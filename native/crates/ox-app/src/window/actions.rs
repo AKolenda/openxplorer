@@ -428,8 +428,9 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 9] = [
     (WindowAction::Search, &["<Primary>f"]),
     (WindowAction::DetailsPane, &["<Alt><Shift>p"]),
     (WindowAction::Settings, &["<Primary>comma"]),
-    // Dolphin's Open Terminal and Open Terminal Here (OPEN-021).
-    (WindowAction::OpenTerminal, &["<Shift>F4"]),
+    // Dolphin's Open Terminal and Open Terminal Here (OPEN-021); Ctrl+Shift+F4
+    // is its Terminal panel key, which opens the terminal here (OPEN-022).
+    (WindowAction::OpenTerminal, &["<Shift>F4", "<Primary><Shift>F4"]),
     (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
     // Dolphin's Open Preferred Search Tool (OPEN-024).
     (WindowAction::SearchTool, &["<Primary><Shift>f"]),

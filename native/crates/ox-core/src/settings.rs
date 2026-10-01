@@ -41,6 +41,7 @@ mod read;
 mod save;
 #[cfg(test)]
 mod test_support;
+mod tree_options;
 
 use std::path::{Path, PathBuf};
 
@@ -54,6 +55,8 @@ pub use preferences::{
     Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, WindowSize, DEFAULT_TEXT_SIZE,
     NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS, WINDOW_WIDTHS,
 };
+
+pub use tree_options::FolderTreeOptions;
 
 use crate::location::same_location;
 use save::{replace_private_file, OldFile, SettingsLock};

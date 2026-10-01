@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use super::choices::{ContextMenu, Theme, View};
 use super::pane_options::DetailsPaneOptions;
+use super::tree_options::FolderTreeOptions;
 use super::SettingsError;
 
 /// Text sizes offered in Settings, in percent.
@@ -290,6 +291,9 @@ pub struct Preferences {
     /// one is hidden.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hidden_sidebar_places: Vec<String>,
+    /// The folder tree's options (SIDE-028); saved only once changed.
+    #[serde(skip_serializing_if = "FolderTreeOptions::is_default")]
+    pub folder_tree: FolderTreeOptions,
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
@@ -343,6 +347,7 @@ impl Default for Preferences {
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
+            folder_tree: FolderTreeOptions::default(),
         }
     }
 }
@@ -420,6 +425,7 @@ impl Preferences {
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
+        replace_if_some(&mut self.folder_tree, update.folder_tree);
     }
 }
 
@@ -483,6 +489,8 @@ pub struct PreferencesUpdate {
     /// Replaces the sidebar places hidden one by one; up to 64 locations,
     /// else ignored.
     pub hidden_sidebar_places: Option<Vec<String>>,
+    /// Replaces the folder tree's options.
+    pub folder_tree: Option<FolderTreeOptions>,
 }
 
 impl PreferencesUpdate {
@@ -533,6 +541,7 @@ impl PreferencesUpdate {
                 .and_then(|size| u32::try_from(size).ok()),
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
+            folder_tree: values.get("folderTree").and_then(FolderTreeOptions::from_json),
         })
     }
 }

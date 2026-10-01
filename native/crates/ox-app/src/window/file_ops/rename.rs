@@ -15,9 +15,10 @@
 //! toast with Undo says it is renamed (OPS-032), and Undo renames it back
 //! (OPS-029).
 
-use gtk::glib::prelude::*;
+use gtk::gio::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::entry::Entry;
+use gtk::{gio, glib};
+use ox_core::entry::{entry_from_info, Entry, ATTRIBUTES};
 use ox_core::location::parent_location;
 use ox_core::ops::{rename_item, OperationContext, RenamedItem};
 
@@ -64,6 +65,22 @@ impl BrowserWindow {
         match self.folder_pane().owners().file_cell_at(position, &view) {
             Some(cell) => self.rename_in_place(&cell, item.entry()),
             None => self.rename_with_dialog(item.entry()).await,
+        }
+    }
+
+    /// Rename… of the folder tree's folder at `uri` (SIDE-028): asks for
+    /// its new name in the Rename dialog.
+    pub(crate) async fn rename_folder_at(&self, uri: &str) {
+        if self.refuses_writes_during_update() {
+            return;
+        }
+        let file = gio::File::for_uri(uri);
+        let info = file
+            .query_info_future(ATTRIBUTES, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
+            .await;
+        match info {
+            Ok(info) => self.rename_with_dialog(&entry_from_info(&file, &info)).await,
+            Err(error) => self.show_message(error.message()),
         }
     }
 

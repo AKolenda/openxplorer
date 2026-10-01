@@ -96,8 +96,8 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 }
 
 /// The View menu: the views (every icon size the native app has), the
-/// hidden-files, details-pane and navigation-pane toggles, then the text
-/// size.
+/// hidden-files, details-pane, navigation-pane and folder-tree toggles
+/// and the terminal, then the text size.
 pub(super) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item("Details", Icon::TextBulletList, FolderView::Details);
     let mut entries = vec![details];
@@ -115,6 +115,15 @@ pub(super) fn view_menu() -> Vec<MenuEntry> {
             .into(),
         MenuItem::toggle("Navigation pane", Icon::Folder, WindowAction::Sidebar)
             .with_shortcut("F9")
+            .into(),
+        MenuItem::toggle("Folder tree", Icon::Organization, WindowAction::FolderTree)
+            .with_shortcut("F7")
+            .into(),
+        // Dolphin's Terminal panel embeds Konsole; VTE for GTK 4 is not
+        // available everywhere the app ships, so this opens the desktop's
+        // terminal in the folder shown instead (OPEN-022).
+        MenuItem::new("Terminal", Icon::WindowConsole, WindowAction::OpenTerminal)
+            .with_shortcut("Ctrl+Shift+F4")
             .into(),
         MenuEntry::Divider,
         text_size_item("Larger text", Icon::Add, Step::Increase, "Ctrl++"),

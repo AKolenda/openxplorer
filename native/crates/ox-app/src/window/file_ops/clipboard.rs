@@ -149,7 +149,17 @@ impl BrowserWindow {
             return;
         }
         let uris: Vec<String> = items.iter().map(|item| item.entry().uri.clone()).collect();
-        let files = match ClipboardFiles::new(mode, &uris) {
+        self.copy_items(mode, &uris);
+    }
+
+    /// Copy or Cut of the folder tree's folder at `uri` (SIDE-028).
+    pub(crate) fn copy_folder_at(&self, mode: ClipboardMode, uri: &str) {
+        self.copy_items(mode, &[uri.to_owned()]);
+    }
+
+    /// Puts `uris` on the desktop's clipboard and says so.
+    fn copy_items(&self, mode: ClipboardMode, uris: &[String]) {
+        let files = match ClipboardFiles::new(mode, uris) {
             Ok(files) => files,
             Err(error) => {
                 self.show_message(&error.to_string());

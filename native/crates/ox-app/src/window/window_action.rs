@@ -124,6 +124,11 @@ pub(crate) enum WindowAction {
     DetailsPaneOption,
     /// Shows or hides the navigation pane (F9, SIDE-024).
     Sidebar,
+    /// Shows or hides the folder tree (F7, SIDE-028).
+    FolderTree,
+    /// Switches the folder tree option named by the string target (its
+    /// menu).
+    FolderTreeOption,
     /// The sidebar's icon size: `0` (automatic), `16`, `22`, `32` or `48`.
     SidebarIconSize,
     /// Lists the hidden sidebar rows, dimmed (SIDE-010).
@@ -182,6 +187,18 @@ pub(crate) enum WindowAction {
     DeletePermanently,
     /// Copies each selected item next to itself.
     Duplicate,
+    /// Cut of the folder in the string target (the folder tree's menu).
+    CutFolder,
+    /// Copy of the folder in the string target.
+    CopyFolder,
+    /// Pastes into the folder in the string target.
+    PasteInto,
+    /// Asks for a new name for the folder in the string target.
+    RenameFolder,
+    /// Moves the folder in the string target to the Trash, after asking.
+    TrashFolder,
+    /// Deletes the folder in the string target permanently, after asking.
+    DeleteFolder,
     /// Reverses the newest file operation (Ctrl+Z).
     Undo,
     /// Takes the newest Undo back (Ctrl+Shift+Z, Ctrl+Y).
@@ -411,6 +428,8 @@ impl WindowAction {
             WindowAction::DetailsPane => "details-pane",
             WindowAction::DetailsPaneOption => "details-pane-option",
             WindowAction::Sidebar => "sidebar",
+            WindowAction::FolderTree => "folder-tree",
+            WindowAction::FolderTreeOption => "folder-tree-option",
             WindowAction::SidebarIconSize => "sidebar-icon-size",
             WindowAction::SidebarShowAll => "sidebar-show-all",
             WindowAction::HideSection => "hide-section",
@@ -438,6 +457,12 @@ impl WindowAction {
             WindowAction::Trash => "trash",
             WindowAction::DeletePermanently => "delete-permanently",
             WindowAction::Duplicate => "duplicate",
+            WindowAction::CutFolder => "cut-folder",
+            WindowAction::CopyFolder => "copy-folder",
+            WindowAction::PasteInto => "paste-into",
+            WindowAction::RenameFolder => "rename-folder",
+            WindowAction::TrashFolder => "trash-folder",
+            WindowAction::DeleteFolder => "delete-folder",
             WindowAction::Undo => "undo",
             WindowAction::Redo => "redo",
             WindowAction::CancelOperation => "cancel-operation",
