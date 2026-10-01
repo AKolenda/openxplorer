@@ -5701,8 +5701,8 @@ python_tests = []
 bridge = ["environment", "open", "openWith", "activateItem"]
 dolphin = "recentlyused:/files, recentlyused:/locations; Places “Recent Files” (recentlyused:/files) and “Recent Locations”"
 gnome = "GtkRecentManager (~/.local/share/recently-used.xbel); GVfs recent:/// backend / GtkRecentManager (~/.local/share/recently-used.xbel)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere). A 'Recent files' row opens GIO's recent:/// (the desktop's recently-used.xbel), which lists like a folder, opens in tabs and windows and takes no drops; the Home page's own recent list (HOME-011) is unchanged. Left open: 'Recent Locations' (recently visited folders) has no GIO backend and would need a listing of the app's own."
+native = "done"
+native_note = "Recent files: a 'Recent files' row opens GIO's recent:/// (the desktop's recently-used.xbel), which lists like a folder, opens in tabs and windows and takes no drops (native/crates/ox-app/src/window/tests/recycle_bin.rs, the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere). Recent locations: a 'Recent locations' row under it (ox-core VirtualPlace::RecentLocations, ox:recent-locations, also typed by URI or title) lists the folders of the desktop's recently used list, where every folder the app navigates to is recorded (OPEN-025), newest visit first, at most 50, leaving out folders that no longer exist (native/crates/ox-app/src/folder_view/recent_locations.rs, through GtkRecentManager). It honours the desktop's privacy settings: with gtk-recent-files-enabled off (GNOME's 'remember recent files') the list is empty, and entries older than gtk-recent-files-max-age are left out. The row's menu has Open, Open in new tab, Open in new window and 'Clear recent locations', which removes the folders from the recently used list and keeps its files. The Home page's own recent list (HOME-011) is unchanged. Test: native/crates/ox-app/src/window/tests/sidebar.rs (recent_locations_lists_visited_folders_and_clear_forgets_them)."
 
 [[feature]]
 id = "SIDE-027"

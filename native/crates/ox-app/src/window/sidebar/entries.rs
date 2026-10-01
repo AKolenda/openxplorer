@@ -12,7 +12,9 @@
 //! their context menu ([`PlaceMenu`]), and a drive that can be removed its
 //! eject button (DEV-007).
 
-use ox_core::location::{is_server_location, LocationContext, NETWORK_URI, PC_URI, RECENT_URI, TRASH_URI};
+use ox_core::location::{
+    is_server_location, LocationContext, NETWORK_URI, PC_URI, RECENT_LOCATIONS_URI, RECENT_URI, TRASH_URI,
+};
 use ox_core::places::{NetworkLocation, Place};
 use ox_core::search::SavedSearch;
 
@@ -330,10 +332,11 @@ pub(in crate::window) fn sidebar_entries(
     entries
 }
 
-/// "Recent files" (GIO's `recent:///`, the desktop's recently used files)
-/// and the Recycle Bin, whose glyph takes the accent colour and whose
-/// tooltip counts the items while `trash_items` are in it.
-pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEntry; 2] {
+/// "Recent files" (GIO's `recent:///`, the desktop's recently used files),
+/// "Recent locations" (the folders visited lately, SIDE-026) and the
+/// Recycle Bin, whose glyph takes the accent colour and whose tooltip
+/// counts the items while `trash_items` are in it.
+pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEntry; 3] {
     let recent = SidebarEntry {
         tooltip: "Recently used files".to_owned(),
         ..fixed_entry(
@@ -341,6 +344,16 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
             "Recent files",
             Art::Glyph(Icon::History),
             RECENT_URI,
+        )
+    };
+    let recent_locations = SidebarEntry {
+        tooltip: "Recently visited folders".to_owned(),
+        menu: Some(PlaceMenu::RecentLocations),
+        ..fixed_entry(
+            Section::RecentAndBin,
+            "Recent locations",
+            Art::Glyph(Icon::Clock),
+            RECENT_LOCATIONS_URI,
         )
     };
     let (icon, state) = match trash_items {
@@ -358,7 +371,7 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
         }),
         ..fixed_entry(Section::RecentAndBin, "Recycle Bin", icon, TRASH_URI)
     };
-    [recent, bin]
+    [recent, recent_locations, bin]
 }
 
 /// Where a row sits in its section, which decides its spacing: the
@@ -472,9 +485,10 @@ mod tests {
     /// parity: SIDE-025
     #[test]
     fn the_recycle_bin_row_is_drawn_full_or_empty() {
-        let [recent, empty] = recent_and_bin_entries(0);
-        let [_, full] = recent_and_bin_entries(3);
+        let [recent, locations, empty] = recent_and_bin_entries(0);
+        let [_, _, full] = recent_and_bin_entries(3);
         assert_eq!(recent.target, RowTarget::Location(RECENT_URI.into()));
+        assert_eq!(locations.target, RowTarget::Location(RECENT_LOCATIONS_URI.into()));
         assert_eq!(empty.icon, Art::Glyph(Icon::Delete));
         assert_eq!(full.icon, Art::TintedGlyph(Icon::Delete, Tint::Home));
         assert_eq!(full.tooltip, "Recycle Bin · 3 items");

@@ -55,6 +55,12 @@ impl BrowserWindow {
         if let Some(page) = Page::from_uri(typed) {
             return Ok(page.uri().to_owned());
         }
+        // Recent locations, which the app lists itself (SIDE-026).
+        let recent_locations = VirtualPlace::RecentLocations;
+        if [VirtualPlace::from_uri(typed), VirtualPlace::from_title(typed)].contains(&Some(recent_locations))
+        {
+            return Ok(recent_locations.uri().to_owned());
+        }
         if let Some(place) = self.place_titled(typed) {
             return Ok(place);
         }

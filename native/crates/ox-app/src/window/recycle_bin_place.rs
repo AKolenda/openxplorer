@@ -92,7 +92,7 @@ impl BrowserWindow {
                     let items = list_recycle_bin(&Cancellation::new()).await;
                     let count = items.map_or(0, |items| u32::try_from(items.len()).unwrap_or(u32::MAX));
                     if window.imp().trash_items.replace(count) != count {
-                        let [_, bin] = sidebar::recent_and_bin_entries(count);
+                        let [_, _, bin] = sidebar::recent_and_bin_entries(count);
                         window.sidebar().replace_entry(bin);
                     }
                     if !window.imp().recycle_bin_watch.stale.get() {

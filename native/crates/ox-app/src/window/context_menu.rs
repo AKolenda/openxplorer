@@ -20,7 +20,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 use ox_core::entry::Entry;
 use ox_core::integration::{is_disk_image, DiskTool};
-use ox_core::location::{is_smb_location, is_smb_server};
+use ox_core::location::{is_smb_location, is_smb_server, RECENT_LOCATIONS_URI};
 use ox_core::ops::JournalDirection;
 use ox_core::settings::ContextMenu as MenuStyleChoice;
 
@@ -284,7 +284,21 @@ impl BrowserWindow {
                 ));
             }),
             plain_action(WindowAction::OpenWindows, BrowserWindow::show_open_windows),
+            plain_action(
+                WindowAction::ClearRecentLocations,
+                BrowserWindow::clear_recent_locations,
+            ),
         ]);
+    }
+
+    /// "Clear recent locations": forgets the visited folders, and lists
+    /// Recent locations again where it is shown (SIDE-026).
+    fn clear_recent_locations(&self) {
+        crate::folder_view::recent_locations::clear_recent_locations();
+        if self.current_uri().as_deref() == Some(RECENT_LOCATIONS_URI) {
+            WindowAction::Refresh.activate_from(self, None);
+        }
+        self.show_message("Recent locations cleared.");
     }
 
     /// The context menu of the view shown, for tests.

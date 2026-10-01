@@ -15,6 +15,7 @@
 //! | Network | `network:///` | Network |
 //! | Trash | `trash:///` | Recycle Bin |
 //! | Recently used files | `recent:///` | Recent |
+//! | Recently visited folders | `ox:recent-locations` | Recent locations |
 //!
 //! The old spellings are accepted as input so a stored or handed-over tab
 //! keeps working. Items inside the GIO folders (`trash:///folder/file`)
@@ -48,6 +49,9 @@ pub const NETWORK_URI: &str = "network:///";
 pub const TRASH_URI: &str = "trash:///";
 /// GIO's recently used files.
 pub const RECENT_URI: &str = "recent:///";
+/// The folders visited lately, which the app lists from the desktop's
+/// recently used list (SIDE-026).
+pub const RECENT_LOCATIONS_URI: &str = "ox:recent-locations";
 
 /// One of the places described in the module documentation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -62,18 +66,21 @@ pub enum VirtualPlace {
     RecycleBin,
     /// Recently used files.
     Recent,
+    /// Recently visited folders.
+    RecentLocations,
     /// The Settings page.
     Settings,
 }
 
 impl VirtualPlace {
     /// Every place, in sidebar order.
-    pub const ALL: [VirtualPlace; 6] = [
+    pub const ALL: [VirtualPlace; 7] = [
         VirtualPlace::Home,
         VirtualPlace::ThisPc,
         VirtualPlace::Network,
         VirtualPlace::RecycleBin,
         VirtualPlace::Recent,
+        VirtualPlace::RecentLocations,
         VirtualPlace::Settings,
     ];
 
@@ -85,6 +92,7 @@ impl VirtualPlace {
             VirtualPlace::Network => NETWORK_URI,
             VirtualPlace::RecycleBin => TRASH_URI,
             VirtualPlace::Recent => RECENT_URI,
+            VirtualPlace::RecentLocations => RECENT_LOCATIONS_URI,
             VirtualPlace::Settings => SETTINGS_URI,
         }
     }
@@ -97,11 +105,13 @@ impl VirtualPlace {
             VirtualPlace::Network => "Network",
             VirtualPlace::RecycleBin => "Recycle Bin",
             VirtualPlace::Recent => "Recent",
+            VirtualPlace::RecentLocations => "Recent locations",
             VirtualPlace::Settings => "Settings",
         }
     }
 
-    /// True for pages the app draws itself; false for folders GIO lists.
+    /// True for pages the app draws or lists itself; false for folders GIO
+    /// lists.
     pub fn is_page(self) -> bool {
         self.gio_scheme().is_none()
     }
@@ -112,7 +122,10 @@ impl VirtualPlace {
             VirtualPlace::Network => Some("network"),
             VirtualPlace::RecycleBin => Some("trash"),
             VirtualPlace::Recent => Some("recent"),
-            VirtualPlace::Home | VirtualPlace::ThisPc | VirtualPlace::Settings => None,
+            VirtualPlace::Home
+            | VirtualPlace::ThisPc
+            | VirtualPlace::RecentLocations
+            | VirtualPlace::Settings => None,
         }
     }
 
@@ -155,6 +168,7 @@ impl VirtualPlace {
             HOME_URI | "home:" => Some(VirtualPlace::Home),
             PC_URI | "pc:" => Some(VirtualPlace::ThisPc),
             SETTINGS_URI | "settings:" => Some(VirtualPlace::Settings),
+            RECENT_LOCATIONS_URI => Some(VirtualPlace::RecentLocations),
             _ => None,
         }
     }

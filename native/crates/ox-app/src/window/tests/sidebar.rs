@@ -564,3 +564,54 @@ fn hidden_sections_and_places_are_listed_dimmed_and_shown_again() {
     assert!(preferences.hidden_sidebar_sections.is_empty());
     assert!(preferences.hidden_sidebar_places.is_empty());
 }
+
+/// Recent locations lists the folders of the desktop's recently used list
+/// that still exist, honours the desktop's "remember recent files"
+/// setting, and its Clear forgets them.
+///
+/// parity: SIDE-026
+#[gtk::test]
+fn recent_locations_lists_visited_folders_and_clear_forgets_them() {
+    use crate::app_context::add_to_desktop_history;
+    use crate::folder_view::recent_locations::recent_folder_uris;
+    use ox_core::integration::FOLDER_CONTENT_TYPE;
+    use ox_core::location::RECENT_LOCATIONS_URI;
+
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
+    let test = TestWindow::open(&fixture.uri());
+    assert!(test
+        .window
+        .sidebar()
+        .labels()
+        .contains(&"Recent locations".to_owned()));
+    add_to_desktop_history(&fixture.uri_of("Documents"), FOLDER_CONTENT_TYPE);
+    add_to_desktop_history(&fixture.uri_of("Projects"), FOLDER_CONTENT_TYPE);
+    add_to_desktop_history(&fixture.uri_of("Notes 2.txt"), "text/plain");
+
+    test.activate("go-to", Some(RECENT_LOCATIONS_URI));
+    wait_until("Recent locations", || {
+        test.window.current_uri().as_deref() == Some(RECENT_LOCATIONS_URI) && !test.window.is_loading()
+    });
+    wait_until("the recent folders", || {
+        let names = test.names();
+        names.contains(&"Documents".to_owned()) && names.contains(&"Projects".to_owned())
+    });
+    assert!(
+        !test.names().contains(&"Notes 2.txt".to_owned()),
+        "files are not locations"
+    );
+    let settings = gtk::Settings::default().expect("the display's settings");
+    settings.set_gtk_recent_files_enabled(false);
+    let while_private = recent_folder_uris();
+    settings.set_gtk_recent_files_enabled(true);
+    test.activate("clear-recent-locations", None);
+
+    assert!(
+        while_private.is_empty(),
+        "the desktop's privacy setting is honoured"
+    );
+    assert!(recent_folder_uris().is_empty());
+    wait_until("the cleared list", || test.names().is_empty());
+}

@@ -206,6 +206,8 @@ pub(crate) enum WindowAction {
     EmptyRecycleBin,
     /// The same from the sidebar's Recycle Bin, wherever the window is.
     EmptyTrash,
+    /// Forgets the recently visited folders (SIDE-026).
+    ClearRecentLocations,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -469,6 +471,7 @@ impl WindowAction {
             WindowAction::Restore => "restore",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
             WindowAction::EmptyTrash => "empty-trash",
+            WindowAction::ClearRecentLocations => "clear-recent-locations",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::ShowSortMenu => "show-sort-menu",
