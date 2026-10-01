@@ -175,7 +175,10 @@ mod tests {
 
         change_type(TEST_TYPE, &TypeChange::Add(VIEWER.into())).expect("added");
         let added = listed();
-        assert!(matches!(added.as_slice(), [(id, _, true)] if id == VIEWER), "{added:?}");
+        assert!(
+            matches!(added.as_slice(), [(id, _, true)] if id == VIEWER),
+            "{added:?}"
+        );
         change_type(TEST_TYPE, &TypeChange::Remove(VIEWER.into())).expect("removed");
         assert_eq!(listed(), []);
         change_type(TEST_TYPE, &TypeChange::SetDefault(VIEWER.into())).expect("made default");
