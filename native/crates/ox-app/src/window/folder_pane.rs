@@ -22,7 +22,7 @@ use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
 use crate::folder_view::grid::IconView;
 use crate::folder_view::model::FolderModel;
-use crate::text_size::TextSize;
+use crate::text_size::TextScale;
 
 use super::empty_page::EmptyState;
 
@@ -328,7 +328,7 @@ impl FolderPane {
     }
 
     /// Draws the icon view's cells for text of `size`.
-    pub(super) fn set_text_size(&self, size: TextSize) {
+    pub(super) fn set_text_size(&self, size: TextScale) {
         self.icon_view().set_text_size(size);
     }
 }

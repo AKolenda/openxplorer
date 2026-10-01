@@ -13,7 +13,7 @@ use super::fonts::css_for_text_size;
 use super::stylesheets;
 use super::Appearance;
 use crate::icons;
-use crate::text_size::TextSize;
+use crate::text_size::{TextScale, TextSize};
 
 /// A provider's place in the skin's cascade. Each layer sits one step
 /// above the one before it, above the application priority, so it wins
@@ -107,7 +107,7 @@ impl Providers {
     }
 
     /// Loads the font sizes and heights of `size`.
-    pub(super) fn draw_text_size(&self, size: TextSize) {
+    pub(super) fn draw_text_size(&self, size: TextScale) {
         self.text_size.load_from_string(&css_for_text_size(size));
     }
 

@@ -77,6 +77,43 @@ impl Default for TextSize {
     }
 }
 
+/// How large text is drawn: the app's own [`TextSize`] on top of the
+/// desktop's text scaling (GNOME's Large Text, which GTK reports as the
+/// font resolution), so row heights and tiles grow with both (ACC-013).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct TextScale {
+    /// The size chosen in the app.
+    pub size: TextSize,
+    /// The desktop's text scaling factor, 1.0 when it has none.
+    pub desktop: f64,
+}
+
+impl TextScale {
+    /// The factor every font and text-sized measure is multiplied by.
+    pub(crate) fn factor(self) -> f64 {
+        f64::from(self.size.percent()) / 100.0 * self.desktop
+    }
+}
+
+impl From<TextSize> for TextScale {
+    fn from(size: TextSize) -> Self {
+        Self { size, desktop: 1.0 }
+    }
+}
+
+/// The font resolution GTK reports at no desktop text scaling, in the
+/// 1/1024 dots per inch of `gtk-xft-dpi`.
+const UNSCALED_XFT_DPI: f64 = 96.0 * 1024.0;
+
+/// The desktop's text scaling factor for GTK's `gtk-xft-dpi`, 1.0 when it
+/// is unset (-1 or 0); kept between half and three times, as GNOME offers.
+pub(crate) fn desktop_text_scale(xft_dpi: i32) -> f64 {
+    if xft_dpi <= 0 {
+        return 1.0;
+    }
+    (f64::from(xft_dpi) / UNSCALED_XFT_DPI).clamp(0.5, 3.0)
+}
+
 /// A text-size keyboard or menu command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Step {
@@ -159,10 +196,10 @@ pub(crate) fn ceil_pixels(value: f64) -> i32 {
     value.ceil() as i32
 }
 
-/// The metrics at `size`, with the formulas and minimums of `metrics()`
+/// The metrics at `scale`, with the formulas and minimums of `metrics()`
 /// in text-size.js.
-pub(crate) fn metrics(size: TextSize) -> Metrics {
-    let scale = f64::from(size.percent()) / 100.0;
+pub(crate) fn metrics(scale: impl Into<TextScale>) -> Metrics {
+    let scale = scale.into().factor();
     let detail_row = ceil_pixels(24.0 * scale + 14.0).max(38);
     let grid_growth = ceil_pixels((scale - 1.0) * 46.0).max(0);
     let grid_width = ceil_pixels(90.0 * scale + 45.0).max(135);

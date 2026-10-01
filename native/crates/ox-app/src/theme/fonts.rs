@@ -7,11 +7,12 @@
 //! from one table of base sizes (the values in `desktop/ui/style.css`).
 
 use crate::folder_view::grid::{self, IconSize};
-use crate::text_size::{self, TextSize};
+use crate::text_size::{self, TextScale};
 
 /// The stylesheet for `text_size`: every font size, the bars, rows, menus
 /// and tiles whose height follows the text, one rule per line.
-pub(crate) fn css_for_text_size(text_size: TextSize) -> String {
+pub(crate) fn css_for_text_size(text_size: impl Into<TextScale>) -> String {
+    let text_size = text_size.into();
     let metrics = text_size::metrics(text_size);
     let scale = metrics.scale;
     let mut rules: Vec<String> = Vec::new();
@@ -286,7 +287,7 @@ const TILE_VERTICAL_CHROME: i32 = 12 + 12 + 1 + 1;
 /// the window sets (`CellSize::columns_in` in `folder_view/grid.rs`), so the
 /// minimum is only the icon, which lets GTK use every column the window
 /// asks for.
-fn tile_rule(icon_size: IconSize, text_size: TextSize) -> String {
+fn tile_rule(icon_size: IconSize, text_size: TextScale) -> String {
     let cell = grid::cell_size(icon_size, text_size);
     let height = cell.height - TILE_VERTICAL_CHROME;
     let width = icon_size.pixels();
@@ -297,6 +298,7 @@ fn tile_rule(icon_size: IconSize, text_size: TextSize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text_size::TextSize;
 
     /// The stylesheet at `percent`, one of the levels.
     fn css_at(percent: u32) -> String {

@@ -16247,8 +16247,8 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "KDE font DPI and the Dolphin zoom slider"
 gnome = "org.gnome.desktop.interface text-scaling-factor → gtk-xft-dpi (GTK4 scales fonts automatically; pixel metrics must derive from Pango font metrics)"
-native = "todo"
-native_note = "OpenXplorer applies only its own text size. Existing OpenXplorer part is protected by VIEW-044 and VIEW-045."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (the_desktop_text_scaling_grows_rows_on_top_of_the_app_size, large_text_grows_rows_and_dialogs_still_fit_800_by_600). The skin's fonts are in pixels, which GTK does not scale with the desktop's font resolution, so the skin now reads the desktop's text scaling from GTK's gtk-xft-dpi (GNOME's text-scaling-factor arrives there through XSETTINGS or the settings portal), follows its changes, and draws every font, row height, menu and tile at the app's own text size (80–200 %, Ctrl +/−/0) times that factor (text_size::TextScale)."
 
 [[feature]]
 id = "ACC-014"

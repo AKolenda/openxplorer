@@ -443,6 +443,36 @@ fn large_text_grows_rows_and_dialogs_still_fit_800_by_600() {
     assert!(dialog_height <= 600, "{dialog_height} pixels high");
 }
 
+/// The desktop's text scaling (GTK's font resolution) grows the rows on
+/// top of the app's own text size.
+///
+/// parity: ACC-013
+#[gtk::test]
+fn the_desktop_text_scaling_grows_rows_on_top_of_the_app_size() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let settings = gtk::Settings::default().expect("the test display has settings");
+    let before = settings.gtk_xft_dpi();
+    let row = test
+        .window
+        .sidebar()
+        .list()
+        .row_at_index(0)
+        .expect("the Home row");
+    let height_at = |xft_dpi: i32| {
+        settings.set_gtk_xft_dpi(xft_dpi);
+        wait_for_frames(&test.window, 3);
+        row.measure(gtk::Orientation::Vertical, -1).0
+    };
+    let unscaled = height_at(96 * 1024);
+    let large_text = height_at(144 * 1024);
+    let scale = skin().text_scale();
+    settings.set_gtk_xft_dpi(before);
+
+    assert!((scale.desktop - 1.5).abs() < 0.001, "{scale:?}");
+    assert!(large_text > unscaled, "{large_text} > {unscaled}");
+}
+
 /// A command bar menu is a list of rows Enter activates.
 ///
 /// parity: ACC-006

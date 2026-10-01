@@ -15,7 +15,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners};
-use crate::text_size::{self, TextSize};
+use crate::text_size::{self, TextScale};
 
 /// A large tile's width beyond its icon: the 135-pixel `gridWidth` less
 /// the 56-pixel icon of Large icons. Larger icons widen the tile by as
@@ -128,7 +128,7 @@ impl CellSize {
 /// `gridRow` from `metrics()` in text-size.js for large icons (135 × 130
 /// at 100%), widened and heightened with the icon for the other sizes,
 /// which the Python app does not have.
-pub(crate) fn cell_size(size: IconSize, text_size: TextSize) -> CellSize {
+pub(crate) fn cell_size(size: IconSize, text_size: impl Into<TextScale>) -> CellSize {
     let metrics = text_size::metrics(text_size);
     let icon_growth = size.pixels() - IconSize::Large.pixels();
     let width_for_icon = size.pixels() + TILE_WIDTH_BEYOND_ICON;
@@ -163,7 +163,7 @@ mod imp {
     use gtk::subclass::prelude::*;
 
     use super::{IconSize, TileRegistries};
-    use crate::text_size::TextSize;
+    use crate::text_size::{TextScale, TextSize};
 
     /// Private state of [`super::IconView`].
     #[derive(Debug)]
@@ -179,7 +179,7 @@ mod imp {
         /// The icon size the tiles show.
         pub(super) icon_size: Cell<IconSize>,
         /// The text size, which sizes the cells too.
-        pub(super) text_size: Cell<TextSize>,
+        pub(super) text_size: Cell<TextScale>,
     }
 
     impl Default for IconView {
@@ -190,7 +190,7 @@ mod imp {
                 grid: gtk::GridView::default(),
                 registries: OnceCell::new(),
                 icon_size: Cell::new(IconSize::Large),
-                text_size: Cell::new(TextSize::DEFAULT),
+                text_size: Cell::new(TextSize::DEFAULT.into()),
             }
         }
     }
@@ -279,7 +279,7 @@ impl IconView {
     }
 
     /// Sizes the cells for text of `size`.
-    pub(crate) fn set_text_size(&self, size: TextSize) {
+    pub(crate) fn set_text_size(&self, size: TextScale) {
         self.imp().text_size.set(size);
         self.fit_columns();
     }
@@ -337,6 +337,7 @@ impl IconView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text_size::TextSize;
 
     #[gtk::test]
     fn switching_the_icon_size_restyles_the_tiles() {

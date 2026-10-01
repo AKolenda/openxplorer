@@ -23,7 +23,7 @@ pub(crate) use appearance_button::{tooltip, AppearanceExt};
 use ox_core::settings::{Appearance, Theme};
 
 use crate::icons;
-use crate::text_size::TextSize;
+use crate::text_size::{self, TextScale, TextSize};
 use contrast::Contrast;
 use providers::Providers;
 
@@ -55,6 +55,9 @@ mod imp {
         pub(super) contrast: Cell<Contrast>,
         /// The size text is drawn at.
         pub(super) text_size: Cell<TextSize>,
+        /// The desktop's text scaling factor; 0 until it is read, which
+        /// counts as 1.
+        pub(super) desktop_text_scale: Cell<f64>,
         /// The user's theme choice.
         pub(super) theme: Cell<Theme>,
         /// The desktop's colour scheme, which [`Theme::System`] follows.
@@ -94,7 +97,21 @@ impl Skin {
     /// stylesheets and the app's bundled icons.
     pub(crate) fn install(display: &gdk::Display) -> Self {
         icons::register(display);
-        Self::with_providers(Providers::install(display))
+        let skin = Self::with_providers(Providers::install(display));
+        skin.follow_desktop_text_scale(&gtk::Settings::for_display(display));
+        skin
+    }
+
+    /// Draws text at the desktop's text scaling, now and whenever it
+    /// changes (ACC-013).
+    fn follow_desktop_text_scale(&self, settings: &gtk::Settings) {
+        self.set_desktop_text_scale(text_size::desktop_text_scale(settings.gtk_xft_dpi()));
+        settings.connect_gtk_xft_dpi_notify(glib::clone!(
+            #[weak(rename_to = skin)]
+            self,
+            move |settings| skin
+                .set_desktop_text_scale(text_size::desktop_text_scale(settings.gtk_xft_dpi()))
+        ));
     }
 
     /// A skin on no display, for tests that watch what windows connect to
@@ -173,12 +190,36 @@ impl Skin {
         self.imp().text_size.get()
     }
 
+    /// The app's text size on top of the desktop's text scaling.
+    pub(crate) fn text_scale(&self) -> TextScale {
+        let desktop = self.imp().desktop_text_scale.get();
+        TextScale {
+            size: self.text_size(),
+            desktop: if desktop > 0.0 { desktop } else { 1.0 },
+        }
+    }
+
     /// Draws text at `size` and tells the windows when it changed.
     pub(crate) fn set_text_size(&self, size: TextSize) {
         if self.imp().text_size.replace(size) == size {
             return;
         }
-        self.providers().draw_text_size(size);
+        self.redraw_text();
+    }
+
+    /// Draws text at the desktop's text scaling `factor` on top of the
+    /// app's own size, and tells the windows when it changed.
+    pub(crate) fn set_desktop_text_scale(&self, factor: f64) {
+        let previous = self.imp().desktop_text_scale.replace(factor);
+        if (previous - factor).abs() < f64::EPSILON {
+            return;
+        }
+        self.redraw_text();
+    }
+
+    /// Reloads the text-size rules and tells the windows.
+    fn redraw_text(&self) {
+        self.providers().draw_text_size(self.text_scale());
         self.emit_by_name::<()>(TEXT_SIZE_CHANGED, &[]);
     }
 
