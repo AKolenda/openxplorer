@@ -19,6 +19,8 @@ pub(crate) struct LeftView {
     pub scroll: f64,
     /// The URI of the current item: the first selected one, if any.
     pub current: Option<String>,
+    /// The folders expanded in place, outermost first (VIEW-035).
+    pub expanded: Vec<String>,
 }
 
 /// The [`LeftView`] of each history position a tab left.

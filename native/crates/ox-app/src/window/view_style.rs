@@ -120,6 +120,7 @@ impl BrowserWindow {
         let titles: Option<GroupTitle> = grouped.then(|| model.group_titles());
         pane.details().show_group_headers(titles);
         self.set_action_state(WindowAction::Groups, &grouped.to_variant());
+        self.update_expandability();
     }
 
     /// Lists folders before files, or among them.
@@ -209,13 +210,14 @@ impl BrowserWindow {
     }
 
     /// Follows the preferences of how items are shown: the date style
-    /// (VIEW-004), redrawn if it changed, and the selection marker
-    /// (SEL-014).
+    /// (VIEW-004), redrawn if it changed, the selection marker (SEL-014)
+    /// and expandable folders (VIEW-035).
     pub(super) fn follow_item_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
         let pane = self.folder_pane();
         pane.details().set_date_style(date_style(&preferences));
         pane.owners().set_selection_markers(preferences.selection_marker);
+        self.update_expandability();
     }
 }
 

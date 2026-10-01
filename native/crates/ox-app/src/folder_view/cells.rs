@@ -12,6 +12,7 @@
 
 mod cell_owners;
 mod custom_icon;
+mod expander;
 mod row_tooltip;
 mod selection_marker;
 
@@ -23,6 +24,7 @@ use gtk::{glib, pango};
 
 pub(crate) use cell_owners::CellOwners;
 pub(crate) use custom_icon::CUSTOM_ICON;
+pub(crate) use expander::connect_expanders;
 pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip};
 
 use crate::folder_view::item::FileItem;
@@ -114,6 +116,10 @@ mod imp {
         pub(super) icon_frame: gtk::Overlay,
         /// Adds the item to the selection or takes it out (SEL-014).
         pub(super) marker: gtk::Button,
+        /// Expands a folder of a details row in place (VIEW-035).
+        pub(super) expander: gtk::Button,
+        /// The tree row the cell follows, and its handler.
+        pub(super) tree_row: RefCell<Option<(gtk::TreeListRow, glib::SignalHandlerId)>>,
     }
 
     #[glib::object_subclass]

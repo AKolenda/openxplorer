@@ -33,6 +33,7 @@ use crate::folder_view::column_widths;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::model::{self, FolderModel};
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
+use crate::folder_view::tree::FolderTree;
 
 /// Icon edge in details rows (`.name-cell svg{height:21px}`).
 const ROW_ICON_SIZE: i32 = 21;
@@ -74,10 +75,12 @@ fn cell_tooltip(column: SortColumn) -> CellTooltip {
     }
 }
 
-/// The Name column's cells: the item's icon beside its name.
-fn name_factory(owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
+/// The Name column's cells: the item's icon beside its name, after the
+/// arrow of a folder that expands in `tree`.
+fn name_factory(owners: &Rc<CellOwners>, tree: &FolderTree) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     cells::connect_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON_SIZE, owners);
+    cells::connect_expanders(&factory, tree);
     factory
 }
 
@@ -115,27 +118,30 @@ fn text_factory(
     factory
 }
 
-/// The factory of `column`'s cells.
-fn column_factory(
-    column: SortColumn,
-    owners: &Rc<CellOwners>,
-    dates: &Rc<Cell<DateStyle>>,
-) -> gtk::SignalListItemFactory {
-    match column {
-        SortColumn::Name => name_factory(owners),
-        SortColumn::Modified | SortColumn::FolderPath | SortColumn::Type | SortColumn::Size => {
-            text_factory(column, owners, dates)
+/// What the columns' cells share: the registry they are kept in, how dates
+/// are written, and the folders that expand.
+#[derive(Debug)]
+struct CellContext {
+    owners: Rc<CellOwners>,
+    dates: Rc<Cell<DateStyle>>,
+    tree: FolderTree,
+}
+
+impl CellContext {
+    /// The factory of `column`'s cells.
+    fn factory(&self, column: SortColumn) -> gtk::SignalListItemFactory {
+        match column {
+            SortColumn::Name => name_factory(&self.owners, &self.tree),
+            SortColumn::Modified | SortColumn::FolderPath | SortColumn::Type | SortColumn::Size => {
+                text_factory(column, &self.owners, &self.dates)
+            }
         }
     }
 }
 
 /// A resizable column showing `column`, sorted by its header.
-fn new_view_column(
-    column: SortColumn,
-    owners: &Rc<CellOwners>,
-    dates: &Rc<Cell<DateStyle>>,
-) -> gtk::ColumnViewColumn {
-    let factory = column_factory(column, owners, dates);
+fn new_view_column(column: SortColumn, cells: &CellContext) -> gtk::ColumnViewColumn {
+    let factory = cells.factory(column);
     let view_column = gtk::ColumnViewColumn::new(Some(column.label()), Some(factory));
     view_column.set_id(Some(column.as_str()));
     view_column.set_resizable(true);
@@ -182,7 +188,6 @@ const fn is_column_shown(column: SortColumn, columns: DetailsColumns, listing: D
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
-    use std::rc::Rc;
     use std::sync::OnceLock;
 
     use gtk::glib;
@@ -190,9 +195,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use ox_core::format::DateStyle;
-
-    use super::{CellOwners, DetailsColumns, DetailsListing, COLUMNS_RESIZED};
+    use super::{DetailsColumns, DetailsListing, COLUMNS_RESIZED};
 
     /// Private state of [`super::DetailsView`].
     #[derive(Debug, Default)]
@@ -214,10 +217,8 @@ mod imp {
         pub(super) columns: Cell<DetailsColumns>,
         /// Whether the view lists a folder or search results.
         pub(super) listing: Cell<DetailsListing>,
-        /// How dates are written, which the date cells read when bound.
-        pub(super) dates: Rc<Cell<DateStyle>>,
-        /// The cells' registry, set by [`super::DetailsView::new`].
-        pub(super) owners: OnceCell<Rc<CellOwners>>,
+        /// What the cells share, set by [`super::DetailsView::new`].
+        pub(super) cells: OnceCell<super::CellContext>,
     }
 
     #[glib::object_subclass]
@@ -276,14 +277,18 @@ impl DetailsView {
     pub(crate) fn new(model: &FolderModel, owners: &Rc<CellOwners>) -> Self {
         let view: Self = glib::Object::new();
         let column_view = view.column_view();
-        let dates = &view.imp().dates;
+        let cells = CellContext {
+            owners: Rc::clone(owners),
+            dates: Rc::default(),
+            tree: model.tree().clone(),
+        };
         for column in SortColumn::ALL {
-            column_view.append_column(&new_view_column(column, owners, dates));
+            column_view.append_column(&new_view_column(column, &cells));
         }
         view.imp()
-            .owners
-            .set(Rc::clone(owners))
-            .expect("DetailsView::new sets the owners once");
+            .cells
+            .set(cells)
+            .expect("DetailsView::new sets the cells' context once");
         view.apply_column_widths(None);
         view.show_fitting_columns();
         view.watch_column_widths();
@@ -354,23 +359,29 @@ impl DetailsView {
             .collect()
     }
 
+    /// The cells' shared context, which `new` sets.
+    fn cells(&self) -> &CellContext {
+        self.imp().cells.get().expect("DetailsView::new sets the cells' context")
+    }
+
     /// How dates are written.
     pub(crate) fn date_style(&self) -> DateStyle {
-        self.imp().dates.get()
+        self.cells().dates.get()
     }
 
     /// Writes dates in `style` (VIEW-004), redrawing the date cells
     /// shown.
     pub(crate) fn set_date_style(&self, style: DateStyle) {
-        let imp = self.imp();
-        if imp.dates.replace(style) == style {
-            return;
+        if self.cells().dates.replace(style) != style {
+            self.redraw_column(SortColumn::Modified);
         }
-        let (Some(owners), Some(modified)) = (imp.owners.get(), self.column(SortColumn::Modified)) else {
-            return;
-        };
-        // A new factory binds every shown cell again.
-        modified.set_factory(Some(&column_factory(SortColumn::Modified, owners, &imp.dates)));
+    }
+
+    /// Binds every shown cell of `column` again, through a new factory.
+    pub(crate) fn redraw_column(&self, column: SortColumn) {
+        if let Some(view_column) = self.column(column) {
+            view_column.set_factory(Some(&self.cells().factory(column)));
+        }
     }
 
     /// The column view's column for `column`.

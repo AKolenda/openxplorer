@@ -73,6 +73,7 @@ mod disabled_reasons;
 mod disk_tools;
 mod empty_page;
 mod environment;
+mod expanding;
 mod external_requests;
 mod file_drag;
 mod file_drop;

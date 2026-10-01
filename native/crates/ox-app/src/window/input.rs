@@ -258,6 +258,9 @@ impl BrowserWindow {
         if let Some(handled) = self.grid_row_key(key, modifiers) {
             return handled;
         }
+        if let Some(handled) = self.tree_key(key, modifiers) {
+            return handled;
+        }
         // The input method composes text before it reaches type-to-select.
         let consumed = controller
             .current_event()

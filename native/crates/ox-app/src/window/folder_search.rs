@@ -305,6 +305,7 @@ impl BrowserWindow {
         self.search_strip().show_report(report.as_ref(), options);
         self.folder_pane().details().show_listing(listing);
         self.folder_pane().owners().set_row_tooltip(row_tooltip);
+        self.update_expandability();
         self.update_content();
         self.update_details_pane();
     }

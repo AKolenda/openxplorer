@@ -22,6 +22,7 @@ use crate::folder_view::groups::{self, GroupClock};
 use crate::folder_view::item::FileItem;
 use crate::folder_view::sort_roles::{SortRole, SortState};
 use crate::folder_view::sorting::{self, SortColumn, SortDirection};
+use crate::folder_view::tree::FolderTree;
 
 /// The item a folder model hands to its filter or sorters.
 fn as_item(object: &glib::Object) -> &FileItem {
@@ -152,6 +153,8 @@ pub(crate) struct FolderModel {
     filter: gtk::CustomFilter,
     filter_model: gtk::FilterListModel,
     sort_model: gtk::SortListModel,
+    /// The sorted items with expanded folders' contents (VIEW-035).
+    tree: FolderTree,
     selection: gtk::MultiSelection,
     sort_options: SharedOptions,
     folders_first: gtk::CustomSorter,
@@ -171,13 +174,15 @@ impl FolderModel {
         });
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
-        let selection = gtk::MultiSelection::new(Some(sort_model.clone()));
+        let tree = FolderTree::new(&sort_model, &filter);
+        let selection = gtk::MultiSelection::new(Some(tree.model().clone()));
         let sort_options = SharedOptions::default();
         Self {
             filter_state,
             filter,
             filter_model,
             sort_model,
+            tree,
             selection,
             folders_first: folders_first(&sort_options),
             role_sorter: role_sorter(&sort_options),
@@ -229,6 +234,14 @@ impl FolderModel {
         if grouping.is_some() != was_grouped {
             let sections = grouping.map(|_| self.group_sorter.clone());
             self.sort_model.set_section_sorter(sections.as_ref());
+            // GTK 4.14's tree list passes no groups through, so grouped
+            // items are shown without it, and folders do not expand.
+            if grouping.is_some() {
+                self.tree.set_expandable(false);
+                self.selection.set_model(Some(&self.sort_model));
+            } else {
+                self.selection.set_model(Some(self.tree.model()));
+            }
         }
     }
 
@@ -263,19 +276,27 @@ impl FolderModel {
         &self.selection
     }
 
-    /// The sorted, filtered items in display order.
+    /// The sorted, filtered items in display order, without the contents
+    /// of expanded folders.
+    #[cfg(test)]
     pub(crate) fn sorted(&self) -> &gtk::SortListModel {
         &self.sort_model
     }
 
-    /// Shows another tab's items.
+    /// The folders that expand in place in the details view.
+    pub(crate) fn tree(&self) -> &FolderTree {
+        &self.tree
+    }
+
+    /// Shows another tab's items, with no folder expanded.
     pub(crate) fn set_store(&self, store: Option<&gio::ListStore>) {
+        self.tree.collapse_all();
         self.filter_model.set_model(store);
     }
 
-    /// Items shown (after filtering).
+    /// Items shown (after filtering), expanded folders' contents included.
     pub(crate) fn n_items(&self) -> u32 {
-        self.sort_model.n_items()
+        self.selection.n_items()
     }
 
     /// How many of `store`'s items the folder lists, searched or not: the
@@ -293,7 +314,7 @@ impl FolderModel {
 
     /// The item at a display position.
     pub(crate) fn item(&self, position: u32) -> Option<FileItem> {
-        self.sort_model.item(position).and_downcast::<FileItem>()
+        self.selection.item(position).and_downcast::<FileItem>()
     }
 
     /// The display position of the item at `uri`, if it is shown.

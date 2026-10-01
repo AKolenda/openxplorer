@@ -359,6 +359,7 @@ impl BrowserWindow {
         self.reset_typeahead();
         self.folder_pane().show_view(view);
         self.status_bar().show_view(view);
+        self.update_expandability();
     }
 }
 

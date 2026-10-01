@@ -61,7 +61,7 @@ impl BrowserWindow {
             self,
             move |_, _, _| window.selection_changed()
         ));
-        model.sorted().connect_items_changed(glib::clone!(
+        model.selection().connect_items_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |_, _, _, _| window.update_status()

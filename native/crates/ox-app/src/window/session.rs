@@ -118,6 +118,9 @@ pub(super) struct Tab {
     /// A scroll position to restore once the listing finishes: a tab moved
     /// from another window keeps its place in its folder (TAB-039).
     pub scroll_after_listing: Option<f64>,
+    /// The folders to expand in place once the listing finishes: Back and
+    /// Forward return with them expanded (VIEW-035).
+    pub expand_after_listing: Vec<String>,
     /// The running listing; dropping it cancels it.
     pub listing: Option<Listing>,
     /// The folder watch, kept while the tab shows the same folder.
@@ -150,6 +153,7 @@ impl Tab {
             scroll: 0.0,
             focused: None,
             scroll_after_listing: None,
+            expand_after_listing: Vec::new(),
             listing: None,
             watch: None,
             revealed_item: None,
@@ -181,6 +185,7 @@ impl Tab {
         self.scroll = 0.0;
         self.focused = None;
         self.scroll_after_listing = None;
+        self.expand_after_listing.clear();
         self.revealed_item = None;
     }
 
