@@ -121,6 +121,9 @@ mod imp {
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,
+        /// In tests that ask for it, the programs that would have run.
+        #[cfg(test)]
+        pub(super) recorded_runs: RefCell<Option<Vec<String>>>,
     }
 
     #[glib::object_subclass]
@@ -341,15 +344,25 @@ impl AppContext {
         self.imp().recorded_launches.replace(Some(Vec::new()));
     }
 
-    /// Records that the program at `uri` would run, as "run <uri>"; false
-    /// when launches are not being recorded.
+    /// Records the programs that would run instead of running them; the
+    /// drop-to-run tests run theirs, so this is opt-in.
+    #[cfg(test)]
+    pub(crate) fn record_runs(&self) {
+        self.imp().recorded_runs.replace(Some(Vec::new()));
+    }
+
+    /// Records that the program at `uri` would run; false when runs are
+    /// not being recorded.
     #[cfg(test)]
     pub(crate) fn record_run(&self, uri: &str) -> bool {
-        let mut recorded = self.imp().recorded_launches.borrow_mut();
-        recorded
-            .as_mut()
-            .map(|launches| launches.push(format!("run {uri}")))
-            .is_some()
+        let mut recorded = self.imp().recorded_runs.borrow_mut();
+        recorded.as_mut().map(|runs| runs.push(uri.to_owned())).is_some()
+    }
+
+    /// The programs recorded since [`Self::record_runs`].
+    #[cfg(test)]
+    pub(crate) fn recorded_runs(&self) -> Vec<String> {
+        self.imp().recorded_runs.borrow().clone().unwrap_or_default()
     }
 
     /// The files recorded since [`Self::record_launches`].

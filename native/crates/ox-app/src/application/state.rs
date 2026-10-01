@@ -685,15 +685,23 @@ mod tests {
             });
         };
         set_asking(true);
-        for _ in 0..2 {
-            let window = app.state.open_window(&application(), Some(&fixture.uri()));
-            window.add_tab(&fixture.uri()).expect("valid folder");
-        }
+        let windows: Vec<gtk::Window> = (0..2)
+            .map(|_| {
+                let window = app.state.open_window(&application(), Some(&fixture.uri()));
+                window.add_tab(&fixture.uri()).expect("valid folder");
+                window.upcast()
+            })
+            .collect();
         let questions = || {
             gtk::Window::list_toplevels()
                 .into_iter()
                 .filter_map(|window| window.downcast::<gtk::Window>().ok())
-                .filter(|window| window.is_visible() && window.transient_for().is_some())
+                .filter(WidgetExt::is_visible)
+                .filter(|window| {
+                    window
+                        .transient_for()
+                        .is_some_and(|parent| windows.contains(&parent))
+                })
                 .collect::<Vec<_>>()
         };
 

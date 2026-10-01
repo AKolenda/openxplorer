@@ -174,20 +174,23 @@ fn modifier_keys_keep_the_typed_prefix() {
     assert_eq!(test.selected_names(), ["Notes 10.txt"]);
 }
 
+/// Enter opens the selected item, and never an item outside a selection
+/// of several (several selected items all open, OPEN-003).
+///
 /// parity: OPEN-002
 #[gtk::test]
-fn enter_opens_only_a_single_selected_item() {
+fn enter_never_opens_an_item_outside_the_selection() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let details = test.window.folder_pane().details().column_view();
     let model = test.window.folder_model();
     model.select_only(1);
     model.selection().select_item(2, false);
-    details.emit_by_name::<()>("activate", &[&2_u32]);
+    details.emit_by_name::<()>("activate", &[&0_u32]);
     wait_for(Duration::from_millis(200));
     assert!(
         test.context.recorded_launches().is_empty(),
-        "several selected items open nothing"
+        "an item outside the selection does not open"
     );
     model.select_only(1);
     details.emit_by_name::<()>("activate", &[&1_u32]);

@@ -11472,7 +11472,7 @@ python_tests = [
 bridge = ["activateItem", "list"]
 dolphin = "Dolphin: Enter opens all selected items."
 native = "done"
-native_note = "The file list's activate signal and win.open open the item only when it is the one selected item or nothing is selected (native/crates/ox-app/src/window/input.rs, actions.rs); GTK activates a focused toolbar button, menu item, tab, crumb or sidebar row itself. Test: native/crates/ox-app/src/window/tests/input.rs (enter_opens_only_a_single_selected_item). Porting notes: Multi-selection Enter is a gap vs Dolphin/Windows (OPEN-003)."
+native_note = "The file list's activate signal and win.open open the selected item when it is the one selected item or nothing is selected (native/crates/ox-app/src/window/input.rs, actions.rs); with several selected, Enter on one of them opens them all (OPEN-003, as Dolphin and Windows do, replacing app.js's do-nothing rule), and Enter on an item outside the selection opens nothing. GTK activates a focused toolbar button, menu item, tab, crumb or sidebar row itself. Test: native/crates/ox-app/src/window/tests/input.rs (enter_never_opens_an_item_outside_the_selection)."
 
 [[feature]]
 id = "OPEN-003"

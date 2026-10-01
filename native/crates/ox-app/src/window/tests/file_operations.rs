@@ -365,9 +365,11 @@ fn the_confirmation_settings_decide_what_asks() {
     test.window.close();
     let dialog = open_dialog(&test);
     assert_eq!(dialog.title_text(), "Close all tabs?");
+    let over_window = Some(test.window.upcast_ref::<gtk::Window>());
     let questions = gtk::Window::list_toplevels()
         .into_iter()
-        .filter(|window| window.is_visible() && window.downcast_ref::<Dialog>().is_some())
+        .filter_map(|window| window.downcast::<Dialog>().ok())
+        .filter(|dialog| dialog.is_visible() && dialog.transient_for().as_ref() == over_window)
         .count();
     assert_eq!(questions, 1, "a second close asks no second question");
     dialog.press("Cancel");

@@ -274,6 +274,7 @@ fn opening_a_script_asks_to_run_it_only_when_the_settings_say_so() {
     fs::write(&script, "#!/bin/sh\ntouch ran\n").expect("fixture script");
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("executable");
     let test = TestWindow::open(&fixture.uri());
+    test.context.record_runs();
 
     test.window.activate_item(test.position_of("tidy.sh"));
     wait_until("the script to open", || {
@@ -309,16 +310,13 @@ fn opening_a_script_asks_to_run_it_only_when_the_settings_say_so() {
         2,
         "Cancel opens and runs nothing"
     );
+    assert!(test.context.recorded_runs().is_empty());
 
     test.window.activate_item(test.position_of("tidy.sh"));
     open_dialog(&test).press("Run");
-    wait_until("the script to run", || {
-        test.context.recorded_launches().len() == 3
-    });
-    assert_eq!(
-        test.context.recorded_launches()[2],
-        format!("run {}", fixture.uri_of("tidy.sh"))
-    );
+    wait_until("the script to run", || !test.context.recorded_runs().is_empty());
+    assert_eq!(test.context.recorded_runs(), [fixture.uri_of("tidy.sh")]);
+    assert_eq!(test.context.recorded_launches().len(), 2, "Run does not open it");
 
     // On FAT, NTFS and SMB mounts every file may be executed; a text
     // file there opens without the question.
@@ -326,9 +324,9 @@ fn opening_a_script_asks_to_run_it_only_when_the_settings_say_so() {
     fs::set_permissions(&notes, fs::Permissions::from_mode(0o755)).expect("executable");
     test.window.activate_item(test.position_of("Notes 2.txt"));
     wait_until("the text file to open", || {
-        test.context.recorded_launches().len() == 4
+        test.context.recorded_launches().len() == 3
     });
-    assert_eq!(test.context.recorded_launches()[3], fixture.uri_of("Notes 2.txt"));
+    assert_eq!(test.context.recorded_launches()[2], fixture.uri_of("Notes 2.txt"));
 }
 
 /// Shift+F4 opens a terminal in the folder shown and Shift+Alt+F4 one per
