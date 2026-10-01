@@ -2,8 +2,8 @@
 //! The folder pane: the details and icon views, the empty and error state,
 //! the landing pages and the loading line.
 //!
-//! Ports the `main` area of `desktop/ui/index.html` and `renderContent` in
-//! `desktop/ui/app.js`. Only the visible view is attached to the selection
+//! Ports the `main` area of `v2.0.0:desktop/ui/index.html` and `renderContent` in
+//! `v2.0.0:desktop/ui/app.js`. Only the visible view is attached to the selection
 //! model: a hidden `GtkGridView` still builds and binds its tiles for every
 //! change, which made large folders several times slower to list.
 //!

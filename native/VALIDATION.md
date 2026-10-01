@@ -33,7 +33,7 @@ Wayland, assistive technology and startup performance remain unverified.
 
 The public-data audit reports `Screenshot fixture source has changed since
 capture`. The saved base commit already had a mismatch between
-`desktop/ui/app.js` and the published capture manifest's fixture-source hash.
+`v2.0.0:desktop/ui/app.js` and the published capture manifest's fixture-source hash.
 All seven published screenshot image hashes still verify. The audit used no
 private identifier rules, so its fingerprint check is limited; the three native
 captures were also visually reviewed and use synthetic files. The mismatch

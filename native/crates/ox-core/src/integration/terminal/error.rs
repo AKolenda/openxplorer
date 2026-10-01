@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Why Open in Terminal was refused or failed, in the words of
-//! `desktop/terminal_integration.py`.
+//! `v2.0.0:desktop/terminal_integration.py`.
 
 use std::io;
 use std::path::PathBuf;

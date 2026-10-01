@@ -2,7 +2,7 @@
 //! The private backup of `user-dirs.dirs` and the history of changes.
 //!
 //! Ports the backup and `folder-location-history.json` parts of
-//! `FolderLocations.apply` and `_history` in `desktop/folder_locations.py`.
+//! `FolderLocations.apply` and `_history` in `v2.0.0:desktop/folder_locations.py`.
 //! Both apps share the history file, so it keeps the Python format:
 //! `{"DOWNLOAD": {"previous": …, "path": …, "backup": …, "changedAt": …}}`.
 

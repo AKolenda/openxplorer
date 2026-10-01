@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The This PC and Network landing pages.
 //!
-//! Ports the `pc:` branch of `renderLanding` in `desktop/ui/app.js`, and
+//! Ports the `pc:` branch of `renderLanding` in `v2.0.0:desktop/ui/app.js`, and
 //! draws the title of every page ([`super::network_page`] draws the rest
 //! of Network). This PC lists Quick access (cards in a stretching grid,
 //! [`super::card_grid`]), then Devices and drives (Local Disk, drives and

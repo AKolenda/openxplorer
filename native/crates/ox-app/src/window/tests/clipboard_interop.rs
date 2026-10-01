@@ -4,7 +4,7 @@
 //! owner that changes during a read. Dolphin's cut and plain text are in
 //! the `clipboard` tests.
 //!
-//! Ported from `desktop/tests/test_file_clipboard_interop.py`, against the
+//! Ported from `v2.0.0:desktop/tests/test_file_clipboard_interop.py`, against the
 //! display's clipboard instead of its fake GTK clipboard. GitHub issue #20 (1.1.4
 //! crashed on KDE Plasma when GTK returned selection data of length -1) is
 //! the reason every foreign clipboard here must leave the window running,

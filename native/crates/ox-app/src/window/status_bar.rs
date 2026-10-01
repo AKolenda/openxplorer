@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The status bar at the bottom of the window.
 //!
-//! Ports `footer.statusbar` in `desktop/ui/index.html` and `updateStatus`
-//! in `desktop/ui/app.js`: the item count, the selection, the
+//! Ports `footer.statusbar` in `v2.0.0:desktop/ui/index.html` and `updateStatus`
+//! in `v2.0.0:desktop/ui/app.js`: the item count, the selection, the
 //! type-to-select hint, then at the right the volume's free space, the
 //! build, "Check for updates"
 //! and the Details and Large icons view buttons, the current view's

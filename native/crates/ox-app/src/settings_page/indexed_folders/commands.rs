@@ -3,7 +3,7 @@
 //! the window's message line says about it.
 //!
 //! Ports the handlers of `renderSettingsCache` and `renderSettingsPage` in
-//! `desktop/ui/app.js` (`setCache`, `cacheRefresh`, `cacheStop`,
+//! `v2.0.0:desktop/ui/app.js` (`setCache`, `cacheRefresh`, `cacheStop`,
 //! `cacheClear`, the Add button and "Refresh all"; SET-006, SET-007,
 //! SRCH-019, SRCH-023). Each runs off the main thread; a failure is shown
 //! in the window's message line, as the Python toasts were.
@@ -119,7 +119,7 @@ mod tests {
     use super::*;
 
     /// Ported from the Add button of `renderSettingsPage` in
-    /// `desktop/ui/app.js`: a relative path starts at the folder shown
+    /// `v2.0.0:desktop/ui/app.js`: a relative path starts at the folder shown
     /// before Settings, and a UNC path names a share.
     ///
     /// parity: SET-007

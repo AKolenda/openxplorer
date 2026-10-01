@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Location parsing, validation and presentation.
 //!
-//! Ports `desktop/core.py` (`split_location`, `is_device_location`,
+//! Ports `v2.0.0:desktop/core.py` (`split_location`, `is_device_location`,
 //! `_normalise_device_location`, `validate_name`, `normalise_location`,
 //! `require_share`, `new_copy_name`, `safe_label`, `is_smb_server`,
-//! `require_item_uri`) and the display helpers from `desktop/ui/app.js`
+//! `require_item_uri`) and the display helpers from `v2.0.0:desktop/ui/app.js`
 //! (`displayUri`, `baseName`, `parentUri`, `locationParts`, `deviceParts`,
 //! `deviceRoot`, `breadcrumbSegments`, `networkLocation`, `sameLocation`,
 //! `writableLocation`, `readonlyLocation`, `titleFor`).
@@ -68,7 +68,7 @@ pub use virtual_place::{
 /// A user-facing validation error. Its `Display` text is the message,
 /// shown as-is; errors that wrap it keep that text.
 ///
-/// Where the Rust port refuses what a `raise` in `desktop/core.py` refuses,
+/// Where the Rust port refuses what a `raise` in `v2.0.0:desktop/core.py` refuses,
 /// the message is the Python app's, word for word; `location_python.rs`
 /// checks every one of them. Where Python's standard library refused an
 /// address in its own words, the message is in the app's wording instead.

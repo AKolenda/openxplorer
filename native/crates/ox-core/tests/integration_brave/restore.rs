@@ -9,7 +9,7 @@ use serde_json::json;
 
 use super::{original_preferences, write_json, Fixture, PREFERENCES_WITH_ZOOM_LEVEL, PROFILE_ID, ZOOM_LEVEL};
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_restore_only_changed_keys`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_restore_only_changed_keys`
 /// parity: INT-021
 #[test]
 fn restoring_puts_back_only_the_download_folders() {
@@ -50,7 +50,7 @@ fn restoring_keeps_unrelated_decimal_preferences_exactly() {
     );
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_restore_does_not_overwrite_later_preference`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_restore_does_not_overwrite_later_preference`
 /// parity: INT-021
 #[test]
 fn restoring_keeps_a_folder_the_user_changed_later() {
@@ -72,7 +72,7 @@ fn restoring_keeps_a_folder_the_user_changed_later() {
     );
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_restore_consent_required`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_restore_consent_required`
 /// parity: INT-021
 #[test]
 fn restoring_needs_explicit_consent() {

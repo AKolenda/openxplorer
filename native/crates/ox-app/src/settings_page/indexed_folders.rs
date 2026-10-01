@@ -3,7 +3,7 @@
 //! folders to add to it.
 //!
 //! Ports `renderSettingsCache` and the "Add a folder" field of
-//! `renderSettingsPage` in `desktop/ui/app.js` (SET-006, SET-007) in the
+//! `renderSettingsPage` in `v2.0.0:desktop/ui/app.js` (SET-006, SET-007) in the
 //! layout of the settings mockup. The Python app listed every candidate
 //! folder in one long list with a check box each; here the page opens from
 //! the "Folders to index" row and shows two groups. "Indexed folders"

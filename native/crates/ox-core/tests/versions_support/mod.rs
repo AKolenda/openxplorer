@@ -3,7 +3,7 @@
 //! the JSON format a Python script reads too, a [`TreeProvider`] that
 //! serves them to the Rust lookup, and [`lookup_in_both_apps`], which runs
 //! one lookup through [`PreviousVersions::find_versions`] and through
-//! `PreviousVersions.list` in `desktop/previous_versions.py` and checks
+//! `PreviousVersions.list` in `v2.0.0:desktop/previous_versions.py` and checks
 //! that the outcomes match.
 //!
 //! A test crate that includes this module also declares `mod

@@ -3,7 +3,7 @@
 //! in a corner, and the stem and bar of the green network bar.
 //!
 //! Ports the geometry of `networkIcon` and `zipFolderIcon` in
-//! `desktop/ui/app.js` to the owner's rules for the Fluent icons (icon
+//! `v2.0.0:desktop/ui/app.js` to the owner's rules for the Fluent icons (icon
 //! mapping, 2026-09-27): at 16 pixels a network location's picture is 12
 //! pixels on a 2 x 2 stem and a 16 x 2 bar, scaled in proportion at every
 //! other size, and a badge is 9/16 of the icon. Computed without widgets,

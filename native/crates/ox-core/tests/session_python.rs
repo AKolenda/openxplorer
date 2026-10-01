@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Runs the same tab states and `FileManager1` requests through
-//! `desktop/window_state.py` and the Rust port: both must keep the same
+//! `v2.0.0:desktop/window_state.py` and the Rust port: both must keep the same
 //! fields and refuse the same input with the same message. The native app
 //! writes its own pages as `ox:` URIs, which are mapped back to the Python
 //! spellings before comparing.

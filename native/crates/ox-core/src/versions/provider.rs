@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Reading snapshot collections and the items inside snapshots.
 //!
-//! Ports `SnapshotProvider` in `desktop/file_services.py`. The lookup only
+//! Ports `SnapshotProvider` in `v2.0.0:desktop/file_services.py`. The lookup only
 //! reads metadata through this trait, so it can be tested without GIO or a
 //! NAS; [`GioSnapshotProvider`] is the one the app uses.
 

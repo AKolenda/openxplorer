@@ -4,7 +4,7 @@
 //! cards, groups of rows and notes, each a [`Part`] of the section.
 //!
 //! Replaces the stacked `.settings-section` cards of `renderSettingsPage`
-//! in `desktop/ui/app.js`: only the chosen category shows (SET-019). The
+//! in `v2.0.0:desktop/ui/app.js`: only the chosen category shows (SET-019). The
 //! page is as wide as [`WIDEST_PAGE`] where there is room, as the mockup's
 //! `.page`, and narrower where there is not, so rows stay easy to scan in
 //! a wide window.

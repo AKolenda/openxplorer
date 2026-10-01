@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Shared settings in `$XDG_CONFIG_HOME/winspace/settings.json`.
 //!
-//! Ports `Settings` in `desktop/core.py`, on the private storage of
-//! `crate::private_storage` (`desktop/private_storage.py`). The Python
+//! Ports `Settings` in `v2.0.0:desktop/core.py`, on the private storage of
+//! `crate::private_storage` (`v2.0.0:desktop/private_storage.py`). The Python
 //! application and this one use the same file, so the protocol matches
 //! exactly:
 //!

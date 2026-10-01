@@ -290,7 +290,8 @@ class OptionTests(unittest.TestCase):
             status = check.main([])
         self.assertEqual(status, 2)
         run_all_checks.assert_not_called()
-        self.assertIn('Required native check tools are missing: cargo, python3', stderr.getvalue())
+        self.assertIn('Required native check tools are missing: cargo, git, python3',
+                      stderr.getvalue())
 
 
 class FailureReportTests(unittest.TestCase):

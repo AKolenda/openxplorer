@@ -2,7 +2,7 @@
 //! What a tab move is addressed by and what it tells the windows: the
 //! window ids, the capability token, the messages the app delivers, how a
 //! move ends and why it can be refused. Ports the payloads and messages of
-//! `desktop/tab_transfers.py`.
+//! `v2.0.0:desktop/tab_transfers.py`.
 
 use std::fmt;
 use std::str::FromStr;
@@ -78,7 +78,7 @@ pub enum KeptReason {
 
 impl KeptReason {
     /// The message the source window shows, word for word as
-    /// `desktop/tab_transfers.py` sends it.
+    /// `v2.0.0:desktop/tab_transfers.py` sends it.
     pub fn message(self) -> &'static str {
         match self {
             KeptReason::Cancelled => "Tab move cancelled. The original tab was kept.",

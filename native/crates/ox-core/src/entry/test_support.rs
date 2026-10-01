@@ -2,7 +2,7 @@
 //! `GFileInfo` fixtures shared by the entry tests.
 //!
 //! Real `GFileInfo` objects filled in by hand, without any filesystem
-//! query, as `desktop/tests/test_gio_serialization.py` does with fakes, and
+//! query, as `v2.0.0:desktop/tests/test_gio_serialization.py` does with fakes, and
 //! entries built from them for a URI given as text.
 
 use super::info::build_entry;

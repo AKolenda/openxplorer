@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! How the tab strip shares its width between tabs.
 //!
-//! Ports the flex rules of `.tabs` and `.tab` in `desktop/ui/style.css`:
+//! Ports the flex rules of `.tabs` and `.tab` in `v2.0.0:desktop/ui/style.css`:
 //! every tab is 215 pixels wide (180 or 150 in a narrow window), tabs
 //! shrink evenly toward 100 pixels when the title bar runs out of room, and
 //! below that the strip scrolls. A `GtkBox` cannot shrink its children

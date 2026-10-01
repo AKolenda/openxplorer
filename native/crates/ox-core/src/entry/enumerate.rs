@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Folder listing with GIO's asynchronous enumerator.
 //!
-//! Ports `enumerate_folder` in `desktop/gio_backend.py`. GIO owns backend
+//! Ports `enumerate_folder` in `v2.0.0:desktop/gio_backend.py`. GIO owns backend
 //! enumeration (no per-row stat) and does the blocking reads on its own
 //! worker threads, so the listing can be awaited on the GTK main loop. Rows
 //! arrive in batches: the first one at once, so the top of a large folder

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The Secret Service keyring against a real keyring daemon, and against
-//! the Python app's libsecret calls in `desktop/session_credentials.py`.
+//! the Python app's libsecret calls in `v2.0.0:desktop/session_credentials.py`.
 //!
 //! These tests write to the session keyring. They run only in the
 //! isolated session of `native/tools/check.py`, where the private bus
@@ -91,7 +91,7 @@ fn secret_service_window() -> SessionCredentials {
     SessionCredentials::new(Arc::new(CredentialStore::new(Arc::new(SecretService))))
 }
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_other_window_load`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_other_window_load`
 /// and `test_forget_clears_only_matching_host`, against GNOME Keyring
 /// instead of a double.
 ///

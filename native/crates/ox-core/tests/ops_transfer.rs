@@ -107,7 +107,7 @@ fn a_cancelled_conflict_check_reports_the_cancellation() {
     assert_eq!(conflicts, Err(OpsError::Cancelled));
 }
 
-/// Ported from `desktop/tests/test_rc2.py::DispatchTests::test_operate_dispatch_protects_backup_descendants`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::DispatchTests::test_operate_dispatch_protects_backup_descendants`.
 ///
 /// parity: XFER-020
 #[test]

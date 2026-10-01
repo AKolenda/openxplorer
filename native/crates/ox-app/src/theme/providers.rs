@@ -2,7 +2,7 @@
 //! The skin's CSS providers and their place in GTK's style cascade.
 //!
 //! Ports the stylesheet half of `apply_native_theme` in
-//! `desktop/winspace.py`. GTK's built-in theme is forced underneath the
+//! `v2.0.0:desktop/winspace.py`. GTK's built-in theme is forced underneath the
 //! skin so the desktop theme (Zorin's) cannot leak into it; only this
 //! application's GTK settings change, never GNOME's.
 

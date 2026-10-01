@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The identity of an installed or running build, used to notice that a
 //! package upgrade replaced the files under a running process. Ports
-//! `identity`, `PROTOCOL` and `same_build` in `desktop/runtime_guard.py`,
-//! and the `runtime-info` action state of `desktop/winspace.py`.
+//! `identity`, `PROTOCOL` and `same_build` in `v2.0.0:desktop/runtime_guard.py`,
+//! and the `runtime-info` action state of `v2.0.0:desktop/winspace.py`.
 
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -40,7 +40,7 @@ pub struct RuntimeIdentity {
 
 impl RuntimeIdentity {
     /// The identity of the Python app installed in `root`, exactly as
-    /// `identity` in `desktop/runtime_guard.py` computes it: every `*.py`
+    /// `identity` in `v2.0.0:desktop/runtime_guard.py` computes it: every `*.py`
     /// in `root`, then every `.py`, `.html`, `.js`, `.css` and `.svg`
     /// file in `root/ui`, each in name order, each hashed as its relative
     /// path, a NUL byte and its contents.

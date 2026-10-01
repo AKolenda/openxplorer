@@ -4,7 +4,7 @@
 //! nesting depth limit every walk of the engine and its backends obeys.
 //!
 //! Ports `TransferEngine._check_write_tree` and the depth limit of
-//! `desktop/operations.py`.
+//! `v2.0.0:desktop/operations.py`.
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
@@ -43,7 +43,7 @@ pub(crate) enum SourceChange {
 /// source tree (copy, move). Nothing is followed through symbolic links and
 /// nothing is modified. Without a guard this does nothing, exactly like the
 /// Python engine. The Python app also runs it before a rename (`rename_item`
-/// in `desktop/gio_backend.py`).
+/// in `v2.0.0:desktop/gio_backend.py`).
 ///
 /// # Errors
 ///

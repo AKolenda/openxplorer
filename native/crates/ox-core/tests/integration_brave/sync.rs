@@ -16,7 +16,7 @@ use super::{
     mode_of, original_preferences, read_json, Fixture, PREFERENCES_WITH_ZOOM_LEVEL, PROFILE_ID, ZOOM_LEVEL,
 };
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_explicit_consent`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_explicit_consent`
 /// parity: INT-020
 #[test]
 fn syncing_needs_explicit_consent() {
@@ -31,7 +31,7 @@ fn syncing_needs_explicit_consent() {
     assert_eq!(fixture.preferences_json(), original_preferences());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_requires_quit`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_requires_quit`
 /// parity: INT-020, SAFE-020
 #[test]
 fn syncing_waits_until_brave_is_closed() {
@@ -47,7 +47,7 @@ fn syncing_waits_until_brave_is_closed() {
     assert_eq!(fixture.preferences_json(), original_preferences());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_changes_only_directories`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_changes_only_directories`
 /// parity: INT-020
 #[test]
 fn syncing_changes_only_the_two_download_folders() {
@@ -76,7 +76,7 @@ fn syncing_keeps_unrelated_decimal_preferences_exactly() {
     assert!(written.contains(ZOOM_LEVEL), "{written}");
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_private_backups_and_prefs`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_private_backups_and_prefs`
 /// parity: INT-020, SAFE-020
 #[test]
 fn backups_records_and_preferences_are_private() {
@@ -95,7 +95,7 @@ fn backups_records_and_preferences_are_private() {
     assert_eq!(mode_of(fixture.brave().backup_folder()), 0o700);
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_unknown_profile`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_unknown_profile`
 /// parity: INT-020
 #[test]
 fn a_profile_outside_the_detected_ones_is_refused() {
@@ -110,7 +110,7 @@ fn a_profile_outside_the_detected_ones_is_refused() {
     assert!(matches!(refused, Err(BraveError::UnknownProfile)), "{refused:?}");
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_missing_directory`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_missing_directory`
 /// parity: INT-020
 #[test]
 fn a_missing_download_folder_is_refused() {
@@ -125,7 +125,7 @@ fn a_missing_download_folder_is_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_dedicated_directory_required`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_dedicated_directory_required`
 /// parity: INT-020
 #[test]
 fn the_home_folder_is_not_a_download_folder() {
@@ -137,7 +137,7 @@ fn the_home_folder_is_not_a_download_folder() {
     assert_eq!(fixture.preferences_json(), original_preferences());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_no_smb_uri_preference`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_no_smb_uri_preference`
 /// parity: INT-020
 #[test]
 fn an_smb_address_is_not_a_download_folder() {
@@ -151,7 +151,7 @@ fn an_smb_address_is_not_a_download_folder() {
     );
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_symlink_pref_refused`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_symlink_pref_refused`
 /// parity: INT-020, SAFE-020
 #[test]
 fn symlinked_preferences_are_never_written() {
@@ -166,7 +166,7 @@ fn symlinked_preferences_are_never_written() {
     assert_eq!(read_json(&target), original_preferences());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_late_running_race_no_pref_change`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_late_running_race_no_pref_change`
 /// parity: INT-020
 #[test]
 fn brave_starting_during_a_sync_leaves_the_profile_unchanged() {
@@ -188,7 +188,7 @@ fn brave_starting_during_a_sync_leaves_the_profile_unchanged() {
     assert_eq!(fixture.preferences_json(), original_preferences());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_preference_race_detected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_preference_race_detected`
 /// parity: INT-020
 #[test]
 fn preferences_changed_during_a_sync_are_not_overwritten() {
@@ -214,7 +214,7 @@ fn preferences_changed_during_a_sync_are_not_overwritten() {
     assert_eq!(fixture.preferences_json(), json!({"external": true}));
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_invalid_preference_type_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_invalid_preference_type_rejected`
 /// parity: INT-020
 #[test]
 fn a_download_group_that_is_not_an_object_is_refused() {
@@ -230,7 +230,7 @@ fn a_download_group_that_is_not_an_object_is_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_multiple_profiles`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_multiple_profiles`
 /// parity: INT-020
 #[test]
 fn several_profiles_are_updated_together() {
@@ -252,7 +252,7 @@ fn several_profiles_are_updated_together() {
     assert_eq!(outcome.updated.len(), 2);
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_relative_destination_refused`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_relative_destination_refused`
 /// parity: INT-020
 #[test]
 fn a_relative_download_folder_is_refused() {

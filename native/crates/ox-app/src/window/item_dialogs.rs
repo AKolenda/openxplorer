@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Properties, previous versions and the window's in-window dialogs.
 //!
-//! Ports the tab ownership of `propertiesDialog` in `desktop/ui/app.js`
+//! Ports the tab ownership of `propertiesDialog` in `v2.0.0:desktop/ui/app.js`
 //! (`attachTabDialog`, `suspendTabDialog`, `restoreTabDialog`,
 //! `discardTabDialog`) and `showModal` for the window's other dialogs.
 //! Browse and the snapshot banner are in [`super::snapshot_tabs`],

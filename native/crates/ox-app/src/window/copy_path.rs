@@ -2,7 +2,7 @@
 //! Copy path: puts the address of the selected item, or of the folder, on
 //! the clipboard as text (CLIP-012).
 //!
-//! Ports `copyPath` in `desktop/ui/app.js` and the text it copies,
+//! Ports `copyPath` in `v2.0.0:desktop/ui/app.js` and the text it copies,
 //! `displayUri`: a plain path for local items, `\\server\share\…` for SMB
 //! and `<device> / path` for phones and cameras. Only text is copied, so
 //! the command changes no file and no sharing permission, and it needs

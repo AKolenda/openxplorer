@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! When a window may close (TAB-049, TAB-052).
 //!
-//! Ports `askClose` in `desktop/ui/app.js` and `on_delete` and
-//! `quit_safely` in `desktop/winspace.py`. Every close, from the caption's
+//! Ports `askClose` in `v2.0.0:desktop/ui/app.js` and `on_delete` and
+//! `quit_safely` in `v2.0.0:desktop/winspace.py`. Every close, from the caption's
 //! Close button, closing the only tab, or the window manager (Alt+F4, the
 //! dock, the shell), is refused with a toast while an update installs
 //! (UPD-005).

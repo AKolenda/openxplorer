@@ -2,7 +2,7 @@
 //! The archive service over the production GIO adapters: reading archives
 //! through seekable GIO streams, extracting with GIO, and the background
 //! variants the app awaits. Ports `ArchiveReaderTests` of
-//! `desktop/tests/test_rc2.py`, whose fake GIO stream is the
+//! `v2.0.0:desktop/tests/test_rc2.py`, whose fake GIO stream is the
 //! [`ShortReadStream`] here.
 
 mod archive_support;
@@ -27,7 +27,7 @@ use short_reads::{Seeking, ShortReadStream};
 use unsized_file::UnsizedFile;
 
 /// A GIO input stream over bytes in memory that returns at most three
-/// bytes per read, like the `Stream` double of `desktop/tests/test_rc2.py`.
+/// bytes per read, like the `Stream` double of `v2.0.0:desktop/tests/test_rc2.py`.
 mod short_reads {
     use gio::subclass::prelude::*;
 
@@ -141,7 +141,7 @@ mod short_reads {
 
 /// A GIO file whose data opens but whose size cannot be queried, like the
 /// failing `query_info` of `test_constructor_closes_stream_on_failure` in
-/// `desktop/tests/test_rc2.py`.
+/// `v2.0.0:desktop/tests/test_rc2.py`.
 mod unsized_file {
     use std::path::Path;
 
@@ -221,7 +221,7 @@ fn short_reader(data: &[u8], cancel: &Cancellation) -> GioArchiveReader {
     GioArchiveReader::new(stream.upcast(), size, cancel).expect("the stream can seek")
 }
 
-/// Ported from `desktop/tests/test_rc2.py::ArchiveReaderTests::test_read_accumulates_partial_reads`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::ArchiveReaderTests::test_read_accumulates_partial_reads`.
 ///
 /// parity: ARC-007
 #[test]
@@ -253,7 +253,7 @@ fn one_read_asks_gio_for_at_most_64_kib() {
     assert_eq!(count, 64 * 1024);
 }
 
-/// Ported from `desktop/tests/test_rc2.py::ArchiveReaderTests::test_zero_read_and_eof`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::ArchiveReaderTests::test_zero_read_and_eof`.
 ///
 /// parity: ARC-007
 #[test]
@@ -270,7 +270,7 @@ fn an_empty_read_and_the_end_read_nothing() {
     assert_eq!(after_end, 0);
 }
 
-/// Ported from `desktop/tests/test_rc2.py::ArchiveReaderTests::test_real_zip_through_short_reads`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::ArchiveReaderTests::test_real_zip_through_short_reads`.
 ///
 /// parity: ARC-007
 #[test]
@@ -297,7 +297,7 @@ fn a_real_zip_is_read_through_short_reads() {
     );
 }
 
-/// Ported from `desktop/tests/test_rc2.py::ArchiveReaderTests::test_seek_validation`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::ArchiveReaderTests::test_seek_validation`.
 /// Rust's `SeekFrom` cannot hold an invalid mode, so the refused seek is
 /// one before the start.
 ///
@@ -316,7 +316,7 @@ fn seeks_are_relative_to_the_end_and_never_before_the_start() {
     assert_eq!(before_start.kind(), ErrorKind::InvalidInput);
 }
 
-/// Ported from `desktop/tests/test_rc2.py::ArchiveReaderTests::test_cancellation_between_reads`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::ArchiveReaderTests::test_cancellation_between_reads`.
 ///
 /// parity: ARC-007
 #[test]
@@ -330,7 +330,7 @@ fn a_cancelled_reader_stops_reading() {
     assert!(result.is_err());
 }
 
-/// Ported from `desktop/tests/test_rc2.py::ArchiveReaderTests::test_constructor_closes_stream_on_failure`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::ArchiveReaderTests::test_constructor_closes_stream_on_failure`.
 ///
 /// parity: ARC-007
 #[test]
@@ -347,7 +347,7 @@ fn a_failed_open_closes_the_stream() {
     assert!(stream.is_closed());
 }
 
-/// Ported from `desktop/tests/test_rc2.py::ArchiveReaderTests::test_nonseekable_closes_stream`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::ArchiveReaderTests::test_nonseekable_closes_stream`.
 ///
 /// parity: ARC-007
 #[test]
@@ -385,7 +385,7 @@ fn the_production_opener_reads_local_archives() {
 
 /// ARC-007: an archive on a share with a local path (here the `GVfs` FUSE
 /// export in the private runtime directory) is read from that path, as
-/// `archive_stream` in `desktop/native_opening.py` reads it.
+/// `archive_stream` in `v2.0.0:desktop/native_opening.py` reads it.
 ///
 /// parity: ARC-007
 #[test]

@@ -2,7 +2,7 @@
 //! One entry per visible application for Open with, and the code-editor
 //! shortcuts of the context menu.
 //!
-//! Ports `desktop/app_catalog.py` (OPEN-011, OPEN-015). Nothing here
+//! Ports `v2.0.0:desktop/app_catalog.py` (OPEN-011, OPEN-015). Nothing here
 //! launches an application or changes a default.
 
 use std::collections::btree_map::{BTreeMap, Entry};

@@ -3,9 +3,9 @@
 //! cache status as last read, and the operations the windows and Settings
 //! ask for.
 //!
-//! Ports what `desktop/winspace.py` did with its `IndexService` (the
+//! Ports what `v2.0.0:desktop/winspace.py` did with its `IndexService` (the
 //! `cache*` and `search` bridge operations and the `cacheChanged` event)
-//! and `refreshCacheStatus` in `desktop/ui/app.js`. [`SearchCache`] is a
+//! and `refreshCacheStatus` in `v2.0.0:desktop/ui/app.js`. [`SearchCache`] is a
 //! `GObject` owned by the app context. Every operation blocks on SQLite, so
 //! it runs on a GIO worker thread and the caller awaits it; the main
 //! thread never waits for the cache. The status is read again 200 ms

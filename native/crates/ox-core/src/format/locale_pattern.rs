@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Locale-aware `strftime` patterns for numeric dates and clock times.
 //!
-//! The web UI (`dateText` and `timestamp` in `desktop/ui/app.js`)
+//! The web UI (`dateText` and `timestamp` in `v2.0.0:desktop/ui/app.js`)
 //! formatted dates with the browser's `toLocaleDateString` and
 //! `toLocaleString`, which follow the CLDR formats of the browser locale.
 //! `glib::DateTime` has no CLDR formats, but its `%x` and `%X` conversions

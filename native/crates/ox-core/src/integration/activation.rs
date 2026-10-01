@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What activating an item does, and which application opens a file.
 //!
-//! Ports `desktop/activation.py` (OPEN-001, OPEN-005). The decision uses
+//! Ports `v2.0.0:desktop/activation.py` (OPEN-001, OPEN-005). The decision uses
 //! freshly queried metadata, never a cached row, so a folder named like a
 //! file (`Archive.mp4`) still opens as a folder and a file whose cached
 //! row claimed a folder opens as a file.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Ports `desktop/tests/test_v05.py::IndexTests`: how scans and live
+//! Ports `v2.0.0:desktop/tests/test_v05.py::IndexTests`: how scans and live
 //! updates write the cache, and what a search finds afterwards.
 //!
 //! Every test starts from [`ScannedShare`], an SMB root whose scan has
@@ -15,7 +15,7 @@ use super::root::{Caching, HiddenItems, RootStatus};
 use super::scan::ScanOutcome;
 use crate::test_support::permission_bits;
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_cached_regular_not_directory`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_cached_regular_not_directory`
 ///
 /// parity: SRCH-009
 #[test]
@@ -30,7 +30,7 @@ fn a_cached_regular_file_is_never_a_folder() {
     assert!(!hits[0].is_dir);
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_search_full_parent_path`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_search_full_parent_path`
 ///
 /// parity: SRCH-007, SRCH-009
 #[test]
@@ -44,7 +44,7 @@ fn results_carry_their_full_parent_folder() {
     assert_eq!(hits[0].path, "\\\\nas\\share\\Nested\\bank.pdf");
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_delta_add`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_delta_add`
 ///
 /// parity: SRCH-028
 #[test]
@@ -56,7 +56,7 @@ fn a_live_update_adds_a_new_item() {
     assert_eq!(share.found_names("bank"), ["bank.pdf"]);
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_delta_remove`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_delta_remove`
 ///
 /// parity: SRCH-028
 #[test]
@@ -69,7 +69,7 @@ fn a_live_update_removes_a_deleted_item() {
     assert!(share.found_names("bank").is_empty());
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_delete_folder_prunes_descendants_only`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_delete_folder_prunes_descendants_only`
 ///
 /// parity: SRCH-028
 #[test]
@@ -88,7 +88,7 @@ fn deleting_a_folder_prunes_only_its_descendants() {
     assert_eq!(share.found_names("keep"), ["keep.pdf"]);
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_new_directory_traversal_hint`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_new_directory_traversal_hint`
 ///
 /// parity: SRCH-028
 #[test]
@@ -100,7 +100,7 @@ fn a_new_folder_is_returned_for_reading() {
     assert_eq!(new_folders, ["smb://nas/share/new"]);
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_failed_scan_preserves_last_data`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_failed_scan_preserves_last_data`
 ///
 /// parity: SRCH-024
 #[test]
@@ -120,7 +120,7 @@ fn a_failed_scan_keeps_the_last_results() {
     assert_eq!(root.error.as_deref(), Some("offline"));
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_disable_clears_metadata`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_disable_clears_metadata`
 ///
 /// parity: SRCH-019
 #[test]
@@ -139,7 +139,7 @@ fn disabling_a_root_deletes_its_entries() {
     assert_eq!(root.entry_count, 0);
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_directory_to_file_prunes_old_children`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_directory_to_file_prunes_old_children`
 ///
 /// parity: SRCH-028
 #[test]
@@ -154,7 +154,7 @@ fn a_folder_that_became_a_file_loses_its_children() {
     assert_eq!(share.found_names("archive"), ["archive"]);
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_wrong_parent_ignored`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_wrong_parent_ignored`
 ///
 /// parity: SRCH-028
 #[test]
@@ -166,7 +166,7 @@ fn items_of_another_folder_are_ignored() {
     assert!(share.found_names("bank").is_empty());
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_separate_process_connection_reads_updates`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_separate_process_connection_reads_updates`
 ///
 /// parity: SRCH-027, PERF-007
 #[test]
@@ -179,7 +179,7 @@ fn another_connection_reads_what_a_scan_stored() {
     assert_eq!(found_names(&other, "bank"), ["bank.pdf"]);
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_private_database_modes`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_private_database_modes`
 ///
 /// The directory starts out readable by others, so the test also shows
 /// that opening the cache makes it private.
@@ -198,7 +198,7 @@ fn the_database_and_its_directory_are_private() {
     assert_eq!(permission_bits(index.directory()), 0o700);
 }
 
-/// Ported from `desktop/tests/test_v05.py::IndexTests::test_fts_special_characters_bound`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_fts_special_characters_bound`
 ///
 /// parity: SRCH-007, SRCH-008, SRCH-010
 #[test]

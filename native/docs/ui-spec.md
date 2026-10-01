@@ -2,13 +2,13 @@
 
 The visual contract for the GTK 4.14 skin in `native/crates/ox-app/resources/`.
 The native app must look like the current Python/WebKit app
-(`desktop/ui/style.css`), moved closer to Windows 11 File Explorer (24H2)
+(`v2.0.0:desktop/ui/style.css`), moved closer to Windows 11 File Explorer (24H2)
 and WinUI 3 where a sourced Windows value exists.
 
 - **Units.** Logical pixels at 100 % text size. Every font size and every
   text-dependent height scales with the text-size setting (80–200 %), as in
-  `desktop/ui/text-size.js` and `native/crates/ox-app/src/theme/fonts.rs`.
-- **"Current"** means `desktop/ui/style.css` and `desktop/ui/app.js` at this
+  `v2.0.0:desktop/ui/text-size.js` and `native/crates/ox-app/src/theme/fonts.rs`.
+- **"Current"** means `v2.0.0:desktop/ui/style.css` and `v2.0.0:desktop/ui/app.js` at this
   commit, plus the screenshots `apps/web/public/assets/screenshots/explorer-{light,dark}.png`
   and `/tmp/ox-work/gtk4-spike/shots/current-*.png`.
 - **"Native"** means `native/crates/ox-app/resources/{style,light,dark}.css`
@@ -675,7 +675,7 @@ Priorities: P0 breaks the identity or is a bug; P1 is a visible gap in parity;
 P2 moves the look to the Windows spec and needs sign-off if tagged *visible*;
 P3 is polish.
 
-### 5.1 Current app (`desktop/ui/style.css`)
+### 5.1 Current app (`v2.0.0:desktop/ui/style.css`)
 
 The native app is the product going forward. Fix these in the web app only
 where marked, so both apps stay comparable during parity testing.
@@ -717,7 +717,7 @@ size before judging hairlines.
 | D-N08 | P1 | visible | The address and search fields are **40** px high (y = 61–100; spec 34), because GtkBox stretches its children to the row's 40 px content height. | `address_box.set_valign(gtk::Align::Center); search.set_valign(gtk::Align::Center);` Set `.navrow { min-height: 39px; padding: 11px 16px 11px 13px; }` (was 40). 11 + 39 + 11 + 1 px border = 62, as in the current app, whose content box is also 39. |
 | D-N09 | P1 | visible | The search glyph is at the left and the placeholder reads "Filter this folder"; the current app reads "Search *folder*" with the glyph on the right. | Use `gtk::Entry` with `set_secondary_icon_paintable(glyph("search", 15))` and set the placeholder to `format!("Search {}", folder_name)`, following the wording rule in `native/README.md`. |
 | D-N10 | P1 | visible | Command bar content differs: "New tab / Open / Sort / View … Details / Appearance ▾" against "New ▾ │ Cut Copy Paste Rename Share Delete │ Sort ▾ View ▾ ··· ⟶ Light, Settings, Details". The Details button is not highlighted while the pane is open. | Build the current command set (rule 1). Make Details a `gtk::ToggleButton`, styled `:checked` as `@ox_selected`. Appearance is a button showing the current appearance label, like `#theme-toggle`. |
-| D-N11 | P1 | visible | The sidebar has no pin glyphs, no expandable "This PC" (drives) and "Network" (shares) groups, and no "Map network location" footer; the order differs (Home, This PC and Network come first). | §4.4 layout and the Python sidebar model (`desktop/ui/app.js` sidebar rendering). |
+| D-N11 | P1 | visible | The sidebar has no pin glyphs, no expandable "This PC" (drives) and "Network" (shares) groups, and no "Map network location" footer; the order differs (Home, This PC and Network come first). | §4.4 layout and the Python sidebar model (`v2.0.0:desktop/ui/app.js` sidebar rendering). |
 | D-N12 | P1 | visible | The details pane is **238** wide (spec 262), has no Open or Pin button, no "Properties" heading or key/value grid, and shows a raw path. | §4.8. |
 | D-N13 | P1 | visible | The status bar joins its parts with " · "; the view toggles are not highlighted; there is no status mode or update button. | §4.7; add class `active` to the current view's toggle. |
 | D-N14 | P1 | visible | No responsive behaviour: at 990 px the capture still shows a 238 px details pane and a 218 px sidebar. The current app shows 235 / 185 there and hides the pane at ≤ 960. | Follow `.workspace` width with a `notify::width` handler (or `GtkConstraintLayout`) that applies the §4 breakpoints: 1190, 960 and 680. |

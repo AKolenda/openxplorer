@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Open in Terminal: the desktop's terminal in a checked folder.
 //!
-//! Ports the `openTerminal` branch of `dispatch` in `desktop/winspace.py`
+//! Ports the `openTerminal` branch of `dispatch` in `v2.0.0:desktop/winspace.py`
 //! (OPEN-017, OPEN-020). Only a location crosses from the window; the
 //! folder is checked against fresh metadata, the previous-versions write
 //! guard and the file system, and the terminal comes from the system

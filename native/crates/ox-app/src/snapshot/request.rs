@@ -11,6 +11,7 @@ use std::path::PathBuf;
 
 use ox_core::settings::Theme;
 
+use super::scene::SceneStep;
 use super::SnapshotError;
 use crate::settings_page::SettingsView;
 use crate::window::FolderView;
@@ -31,6 +32,10 @@ const SETTINGS_VARIABLE: &str = "OPENXPLORER_SETTINGS";
 const SETTINGS_SEARCH_VARIABLE: &str = "OPENXPLORER_SETTINGS_SEARCH";
 /// What to type into the window's search box.
 const SEARCH_VARIABLE: &str = "OPENXPLORER_SEARCH";
+/// The scene steps to run before the window is saved.
+const SCENE_VARIABLE: &str = "OPENXPLORER_SCENE";
+/// The JSON file to write the controls' rectangles to.
+const HOTSPOTS_VARIABLE: &str = "OPENXPLORER_HOTSPOTS";
 
 /// The size of a window's title bar and contents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +75,10 @@ pub(crate) struct SnapshotRequest {
     pub settings_search: Option<String>,
     /// What to type into the window's search box, or `None` for nothing.
     pub search: Option<String>,
+    /// The scene steps to run once the window is listed, in order.
+    pub scene: Vec<SceneStep>,
+    /// Where to write the controls' rectangles, or `None` for nowhere.
+    pub hotspots: Option<PathBuf>,
 }
 
 impl SnapshotRequest {
@@ -79,7 +88,7 @@ impl SnapshotRequest {
     /// # Errors
     ///
     /// [`SnapshotError::InvalidValue`] when a variable holds an unknown
-    /// theme, view or size.
+    /// theme, view, size or scene step.
     pub(crate) fn from_environment() -> Result<Option<Self>, SnapshotError> {
         Self::from_variables(|name| std::env::var(name).ok())
     }
@@ -103,6 +112,12 @@ impl SnapshotRequest {
             "a settings category or page",
             SettingsView::from_key,
         )?;
+        let scene = parse_variable(
+            &lookup,
+            SCENE_VARIABLE,
+            "select=<name> or action=<name>[:<target>] steps separated by ;",
+            SceneStep::parse_scene,
+        )?;
         Ok(Some(Self {
             png: PathBuf::from(png),
             start: non_empty(&lookup, START_VARIABLE),
@@ -112,6 +127,8 @@ impl SnapshotRequest {
             settings,
             settings_search: non_empty(&lookup, SETTINGS_SEARCH_VARIABLE),
             search: non_empty(&lookup, SEARCH_VARIABLE),
+            scene: scene.unwrap_or_default(),
+            hotspots: non_empty(&lookup, HOTSPOTS_VARIABLE).map(PathBuf::from),
         }))
     }
 }
@@ -188,6 +205,8 @@ mod tests {
             settings: None,
             settings_search: None,
             search: None,
+            scene: Vec::new(),
+            hotspots: None,
         };
         assert_eq!(asked.expect("valid variables"), Some(expected));
     }
@@ -211,6 +230,21 @@ mod tests {
         assert_eq!(asked.search, None);
         let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SETTINGS_VARIABLE, "general")]);
         assert!(refused.is_err(), "general is not a settings page");
+    }
+
+    #[test]
+    fn the_scene_variables_add_steps_and_a_hotspot_file() {
+        let asked = request(&[
+            (SNAPSHOT_VARIABLE, "/tmp/menu.png"),
+            (SCENE_VARIABLE, "select=Notes.md;action=context-menu"),
+            (HOTSPOTS_VARIABLE, "/tmp/menu.json"),
+        ])
+        .expect("valid variables")
+        .expect("a snapshot is asked for");
+        assert_eq!(asked.scene.len(), 2);
+        assert_eq!(asked.hotspots, Some(PathBuf::from("/tmp/menu.json")));
+        let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SCENE_VARIABLE, "rename=Notes.md")]);
+        assert!(refused.is_err(), "rename is not a scene step");
     }
 
     #[test]

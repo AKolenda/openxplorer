@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Stable release versions. Ports `version_tuple` in `desktop/updater.py`.
+//! Stable release versions. Ports `version_tuple` in `v2.0.0:desktop/updater.py`.
 
 use std::fmt;
 use std::str::FromStr;
@@ -10,7 +10,7 @@ use super::UpdateError;
 /// numerically, part by part, so 1.10.0 is newer than 1.9.9.
 ///
 /// Safety rule "only plain stable versions" (`version_tuple` in
-/// `desktop/updater.py`): every part is `0` or ASCII digits without a
+/// `v2.0.0:desktop/updater.py`): every part is `0` or ASCII digits without a
 /// leading zero. A pre-release, a path fragment or shell text is never a
 /// version, so it can never reach an installer name, a download URL or a
 /// package command.

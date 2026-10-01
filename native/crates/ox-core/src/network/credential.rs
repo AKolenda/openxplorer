@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! One SMB account and how long it is remembered.
 //!
-//! Ports the credential dictionaries of `desktop/session_credentials.py`
-//! and `desktop/auth_bridge.py` (`{'username', 'domain', 'password',
+//! Ports the credential dictionaries of `v2.0.0:desktop/session_credentials.py`
+//! and `v2.0.0:desktop/auth_bridge.py` (`{'username', 'domain', 'password',
 //! 'remember'}`), including the JSON text stored in the keyring, which the
 //! Python app reads too.
 
@@ -19,7 +19,7 @@ const MAX_STORED_CHARS: usize = 24_000;
 /// A password. `Debug` never shows it, so a password cannot reach a log
 /// message.
 ///
-/// Privacy rule (`desktop/auth_bridge.py`): password values are never
+/// Privacy rule (`v2.0.0:desktop/auth_bridge.py`): password values are never
 /// emitted back to the interface, settings or log messages.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Password(String);

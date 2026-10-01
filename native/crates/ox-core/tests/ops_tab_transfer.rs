@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Moving tabs between windows: every `TabTransferTests` case of
-//! `desktop/tests/test_rc3.py` that the typed broker can express.
+//! `v2.0.0:desktop/tests/test_rc3.py` that the typed broker can express.
 //!
 //! Two Python cases need no port: `test_non_integer_destination_rejected`
 //! is ruled out by [`WindowId`]'s type, and `test_invalid_location_rejected`
-//! checks `tab_snapshot` in `desktop/window_state.py`, which validates the
+//! checks `tab_snapshot` in `v2.0.0:desktop/window_state.py`, which validates the
 //! tab's state when the app builds it, not when the broker moves it.
 
 use std::cell::{Cell, RefCell};
@@ -111,7 +111,7 @@ fn snapshot() -> TabState {
     }
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_capability_is_random_and_never_contains_a_uri`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_capability_is_random_and_never_contains_a_uri`.
 #[test]
 fn the_capability_is_random_and_never_contains_a_location() {
     let mut hub = Hub::new();
@@ -130,7 +130,7 @@ fn the_capability_is_random_and_never_contains_a_location() {
     );
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_claim_does_not_remove_source`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_claim_does_not_remove_source`.
 #[test]
 fn a_claim_sends_the_tab_but_does_not_remove_it_from_the_source() {
     let mut hub = Hub::new();
@@ -144,7 +144,7 @@ fn a_claim_sends_the_tab_but_does_not_remove_it_from_the_source() {
     assert!(hub.transfers.is_busy(SOURCE));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_ack_commits_once_to_original_source`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_ack_commits_once_to_original_source`.
 #[test]
 fn the_acknowledgement_commits_once_to_the_original_source() {
     let mut hub = Hub::new();
@@ -167,7 +167,7 @@ fn the_acknowledgement_commits_once_to_the_original_source() {
     assert_eq!(hub.second_last_message(), (DESTINATION, settled));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_receives_snapshot_position_and_selection`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_receives_snapshot_position_and_selection`.
 #[test]
 fn the_destination_receives_the_tab_state_and_its_position() {
     let mut hub = Hub::new();
@@ -183,7 +183,7 @@ fn the_destination_receives_the_tab_state_and_its_position() {
     assert_eq!(hub.last_message(), (DESTINATION, receive));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_spoofed_ack_cannot_close_source`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_spoofed_ack_cannot_close_source`.
 #[test]
 fn an_acknowledgement_from_another_window_cannot_close_the_source_tab() {
     let mut hub = Hub::new();
@@ -197,7 +197,7 @@ fn an_acknowledgement_from_another_window_cannot_close_the_source_tab() {
     assert_eq!(hub.messages.borrow().len(), 1);
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_unknown_token_rejected`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_unknown_token_rejected`.
 #[test]
 fn an_unknown_capability_is_refused() {
     let mut hub = Hub::new();
@@ -208,7 +208,7 @@ fn an_unknown_capability_is_refused() {
     assert_eq!(claimed, Err(TabTransferError::NotPending));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_replayed_token_rejected`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_replayed_token_rejected`.
 #[test]
 fn a_used_capability_cannot_be_replayed() {
     let mut hub = Hub::new();
@@ -222,7 +222,7 @@ fn a_used_capability_cannot_be_replayed() {
     assert_eq!(replayed, Err(TabTransferError::NotPending));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_claim_cannot_be_retargeted`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_claim_cannot_be_retargeted`.
 #[test]
 fn a_claimed_move_cannot_be_retargeted() {
     let mut hub = Hub::new();
@@ -234,7 +234,7 @@ fn a_claimed_move_cannot_be_retargeted() {
     assert_eq!(retargeted, Err(TabTransferError::NotPending));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_expiration_rolls_back_destination_and_keeps_source`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_expiration_rolls_back_destination_and_keeps_source`.
 #[test]
 fn expiry_rolls_back_the_destination_and_keeps_the_source_tab() {
     let mut hub = Hub::new();
@@ -256,7 +256,7 @@ fn expiry_rolls_back_the_destination_and_keeps_the_source_tab() {
     );
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_late_ack_after_timeout_never_commits`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_late_ack_after_timeout_never_commits`.
 #[test]
 fn an_acknowledgement_after_the_timeout_never_commits() {
     let mut hub = Hub::new();
@@ -272,7 +272,7 @@ fn an_acknowledgement_after_the_timeout_never_commits() {
     assert_eq!(hub.source_outcome(), TabMoveOutcome::Kept(KeptReason::TimedOut));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_negative_ack_keeps_source`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_negative_ack_keeps_source`.
 #[test]
 fn a_refusal_keeps_the_source_tab() {
     let mut hub = Hub::new();
@@ -291,7 +291,7 @@ fn a_refusal_keeps_the_source_tab() {
     assert!(!hub.transfers.has_pending());
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_destination_close_rolls_back`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_destination_close_rolls_back`.
 #[test]
 fn closing_the_destination_rolls_the_move_back() {
     let mut hub = Hub::new();
@@ -307,7 +307,7 @@ fn closing_the_destination_rolls_the_move_back() {
     );
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_source_close_rolls_back`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_source_close_rolls_back`.
 #[test]
 fn closing_the_source_rolls_the_move_back() {
     let mut hub = Hub::new();
@@ -320,7 +320,7 @@ fn closing_the_source_rolls_the_move_back() {
     assert!(!hub.transfers.is_busy(DESTINATION));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_unready_destination_not_claimed`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_unready_destination_not_claimed`.
 #[test]
 fn a_destination_that_is_not_ready_does_not_claim_the_move() {
     let mut hub = Hub::new();
@@ -335,7 +335,7 @@ fn a_destination_that_is_not_ready_does_not_claim_the_move() {
     assert_eq!(hub.transfers.claim(&token, DESTINATION, None), Ok(()));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_same_window_rejected_by_cross_window_hub`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_same_window_rejected_by_cross_window_hub`.
 #[test]
 fn a_tab_cannot_move_to_its_own_window() {
     let mut hub = Hub::new();
@@ -346,7 +346,7 @@ fn a_tab_cannot_move_to_its_own_window() {
     assert_eq!(claimed, Err(TabTransferError::DestinationNotReady));
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_concurrent_transfer_of_same_tab_rejected`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_concurrent_transfer_of_same_tab_rejected`.
 #[test]
 fn the_same_tab_cannot_move_twice_at_once() {
     let mut hub = Hub::new();
@@ -361,10 +361,10 @@ fn the_same_tab_cannot_move_twice_at_once() {
     );
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_no_credentials_or_arbitrary_js_forwarded`,
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_no_credentials_or_arbitrary_js_forwarded`,
 /// as far as the broker goes: it hands the destination exactly the tab
 /// state it was offered. The Python broker also filtered that state
-/// (`tab_snapshot` in `desktop/window_state.py`); dropping passwords and
+/// (`tab_snapshot` in `v2.0.0:desktop/window_state.py`); dropping passwords and
 /// other fields is now the rule of the app's tab-state type, which must
 /// carry this test's other half.
 #[test]
@@ -380,7 +380,7 @@ fn only_the_tab_state_reaches_the_destination() {
     assert_eq!(tab, snapshot());
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_global_cap_is_bounded`.
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::TabTransferTests::test_global_cap_is_bounded`.
 #[test]
 fn at_most_sixty_four_moves_wait_at_once() {
     let mut hub = Hub::new();

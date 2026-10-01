@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A browsing window with independent tab histories and listings.
 //!
-//! Ports the page structure and the controller of `desktop/ui/app.js`.
+//! Ports the page structure and the controller of `v2.0.0:desktop/ui/app.js`.
 //! [`BrowserWindow`] is a `GtkApplicationWindow` subclass whose frame, the
-//! static layout of `desktop/ui/index.html`, is the template
+//! static layout of `v2.0.0:desktop/ui/index.html`, is the template
 //! `resources/ui/window.ui`. Each part of the frame is a widget with a
 //! module of its own: the title bar ([`title_bar`], [`tab_strip`],
 //! [`caption_buttons`]), the navigation row ([`navigation_buttons`],

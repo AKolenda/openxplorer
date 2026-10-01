@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  The transfer panel, `#transfer` of desktop/ui/index.html: the glyph of
+  The transfer panel, `#transfer` of v2.0.0:desktop/ui/index.html: the glyph of
   the kind of write, what the operation is doing above its progress bar,
   the current file's bar while a file is copied, and Cancel.
   It floats above the status bar between the sidebar and the details pane

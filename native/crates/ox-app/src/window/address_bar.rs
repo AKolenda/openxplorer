@@ -2,7 +2,7 @@
 //! The address bar: breadcrumbs, or an editable address.
 //!
 //! Ports `renderNavigation`, `editAddress` and `finishAddress` in
-//! `desktop/ui/app.js`: the location's icon, then crumbs divided by `/`
+//! `v2.0.0:desktop/ui/app.js`: the location's icon, then crumbs divided by `/`
 //! (`\` on SMB, none after the `/` root) as the current app draws them.
 //! The crumbs scroll sideways (a plain mouse wheel scrolls them) and stay
 //! scrolled to the current folder, so a deep path never widens the

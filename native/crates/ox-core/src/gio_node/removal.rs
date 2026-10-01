@@ -2,7 +2,7 @@
 //! Explicit Trash and permanent deletion, kept as separate operations.
 //!
 //! Ports `GioNode.trash` and `GioNode.delete_tree` in
-//! `desktop/gio_backend.py`.
+//! `v2.0.0:desktop/gio_backend.py`.
 
 use gio::prelude::*;
 

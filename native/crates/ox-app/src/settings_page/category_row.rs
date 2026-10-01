@@ -3,7 +3,7 @@
 //! the category's coloured glyph and name, and while a search is typed how
 //! many of its settings match.
 //!
-//! Ports the section links of `renderSettingsPage` in `desktop/ui/app.js`
+//! Ports the section links of `renderSettingsPage` in `v2.0.0:desktop/ui/app.js`
 //! (`.settings-nav-link`), with the per-category counts of the settings
 //! mockup. The static layout is the template
 //! `resources/ui/category-row.ui`. Each row knows its [`Category`], so the

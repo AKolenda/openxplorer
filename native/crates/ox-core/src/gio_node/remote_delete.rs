@@ -3,7 +3,7 @@
 //! other `GVfs` backends. Local folders use the descriptor-pinned walk in
 //! `local_delete` instead.
 //!
-//! Ports `GioNode._delete_recursive` in `desktop/gio_backend.py`.
+//! Ports `GioNode._delete_recursive` in `v2.0.0:desktop/gio_backend.py`.
 //!
 //! Rules enforced here (XFER-015):
 //! - Every item is inspected without following symbolic links. Only real
@@ -99,7 +99,7 @@ mod tests {
         delete_tree(&gio::File::for_path(path), cancel, guard)
     }
 
-    /// Ported from `_delete_recursive` in `desktop/gio_backend.py`: hidden items
+    /// Ported from `_delete_recursive` in `v2.0.0:desktop/gio_backend.py`: hidden items
     /// and empty folders go too. GIO removes only empty folders, so a tree
     /// that is gone was emptied children first.
     ///

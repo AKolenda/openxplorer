@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! New folder and New file (an empty file with any name).
 //!
-//! Ports `create_item` in `desktop/gio_backend.py` and the checks the
-//! `create` branch of `dispatch` in `desktop/winspace.py` runs first.
+//! Ports `create_item` in `v2.0.0:desktop/gio_backend.py` and the checks the
+//! `create` branch of `dispatch` in `v2.0.0:desktop/winspace.py` runs first.
 //! Creating never overwrites (OPS-008): a folder is made with GIO's
 //! exclusive `make_directory` and a file with an exclusive `create`, so a
 //! taken name fails and the existing item stays as it was.

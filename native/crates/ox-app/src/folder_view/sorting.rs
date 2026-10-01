@@ -2,7 +2,7 @@
 //! Sort order of the file list: the sortable columns, the direction and
 //! natural ordering of names.
 //!
-//! Ports the comparison in `filtered()` in `desktop/ui/app.js`. Folders
+//! Ports the comparison in `filtered()` in `v2.0.0:desktop/ui/app.js`. Folders
 //! sort first, then the chosen column. Name keys ignore case and combining
 //! accents and compare ASCII digit runs by value ("file 2" before
 //! "file 10"). Unlike the web interface's `Intl.Collator`, this ordering is

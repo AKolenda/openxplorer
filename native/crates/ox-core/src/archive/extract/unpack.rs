@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Writing the planned members into the staging folder and publishing it.
 //! Ports the loop of `ZipExtractor.extract` in
-//! `desktop/zip_extraction.py`.
+//! `v2.0.0:desktop/zip_extraction.py`.
 
 use std::collections::HashMap;
 use std::ffi::OsStr;

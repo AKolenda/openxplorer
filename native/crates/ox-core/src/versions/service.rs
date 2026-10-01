@@ -2,7 +2,7 @@
 //! The previous-versions service: the snapshot sources, the snapshot roots
 //! they and earlier lookups make known, and the read-only rule for them.
 //!
-//! Ports the `PreviousVersions` class of `desktop/previous_versions.py`
+//! Ports the `PreviousVersions` class of `v2.0.0:desktop/previous_versions.py`
 //! except its lookup (`candidates`, `list`), which is in `lookup`.
 
 use std::collections::BTreeSet;
@@ -141,7 +141,7 @@ impl PreviousVersions {
     /// address the location rules refuse.
     pub fn restore_destination(&self, destination: &str) -> Result<String, VersionsError> {
         let destination = normalise(destination)?;
-        // Safety rule PROP-025 (`restoreVersion` in desktop/ui/app.js): a
+        // Safety rule PROP-025 (`restoreVersion` in v2.0.0:desktop/ui/app.js): a
         // restored copy goes to a live folder, never into a snapshot.
         if self.protected_locations().is_protected(&destination) {
             return Err(VersionsError::RestoreIntoSnapshot);

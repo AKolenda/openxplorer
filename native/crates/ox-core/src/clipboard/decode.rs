@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Reading a file list another window or application published.
 //!
-//! Ports `decode_clipboard` in `desktop/file_clipboard.py`. Every format is
+//! Ports `decode_clipboard` in `v2.0.0:desktop/file_clipboard.py`. Every format is
 //! read fail-closed: anything that is not exactly a valid file list is no
 //! file list at all, so paste has nothing to do.
 

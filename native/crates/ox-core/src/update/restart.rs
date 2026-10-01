@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Starting the launcher that restarts the app into an installed update.
 //! Ports the `subprocess.Popen` call of the `updateRestart` branch of
-//! `dispatch` in `desktop/winspace.py`.
+//! `dispatch` in `v2.0.0:desktop/winspace.py`.
 
 use super::process::start_in_new_session;
 use super::UpdateError;

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Where archive bytes come from.
 //!
-//! Ports the `opener` argument of `Archives` in `desktop/archives.py`, its
-//! production value `archive_stream` in `desktop/native_opening.py`, and
+//! Ports the `opener` argument of `Archives` in `v2.0.0:desktop/archives.py`, its
+//! production value `archive_stream` in `v2.0.0:desktop/native_opening.py`, and
 //! `Archives.opened`, which every listing, preview, check and extraction
 //! goes through.
 
@@ -59,7 +59,7 @@ where
 /// ARC-007: opens archives through GIO. A file with a local path is read
 /// directly, and so is an `smb://` archive inside a kernel CIFS mount or
 /// the `GVfs` FUSE export of its share ([`local_path`], as
-/// `archive_stream` in `desktop/native_opening.py`); anything else (a share
+/// `archive_stream` in `v2.0.0:desktop/native_opening.py`); anything else (a share
 /// or a phone without a local path) is read in place through a seekable
 /// GIO stream, never copied first.
 #[derive(Debug, Clone, Copy, Default)]

@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Prints what the display helpers in desktop/ui/app.js answer for the
+// Prints what the display helpers in v2.0.0:desktop/ui/app.js answer for the
 // location parity inputs.
 //
 // Usage, from the repository root:
 //
-//   node native/crates/ox-core/tests/location_fixtures/generate_javascript.cjs desktop/ui/app.js
+//   node native/crates/ox-core/tests/location_fixtures/generate_javascript.cjs "$desktop/ui/app.js"
+//
+// where $desktop is the Python app's sources (python3 native/tools/python_app.py).
 //
 // The JSON document on standard output is javascript.json.
 // location_javascript.rs compares the Rust port with it, and

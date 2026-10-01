@@ -3,7 +3,7 @@
 //! choosing, refreshing, stopping and clearing indexed folders.
 //!
 //! Ports the `search`, `cacheSet`, `cacheRefresh`, `cacheStop` and
-//! `cacheClear` bridge operations of `desktop/winspace.py`. Each runs on a
+//! `cacheClear` bridge operations of `v2.0.0:desktop/winspace.py`. Each runs on a
 //! GIO worker thread once the index service has started; one that changes
 //! the cache reads the status again, so every window shows its effect.
 

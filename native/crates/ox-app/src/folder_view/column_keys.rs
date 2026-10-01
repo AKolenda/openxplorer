@@ -2,7 +2,7 @@
 //! The details view's column titles as keyboard controls (ACC-006).
 //!
 //! Ports the keys of the `.column-label` buttons and `.column-resizer`
-//! handles of `renderColumns` in `desktop/ui/app.js`: each title takes
+//! handles of `renderColumns` in `v2.0.0:desktop/ui/app.js`: each title takes
 //! keyboard focus; Enter or Space sorts by its column, and again turns
 //! the order round, as a click does; Left and Right make the column 10
 //! pixels narrower or wider (40 with Shift), within the Python app's

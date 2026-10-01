@@ -2,7 +2,7 @@
 //! Fixtures shared by the unit tests of the search module.
 //!
 //! [`listed_file`] and [`listed_folder`] build items as the `entry` helper
-//! of `desktop/tests/test_v05.py` does, [`ScannedShare`] is the set-up of
+//! of `v2.0.0:desktop/tests/test_v05.py` does, [`ScannedShare`] is the set-up of
 //! its `IndexTests` (a cache with one SMB root whose scan has begun), and
 //! [`LocalRoot`] the set-up of its `LiveTests` without the service.
 //!

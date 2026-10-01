@@ -3,7 +3,7 @@
 //!
 //! Titles, the address text, breadcrumbs and the Up target come from
 //! ox-core's [`LocationContext`], the port of `titleFor`, `displayUri`,
-//! `breadcrumbSegments` and `deviceMountName` in `desktop/ui/app.js`, which
+//! `breadcrumbSegments` and `deviceMountName` in `v2.0.0:desktop/ui/app.js`, which
 //! the app's JavaScript fixtures check. This module adds only what the
 //! window draws itself:
 //!
@@ -26,7 +26,7 @@ use crate::volumes::{VolumeKind, VolumeRow};
 /// not one of them: as in the Python app, `home:` opens the home folder.
 /// This PC and Network are landing pages in the folder pane; Settings
 /// takes the place of the whole browsing area, as `.settings-open` does in
-/// `desktop/ui/style.css`.
+/// `v2.0.0:desktop/ui/style.css`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Page {
     /// Quick access, devices and drives, and saved network locations.

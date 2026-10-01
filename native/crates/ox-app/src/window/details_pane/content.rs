@@ -2,7 +2,7 @@
 //! What the details pane says about the selection, computed without
 //! widgets so it is tested on its own.
 //!
-//! Ports the text of `renderDetails` in `desktop/ui/app.js`: one selected
+//! Ports the text of `renderDetails` in `v2.0.0:desktop/ui/app.js`: one selected
 //! item shows its type, size, date and containing folder; no selection or
 //! several items describe the folder, with the item count, its location
 //! and where it is stored. A folder on an SMB share is pictured as its tab

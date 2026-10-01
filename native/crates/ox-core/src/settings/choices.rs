@@ -2,8 +2,8 @@
 //! The fixed choices of the `theme`, `view` and `contextMenu` preferences,
 //! and the [`Appearance`] a theme resolves to.
 //!
-//! Ports the whitelists in `update_preferences` (`desktop/core.py`) and the
-//! light-or-dark decision of `applyTheme` (`desktop/ui/app.js`). Each
+//! Ports the whitelists in `update_preferences` (`v2.0.0:desktop/core.py`) and the
+//! light-or-dark decision of `applyTheme` (`v2.0.0:desktop/ui/app.js`). Each
 //! choice serialises to the exact string both applications store in
 //! `settings.json`; [`from_key`](Theme::from_key) is the case-sensitive
 //! check Python's `value in (...)` makes, so anything else is ignored.
@@ -43,7 +43,7 @@ impl Theme {
 
     /// The appearance this theme draws on a desktop whose own colour scheme
     /// is `desktop`: [`Theme::System`] follows the desktop, the others
-    /// ignore it (`applyTheme` in `desktop/ui/app.js`).
+    /// ignore it (`applyTheme` in `v2.0.0:desktop/ui/app.js`).
     pub const fn appearance(self, desktop: Appearance) -> Appearance {
         match self {
             Theme::System => desktop,
@@ -53,7 +53,7 @@ impl Theme {
     }
 }
 
-/// The colours actually drawn: `data-theme` in `desktop/ui/app.js`.
+/// The colours actually drawn: `data-theme` in `v2.0.0:desktop/ui/app.js`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum Appearance {
     /// Light surfaces with dark text; drawn until the desktop's colour

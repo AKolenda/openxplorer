@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Middle-clicks open places in tabs, against `bindMiddleOpen` and
-//! `bindMiddleClick` in `desktop/ui/app.js` (TAB-020 to TAB-025): a folder
+//! `bindMiddleClick` in `v2.0.0:desktop/ui/app.js` (TAB-020 to TAB-025): a folder
 //! row or tile, a sidebar place and a landing-page card open in a
 //! background tab, a file never opens, and a tab closes.
 //!

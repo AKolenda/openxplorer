@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Who owns `org.freedesktop.FileManager1`, as the Settings card shows it.
-//! Ports `FileManagerBus.status` of `desktop/filemanager_bus.py`.
+//! Ports `FileManagerBus.status` of `v2.0.0:desktop/filemanager_bus.py`.
 
 use std::fs;
 

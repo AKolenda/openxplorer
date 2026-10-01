@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The HTTPS client for GitHub, on libsoup. Ports `open_url` and
-//! `TrustedRedirect` in `desktop/updater.py`.
+//! `TrustedRedirect` in `v2.0.0:desktop/updater.py`.
 //!
 //! libsoup is GNOME's HTTP library: it follows the desktop's proxy
 //! settings, checks certificates against the system's store through
@@ -110,7 +110,7 @@ impl ReleaseServer for GitHubReleases {
 /// makes one request and answers with its [`Hop`].
 ///
 /// Safety rule "redirects cross the same trust boundary"
-/// (`TrustedRedirect` in `desktop/updater.py`): every target passes
+/// (`TrustedRedirect` in `v2.0.0:desktop/updater.py`): every target passes
 /// [`TrustedUrl::redirect`] before `send` sees it, so an untrusted address
 /// is never contacted.
 ///
@@ -256,7 +256,7 @@ mod tests {
         TrustedUrl::parse("https://github.com/fixture").unwrap()
     }
 
-    /// Ported from `desktop/tests/test_updater.py::UrlTests::test_http_opener_sets_timeout_and_uses_validating_redirect_handler`
+    /// Ported from `v2.0.0:desktop/tests/test_updater.py::UrlTests::test_http_opener_sets_timeout_and_uses_validating_redirect_handler`
     ///
     /// The request side: the check asks for GitHub's JSON, downloads ask
     /// for bytes, and every session has the 30-second timeout and the

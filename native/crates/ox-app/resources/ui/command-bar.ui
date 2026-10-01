@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- The command bar (section.commandbar in desktop/ui/index.html): the
+<!-- The command bar (section.commandbar in v2.0.0:desktop/ui/index.html): the
      file commands, then at the right the appearance toggle, Settings and
      the Details toggle (src/window/command_bar/mod.rs). The gaps are CSS
      border-spacing, which narrow windows shrink. -->

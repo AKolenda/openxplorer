@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Running the package tools and starting the restart launcher, with GIO's
 //! subprocess API. Ports the `subprocess.run` and `subprocess.Popen` calls
-//! of `desktop/updater.py` and `desktop/winspace.py`.
+//! of `v2.0.0:desktop/updater.py` and `v2.0.0:desktop/winspace.py`.
 
 use std::ffi::{OsStr, OsString};
 use std::iter;
@@ -204,7 +204,7 @@ mod tests {
         assert!(matches!(result, Err(UpdateError::Io { .. })));
     }
 
-    /// Ported from `desktop/tests/test_updater.py::BridgeTests::test_restart_requires_pending_update_idle_writes_and_fixed_launcher`
+    /// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_restart_requires_pending_update_idle_writes_and_fixed_launcher`
     ///
     /// The `start_new_session=True` half: the launcher leads a session of
     /// its own, so it survives this process quitting.

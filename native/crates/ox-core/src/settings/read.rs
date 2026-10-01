@@ -2,7 +2,7 @@
 //! Reading `settings.json`: the private-storage checks, then a whitelist
 //! validation of the untrusted contents.
 //!
-//! Ports the reading half of `Settings.__init__` in `desktop/core.py`.
+//! Ports the reading half of `Settings.__init__` in `v2.0.0:desktop/core.py`.
 //! Reading never fails: invalid entries are skipped, lists are capped, and
 //! only known preferences within their bounds are kept, so credentials or
 //! arbitrary values in the file never reach the application. Like the
@@ -24,7 +24,7 @@ use crate::location::{normalise, require_share, safe_label, LocationError};
 use crate::private_storage::{private_directory, private_file, read_limited_text, PrivateFileOptions};
 
 /// Largest settings file read, in bytes: the default limit of
-/// `private_text` in `desktop/private_storage.py`.
+/// `private_text` in `v2.0.0:desktop/private_storage.py`.
 const SETTINGS_SIZE_LIMIT: u64 = 4 * 1024 * 1024;
 
 /// How a location read from the file is checked: [`normalise`] for a pin,

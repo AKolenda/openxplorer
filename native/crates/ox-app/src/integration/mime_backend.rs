@@ -4,7 +4,7 @@
 //! memory, so no test changes the associations of the session it runs
 //! in.
 //!
-//! Ports `DesktopIntegration._run` of `desktop/desktop_integration.py`
+//! Ports `DesktopIntegration._run` of `v2.0.0:desktop/desktop_integration.py`
 //! as ox-core's [`MimeDefaults`] implements it; the Python tests replaced
 //! `_run` with a dictionary in the same way.
 

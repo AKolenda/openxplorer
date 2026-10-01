@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The state the index service shares with its worker thread.
 //!
-//! Ports the attributes of `IndexService` in `desktop/index_service.py`,
+//! Ports the attributes of `IndexService` in `v2.0.0:desktop/index_service.py`,
 //! its helpers `monitor` and `update_monitoring`, and the job bookkeeping
 //! of `_run`, `_update` and `_release`.
 

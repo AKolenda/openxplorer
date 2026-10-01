@@ -3,10 +3,10 @@
 //! the Software updates dialog, the update notice of the status bar and
 //! About, and the launch guard behind `--restart`.
 //!
-//! Ports `updatesDialog` in `desktop/ui/app.js`, the update branches of
-//! `dispatch` and `main` in `desktop/winspace.py`, and the launch checks of
-//! `desktop/runtime_guard.py`. Checking, downloading, verifying and
-//! installing are ox-core's port of `desktop/updater.py`
+//! Ports `updatesDialog` in `v2.0.0:desktop/ui/app.js`, the update branches of
+//! `dispatch` and `main` in `v2.0.0:desktop/winspace.py`, and the launch checks of
+//! `v2.0.0:desktop/runtime_guard.py`. Checking, downloading, verifying and
+//! installing are ox-core's port of `v2.0.0:desktop/updater.py`
 //! ([`ox_core::update`]): the same GitHub endpoints (the original
 //! repository and the openxplorer organisation), the same installer name,
 //! size and SHA-256 checks and the same `pkexec apt-get` installation.

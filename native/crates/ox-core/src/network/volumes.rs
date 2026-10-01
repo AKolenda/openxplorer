@@ -2,7 +2,7 @@
 //! Connecting drives and phones, Disconnect, Eject and Safely remove.
 //!
 //! Ports the `mountVolume` and `unmount` operations of
-//! `desktop/winspace.py` and `volume_id` of `desktop/volume_locations.py`,
+//! `v2.0.0:desktop/winspace.py` and `volume_id` of `v2.0.0:desktop/volume_locations.py`,
 //! and adds Dolphin's Eject and Safely remove (DEV-007, DEV-008), which
 //! the Python app lacks. Each takes the mount operation from the
 //! interface: GTK's shows the password dialog of an encrypted disk, the
@@ -35,7 +35,7 @@ pub fn volume_id(volume: &gio::Volume) -> String {
 /// volume monitor reports: its UUID, else its device path, else its
 /// activation root, else its name.
 ///
-/// The one implementation of `volume_id` in `desktop/volume_locations.py`:
+/// The one implementation of `volume_id` in `v2.0.0:desktop/volume_locations.py`:
 /// the rows the app lists and [`mount_volume`] must agree on it, or
 /// Connect would not find the volume. An empty value counts as missing, as
 /// Python's `or` does.

@@ -2,12 +2,12 @@
 //! The private, metadata-only filename search cache and the service that
 //! keeps it up to date.
 //!
-//! Ports `desktop/search_index.py` (the SQLite cache),
-//! `desktop/index_service.py` (scans, live updates and the one index owner
-//! across processes), `desktop/local_watch.py` (inotify), the mount-table
-//! reading of `desktop/mount_support.py`, `index_directory` of
-//! `desktop/gio_backend.py` and the cache operations of
-//! `desktop/winspace.py`. The database, `~/.cache/winspace/search.sqlite3`,
+//! Ports `v2.0.0:desktop/search_index.py` (the SQLite cache),
+//! `v2.0.0:desktop/index_service.py` (scans, live updates and the one index owner
+//! across processes), `v2.0.0:desktop/local_watch.py` (inotify), the mount-table
+//! reading of `v2.0.0:desktop/mount_support.py`, `index_directory` of
+//! `v2.0.0:desktop/gio_backend.py` and the cache operations of
+//! `v2.0.0:desktop/winspace.py`. The database, `~/.cache/winspace/search.sqlite3`,
 //! is shared with the Python app, so both read each other's cache.
 //!
 //! Privacy and safety rules that hold throughout:

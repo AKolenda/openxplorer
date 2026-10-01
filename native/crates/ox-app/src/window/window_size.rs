@@ -2,7 +2,7 @@
 //! New windows open at the last window's size (TAB-054).
 //!
 //! The Python app always opened at 1320 × 810 (`set_default_size` in
-//! `desktop/winspace.py`); Dolphin and Nautilus remember the size and the
+//! `v2.0.0:desktop/winspace.py`); Dolphin and Nautilus remember the size and the
 //! maximized state, and so does this. A window saves its size a moment
 //! after the user stops resizing it, or maximizes or restores it, and when
 //! it closes; the size saved is the one it has when not maximized, kept

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A full scan of one root.
 //!
-//! Ports `_run` in `desktop/index_service.py` (SRCH-024, SRCH-031,
+//! Ports `_run` in `v2.0.0:desktop/index_service.py` (SRCH-024, SRCH-031,
 //! SRCH-032). The scan walks the root depth first, stores what it reads
 //! under a new generation and, only when every folder was read, prunes
 //! what it did not see.

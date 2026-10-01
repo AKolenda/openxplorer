@@ -2,7 +2,7 @@
 //! A row of the "Indexed folders" list: one folder the search index keeps,
 //! with its state and what can be done with it.
 //!
-//! Ports the enabled rows of `renderSettingsCache` in `desktop/ui/app.js`
+//! Ports the enabled rows of `renderSettingsCache` in `v2.0.0:desktop/ui/app.js`
 //! (SET-006, SRCH-022, SRCH-023) in the look of the settings mockup: the
 //! folder's picture, its name with a "Pinned" tag for a folder pinning
 //! added (SRCH-040), its path, how many names it holds and how it keeps

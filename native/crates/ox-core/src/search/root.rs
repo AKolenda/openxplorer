@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Indexed folders (roots) and the cache status the Search settings show.
 //!
-//! Ports the `roots` table of `desktop/search_index.py` and the status
-//! words of `search_index.py` and `desktop/index_service.py`. The words
+//! Ports the `roots` table of `v2.0.0:desktop/search_index.py` and the status
+//! words of `search_index.py` and `v2.0.0:desktop/index_service.py`. The words
 //! are stored in the database the Python app shares, so each is spelled
 //! exactly as Python spells it, in one place: the `as_str` of its enum.
 

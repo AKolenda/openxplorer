@@ -11,8 +11,8 @@ concurrency:
 jobs:
   # The release packages of the native app (native/packaging/README.md), built
   # on hosted runners in each distribution's container, and uploaded as
-  # artifacts that the release job below publishes. The Python app in
-  # desktop/ is deprecated and no longer packaged.
+  # artifacts that the release job below publishes. The Python app of 1.x
+  # is retired (tag v1.1.4) and no longer packaged.
   native-package:
     if: github.ref == 'refs/heads/main'
     name: Release package (${{ matrix.name }})
@@ -161,26 +161,11 @@ jobs:
         run: '"$RUNNER_TEMP/browser-tests/bin/python" tests/test_launch_production.py'
       - name: Verify generated documentation
         run: git diff --exit-code -- docs apps/web/public/docs-markdown apps/web/public/assets/markdown.json
-      - run: /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py'
-        working-directory: desktop
-      - run: node --test desktop/tests/*.test.cjs
       - name: Verify release source and public-data policies
         run: |
           /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'
           /usr/bin/python3 -m unittest discover -s tests -p 'test_public_data.py'
-      - run: /usr/bin/python3 -m unittest tests.gio_integration
-        working-directory: desktop
       - run: /usr/bin/python3 tools/security_sweep.py
-      - name: Verify drag and updater UI
-        run: |
-          /usr/bin/python3 desktop/tools/build_preview.py
-          "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/ui_file_drag.py
-          node desktop/tests/ui_regressions.cjs
-      - name: Verify native file transport with WebKit sandbox enabled
-        run: |
-          dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' \
-            env GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 \
-            "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/native_file_transport.py
       - name: Download the native release packages
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:

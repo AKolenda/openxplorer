@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The running-instance guard's calls on the D-Bus session bus. Ports
 //! `Session.call`, `Session.owner`, `Session.running` and the quit call of
-//! `Session.stop` in `desktop/runtime_guard.py`.
+//! `Session.stop` in `v2.0.0:desktop/runtime_guard.py`.
 //!
 //! A `GApplication` exports its actions as `org.gtk.Actions` on its object
 //! path, so the guard reads `runtime-info` with `Describe` and quits with

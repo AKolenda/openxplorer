@@ -2,7 +2,7 @@
 //! Why the app could not use the search cache.
 //!
 //! Wraps ox-core's [`SearchError`], whose messages are the Python app's
-//! (`desktop/search_index.py`, `desktop/winspace.py`), with the ways the
+//! (`v2.0.0:desktop/search_index.py`, `v2.0.0:desktop/winspace.py`), with the ways the
 //! app's own side can fail: the cache never started, or its worker
 //! stopped.
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Selecting with the mouse and the keyboard in a real window, against
 //! `selectEntry`, `onKey` and the blank-space click of
-//! `desktop/ui/app.js`, with Dolphin's and Explorer's keys.
+//! `v2.0.0:desktop/ui/app.js`, with Dolphin's and Explorer's keys.
 //!
 //! GTK has no public way to synthesise pointer or key events. A click on
 //! an item runs `list.select-item`, where GTK's own click ends; a

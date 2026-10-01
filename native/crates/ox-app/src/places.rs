@@ -2,8 +2,8 @@
 //! What the sidebar and the landing pages list.
 //!
 //! Ports the Quick access and network parts of `environment()` in
-//! `desktop/winspace.py` and the sections of `renderSidebar` in
-//! `desktop/ui/app.js`:
+//! `v2.0.0:desktop/winspace.py` and the sections of `renderSidebar` in
+//! `v2.0.0:desktop/ui/app.js`:
 //!
 //! - Quick access: the known folders and pins, with `is_shared` set for
 //!   locations on SMB or on a kernel CIFS/SMB3 mount.
@@ -38,7 +38,7 @@ pub(crate) struct PlaceSources<'a> {
     /// Rows from the volume monitor.
     pub volumes: &'a [VolumeRow],
     /// Kernel CIFS/SMB3 mounts (`read_mounts` in
-    /// `desktop/mount_support.py`), as the application last read them.
+    /// `v2.0.0:desktop/mount_support.py`), as the application last read them.
     pub stable_mounts: &'a [StableMount],
     /// SMB servers and shares browsed this session.
     pub visited_network: &'a [Bookmark],

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Test double of a `GVfs` MTP destination: `DeviceNode` in
-//! `desktop/tests/test_device_staging.py`.
+//! `v2.0.0:desktop/tests/test_device_staging.py`.
 //!
 //! It follows the adapter contract `GioNode` provides for `mtp://`, as
 //! measured on a Pixel 9 with `GVfs` 1.54.4: a same-folder move is a

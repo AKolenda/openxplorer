@@ -2,7 +2,7 @@
 //! Native moves and the MTP device rename rules.
 //!
 //! Ports `GioNode.move_native`, `GioNode.replace_native` and
-//! `GioNode._rename_mtp` in `desktop/gio_backend.py`.
+//! `GioNode._rename_mtp` in `v2.0.0:desktop/gio_backend.py`.
 //!
 //! Rules enforced here:
 //! - XFER-011: no move ever falls back to copy-then-delete
@@ -39,7 +39,7 @@ pub(super) enum Overwrite {
     Replace,
 }
 
-/// XFER-011 and XFER-017: `MOVE_FLAGS` in `desktop/gio_backend.py`. A move
+/// XFER-011 and XFER-017: `MOVE_FLAGS` in `v2.0.0:desktop/gio_backend.py`. A move
 /// never follows a link and never degrades to copy-then-delete.
 const MOVE_FLAGS: gio::FileCopyFlags =
     gio::FileCopyFlags::NOFOLLOW_SYMLINKS.union(gio::FileCopyFlags::NO_FALLBACK_FOR_MOVE);
@@ -228,7 +228,7 @@ fn move_error(error: glib::Error, overwrite: Overwrite) -> TransferError {
 }
 
 /// The refusal of a move the backend can only do by copying, word for word
-/// as `desktop/gio_backend.py` reports it. The user sees it when they
+/// as `v2.0.0:desktop/gio_backend.py` reports it. The user sees it when they
 /// declined to finish the move by copying, or nobody could be asked.
 fn native_move_unsupported() -> TransferError {
     TransferError::NotSupported(

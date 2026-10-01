@@ -2,8 +2,8 @@
 //! Damaged or unsupported ZIP structures.
 //!
 //! These are the refusals of Python's `zipfile` (`BadZipFile`,
-//! `NotImplementedError`) that `desktop/archives.py` and
-//! `desktop/zip_extraction.py` pass on to the user. Where `zipfile` has a
+//! `NotImplementedError`) that `v2.0.0:desktop/archives.py` and
+//! `v2.0.0:desktop/zip_extraction.py` pass on to the user. Where `zipfile` has a
 //! message it is kept word for word, with names quoted as its `%r` quotes
 //! them (see `python_repr`); where Python only raised a generic error (a
 //! `UnicodeDecodeError`, a `zlib.error`), the message says what is wrong

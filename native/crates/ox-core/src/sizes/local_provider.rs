@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Folder-size metadata of local folders, read with `lstat`.
 //!
-//! Ports `LocalSizeProvider` in `desktop/folder_sizes.py`. Local scans
+//! Ports `LocalSizeProvider` in `v2.0.0:desktop/folder_sizes.py`. Local scans
 //! read the file system directly rather than through GIO, because only
 //! `lstat` gives the device and inode that let hard links count once, and
 //! the mount table shows mount points that share their parent's device.

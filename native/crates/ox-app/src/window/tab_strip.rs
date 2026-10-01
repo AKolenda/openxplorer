@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The tab strip in the title bar.
 //!
-//! Ports `renderTabs` in `desktop/ui/app.js` and `.tab` in `style.css`:
+//! Ports `renderTabs` in `v2.0.0:desktop/ui/app.js` and `.tab` in `style.css`:
 //! each tab is 215 pixels wide with its icon, title and close button, and
 //! tabs shrink toward 100 pixels and then scroll sideways
 //! ([`TabLayout`](super::tab_layout::TabLayout)), so opening many tabs

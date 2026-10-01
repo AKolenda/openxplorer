@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What an extraction reports, and the names Extract here tries.
 //!
-//! Ports the end of `extractDialog` in `desktop/ui/app.js` (ARC-011): a
+//! Ports the end of `extractDialog` in `v2.0.0:desktop/ui/app.js` (ARC-011): a
 //! failure opens "Extraction stopped" with the reason and the promise
 //! that nothing was changed, and a success says how many files went into
 //! which folder. Extract here (ARC-025) names the new folder after the

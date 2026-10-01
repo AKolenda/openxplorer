@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! "Open with": choosing an installed application for a file or folder.
 //!
-//! Ports `openWithDialog` in `desktop/ui/app.js` (OPEN-011, OPEN-012):
+//! Ports `openWithDialog` in `v2.0.0:desktop/ui/app.js` (OPEN-011, OPEN-012):
 //! "Find an application" filters the list by name, "Show all installed
 //! applications" (ticked for folders) lists every application, and
 //! "Always use this app for this file type" (never for folders) makes the

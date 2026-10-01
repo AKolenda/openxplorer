@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the Properties dialog reads about one item.
 //!
-//! Ports `properties` in `desktop/file_services.py`: the item itself is
+//! Ports `properties` in `v2.0.0:desktop/file_services.py`: the item itself is
 //! queried without following a link, with its times, owner, mode and
 //! access, and a file's default application is looked up by its content
 //! type. The query blocks, so it runs on a GIO worker thread, as the

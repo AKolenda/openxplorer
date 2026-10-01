@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The sidebar's context menus.
 //!
-//! A pin's (SIDE-014) ports `sidebarMenu` in `desktop/ui/app.js`: Open,
+//! A pin's (SIDE-014) ports `sidebarMenu` in `v2.0.0:desktop/ui/app.js`: Open,
 //! Open in new tab, Dolphin's Open in new window (SIDE-015), Open in
 //! Terminal, Open folder with…, the cache entry, Sign out of server… for
 //! SMB, Edit… for a pin of the user's own (SIDE-011), Unpin from Quick

@@ -3,9 +3,9 @@
 //! press would drag, where a dropped tab would go, the dragged tab itself
 //! and the tab a file drop would go into (TAB-018, TAB-032, TAB-033).
 //!
-//! Ports `showTabDropHint` of `desktop/ui/app.js` and the `.tab-drop-active`,
+//! Ports `showTabDropHint` of `v2.0.0:desktop/ui/app.js` and the `.tab-drop-active`,
 //! `.tab-insert-before` and `.tab-drag-source` rules of
-//! `desktop/ui/style.css`. The strip answers for points in its own
+//! `v2.0.0:desktop/ui/style.css`. The strip answers for points in its own
 //! coordinates, so its sideways scrolling needs no arithmetic.
 
 use gtk::graphene;

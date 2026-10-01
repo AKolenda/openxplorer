@@ -2,7 +2,7 @@
 //! Folder sizes of network shares through GIO metadata (PROP-030), and the
 //! background scan the window awaits (PROP-026, PROP-029).
 //!
-//! `desktop/tests` has no test of `GioSizeProvider`: shares are simulated
+//! `v2.0.0:desktop/tests` has no test of `GioSizeProvider`: shares are simulated
 //! in memory here, and the GIO provider is checked on a real local folder
 //! against the `lstat` provider. Every file is inside a temporary
 //! directory.

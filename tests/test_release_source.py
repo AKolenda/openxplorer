@@ -46,7 +46,7 @@ EDITABLE_INPUTS = [
     '.github/workflows/checks.yml', '.gitignore', '.env.example', '.dev.vars.example',
     'AGENTS.md', 'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md', 'pnpm-lock.yaml',
     'pnpm-workspace.yaml', 'package.json', 'requirements-dev.txt', 'wrangler.jsonc',
-    'desktop/core.py', 'desktop/ui/app.js', 'desktop/licenses/Winspace-MIT.txt',
+    'apps/web/public/tour/tour.js', 'apps/web/public/tour/scenes.json',
     'licenses/Winspace-MIT.txt', 'tools/release.py', 'tests/test_release_source.py',
     'apps/web/components/product.tsx', 'apps/web/public/assets/site.css',
     'apps/web/public/assets/screenshots/manifest.json', 'docs/PRIVACY.md',
@@ -62,7 +62,7 @@ FILES_IN_EXCLUDED_TREES = [
     'node_modules/package/source.js', 'apps/web/node_modules/package/source.js',
     '.next/source.js', 'apps/web/out/index.html', '.git/config', '.hg/store/file',
     '.svn/entries', '__pycache__/module.pyc', 'test-results/result.json',
-    'desktop/test-results/screenshot.png', 'dist/source.zip', 'desktop/dist/package.deb',
+    'native/test-results/screenshot.png', 'dist/source.zip', 'native/dist/package.deb',
     'designs/index.html', '.pnpm-store/index.json', '.wrangler/state/v3/db.sqlite',
     'apps/web/.wrangler/config/default.toml', '.vercel/project.json', '.venv/bin/python',
     'tools/venv/bin/python', '.pytest_cache/state', '.mypy_cache/state',
@@ -70,8 +70,8 @@ FILES_IN_EXCLUDED_TREES = [
     '.nyc_output/result.json', 'htmlcov/index.html', 'coverage/index.html',
     'playwright-report/index.html', 'blob-report/result.json', 'tmp/note.txt',
     '.tmp/note.txt', 'temp/note.txt', '.temp/note.txt',
-    'apps/web/public/downloads/SHA256SUMS', 'apps/web/public/app-preview.html',
-    'apps/web/public/assets/site.js', 'desktop/preview.html',
+    'apps/web/public/downloads/SHA256SUMS', 'apps/web/public/assets/site.js',
+    'apps/web/public/tour/scenes.js',
     # Rust build output.
     'native/target/debug/openxplorer-native', 'native/target/debug/deps/object.o',
     'native/target/.rustc_info.json',
@@ -99,10 +99,10 @@ GIT_IGNORED = {
     '.env.example': False, '.dev.vars.example': False, '.cache/private.txt': True,
     '.venv/pyvenv.cfg': True, 'nested/temp/private.txt': True, 'trace.log.1': True,
     'credentials.json': True, 'local.db-wal': True, 'private.pem': True,
-    'desktop/test-results/native.json': True, 'desktop/preview.html': True,
-    'desktop/dist/SHA256SUMS': True, 'apps/web/out/index.html': True,
+    'native/test-results/native.json': True, 'apps/web/public/tour/scenes.js': True,
+    'native/dist/SHA256SUMS': True, 'apps/web/out/index.html': True,
     'apps/web/public/downloads/SHA256SUMS': True, 'pnpm-lock.yaml': False,
-    'wrangler.jsonc': False, 'desktop/ui/app.js': False,
+    'wrangler.jsonc': False, 'apps/web/public/tour/tour.js': False,
     'licenses/Winspace-MIT.txt': False, '.github/workflows/checks.yml': False,
     # The native Rust workspace.
     'native/target/debug/openxplorer-native': True,
@@ -146,8 +146,8 @@ class SourceArchiveTests(unittest.TestCase):
         """Nothing inside an excluded tree is kept, however deep the tree is."""
         for path in FILES_IN_EXCLUDED_TREES:
             self.put(path)
-        self.put('desktop/ui/index.html')
-        self.assertEqual(self.selected(), ['desktop/ui/index.html'])
+        self.put('native/crates/ox-app/src/main.rs')
+        self.assertEqual(self.selected(), ['native/crates/ox-app/src/main.rs'])
 
     def test_excludes_environment_credentials_databases_logs_and_editor_backups(self) -> None:
         """Sensitive and local-only file names are excluded in any directory."""
@@ -170,7 +170,7 @@ class SourceArchiveTests(unittest.TestCase):
         self.put('node_modules/package/deep/source.js')
         self.put('.wrangler/state/v3/source.py')
         self.put('apps/web/public/downloads/deep/source.py')
-        self.put('desktop/ui/app.js')
+        self.put('native/crates/ox-app/src/main.rs')
         visited = []
         real_scandir = os.scandir
 
@@ -184,8 +184,8 @@ class SourceArchiveTests(unittest.TestCase):
 
         # os.walk() lists every directory it enters with os.scandir().
         with patch.object(os, 'scandir', side_effect=scandir):
-            self.assertEqual(self.selected(), ['desktop/ui/app.js'])
-        self.assertIn('desktop/ui', visited)
+            self.assertEqual(self.selected(), ['native/crates/ox-app/src/main.rs'])
+        self.assertIn('native/crates/ox-app/src', visited)
 
     def test_links_cannot_import_external_private_files_or_cycle(self) -> None:
         """Links to files or folders, inside or outside the tree, are never followed."""
@@ -265,12 +265,10 @@ class ReleasePackageTests(unittest.TestCase):
         replacements: dict[str, Any] = {
             'DIST': self.dist,
             'TEST_RESULTS': root / 'test-results',
-            'DESIGNS': root / 'designs',
             'release_version': lambda: self.VERSION,
             'remove_website_downloads': lambda: None,
             'verify_debian_package': lambda package: None,
             'write_source_archive': lambda archive: archive.write_bytes(b'source'),
-            'publish_preview': lambda: None,
         }
         for name, value in replacements.items():
             patcher = patch.object(release, name, value)
@@ -332,17 +330,17 @@ class ReleaseFailureTests(unittest.TestCase):
 
     def test_a_failed_build_step_is_named_with_its_exit_status(self) -> None:
         """A script that fails is named by its command line, not by a traceback."""
-        command = ['python3', 'desktop/tools/verify_deb.py', 'dist/open xplorer.deb']
+        command = ['python3', 'native/tools/verify_deb.py', 'dist/open xplorer.deb']
         message = self.failure_message(subprocess.CalledProcessError(2, command))
-        self.assertEqual(message, 'Release failed: python3 desktop/tools/verify_deb.py '
+        self.assertEqual(message, 'Release failed: python3 native/tools/verify_deb.py '
                                   "'dist/open xplorer.deb' exited with status 2; "
                                   'its output is above.\n')
 
     def test_a_build_step_killed_by_a_signal_names_the_signal(self) -> None:
         """A negative return code is reported as the signal that ended the step."""
-        command = ['python3', 'desktop/tools/build_deb.py']
+        command = ['python3', 'native/tools/build_deb.py']
         message = self.failure_message(subprocess.CalledProcessError(-9, command))
-        self.assertEqual(message, 'Release failed: python3 desktop/tools/build_deb.py '
+        self.assertEqual(message, 'Release failed: python3 native/tools/build_deb.py '
                                   'was killed by signal 9; its output is above.\n')
 
     def test_an_unreadable_directory_is_reported_in_one_line(self) -> None:

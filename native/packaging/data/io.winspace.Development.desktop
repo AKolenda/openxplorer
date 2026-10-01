@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The launcher of the native app once it replaces the Python app. Every key
-# and value is the Python package's (DESKTOP in desktop/tools/build_deb.py):
+# and value is the Python package's (DESKTOP in v2.0.0:desktop/tools/build_deb.py):
 # the ID, icon name, MIME types, StartupWMClass and quick actions are
 # compatibility contracts (AGENTS.md). native/packaging/README.md explains
 # the choices. The one addition is X-GNOME-UsesNotifications: the native app notifies when

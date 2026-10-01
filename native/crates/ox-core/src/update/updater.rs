@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Checking for and installing one update at a time. Ports `Updater` in
-//! `desktop/updater.py`.
+//! `v2.0.0:desktop/updater.py`.
 //!
 //! Both operations block on the network and on processes; run them on a
 //! worker thread, as [`UpdateService`](super::UpdateService) does.
@@ -169,7 +169,7 @@ impl Updater {
     /// `on_progress` hears each step as it starts.
     ///
     /// Safety rule "confirmed, checked, verified, then prompted"
-    /// (`Updater.install` in `desktop/updater.py`): nothing is fetched or
+    /// (`Updater.install` in `v2.0.0:desktop/updater.py`): nothing is fetched or
     /// run without the user's confirmation and a check for exactly this
     /// version; the administrator prompt appears only after the download's
     /// size, digest and package fields matched. Only the version comes

@@ -2,7 +2,7 @@
 //! [`ArtImage`]: a widget that shows an [`Art`] from real icons.
 //!
 //! Replaces the SVG compositions of `zipFolderIcon`, `fileIcon` and
-//! `networkIcon` in `desktop/ui/app.js`. Nothing is drawn: the pictures are
+//! `networkIcon` in `v2.0.0:desktop/ui/app.js`. Nothing is drawn: the pictures are
 //! bundled icons in `gtk::Image`s, layered with a `gtk::Overlay`, and the
 //! green network bar and the disc behind the red cross are small boxes the
 //! skin colours (`resources/skin/icons.css`). [`compose`] decides where

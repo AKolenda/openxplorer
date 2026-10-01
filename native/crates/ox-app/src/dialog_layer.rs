@@ -3,7 +3,7 @@
 //! with one dialog centred on it.
 //!
 //! Ports `#modal-layer`, `showModal` and `closeModal` of
-//! `desktop/ui/app.js`, drawn as `native/docs/ui-spec.md` §4.11 says:
+//! `v2.0.0:desktop/ui/app.js`, drawn as `native/docs/ui-spec.md` §4.11 says:
 //! the scrim covers the window's content, as `positionTabDialog` places
 //! the layer of a tab's Properties under the title bar, and the dialog is
 //! at most the window's width less 30 pixels (`calc(100vw - 30px)`).

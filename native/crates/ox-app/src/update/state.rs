@@ -2,7 +2,7 @@
 //! What the app knows about updates, and how the Software updates dialog,
 //! the status bar and the About settings say it.
 //!
-//! Ports the states of `updatesDialog` in `desktop/ui/app.js`: its
+//! Ports the states of `updatesDialog` in `v2.0.0:desktop/ui/app.js`: its
 //! `release`, `checking` and `installed` variables and every status line,
 //! word for word. Beyond the Python app, the state is shared by every
 //! window, so the status bar and About show a release found by a check
@@ -247,7 +247,7 @@ mod tests {
     }
 
     /// Ported from the status lines of `updatesDialog` in
-    /// `desktop/ui/app.js`.
+    /// `v2.0.0:desktop/ui/app.js`.
     ///
     /// parity: UPD-001, UPD-006
     #[test]

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The icon view: tiles with a large icon and up to two lines of name.
 //!
-//! Matches `.file-tile` in `desktop/ui/style.css` ("Large icons": a 56
+//! Matches `.file-tile` in `v2.0.0:desktop/ui/style.css` ("Large icons": a 56
 //! pixel icon in a 135 pixel cell) and the grid layout of `renderRows` in
-//! `desktop/ui/app.js`. Explorer's other icon layouts use the same tiles
+//! `v2.0.0:desktop/ui/app.js`. Explorer's other icon layouts use the same tiles
 //! with a different icon size; the window binds them to Ctrl+Shift+1..4
 //! as Explorer does. [`IconView`] is the widget; it keeps its icon size
 //! and the text size, and fits its columns to its width.

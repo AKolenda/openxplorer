@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A local provider that fails at a chosen step of a copy, a publication or
 //! a reversible replacement, like the failing `LocalNode` subclasses in
-//! `desktop/tests/test_operations.py`.
+//! `v2.0.0:desktop/tests/test_operations.py`.
 
 use std::sync::Arc;
 

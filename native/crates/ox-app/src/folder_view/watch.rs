@@ -2,7 +2,7 @@
 //! Watching a folder for changes without blocking the interface.
 //!
 //! Ports `watch` and the directory monitor with its 350 ms debounce in
-//! `desktop/winspace.py`. Creating a monitor can block: for a phone, a
+//! `v2.0.0:desktop/winspace.py`. Creating a monitor can block: for a phone, a
 //! camera or a network share, `GVfs` answers the request over D-Bus, and a
 //! busy backend (an MTP copy in another tab) can take seconds. The Python
 //! app therefore creates monitors off the GTK thread, and so does this

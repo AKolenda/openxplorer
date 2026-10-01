@@ -2,8 +2,8 @@
 //! Why a network operation failed: mounting, connecting, unmounting,
 //! ejecting, signing out or discovering servers.
 //!
-//! The messages are the Python app's (`desktop/winspace.py` and
-//! `desktop/gio_backend.py`); GIO's own errors keep GIO's message.
+//! The messages are the Python app's (`v2.0.0:desktop/winspace.py` and
+//! `v2.0.0:desktop/gio_backend.py`); GIO's own errors keep GIO's message.
 
 use super::keyring::KeyringError;
 use crate::location::LocationError;

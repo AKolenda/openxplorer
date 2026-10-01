@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! New from template: a new file holding a copy of a template's content.
 //!
-//! Ports `create_from_template` in `desktop/file_services.py` and the
+//! Ports `create_from_template` in `v2.0.0:desktop/file_services.py` and the
 //! checks of the `createTemplate` branch of `dispatch` in
-//! `desktop/winspace.py`. The OPS-048 safety rules:
+//! `v2.0.0:desktop/winspace.py`. The OPS-048 safety rules:
 //!
 //! - A user template must be in a fresh template list, so only a bounded,
 //!   regular, visible, non-link file in the Templates folder is copied.
@@ -44,7 +44,7 @@ const READ_BLOCK_BYTES: usize = 64 * 1024;
 const STAGE_PREFIX: &str = ".winspace-new-";
 
 /// The refusal of a taken name, in `create_from_template`'s wording in
-/// `desktop/file_services.py`, whether the name was taken before the file
+/// `v2.0.0:desktop/file_services.py`, whether the name was taken before the file
 /// was made or while it was published.
 const NAME_TAKEN: &str = "An item with that name already exists. Nothing was overwritten.";
 

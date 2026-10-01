@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The folder views' context menus in a real window, against `entryMenu`,
-//! `backgroundMenu` and `openNewMenu` of `desktop/ui/app.js`: the item a
+//! `backgroundMenu` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`: the item a
 //! right-click selects, both menu styles, the items the selection
 //! disables, and the menus "Show more options" and "New…" open in place.
 

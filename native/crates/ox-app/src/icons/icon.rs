@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Every icon the app shows, by name: the only place icon names live.
 //!
-//! Replaces the `paths` table and the art functions of `desktop/ui/app.js`
+//! Replaces the `paths` table and the art functions of `v2.0.0:desktop/ui/app.js`
 //! (`icon()`, `folderIcon`, `fileIcon`), which drew their own SVG, with the
 //! Fluent icons the product owner approved. They are vendored unmodified in
 //! `resources/icons/hicolor/scalable/<context>/`; `resources/icons/SOURCES.md`

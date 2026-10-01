@@ -2,9 +2,9 @@
 //! Previous versions from snapshot and backup folders, and the rule that
 //! keeps those folders read-only.
 //!
-//! Ports `desktop/previous_versions.py`, its GIO provider
-//! (`SnapshotProvider` in `desktop/file_services.py`) and the snapshot
-//! name rules of `desktop/ui/snapshot-meta.js`. Snapshots are found
+//! Ports `v2.0.0:desktop/previous_versions.py`, its GIO provider
+//! (`SnapshotProvider` in `v2.0.0:desktop/file_services.py`) and the snapshot
+//! name rules of `v2.0.0:desktop/ui/snapshot-meta.js`. Snapshots are found
 //! only where a server or filesystem already exposes them as readable
 //! folders: `.snapshot`, `#snapshot` and `.zfs/snapshot` collections,
 //! Snapper's `.snapshots/<id>/snapshot` on Btrfs, and backup folders the

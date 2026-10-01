@@ -32,11 +32,14 @@ import tempfile
 import time
 from typing import Any
 
+import python_app
+
 NATIVE = Path(__file__).resolve().parents[1]
 
-# The driver runs cargo and the isolation tools. The Rust tests themselves call
-# python3 (settings interop) and mkfifo.
-REQUIRED_TOOLS = ('cargo', 'python3', 'dbus-run-session', 'xvfb-run', 'Xvfb', 'xauth', 'mkfifo')
+# The driver runs cargo, git (for the Python app's sources) and the isolation
+# tools. The Rust tests themselves call python3 (settings interop) and mkfifo.
+REQUIRED_TOOLS = ('cargo', 'git', 'python3', 'dbus-run-session', 'xvfb-run', 'Xvfb', 'xauth',
+                  'mkfifo')
 
 DEFAULT_TEST_TIMEOUT = 180.0
 # How long a stop signal may take before the next, stronger one is sent.
@@ -454,11 +457,18 @@ def check_rust_tests(test_timeout: float) -> int:
 
 
 def run_all_checks(test_timeout: float) -> None:
-    """Run every check in order, raising on the first failure."""
-    check_inventories_and_driver()
-    check_no_drawn_icons()
-    check_formatting_and_lints()
-    executable_count = check_rust_tests(test_timeout)
+    """Run every check in order, raising on the first failure.
+
+    The compatibility tests run the retired Python app's code, so its sources
+    are extracted from their tag for the run (python_app.py) and named in
+    $OX_PYTHON_APP, which every test inherits.
+    """
+    with python_app.sources() as sources:
+        os.environ[python_app.VARIABLE] = str(sources)
+        check_inventories_and_driver()
+        check_no_drawn_icons()
+        check_formatting_and_lints()
+        executable_count = check_rust_tests(test_timeout)
     print(f'Native checks passed ({executable_count} test executables plus doctests).')
 
 
@@ -514,7 +524,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f'Native checks failed: {describe_failed_command(error)}; its output is above.',
               file=sys.stderr)
         return 1
-    except CheckError as error:
+    except (CheckError, python_app.PythonAppMissing) as error:
         print(f'Native checks failed: {error}', file=sys.stderr)
         return 1
     return 0

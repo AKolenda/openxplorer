@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Dragging files out of and dropping files onto a real window, against
-//! `makeFileDraggable` in `desktop/ui/app.js` and
-//! `desktop/native_file_drop.py`. The drag and drop gestures themselves
+//! `makeFileDraggable` in `v2.0.0:desktop/ui/app.js` and
+//! `v2.0.0:desktop/native_file_drop.py`. The drag and drop gestures themselves
 //! need a pointer, which the private display has none of; these tests run
 //! what the drag source and the drop target call.
 

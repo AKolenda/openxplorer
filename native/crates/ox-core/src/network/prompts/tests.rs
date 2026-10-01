@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Ports `AuthTests` of `desktop/tests/test_v05.py`. The Python tests drove
+//! Ports `AuthTests` of `v2.0.0:desktop/tests/test_v05.py`. The Python tests drove
 //! a fake operation; these emit `GVfs`'s signals on a real
 //! `gio::MountOperation` and read its replies, on a private main context,
 //! with an in-memory keyring.
@@ -75,7 +75,7 @@ fn sam(password: &str) -> Credential {
     }
 }
 
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_unchecked_session_not_never`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_unchecked_session_not_never`
 ///
 /// parity: NET-007, NET-011
 #[test]
@@ -90,7 +90,7 @@ fn unchecked_remember_saves_for_the_session_not_never() {
     });
 }
 
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_checked_permanent`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_checked_permanent`
 ///
 /// parity: NET-007, NET-011
 #[test]
@@ -106,7 +106,7 @@ fn checked_remember_saves_permanently() {
     });
 }
 
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_failed_mount_not_saved`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_failed_mount_not_saved`
 ///
 /// parity: NET-001, NET-014, NET-015
 #[test]
@@ -123,7 +123,7 @@ fn a_failed_mount_saves_nothing() {
     });
 }
 
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_success_saved_after_finish`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_success_saved_after_finish`
 ///
 /// parity: NET-001, NET-014, NET-015
 #[test]
@@ -144,7 +144,7 @@ fn credentials_are_saved_only_after_the_mount_succeeds() {
     });
 }
 
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_reuse_without_dialog`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_reuse_without_dialog`
 ///
 /// parity: NET-011, NET-014
 #[test]
@@ -268,7 +268,7 @@ fn a_credential_the_keyring_cannot_save_still_works_and_the_user_is_told() {
     });
 }
 
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_rejected_reuse_shows_prompt_not_loop`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_rejected_reuse_shows_prompt_not_loop`
 ///
 /// parity: NET-011, NET-014
 #[test]
@@ -289,7 +289,7 @@ fn a_rejected_known_credential_shows_the_dialog_instead_of_looping() {
     });
 }
 
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_password_not_sent_back_to_ui`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_password_not_sent_back_to_ui`
 ///
 /// parity: NET-008, NET-011, SAFE-011
 #[test]
@@ -304,7 +304,7 @@ fn the_password_is_never_sent_back_to_the_window() {
     });
 }
 
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_cancelled_challenge_dismisses`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_cancelled_challenge_dismisses`
 ///
 /// parity: NET-011, NET-012, NET-013
 #[test]

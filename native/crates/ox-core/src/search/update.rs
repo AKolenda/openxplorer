@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A live update: re-reading the folders that changed below a root.
 //!
-//! Ports `_read` and `_update` in `desktop/index_service.py` (SRCH-028,
+//! Ports `_read` and `_update` in `v2.0.0:desktop/index_service.py` (SRCH-028,
 //! SRCH-030, SRCH-032). Only the changed folder and the folders that are
 //! new below it are read; the rest of the cache stays as it is.
 //!
 //! A changed location that is gone or not a folder re-reads its parent
 //! instead: the app may pass a deleted, renamed or plain file, as
-//! `invalidate_cache_for_write` in `desktop/winspace.py` did, and a
+//! `invalidate_cache_for_write` in `v2.0.0:desktop/winspace.py` did, and a
 //! watched or cached folder may be deleted before its update runs. Only
 //! the parent's listing shows such a change. Python read the location as a
 //! folder, which failed and reported the root offline.

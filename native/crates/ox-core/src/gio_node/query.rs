@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Metadata and enumeration without following symbolic links.
 //!
-//! Ports `GioNode.info` and `GioNode.children` in `desktop/gio_backend.py`.
+//! Ports `GioNode.info` and `GioNode.children` in `v2.0.0:desktop/gio_backend.py`.
 
 use std::time::{Duration, SystemTime};
 

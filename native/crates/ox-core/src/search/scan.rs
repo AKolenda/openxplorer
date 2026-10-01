@@ -2,7 +2,7 @@
 //! How scans and live updates write to the cache.
 //!
 //! Ports `begin`, `put_batch`, `finish`, `replace_directory` and
-//! `directories` from `desktop/search_index.py`.
+//! `directories` from `v2.0.0:desktop/search_index.py`.
 //!
 //! Safety rule "only a complete scan prunes" (SRCH-024): each scan has a
 //! [`ScanGeneration`]; entries it did not see are deleted only when it

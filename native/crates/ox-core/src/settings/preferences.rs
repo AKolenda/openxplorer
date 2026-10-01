@@ -2,7 +2,7 @@
 //! User preferences: their defaults, the values each one accepts, and how an
 //! untrusted update is read and applied.
 //!
-//! Ports `update_preferences` in `desktop/core.py`, including the JSON type
+//! Ports `update_preferences` in `v2.0.0:desktop/core.py`, including the JSON type
 //! checks Python makes (`type(size) is int`, `isinstance(value, bool)`), so
 //! both applications accept and ignore exactly the same values.
 
@@ -628,7 +628,7 @@ mod tests {
         assert!(!preferences.show_hidden);
     }
 
-    /// The layout of `Settings.data['preferences']` in `desktop/core.py`.
+    /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`.
     /// parity: SET-016
     #[test]
     fn default_preferences_are_stored_like_the_python_app() {

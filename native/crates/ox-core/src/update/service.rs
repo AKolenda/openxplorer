@@ -2,7 +2,7 @@
 //! The application's update service: the rules every window follows while
 //! an update installs and until the restart, and checks and installations
 //! run on worker threads. Ports the update branches of `dispatch`, and
-//! `on_delete`, `create_window` and `quit_safely`, in `desktop/winspace.py`.
+//! `on_delete`, `create_window` and `quit_safely`, in `v2.0.0:desktop/winspace.py`.
 
 use std::cell::Cell;
 use std::fmt;
@@ -158,7 +158,7 @@ impl UpdateService {
     /// Whether a window may do `request` now.
     ///
     /// Safety rule "an update locks the application" (`dispatch` in
-    /// `desktop/winspace.py`): while an update installs, only a window's
+    /// `v2.0.0:desktop/winspace.py`): while an update installs, only a window's
     /// own chrome is served, in every window; until the restart, files
     /// stay untouched and only update status, restart, quitting, chrome
     /// and the environment are served.
@@ -317,7 +317,7 @@ impl UpdateService {
     /// resolves to the installation's result.
     ///
     /// Safety rule "the lock lasts as long as the package manager"
-    /// (`install_update`'s `finally` in `desktop/winspace.py`): the
+    /// (`install_update`'s `finally` in `v2.0.0:desktop/winspace.py`): the
     /// application leaves [`UpdatePhase::Installing`] only when the worker
     /// has ended, whether or not anyone still awaits the installation.
     /// While APT may run, quitting, closing a window and restarting stay

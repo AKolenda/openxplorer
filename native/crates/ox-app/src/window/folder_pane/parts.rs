@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The widgets of the folder pane and the folder model they show.
 //!
-//! Builds the `main` area of `desktop/ui/index.html`: the details and icon
+//! Builds the `main` area of `v2.0.0:desktop/ui/index.html`: the details and icon
 //! views in a stack of their own, the empty page and the landing page, all
 //! in the stack of pages [`super::PanePage`] names.
 

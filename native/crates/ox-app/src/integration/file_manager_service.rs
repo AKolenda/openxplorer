@@ -4,7 +4,7 @@
 //! window.
 //!
 //! Ports `enable_reveal`, `disable_reveal`, the `startup` registration
-//! and `handle_reveal` of `desktop/winspace.py` (INT-013, INT-017). The
+//! and `handle_reveal` of `v2.0.0:desktop/winspace.py` (INT-013, INT-017). The
 //! service itself, its argument checks and its error replies are
 //! ox-core's [`FileManagerBus`]; requests reach the application through
 //! the handler it attached, which shows them in a window.

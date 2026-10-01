@@ -3,7 +3,7 @@
 //! Recycle Bin, Cut, Copy and Paste with their name conflicts, and Undo
 //! and Redo.
 //!
-//! Ports the file commands of `desktop/ui/app.js` (`newItem`,
+//! Ports the file commands of `v2.0.0:desktop/ui/app.js` (`newItem`,
 //! `newTemplateDialog`, `rename`, `trash`, `copySelection`, `paste`,
 //! `transferWithConflicts`, `runOperation`, `updateTransfer`,
 //! `updateToolbar` and the trash-support cache) on ox-core's

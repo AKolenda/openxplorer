@@ -16,9 +16,9 @@ Local selected directories use filesystem watches while the app is open. Network
 
 A result includes its parent path. Opening a directory navigates to the actual folder; opening a file checks current metadata and launches an appropriate application. Stale results can remain when a server is offline.
 
-![Actual cached search with complete SMB folder paths](../apps/web/public/assets/screenshots/cached-search.png)
+![A cached search for “budget” in the native app, showing the folder of the result](../apps/web/public/assets/screenshots/cached-search.png)
 
-*Actual HTML interface. Sample files; no live NAS connection.*
+*The native app, captured with fictional sample files. No live NAS connection.*
 
 ## Coverage and limits
 

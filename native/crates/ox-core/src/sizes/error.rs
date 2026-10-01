@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Why a folder-size scan could not start or read its folder.
 //!
-//! Mirrors the `ValueError`s `scan_folder` in `desktop/folder_sizes.py`
+//! Mirrors the `ValueError`s `scan_folder` in `v2.0.0:desktop/folder_sizes.py`
 //! raises, word for word. Problems below the scanned folder never end a
 //! scan; they are counted in its result instead.
 

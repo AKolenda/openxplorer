@@ -2,7 +2,7 @@
 //! Reading `user-dirs.dirs` without ever running it as a shell script.
 //!
 //! Ports `read_user_dirs` and its `LINE` pattern from
-//! `desktop/folder_locations.py`. Both applications must resolve the same
+//! `v2.0.0:desktop/folder_locations.py`. Both applications must resolve the same
 //! standard folders, because Quick access compares their URIs with the
 //! `hiddenQuick` and `quickOrder` entries in the shared `settings.json`.
 //!

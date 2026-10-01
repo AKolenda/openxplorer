@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Presentation classification of a listed item.
 //!
-//! Ports `classify_entry` in `desktop/entry_model.py`. It never performs a
+//! Ports `classify_entry` in `v2.0.0:desktop/entry_model.py`. It never performs a
 //! stat, mount or transfer. A GIO directory is not the only navigable
 //! object: gvfsd-smb-browse lists shares as mountables and servers as
 //! shortcuts, with a `standard::target-uri` and the `inode/directory` MIME
@@ -192,7 +192,7 @@ fn names_an_smb_share(source: &LocationParts) -> bool {
 
 #[cfg(test)]
 mod tests {
-    //! Ported from `desktop/tests/test_entry_model.py`. Fixtures mirror
+    //! Ported from `v2.0.0:desktop/tests/test_entry_model.py`. Fixtures mirror
     //! gvfsd-smb-browse metadata, not a connection to a real NAS.
 
     use super::*;
@@ -211,7 +211,7 @@ mod tests {
         }
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_smb_share_is_navigable_not_a_mutable_regular_directory`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_smb_share_is_navigable_not_a_mutable_regular_directory`
     ///
     /// parity: NET-003
     #[test]
@@ -228,7 +228,7 @@ mod tests {
         assert_eq!(share.folder_type, Some(FolderType::NetworkShare));
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_shortcut_server_uses_real_target`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_shortcut_server_uses_real_target`
     ///
     /// parity: NET-003
     #[test]
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(server.folder_type, Some(FolderType::NetworkLocation));
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_normal_smb_directory`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_normal_smb_directory`
     ///
     /// parity: NET-003
     #[test]
@@ -259,7 +259,7 @@ mod tests {
         assert_eq!(folder.folder_type, Some(FolderType::FileFolder));
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_local_directory`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_local_directory`
     ///
     /// parity: NAV-040
     #[test]
@@ -268,7 +268,7 @@ mod tests {
         assert!(folder.is_dir());
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_extensionless_smb_file_is_not_a_folder`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_extensionless_smb_file_is_not_a_folder`
     ///
     /// parity: NAV-040
     #[test]
@@ -282,7 +282,7 @@ mod tests {
         assert_eq!(file.folder_type, None);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_empty_regular_file_with_directory_mime_does_not_become_folder`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_empty_regular_file_with_directory_mime_does_not_become_folder`
     ///
     /// parity: NAV-040
     #[test]
@@ -294,7 +294,7 @@ mod tests {
         assert!(!file.is_dir());
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_unknown_directory_mime`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_unknown_directory_mime`
     ///
     /// parity: NAV-040
     #[test]
@@ -306,7 +306,7 @@ mod tests {
         assert!(folder.is_dir());
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_unknown_without_metadata_is_not_falsely_a_directory`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_unknown_without_metadata_is_not_falsely_a_directory`
     ///
     /// parity: NAV-040
     #[test]
@@ -315,7 +315,7 @@ mod tests {
         assert!(!unknown.is_dir());
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_mountable_share_without_optional_metadata`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_mountable_share_without_optional_metadata`
     ///
     /// parity: NAV-040, NET-003
     #[test]
@@ -324,7 +324,7 @@ mod tests {
         assert!(share.is_dir());
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_non_smb_mountable_not_assumed_to_be_directory`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_non_smb_mountable_not_assumed_to_be_directory`
     ///
     /// parity: NAV-040
     #[test]
@@ -333,7 +333,7 @@ mod tests {
         assert!(!mountable.is_dir());
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_mtp_directory_with_bracketed_usb_identifier`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_mtp_directory_with_bracketed_usb_identifier`
     ///
     /// parity: DEV-005
     #[test]
@@ -343,7 +343,7 @@ mod tests {
         assert!(folder.can_operate);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_file_shortcut_is_not_a_folder`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_file_shortcut_is_not_a_folder`
     ///
     /// parity: NAV-040
     #[test]
@@ -356,7 +356,7 @@ mod tests {
         assert!(!shortcut.is_dir());
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_virtual_bad_scheme_is_not_followed`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_virtual_bad_scheme_is_not_followed`
     ///
     /// parity: NAV-040, SAFE-010
     #[test]
@@ -370,7 +370,7 @@ mod tests {
         assert_eq!(shortcut.target_uri, None);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_credentials_in_backend_target_not_used`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_credentials_in_backend_target_not_used`
     ///
     /// parity: NAV-040, SAFE-010
     #[test]
@@ -384,7 +384,7 @@ mod tests {
         assert_eq!(share.target_uri, None);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_unicode_target_and_spaces`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_unicode_target_and_spaces`
     ///
     /// parity: NAV-040
     #[test]
@@ -400,7 +400,7 @@ mod tests {
         );
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_metadata_does_not_override_a_real_file_target`
+    /// Ported from `v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_metadata_does_not_override_a_real_file_target`
     ///
     /// parity: NAV-040
     #[test]
@@ -428,7 +428,7 @@ mod tests {
     }
 
     /// The wording is the `description` of `classify_entry` in
-    /// `desktop/entry_model.py`.
+    /// `v2.0.0:desktop/entry_model.py`.
     ///
     /// parity: VIEW-002
     #[test]

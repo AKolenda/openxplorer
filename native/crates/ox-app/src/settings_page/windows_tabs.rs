@@ -3,7 +3,7 @@
 //! files between windows and apps.
 //!
 //! Ports the "Windows & tabs" section of `appendV07Settings` in
-//! `desktop/ui/app.js` (SET-009). "Open windows…" opens the menu of the
+//! `v2.0.0:desktop/ui/app.js` (SET-009). "Open windows…" opens the menu of the
 //! title bar's windows button (`windowsMenu`), and "New window" runs
 //! `app.new-window` (Ctrl+N). Dolphin's options for folders opened from
 //! other apps and for the address bar join them. The Python

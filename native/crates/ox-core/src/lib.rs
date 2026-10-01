@@ -4,7 +4,7 @@
 //! Nothing in this crate depends on GTK. Filesystem access goes through GIO,
 //! so local folders, SMB shares, phones (MTP) and the Trash behave the same
 //! way they do in the Python application. The Python modules under
-//! `desktop/` are the behavioural specification; each module names the
+//! `v2.0.0:desktop/` are the behavioural specification; each module names the
 //! files it ports:
 //!
 //! | Module | Responsibility | Ports |

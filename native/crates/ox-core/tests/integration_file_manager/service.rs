@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Owning the name, serving the object and answering calls. Ports
-//! `BusTests` of `desktop/tests/test_v07.py`.
+//! `BusTests` of `v2.0.0:desktop/tests/test_v07.py`.
 
 use ox_core::integration::{FileManagerMethod, RequestNotOpened, BUS_NAME};
 
 use super::{remote_error_name, Fixture};
 
-/// Ported from `desktop/tests/test_v07.py::BusTests::test_registration_paths_and_flags`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BusTests::test_registration_paths_and_flags`
 /// parity: INT-013
 #[test]
 fn enabling_owns_the_standard_name_and_serves_the_standard_path() {
@@ -20,7 +20,7 @@ fn enabling_owns_the_standard_name_and_serves_the_standard_path() {
     assert!(reply.is_ok(), "{reply:?}");
 }
 
-/// Ported from `desktop/tests/test_v07.py::BusTests::test_registration_paths_and_flags`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BusTests::test_registration_paths_and_flags`
 /// parity: INT-013
 #[test]
 fn enabling_takes_the_name_over_from_an_owner_that_allows_it() {
@@ -50,7 +50,7 @@ fn enabling_takes_the_name_over_from_an_owner_that_allows_it() {
     gio::bus_unown_name(other_owner);
 }
 
-/// Ported from `desktop/tests/test_v07.py::BusTests::test_enable_idempotent`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BusTests::test_enable_idempotent`
 /// parity: INT-013
 #[test]
 fn enabling_twice_registers_once() {
@@ -67,7 +67,7 @@ fn enabling_twice_registers_once() {
     assert_eq!(fixture.received().len(), 1);
 }
 
-/// Ported from `desktop/tests/test_v07.py::BusTests::test_owner_status`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BusTests::test_owner_status`
 /// parity: INT-013, INT-016
 #[test]
 fn acquiring_and_releasing_the_name_is_reported() {
@@ -83,7 +83,7 @@ fn acquiring_and_releasing_the_name_is_reported() {
     assert!(fixture.ownership_changes.get() > changes_after_enabling);
 }
 
-/// Ported from `desktop/tests/test_v07.py::BusTests::test_disable_releases`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BusTests::test_disable_releases`
 /// parity: INT-013
 #[test]
 fn disabling_releases_the_name_and_the_object() {
@@ -98,7 +98,7 @@ fn disabling_releases_the_name_and_the_object() {
     assert!(fixture.received().is_empty());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BusTests::test_showitems_dispatch`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BusTests::test_showitems_dispatch`
 /// parity: INT-013, INT-014, INT-023
 #[test]
 fn show_items_reaches_the_app_with_the_startup_id() {
@@ -131,7 +131,7 @@ fn a_long_startup_id_is_cut_to_4096_characters() {
     assert_eq!(received[0].1.chars().count(), 4096);
 }
 
-/// Ported from `desktop/tests/test_v07.py::BusTests::test_bad_scheme_error_not_launch`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BusTests::test_bad_scheme_error_not_launch`
 /// parity: INT-013, SAFE-017
 #[test]
 fn an_unsupported_location_is_refused_without_reaching_the_app() {
@@ -148,7 +148,7 @@ fn an_unsupported_location_is_refused_without_reaching_the_app() {
     assert!(fixture.received().is_empty());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BusTests::test_bad_method_error`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BusTests::test_bad_method_error`
 /// parity: INT-013, SAFE-017
 #[test]
 fn an_unknown_method_is_refused() {
@@ -161,7 +161,7 @@ fn an_unknown_method_is_refused() {
     assert!(fixture.received().is_empty());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BusTests::test_no_request_executes_shell`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BusTests::test_no_request_executes_shell`
 /// parity: INT-013, SAFE-017
 #[test]
 fn a_path_that_looks_like_a_command_stays_an_escaped_location() {

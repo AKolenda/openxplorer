@@ -6,7 +6,7 @@
 //! each cell's content widget with its list item, and a click position is
 //! picked and walked up to a registered widget. The web app reads the row
 //! from the clicked element instead (`closest('.file-row,.file-tile')` in
-//! `desktop/ui/app.js`).
+//! `v2.0.0:desktop/ui/app.js`).
 //!
 //! The same registry styles cells by their item: the views style each cell
 //! when they bind it, since GTK reuses cells for other items, and the
@@ -32,7 +32,7 @@ use crate::folder_view::item::FileItem;
 
 /// The CSS class of a cell whose item a cut put on the clipboard. The
 /// stylesheet draws such cells at half opacity (`.file-row.cut{opacity:.5}`
-/// in `desktop/ui/style.css`).
+/// in `v2.0.0:desktop/ui/style.css`).
 const CUT_CSS_CLASS: &str = "cut";
 
 /// The CSS class of a cell whose item is hidden, shown only while "Show

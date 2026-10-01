@@ -3,7 +3,7 @@
 //! Shift+F10 (CMD-008 to CMD-015).
 //!
 //! Ports the rows' `contextmenu` handlers, `entryMenu`, `backgroundMenu`
-//! and the `ContextMenu`/Shift+F10 keys of `onKey` in `desktop/ui/app.js`.
+//! and the `ContextMenu`/Shift+F10 keys of `onKey` in `v2.0.0:desktop/ui/app.js`.
 //! A right-click on an unselected item selects only it first and opens
 //! that item's menu; on blank space it clears the selection and opens the
 //! folder's menu. The Settings choice "Right-click menu" picks the

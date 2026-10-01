@@ -9,7 +9,7 @@ desktop entry, D-Bus service file and AppStream metainfo name the program,
 icon and application ID the channel requires, that the desktop's own
 validators accept them, that nothing touches user state, and that no
 package ships Python. It ports the
-layout checks of desktop/tools/verify_deb.py; verify_deb.py adds the Debian
+layout checks of v2.0.0:desktop/tools/verify_deb.py; verify_deb.py adds the Debian
 ones.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ PERSONAL_SUFFIXES = ('.sqlite3', 'settings.json')
 # The first bytes of a compiled Linux program.
 ELF_MAGIC = b'\x7fELF'
 # The launcher keys the Python package's desktop entry has, which the
-# stable entry keeps (DESKTOP in desktop/tools/build_deb.py).
+# stable entry keeps (DESKTOP in v2.0.0:desktop/tools/build_deb.py).
 STABLE_DESKTOP_KEYS = {
     'Exec': 'openxplorer %U',
     'Icon': 'io.winspace.Development',

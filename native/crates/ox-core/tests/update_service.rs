@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The application lock while an update installs, and the worker-thread
 //! orchestration. Ports the installation tests of `BridgeTests` in
-//! `desktop/tests/test_updater.py`, which run the update branches of
+//! `v2.0.0:desktop/tests/test_updater.py`, which run the update branches of
 //! `dispatch`, `on_delete`, `create_window` and `quit_safely` in
-//! `desktop/winspace.py`.
+//! `v2.0.0:desktop/winspace.py`.
 //!
 //! The service is shared by every window, so "in every window" is one
 //! service here.
@@ -22,7 +22,7 @@ use ox_core::update::{
 };
 use update_support::service::{confirmed, ServiceFixture, ALL_REQUESTS};
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_running_update_blocks_file_actions_and_other_updates_in_every_window`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_running_update_blocks_file_actions_and_other_updates_in_every_window`
 /// parity: UPD-005
 #[test]
 fn running_update_blocks_file_actions_and_other_updates_in_every_window() {
@@ -76,7 +76,7 @@ fn a_running_update_refuses_another_check_or_installation() {
     );
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_confirmation_is_required_before_worker_or_busy_state`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_confirmation_is_required_before_worker_or_busy_state`
 /// parity: UPD-003, UPD-005
 #[test]
 fn confirmation_is_required_before_worker_or_busy_state() {
@@ -94,7 +94,7 @@ fn confirmation_is_required_before_worker_or_busy_state() {
     assert!(fixture.updates.packages.commands().is_empty());
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_active_work_in_any_window_blocks_install`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_active_work_in_any_window_blocks_install`
 ///
 /// Python checks each window's jobs, writes, mount prompts and handoff,
 /// and pending tab moves; the window side sums them up as [`Activity`].
@@ -112,7 +112,7 @@ fn active_work_in_any_window_blocks_install() {
     assert!(fixture.updates.packages.commands().is_empty());
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_queued_install_blocks_second_window_before_worker_starts`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_queued_install_blocks_second_window_before_worker_starts`
 /// parity: UPD-005
 #[test]
 fn queued_install_blocks_second_window_before_worker_starts() {
@@ -130,7 +130,7 @@ fn queued_install_blocks_second_window_before_worker_starts() {
     assert_ne!(fixture.service.phase(), UpdatePhase::Installing);
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_bridge_only_passes_version_confirmation_and_progress_not_remote_commands`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_bridge_only_passes_version_confirmation_and_progress_not_remote_commands`
 ///
 /// An [`InstallRequest`] has no field for an address, path, command or
 /// digest; progress reaches the caller's thread.
@@ -158,7 +158,7 @@ fn only_version_confirmation_and_progress_cross_to_the_installation() {
     assert!(fixture.launched().is_empty());
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_worker_submission_failure_clears_app_busy`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_worker_submission_failure_clears_app_busy`
 ///
 /// A GIO worker cannot fail to start; the equivalent failure is a worker
 /// that dies. The application must not stay locked, and since the
@@ -178,7 +178,7 @@ fn a_worker_that_dies_does_not_leave_the_application_locked() {
     assert_eq!(fixture.service.phase(), UpdatePhase::RestartRequired);
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_quit_and_window_close_refuse_while_update_runs`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_quit_and_window_close_refuse_while_update_runs`
 /// parity: UPD-005
 #[test]
 fn quit_and_window_close_refuse_while_update_runs() {
@@ -202,7 +202,7 @@ fn quit_and_window_close_refuse_while_update_runs() {
     );
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_new_windows_are_blocked_during_update_and_until_restart`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_new_windows_are_blocked_during_update_and_until_restart`
 /// parity: UPD-005, UPD-006
 #[test]
 fn new_windows_are_blocked_during_update_and_until_restart() {

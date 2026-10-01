@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Drives, volumes and phones coming and going: every volume monitor
 //! signal redraws every window, as the `mounts` events of
-//! `desktop/winspace.py` refresh the environment in `desktop/ui/app.js`.
+//! `v2.0.0:desktop/winspace.py` refresh the environment in `v2.0.0:desktop/ui/app.js`.
 //!
 //! A test cannot plug in a drive, so each signal is emitted on the
 //! desktop's volume monitor without a drive, volume or mount; the window

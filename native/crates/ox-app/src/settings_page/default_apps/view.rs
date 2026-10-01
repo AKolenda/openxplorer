@@ -2,7 +2,7 @@
 //! Showing the Default apps status, and running the page's changes.
 //!
 //! Ports `updateDefaultStatus`, `renderDefaultStatus`, `changeDefault` and
-//! `changeZipDefault` in `desktop/ui/app.js`. "Make `OpenXplorer` default"
+//! `changeZipDefault` in `v2.0.0:desktop/ui/app.js`. "Make `OpenXplorer` default"
 //! is enabled again after every status read, so it can re-apply after
 //! another application took a route; Restore previous and Restore ZIP
 //! handler are enabled only when a handler is recorded, and "Use

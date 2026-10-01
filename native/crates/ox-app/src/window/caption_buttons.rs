@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The window's own minimise, maximise and close buttons.
 //!
-//! Ports `.window-buttons` in `desktop/ui/index.html` and `style.css`:
+//! Ports `.window-buttons` in `v2.0.0:desktop/ui/index.html` and `style.css`:
 //! 46-pixel-wide, full-height buttons with thin 12-pixel glyphs and a red
 //! close hover. `GtkWindowControls` can only draw the icon theme's bold
 //! symbolic icons, so these are plain buttons running GTK's built-in

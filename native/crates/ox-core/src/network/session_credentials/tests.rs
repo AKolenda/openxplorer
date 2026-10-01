@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Ports `CredentialsTests` of `desktop/tests/test_v05.py` and the keyring
+//! Ports `CredentialsTests` of `v2.0.0:desktop/tests/test_v05.py` and the keyring
 //! races of `AdditionalSecurityTests` in
-//! `desktop/tests/test_terminal_security.py`, against an in-memory
+//! `v2.0.0:desktop/tests/test_terminal_security.py`, against an in-memory
 //! keyring.
 
 use std::sync::mpsc;
@@ -91,7 +91,7 @@ fn nas_entry(scope: CredentialScope) -> SecretAttributes {
         .with("scope", scope.as_str())
 }
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_session_collection_unchecked`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_session_collection_unchecked`
 ///
 /// parity: NET-011, NET-015
 #[test]
@@ -103,7 +103,7 @@ fn unchecked_remember_saves_in_the_session_collection() {
     assert_eq!(keyring.last_saved_collection(), Some(KeyringCollection::Session));
 }
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_permanent_checked`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_permanent_checked`
 ///
 /// parity: NET-011, NET-015
 #[test]
@@ -115,7 +115,7 @@ fn checked_remember_saves_in_the_default_collection() {
     assert_eq!(keyring.last_saved_collection(), Some(KeyringCollection::Default));
 }
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_cross_share_load`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_cross_share_load`
 ///
 /// parity: NET-014
 #[test]
@@ -127,7 +127,7 @@ fn another_share_on_the_server_loads_the_saved_credential() {
     assert_eq!(load(&credentials, "smb://nas/b"), Some(sam()));
 }
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_other_window_load`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_other_window_load`
 ///
 /// parity: NET-014
 #[test]
@@ -153,7 +153,7 @@ fn another_process_on_the_same_keyring_loads_the_saved_credential() {
     assert_eq!(load(&other_process, "smb://nas/b"), Some(sam()));
 }
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_other_host_no_load`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_other_host_no_load`
 ///
 /// parity: NET-014
 #[test]
@@ -165,7 +165,7 @@ fn another_server_does_not_load_the_credential() {
     assert_eq!(load(&credentials, "smb://other/a"), None);
 }
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_session_overrides_older_account`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_session_overrides_older_account`
 ///
 /// parity: NET-011, NET-014
 #[test]
@@ -204,7 +204,7 @@ fn a_permanent_save_removes_the_stale_session_entry() {
     assert_eq!(load(&fresh_window, "smb://nas/a"), Some(remembered));
 }
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_forget_clears_only_matching_host`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_forget_clears_only_matching_host`
 ///
 /// parity: NET-020, NET-021
 #[test]
@@ -252,7 +252,7 @@ fn forgetting_session_entries_deletes_them_but_not_the_permanent_account() {
     assert_eq!(load(&credentials, "smb://nas/c"), Some(remembered_sam()));
 }
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_no_plaintext_fallback`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_no_plaintext_fallback`
 ///
 /// parity: NET-011, SAFE-011
 #[test]
@@ -331,7 +331,7 @@ fn signing_out_in_one_window_wipes_the_server_from_every_windows_memory() {
     assert_eq!(other_window.peek("smb://other/a"), Some(sam()));
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_stale_credential_write_after_signout_discarded`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_stale_credential_write_after_signout_discarded`
 ///
 /// parity: NET-020, NET-021, SAFE-012
 #[test]
@@ -353,7 +353,7 @@ fn a_save_started_before_sign_out_is_discarded() {
     assert_eq!(credentials.peek(uri), None);
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_forget_waits_for_inflight_keyring_save`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_forget_waits_for_inflight_keyring_save`
 ///
 /// The save is held inside the keyring until the clearer has started and
 /// had time to reach the keyring; only the server lock keeps it out.

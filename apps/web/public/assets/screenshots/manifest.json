@@ -1,9 +1,8 @@
 {
-  "fixturePolicy": "Entirely fictional sample names, addresses and paths; fresh isolated browser context. No user screenshots.",
-  "source": "desktop/preview.html generated from desktop/ui/* + preview-only demo/showcase.js",
-  "storage": "simulated fixtures",
-  "renderer": "Chromium",
-  "nativeRuntime": false,
+  "fixturePolicy": "Entirely fictional sample names, addresses and paths (docs/PRIVACY.md); a fresh isolated session with no network. No user screenshots.",
+  "source": "tools/capture-screenshots.py: the native app's snapshot hook (OPENXPLORER_SNAPSHOT) with tools/native_capture.py's demo tree",
+  "renderer": "GTK 4",
+  "nativeRuntime": true,
   "screenshots": [
     "cached-search.png",
     "explorer-dark.png",
@@ -14,13 +13,12 @@
     "snapshot-tab.png"
   ],
   "sha256": {
-    "cached-search.png": "34c71020a875fdd25b2aa9f74b87379de39440f356ea49f7dcdb8396bf40bb48",
-    "explorer-dark.png": "d5e9c7302d4705d7c7dc8932b744aad10d7fe17d7a6ec0f580f206f7b2fc4684",
-    "explorer-light.png": "e82668755354c05ef096c92c7cb199a5468e01cc16a8597a8d920a3fb4fbf8a6",
-    "network-path.png": "e963527ee0af11f4c70effebfedae508483124ac22047886a4c014dce23a7c05",
-    "pinned-sidebar.png": "e56f868e9d83f761ec748784232694e9279fc06b3c5242f198a77c93b271ca67",
-    "previous-versions.png": "9b4d1a617bfc45ddaf848896a5785fe7542d4e6a59cec068711586028def269f",
-    "snapshot-tab.png": "9323fd46a252be08338b671d4aa275b2ddd9d5d09b145e54e5a2dc08aaac966f"
-  },
-  "fixtureSourceSha256": "6af4c55b34135685abb2e41b318d54cbf97353189bd02f0a3bfc483cf5d1861e"
+    "cached-search.png": "b75be1673a3ddcda79e111c74589e019d6fc3311f907d91598c8db87718ca603",
+    "explorer-dark.png": "8ba5062f27b2981f16648965685014dbce8c0cb54cecfaad45048dcc058b1474",
+    "explorer-light.png": "3dd51ba34a89254dd2e45a0a6e23f0ab789cd508606c9902a0a10bca1b1ba813",
+    "network-path.png": "f922d85a0f041b9e2df586a2f5e026c38c941caf6b7c54f7a4df36a6f1958fa3",
+    "pinned-sidebar.png": "8ca07348d24a98d8b14332a1e9bc9b6065cf825331d4c5e7ea4203cb54f9ae1d",
+    "previous-versions.png": "6fdb28019080671228e6cf3a97493f55cda22e33cce6537836660704cc0f8ef1",
+    "snapshot-tab.png": "e66978ec9a0a6dd67bab184d4b39ce7479786aeff0126a009fc2b12a4cae5bad"
+  }
 }

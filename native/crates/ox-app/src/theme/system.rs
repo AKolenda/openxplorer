@@ -2,7 +2,7 @@
 //! The desktop's light or dark preference.
 //!
 //! Ports `system_dark` and `on_system_theme_changed` in
-//! `desktop/winspace.py`: GNOME's `org.gnome.desktop.interface`
+//! `v2.0.0:desktop/winspace.py`: GNOME's `org.gnome.desktop.interface`
 //! `color-scheme` key decides when the schema is installed (`prefer-dark`
 //! or `prefer-light`; `default` falls back to a GTK theme name containing
 //! "dark"). Without the schema, the XDG desktop portal's

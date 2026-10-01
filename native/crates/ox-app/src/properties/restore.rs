@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The Restore a copy dialog (PROP-025).
 //!
-//! Ports `restoreVersion` in `desktop/ui/app.js`: the dialog asks for a
+//! Ports `restoreVersion` in `v2.0.0:desktop/ui/app.js`: the dialog asks for a
 //! destination folder (the home folder by default), refuses one inside a
 //! snapshot or backup folder, and answers with the canonical folder. The
 //! window then copies the version there with Keep both, so neither the

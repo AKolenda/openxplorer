@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The "Extract compressed folder" dialog (ARC-009, ARC-010).
 //!
-//! Ports `extractDialog` in `desktop/ui/app.js`: the archive, the
+//! Ports `extractDialog` in `v2.0.0:desktop/ui/app.js`: the archive, the
 //! destination folder and the new folder's name with a live "Extract
 //! into:" line, the check of every member before anything is written
 //! ("Checking archive contents…", then the counts and size), "Show

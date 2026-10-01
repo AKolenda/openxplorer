@@ -2,8 +2,8 @@
 //! The title bar: tabs, the new-tab button, an empty drag area, the
 //! open-windows button and the caption buttons.
 //!
-//! Ports `header.titlebar` in `desktop/ui/index.html` and `windowsMenu` in
-//! `desktop/ui/app.js`. The window template (`resources/ui/window.ui`)
+//! Ports `header.titlebar` in `v2.0.0:desktop/ui/index.html` and `windowsMenu` in
+//! `v2.0.0:desktop/ui/app.js`. The window template (`resources/ui/window.ui`)
 //! lays the bar out: the "+" right after the last tab, the drag area taking
 //! the rest of the width, and the whole bar a `GtkWindowHandle`, so
 //! dragging or double-clicking any empty part moves or maximises the

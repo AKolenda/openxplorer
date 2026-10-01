@@ -2,8 +2,8 @@
 //! Which member names the archive browser shows and opens, and the folder
 //! name an extraction suggests.
 //!
-//! Ports `safe_member` and `SAFE_VIEW_EXT` of `desktop/archives.py` and
-//! `suggested_name` of `desktop/zip_extraction.py`.
+//! Ports `safe_member` and `SAFE_VIEW_EXT` of `v2.0.0:desktop/archives.py` and
+//! `suggested_name` of `v2.0.0:desktop/zip_extraction.py`.
 
 use crate::location::{validate_name, LocationError};
 
@@ -133,7 +133,7 @@ fn strip_zip_extension(archive_name: &str) -> &str {
 mod tests {
     use super::*;
 
-    /// Ported from `desktop/tests/test_v05.py::ZipTests::test_absolute_rejected`,
+    /// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_absolute_rejected`,
     /// `test_windows_path_rejected` and `test_backslash_rejected`.
     ///
     /// parity: ARC-004
@@ -144,7 +144,7 @@ mod tests {
         assert!(!is_safe_member("dir\\x"));
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_rejects_ambiguous_and_control_names`.
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_rejects_ambiguous_and_control_names`.
     ///
     /// parity: ARC-004
     #[test]
@@ -197,7 +197,7 @@ mod tests {
         }
     }
 
-    /// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_suggested_names`.
+    /// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_suggested_names`.
     ///
     /// parity: ARC-009, ARC-012
     #[test]

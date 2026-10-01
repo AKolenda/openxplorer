@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Fixtures shared by the network tests: an in-memory keyring standing in
-//! for the Secret Service as `FakeSecret` in `desktop/tests/test_v05.py`
+//! for the Secret Service as `FakeSecret` in `v2.0.0:desktop/tests/test_v05.py`
 //! does for libsecret, a credential store on it with its windows'
 //! credentials, a sign-in dialog that records what it was asked to show,
 //! and one window's sign-in prompts on a private main context.

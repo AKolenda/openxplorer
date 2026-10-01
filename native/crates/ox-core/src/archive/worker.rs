@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Running blocking archive work off the main thread. Ports the
 //! `start_worker` calls of the archive branches of `dispatch` in
-//! `desktop/winspace.py`, which run every listing, preview, check and
+//! `v2.0.0:desktop/winspace.py`, which run every listing, preview, check and
 //! extraction on a worker thread.
 
 /// Runs `job` on a GIO worker thread and resolves with its result, so the

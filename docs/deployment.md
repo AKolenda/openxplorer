@@ -52,7 +52,7 @@ Pull requests do not execute on this runner. Cloudflare uses a dedicated reposit
 
 Run browser checks against the actual HTTP-served Next.js export. Test hydration, routes, keyboard navigation, mobile menus, search and every public-repository link. Confirm that no release binaries are emitted into the website export. Also verify Cloudflare routing/security headers and 404 behavior. The site has no application sign-in, analytics scripts, external fonts or tracking pixels.
 
-The application preview is embedded in an iframe with only allow-scripts; it has an opaque sandbox origin. The tour bridge accepts only fixed demo commands from its parent window. The page checks message sources before showing status. The preview’s CSP blocks network requests. Never replace this with a native credential or filesystem bridge.
+The tour of the native app is embedded in an iframe with only allow-scripts; it has an opaque sandbox origin and shows only static pictures. It accepts only fixed demo commands from its parent window, and the page checks message sources before showing status. Never replace this with a native credential or filesystem bridge.
 
 ## Release launch checks
 

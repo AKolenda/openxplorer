@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The private folder an extraction is built in, and how it is published
 //! or removed. Ports the staging steps of `ZipExtractor.extract` in
-//! `desktop/zip_extraction.py`. Like the Python extractor, which calls
-//! `_secure_local_staging` and `_clean_staging` of `desktop/operations.py`,
+//! `v2.0.0:desktop/zip_extraction.py`. Like the Python extractor, which calls
+//! `_secure_local_staging` and `_clean_staging` of `v2.0.0:desktop/operations.py`,
 //! it applies the transfer engine's own staging rules: its random names,
 //! `secure_local_staging` and [`Node::delete_staging`].
 //!
@@ -59,7 +59,7 @@ impl ExtractionStaging {
 
     /// ARC-018: makes a local staging folder owner-only (`0700`) with the
     /// transfer engine's rule for its own staging, as
-    /// `desktop/zip_extraction.py` calls `_secure_local_staging`. Only
+    /// `v2.0.0:desktop/zip_extraction.py` calls `_secure_local_staging`. Only
     /// `file:` folders with a local path get Unix modes: MTP, AFC and many
     /// SMB backends expose a FUSE path but cannot `chmod` (XFER-004); their
     /// random staging name keeps the folder private instead. The mode is set

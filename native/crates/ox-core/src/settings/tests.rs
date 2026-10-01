@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Tests of [`Settings`] against real files in temporary directories.
 //!
-//! Ports the settings cases of `desktop/tests/test_core.py`,
+//! Ports the settings cases of `v2.0.0:desktop/tests/test_core.py`,
 //! `test_pins.py`, `test_v05.py` and `test_terminal_security.py`; the
 //! preference cases are in `tests/preferences.rs`, and private storage and
 //! the backups of unreadable files in `tests/storage.rs`.
@@ -36,7 +36,7 @@ fn backups(directory: &Path) -> Vec<String> {
     names_starting_with(directory, "settings.json.unreadable-")
 }
 
-/// Ported from `desktop/tests/test_core.py::CoreTests::test_settings_private_and_atomic`
+/// Ported from `v2.0.0:desktop/tests/test_core.py::CoreTests::test_settings_private_and_atomic`
 /// parity: SET-012, SET-016, SAFE-018, NET-017
 #[test]
 fn settings_private_and_atomic() {
@@ -62,7 +62,7 @@ fn settings_private_and_atomic() {
     assert_eq!(temporary_files.len(), 0);
 }
 
-/// Ported from `desktop/tests/test_core.py::CoreTests::test_credential_bookmark_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_core.py::CoreTests::test_credential_bookmark_rejected`
 /// parity: SAFE-010
 #[test]
 fn a_bookmark_with_credentials_is_refused_and_nothing_is_saved() {
@@ -74,7 +74,7 @@ fn a_bookmark_with_credentials_is_refused_and_nothing_is_saved() {
     assert!(!store.path().exists());
 }
 
-/// Ported from `desktop/tests/test_core.py::CoreTests::test_corrupt_settings`
+/// Ported from `v2.0.0:desktop/tests/test_core.py::CoreTests::test_corrupt_settings`
 /// parity: SET-013
 #[test]
 fn corrupt_settings_fall_back_to_defaults_with_a_warning() {
@@ -85,7 +85,7 @@ fn corrupt_settings_fall_back_to_defaults_with_a_warning() {
     assert!(store.data().shares.is_empty());
 }
 
-/// Ported from `desktop/tests/test_pins.py::PinTests::test_add_pin_preserves_file_tree`
+/// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_add_pin_preserves_file_tree`
 /// parity: SIDE-007
 #[test]
 fn add_pin_preserves_file_tree() {
@@ -100,7 +100,7 @@ fn add_pin_preserves_file_tree() {
     assert!(actual.is_dir());
 }
 
-/// Ported from `desktop/tests/test_pins.py::PinTests::test_bulk_pin_and_reload`
+/// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_bulk_pin_and_reload`
 /// parity: SIDE-007
 #[test]
 fn a_pinned_batch_is_read_back_after_the_shown_order() {
@@ -129,7 +129,7 @@ fn a_pinned_batch_is_read_back_after_the_shown_order() {
     assert_eq!(reread.data().quick_order, expected);
 }
 
-/// Ported from `desktop/tests/test_pins.py::PinTests::test_invalid_batch_has_no_partial_writes`
+/// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_invalid_batch_has_no_partial_writes`
 /// parity: SIDE-007
 #[test]
 fn invalid_batch_writes_nothing() {
@@ -145,7 +145,7 @@ fn invalid_batch_writes_nothing() {
     assert!(!store.path().exists());
 }
 
-/// Ported from `desktop/tests/test_pins.py::PinTests::test_save_error_rolls_back_in_memory`
+/// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_save_error_rolls_back_in_memory`
 /// parity: SIDE-007
 #[test]
 fn save_error_rolls_back_in_memory() {
@@ -162,7 +162,7 @@ fn save_error_rolls_back_in_memory() {
     assert_eq!(store.data(), &before);
 }
 
-/// Ported from `desktop/tests/test_pins.py::PinTests::test_system_theme_and_legacy_migration`
+/// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_system_theme_and_legacy_migration`
 /// parity: SET-017, LOOK-003
 #[test]
 fn a_version_1_file_is_read_and_can_switch_to_the_system_theme() {
@@ -183,7 +183,7 @@ fn a_version_1_file_is_read_and_can_switch_to_the_system_theme() {
     assert_eq!(Settings::open(&directory).data().preferences.theme, Theme::System);
 }
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_two_windows_preserve_each_others_preferences`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_two_windows_preserve_each_others_preferences`
 /// parity: SET-014
 #[test]
 fn two_windows_preserve_each_others_preferences() {
@@ -197,7 +197,7 @@ fn two_windows_preserve_each_others_preferences() {
     assert!(!merged.show_details_pane);
 }
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_two_windows_pins_not_lost`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_two_windows_pins_not_lost`
 /// parity: SIDE-022
 #[test]
 fn two_windows_pins_not_lost() {

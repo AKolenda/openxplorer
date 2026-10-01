@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Replace on local files: files are overwritten and folders merged, and
 //! the existing item is never lost on the way. Ports the Replace cases of
-//! `TransferTests` in `desktop/tests/test_operations.py`.
+//! `TransferTests` in `v2.0.0:desktop/tests/test_operations.py`.
 
 use std::fs;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use crate::transfer_support::{
     *,
 };
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_replace_move_is_native_and_removes_source`.
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_replace_move_is_native_and_removes_source`.
 ///
 /// parity: XFER-009, XFER-011
 #[test]
@@ -64,7 +64,7 @@ fn replace_merges_folders_and_retains_destination_only_children() {
 }
 
 /// A backend that cannot overwrite in one step, like `NoDirectReplace` in
-/// `desktop/tests/test_operations.py`.
+/// `v2.0.0:desktop/tests/test_operations.py`.
 struct NoDirectReplace;
 
 impl Provider for NoDirectReplace {
@@ -80,7 +80,7 @@ impl Provider for NoDirectReplace {
     }
 }
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_replace_falls_back_to_reversible_rename_for_remote_backend`.
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_replace_falls_back_to_reversible_rename_for_remote_backend`.
 ///
 /// parity: XFER-010
 #[test]
@@ -99,7 +99,7 @@ fn replace_without_direct_overwrite_renames_reversibly_and_leaves_no_backup() {
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
 }
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_replace_type_mismatch_preserves_existing_folder`, in both
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_replace_type_mismatch_preserves_existing_folder`, in both
 /// directions.
 ///
 /// parity: XFER-009

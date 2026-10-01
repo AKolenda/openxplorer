@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Print what desktop/core.py answers for the location parity inputs.
+"""Print what v2.0.0:desktop/core.py answers for the location parity inputs.
 
 Usage, from the repository root:
 
-    python3 native/crates/ox-core/tests/location_fixtures/generate_python.py desktop
+    python3 native/crates/ox-core/tests/location_fixtures/generate_python.py "$(python3 native/tools/python_app.py)"
 
 The JSON document on standard output is python.json. location_python.rs and
 location_external.rs compare the Rust port with it, and
@@ -24,7 +24,7 @@ from pathlib import Path
 import sys
 import traceback
 
-# Importing core must not leave a __pycache__ folder in desktop/.
+# Importing core must not leave a __pycache__ folder in the Python app's sources.
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -74,7 +74,7 @@ def split_parts(address: str) -> dict:
 def is_server(address: str) -> bool:
     """core.is_smb_server, where an address core.py refuses is not a server.
 
-    Its callers in desktop/ only ask about locations that were already
+    Its callers in v2.0.0:desktop/ only ask about locations that were already
     normalised; the Rust port answers false instead of failing.
     """
     try:

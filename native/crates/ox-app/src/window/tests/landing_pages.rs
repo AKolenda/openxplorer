@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The This PC and Network pages against `renderLanding` and
-//! `renderNetwork` in `desktop/ui/app.js`: cards in stretching grids, the
+//! `renderNetwork` in `v2.0.0:desktop/ui/app.js`: cards in stretching grids, the
 //! Network page's banner, address field and notes, Open address, and the
 //! network locations' art.
 

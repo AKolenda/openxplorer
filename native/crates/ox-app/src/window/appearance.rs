@@ -2,7 +2,7 @@
 //! How the window follows the skin: light or dark, and the text size.
 //!
 //! Ports `applyTheme` and the `textSizeChanged` handling in
-//! `desktop/ui/app.js`. Nothing is redrawn for a new appearance or screen
+//! `v2.0.0:desktop/ui/app.js`. Nothing is redrawn for a new appearance or screen
 //! scale: the icons are bundled SVG files shown by name, which GTK renders
 //! again at the new scale by itself, and the glyphs take the CSS colour of
 //! the new palette, as the web app's `currentColor` glyphs do.

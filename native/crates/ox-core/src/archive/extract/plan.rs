@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Checking every member before anything is extracted. Ports
-//! `member_parts` and `plan` of `desktop/zip_extraction.py`.
+//! `member_parts` and `plan` of `v2.0.0:desktop/zip_extraction.py`.
 //!
 //! All of these rules are checked before the staging folder exists, so a
 //! refused archive leaves nothing behind:
@@ -355,7 +355,7 @@ impl ArchivePaths {
 }
 
 /// `segment` as a case-insensitive share compares it: composed Unicode
-/// (NFC), then case-folded, as `desktop/zip_extraction.py` does.
+/// (NFC), then case-folded, as `v2.0.0:desktop/zip_extraction.py` does.
 fn share_key(segment: &str) -> String {
     // `DefaultCompose` is NFC.
     let composed = glib::normalize(segment, glib::NormalizeMode::DefaultCompose);

@@ -2,7 +2,7 @@
 //! What the window connects to its widgets when it is created, and what it
 //! lets go of when it goes away.
 //!
-//! Ports the event wiring of `setup` in `desktop/ui/app.js`. The window
+//! Ports the event wiring of `setup` in `v2.0.0:desktop/ui/app.js`. The window
 //! follows its widgets' own calls (the selection, the search box, the
 //! address, activating an item, the skin, the history buttons) for as long
 //! as it lives. Handlers it registers on objects that outlive it (the skin

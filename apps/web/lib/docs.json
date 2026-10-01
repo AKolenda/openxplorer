@@ -13,14 +13,14 @@
           "Previously called Winspace, the project is now published as OpenXplorer. The desktop application and this website are distributed under AGPL-3.0-only; original third-party notices remain intact."
         ],
         "image": "explorer-light",
-        "imageAlt": "OpenXplorer’s real HTML interface browsing Projects on a sample NAS"
+        "imageAlt": "OpenXplorer showing the sample Documents folder, with Launch planning selected and pinned to Quick access"
       },
       {
         "id": "what-it-does",
         "title": "Your files. Your network. Your workflow.",
         "paragraphs": [
           "Navigate with clickable breadcrumbs, pin folders, type to select a filename, resize columns, and use either a classic or compact context menu. Search opted-in filename indexes, browse ZIP contents read-only, and inspect existing exposed snapshots.",
-          "The interactive preview runs the same HTML, CSS, icons and controls as the desktop application, with a simulated storage adapter. It cannot access your computer, NAS, browser settings or keyring. On a desktop-sized screen, use the preview controls to open a fictional sample NAS, switch appearance, or replay a pinning walkthrough. The interactive explorer is intentionally not loaded on phones; the documentation and screenshots remain available."
+          "The tour below shows pictures of the real native app, captured with fictional sample files: click a control in a picture to see where it leads. It cannot access your computer, NAS, browser settings or keyring. On a desktop-sized screen, use the buttons above the tour to open a scene, switch appearance, or play a short walkthrough. The tour is not loaded on phones; the documentation and screenshots remain available."
         ],
         "items": [
           "Local files and SMB shares in one interface.",
@@ -33,7 +33,7 @@
         "id": "under-the-hood",
         "title": "Native storage. Local interface.",
         "paragraphs": [
-          "Since 2.0.0 the desktop app is a native GTK 4 application written in Rust. GIO/GVfs provides the filesystem, SMB and phone layer; SQLite stores the optional filename index. The Python/WebKitGTK app of 1.x is deprecated and no longer released. This Next.js website is separate and is not required to run the app; its interactive preview still renders the 1.x HTML interface, which the native app reproduces."
+          "Since 2.0.0 the desktop app is a native GTK 4 application written in Rust. GIO/GVfs provides the filesystem, SMB and phone layer; SQLite stores the optional filename index. The Python/WebKitGTK app of 1.x is retired; its last release, 1.1.4, stays available as a tag of the public repository. This Next.js website is separate and is not required to run the app; its tour shows pictures of the native app."
         ]
       },
       {
@@ -141,7 +141,7 @@
         ],
         "code": "\\\\nas\\Projects\nsmb://nas/Projects",
         "image": "network-path",
-        "imageAlt": "Actual SMB address bar with clickable server, share and directory segments"
+        "imageAlt": "The Network page with its address box, and the sample share \\\\studio-nas\\Projects saved (shown offline in this picture)"
       },
       {
         "id": "credentials",
@@ -156,10 +156,10 @@
         "title": "Keep a share in reach",
         "paragraphs": [
           "Successfully browsed locations appear beneath Network for the session. Right-click a share and choose Keep in Network to save it. Pin a share or a nested folder into the sidebar for a direct route back. Green marks indicate network-backed locations, not guaranteed online status.",
-          "The website’s replayable pointer demonstration opens a sample NAS by its UNC path, drags Design to the sidebar, and opens the resulting pin. This goes through the preview’s existing pointer handlers. It is a deterministic demonstration on fictional files, not a recording of a live NAS."
+          "The picture shows the sidebar with the sample folder Launch planning pinned to Quick access and the saved share Projects under Network. It was captured from the native app with fictional files and no network, so the share is shown offline."
         ],
         "image": "pinned-sidebar",
-        "imageAlt": "A sample Design folder pinned in the real sidebar, with its network marker"
+        "imageAlt": "The sidebar with the sample Launch planning folder pinned to Quick access and the saved share Projects under Network"
       },
       {
         "id": "discovery",
@@ -212,7 +212,7 @@
           "A result includes its parent path. Opening a directory navigates to the actual folder; opening a file checks current metadata and launches an appropriate application. Stale results can remain when a server is offline."
         ],
         "image": "cached-search",
-        "imageAlt": "Actual cached search with complete SMB folder paths"
+        "imageAlt": "A cached search for “budget” in the native app, showing the folder of the result"
       },
       {
         "id": "limits",
@@ -429,7 +429,7 @@
           "Select one or more files or folders and drag them into an application that accepts native file drops. The desktop app supplies file URIs and readable paths through GTK, including already-mounted network paths when available. Ctrl-click or Shift-click to select multiple items. Press Escape to cancel.",
           "Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. Choose Replace existing or Skip duplicates. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Quick access drops pin or reorder folders. File drops never request deletion of the source.",
           "ZIP members must be extracted first. Some editors only accept local files: network items need an existing GVfs/FUSE or CIFS path for those applications. Dragging does not mount a share or download a temporary copy. Drag-to-move, automatic extraction, and undo remain unavailable; use Cut and Paste for supported same-filesystem moves.",
-          "The website preview uses sample files and cannot export desktop files. Compatibility with a particular editor or a Wayland desktop must be checked on that system."
+          "The website tour shows pictures and cannot drag files. Compatibility with a particular editor or a Wayland desktop must be checked on that system."
         ]
       }
     ]
@@ -444,7 +444,7 @@
         "id": "structure",
         "title": "Repository layout",
         "paragraphs": [
-          "native/ contains the Rust GTK 4 application, its parity inventories, packaging and check driver. desktop/ contains the deprecated Python GTK/WebKit app of 1.x, kept only as the behavioural specification that native/parity/ checks the native app against; it is not built or released. apps/web/ contains the Next.js App Router website. docs/ mirrors the website documentation as Markdown. designs/ holds generated standalone HTML pitches."
+          "native/ contains the Rust GTK 4 application, its parity inventories, packaging and check driver. The Python GTK/WebKit app of 1.x has been removed from the tree: its last release is tag v1.1.4, and its final sources, which native/parity/ cites as the behavioural specification, are desktop/ at tag v2.0.0. apps/web/ contains the Next.js App Router website. docs/ mirrors the website documentation as Markdown. designs/ holds generated standalone HTML pitches."
         ]
       },
       {
@@ -454,13 +454,13 @@
           "Use Node.js 22.13+ and the package manager version declared at the root. The supplied pnpm-lock.yaml records resolved dependencies. Use frozen installs and review any dependency changes together with their lockfile changes. Dependencies are not vendored."
         ],
         "code": "corepack enable\ncorepack prepare pnpm@10.34.5 --activate\npnpm install --frozen-lockfile\npnpm audit --audit-level=moderate\npnpm dev",
-        "callout": "Dependency installation, dependency-aware pnpm check and the real Next.js production export have passed. The production-export browser suite also passes, including React hydration, preview readiness and mobile iframe removal. Standalone HTML rendering is a separate preview workflow; consult the current test report for each check actually executed."
+        "callout": "Dependency installation, dependency-aware pnpm check and the real Next.js production export have passed. The production-export browser suite also passes, including React hydration, tour readiness and mobile iframe removal. Standalone HTML rendering is a separate design-review workflow; consult the current test report for each check actually executed."
       },
       {
         "id": "build",
         "title": "Build and validate",
         "paragraphs": [
-          "The website remains a Next.js static export. pnpm build writes apps/web/out, and pnpm check performs dependency-aware TypeScript checking. Cloudflare Workers Static Assets serves that export without a framework migration or application backend. The offline preview renderer does not exercise the Next.js runtime.",
+          "The website remains a Next.js static export. pnpm build writes apps/web/out, and pnpm check performs dependency-aware TypeScript checking. Cloudflare Workers Static Assets serves that export without a framework migration or application backend. The offline design renderer does not exercise the Next.js runtime.",
           "The native experience roadmap and public source checklist are in docs/NATIVE-EXPERIENCE-ROADMAP.md and docs/PUBLIC-RELEASE-CHECKLIST.md. They distinguish remaining desktop work, source-publication preparation and stable-release validation."
         ],
         "code": "pnpm check\npnpm build\npnpm preview\n\n# Native checks and the release .deb (Ubuntu 24.04 build host)\npython3 native/tools/check.py\npython3 native/parity/check.py\npython3 native/tools/build_deb.py --app-id io.winspace.Development\npython3 native/tools/verify_deb.py dist/native/openxplorer_2.0.0_all.deb"
@@ -481,12 +481,12 @@
       },
       {
         "id": "screenshots",
-        "title": "Regenerate the website screenshots",
+        "title": "Regenerate the screenshots and the tour",
         "paragraphs": [
-          "The website screenshots show the 1.x interface: they are captured with Playwright from desktop/preview.html, the HTML interface of the deprecated Python app, whose layout the native app keeps. Do not replace them with a separately drawn explorer mockup. The source fixtures contain fictional project names, never real NAS credentials."
+          "The website screenshots and the click-through tour are pictures of the native app, taken by its snapshot hook (OPENXPLORER_SNAPSHOT) in an isolated session: bubblewrap hides the home folders, mounts and session bus and gives the app no network, Xvfb and a private D-Bus session keep it off the desktop, and a fictional demo tree is mounted as /home/demo. The tour's clickable areas are the rectangles of real controls, which the app reports. Do not replace the pictures with a separately drawn explorer mockup. Review every picture before committing it."
         ],
-        "code": "python3 desktop/tools/build_preview.py\npython3 tools/capture-screenshots.py\npnpm designs",
-        "callout": "Screenshot capture uses Chromium and simulated files. It does not test the native GTK 4 app or live SMB. It needs Python Playwright and a Chromium executable; set CHROMIUM when the executable is not /usr/bin/chromium."
+        "code": "python3 tools/capture-screenshots.py\npython3 tools/capture-native-tour.py\npython3 tools/audit-public-data.py\npnpm designs",
+        "callout": "Capturing needs cargo, bubblewrap (bwrap), xvfb-run and dbus-run-session; the tools build the release program with the stable application ID. The pictures show fictional files and no live SMB server; they do not replace the native tests."
       },
       {
         "id": "markdown",
@@ -543,7 +543,7 @@
         "title": "Check before announcing",
         "paragraphs": [
           "Run browser checks against the actual HTTP-served Next.js export. Test hydration, routes, keyboard navigation, mobile menus, search and every public-repository link. Confirm that no release binaries are emitted into the website export. Also verify Cloudflare routing/security headers and 404 behavior. The site has no application sign-in, analytics scripts, external fonts or tracking pixels.",
-          "The application preview is embedded in an iframe with only allow-scripts; it has an opaque sandbox origin. The tour bridge accepts only fixed demo commands from its parent window. The page checks message sources before showing status. The preview’s CSP blocks network requests. Never replace this with a native credential or filesystem bridge."
+          "The tour of the native app is embedded in an iframe with only allow-scripts; it has an opaque sandbox origin and shows only static pictures. It accepts only fixed demo commands from its parent window, and the page checks message sources before showing status. Never replace this with a native credential or filesystem bridge."
         ]
       },
       {

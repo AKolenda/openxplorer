@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-only
 # The postinst and postrm of both native packages, ported from CACHE_SCRIPT in
-# desktop/tools/build_deb.py. Safety rule "installing never changes user
+# v2.0.0:desktop/tools/build_deb.py. Safety rule "installing never changes user
 # state" (UPD-018): they refresh the application, icon and AppStream caches
 # and nothing else; defaults, user data, passwords, folder locations and
 # mounts stay as they are. The AppStream refresh is the one dpkg triggers do

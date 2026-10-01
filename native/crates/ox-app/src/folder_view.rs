@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The folder listing: loading, models and the two views that show it.
 //!
-//! Ports the file list of `desktop/ui/app.js` (`load`, `filtered`,
+//! Ports the file list of `v2.0.0:desktop/ui/app.js` (`load`, `filtered`,
 //! `renderColumns` and `renderRows`), `enumerate_folder` in
-//! `desktop/gio_backend.py` and `watch` in `desktop/winspace.py`. Data
+//! `v2.0.0:desktop/gio_backend.py` and `watch` in `v2.0.0:desktop/winspace.py`. Data
 //! flows one way:
 //!
 //! - [`loader`] lists a folder in batches and [`watch`] reports changes;

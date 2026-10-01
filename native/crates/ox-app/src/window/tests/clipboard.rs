@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Cut, Copy and Paste through the display's clipboard, and the
 //! name-conflict dialog, against `copySelection`, `paste` and
-//! `transferWithConflicts` of `desktop/ui/app.js`: the refusals, the
+//! `transferWithConflicts` of `v2.0.0:desktop/ui/app.js`: the refusals, the
 //! dimming of cut items and what a clipboard manager may keep. What other
 //! applications put on the clipboard is in `clipboard_interop`.
 

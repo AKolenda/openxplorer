@@ -28,8 +28,8 @@ Use the committed pnpm lockfile and the version declared in `package.json`:
 ```sh
 pnpm install --frozen-lockfile
 pnpm audit --audit-level=moderate
-pnpm test:desktop
-node --test desktop/tests/*.test.cjs
+python3 native/tools/check.py
+python3 native/parity/check.py
 pnpm security:source
 pnpm check
 pnpm build
@@ -38,7 +38,7 @@ python3 tools/audit-public-data.py
 
 Review dependency-audit findings before changing versions. The public-data audit without an external private denylist verifies provenance and packaging, not the absence of every private identifier. Record the scope and outcome of each executed check; do not copy historical pass counts into a new release report.
 
-The GitHub workflow runs website typechecking/build/audit and production-export browser checks for React hydration and mobile preview removal. It also covers desktop unit and JavaScript tests, source-archive exclusions, a browser UI contract, native GTK/WebKit transport into Chromium on isolated X11, package verification and a staged public-data audit. It declares its native prerequisites and uses read-only repository access with pinned action commits. It has no deployment credentials or publishing step. Hosted CI is verified only after its actual run completes.
+The GitHub workflow runs website typechecking/build/audit and production-export browser checks for React hydration and mobile tour removal. It also covers source-archive exclusions, the security sweep, package verification and a staged public-data audit; the native checks and package builds run in their own workflows. It declares its native prerequisites and uses read-only repository access with pinned action commits. It has no deployment credentials or publishing step. Hosted CI is verified only after its actual run completes.
 
 ## Keep the website pointed at public source
 

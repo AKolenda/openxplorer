@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The search cache database: opening it safely and managing its roots.
 //!
-//! Ports `SearchIndex` in `desktop/search_index.py`: `__init__`, `connect`,
+//! Ports `SearchIndex` in `v2.0.0:desktop/search_index.py`: `__init__`, `connect`,
 //! `roots`, `snapshot`, `configure`, `clear`, `remove` and `monitoring`.
 //! Scans write through `scan.rs`, searches read through `query.rs`, and
 //! other processes' requests pass through `requests.rs`.

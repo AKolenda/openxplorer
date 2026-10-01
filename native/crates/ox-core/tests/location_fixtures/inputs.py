@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Inputs that generate_python.py runs through desktop/core.py.
+"""Inputs that generate_python.py runs through v2.0.0:desktop/core.py.
 
 Synthetic addresses only: nothing here names or reads a real file.
 """

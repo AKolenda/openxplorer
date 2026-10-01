@@ -3,8 +3,8 @@
 //! SMB links and the three spellings of ZIP.
 //!
 //! Ports `TYPES`, `ZIP_TYPES` and `ALL_TYPES` of
-//! `desktop/desktop_integration.py` and `ZIP_TYPES` of
-//! `desktop/activation.py`. The names are a compatibility contract
+//! `v2.0.0:desktop/desktop_integration.py` and `ZIP_TYPES` of
+//! `v2.0.0:desktop/activation.py`. The names are a compatibility contract
 //! (AGENTS.md): they are the keys of `previous-defaults.json` and the
 //! types in the user's `mimeapps.list`.
 

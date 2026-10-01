@@ -3,7 +3,7 @@
 //! protection it gives file operations.
 //!
 //! The Python app kept one `PreviousVersions` service for the whole
-//! application (`desktop/winspace.py`): the snapshot collections a lookup
+//! application (`v2.0.0:desktop/winspace.py`): the snapshot collections a lookup
 //! finds in one window are read-only in every window for the rest of the
 //! session (PROP-024), and every write asks it first (XFER-020).
 
@@ -26,7 +26,7 @@ impl AppContext {
 
     /// The protection every file operation runs with: previous versions
     /// (snapshots and backups) are never changed in place
-    /// (`PreviousVersions.assert_writable` in `desktop/previous_versions.py`).
+    /// (`PreviousVersions.assert_writable` in `v2.0.0:desktop/previous_versions.py`).
     pub(crate) fn write_protection(&self) -> WriteProtection {
         WriteProtection::new(self.previous_versions().write_guard())
     }

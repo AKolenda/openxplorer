@@ -2,9 +2,9 @@
 //! The bar at the bottom of the window while folders are measured
 //! (PROP-026).
 //!
-//! Ports `#size-scan` of `desktop/ui/index.html` and the texts
+//! Ports `#size-scan` of `v2.0.0:desktop/ui/index.html` and the texts
 //! `receiveFolderSize`, `stopSizeScan` and `scanFolderSizes` of
-//! `desktop/ui/app.js` write into it: which folder of how many is being
+//! `v2.0.0:desktop/ui/app.js` write into it: which folder of how many is being
 //! measured and how much it holds so far, then how the run ended, with
 //! Cancel scan while it runs and Dismiss after it. The button runs
 //! [`WindowAction::CancelSizeScan`], which cancels a running scan or hides

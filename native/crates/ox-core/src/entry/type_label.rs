@@ -2,12 +2,12 @@
 //! Text for the Type column.
 //!
 //! Ports the type description of `entry_from_info` in
-//! `desktop/gio_backend.py`: the classifier's folder wording ("File
+//! `v2.0.0:desktop/gio_backend.py`: the classifier's folder wording ("File
 //! folder", "Network share", "Network location") for navigable items,
 //! otherwise `Gio.content_type_get_description`, otherwise "File".
 //!
 //! Common Office, text, ZIP and video files show the interface's own names
-//! instead, the ones of the preview listing in `desktop/ui/app.js`
+//! instead, the ones of the preview listing in `v2.0.0:desktop/ui/app.js`
 //! (`demo`), such as "Word document", "Excel worksheet", "Text document",
 //! "Compressed folder" and "MP4 video".
 //! GIO's description of these types depends on which packages installed
@@ -25,7 +25,7 @@ const UNKNOWN_TYPE: &str = "File";
 
 /// The Type column's name for ZIP archives, as Explorer and the preview
 /// listing call them, and as the ZIP browser's title reads
-/// (`"<name> — Compressed folder"` in `desktop/ui/app.js`).
+/// (`"<name> — Compressed folder"` in `v2.0.0:desktop/ui/app.js`).
 const ZIP_LABEL: &str = "Compressed folder";
 
 /// Type column text: the label of `folder_type` for navigable items, then

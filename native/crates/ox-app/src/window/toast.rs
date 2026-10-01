@@ -2,8 +2,8 @@
 //! The toast: a short message at the bottom centre of the window, with an
 //! optional action button such as Undo (OPS-032).
 //!
-//! Ports `toast()` in `desktop/ui/app.js` and `.toast` in
-//! `desktop/ui/style.css`. A message stays four seconds; a new one replaces
+//! Ports `toast()` in `v2.0.0:desktop/ui/app.js` and `.toast` in
+//! `v2.0.0:desktop/ui/style.css`. A message stays four seconds; a new one replaces
 //! it and starts the time again. Screen readers announce it as a status.
 //! The time stops while the pointer rests on the toast or its button has
 //! keyboard focus, so the button can be reached (WCAG 2.2.1), and starts

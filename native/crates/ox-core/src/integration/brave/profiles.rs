@@ -4,7 +4,7 @@
 //!
 //! Ports `FLAVORS`, `PROFILE`, `BraveIntegration.profiles` and the
 //! sandbox detection of `BraveIntegration.status` in
-//! `desktop/brave_integration.py` (INT-019).
+//! `v2.0.0:desktop/brave_integration.py` (INT-019).
 
 use std::fs;
 use std::path::{Path, PathBuf};

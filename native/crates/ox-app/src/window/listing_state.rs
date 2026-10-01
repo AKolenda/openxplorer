@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Where a tab's listing stands: never listed, listing or listed.
 //!
-//! Ports each tab's `loaded` and `busy` flags in `desktop/ui/app.js`, and
-//! the folder monitor's rule in `desktop/winspace.py` that a change seen
+//! Ports each tab's `loaded` and `busy` flags in `v2.0.0:desktop/ui/app.js`, and
+//! the folder monitor's rule in `v2.0.0:desktop/winspace.py` that a change seen
 //! while a folder is listed lists it once more afterwards. One enum holds
 //! what were three flags, so a pending reload can only exist while a
 //! listing runs.

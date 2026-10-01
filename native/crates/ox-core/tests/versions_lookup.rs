@@ -2,9 +2,9 @@
 //! Finding the previous versions of an item (PROP-032) in simulated
 //! snapshot folders.
 //!
-//! `desktop/tests` has no backend test of the lookup, so each scenario
+//! `v2.0.0:desktop/tests` has no backend test of the lookup, so each scenario
 //! here runs twice: through [`PreviousVersions::find_versions`] and
-//! through `PreviousVersions.list` in `desktop/previous_versions.py`, over
+//! through `PreviousVersions.list` in `v2.0.0:desktop/previous_versions.py`, over
 //! the same simulated snapshot folders, and the two outcomes must match
 //! (`versions_support`). The GIO provider is checked on real local
 //! snapshot folders in `versions_lookup_gio.rs`. Every file is inside a
@@ -212,7 +212,7 @@ fn at_most_eight_warnings_are_kept() {
     assert_eq!(outcome["message"], NO_VERSIONS_FOUND);
 }
 
-/// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Never disguise
+/// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Never disguise
 /// mtime as snapshot date"): a version's date comes from its snapshot's
 /// name, and a name without one has no date even though the snapshot
 /// folder's modification time is known.

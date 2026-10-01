@@ -264,7 +264,7 @@ struct SearchCase {
     shown: &'static [&'static str],
 }
 
-/// Ported from the keywords of `appendV07Settings` in `desktop/ui/app.js`,
+/// Ported from the keywords of `appendV07Settings` in `v2.0.0:desktop/ui/app.js`,
 /// which make "zoom", "watch live" and "dolphin" find their settings.
 ///
 /// parity: SET-019, SET-004
@@ -317,7 +317,7 @@ struct ShownTextCase {
     shown: &'static [&'static str],
 }
 
-/// Ported from `settingsSearch` in `desktop/ui/app.js`, which matched an
+/// Ported from `settingsSearch` in `v2.0.0:desktop/ui/app.js`, which matched an
 /// element's visible text too: buttons, drop-down options and headings
 /// find their settings.
 ///

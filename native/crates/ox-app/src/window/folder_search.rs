@@ -3,7 +3,7 @@
 //! or asking the search cache, and showing what it found.
 //!
 //! Ports `queueSearch`, `runSearch`, `resetSearch` and the search parts of
-//! `renderRows`, `updateStatus` and `onKey` in `desktop/ui/app.js`
+//! `renderRows`, `updateStatus` and `onKey` in `v2.0.0:desktop/ui/app.js`
 //! (SRCH-001 to SRCH-003, SRCH-007, SRCH-012 to SRCH-015, SRCH-018,
 //! NAV-013). Each keystroke stops the running search, clears the
 //! selection, scrolls to the top and filters the listing at once; after

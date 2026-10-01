@@ -3,7 +3,7 @@
 //! Escape clears the selection, wherever keyboard focus is outside a text
 //! field. Ctrl+H is one of the window keys (see [`super::window_keys`]).
 //!
-//! Ports the document-level part of `onKey` in `desktop/ui/app.js`
+//! Ports the document-level part of `onKey` in `v2.0.0:desktop/ui/app.js`
 //! (SEL-004, SEL-005). The folder views handle Ctrl+A (GTK's own
 //! list binding) and Escape (the typed prefix first, see [`super::input`])
 //! before these keys reach the window; this controller runs in the bubble

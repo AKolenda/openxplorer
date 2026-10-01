@@ -4,7 +4,7 @@
 //!
 //! Ports `MountPrompts.create`, `_ask_password`, `_ask_question`,
 //! `_show_processes` and the `op.set_*` / `op.reply` calls of
-//! `desktop/auth_bridge.py`. A plain `gio::MountOperation` is used, never
+//! `v2.0.0:desktop/auth_bridge.py`. A plain `gio::MountOperation` is used, never
 //! GTK's, so `GVfs`'s challenges reach `OpenXplorer`'s own dialog instead of a
 //! GNOME Shell prompt.
 

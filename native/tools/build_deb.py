@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Build the native app's Debian package, without installing it.
 
-Ports desktop/tools/build_deb.py for the Rust program. The stable package is
+Ports v2.0.0:desktop/tools/build_deb.py for the Rust program. The stable package is
 openxplorer_<version>_all.deb, the only installer the in-app updater of
 OpenXplorer 1.1.x downloads and accepts, so existing users move to the native
 app with the update they are offered. The preview is
@@ -35,14 +35,16 @@ from package_data import CARGO_MANIFEST, REPOSITORY, Channel, InstallRequest, La
 
 OUTPUT_DIRECTORY = REPOSITORY / 'dist' / 'native'
 DEBIAN_DATA = REPOSITORY / 'native' / 'packaging' / 'debian'
-PYTHON_APP_CORE = REPOSITORY / 'desktop' / 'core.py'
+# The last release of the Python app (VERSION in v1.1.4:desktop/core.py),
+# which the stable package replaces; the app has no later release.
+PYTHON_APP_VERSION = '1.1.4'
 CARGO_PROGRAM = 'openxplorer-native'
 # The administrator's mount helper, a program of ox-core that only the stable
 # package installs.
 CARGO_MOUNT_HELPER = 'openxplorer-mount-share'
 
 # The version form the 1.1.x updater accepts (version_tuple in
-# desktop/updater.py): three numbers without leading zeros.
+# v2.0.0:desktop/updater.py): three numbers without leading zeros.
 RELEASE_VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 
 MAINTAINER = 'OpenXplorer contributors <openxplorer@users.noreply.github.com>'
@@ -80,7 +82,7 @@ STABLE_RECOMMENDS = (
 )
 # The maintainer scripts that run native/packaging/debian/refresh-caches.
 MAINTAINER_SCRIPTS_REFRESHING_CACHES = ('postinst', 'postrm')
-# The package name before 0.8.0, as desktop/tools/build_deb.py declares.
+# The package name before 0.8.0, as v2.0.0:desktop/tools/build_deb.py declares.
 STABLE_RELATIONS = {
     'Replaces': 'winspace-explorer (<< 0.8.0)',
     'Conflicts': 'winspace-explorer (<< 0.8.0)',
@@ -138,15 +140,6 @@ def cargo_version() -> str:
     manifest = tomllib.loads(CARGO_MANIFEST.read_text(encoding='utf-8'))
     version: str = manifest['workspace']['package']['version']
     return version
-
-
-def python_app_version() -> str:
-    """Return the version of the Python app in desktop/core.py."""
-    text = PYTHON_APP_CORE.read_text(encoding='utf-8')
-    match = re.search(r"^VERSION = '([^']+)'$", text, re.MULTILINE)
-    if match is None:
-        raise BuildError(f'{PYTHON_APP_CORE} does not define VERSION.')
-    return match.group(1)
 
 
 def version_numbers(version: str) -> tuple[int, int, int]:
@@ -354,7 +347,7 @@ def build(request: DebianBuild) -> Path:
     """Build the package and return its path."""
     version = cargo_version()
     if request.channel is Channel.STABLE:
-        check_stable_version(version, python_app_version())
+        check_stable_version(version, PYTHON_APP_VERSION)
     architecture = build_architecture()
     identity = package_identity(request.channel, version, architecture)
     programs = request.programs or build_programs(request.channel)

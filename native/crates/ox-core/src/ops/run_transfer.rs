@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Copy, move, Trash and permanent delete as the interface starts them.
 //!
-//! Ports the `operate` branch of `dispatch` in `desktop/winspace.py`: the
+//! Ports the `operate` branch of `dispatch` in `v2.0.0:desktop/winspace.py`: the
 //! request is checked before anything changes (whole shares and devices
 //! are refused, OPS-035; the destination and every source a mode changes
 //! must not be protected, XFER-020; a server listing is no destination,

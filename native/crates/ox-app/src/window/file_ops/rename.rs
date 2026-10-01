@@ -2,7 +2,7 @@
 //! Rename (F2): the one selected item gets a new name in its folder
 //! (OPS-008, OPS-009, OPS-010).
 //!
-//! Ports `rename` in `desktop/ui/app.js`. It does nothing unless an item
+//! Ports `rename` in `v2.0.0:desktop/ui/app.js`. It does nothing unless an item
 //! is selected, no operation runs, and the item can be changed: not a
 //! share root, a virtual entry or a previous version. With several items
 //! selected, the batch rename asks instead ([`super::batch_rename`]),

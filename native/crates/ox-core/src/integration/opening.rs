@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Preparing to open a file in its default application.
 //!
-//! Ports `prepare_default` in `desktop/native_opening.py` (OPEN-005,
+//! Ports `prepare_default` in `v2.0.0:desktop/native_opening.py` (OPEN-005,
 //! OPEN-006). The file is queried again, its application is chosen by
 //! content type, and a file on a share is handed over by its local path
 //! when it has one, so every application can read it. The caller launches
@@ -11,7 +11,7 @@
 //! The local path of a share (`local_path` in `native_opening.py`) is
 //! supplied by the caller, from the network service's mount lookup, and
 //! the caller runs the previous-versions write guard first, as
-//! `resolve_activation` in `desktop/winspace.py` does. The archive reader
+//! `resolve_activation` in `v2.0.0:desktop/winspace.py` does. The archive reader
 //! of `native_opening.py` belongs to the archive service.
 
 use std::future::Future;
@@ -111,7 +111,7 @@ where
     ///
     /// Safety rule "previous versions stay read-only" is the caller's: run
     /// the previous-versions write guard on `uri` before this, as
-    /// `resolve_activation` in `desktop/winspace.py` runs
+    /// `resolve_activation` in `v2.0.0:desktop/winspace.py` runs
     /// `assert_writable` before `prepare_default`, so that no file inside
     /// a snapshot or backup is handed to an application that could change
     /// it.

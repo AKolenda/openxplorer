@@ -2,7 +2,7 @@
 //! Checking a request that another application sends through
 //! `org.freedesktop.FileManager1`, or that `--select` makes.
 //!
-//! Ports `filemanager_request` in `desktop/window_state.py`. Only the
+//! Ports `filemanager_request` in `v2.0.0:desktop/window_state.py`. Only the
 //! three methods of the interface are accepted, with 1 to 100 locations,
 //! and every location is normalised like one typed in the address bar:
 //! a request carries data to show, never a command to run.

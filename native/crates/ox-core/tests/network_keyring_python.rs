@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The keyring items of `SessionCredentials` in
-//! `desktop/session_credentials.py`, written by one app and read by the
+//! `v2.0.0:desktop/session_credentials.py`, written by one app and read by the
 //! other through the same keyring double, `FakeSecret` of
-//! `desktop/tests/test_v05.py`. `network_secret_service.rs` repeats this
+//! `v2.0.0:desktop/tests/test_v05.py`. `network_secret_service.rs` repeats this
 //! against GNOME Keyring and the real libsecret.
 //!
 //! Each Python script reads its inputs from the JSON file named by
@@ -20,7 +20,7 @@ use ox_core::network::{
 use python_support::{as_array, python_answers};
 use serde_json::{json, Value};
 
-/// `FakeSecret` of `desktop/tests/test_v05.py`: libsecret's calls on a
+/// `FakeSecret` of `v2.0.0:desktop/tests/test_v05.py`: libsecret's calls on a
 /// dictionary. Prepended to the credential scripts, so they need none of
 /// the modules that test file imports.
 const PYTHON_FAKE_SECRET: &str = r"

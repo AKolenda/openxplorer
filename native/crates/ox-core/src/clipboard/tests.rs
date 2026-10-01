@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Clipboard protocol regressions from
-//! `desktop/tests/test_file_clipboard_interop.py` and the `ClipboardTests`
-//! in `desktop/tests/test_v05.py`.
+//! `v2.0.0:desktop/tests/test_file_clipboard_interop.py` and the `ClipboardTests`
+//! in `v2.0.0:desktop/tests/test_v05.py`.
 
 use super::*;
 
@@ -30,7 +30,7 @@ fn uri_list(kde_cut_marker: Option<&[u8]>) -> FileListFormat<'_> {
     FileListFormat::UriList { kde_cut_marker }
 }
 
-/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_gnome_cut_can_consume_successful_items_across_reads`
+/// Ported from `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_gnome_cut_can_consume_successful_items_across_reads`
 ///
 /// parity: CLIP-008
 #[test]
@@ -45,8 +45,8 @@ fn gnome_cut_keeps_identity_across_reads_and_consumes_only_successful_items() {
     assert!(files.encode().is_empty());
 }
 
-/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_changed_external_payload_is_not_consumed_by_old_operation`
-/// and `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_changed_mode_is_not_consumed_by_old_cut`
+/// Ported from `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_changed_external_payload_is_not_consumed_by_old_operation`
+/// and `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_changed_mode_is_not_consumed_by_old_cut`
 ///
 /// parity: CLIP-008
 #[test]
@@ -118,9 +118,9 @@ const MARKER_CASES: [MarkerCase; 9] = [
     },
 ];
 
-/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_uri_list_without_exact_kde_cut_marker_remains_copy`,
-/// `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_nul_terminated_kde_cut_marker`
-/// and `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_gnome_copy_ignores_unrelated_kde_cut_marker`
+/// Ported from `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_uri_list_without_exact_kde_cut_marker_remains_copy`,
+/// `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_nul_terminated_kde_cut_marker`
+/// and `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_gnome_copy_ignores_unrelated_kde_cut_marker`
 ///
 /// parity: CLIP-006
 #[test]
@@ -167,7 +167,7 @@ fn kde_cut_marker_uses_the_mime_type_kio_reads() {
     assert_eq!(published(&selection(ClipboardMode::Copy), kio_mime_type), b"0");
 }
 
-/// Ported from `desktop/tests/test_v05.py::ClipboardTests::test_deduplication`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ClipboardTests::test_deduplication`
 ///
 /// parity: CLIP-005
 #[test]
@@ -178,12 +178,12 @@ fn uri_list_discards_comments_and_deduplicates_canonical_addresses() {
     assert_eq!(files.uris(), &["file:///tmp/a", "smb://studio-nas/Shared/a"]);
 }
 
-/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_kde_marker_cannot_turn_plain_text_into_files`,
-/// `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_kde_marker_cannot_turn_invalid_uri_list_into_files`
+/// Ported from `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_kde_marker_cannot_turn_plain_text_into_files`,
+/// `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_kde_marker_cannot_turn_invalid_uri_list_into_files`
 /// and the `test_plain_text_is_not_file_clipboard`, `test_unsafe_scheme`,
 /// `test_no_password_in_clipboard_uri`, `test_share_itself_not_transferable`,
 /// `test_malformed_json` and `test_large_rejected` cases of
-/// `desktop/tests/test_v05.py::ClipboardTests`
+/// `v2.0.0:desktop/tests/test_v05.py::ClipboardTests`
 ///
 /// parity: CLIP-005, SAFE-010
 #[test]
@@ -286,7 +286,7 @@ fn file_list_formats_map_to_and_from_their_mime_types() {
     assert_eq!(FileListFormat::from_mime_type(KDE_CUT), None);
 }
 
-/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_custom_payload_keeps_priority_and_its_token`
+/// Ported from `v2.0.0:desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_custom_payload_keeps_priority_and_its_token`
 ///
 /// parity: CLIP-005
 #[test]
@@ -304,9 +304,9 @@ fn custom_payload_preserves_token_and_rejects_invalid_operations() {
     assert_eq!(no_token.token().len(), 32);
 }
 
-/// Ported from `desktop/tests/test_v05.py::ClipboardTests::test_custom_copy_roundtrip`,
-/// `desktop/tests/test_v05.py::ClipboardTests::test_custom_cut_roundtrip`
-/// and `desktop/tests/test_v05.py::ClipboardTests::test_gnome_cut_flag`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ClipboardTests::test_custom_copy_roundtrip`,
+/// `v2.0.0:desktop/tests/test_v05.py::ClipboardTests::test_custom_cut_roundtrip`
+/// and `v2.0.0:desktop/tests/test_v05.py::ClipboardTests::test_gnome_cut_flag`
 ///
 /// parity: CLIP-004
 #[test]
@@ -343,7 +343,12 @@ fn external_fingerprint_matches_the_python_clipboard() {
         "from file_clipboard import decode_clipboard, GNOME\n",
         "print(decode_clipboard(GNOME, b'cut\\nfile:///tmp/a')['token'])",
     );
-    let desktop = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../desktop");
+    // The Python app's modules (v2.0.0:desktop/), which native/tools/check.py
+    // extracts and names in OX_PYTHON_APP.
+    let desktop = std::env::var_os("OX_PYTHON_APP").expect(
+        "OX_PYTHON_APP names the Python app's modules (v2.0.0:desktop/); run the tests through \
+         native/tools/check.py, which extracts them",
+    );
     let output = std::process::Command::new("python3")
         .current_dir(desktop)
         .args(["-c", script])

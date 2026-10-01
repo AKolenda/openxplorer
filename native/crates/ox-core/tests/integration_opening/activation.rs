@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What activating an item does, and which application opens a file.
-//! Ports `OpeningTests` of `desktop/tests/test_v05.py`.
+//! Ports `OpeningTests` of `v2.0.0:desktop/tests/test_v05.py`.
 
 use ox_core::entry::{Entry, EntryKind};
 use ox_core::integration::{choose_application, Activation, OpenError};
@@ -12,7 +12,7 @@ fn activation(entry: &Entry) -> Result<Activation, OpenError> {
     Activation::for_entry(entry)
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_regular_pdf`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_regular_pdf`
 /// parity: OPEN-001, OPEN-005
 #[test]
 fn a_pdf_opens_as_a_file() {
@@ -22,7 +22,7 @@ fn a_pdf_opens_as_a_file() {
     );
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_regular_mp4`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_regular_mp4`
 /// parity: OPEN-001, OPEN-005
 #[test]
 fn a_video_opens_as_a_file() {
@@ -32,7 +32,7 @@ fn a_video_opens_as_a_file() {
     );
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_directory_with_extension`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_directory_with_extension`
 /// parity: OPEN-001, OPEN-005, NAV-040
 #[test]
 fn a_folder_named_like_a_video_opens_as_a_folder() {
@@ -42,7 +42,7 @@ fn a_folder_named_like_a_video_opens_as_a_folder() {
     );
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_directory_named_zip`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_directory_named_zip`
 /// parity: OPEN-001, OPEN-005, ARC-002, NAV-040
 #[test]
 fn a_folder_named_like_a_zip_opens_as_a_folder() {
@@ -52,7 +52,7 @@ fn a_folder_named_like_a_zip_opens_as_a_folder() {
     );
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_zip_by_mime`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_zip_by_mime`
 /// parity: OPEN-001, OPEN-005, ARC-002
 #[test]
 fn a_zip_by_content_type_is_browsed() {
@@ -64,7 +64,7 @@ fn a_zip_by_content_type_is_browsed() {
     assert_eq!(activation(&archive), Ok(Activation::BrowseArchive));
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_zip_by_extension`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_zip_by_extension`
 /// parity: OPEN-001, OPEN-005, ARC-002
 #[test]
 fn a_zip_by_name_in_any_case_is_browsed() {
@@ -74,7 +74,7 @@ fn a_zip_by_name_in_any_case_is_browsed() {
     );
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_unknown_not_directory`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_unknown_not_directory`
 /// parity: OPEN-001, OPEN-005
 #[test]
 fn an_item_of_unknown_type_is_not_opened() {
@@ -87,7 +87,7 @@ fn an_item_of_unknown_type_is_not_opened() {
     );
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_mountable`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_mountable`
 /// parity: OPEN-001, OPEN-005
 #[test]
 fn a_share_that_navigates_opens_as_a_folder() {
@@ -99,7 +99,7 @@ fn a_share_that_navigates_opens_as_a_folder() {
     assert_eq!(activation(&share), Ok(Activation::OpenFolder));
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_regular_overrides_stale_bool`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_regular_overrides_stale_bool`
 /// parity: OPEN-001, OPEN-005, NAV-040
 #[test]
 fn a_regular_file_is_opened_even_if_flagged_as_a_folder() {
@@ -111,7 +111,7 @@ fn a_regular_file_is_opened_even_if_flagged_as_a_folder() {
     assert_eq!(activation(&stale), Ok(Activation::OpenFile));
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_excludes_smb_self_handler`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_excludes_smb_self_handler`
 /// parity: OPEN-001, OPEN-005
 #[test]
 fn openxplorer_is_skipped_for_the_next_application() {
@@ -123,7 +123,7 @@ fn openxplorer_is_skipped_for_the_next_application() {
     assert_eq!(chosen, Ok(external));
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_no_recursion_without_external_app`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_no_recursion_without_external_app`
 /// parity: OPEN-005
 #[test]
 fn without_another_application_nothing_opens() {
@@ -138,7 +138,7 @@ fn without_another_application_nothing_opens() {
     );
 }
 
-/// Ported from `desktop/tests/test_v05.py::OpeningTests::test_respects_external_default`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::OpeningTests::test_respects_external_default`
 /// parity: OPEN-001, OPEN-005
 #[test]
 fn another_default_application_is_used() {

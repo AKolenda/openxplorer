@@ -2,7 +2,7 @@
 //! Folder-size metadata of network shares and other GIO locations
 //! (PROP-030).
 //!
-//! Ports `GioSizeProvider` in `desktop/folder_sizes.py`: only the
+//! Ports `GioSizeProvider` in `v2.0.0:desktop/folder_sizes.py`: only the
 //! attributes below are queried, never file contents, and links are not
 //! followed. GIO reports no inode, so hard links on these locations are
 //! counted once per name.

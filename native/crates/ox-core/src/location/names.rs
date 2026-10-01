@@ -2,7 +2,7 @@
 //! File names, "Keep both" names and sidebar labels.
 //!
 //! Ports `validate_name`, `new_copy_name` and `safe_label` from
-//! `desktop/core.py`.
+//! `v2.0.0:desktop/core.py`.
 
 use super::text::{has_control_character, python_strip};
 use super::LocationError;

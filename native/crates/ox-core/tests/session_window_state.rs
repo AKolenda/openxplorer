@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A tab's navigation state and `FileManager1` request arguments. Ports
-//! `HandoffTests` of `desktop/tests/test_v07.py`; `session_python.rs`
+//! `HandoffTests` of `v2.0.0:desktop/tests/test_v07.py`; `session_python.rs`
 //! runs the same functions through both apps.
 
 use ox_core::location::{HOME_URI, NETWORK_URI, SETTINGS_URI};
@@ -11,7 +11,7 @@ use ox_core::session::{
 use ox_core::settings::View;
 use serde_json::json;
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_tab_roundtrip`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_tab_roundtrip`
 /// parity: TAB-038
 #[test]
 fn a_tab_snapshot_survives_a_json_round_trip() {
@@ -38,7 +38,7 @@ fn a_tab_snapshot_survives_a_json_round_trip() {
     assert_eq!(TabSnapshot::from_json(&snapshot.to_json()).unwrap(), snapshot);
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_no_password_fields_forwarded`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_no_password_fields_forwarded`
 /// parity: TAB-038
 #[test]
 fn password_fields_are_never_forwarded() {
@@ -51,7 +51,7 @@ fn password_fields_are_never_forwarded() {
     assert!(!forwarded.to_string().contains("not a real password"));
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_unknown_scheme_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_unknown_scheme_rejected`
 /// parity: TAB-038
 #[test]
 fn a_location_with_an_unknown_scheme_is_refused() {
@@ -60,7 +60,7 @@ fn a_location_with_an_unknown_scheme_is_refused() {
     assert!(matches!(result, Err(WindowStateError::Location(_))));
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_bad_history_position_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_bad_history_position_rejected`
 /// parity: TAB-038
 #[test]
 fn a_history_position_must_be_an_integer_inside_the_history() {
@@ -71,7 +71,7 @@ fn a_history_position_must_be_an_integer_inside_the_history() {
     }
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_mismatching_history_resets_safely`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_mismatching_history_resets_safely`
 /// parity: TAB-038
 #[test]
 fn a_history_without_the_location_resets_to_the_location() {
@@ -83,7 +83,7 @@ fn a_history_without_the_location_resets_to_the_location() {
     assert_eq!(snapshot.index, 0);
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_history_size_limit`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_history_size_limit`
 /// parity: TAB-038, NAV-005
 #[test]
 fn a_history_holds_1_to_200_locations() {
@@ -96,7 +96,7 @@ fn a_history_holds_1_to_200_locations() {
     assert_eq!(empty, Err(WindowStateError::HistoryLength));
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_infinite_scroll_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_infinite_scroll_rejected`
 ///
 /// JSON has no infinity, so Python's `float('inf')` arrives as text.
 /// parity: TAB-038
@@ -111,7 +111,7 @@ fn an_infinite_scroll_position_is_refused_and_a_huge_one_clamped() {
     assert!((clamped.scroll - MAX_SCROLL).abs() < f64::EPSILON);
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_selection_size_limit`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_selection_size_limit`
 /// parity: TAB-038
 #[test]
 fn a_selection_is_a_list_of_at_most_10000_items() {
@@ -136,7 +136,7 @@ fn selected_items_are_file_locations() {
     assert_eq!(message, "Enter a local folder path or an SMB address.");
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_settings_supported`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_settings_supported`
 /// parity: TAB-038
 #[test]
 fn a_settings_tab_keeps_its_known_section() {
@@ -171,7 +171,7 @@ fn unknown_view_and_sort_fall_back_to_the_defaults() {
     assert_eq!(not_text, Err(WindowStateError::LocationNotText));
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_showitems_keeps_file_path`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_showitems_keeps_file_path`
 /// parity: INT-014, SAFE-017
 #[test]
 fn show_items_keeps_a_file_location() {
@@ -181,7 +181,7 @@ fn show_items_keeps_a_file_location() {
     assert_eq!(request.uris, ["file:///tmp/movie.mp4"]);
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_showfolders_and_properties`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_showfolders_and_properties`
 /// parity: INT-014
 #[test]
 fn show_folders_and_item_properties_keep_their_locations() {
@@ -193,7 +193,7 @@ fn show_folders_and_item_properties_keep_their_locations() {
     }
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_unsupported_method_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_unsupported_method_rejected`
 /// parity: SAFE-017
 #[test]
 fn an_unsupported_method_is_refused() {
@@ -202,7 +202,7 @@ fn an_unsupported_method_is_refused() {
     assert_eq!(result, Err(WindowStateError::UnsupportedMethod));
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_empty_request_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_empty_request_rejected`
 /// parity: SAFE-017
 #[test]
 fn a_request_without_locations_is_refused() {
@@ -211,7 +211,7 @@ fn a_request_without_locations_is_refused() {
     assert_eq!(result, Err(WindowStateError::RequestLength));
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_reveal_limit`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_reveal_limit`
 /// parity: SAFE-017
 #[test]
 fn a_request_accepts_100_locations_and_refuses_101() {
@@ -222,7 +222,7 @@ fn a_request_accepts_100_locations_and_refuses_101() {
     assert_eq!(too_many, Err(WindowStateError::RequestLength));
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_no_virtual_locations_in_external_requests`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_no_virtual_locations_in_external_requests`
 /// parity: SAFE-017
 #[test]
 fn app_pages_and_other_schemes_are_refused_in_external_requests() {

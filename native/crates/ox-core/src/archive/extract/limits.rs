@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The ZIP-bomb limits of an extraction (ARC-017). Ports `Limits` of
-//! `desktop/zip_extraction.py` and the byte checks of
+//! `v2.0.0:desktop/zip_extraction.py` and the byte checks of
 //! `ZipExtractor.extract` that apply them while data is written.
 
 use crate::archive::ArchiveError;

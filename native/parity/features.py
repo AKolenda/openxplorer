@@ -13,7 +13,7 @@ import re
 import tomllib
 from typing import Any, TypeAlias
 
-from desktop_tests import Catalog
+from legacy import Catalog
 
 Feature: TypeAlias = dict[str, Any]
 

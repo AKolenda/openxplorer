@@ -3,7 +3,7 @@
 //! here and Compress to ZIP file.
 //!
 //! Ports `archiveDialog`, the `extractDialog` flow after its dialog and
-//! the `isZipEntry` item of `entryMenu` in `desktop/ui/app.js`: opening a
+//! the `isZipEntry` item of `entryMenu` in `v2.0.0:desktop/ui/app.js`: opening a
 //! ZIP browses it (ARC-002), Extract all… asks where (ARC-009) and runs
 //! the extraction with the transfer panel and Cancel (ARC-011), then
 //! shows the result in the tab that asked, or a new tab. Extract here

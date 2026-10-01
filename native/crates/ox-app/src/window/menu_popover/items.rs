@@ -2,7 +2,7 @@
 //! What a menu shows: its items and dividers, the action each item runs,
 //! and whether an item is checked or disabled.
 //!
-//! Ports the item objects `openMenu` in `desktop/ui/app.js` takes
+//! Ports the item objects `openMenu` in `v2.0.0:desktop/ui/app.js` takes
 //! (`{label, icon, fn, shortcut, disabled}` and `'-'`).
 
 use gtk::glib;

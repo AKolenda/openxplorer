@@ -5,7 +5,7 @@
 //! opened.
 //!
 //! The Python app kept these on its `Gtk.Application` (`settings_store`,
-//! `visited_network`, `launch_default` in `desktop/winspace.py`) and
+//! `visited_network`, `launch_default` in `v2.0.0:desktop/winspace.py`) and
 //! broadcast `environmentChanged` to every window. Here an [`AppContext`]
 //! emits `places-changed`, which every window connects to, when a pin, a
 //! saved share, a visited server, a standard folder ([`known_folders`]) or
@@ -328,7 +328,7 @@ impl AppContext {
     }
 
     /// Saves every valid value of `update` off the main thread, as
-    /// `update_preferences` in `desktop/core.py` does; `reply` hears the
+    /// `update_preferences` in `v2.0.0:desktop/core.py` does; `reply` hears the
     /// outcome.
     pub(crate) fn update_preferences(
         &self,
@@ -412,7 +412,7 @@ impl AppContext {
 }
 
 /// The recent-files record of an opened entry (`remember_open` in
-/// `desktop/core.py` keeps these fields).
+/// `v2.0.0:desktop/core.py` keeps these fields).
 pub(super) fn recent_entry(entry: &Entry) -> RecentEntry {
     RecentEntry {
         uri: entry.uri.clone(),

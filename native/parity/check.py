@@ -20,8 +20,9 @@ from pathlib import Path
 from typing import Any
 
 import bridge
-from desktop_tests import Catalog, discover
 import features as feature_inventory
+import legacy
+from legacy import Catalog
 import markers as parity_markers
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -58,7 +59,7 @@ def parse_arguments() -> argparse.Namespace:
              'covers the Dolphin must-haves (repeatable)')
     parser.add_argument(
         '--python-tests', action='store_true',
-        help='list desktop/tests tests that no feature cites')
+        help='list the Python app\'s tests that no feature cites')
     return parser.parse_args()
 
 
@@ -69,11 +70,15 @@ def check_inventories(root: Path) -> Inventories:
     so the output names the file to fix.
     """
     try:
-        bridge_inventory = bridge.load(root)
+        python_app = legacy.load(root)
     except ValueError as error:  # json.JSONDecodeError is a ValueError.
+        return Inventories({}, [], Catalog([]), [f'{legacy.LEGACY}: {error}'])
+    try:
+        bridge_inventory = bridge.load(root)
+    except ValueError as error:
         return Inventories({}, [], Catalog([]), [f'{bridge.BRIDGE}: {error}'])
-    errors = bridge.validate(root, bridge_inventory)
-    catalog = Catalog(discover(root))
+    errors = bridge.validate(root, bridge_inventory, python_app.bridge_operations)
+    catalog = python_app.catalog
     try:
         features = feature_inventory.load(root / FEATURES)
     except ValueError as error:  # tomllib.TOMLDecodeError is a ValueError.
@@ -103,12 +108,12 @@ def print_status(inventories: Inventories) -> None:
 
 def report_unreferenced_tests(features: list[dict[str, Any]],
                               catalog: Catalog) -> None:
-    """Print the desktop tests that no feature cites, in file order."""
+    """Print the Python app's tests that no feature cites, in file order."""
     cited = {reference
              for feature in features
              for reference in feature['python_tests']}
     unreferenced = catalog.unreferenced(cited)
-    print(f'{len(unreferenced)} of {len(catalog.tests)} desktop tests are '
+    print(f'{len(unreferenced)} of {len(catalog.tests)} Python app tests are '
           'not cited by any feature:')
     for test in unreferenced:
         print(f'  {test.reference}')

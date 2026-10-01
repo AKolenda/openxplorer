@@ -4,7 +4,7 @@
 //!
 //! The archive browser uses it for Open in archive manager and for the
 //! private read-only copy of a member (`open` and `open_archive_preview`
-//! in `desktop/winspace.py`): neither is a file the user opened from a
+//! in `v2.0.0:desktop/winspace.py`): neither is a file the user opened from a
 //! folder, so neither belongs in Recent.
 
 use gtk::prelude::*;

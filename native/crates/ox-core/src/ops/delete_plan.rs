@@ -2,9 +2,9 @@
 //! Deciding what Delete does with each item, and the confirmation that
 //! says so (OPS-015, OPS-017, OPS-018, CMD-003).
 //!
-//! Ports `trash_support` in `desktop/gio_backend.py` and `trashScope`,
+//! Ports `trash_support` in `v2.0.0:desktop/gio_backend.py` and `trashScope`,
 //! `trashSupported`, `deleteLabel` and the confirmation of `trash` in
-//! `desktop/ui/app.js`. Each item is decided by its own folder: where GIO
+//! `v2.0.0:desktop/ui/app.js`. Each item is decided by its own folder: where GIO
 //! reports a Trash the item goes there, elsewhere (SMB shares, most remote
 //! backends) it is deleted permanently, and the confirmation says which.
 
@@ -25,7 +25,7 @@ use crate::transfer::{Cancellation, Node};
 /// An address that is not a supported location, [`OpsError::NotMounted`]
 /// when the share must be mounted first (mount it and ask again), or
 /// [`OpsError::Cancelled`]. Every other failure answers `false`, as
-/// `trash_support` in `desktop/gio_backend.py` does.
+/// `trash_support` in `v2.0.0:desktop/gio_backend.py` does.
 pub async fn trash_support(folder_uri: &str, cancel: &Cancellation) -> Result<bool, OpsError> {
     let folder = GioNode::new(&normalise(folder_uri)?);
     let cancel = cancel.clone();
@@ -87,7 +87,7 @@ pub struct DeleteConfirmation {
 /// asked about, counts as having a Trash, so that failure never turns into
 /// a permanent delete; the Trash attempt then fails visibly instead. Any
 /// other failed query answers "no Trash", as `trash_support` in
-/// `desktop/gio_backend.py` does, and the confirmation then says that the
+/// `v2.0.0:desktop/gio_backend.py` does, and the confirmation then says that the
 /// items are deleted permanently.
 ///
 /// # Errors

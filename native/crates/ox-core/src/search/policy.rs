@@ -2,7 +2,7 @@
 //! What may be indexed below a root, and whether a root is on the network.
 //!
 //! Ports `root_network`, `policy` and `allowed` from
-//! `desktop/index_service.py` (SRCH-030, SRCH-031).
+//! `v2.0.0:desktop/index_service.py` (SRCH-030, SRCH-031).
 
 use std::fs;
 use std::path::Path;
@@ -233,14 +233,14 @@ mod tests {
         IndexScope::for_root(root, Path::new(INDEX_DIRECTORY), mounts)
     }
 
-    /// Ported from `desktop/tests/test_release.py::IndexPolicyTests::test_whole_disk_still_excludes_tmp`
+    /// Ported from `v2.0.0:desktop/tests/test_release.py::IndexPolicyTests::test_whole_disk_still_excludes_tmp`
     /// parity: SRCH-031
     #[test]
     fn whole_disk_still_excludes_tmp() {
         assert!(!scope("file:///", &[]).admits("file:///tmp/private"));
     }
 
-    /// Ported from `desktop/tests/test_release.py::IndexPolicyTests::test_explicit_tmp_subtree_is_indexable`
+    /// Ported from `v2.0.0:desktop/tests/test_release.py::IndexPolicyTests::test_explicit_tmp_subtree_is_indexable`
     /// parity: SRCH-031
     #[test]
     fn explicit_tmp_subtree_is_indexable() {
@@ -248,14 +248,14 @@ mod tests {
         assert!(scope(root, &[]).admits("file:///tmp/my-project/notes.txt"));
     }
 
-    /// Ported from `desktop/tests/test_release.py::IndexPolicyTests::test_selected_var_excludes_its_tmp_child`
+    /// Ported from `v2.0.0:desktop/tests/test_release.py::IndexPolicyTests::test_selected_var_excludes_its_tmp_child`
     /// parity: SRCH-031
     #[test]
     fn selected_var_excludes_its_tmp_child() {
         assert!(!scope("file:///var", &[]).admits("file:///var/tmp/file"));
     }
 
-    /// Ported from `desktop/tests/test_release.py::IndexPolicyTests::test_index_database_remains_excluded`
+    /// Ported from `v2.0.0:desktop/tests/test_release.py::IndexPolicyTests::test_index_database_remains_excluded`
     /// parity: SRCH-031
     #[test]
     fn index_database_remains_excluded() {
@@ -264,7 +264,7 @@ mod tests {
         assert!(home.admits("file:///home/test/.cache/other"));
     }
 
-    /// Ported from `desktop/tests/test_release.py::IndexPolicyTests::test_nested_mounts_remain_excluded`
+    /// Ported from `v2.0.0:desktop/tests/test_release.py::IndexPolicyTests::test_nested_mounts_remain_excluded`
     /// parity: SRCH-031
     #[test]
     fn nested_mounts_remain_excluded() {
@@ -272,7 +272,7 @@ mod tests {
         assert!(!scope("file:///mnt/data", &mounts).admits("file:///mnt/data/other-volume/file"));
     }
 
-    /// Ported from `desktop/tests/test_v05.py::LiveTests::test_root_exclusions`
+    /// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_root_exclusions`
     /// parity: SRCH-031
     #[test]
     fn root_exclusions() {

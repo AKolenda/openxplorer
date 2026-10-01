@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Reading an archive in place through a seekable GIO stream, for shares
 //! and devices without a local path. Ports `GioReader` in
-//! `desktop/native_opening.py`.
+//! `v2.0.0:desktop/native_opening.py`.
 //!
 //! GIO may return fewer bytes than asked for; as a [`Read`] that is simply
 //! a short read, which the ZIP reader completes with further reads. Every

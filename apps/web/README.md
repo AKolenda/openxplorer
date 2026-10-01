@@ -35,13 +35,13 @@ profile described below.
 
 ## Mobile behavior and safe examples
 
-Documentation topics open from the existing header menu on small screens; there is no horizontal topic strip. The current topic is marked and Escape closes the menu. The application preview is held in an inert `<template>` and instantiated only at 960 CSS pixels and above. Shrinking the viewport disposes it; mobile visitors see readable documentation and static screenshots instead of a cropped desktop app.
+Documentation topics open from the existing header menu on small screens; there is no horizontal topic strip. The current topic is marked and Escape closes the menu. The tour of the native app is held in an inert `<template>` and instantiated only at 960 CSS pixels and above. Shrinking the viewport disposes it; mobile visitors see readable documentation and static screenshots instead of a cropped desktop app.
 
 The homepage, documentation, browser demo and both READMEs use fictional fixture data. Do not substitute images from bug reports. Rebuild captures and run the [privacy audit](../../docs/PRIVACY.md) before publication:
 
 ```sh
-python3 desktop/tools/build_preview.py
 python3 tools/capture-screenshots.py
+python3 tools/capture-native-tour.py
 pnpm designs
 python3 tools/capture-website.py
 python3 tools/audit-public-data.py
@@ -58,27 +58,42 @@ These changes apply to the Next.js component/CSS source and the generated offlin
 
 These are captures of the standalone HTML rendered from the same site components. They are not evidence of a successful Next.js production build. Run `python3 tools/capture-website.py` from the repository root after `pnpm designs` to refresh them (Playwright, Chromium and Pillow required).
 
-## The real interface, embedded
+## The real app, as a click-through tour
 
-`components/product.tsx` embeds `/app-preview.html` on the Introduction guide, generated from `desktop/ui/` plus the preview-only tour controller in `desktop/demo/showcase.js`.
+A GTK app cannot run in a web page, so `components/product.tsx` embeds a tour of
+pictures of the real native app on the Introduction guide:
+`public/tour/index.html`, with `tour.js` and `tour.css`. Each picture's clickable
+areas are the rectangles of real controls, which the app reports through its
+snapshot hook (`OPENXPLORER_HOTSPOTS`); a click or Enter opens the picture the
+control leads to, and Back returns. The buttons above the tour open a scene,
+switch light and dark, restart it, or play a short walkthrough; no animation
+starts automatically, and reduced motion is respected.
 
-The preview has the real folder and file icons, tabs, breadcrumb buttons, menu behavior, pinning handlers and light/dark controls. Its storage adapter is simulated. It cannot access local files, NAS services, operating-system settings, credentials or a keyring.
+`tools/capture-native-tour.py` takes the pictures in an isolated session with a
+fictional demo tree (bubblewrap hides the home folders, mounts and session bus
+and gives the app no network; Xvfb and a private D-Bus session keep it off the
+desktop) and writes `public/tour/*.png` and `public/tour/scenes.json`, which
+registers each picture's hash for the public-data audit.
+`tools/prepare-web.cjs` turns `scenes.json` into `scenes.js`, because the
+sandboxed frame cannot fetch it. Run `pnpm capture:tour` after a change to the
+app's look, and review every picture before committing it.
 
-The **Watch: open NAS & pin a folder** button starts a deterministic tour. An animated pointer types `\\studio-nas\Projects`, opens the sample share, drags **Design** through the existing pointer-based pin handler, then opens the pin. Stop, Reset, reduced-motion preferences and direct user interruption are supported. No animation starts automatically.
+The iframe uses `sandbox="allow-scripts"` without `allow-same-origin`. Parent and
+frame messages are scoped to the specific frame and a short allowlist of demo
+commands. The tour shows static pictures; it cannot reach local files, NAS
+services, operating-system settings, credentials or a keyring.
 
-The iframe uses `sandbox="allow-scripts"` without `allow-same-origin`. Parent/child messages are scoped to the specific frame and a short allowlist of demo commands. Arbitrary URI or native-operation commands are not accepted. The app preview CSP blocks network requests. The native application does not load `demo/showcase.js`.
-
-The standalone HTML renderer inlines the same preview as sandboxed `srcdoc` and screenshot PNGs as data URLs for convenient offline review. That renderer is **not** a replacement for a Next.js production build.
+The standalone HTML renderer loads the tour from `designs/tour/` and inlines screenshot PNGs as data URLs for convenient offline review. That renderer is **not** a replacement for a Next.js production build.
 
 ## Page structure
 
 | Route | Purpose |
 |---|---|
 | `/` | Hero with a CSS guided tour, screenshots, SMB / drag / search features, open-source links |
-| `/docs/introduction/` | Guide entry point, real screenshot and interactive demo |
+| `/docs/introduction/` | Guide entry point, real screenshot and the tour of the native app |
 | `/docs/[slug]/` | Topic navigation left, article center, same-page navigation right |
 | `/source/` | Public source repository and license information |
-| `/app-preview.html` | Standalone, interactive application UI with simulated files |
+| `/tour/index.html` | Standalone click-through tour of native app pictures with sample files |
 | `/docs-markdown/[slug].md` | Generated guide Markdown used by documentation tooling |
 
 ## Edit content and identity
@@ -88,7 +103,7 @@ GitHub Releases URL, and canonical `https://openxplorer.app` URL.
 Package buttons lead to GitHub Releases; source links lead to the public repository.
 The website has no direct download links or hosted release binaries.
 
-`lib/docs.json` is the canonical documentation source. Each section can contain paragraphs, a list, code, a callout, a real screenshot or the interactive preview. Run from the root:
+`lib/docs.json` is the canonical documentation source. Each section can contain paragraphs, a list, code, a callout, a real screenshot or the tour of the native app. Run from the root:
 
 ```sh
 python3 tools/sync-docs.py
@@ -100,20 +115,19 @@ Each documentation page provides **Copy page as Markdown**, which copies the com
 
 ## Screenshots, not substitute icons
 
-![Actual Previous versions UI, with the date on the right](public/assets/screenshots/previous-versions.png)
+![Previous versions of a sample file in the native app's Properties](public/assets/screenshots/previous-versions.png)
 
-All screenshots live in `public/assets/screenshots/`. `tools/capture-screenshots.py` uses the real app UI, including the file icons generated by `desktop/ui/app.js` and the date logic in `desktop/ui/snapshot-meta.js`.
+All screenshots live in `public/assets/screenshots/`. `tools/capture-screenshots.py` takes them from the native app, in the same isolated session and with the same fictional demo tree as the tour, and records their hashes in `manifest.json`.
 
 To refresh screenshots:
 
 ```sh
-python3 desktop/tools/build_preview.py
 python3 tools/capture-screenshots.py
 node tools/prepare-web.cjs
 pnpm designs
 ```
 
-Run those commands from the repository root. Python Playwright and Chromium are required. Set `CHROMIUM` for a different executable. Do not use a real customer share or capture credentials for marketing assets.
+Run those commands from the repository root. They need cargo, bubblewrap (`bwrap`), `xvfb-run` and `dbus-run-session`, and build the release program first. Do not use a real customer share or capture credentials for marketing assets.
 
 ## Visual system
 
@@ -126,7 +140,7 @@ Run those commands from the repository root. Python Playwright and Chromium are 
 | Network green | `#2EAF72` — network identification, not a health guarantee |
 | Type | System Segoe UI / Ubuntu / Noto Sans; monospace only for code and paths |
 
-The page’s distinctive element is a usable, full-width application preview. The
+The page’s distinctive element is a full-width, click-through tour of the real app. The
 feature grid uses unequal cards and real screenshot crops. Keyboard focus,
 mobile layout and reduced-motion behavior are retained. Below 960 CSS pixels,
 the iframe is removed and visitors see the static screenshots and readable
@@ -187,10 +201,10 @@ header rules; a local HTML file does not exercise those headers.
 ```sh
 node tools/check-syntax.cjs
 python3 tests/test_website.py
-python3 desktop/tests/ui_v09.py
+python3 tests/test_mobile_review.py
 ```
 
-The syntax check is not dependency-aware TypeScript verification. Standalone browser tests exercise the sandboxed iframe, tour, Markdown copying, mobile layout and documentation search with simulated storage. They do not test Next.js routing, hydration, hosting, native GTK/WebKit, real SMB or native authentication.
+The syntax check is not dependency-aware TypeScript verification. Standalone browser tests exercise the sandboxed tour iframe, Markdown copying, mobile layout and documentation search. They do not test Next.js routing, hydration, hosting, the native app, real SMB or native authentication.
 
 See the repository [test report](../../TEST-REPORT.md) and [contribution guide](../../CONTRIBUTING.md).
 
@@ -208,7 +222,7 @@ production hydration and deployment each need their own recorded checks.
 Hosting rules include MIME-sniffing protection, a restricted feature policy
 and frame/base/object restrictions. Their CSP is **not a strict script policy**;
 review any tighter script rules against the actual exported Next.js output and
-the sandboxed preview before enabling them.
+the sandboxed tour before enabling them.
 
 The canonical domain is `openxplorer.app`. The source repository is public at
 `https://github.com/AKolenda/openxplorer`; the website hosts no release binaries.

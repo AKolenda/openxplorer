@@ -1,0 +1,31 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The click-through tour of the native app: one picture at a time, with its
+   real controls as buttons laid over it in percentages of the picture. */
+:root { color-scheme: light; --paper: #fff; --canvas: #f3f3f3; --ink: #1b1b1b; --muted: #5d5d5d; --line: #dcdcdc; --accent: #0067c0; --accent-soft: #0067c022; }
+:root[data-theme="dark"] { color-scheme: dark; --paper: #272727; --canvas: #1c1c1c; --ink: #f3f3f3; --muted: #c5c5c5; --line: #3d3d3d; --accent: #60cdff; --accent-soft: #60cdff26; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: grid; grid-template-rows: auto 1fr auto; background: var(--canvas); color: var(--ink); font: 14px/1.45 "Segoe UI", "Noto Sans", "Inter", system-ui, sans-serif; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 8px 14px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.back { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 11px 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: inherit; font: inherit; cursor: pointer; }
+.back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.back:hover:not(:disabled) { background: var(--canvas); }
+.back:disabled { opacity: .45; cursor: default; }
+.heading { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
+.heading strong { font-size: 14px; font-weight: 600; }
+.heading span { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { flex: none; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; }
+.stage { display: grid; place-items: center; min-height: 0; padding: 10px; container-type: size; }
+.frame { position: relative; margin: 0; width: min(100cqw, calc(100cqh * 1.6)); aspect-ratio: 1440 / 900; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--paper); box-shadow: 0 6px 24px #0000002e; }
+.frame img { display: block; width: 100%; height: 100%; }
+.hotspots { position: absolute; inset: 0; }
+.hotspot { position: absolute; padding: 0; border: 2px solid transparent; border-radius: 6px; background: transparent; cursor: pointer; }
+.hotspot:hover, .hotspot:focus-visible, .hotspot.highlighted { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+.hotspot span { position: absolute; left: 50%; top: calc(100% + 6px); z-index: 2; transform: translateX(-50%); padding: 4px 9px; border-radius: 6px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; }
+:root[data-theme="dark"] .hotspot span { color: #002c47; }
+.hotspot.above span { top: auto; bottom: calc(100% + 6px); }
+.hotspot:hover span, .hotspot:focus-visible span, .hotspot.highlighted span { opacity: 1; }
+.frame.arrived .hotspot { animation: hint 1.4s ease-out 1; }
+@keyframes hint { 0%, 40% { border-color: var(--accent); background: var(--accent-soft); } 100% { border-color: transparent; background: transparent; } }
+.hint { margin: 0; padding: 7px 14px 9px; color: var(--muted); font-size: 12.5px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .frame.arrived .hotspot { animation: none; } .hotspot span { transition: none; } }

@@ -3,7 +3,7 @@
 //!
 //! The Python app started one `IndexService` per process and passed it the
 //! Auto-index and network interval preferences on every tick
-//! (`desktop/winspace.py:148-163`). Here the context starts the
+//! (`v2.0.0:desktop/winspace.py:148-163`). Here the context starts the
 //! [`SearchCache`] and hands it the preferences and Quick access pins each
 //! time the places change, which includes every preference change and
 //! every pin made in any window or process (SRCH-026, SRCH-030, SRCH-040).

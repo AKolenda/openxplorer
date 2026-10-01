@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The details view's column titles, drawn as the current app draws them.
 //!
-//! Ports the title part of `renderColumns` in `desktop/ui/app.js` and the
-//! `.column-head` rules of `desktop/ui/style.css`: the Size title is
+//! Ports the title part of `renderColumns` in `v2.0.0:desktop/ui/app.js` and the
+//! `.column-head` rules of `v2.0.0:desktop/ui/style.css`: the Size title is
 //! right-aligned, and only the sorted column shows an arrow, the app's own
 //! 10-pixel chevron (`icon('down')`, turned up while ascending) rather
 //! than GTK's filled triangle (ui-spec.md §4.5, §7.2).

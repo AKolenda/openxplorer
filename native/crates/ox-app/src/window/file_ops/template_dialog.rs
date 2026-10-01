@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The New file and New from template dialog (OPS-002, OPS-048).
 //!
-//! Ports `newTemplateDialog` in `desktop/ui/app.js`. The dialog lists the
+//! Ports `newTemplateDialog` in `v2.0.0:desktop/ui/app.js`. The dialog lists the
 //! six built-in starters and the user's templates (" · Your template"),
 //! read from the XDG Templates folder when it opens; choosing another
 //! template puts its suggested name in the File name field. Create checks

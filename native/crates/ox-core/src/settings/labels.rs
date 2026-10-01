@@ -2,7 +2,7 @@
 //! The labels a pin or share gets when the user gives none.
 //!
 //! Ports the label fallbacks of `Settings.__init__`, `bookmark` and
-//! `pin_many` in `desktop/core.py`. Checking a label the user did give is
+//! `pin_many` in `v2.0.0:desktop/core.py`. Checking a label the user did give is
 //! [`safe_label`](crate::location::safe_label).
 
 use crate::location::{split_location, unquote_lossy, LocationParts};

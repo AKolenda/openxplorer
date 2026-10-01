@@ -5,8 +5,8 @@
 //! starts a real application.
 //!
 //! Ports `handle_reveal`, `enable_reveal`/`disable_reveal` and
-//! `revealTest` of `desktop/winspace.py`, `handleFileManagerRequest` and
-//! `openWithDialog` of `desktop/ui/app.js`. Show in folder inside Flatpak
+//! `revealTest` of `v2.0.0:desktop/winspace.py`, `handleFileManagerRequest` and
+//! `openWithDialog` of `v2.0.0:desktop/ui/app.js`. Show in folder inside Flatpak
 //! is in `flatpak`.
 
 mod flatpak;

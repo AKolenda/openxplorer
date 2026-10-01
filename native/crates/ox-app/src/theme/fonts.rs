@@ -4,7 +4,7 @@
 //! In the web interface every font size is `calc(Npx * var(--text-scale))`
 //! and row metrics come from `metrics()` in text-size.js. GTK 4.14 CSS has
 //! no variables, so this module generates those rules for the chosen size
-//! from one table of base sizes (the values in `desktop/ui/style.css`).
+//! from one table of base sizes (the values in `v2.0.0:desktop/ui/style.css`).
 
 use crate::folder_view::grid::{self, IconSize};
 use crate::text_size::{self, TextSize};
@@ -142,7 +142,7 @@ const FONT_SIZES: &[FontSize] = &[
 
 /// A bar height that grows with the text, as the
 /// `min-height: max(floor, calc(N * var(--text-scale) + M))` rules at the
-/// end of `desktop/ui/style.css`. The web heights are border boxes and
+/// end of `v2.0.0:desktop/ui/style.css`. The web heights are border boxes and
 /// GTK's `min-height` is the content box; the two agree because these bars
 /// have no vertical border or padding.
 #[derive(Debug)]

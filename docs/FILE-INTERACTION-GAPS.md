@@ -14,7 +14,7 @@ The original file list did not initiate an operating-system file drag. Its
 `pointerPinMove` restricted the selection to folders. That gesture only moved an
 in-page badge and pinned a shortcut in Quick access. Ordinary files and mixed
 selections could not leave the window. The existing native drag transport in
-`desktop/native_tab_drag.py:61` offered an application-private tab target and
+`v2.0.0:desktop/native_tab_drag.py:61` offered an application-private tab target and
 an empty desktop handshake, rather than a file list. HTML drop handlers also
 explicitly rejected external transfers. Adding editor-specific text to the
 existing pointer badge would not repair that missing native transport.
@@ -40,23 +40,23 @@ and remaining real-desktop checks are listed separately below.
 
 | Priority | Interaction gap | Current disposition and code evidence |
 | --- | --- | --- |
-| P0 | Drag ordinary files into editors or attachment fields. The original pointer gesture never exported files to the desktop. | **Implemented:** a real GDK gesture starts a GTK drag; URI targets export local file URIs and text targets offer readable paths. `desktop/native_file_drag.py:163` (`begin`) and `:190` (`data_get`). Sources are copy-only; no source deletion occurs in `data_delete` at `:200`. |
-| P1 | Drag a multi-selection, including both files and folders, without collapsing it to the item under the pointer. | **Implemented:** `beginNativeFileDrag` in `desktop/ui/app.js` uses the complete selection when dragging a selected entry, or selects the unselected entry being dragged. `prepare_files` in `desktop/native_file_drag.py:39` validates and deduplicates up to 200 items. Ctrl/Shift selection remains in `desktop/ui/app.js:366` (`selectEntry`). |
-| P1 | Drop files from another file manager into an open directory or a folder row. Original DOM handlers rejected external drops. | **Implemented:** `desktop/native_file_drop.py` decodes bounded, explicit file/SMB URI lists and validates the received destination. `receiveFileDrop` asks for Replace existing or Skip duplicates and calls the transfer engine; replacement is never implicit. |
-| P1 | Copy files by dragging between OpenXplorer windows or into a subfolder. Previously only Quick access pinning was possible. | **Implemented for copy:** uses the same native source/receiver and existing transfer engine. Same-process drops retain canonical SMB URIs even if the external representation uses an existing local mount (`desktop/native_file_drop.py`, `received`). Quick access remains a pin/reorder target, not a file-copy destination. |
-| P1 | Clipboard cut from KDE is interpreted as copy. | **Fixed:** export already supplied `x-kde-cutselection`, but reads ignored it. `desktop/file_clipboard.py:126` now requests that marker only alongside a valid URI-list fallback. Only the exact cut marker gives move semantics; plain text does not become a file list. An owner-change guard rejects mismatched asynchronous replies. |
-| P1 | Completed cuts from an external GNOME clipboard cannot be consumed reliably. | **Fixed:** external formats previously received a new random token on every read, so the completion token never matched. `desktop/file_clipboard.py:45` now derives a stable token from the external payload and mode; `:151` consumes only completed items from the matching current clipboard. Changed payloads and changed owners are preserved. |
-| P1 | Remote files may be browseable here but unusable by an editor that requires a local path. | **Partially addressed:** `desktop/native_file_drag.py:39` reuses `desktop/native_opening.py:19` (`local_path`) to resolve already-mounted CIFS/GVfs paths. Without one, an SMB URI is offered; a file-only receiver may reject it. The drag does not mount, authenticate or download files. |
+| P0 | Drag ordinary files into editors or attachment fields. The original pointer gesture never exported files to the desktop. | **Implemented:** a real GDK gesture starts a GTK drag; URI targets export local file URIs and text targets offer readable paths. `v2.0.0:desktop/native_file_drag.py:163` (`begin`) and `:190` (`data_get`). Sources are copy-only; no source deletion occurs in `data_delete` at `:200`. |
+| P1 | Drag a multi-selection, including both files and folders, without collapsing it to the item under the pointer. | **Implemented:** `beginNativeFileDrag` in `v2.0.0:desktop/ui/app.js` uses the complete selection when dragging a selected entry, or selects the unselected entry being dragged. `prepare_files` in `v2.0.0:desktop/native_file_drag.py:39` validates and deduplicates up to 200 items. Ctrl/Shift selection remains in `v2.0.0:desktop/ui/app.js:366` (`selectEntry`). |
+| P1 | Drop files from another file manager into an open directory or a folder row. Original DOM handlers rejected external drops. | **Implemented:** `v2.0.0:desktop/native_file_drop.py` decodes bounded, explicit file/SMB URI lists and validates the received destination. `receiveFileDrop` asks for Replace existing or Skip duplicates and calls the transfer engine; replacement is never implicit. |
+| P1 | Copy files by dragging between OpenXplorer windows or into a subfolder. Previously only Quick access pinning was possible. | **Implemented for copy:** uses the same native source/receiver and existing transfer engine. Same-process drops retain canonical SMB URIs even if the external representation uses an existing local mount (`v2.0.0:desktop/native_file_drop.py`, `received`). Quick access remains a pin/reorder target, not a file-copy destination. |
+| P1 | Clipboard cut from KDE is interpreted as copy. | **Fixed:** export already supplied `x-kde-cutselection`, but reads ignored it. `v2.0.0:desktop/file_clipboard.py:126` now requests that marker only alongside a valid URI-list fallback. Only the exact cut marker gives move semantics; plain text does not become a file list. An owner-change guard rejects mismatched asynchronous replies. |
+| P1 | Completed cuts from an external GNOME clipboard cannot be consumed reliably. | **Fixed:** external formats previously received a new random token on every read, so the completion token never matched. `v2.0.0:desktop/file_clipboard.py:45` now derives a stable token from the external payload and mode; `:151` consumes only completed items from the matching current clipboard. Changed payloads and changed owners are preserved. |
+| P1 | Remote files may be browseable here but unusable by an editor that requires a local path. | **Partially addressed:** `v2.0.0:desktop/native_file_drag.py:39` reuses `v2.0.0:desktop/native_opening.py:19` (`local_path`) to resolve already-mounted CIFS/GVfs paths. Without one, an SMB URI is offered; a file-only receiver may reject it. The drag does not mount, authenticate or download files. |
 | P2 | Traditional drag-to-move and Ctrl/Shift/Alt action negotiation are absent. | **Deferred:** drag sources and receivers intentionally use copy. Cut/Paste remains the explicit move operation. Reliable destructive drag negotiation, including destination failure and cancellation, needs a separate design and native tests. |
-| P2 | Cross-filesystem cut/move is absent. | **Existing explicit limitation:** `desktop/operations.py:145` delegates only to native moves; `desktop/gio_backend.py:19` uses `NO_FALLBACK_FOR_MOVE`. Do not implement this by naively copying and then deleting the source. A future implementation needs durable completion, metadata/error policy and cancellation recovery. |
-| P2 | ZIP members and virtual network objects are not ordinary OS-backed files. | **Existing boundary:** `fileDragEntry` in `desktop/ui/app.js:477` excludes archive and virtual entries; native source validation rejects unsupported schemes (`desktop/native_file_drag.py:24`). Concrete share-root references can be dragged out or pinned, but copying a whole SMB share remains rejected by the receiver/operation checks (`desktop/native_file_drop.py`, `received`; `desktop/core.py:363`). Extract ZIP contents first, and open a share to select its children when copying. |
+| P2 | Cross-filesystem cut/move is absent. | **Existing explicit limitation:** `v2.0.0:desktop/operations.py:145` delegates only to native moves; `v2.0.0:desktop/gio_backend.py:19` uses `NO_FALLBACK_FOR_MOVE`. Do not implement this by naively copying and then deleting the source. A future implementation needs durable completion, metadata/error policy and cancellation recovery. |
+| P2 | ZIP members and virtual network objects are not ordinary OS-backed files. | **Existing boundary:** `fileDragEntry` in `v2.0.0:desktop/ui/app.js:477` excludes archive and virtual entries; native source validation rejects unsupported schemes (`v2.0.0:desktop/native_file_drag.py:24`). Concrete share-root references can be dragged out or pinned, but copying a whole SMB share remains rejected by the receiver/operation checks (`v2.0.0:desktop/native_file_drop.py`, `received`; `v2.0.0:desktop/core.py:363`). Extract ZIP contents first, and open a share to select its children when copying. |
 | P2 | No file-operation undo or per-item conflict review. | **Partially addressed:** copy, cut/paste and native drops now offer explicit Replace existing or Skip duplicates. Replacements commit staged files and merge same-name folders. There is still no undo journal or per-item conflict picker. |
-| P2 | Some keyboard and selection conveniences still trail a full explorer. | **Deferred:** icon-view Up/Down currently move by one item instead of by the number of visible columns (`desktop/ui/app.js`, `onKey`); there is no file-list Left/Right or rubber-band selection. `copyPath` at `:423` handles a single selected path or the current directory, not all selected paths. These are useful follow-ups independent of the native drag fix. |
+| P2 | Some keyboard and selection conveniences still trail a full explorer. | **Deferred:** icon-view Up/Down currently move by one item instead of by the number of visible columns (`v2.0.0:desktop/ui/app.js`, `onKey`); there is no file-list Left/Right or rubber-band selection. `copyPath` at `:423` handles a single selected path or the current directory, not all selected paths. These are useful follow-ups independent of the native drag fix. |
 
 ## Behaviors to preserve
 
 The transfer engine already rejects copies into the source folder or one of its
-descendants, including local symlink aliases (`desktop/operations.py:67`). Copies
+descendants, including local symlink aliases (`v2.0.0:desktop/operations.py:67`). Copies
 use private staging before the final rename or explicitly confirmed replacement (`TransferEngine.run`);
 the drag receiver must continue through that engine. Snapshot destinations retain
 their read-only checks. The source-side copy action prevents OpenXplorer from
@@ -85,7 +85,7 @@ KDE cut/copy marker handling, format priority, text/unsafe-URI rejection and own
 changes between asynchronous replies. These tests use queued selection doubles;
 they do not claim native GTK clipboard or actual KDE/GNOME session validation.
 
-The [current test report](../desktop/TEST-REPORT.md) records 542 Python tests,
+The [current test report](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/TEST-REPORT.md) records 542 Python tests,
 30 file-drag browser checks, 27 native file-transport checks and 24 native tab
 checks. The native file test uses a real WebKit source, a GTK URI receiver, and
 a separate headed Chromium process that received readable `DataTransfer.Files`.
@@ -102,7 +102,7 @@ report does not explicitly record them as run:
    Include filenames containing spaces, Unicode, `#`, `%` and `?`.
 2. Repeat the source/destination test on both supported Wayland and X11 sessions,
    with the installed editor packaging (including Flatpak/Snap if relevant).
-   Distinguish desktop/portal restrictions from a missing URI payload.
+   Distinguish v2.0.0:desktop/portal restrictions from a missing URI payload.
 3. Drop files into the current directory, a visible subfolder and another
    OpenXplorer window. Verify target highlighting, destination confirmation,
    duplicate handling and cancel. Confirm Quick access pins folders and never

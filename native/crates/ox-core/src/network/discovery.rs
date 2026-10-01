@@ -2,8 +2,8 @@
 //! Servers advertising on the local network, for the Network page's
 //! "Discover servers".
 //!
-//! Ports `discover_network` in `desktop/winspace.py` and `discover_servers`
-//! in `desktop/gio_backend.py`. `GVfs`'s `network:///` combines DNS-SD,
+//! Ports `discover_network` in `v2.0.0:desktop/winspace.py` and `discover_servers`
+//! in `v2.0.0:desktop/gio_backend.py`. `GVfs`'s `network:///` combines DNS-SD,
 //! WS-Discovery and the SMB browser; this module only reads it. There is
 //! no port scan, no password prompt and no listing of any server's shares.
 

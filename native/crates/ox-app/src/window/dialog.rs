@@ -2,8 +2,8 @@
 //! The app's modal dialog: a title, a message, fields, an error line and
 //! buttons.
 //!
-//! Ports `showModal`, `showMessage` and `textField` of `desktop/ui/app.js`
-//! with `.modal` of `desktop/ui/style.css`, refined to the `ContentDialog`
+//! Ports `showModal`, `showMessage` and `textField` of `v2.0.0:desktop/ui/app.js`
+//! with `.modal` of `v2.0.0:desktop/ui/style.css`, refined to the `ContentDialog`
 //! of `WinUI` (`native/docs/ui-spec.md` §4.11). The behaviour follows
 //! `showModal` and ACC-004:
 //!

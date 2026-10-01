@@ -4,7 +4,7 @@
 //! Wraps an [`ox_core::entry::Entry`] with what the views need often and
 //! should compute once: the natural-order sort keys, the lower-cased name
 //! used by the search filter, and the icon art, and while searching the
-//! folder the item is in. A row of `renderRows` in `desktop/ui/app.js`
+//! folder the item is in. A row of `renderRows` in `v2.0.0:desktop/ui/app.js`
 //! reads the same fields from the entry. A folder also carries its
 //! measured size once the user asked for it (`state.folderSizes` in
 //! app.js), which the Size column shows and sorts by.

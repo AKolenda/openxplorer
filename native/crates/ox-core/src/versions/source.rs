@@ -3,7 +3,7 @@
 //! copies of a live folder, and how the copies are laid out in it.
 //!
 //! Ports the validation of `PreviousVersions.sources` and
-//! `PreviousVersions.configure` in `desktop/previous_versions.py`. Sources
+//! `PreviousVersions.configure` in `v2.0.0:desktop/previous_versions.py`. Sources
 //! are saved as `{"live": …, "snapshots": …, "layout": …}` objects, the
 //! format the Python app reads and writes.
 

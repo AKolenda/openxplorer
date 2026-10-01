@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Compares the location display helpers and [`pretty_bytes`] with the web
-//! UI's helpers in `desktop/ui/app.js`, using the answers
+//! UI's helpers in `v2.0.0:desktop/ui/app.js`, using the answers
 //! `generate_javascript.cjs` captured in `javascript.json`; see
 //! `location_fixtures/README.md`. `location_fixture_drift.rs` proves the
 //! captured answers are still what `app.js` says.

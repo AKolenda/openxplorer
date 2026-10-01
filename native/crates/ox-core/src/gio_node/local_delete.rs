@@ -2,8 +2,8 @@
 //! Deletion of local items relative to pinned folder descriptors: the
 //! user's confirmed permanent deletions and the engine's own staging.
 //!
-//! Ports `GioNode._delete_recursive` in `desktop/gio_backend.py` and
-//! `_clean_staging` in `desktop/operations.py` for `file:` items, with
+//! Ports `GioNode._delete_recursive` in `v2.0.0:desktop/gio_backend.py` and
+//! `_clean_staging` in `v2.0.0:desktop/operations.py` for `file:` items, with
 //! stronger protection than the Python app's path-based walks.
 //!
 //! Rules enforced here (XFER-015 for the user's deletions, XFER-002 for

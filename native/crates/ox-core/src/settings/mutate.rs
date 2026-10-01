@@ -2,7 +2,7 @@
 //! The changes `Settings` can make, as pure functions on [`SettingsData`].
 //!
 //! Ports the bodies of `bookmark`, `pin_many` and `remember_open` in
-//! `desktop/core.py`. Locking, reloading and saving happen in
+//! `v2.0.0:desktop/core.py`. Locking, reloading and saving happen in
 //! [`Settings`](super::Settings). Safety rule "validate before changing"
 //! (`pin_many` in core.py): each function checks its whole request before
 //! it changes anything, so a rejected request leaves the settings as they
@@ -285,7 +285,7 @@ mod tests {
             .expect("a valid location");
     }
 
-    /// Ported from `desktop/tests/test_pins.py::PinTests::test_insert_before_documents`
+    /// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_insert_before_documents`
     /// parity: SIDE-007, SIDE-008
     #[test]
     fn pins_dropped_on_a_folder_are_inserted_before_it() {
@@ -298,7 +298,7 @@ mod tests {
         );
     }
 
-    /// Ported from `desktop/tests/test_pins.py::PinTests::test_duplicate_batch_dedupes_canonical_uri`
+    /// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_duplicate_batch_dedupes_canonical_uri`
     /// parity: SIDE-007
     #[test]
     fn duplicate_batch_dedupes_canonical_uri() {
@@ -308,7 +308,7 @@ mod tests {
         assert_eq!(settings.pins.len(), 1);
     }
 
-    /// Ported from `desktop/tests/test_pins.py::PinTests::test_repeat_drag_does_not_duplicate`
+    /// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_repeat_drag_does_not_duplicate`
     /// parity: SIDE-007
     #[test]
     fn repeat_drag_does_not_duplicate() {
@@ -320,7 +320,7 @@ mod tests {
         assert_eq!(settings.pins.len(), 1);
     }
 
-    /// Ported from `desktop/tests/test_pins.py::PinTests::test_reorder_offline_pin_without_querying_nas`
+    /// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_reorder_offline_pin_without_querying_nas`
     /// parity: SIDE-008
     #[test]
     fn reorder_offline_pin_without_querying_nas() {
@@ -332,7 +332,7 @@ mod tests {
         assert_eq!(settings.quick_order[0], "smb://offline/work");
     }
 
-    /// Ported from `desktop/tests/test_pins.py::PinTests::test_drop_on_self_keeps_order`
+    /// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_drop_on_self_keeps_order`
     /// parity: SIDE-008
     #[test]
     fn drop_on_self_keeps_order() {
@@ -344,7 +344,7 @@ mod tests {
         assert_eq!(settings.quick_order, before);
     }
 
-    /// Ported from `desktop/tests/test_pins.py::PinTests::test_unpin_removes_order_only_not_share`
+    /// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_unpin_removes_order_only_not_share`
     /// parity: SIDE-009
     #[test]
     fn unpin_removes_order_only_not_share() {
@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(settings.shares.len(), 1);
     }
 
-    /// Ported from `desktop/tests/test_pins.py::PinTests::test_invalid_batch_has_no_partial_writes`
+    /// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_invalid_batch_has_no_partial_writes`
     /// parity: SIDE-007
     #[test]
     fn invalid_batch_has_no_partial_writes() {
@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(settings, SettingsData::default());
     }
 
-    /// Ported from `desktop/tests/test_pins.py::PinTests::test_bad_label_does_not_mutate`
+    /// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_bad_label_does_not_mutate`
     /// parity: SIDE-007
     #[test]
     fn bad_label_does_not_mutate() {
@@ -379,7 +379,7 @@ mod tests {
         assert_eq!(settings, SettingsData::default());
     }
 
-    /// Ported from `desktop/tests/test_pins.py::PinTests::test_pin_cap`
+    /// Ported from `v2.0.0:desktop/tests/test_pins.py::PinTests::test_pin_cap`
     /// parity: SIDE-007
     #[test]
     fn pins_are_capped_per_batch_and_in_total() {
@@ -392,7 +392,7 @@ mod tests {
         assert_eq!(error.to_string(), "Quick access supports up to 200 custom pins.");
     }
 
-    /// Ported from `desktop/tests/test_core.py::CoreTests::test_hidden_builtin_pin`
+    /// Ported from `v2.0.0:desktop/tests/test_core.py::CoreTests::test_hidden_builtin_pin`
     /// parity: SIDE-009
     #[test]
     fn unpinning_a_standard_folder_hides_it_until_it_is_pinned_again() {
@@ -405,7 +405,7 @@ mod tests {
         assert!(!settings.hidden_quick.contains(&desktop.to_owned()));
     }
 
-    /// Ported from `desktop/tests/test_core.py::CoreTests::test_credential_bookmark_rejected`
+    /// Ported from `v2.0.0:desktop/tests/test_core.py::CoreTests::test_credential_bookmark_rejected`
     /// parity: SAFE-010, NET-017
     #[test]
     fn a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged() {

@@ -3,7 +3,7 @@
 //! time Settings is shown.
 //!
 //! The Python app rendered its settings page each time Settings opened
-//! (`renderSettingsPage` in `desktop/ui/app.js`). Every native window
+//! (`renderSettingsPage` in `v2.0.0:desktop/ui/app.js`). Every native window
 //! holds a Settings page, and most never show it, so a window builds its
 //! six categories, their sub-pages and some forty rows only when Settings
 //! is first shown or opened, rather than when the window is created.

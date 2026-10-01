@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Runs the same inputs through `desktop/updater.py` and the Rust port:
+//! Runs the same inputs through `v2.0.0:desktop/updater.py` and the Rust port:
 //! `version_tuple`, `trusted_url` and `release_metadata` must accept and
 //! refuse the same inputs, with the same messages and results. Where the
 //! port is deliberately stricter, the case is listed as such.

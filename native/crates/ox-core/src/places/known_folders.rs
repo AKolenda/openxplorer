@@ -2,8 +2,8 @@
 //! The XDG standard folders (Desktop, Downloads, ...) and where they are.
 //!
 //! Ports `FOLDERS` and `FolderLocations.paths` from
-//! `desktop/folder_locations.py`, and the Quick access glyph colours from
-//! `environment` in `desktop/winspace.py`. The paths are read from
+//! `v2.0.0:desktop/folder_locations.py`, and the Quick access glyph colours from
+//! `environment` in `v2.0.0:desktop/winspace.py`. The paths are read from
 //! `user-dirs.dirs` on every call instead of through the `GLib` special-folder
 //! cache, which lives for the whole process: a folder moved with
 //! `xdg-user-dirs-update` or the Python app shows up at once.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The General and Permissions tabs of the Properties dialog.
 //!
-//! Ports the part of `propertiesDialog` in `desktop/ui/app.js` that runs
+//! Ports the part of `propertiesDialog` in `v2.0.0:desktop/ui/app.js` that runs
 //! once the item's properties are read (PROP-003, PROP-006): the icon and
 //! name, then Type, Location, Full path, Size, Opens with, Created,
 //! Modified and Accessed, the Change app…, Copy full path and Calculate

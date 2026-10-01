@@ -2,7 +2,7 @@
 //! The details columns' widths: where they start, what GTK is told and
 //! what settings save.
 //!
-//! Ports `columnDefaults` and `applyColumnLayout` in `desktop/ui/app.js`:
+//! Ports `columnDefaults` and `applyColumnLayout` in `v2.0.0:desktop/ui/app.js`:
 //! Name takes the remaining width until the user resizes it, the other
 //! columns default to 176 (Date modified), 330 (Folder path), 135 and 90
 //! pixels, and saved widths are clamped to the limits the Python app uses (ox-core's [`Column::width_range`]).
@@ -168,7 +168,7 @@ mod tests {
         assert_eq!(clamped_fixed_width(SortColumn::Size, 900), 600 + 14);
     }
 
-    /// Ported from `fitColumn` in `desktop/ui/app.js`: the widest text and
+    /// Ported from `fitColumn` in `v2.0.0:desktop/ui/app.js`: the widest text and
     /// its padding, never below or above the column's limits.
     ///
     /// parity: VIEW-029

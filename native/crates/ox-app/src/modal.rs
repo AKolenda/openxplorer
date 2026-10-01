@@ -2,7 +2,7 @@
 //! What every modal dialog window of the app does: how it is shown and
 //! what it does with the keyboard.
 //!
-//! Ports the Escape handling of `showModal` in `desktop/ui/app.js`:
+//! Ports the Escape handling of `showModal` in `v2.0.0:desktop/ui/app.js`:
 //! Escape answers "cancel", as the dialog's Close or Cancel button does.
 //!
 //! A dialog window is filled before it is shown and fits its parent when

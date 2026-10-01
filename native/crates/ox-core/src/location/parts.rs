@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Splitting a location into scheme, authority and path.
 //!
-//! Ports `split_location` from `desktop/core.py` together with the parts of
+//! Ports `split_location` from `v2.0.0:desktop/core.py` together with the parts of
 //! Python's `urllib.parse.urlsplit` it relies on, including the `hostname`
 //! and `port` properties and the bracketed-IPv6 checks. Portable-device URIs
 //! (`mtp://[usb:001,002]/`) use their own narrow parser

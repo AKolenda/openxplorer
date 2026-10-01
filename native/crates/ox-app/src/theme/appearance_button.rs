@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the Appearance button shows for the theme and the drawn appearance.
 //!
-//! Ports the theme button of `applyTheme` in `desktop/ui/app.js`. The saved
+//! Ports the theme button of `applyTheme` in `v2.0.0:desktop/ui/app.js`. The saved
 //! choice is ox-core's [`Theme`] and the palette it resolves to is ox-core's
 //! [`Appearance`] ([`Theme::appearance`]); this module adds only the label,
 //! icon and tooltip the window shows for them.

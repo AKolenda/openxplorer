@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Copy, move, Trash and permanent delete.
 //!
-//! Ports `desktop/operations.py` and preserves its transfer safety rules.
+//! Ports `v2.0.0:desktop/operations.py` and preserves its transfer safety rules.
 //! Each rule is named by the id of the feature in
 //! `native/parity/features.toml` that specifies it. The code that enforces a
 //! rule names that id in a comment, and the tests that prove it carry a
@@ -49,17 +49,17 @@
 //! | `types` | Operations, modes, conflict policies, progress and the run's result |
 //! | `error` | [`TransferError`] and how backend errors map onto it |
 //!
-//! Every test of `desktop/tests/test_operations.py` and
-//! `desktop/tests/test_device_staging.py`, and the engine cases of
-//! `desktop/tests/gio_integration.py`, is ported to `tests/transfer.rs`,
+//! Every test of `v2.0.0:desktop/tests/test_operations.py` and
+//! `v2.0.0:desktop/tests/test_device_staging.py`, and the engine cases of
+//! `v2.0.0:desktop/tests/gio_integration.py`, is ported to `tests/transfer.rs`,
 //! `tests/transfer_cases/` and `tests/gio_node.rs`, against temporary local
 //! files, device test doubles and the production GIO adapter; each port
 //! names the Python test it comes from. Still to come with the features
 //! they test: the rename cases of `gio_integration.py` and the bridge
-//! dispatch of `desktop/tests/test_rc2.py` (its engine half is ported). The
+//! dispatch of `v2.0.0:desktop/tests/test_rc2.py` (its engine half is ported). The
 //! ZIP extractor in [`crate::archive`] secures and removes its staging
 //! folder with this module's `secure_local_staging` and
-//! [`Node::delete_staging`]; `desktop/tests/test_zip_extract.py` is ported
+//! [`Node::delete_staging`]; `v2.0.0:desktop/tests/test_zip_extract.py` is ported
 //! to its `tests/archive_*.rs`. Native backend limitations are documented
 //! in [`crate::gio_node`].
 

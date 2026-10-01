@@ -2,7 +2,7 @@
 //! The shared settings file, read and written off the GTK main thread.
 //!
 //! Holds what the Python application kept in `settings_store` (the
-//! `Settings` of `desktop/core.py`, shared through `desktop/winspace.py`).
+//! `Settings` of `v2.0.0:desktop/core.py`, shared through `v2.0.0:desktop/winspace.py`).
 //! Every window reads the same [`Settings`] handle. Changes and re-reads
 //! are queued and run one after another on a GIO worker thread: the file
 //! lock can wait for the Python app, and nothing may block the interface

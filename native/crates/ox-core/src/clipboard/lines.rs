@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Python's `str.splitlines()`, which `decode_clipboard` in
-//! `desktop/file_clipboard.py` uses on every external file list.
+//! `v2.0.0:desktop/file_clipboard.py` uses on every external file list.
 //!
 //! Rust's `str::lines` splits only on `\n` and `\r\n`, so a list written
 //! with bare CR or a Unicode line separator would decode differently in

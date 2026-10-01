@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Validating the destination of a standard folder.
 //!
-//! Ports `FolderLocations.validate` in `desktop/folder_locations.py`. The
+//! Ports `FolderLocations.validate` in `v2.0.0:desktop/folder_locations.py`. The
 //! checks run in the Python order, so the same destination fails with the
 //! same message in both apps.
 

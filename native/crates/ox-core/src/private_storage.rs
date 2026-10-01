@@ -2,7 +2,7 @@
 //! Private application state: owned 0700 directories and 0600 files that
 //! are never symlinks, hard links, FIFOs or devices.
 //!
-//! Ports `desktop/private_storage.py`, which several Python services use.
+//! Ports `v2.0.0:desktop/private_storage.py`, which several Python services use.
 //! The settings keep `settings.json` here (their lock is in
 //! `settings::save`) and the previous-versions service its
 //! `snapshot-sources.json`; both save through the atomic replace of
@@ -63,7 +63,7 @@ pub enum StorageError {
 }
 
 /// The private-storage rule a file or directory broke, in the words of
-/// `desktop/private_storage.py`.
+/// `v2.0.0:desktop/private_storage.py`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum StorageRefusal {
     /// The application's own directory belongs to another user.
@@ -397,7 +397,7 @@ mod tests {
         assert_eq!(effective_uid(), owner);
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_permissions`
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_permissions`
     /// parity: SAFE-009
     #[test]
     fn private_storage_gets_modes_0700_and_0600() {
@@ -414,7 +414,7 @@ mod tests {
         assert_eq!(permission_bits(&directory.join("state")), 0o600);
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_directory_symlink_not_chmodded`
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_directory_symlink_not_chmodded`
     /// parity: SAFE-009
     #[test]
     fn directory_symlink_not_chmodded() {
@@ -428,7 +428,7 @@ mod tests {
         assert_eq!(permission_bits(&real), 0o755);
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_file_symlink_leaves_target_unchanged`
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_file_symlink_leaves_target_unchanged`
     /// parity: SAFE-009
     #[test]
     fn file_symlink_leaves_target_unchanged() {
@@ -446,7 +446,7 @@ mod tests {
         assert_eq!(permission_bits(&real), 0o644);
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_hardlink_rejected`
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_hardlink_rejected`
     /// parity: SAFE-009
     #[test]
     fn a_hard_linked_file_is_refused() {
@@ -464,7 +464,7 @@ mod tests {
         ));
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_fifo_does_not_block`
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_fifo_does_not_block`
     /// parity: SAFE-009
     #[test]
     fn fifo_does_not_block() {
@@ -481,7 +481,7 @@ mod tests {
         ));
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_read_bound`
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_read_bound`
     /// parity: SAFE-009, SET-013
     #[test]
     fn reads_beyond_the_size_limit_are_refused() {
@@ -498,7 +498,7 @@ mod tests {
         assert_eq!(private_text(&file, 33).unwrap().len(), 33);
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_database_symlink_refused`
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_database_symlink_refused`
     /// parity: SAFE-009
     #[test]
     fn a_symlinked_database_is_refused_and_its_target_unchanged() {
@@ -511,7 +511,7 @@ mod tests {
         assert_eq!(fs::read(&target).unwrap(), b"unchanged");
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_database_sidecar_symlink_refused`
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_database_sidecar_symlink_refused`
     /// parity: SAFE-009
     #[test]
     fn database_sidecar_symlink_refused() {
@@ -530,7 +530,7 @@ mod tests {
         validate_sqlite_files(&database).unwrap();
     }
 
-    /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_sqlite_sidecar_unlinked_during_check_is_allowed`
+    /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_sqlite_sidecar_unlinked_during_check_is_allowed`
     ///
     /// Python fakes `fstat` to report no links; here the decision is a pure
     /// function of what `fstat` reported, so the same facts are passed in.

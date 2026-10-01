@@ -9,10 +9,10 @@ on:
     # One list for both triggers, shared through a YAML anchor so the two
     # cannot drift apart.
     paths: &packaged-paths
-      # The app, its packaging and tools, and the Python mount helper and
-      # updater that the packages ship or must satisfy.
+      # The app, its packaging and tools, and the licences the packages ship.
+      # The 1.1.x updater the packages must satisfy is read from tag v2.0.0
+      # (native/tools/python_app.py).
       - 'native/**'
-      - 'desktop/**'
       - 'licenses/**'
       - 'LICENSE'
       - 'THIRD_PARTY_NOTICES.md'

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Why a Brave download-folder change or restore was refused or failed,
-//! in the words of `desktop/brave_integration.py`.
+//! in the words of `v2.0.0:desktop/brave_integration.py`.
 
 use std::io;
 use std::path::PathBuf;

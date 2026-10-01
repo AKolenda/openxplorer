@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the user is told when an operation ends (OPS-023).
 //!
-//! Ports the end of `runOperation` in `desktop/ui/app.js`: complete success
+//! Ports the end of `runOperation` in `v2.0.0:desktop/ui/app.js`: complete success
 //! is a short toast; errors, skipped items or a cancellation open the
 //! "Operation result" dialog listing each; a request refused before it
 //! started opens "Operation stopped" with the refusal.

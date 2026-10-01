@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Failure injection at the copy, publication and reversible replacement
 //! boundaries. Ports the failure cases of `TransferTests` in
-//! `desktop/tests/test_operations.py` and adds the native adversarial cases.
+//! `v2.0.0:desktop/tests/test_operations.py` and adds the native adversarial cases.
 //! The failing provider is [`Faults`].
 
 use std::path::PathBuf;
@@ -55,7 +55,7 @@ fn failed_or_backend_cancelled_copies_keep_the_original_and_remove_private_stagi
     }
 }
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_failure_does_not_copy_delete`:
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_move_failure_does_not_copy_delete`:
 /// a move the backend cannot do is refused and the source kept, both
 /// without a question installed and when the user declines to finish it
 /// by copying, who is asked once for the whole operation.
@@ -112,7 +112,7 @@ fn native_move_failure_never_degrades_to_copy_then_delete() {
     assert_eq!(*asked.lock().unwrap(), [expected]);
 }
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_preflight_race_never_overwrites`: a name another program
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_preflight_race_never_overwrites`: a name another program
 /// creates after the conflict check is not overwritten when the copy is
 /// published.
 ///
@@ -161,7 +161,7 @@ impl Provider for UnreachableAfterFailure {
     }
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_local_stage_query_error_is_still_reported`: local staging
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_local_stage_query_error_is_still_reported`: local staging
 /// that cannot even be queried gets one cleanup attempt and is reported
 /// with its exact location.
 ///

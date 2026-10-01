@@ -2,9 +2,9 @@
 //! A search hit as a listed item, so a view shows cached results in the
 //! same rows as a folder's items.
 //!
-//! Ports what `renderRows` in `desktop/ui/app.js` read from a cached
+//! Ports what `renderRows` in `v2.0.0:desktop/ui/app.js` read from a cached
 //! result: the result carried the fields of a listed entry (`search` in
-//! `desktop/search_index.py` returns them), and the rows treated it as
+//! `v2.0.0:desktop/search_index.py` returns them), and the rows treated it as
 //! one.
 
 use super::query::SearchHit;

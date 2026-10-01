@@ -2,8 +2,8 @@
 //! The Settings tab: opening Settings, showing it in place of the
 //! browsing area, and leaving it.
 //!
-//! Ports `settingsDialog` in `desktop/ui/app.js` and the `.settings-open`
-//! rules of `desktop/ui/style.css` (SET-001). Ctrl+,, the gear, More >
+//! Ports `settingsDialog` in `v2.0.0:desktop/ui/app.js` and the `.settings-open`
+//! rules of `v2.0.0:desktop/ui/style.css` (SET-001). Ctrl+,, the gear, More >
 //! Settings and More > Default file explorer… open Settings as a tab of
 //! its own, titled Settings; an open Settings tab is shown again rather
 //! than a second one opened. The folder shown before is remembered

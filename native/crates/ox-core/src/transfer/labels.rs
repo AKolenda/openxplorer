@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Progress text for the transfer panel, word for word as
-//! `desktop/operations.py` emits it.
+//! `v2.0.0:desktop/operations.py` emits it.
 
 use super::types::TransferMode;
 

@@ -3,7 +3,7 @@
 //! bars.
 //!
 //! Ports `.primary`, `.danger` and the bordered secondary buttons of
-//! `desktop/ui/style.css`, as `native/docs/ui-spec.md` §3.6 (E06, E07) and
+//! `v2.0.0:desktop/ui/style.css`, as `native/docs/ui-spec.md` §3.6 (E06, E07) and
 //! §4.14 draw them; `resources/skin/base.css` and `dialogs.css` style the
 //! classes.
 

@@ -2,7 +2,7 @@
 //! The sidebar resizer as a keyboard and screen-reader control.
 //!
 //! Ports `#sidebar-resizer` and the keys of `setupSidebarResize` in
-//! `desktop/ui/app.js`. The pointer drags the handle of the workspace's
+//! `v2.0.0:desktop/ui/app.js`. The pointer drags the handle of the workspace's
 //! `GtkPaned`, titled "Drag to resize sidebar · double-click to reset";
 //! dragging and the double-click reset are [`super::preferences`]'.
 //! GTK gives that handle a generic role it cannot change, so a separator

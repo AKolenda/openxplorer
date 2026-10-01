@@ -2,7 +2,7 @@
 //! The persistent network mount assistant's plan: a reviewable systemd SMB
 //! automount for a share without a stable Linux path.
 //!
-//! Ports `mount_plan` in `desktop/mount_support.py`. Planning writes
+//! Ports `mount_plan` in `v2.0.0:desktop/mount_support.py`. Planning writes
 //! nothing and mounts nothing; the plan's command runs the administrator
 //! helper (`openxplorer-mount-share`, in `mount_helper`)
 //! in the user's own terminal.

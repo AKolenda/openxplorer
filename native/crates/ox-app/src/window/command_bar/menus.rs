@@ -3,7 +3,7 @@
 //! appearance choices.
 //!
 //! Ports `openNewMenu`, the Sort and View menus of `setup()`, the More
-//! options menu and `appearanceMenu` in `desktop/ui/app.js`, in their
+//! options menu and `appearanceMenu` in `v2.0.0:desktop/ui/app.js`, in their
 //! order. Each item runs a window or application action; the choices and
 //! toggles show a check mark while their action's state matches.
 

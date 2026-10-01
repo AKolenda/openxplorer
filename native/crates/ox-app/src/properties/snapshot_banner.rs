@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The banner of a tab that shows a previous version (PROP-022).
 //!
-//! Ports `renderSnapshotBanner` in `desktop/ui/app.js` and
-//! `#snapshot-banner` in `desktop/ui/index.html`: under the command bar, a
+//! Ports `renderSnapshotBanner` in `v2.0.0:desktop/ui/app.js` and
+//! `#snapshot-banner` in `v2.0.0:desktop/ui/index.html`: under the command bar, a
 //! clock, "Previous version", the date and time read from the snapshot's
 //! name (or the name itself) with a tooltip saying where they come from,
 //! and `Read-only in OpenXplorer · Restore a copy to edit`. Live folders

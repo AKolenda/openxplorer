@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Cross-language checks of `settings.json` and its `flock` protocol
-//! against `desktop/core.py`.
+//! against `v2.0.0:desktop/core.py`.
 //!
 //! Each Python script gets the settings directory as `sys.argv[1]`. Every
 //! file is inside a temporary directory; the user's settings are untouched.

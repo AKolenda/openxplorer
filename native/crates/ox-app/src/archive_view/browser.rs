@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The "Compressed folder" dialog: a ZIP browsed read-only (ARC-003).
 //!
-//! Ports `archiveDialog` in `desktop/ui/app.js`: Up and the path inside
+//! Ports `archiveDialog` in `v2.0.0:desktop/ui/app.js`: Up and the path inside
 //! the archive, one row per folder and file with its size, a folder opened
 //! by a double-click or Enter, and a supported file opened as a private
 //! read-only copy. The dialog says when a folder is empty, how many

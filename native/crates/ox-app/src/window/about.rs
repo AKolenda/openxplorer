@@ -3,7 +3,7 @@
 //! the About settings.
 //!
 //! Ports the `About this build` item of the More menu and `showLicense`
-//! in `desktop/ui/app.js`: message boxes with one OK button. About names
+//! in `v2.0.0:desktop/ui/app.js`: message boxes with one OK button. About names
 //! the native stack and what the app does not do (UPD-015); License &
 //! source keeps the AGPL's "Appropriate Legal Notices" reachable: the
 //! copyright, where the corresponding source is, the full AGPL-3.0 text

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Why a file operation was refused or failed.
 //!
-//! Ports `error_payload` in `desktop/gio_backend.py` for the operations of
+//! Ports `error_payload` in `v2.0.0:desktop/gio_backend.py` for the operations of
 //! this module: every failure carries the message the user sees and maps to
 //! the code the Python bridge reported (OPS-037). GIO, transfer, location
 //! and local I/O errors convert with `?`, so each operation reports the

@@ -2,7 +2,7 @@
 //! One window's server-scoped SMB credentials, in memory and in the
 //! keyring.
 //!
-//! Ports `SessionCredentials` in `desktop/session_credentials.py`. There is
+//! Ports `SessionCredentials` in `v2.0.0:desktop/session_credentials.py`. There is
 //! no settings, database or plaintext-file fallback: without a keyring,
 //! credentials live in memory only. Session credentials survive closing
 //! `OpenXplorer` but end at logout; remembered ones go to the default

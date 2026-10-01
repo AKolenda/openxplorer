@@ -3,7 +3,7 @@
 //! it again, open locations in it and open another one.
 //!
 //! Ports `activate_app`, `open_files` and `create_window` in
-//! `desktop/winspace.py` and `newWindow` in `desktop/ui/app.js`, and keeps
+//! `v2.0.0:desktop/winspace.py` and `newWindow` in `v2.0.0:desktop/ui/app.js`, and keeps
 //! the skin in step with the desktop's colour scheme and contrast for as
 //! long as the application runs. It also attaches the desktop
 //! integration, whose `FileManager1` requests open in the active window

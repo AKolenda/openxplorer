@@ -1,20 +1,30 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Render shipped standalone pages and actual embedded app for documentation.
+"""Render the shipped standalone pages and the embedded tour for documentation.
 
 Uses the same presentational components, inline assets and script-only sandbox
 as designs/. Not a Next.js production rendering or React hydration test.
 """
 import json,os,io,hashlib
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 from PIL import Image
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1];D=ROOT/'designs';OUT=ROOT/'test-results';OUT.mkdir(exist_ok=True)
+# Served over local HTTP: the script-only sandboxed tour frame cannot load its
+# files from file:// URLs.
+class QuietHandler(SimpleHTTPRequestHandler):
+ def log_message(self,*_args):pass
+SERVER=ThreadingHTTPServer(('127.0.0.1',0),partial(QuietHandler,directory=str(D)))
+Thread(target=SERVER.serve_forever,daemon=True).start()
+BASE=f'http://127.0.0.1:{SERVER.server_port}/'
 with sync_playwright() as p:
  b=p.chromium.launch(executable_path=os.environ.get('CHROMIUM','/usr/bin/chromium'),args=['--no-sandbox'])
  def open_page(name,width=1440,height=1000):
   page=b.new_page(viewport={'width':width,'height':height});page.set_default_timeout(10000)
-  page.set_content((D/name).read_text(),wait_until='load')
+  page.goto(BASE+name,wait_until='load')
   # Load below-the-fold PNGs for deterministic captures, without changing layout.
   page.evaluate("()=>document.querySelectorAll('img').forEach(i=>i.loading='eager')")
   page.wait_for_function('()=>Array.from(document.images).every(i=>i.complete&&i.naturalWidth>0)')
@@ -36,5 +46,5 @@ assets=ROOT/'docs/assets';assets.mkdir(exist_ok=True)
 (assets/'website-home.png').write_bytes((OUT/'website-top.png').read_bytes())
 (assets/'website-features.png').write_bytes((OUT/'website-features.png').read_bytes())
 (assets/'manifest.json').write_text(json.dumps({'source':'tools/capture-website.py; generated designs only','fictional':True,'sha256':{f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in assets.glob('*.png')}},indent=2)+'\n')
-(OUT/'website-screenshot-manifest.json').write_text(json.dumps({'renderer':'Chromium, standalone HTML','nextBuild':False,'demoStorage':'fictional fixtures','screenshots':['website-top.png','website-features.png','website-tour.png','website-docs.png','website-mobile.png']},indent=2)+'\n')
-print('Captured homepage, features, completed real-UI tour, docs and mobile.')
+(OUT/'website-screenshot-manifest.json').write_text(json.dumps({'renderer':'Chromium, standalone HTML','nextBuild':False,'tour':'pictures of the native app with fictional files','screenshots':['website-top.png','website-features.png','website-tour.png','website-docs.png','website-mobile.png']},indent=2)+'\n')
+print('Captured homepage, features, completed tour of the native app, docs and mobile.')

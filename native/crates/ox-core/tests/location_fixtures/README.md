@@ -7,30 +7,33 @@ No personal file system is read.
 
 | File | Purpose |
 | --- | --- |
-| `inputs.py` | The inputs for `desktop/core.py`. |
-| `generate_python.py` | Runs `desktop/core.py` on them and prints `python.json`. |
-| `generate_javascript.cjs` | Runs the display helpers of `desktop/ui/app.js` on its own inputs and prints `javascript.json`. |
+| `inputs.py` | The inputs for `v2.0.0:desktop/core.py`. |
+| `generate_python.py` | Runs `v2.0.0:desktop/core.py` on them and prints `python.json`. |
+| `generate_javascript.cjs` | Runs the display helpers of `v2.0.0:desktop/ui/app.js` on its own inputs and prints `javascript.json`. |
 | `python.json`, `javascript.json` | The captured answers. |
 | `support.rs` | Rust helpers shared by the `location_*` tests. |
 
 `location_python.rs`, `location_external.rs` and `location_javascript.rs`
 compare the Rust port with the captured answers; they embed the JSON and need
 neither Python nor Node. `location_fixture_drift.rs` runs both generators
-against the current `desktop/` sources and fails when an answer changed, so
-the fixtures cannot go stale. It needs `python3` and `node`. If `node` is a
+against the Python app's sources (`desktop/` of tag `v2.0.0`, which
+`native/tools/check.py` extracts and names in `OX_PYTHON_APP`) and fails when
+an answer changed, so the fixtures cannot drift from them. It needs `python3`
+and `node`. If `node` is a
 version-manager shim, which may not work with the disposable home folder of
 `native/tools/check.py`, set `OX_NODE` to the executable it runs
 (`OX_NODE=$(node -p process.execPath)`).
 
 ## Regenerating
 
-After a change to `desktop/core.py`, the display helpers in `app.js`, or the
-inputs, run from the repository root:
+The Python app no longer changes, so only a change to the inputs needs new
+answers. Run from the repository root:
 
 ```sh
-python3 native/crates/ox-core/tests/location_fixtures/generate_python.py desktop \
+desktop=$(python3 native/tools/python_app.py)
+python3 native/crates/ox-core/tests/location_fixtures/generate_python.py "$desktop" \
   > native/crates/ox-core/tests/location_fixtures/python.json
-node native/crates/ox-core/tests/location_fixtures/generate_javascript.cjs desktop/ui/app.js \
+node native/crates/ox-core/tests/location_fixtures/generate_javascript.cjs "$desktop/ui/app.js" \
   > native/crates/ox-core/tests/location_fixtures/javascript.json
 ```
 
@@ -41,7 +44,8 @@ Review the changed answers in the diff, then make the Rust port pass again.
 `generate_python.py` records each answer as a value, as an `error` (a message
 that a `raise` in `core.py` wrote, which the port must repeat word for word) or
 as `rejected` (Python's standard library refused the input in its own words;
-the port must refuse it too). It does not write `__pycache__` into `desktop/`.
+the port must refuse it too). It does not write `__pycache__` into the Python
+app's sources.
 
 `generate_javascript.cjs` cannot run `app.js` itself, which needs a browser
 document. It finds the helpers by name, together with every `app.js` function

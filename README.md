@@ -31,7 +31,7 @@ python3 native/tools/check.py
 
 No package ships Python; the persistent SMB mount helper is a Rust program too. The Next.js website lives in `apps/web/`. The installed app does not depend on Node or pnpm.
 
-**Deprecated:** `desktop/` holds the Python/GTK 3/WebKitGTK app of OpenXplorer 1.x. It stays in the repository only as reference: the behavioural specification the native app is checked against (`native/parity/`), with its tests. It is no longer released or maintained.
+**Retired:** the Python/GTK 3/WebKitGTK app of OpenXplorer 1.x is no longer in the tree, released or maintained. Its last release is tag [v1.1.4](https://github.com/AKolenda/openxplorer/tree/v1.1.4); its final sources, which `native/parity/` cites as the behavioural specification, are `desktop/` at tag [v2.0.0](https://github.com/AKolenda/openxplorer/tree/v2.0.0/desktop).
 
 For the website, use Node.js 22.13+ and pnpm 10.34.5:
 

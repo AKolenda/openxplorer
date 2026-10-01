@@ -4,7 +4,7 @@
 //! `--new-window` locations and the launcher's "Open windows…".
 //!
 //! Ports `handleFileManagerRequest` and the `showWindows` event of
-//! `desktop/ui/app.js` (INT-014, TAB-044). A request carries locations
+//! `v2.0.0:desktop/ui/app.js` (INT-014, TAB-044). A request carries locations
 //! to show, never anything to run: `ShowFolders` opens each folder in a new
 //! tab; `ShowItems` opens each item's folder, reusing a tab that already
 //! shows it, lists it again, selects exactly the requested items and

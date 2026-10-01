@@ -2,7 +2,7 @@
 //! Shared by the `sizes_*` integration tests: a temporary folder to scan,
 //! the scan the app runs on it, simulated item metadata, and a
 //! [`TestProvider`] that stands in for the `LocalSizeProvider` subclasses
-//! of `desktop/tests/test_v06.py`.
+//! of `v2.0.0:desktop/tests/test_v06.py`.
 #![allow(
     dead_code,
     reason = "each test crate that includes this module uses a different part of it"

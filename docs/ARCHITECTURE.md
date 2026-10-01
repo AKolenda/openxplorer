@@ -2,8 +2,8 @@
 
 ## Decision
 
-Keep OpenXplorer as a monorepo. The website embeds a build of the actual app UI;
-documentation, screenshots, version metadata and AGPL corresponding-source
+Keep OpenXplorer as a monorepo. The website shows pictures of the actual native
+app; documentation, screenshots, version metadata and AGPL corresponding-source
 archives change together. Separate repositories would add cross-repository
 asset publishing and synchronization without an operational benefit here.
 
@@ -11,22 +11,25 @@ asset publishing and synchronization without an operational benefit here.
 
 | Directory | Responsibility | Runtime dependencies |
 |---|---|---|
-| `desktop/` | Python native host, GIO operations, desktop UI | Distro Python GI, GTK/WebKit/GVfs |
+| `native/` | The Rust GTK 4 app, its parity inventories, packaging and checks | GTK 4.14+, GLib/GIO, GVfs, SQLite, libsoup 3 |
 | `apps/web/` | Next.js website and docs presentation | pnpm at build time; static export for hosting |
 | `docs/` | Generated guides and handwritten policies/release review | None |
-| `tools/` | Preview generation, screenshots, source/deb release assembly | Python, Node; Playwright for captures |
+| `tools/` | Website preparation, native screenshots and tour, source/release assembly | Python, Node; bubblewrap and Xvfb for captures, Playwright for website captures |
 | `dist/` | Same-version Debian package and corresponding source | Download artifacts, not editable source |
 
 pnpm manages the website workspace, not Python system libraries. No Turborepo,
 Nx, second JavaScript desktop runtime or shared backend is needed. The installed
 file manager does not depend on website availability. The website never receives
-the privileged native bridge or user data. Its interactive preview is isolated
-and backed by fictional fixtures; it is not instantiated on narrow screens.
+user data. Its click-through tour shows pictures of the native app taken with
+fictional files, runs in a script-only sandbox and is not instantiated on narrow
+screens.
 
 ## Change and release flow
 
-Edit `desktop/ui/*` for product behavior. Edit `apps/web/lib/docs.json` for guide
-content. `tools/prepare-web.cjs` builds the app preview and generated Markdown;
+Edit `native/` for product behavior. Edit `apps/web/lib/docs.json` for guide
+content. `tools/capture-native-tour.py` and `tools/capture-screenshots.py`
+picture the native app; `tools/prepare-web.cjs` prepares the tour data and
+generated Markdown;
 `tools/render-previews.cjs` creates standalone design-review pages. The latter
 is not a Next.js production build. `pnpm build` produces the hosted export after
 a real, locked install.

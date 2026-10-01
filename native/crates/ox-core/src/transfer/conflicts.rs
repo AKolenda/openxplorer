@@ -2,7 +2,7 @@
 //! Choosing the name an item gets in the destination folder when that name
 //! may be taken: Skip, Keep both, Replace or a name the user typed, and
 //! moves into the folder an item is already in. Ports the conflict branch
-//! of `_run_items` in `desktop/operations.py`.
+//! of `_run_items` in `v2.0.0:desktop/operations.py`.
 
 use std::ffi::OsStr;
 

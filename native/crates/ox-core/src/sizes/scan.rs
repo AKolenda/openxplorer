@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The bounded, read-only walk that totals a folder's logical size.
 //!
-//! Ports `scan_folder` in `desktop/folder_sizes.py`. The walk reads
+//! Ports `scan_folder` in `v2.0.0:desktop/folder_sizes.py`. The walk reads
 //! metadata only, never follows a link, and never enters a nested mount,
 //! another filesystem or a snapshot collection (PROP-028). Limits and
 //! cancellation are checked between metadata reads, so a read that blocks
@@ -371,7 +371,7 @@ mod tests {
     use crate::location::file_uri;
     use crate::sizes::LocalSizeProvider;
 
-    /// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_max_seconds`:
+    /// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_max_seconds`:
     /// a clock that advances one second each time it is read.
     ///
     /// parity: PROP-029

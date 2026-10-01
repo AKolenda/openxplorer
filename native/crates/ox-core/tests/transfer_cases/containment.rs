@@ -2,8 +2,8 @@
 //! XFER-016: a folder is never copied or moved into itself or one of its
 //! descendants, whether the destination names it directly, through a
 //! symbolic link, or through another host name. Ports the self-descendant
-//! cases of `TransferTests` in `desktop/tests/test_operations.py` and the
-//! alias guard of `_copy` in `desktop/operations.py`.
+//! cases of `TransferTests` in `v2.0.0:desktop/tests/test_operations.py` and the
+//! alias guard of `_copy` in `v2.0.0:desktop/operations.py`.
 
 use std::fs;
 use std::os::unix::fs::symlink;
@@ -72,7 +72,7 @@ impl Provider for ShareUnderTwoNames {
     }
 }
 
-/// Ported from the alias guard in `_copy` (`desktop/operations.py`): when
+/// Ported from the alias guard in `_copy` (`v2.0.0:desktop/operations.py`): when
 /// the destination lies inside the
 /// source under another host name, the copy meets its own staging folder
 /// and stops instead of copying itself.

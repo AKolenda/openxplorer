@@ -3,8 +3,8 @@
 //! and the Alt+Left, Alt+Right, Alt+Up and Alt+Home keys that go the same
 //! ways.
 //!
-//! Ports `.nav-buttons` in `desktop/ui/index.html` and the history keys
-//! of `onKey` in `desktop/ui/app.js`. The window template
+//! Ports `.nav-buttons` in `v2.0.0:desktop/ui/index.html` and the history keys
+//! of `onKey` in `v2.0.0:desktop/ui/app.js`. The window template
 //! (`resources/ui/window.ui`) places their row, 5 pixels apart by its CSS
 //! `border-spacing`; this module adds the buttons from
 //! [`NAVIGATION_BUTTONS`] and the keys from [`NAVIGATION_KEYS`], and

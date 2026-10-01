@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Brave's download folder in disposable profiles.
 //!
-//! Ports `BraveTests` of `desktop/tests/test_v07.py`. The profiles, backups
+//! Ports `BraveTests` of `v2.0.0:desktop/tests/test_v07.py`. The profiles, backups
 //! and process tables are real files in a temporary folder; whether Brave
 //! runs is answered by the test, as the Python fixture's `is_running`
 //! double did. This file holds the shared fixture.

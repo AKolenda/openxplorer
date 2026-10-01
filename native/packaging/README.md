@@ -62,7 +62,7 @@ never takes over the Python app's name. Every package build sets it.
 - **Program folder.** The Debian program lives in `/opt/openxplorer/bin`
   because the in-app updater allows installing updates only for that folder
   (`Installation::detect` in `crates/ox-core/src/update/installation.rs`, which
-  ports `can_install` of `desktop/updater.py`). An RPM or Arch program in
+  ports `can_install` of `v2.0.0:desktop/updater.py`). An RPM or Arch program in
   `/usr/bin` counts as "installed by another package manager", which updates it.
 - **Licences.** The AGPL, `THIRD_PARTY_NOTICES.md`, every text in `licenses/`,
   and the licence files of each Rust crate linked into the program, with an
@@ -72,7 +72,7 @@ never takes over the Python app's name. Every package build sets it.
   byte for byte, following the rule that every icon is an unmodified Fluent
   file. It is an SVG, which GNOME, KDE, GNOME Software and Flatpak all accept.
 - **Mount helper.** `openxplorer-mount-share`, the port of
-  `desktop/mount_share.py`, is a second Rust program
+  `v2.0.0:desktop/mount_share.py`, is a second Rust program
   (`crates/ox-core/src/bin/openxplorer-mount-share.rs`) with the same command
   line. Only the stable host packages install it, with the Python package's
   legacy name `winspace-mount-share` as a link: the preview installs beside
@@ -84,7 +84,7 @@ never takes over the Python app's name. Every package build sets it.
 ## Desktop integration data
 
 - **Desktop entries** ([`data/`](data/)). The stable entry is the Python
-  package's (`DESKTOP` in `desktop/tools/build_deb.py`) key for key: name,
+  package's (`DESKTOP` in `v2.0.0:desktop/tools/build_deb.py`) key for key: name,
   `GenericName=File Explorer`, keywords, `Exec=openxplorer %U`, the icon, the
   MIME types `inode/directory`, `x-scheme-handler/smb` and the three ZIP types,
   `StartupWMClass=io.winspace.Development` and the quick actions New window,
@@ -180,7 +180,7 @@ Build release packages on Ubuntu 24.04, the oldest supported base:
   links out of it, root-owned, nothing group- or world-writable), the scripts,
   the checksums, the processor, the catalog and every installed file
   (`verify_layout.py`); for the stable package it also runs the real
-  `Updater.check` and `Updater.install` of `desktop/updater.py` against it,
+  `Updater.check` and `Updater.install` of `v2.0.0:desktop/updater.py` against it,
   with only the network, the administrator prompt and the package database
   simulated.
 

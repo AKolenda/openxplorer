@@ -3,9 +3,9 @@
 //! copy, extracting them into a new folder, and compressing items into a
 //! new ZIP.
 //!
-//! Ports `desktop/archives.py`, `desktop/zip_extraction.py`, the archive
-//! reader of `desktop/native_opening.py` and the archive branches of
-//! `dispatch` in `desktop/winspace.py`. The archive is never changed, and:
+//! Ports `v2.0.0:desktop/archives.py`, `v2.0.0:desktop/zip_extraction.py`, the archive
+//! reader of `v2.0.0:desktop/native_opening.py` and the archive branches of
+//! `dispatch` in `v2.0.0:desktop/winspace.py`. The archive is never changed, and:
 //!
 //! - ARC-003: a listing reads the central directory only; nothing is
 //!   decompressed or written.

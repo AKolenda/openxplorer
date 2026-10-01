@@ -2,7 +2,7 @@
 //! Changing location: tabs, history and Up.
 //!
 //! Ports `addTab`, `closeTab`, `switchTab`, `navigate` and `goHistory` in
-//! `desktop/ui/app.js`. Each tab keeps its own history, selection and
+//! `v2.0.0:desktop/ui/app.js`. Each tab keeps its own history, selection and
 //! scroll position; moving to another location forgets the selection and
 //! the scroll position, and showing another tab puts its own back. As in
 //! Dolphin, Back and Forward return to where the view was, and going up

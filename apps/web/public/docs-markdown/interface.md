@@ -8,7 +8,7 @@ Resize the sidebar and column edges. Double-click an edge to reset or fit it, de
 
 ![Historical directory in an amber-badged Previous version tab, with a read-only banner](../assets/screenshots/snapshot-tab.png)
 
-*Actual HTML interface. Sample files; no live NAS connection.*
+*The native app, captured with fictional sample files. No live NAS connection.*
 
 ## Choose your context menu
 
@@ -28,7 +28,7 @@ Snapshot tabs carry a “Previous version” badge and an amber top edge. A bann
 
 ![Snapshot list with a separate right-hand date and time column](../assets/screenshots/previous-versions.png)
 
-*Actual HTML interface. Sample files; no live NAS connection.*
+*The native app, captured with fictional sample files. No live NAS connection.*
 
 ## Measure folder sizes on demand
 
@@ -78,7 +78,7 @@ Drop files into an OpenXplorer folder, the empty area of the current folder, or 
 
 ZIP members must be extracted first. Some editors only accept local files: network items need an existing GVfs/FUSE or CIFS path for those applications. Dragging does not mount a share or download a temporary copy. Drag-to-move, automatic extraction, and undo remain unavailable; use Cut and Paste for supported same-filesystem moves.
 
-The website preview uses sample files and cannot export desktop files. Compatibility with a particular editor or a Wayland desktop must be checked on that system.
+The website tour shows pictures and cannot drag files. Compatibility with a particular editor or a Wayland desktop must be checked on that system.
 
 ---
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Whether Brave is running for this user.
 //!
-//! Ports `browser_running` in `desktop/brave_integration.py`. Brave
+//! Ports `browser_running` in `v2.0.0:desktop/brave_integration.py`. Brave
 //! rewrites its preferences when it exits, so a change made while it runs
 //! would be lost or, worse, mixed with Brave's own write. The app
 //! therefore changes nothing while any Brave process runs, and never

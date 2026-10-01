@@ -3,8 +3,8 @@
 //!
 //! Ports `unescape_mount`, `parse_mounts`, `read_mounts`, `is_below`,
 //! `mount_for_path`, `remote_root` and `resolve_smb_path` in
-//! `desktop/mount_support.py`, and the `stable` mounts `environment` in
-//! `desktop/winspace.py` hands to the Network list. Reading the table
+//! `v2.0.0:desktop/mount_support.py`, and the `stable` mounts `environment` in
+//! `v2.0.0:desktop/winspace.py` hands to the Network list. Reading the table
 //! never mounts anything.
 
 use std::fs;

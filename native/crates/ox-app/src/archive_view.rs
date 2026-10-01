@@ -3,9 +3,9 @@
 //! a new folder, and compressing a selection into a new ZIP.
 //!
 //! Ports `archiveDialog`, `extractDialog` and `zipOutputName` of
-//! `desktop/ui/app.js` over ox-core's [`archive`](ox_core::archive)
-//! service, which ports `desktop/archives.py` and
-//! `desktop/zip_extraction.py` with every safety rule: nothing is
+//! `v2.0.0:desktop/ui/app.js` over ox-core's [`archive`](ox_core::archive)
+//! service, which ports `v2.0.0:desktop/archives.py` and
+//! `v2.0.0:desktop/zip_extraction.py` with every safety rule: nothing is
 //! decompressed to browse, only the member the user opens is copied (to a
 //! private read-only file), and an extraction checks every member first,
 //! builds the new folder privately and publishes it all or nothing, so

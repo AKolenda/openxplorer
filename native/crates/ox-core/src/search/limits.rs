@@ -2,8 +2,8 @@
 //! The safety limits of scans, live updates and watches (SRCH-029,
 //! SRCH-032).
 //!
-//! Ports the limits of `_run` and `_update` in `desktop/index_service.py`
-//! and `max_watches` in `desktop/local_watch.py`. The service keeps them in
+//! Ports the limits of `_run` and `_update` in `v2.0.0:desktop/index_service.py`
+//! and `max_watches` in `v2.0.0:desktop/local_watch.py`. The service keeps them in
 //! one [`ServiceLimits`], so that tests can lower each limit to reach it.
 
 use super::watch::WATCH_LIMIT;

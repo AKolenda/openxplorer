@@ -2,7 +2,7 @@
 //! Place colours for glyphs: Home, This PC, Network and the standard
 //! folders are drawn in colour, as the current app draws them.
 //!
-//! Ports the `color` options of `renderSidebar` in `desktop/ui/app.js`
+//! Ports the `color` options of `renderSidebar` in `v2.0.0:desktop/ui/app.js`
 //! (`im.style.color`), which are the same in both themes. The standard
 //! folders' colours stay in ox-core ([`KnownFolder::glyph_color`]); the
 //! others are the app's own. [`stylesheet`] turns every tint into a CSS

@@ -248,7 +248,7 @@
     },
     "create": {
       "status": "native-tested",
-      "note": "ox_core::ops::create_item ports create_item in desktop/gio_backend.py and the checks of the create branch of dispatch: name validation, the refusal inside an SMB server listing, the snapshot write guard, and an exclusive make_directory or create that never overwrites. Native: The New folder dialog runs it: a refused name stays in the dialog, the new folder is selected and Undo removes it.",
+      "note": "ox_core::ops::create_item ports create_item in v2.0.0:desktop/gio_backend.py and the checks of the create branch of dispatch: name validation, the refusal inside an SMB server listing, the snapshot write guard, and an exclusive make_directory or create that never overwrites. Native: The New folder dialog runs it: a refused name stays in the dialog, the new folder is selected and Undo removes it.",
       "evidence": [
         "native/crates/ox-core/tests/ops_create.rs::new_folder_and_new_file_appear_under_their_names",
         "native/crates/ox-core/tests/ops_create.rs::creating_onto_a_taken_name_never_overwrites",
@@ -260,7 +260,7 @@
     },
     "createTemplate": {
       "status": "native-tested",
-      "note": "ox_core::ops::create_from_template ports create_from_template in desktop/file_services.py with the OPS-048 rules: the template must be in a fresh list, it is opened without following links or blocking and checked on the descriptor, read in bounded, cancellable blocks, staged in a private file that is published without overwriting and deleted when it is not published. Native: Create in the New from template dialog runs it; the new file is selected.",
+      "note": "ox_core::ops::create_from_template ports create_from_template in v2.0.0:desktop/file_services.py with the OPS-048 rules: the template must be in a fresh list, it is opened without following links or blocking and checked on the descriptor, read in bounded, cancellable blocks, staged in a private file that is published without overwriting and deleted when it is not published. Native: Create in the New from template dialog runs it; the new file is selected.",
       "evidence": [
         "native/crates/ox-core/tests/ops_create.rs::a_starter_writes_its_content_to_a_private_new_file",
         "native/crates/ox-core/tests/ops_create.rs::a_user_template_is_copied_without_its_permissions",
@@ -504,7 +504,7 @@
     },
     "rename": {
       "status": "native-tested",
-      "note": "ox_core::ops::rename_item ports rename_item in desktop/gio_backend.py: name validation, the refusal of roots and whole SMB shares, the same-name no-op, the whole-tree snapshot write check, then a same-folder move that never overwrites. test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected of desktop/tests/gio_integration.py are ported. Native: F2 runs it on the name edited in place (or in the Rename dialog when the item is not on screen) with the base name selected; the renamed item stays selected and Undo and Redo walk the rename.",
+      "note": "ox_core::ops::rename_item ports rename_item in v2.0.0:desktop/gio_backend.py: name validation, the refusal of roots and whole SMB shares, the same-name no-op, the whole-tree snapshot write check, then a same-folder move that never overwrites. test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected of v2.0.0:desktop/tests/gio_integration.py are ported. Native: F2 runs it on the name edited in place (or in the Rename dialog when the item is not on screen) with the base name selected; the renamed item stays selected and Undo and Redo walk the rename.",
       "evidence": [
         "native/crates/ox-core/tests/ops_rename.rs::rename_onto_a_taken_name_changes_nothing",
         "native/crates/ox-core/tests/ops_rename.rs::a_folder_holding_a_protected_backup_is_not_renamed",
@@ -581,7 +581,7 @@
     },
     "templates": {
       "status": "native-tested",
-      "note": "ox_core::ops::list_templates ports PRESETS and list_templates in desktop/file_services.py: the six starters, then at most 100 visible regular files of at most 16 MiB from the Templates folder, listed without following links and without .desktop files. Native: The New file and New from template dialog lists the templates when it opens.",
+      "note": "ox_core::ops::list_templates ports PRESETS and list_templates in v2.0.0:desktop/file_services.py: the six starters, then at most 100 visible regular files of at most 16 MiB from the Templates folder, listed without following links and without .desktop files. Native: The New file and New from template dialog lists the templates when it opens.",
       "evidence": [
         "native/crates/ox-core/tests/ops_create.rs::the_six_starters_come_first_with_their_fixed_names",
         "native/crates/ox-core/tests/ops_create.rs::only_visible_regular_files_up_to_sixteen_mebibytes_are_user_templates",
@@ -592,7 +592,7 @@
     },
     "transferConflicts": {
       "status": "native-tested",
-      "note": "ox_core::ops::find_conflicts answers the paste-conflict query of desktop/winspace.py: 1 to 100,000 item URIs, a destination that must be a folder (\"Open a destination folder before pasting.\") and the items whose names are taken there, hidden items and dangling links included. A cancelled check is reported as cancelled, never as no conflicts. Native: Paste checks the destination with it and asks about taken names (Skip, Keep both, Replace, Apply to all).",
+      "note": "ox_core::ops::find_conflicts answers the paste-conflict query of v2.0.0:desktop/winspace.py: 1 to 100,000 item URIs, a destination that must be a folder (\"Open a destination folder before pasting.\") and the items whose names are taken there, hidden items and dangling links included. A cancelled check is reported as cancelled, never as no conflicts. Native: Paste checks the destination with it and asks about taken names (Skip, Keep both, Replace, Apply to all).",
       "evidence": [
         "native/crates/ox-core/tests/ops_transfer.rs::conflicts_list_the_items_whose_names_are_taken_hidden_and_dangling_ones_included",
         "native/crates/ox-core/tests/ops_transfer.rs::a_conflict_check_needs_a_folder_and_between_one_and_the_maximum_items",
@@ -603,7 +603,7 @@
     },
     "trashSupport": {
       "status": "native-tested",
-      "note": "ox_core::ops::trash_support asks access::can-trash as trash_support in desktop/gio_backend.py does, and is tested on a local folder, a folder GIO reports without a Trash, and a share that is not mounted, which reaches the caller as not-mounted so it can mount and ask again. ox_core::ops::plan_delete applies the per-folder decision of app.js. Native: The window asks each folder it shows once and labels Delete from the answer; each Delete decides every item by its own folder with plan_delete.",
+      "note": "ox_core::ops::trash_support asks access::can-trash as trash_support in v2.0.0:desktop/gio_backend.py does, and is tested on a local folder, a folder GIO reports without a Trash, and a share that is not mounted, which reaches the caller as not-mounted so it can mount and ask again. ox_core::ops::plan_delete applies the per-folder decision of app.js. Native: The window asks each folder it shows once and labels Delete from the answer; each Delete decides every item by its own folder with plan_delete.",
       "evidence": [
         "native/crates/ox-core/tests/ops_delete_plan.rs::an_item_whose_folder_cannot_be_queried_is_planned_for_permanent_delete_like_python",
         "native/crates/ox-core/tests/ops_delete_plan.rs::a_folder_gio_reports_without_a_trash_is_planned_for_permanent_delete",

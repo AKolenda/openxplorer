@@ -2,11 +2,13 @@
 //! Proves that the location fixtures still hold what the Python app answers.
 //!
 //! `python.json` and `javascript.json` record the answers of
-//! `desktop/core.py` and of the display helpers in `desktop/ui/app.js`, and
-//! the other `location_*` tests hold the Rust port to them. When the Python
-//! app changes, recorded answers go stale without any test noticing. These
-//! tests run both generators against the current `desktop/` sources and fail
-//! when the answers differ from the committed files, naming each change.
+//! `v2.0.0:desktop/core.py` and of the display helpers in
+//! `v2.0.0:desktop/ui/app.js`, and the other `location_*` tests hold the Rust
+//! port to them. These tests run both generators against those sources again
+//! and fail when the answers differ from the committed files, naming each
+//! change, so a fixture edited by hand cannot drift from the Python app.
+//! `native/tools/check.py` extracts the sources from their tag and names the
+//! directory in `OX_PYTHON_APP`.
 //!
 //! They need `python3` and Node.js. A missing tool fails the test: a skipped
 //! check would look like a passing one.
@@ -28,7 +30,7 @@ fn python_fixture_matches_desktop_core_py() {
         eprintln!("skipped under OX_DISTRO_CI: the reference check needs the Python version the fixtures were generated with; the native job covers this");
         return;
     }
-    let desktop = repository_path("desktop");
+    let desktop = python_app();
     let captured = run_generator(OsStr::new("python3"), "generate_python.py", &desktop);
     let committed = include_str!("location_fixtures/python.json");
     assert_fixture_is_current("python.json", committed, &captured);
@@ -40,7 +42,7 @@ fn javascript_fixture_matches_desktop_app_js() {
         eprintln!("skipped under OX_DISTRO_CI: the reference check needs a current Node.js; distribution Node versions differ; the native job covers this");
         return;
     }
-    let app = repository_path("desktop/ui/app.js");
+    let app = python_app().join("ui/app.js");
     let captured = run_generator(&node_program(), "generate_javascript.cjs", &app);
     let committed = include_str!("location_fixtures/javascript.json");
     assert_fixture_is_current("javascript.json", committed, &captured);
@@ -56,10 +58,12 @@ fn node_program() -> OsString {
     env::var_os("OX_NODE").unwrap_or_else(|| OsString::from("node"))
 }
 
-/// A path relative to the repository root.
-fn repository_path(relative: &str) -> PathBuf {
-    let crate_directory = Path::new(env!("CARGO_MANIFEST_DIR"));
-    crate_directory.join("../../..").join(relative)
+/// The Python app's sources: the directory `OX_PYTHON_APP` names.
+fn python_app() -> PathBuf {
+    env::var_os("OX_PYTHON_APP").map(PathBuf::from).expect(
+        "OX_PYTHON_APP names the Python app's modules (v2.0.0:desktop/); run the tests through \
+         native/tools/check.py, which extracts them",
+    )
 }
 
 /// Runs a generator from `location_fixtures/` on `source` and returns the
@@ -72,7 +76,7 @@ fn run_generator(interpreter: &OsStr, script: &str, source: &Path) -> String {
         .output()
         .unwrap_or_else(|error| {
             let interpreter = interpreter.display();
-            panic!("{interpreter} is required to check {script} against desktop/: {error}")
+            panic!("{interpreter} is required to check {script} against the Python app: {error}")
         });
     let errors = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{script} failed:\n{errors}");
@@ -88,7 +92,7 @@ fn assert_fixture_is_current(fixture: &str, committed: &str, captured: &str) {
     let listed = &changes[..changes.len().min(LISTED_CHANGES)];
     assert!(
         changes.is_empty(),
-        "{fixture} no longer matches desktop/ ({} changed answers). Regenerate it as \
+        "{fixture} no longer matches the Python app ({} changed answers). Regenerate it as \
          location_fixtures/README.md describes, review the changes and update the Rust port.\n{}",
         changes.len(),
         listed.join("\n")

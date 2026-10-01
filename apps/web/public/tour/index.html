@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>OpenXplorer tour: the real app, with sample files</title>
+<link rel="stylesheet" href="tour.css">
+</head>
+<body>
+<header class="bar">
+ <button type="button" class="back" id="back" disabled aria-label="Back to the previous picture">
+  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg><span>Back</span>
+ </button>
+ <div class="heading">
+  <strong id="title">OpenXplorer</strong>
+  <span id="caption"></span>
+ </div>
+ <span class="badge" title="These are pictures of the native GTK 4 app, captured with fictional sample files.">Real app · sample files</span>
+</header>
+<main class="stage">
+ <figure class="frame" id="frame">
+  <img id="picture" alt="" width="1440" height="900">
+  <div class="hotspots" id="hotspots"></div>
+ </figure>
+</main>
+<p class="hint" id="hint" role="status">Click a control in the picture, or press Tab to move between them and Enter to follow one.</p>
+<noscript><p class="hint">The tour needs JavaScript. The pictures are in the documentation.</p></noscript>
+<script src="scenes.js"></script>
+<script src="tour.js"></script>
+</body>
+</html>

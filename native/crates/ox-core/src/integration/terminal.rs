@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Open in Terminal: a local terminal in a checked folder.
 //!
-//! Ports `desktop/terminal_integration.py` (OPEN-017, OPEN-018, OPEN-020).
+//! Ports `v2.0.0:desktop/terminal_integration.py` (OPEN-017, OPEN-018, OPEN-020).
 //! Only a location crosses from the window; the terminal program comes
 //! from the system folders, the folder is checked against fresh metadata
 //! and the file system, and nothing derived from a file name is ever run.

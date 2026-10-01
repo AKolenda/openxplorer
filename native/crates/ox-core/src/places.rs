@@ -5,11 +5,11 @@
 //! supplies; building the sidebar never mounts a share or saves anything:
 //!
 //! - `quick_access`: the standard folders and the user's pins, ported from
-//!   `environment` in `desktop/winspace.py`. The standard folders come from
+//!   `environment` in `v2.0.0:desktop/winspace.py`. The standard folders come from
 //!   `known_folders` and `user_dirs`, ported from
-//!   `desktop/folder_locations.py`.
+//!   `v2.0.0:desktop/folder_locations.py`.
 //! - `network`: saved shares, active mounts and visited servers merged into
-//!   one Network list, ported from `desktop/network_locations.py`.
+//!   one Network list, ported from `v2.0.0:desktop/network_locations.py`.
 //! - `desktop_bookmarks`: the pins mirrored into the desktop-wide places
 //!   list (SIDE-013), which the app writes only when its pins change.
 

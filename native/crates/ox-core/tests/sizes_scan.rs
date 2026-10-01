@@ -3,7 +3,7 @@
 //! it leaves out (PROP-026, PROP-028).
 //!
 //! Ports the totals and exclusions of `FolderSizeTests` in
-//! `desktop/tests/test_v06.py`. Its limits, cancellation, progress and the
+//! `v2.0.0:desktop/tests/test_v06.py`. Its limits, cancellation, progress and the
 //! refusals and errors of the scanned folder are in `sizes_scan_limits.rs`;
 //! `test_max_seconds`, which needs a simulated clock, is a unit test in
 //! `sizes::scan`. Where a Python test subclasses `LocalSizeProvider`, the
@@ -22,7 +22,7 @@ use ox_core::location::file_uri;
 use ox_core::sizes::{LocalSizeProvider, ScanStatus, SizeEntry, SizeEntryKind};
 use sizes_support::{scan, simulated_entry, Folder, Listing, TestProvider, EXCLUDED};
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_empty_is_real_zero`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_empty_is_real_zero`
 ///
 /// parity: PROP-026, PROP-028
 #[test]
@@ -34,7 +34,7 @@ fn an_empty_folder_is_a_real_zero() {
     assert_eq!((size.bytes, size.status), (0, ScanStatus::Complete));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_recursive_file_bytes`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_recursive_file_bytes`
 ///
 /// parity: PROP-026, PROP-028
 #[test]
@@ -48,7 +48,7 @@ fn file_bytes_are_totalled_recursively() {
     assert_eq!((size.bytes, size.files, size.folders), (8, 2, 1));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_hidden_files_counted`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_hidden_files_counted`
 ///
 /// parity: PROP-026, PROP-028
 #[test]
@@ -59,7 +59,7 @@ fn hidden_files_are_counted() {
     assert_eq!(folder.scan().bytes, 4);
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_files_unchanged`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_files_unchanged`
 ///
 /// parity: PROP-026, PROP-028
 #[test]
@@ -78,7 +78,7 @@ fn scanning_leaves_files_unchanged() {
     assert_eq!(fs::read(&path).unwrap(), b"abc");
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_symbolic_link_not_followed`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_symbolic_link_not_followed`
 ///
 /// parity: PROP-028
 #[test]
@@ -96,7 +96,7 @@ fn a_symbolic_link_is_not_followed() {
     );
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_cycle_does_not_recurse`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_cycle_does_not_recurse`
 ///
 /// parity: PROP-028
 #[test]
@@ -111,7 +111,7 @@ fn a_link_cycle_does_not_recurse() {
     assert_eq!(size.folders, 1);
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_snapshot_collection_excluded`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_snapshot_collection_excluded`
 ///
 /// parity: PROP-028
 #[test]
@@ -143,7 +143,7 @@ fn every_snapshot_collection_name_is_excluded() {
     assert_eq!((size.bytes, size.folders, size.skipped), (3, 0, 4));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_explicit_snapshot_root_can_be_scanned`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_explicit_snapshot_root_can_be_scanned`
 ///
 /// parity: PROP-028
 #[test]
@@ -157,7 +157,7 @@ fn an_explicitly_chosen_snapshot_folder_can_be_scanned() {
     assert_eq!(size.bytes, 3);
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_hardlinks_count_once`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_hardlinks_count_once`
 ///
 /// parity: PROP-028
 #[test]
@@ -171,7 +171,7 @@ fn hard_links_count_once() {
     assert_eq!((size.bytes, size.files), (3, 1));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_fifo_excluded_not_opened`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_fifo_excluded_not_opened`
 ///
 /// parity: PROP-028
 #[test]
@@ -188,7 +188,7 @@ fn a_fifo_is_excluded_and_never_opened() {
     assert_eq!((size.bytes, size.skipped), (0, 1));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_nested_mount_excluded`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_nested_mount_excluded`
 ///
 /// parity: PROP-028
 #[test]
@@ -202,7 +202,7 @@ fn a_nested_mount_is_excluded() {
     assert_eq!((size.bytes, size.status), (0, EXCLUDED));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_unreadable_entries_reported`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_unreadable_entries_reported`
 ///
 /// parity: PROP-028
 #[test]
@@ -215,7 +215,7 @@ fn unreadable_entries_are_reported_as_errors() {
     assert_eq!((size.errors, size.status), (1, EXCLUDED));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_failed_subtree_reported`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_failed_subtree_reported`
 ///
 /// parity: PROP-028
 #[test]
@@ -232,7 +232,7 @@ fn a_failed_subfolder_is_reported_and_not_shown_as_empty() {
     assert_eq!((size.errors, size.status), (1, EXCLUDED));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_unknown_size_is_not_fabricated_zero`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_unknown_size_is_not_fabricated_zero`
 ///
 /// parity: PROP-027, PROP-028
 #[test]
@@ -247,7 +247,7 @@ fn an_unknown_size_is_not_counted_as_zero() {
     assert_eq!((size.files, size.skipped), (0, 1));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_spaces_in_path`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_spaces_in_path`
 ///
 /// parity: PROP-026
 #[test]

@@ -6,7 +6,7 @@
 //! Ports the "Default file explorer" card of `renderSettingsPage`,
 //! `renderDefaultStatus`, `changeDefault`, `changeZipDefault` and the Show
 //! in folder and ZIP controls of `appendV07Settings` in
-//! `desktop/ui/app.js` (INT-008 to INT-016, INT-030, SET-009), laid out as
+//! `v2.0.0:desktop/ui/app.js` (INT-008 to INT-016, INT-030, SET-009), laid out as
 //! the settings mockup's Default apps page: a status card that says
 //! whether `OpenXplorer` is the default file explorer, with "Make
 //! `OpenXplorer` default"; the two options that go with it; what opens each

@@ -3,9 +3,9 @@
 //! first report, and the rate at which reports reach the interface.
 //!
 //! Ports the `progress` closure of the `operate` branch of `dispatch` in
-//! `desktop/winspace.py`, which forwards a report only when 80 ms have
+//! `v2.0.0:desktop/winspace.py`, which forwards a report only when 80 ms have
 //! passed since the last one or the report says the work is complete, and
-//! the starting labels of `runOperation` in `desktop/ui/app.js`. The batch
+//! the starting labels of `runOperation` in `v2.0.0:desktop/ui/app.js`. The batch
 //! bar the Python app did not have (OPS-020) gets every report: there is at
 //! most one per top-level item, and a file's reports must not crowd it out.
 

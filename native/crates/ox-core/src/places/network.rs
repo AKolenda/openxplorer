@@ -2,7 +2,7 @@
 //! The Network list: saved shares, active mounts and visited servers.
 //!
 //! Ports `network_key` and `merge_network_locations` in
-//! `desktop/network_locations.py`. Callers pass snapshots of their mounts
+//! `v2.0.0:desktop/network_locations.py`. Callers pass snapshots of their mounts
 //! and of the servers browsed this session; merging performs no file or
 //! network I/O and never saves a bookmark. Port 445 is filled in, but host
 //! aliases are never guessed, so a row never implies shared credentials.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Live updates of local folders through the index service's public API.
 //!
-//! Ports `desktop/tests/test_v05.py::LiveTests` on real local folders with
+//! Ports `v2.0.0:desktop/tests/test_v05.py::LiveTests` on real local folders with
 //! real inotify events, as the app uses the service.
 //! `test_watch_limit_fallback_is_reported` and `test_root_exclusions` need
 //! the crate's internals and are ported in `src/search`.
@@ -18,7 +18,7 @@ use ox_core::search::{
 };
 use search_support::{tick_for, tick_until, IndexedFolder};
 
-/// Ported from `desktop/tests/test_v05.py::LiveTests::test_live_create_without_full_scan`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_live_create_without_full_scan`
 ///
 /// parity: SRCH-028
 #[test]
@@ -34,7 +34,7 @@ fn a_new_file_is_indexed_without_a_full_scan() {
     assert_eq!(folder.state().generation, generation);
 }
 
-/// Ported from `desktop/tests/test_v05.py::LiveTests::test_new_nested_folder_watched`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_new_nested_folder_watched`
 ///
 /// parity: SRCH-028
 #[test]
@@ -55,7 +55,7 @@ fn a_new_nested_folder_is_watched() {
     folder.tick_until("both folders are watched", || folder.state().watch_count >= 2);
 }
 
-/// Ported from `desktop/tests/test_v05.py::LiveTests::test_live_rename_and_delete`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_live_rename_and_delete`
 ///
 /// parity: SRCH-028
 #[test]
@@ -79,7 +79,7 @@ fn renames_and_deletions_update_the_cache() {
     });
 }
 
-/// Ported from `desktop/tests/test_v05.py::LiveTests::test_hidden_and_symlinks_not_traversed`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_hidden_and_symlinks_not_traversed`
 ///
 /// parity: SRCH-031, SAFE-019
 #[test]
@@ -129,7 +129,7 @@ fn the_uri_of_a_deleted_file_keeps_live_events() {
     assert_eq!(root.watch_error, None);
 }
 
-/// Ported from `desktop/tests/test_v05.py::LiveTests::test_two_window_index_leader`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_two_window_index_leader`
 ///
 /// The second window does not scan; the owner runs the scan it asked for,
 /// which gives the root a new generation.
@@ -151,7 +151,7 @@ fn a_second_window_passes_its_refresh_to_the_owner() {
     });
 }
 
-/// Ported from `desktop/tests/test_v05.py::LiveTests::test_snapshot_folders_not_indexed`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_snapshot_folders_not_indexed`
 ///
 /// parity: SRCH-031
 #[test]

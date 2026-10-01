@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The arguments of a request to `org.freedesktop.FileManager1`, which
 //! browsers and other applications send to show a download or a folder.
-//! Ports `filemanager_request` in `desktop/window_state.py`.
+//! Ports `filemanager_request` in `v2.0.0:desktop/window_state.py`.
 
 use super::WindowStateError;
 use crate::location;
@@ -59,7 +59,7 @@ impl FileManagerRequest {
     /// Validates the method name and locations another application sent.
     ///
     /// Safety rule "reveal requests are data, never commands"
-    /// (`filemanager_request` in `desktop/window_state.py`): only the three
+    /// (`filemanager_request` in `v2.0.0:desktop/window_state.py`): only the three
     /// `FileManager1` methods, 1 to 100 locations, and only local, SMB and
     /// device locations; the app's own pages such as Settings, other
     /// schemes and credentials are refused, and nothing is executed.

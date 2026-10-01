@@ -3,7 +3,7 @@
 //! action or a `FileManager1` request.
 //!
 //! Ports `command_line`, `show_windows`, `open_settings`, `quit_safely`
-//! and `handle_reveal` of `OpenXplorer` in `desktop/winspace.py`
+//! and `handle_reveal` of `OpenXplorer` in `v2.0.0:desktop/winspace.py`
 //! (INT-004, INT-006, INT-007, INT-014, INT-017, INT-023, SET-002,
 //! TAB-052).
 

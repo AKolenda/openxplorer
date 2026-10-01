@@ -2,7 +2,7 @@
 //! Which terminal emulator opens, and how it is told the folder.
 //!
 //! Ports `TERMINALS`, `SYSTEM_PATH`, `Terminal` and `find_terminal` in
-//! `desktop/terminal_integration.py` (OPEN-018, OPEN-020), with the
+//! `v2.0.0:desktop/terminal_integration.py` (OPEN-018, OPEN-020), with the
 //! desktop's configured terminal first (OPEN-019).
 
 use std::fs;

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Network shares, sign-in and mounts: the network service of the window.
 //!
-//! Ports `desktop/session_credentials.py`, `desktop/auth_bridge.py`,
-//! `desktop/mount_support.py`, `desktop/mount_share.py`,
-//! and the network operations of `desktop/winspace.py` (`mount`,
+//! Ports `v2.0.0:desktop/session_credentials.py`, `v2.0.0:desktop/auth_bridge.py`,
+//! `v2.0.0:desktop/mount_support.py`, `v2.0.0:desktop/mount_share.py`,
+//! and the network operations of `v2.0.0:desktop/winspace.py` (`mount`,
 //! `connect`, `mountVolume`, `unmount`, `sign_out`, `discover_network`,
 //! `remember_network`), `verify_folder` and `discover_servers` of
-//! `desktop/gio_backend.py` and `local_path` of `desktop/native_opening.py`.
-//! The Network sidebar list (`desktop/network_locations.py`) is composed in
-//! [`places`](crate::places); the volume rows (`desktop/volume_locations.py`)
+//! `v2.0.0:desktop/gio_backend.py` and `local_path` of `v2.0.0:desktop/native_opening.py`.
+//! The Network sidebar list (`v2.0.0:desktop/network_locations.py`) is composed in
+//! [`places`](crate::places); the volume rows (`v2.0.0:desktop/volume_locations.py`)
 //! are read in the app.
 //!
 //! Nothing here depends on GTK. Keyring calls block, so they run on worker

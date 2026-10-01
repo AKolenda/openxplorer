@@ -3,7 +3,7 @@
 //! sign-in dialog.
 //!
 //! Ports `_ask_password`, `_reuse` and `_show_password` of `MountPrompts`
-//! in `desktop/auth_bridge.py`.
+//! in `v2.0.0:desktop/auth_bridge.py`.
 
 use std::rc::Rc;
 use std::sync::Arc;

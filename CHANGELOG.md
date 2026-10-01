@@ -20,7 +20,7 @@ passwords. OpenXplorer 1.1.x offers it in **Check for updates**.
   and newer and Debian 13; RPMs for Fedora and openSUSE and a package for Arch
   Linux where the release lists them; and a Flatpak bundle for every
   distribution with Flatpak, including those whose GTK is older than 4.14.
-- The Python app in `desktop/` is deprecated and no longer shipped.
+- The Python app in `desktop/` is deprecated and no longer shipped (its sources remain at tag v2.0.0).
 
 ## Known gaps
 
@@ -43,4 +43,4 @@ passwords. OpenXplorer 1.1.x offers it in **Check for updates**.
 Rollback: `sudo apt install --allow-downgrades ./openxplorer_1.1.4_all.deb`
 restores the Python app; settings and saved passwords are shared.
 
-Earlier releases: [desktop/CHANGELOG.md](desktop/CHANGELOG.md).
+Earlier releases: [desktop/CHANGELOG.md at tag v1.1.4](https://github.com/AKolenda/openxplorer/blob/v1.1.4/desktop/CHANGELOG.md).

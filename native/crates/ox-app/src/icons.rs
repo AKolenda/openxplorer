@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Icons: the approved Fluent icons, bundled with the app and shown by name.
 //!
-//! Replaces the icon helpers of `desktop/ui/app.js` (`icon()`, `folderIcon`,
+//! Replaces the icon helpers of `v2.0.0:desktop/ui/app.js` (`icon()`, `folderIcon`,
 //! `zipFolderIcon`, `fileIcon` and `networkIcon`), which drew their own SVG.
 //! The native app draws no icon: every picture is one of the upstream files
 //! in `resources/icons/` (`SOURCES.md` says where each comes from), which

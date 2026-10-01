@@ -2,7 +2,7 @@
 
 ## Original Winspace material
 
-The desktop is based on the Winspace 0.7.0 source supplied in this conversation. Its original MIT copyright, permission and disclaimer notice is preserved without editing in `licenses/Winspace-MIT.txt` and `desktop/licenses/Winspace-MIT.txt`. The modified combined application is offered under AGPL-3.0-only; the original permissive grant is not erased.
+The desktop is based on the Winspace 0.7.0 source supplied in this conversation. Its original MIT copyright, permission and disclaimer notice is preserved without editing in `licenses/Winspace-MIT.txt`. The modified combined application is offered under AGPL-3.0-only; the original permissive grant is not erased.
 
 ## Distribution runtime libraries
 

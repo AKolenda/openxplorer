@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Helpers of the search service integration tests: a local folder indexed
 //! by a service with the real GIO reader (the set-up of `LiveTests` in
-//! `desktop/tests/test_v05.py`), an SMB share held in memory, and waiting
+//! `v2.0.0:desktop/tests/test_v05.py`), an SMB share held in memory, and waiting
 //! for the service's ticks. Include it with `mod search_support;`.
 //!
 //! `src/search/fixtures.rs` has crate-private counterparts of

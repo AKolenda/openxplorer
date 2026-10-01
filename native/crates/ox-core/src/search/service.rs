@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The index coordinator: its worker thread and the one index owner.
 //!
-//! Ports the life cycle of `IndexService` in `desktop/index_service.py`:
+//! Ports the life cycle of `IndexService` in `v2.0.0:desktop/index_service.py`:
 //! `__init__`, `elect`, `refresh`, `update`, `changed` and `close`
 //! (SRCH-025, SRCH-027). One elected process owns the crawler and the
 //! watchers for every `OpenXplorer` window; the database is shared, and

@@ -3,8 +3,8 @@
 //! through the system package manager, restarting into it, and noticing a
 //! running instance whose files an upgrade replaced.
 //!
-//! Ports `desktop/updater.py`, `desktop/runtime_guard.py` and the update
-//! rules of `desktop/winspace.py`. Nothing here depends on GTK; the
+//! Ports `v2.0.0:desktop/updater.py`, `v2.0.0:desktop/runtime_guard.py` and the update
+//! rules of `v2.0.0:desktop/winspace.py`. Nothing here depends on GTK; the
 //! interface calls [`UpdateService`] from the main thread, which runs the
 //! blocking work on GIO worker threads.
 //!

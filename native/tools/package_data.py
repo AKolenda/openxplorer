@@ -6,7 +6,7 @@ The Debian package, the RPM, the Arch package and the Flatpak all install
 through this tool, so the program, the desktop entry, the AppStream
 metainfo, the icon, the D-Bus service file, the licences and the mount
 helper program land in the same places with the same modes whichever format builds
-them. It ports the file layout of desktop/tools/build_deb.py;
+them. It ports the file layout of v2.0.0:desktop/tools/build_deb.py;
 native/packaging/README.md explains each decision.
 """
 from __future__ import annotations

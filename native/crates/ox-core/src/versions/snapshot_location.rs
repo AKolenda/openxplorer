@@ -2,7 +2,7 @@
 //! Which snapshot a location is inside (PROP-021), for the "Previous
 //! version" badge and banner of a tab.
 //!
-//! Ports `location` in `desktop/ui/snapshot-meta.js`. A location is inside
+//! Ports `location` in `v2.0.0:desktop/ui/snapshot-meta.js`. A location is inside
 //! a snapshot when a path component marks one (`.snapshot/<name>`,
 //! `.snapshots/<id>/snapshot`, `#snapshot/<name>`,
 //! `.zfs/snapshot/<name>` or `@GMT-…`), percent-encoded or not, or when it
@@ -219,7 +219,7 @@ mod tests {
         Some(location.label().to_owned())
     }
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Historical
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Historical
     /// path …").
     ///
     /// parity: PROP-021
@@ -230,7 +230,7 @@ mod tests {
         }
     }
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Custom
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Custom
     /// configured roots recognized").
     ///
     /// parity: PROP-021
@@ -249,7 +249,7 @@ mod tests {
         );
     }
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Ordinary share
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Ordinary share
     /// not misidentified").
     ///
     /// parity: PROP-021
@@ -258,7 +258,7 @@ mod tests {
         assert_eq!(snapshot_location("smb://nas/share/folder.mp4", &[]), None);
     }
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Encoded markers
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Encoded markers
     /// recognized").
     ///
     /// parity: PROP-021
@@ -270,7 +270,7 @@ mod tests {
         );
     }
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Snapshot root
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Snapshot root
     /// excludes descendants").
     ///
     /// parity: PROP-021

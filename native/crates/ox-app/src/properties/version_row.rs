@@ -2,7 +2,7 @@
 //! One row of the Previous versions list (PROP-019, PROP-020).
 //!
 //! Ports the loop over `data.versions` in `renderVersionsPanel` of
-//! `desktop/ui/app.js`: the item's icon, the snapshot's name over the
+//! `v2.0.0:desktop/ui/app.js`: the item's icon, the snapshot's name over the
 //! collection it came from, the date and time read from the snapshot's
 //! name with a tooltip saying where they come from, then Browse (folders)
 //! and Restore a copy…. The buttons run window actions, so the window

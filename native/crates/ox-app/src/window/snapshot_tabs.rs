@@ -3,7 +3,7 @@
 //! banner (PROP-021, PROP-022).
 //!
 //! Ports Browse of `renderVersionsPanel`, `snapshotFor`, the snapshot part
-//! of `renderTabs` and `renderSnapshotBanner` in `desktop/ui/app.js`.
+//! of `renderTabs` and `renderSnapshotBanner` in `v2.0.0:desktop/ui/app.js`.
 //! Browse opens a snapshot folder in a new foreground tab tagged with the
 //! snapshot; a tab inside a snapshot, tagged or found by its location,
 //! gets the amber edge and "Previous version" badge, and the banner under

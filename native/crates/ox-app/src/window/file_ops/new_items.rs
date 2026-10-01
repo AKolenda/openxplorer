@@ -2,7 +2,7 @@
 //! New folder (Ctrl+Shift+N), and the New menu's files (OPS-001,
 //! OPS-002, CMD-004).
 //!
-//! Ports `newItem` and `openNewMenu` of `desktop/ui/app.js`. New folder
+//! Ports `newItem` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`. New folder
 //! asks for the name first, "New folder" selected, and creates the folder
 //! with an exclusive creation, so an existing name is refused inside the
 //! dialog and never overwritten (OPS-008). The new folder is selected

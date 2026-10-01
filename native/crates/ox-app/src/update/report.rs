@@ -3,7 +3,7 @@
 //! without opening a window.
 //!
 //! Ports the `args.check` and `args.diagnose` branches of `main` in
-//! `desktop/winspace.py`. `--check` names the libraries the app runs on
+//! `v2.0.0:desktop/winspace.py`. `--check` names the libraries the app runs on
 //! and this build's digest; `--diagnose` prints [`Diagnosis`] as JSON.
 //! Both only read: the diagnosis asks the bus daemon without starting any
 //! service and `xdg-mime` for the current handlers.

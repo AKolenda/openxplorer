@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Installing an update: the private, verified download and the package
 //! commands around the administrator prompt. Ports the installation tests
-//! of `UpdaterTests` in `desktop/tests/test_updater.py`, with fictional
+//! of `UpdaterTests` in `v2.0.0:desktop/tests/test_updater.py`, with fictional
 //! HTTP bytes and a package manager double. No network connection,
 //! administrator prompt or package installation is made.
 
@@ -27,7 +27,7 @@ fn argv_text(command: &PackageCommand) -> Vec<String> {
         .collect()
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_success_verifies_bytes_and_metadata_before_admin_prompt_and_cleans_up`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_success_verifies_bytes_and_metadata_before_admin_prompt_and_cleans_up`
 /// parity: UPD-003
 #[test]
 fn success_verifies_bytes_and_metadata_before_admin_prompt_and_cleans_up() {
@@ -99,7 +99,7 @@ fn installation_runs_only_the_fixed_package_commands() {
     assert_eq!(commands[1], PackageCommand::Install(installer));
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_install_requires_literal_confirmation_before_any_network_or_process`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_install_requires_literal_confirmation_before_any_network_or_process`
 ///
 /// Python's `False`, `None`, `1`, `'true'`, `[]` and `{}` are all the one
 /// value [`Confirmation::Unconfirmed`] here.
@@ -118,7 +118,7 @@ fn install_requires_literal_confirmation_before_any_network_or_process() {
     fixture.assert_idle_and_clean(&updater);
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_install_requires_matching_previously_checked_newer_version`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_install_requires_matching_previously_checked_newer_version`
 ///
 /// Python's hostile versions (`'../../example.deb'`, `'--allow-unauthenticated'`,
 /// ...) are not [`ReleaseVersion`]s, so they cannot reach `install`.
@@ -170,7 +170,7 @@ struct DownloadCase {
     is_expected: fn(&UpdateError) -> bool,
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_bad_checksum_short_download_and_oversized_download_never_prompt`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_bad_checksum_short_download_and_oversized_download_never_prompt`
 /// parity: UPD-003
 #[test]
 fn bad_checksum_short_download_and_oversized_download_never_prompt() {
@@ -207,7 +207,7 @@ fn bad_checksum_short_download_and_oversized_download_never_prompt() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_wrong_package_identity_version_or_architecture_never_prompt`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_wrong_package_identity_version_or_architecture_never_prompt`
 /// parity: UPD-003
 #[test]
 fn wrong_package_identity_version_or_architecture_never_prompt() {
@@ -231,7 +231,7 @@ fn wrong_package_identity_version_or_architecture_never_prompt() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_download_failure_cleans_partial_files_and_releases_lock`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_download_failure_cleans_partial_files_and_releases_lock`
 /// parity: UPD-003
 #[test]
 fn download_failure_cleans_partial_files_and_releases_lock() {
@@ -269,7 +269,7 @@ fn a_refused_download_names_its_http_status() {
     fixture.assert_idle_and_clean(&updater);
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_polkit_cancellation_or_apt_failure_cleans_up_without_marking_installed`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_polkit_cancellation_or_apt_failure_cleans_up_without_marking_installed`
 /// parity: UPD-003
 #[test]
 fn polkit_cancellation_or_apt_failure_cleans_up_without_marking_installed() {
@@ -296,7 +296,7 @@ fn polkit_cancellation_or_apt_failure_cleans_up_without_marking_installed() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_package_inspection_failure_cleans_up_and_does_not_prompt`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_package_inspection_failure_cleans_up_and_does_not_prompt`
 /// parity: UPD-003
 #[test]
 fn package_inspection_failure_cleans_up_and_does_not_prompt() {
@@ -314,7 +314,7 @@ fn package_inspection_failure_cleans_up_and_does_not_prompt() {
     fixture.assert_idle_and_clean(&updater);
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_installed_version_is_verified_after_package_manager_returns_success`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_installed_version_is_verified_after_package_manager_returns_success`
 /// parity: UPD-003
 #[test]
 fn installed_version_is_verified_after_package_manager_returns_success() {

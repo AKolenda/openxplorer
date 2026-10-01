@@ -3,7 +3,7 @@
 //! CMD-011, CMD-016, OPS-040).
 //!
 //! Ports `entryMenu`, `backgroundMenu` and `terminalMenuItem` of
-//! `desktop/ui/app.js`, item for item and in their order, with their
+//! `v2.0.0:desktop/ui/app.js`, item for item and in their order, with their
 //! shortcuts and the items a multi-selection disables. The menus are
 //! plain data built from a few facts ([`ItemFacts`]), so their order is
 //! tested without a window. Beyond the Python app: Duplicate after

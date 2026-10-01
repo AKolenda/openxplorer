@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A read-only ZIP reader with the behaviour of Python's `zipfile`, which
-//! `desktop/archives.py` and `desktop/zip_extraction.py` rely on.
+//! `v2.0.0:desktop/archives.py` and `v2.0.0:desktop/zip_extraction.py` rely on.
 //!
 //! The archive services refuse members by the exact rules of the Python
 //! app, so the reader reports what `zipfile` reports: every member of the

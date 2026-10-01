@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The transfer error type and how backend errors map onto it.
 //!
-//! Ports the error interpretation of `desktop/operations.py` (`Cancelled`,
+//! Ports the error interpretation of `v2.0.0:desktop/operations.py` (`Cancelled`,
 //! `ReplaceUnsupported`, `is_not_found`) and the error codes of
-//! `error_payload` in `desktop/gio_backend.py` that transfers rely on.
+//! `error_payload` in `v2.0.0:desktop/gio_backend.py` that transfers rely on.
 
 use crate::location::LocationError;
 
@@ -60,8 +60,8 @@ impl TransferError {
     }
 }
 
-/// Maps `GLib` errors the way `desktop/gio_backend.py` and
-/// `desktop/operations.py` interpret them: `NOT_FOUND` is a definite absence
+/// Maps `GLib` errors the way `v2.0.0:desktop/gio_backend.py` and
+/// `v2.0.0:desktop/operations.py` interpret them: `NOT_FOUND` is a definite absence
 /// (see `is_not_found` in `operations.py`), `EXISTS` a taken name,
 /// `NOT_MOUNTED` a location to mount first and `NOT_SUPPORTED` an
 /// unsupported operation. Operation-specific meanings (for example

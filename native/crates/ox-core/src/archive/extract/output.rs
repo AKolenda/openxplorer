@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Where extracted files are written. Ports the `writer` of `ZipExtractor`
-//! in `desktop/zip_extraction.py` and its production value,
-//! `exclusive_output` in `desktop/gio_backend.py`.
+//! in `v2.0.0:desktop/zip_extraction.py` and its production value,
+//! `exclusive_output` in `v2.0.0:desktop/gio_backend.py`.
 
 use gio::prelude::*;
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What GitHub's "latest release" answer says, checked. Ports
-//! `release_metadata` in `desktop/updater.py`.
+//! `release_metadata` in `v2.0.0:desktop/updater.py`.
 
 use serde_json::{Map, Value};
 
@@ -87,7 +87,7 @@ pub fn installer_name(version: ReleaseVersion) -> String {
 /// with `current`.
 ///
 /// Safety rule "only stable, verified releases" (`release_metadata` in
-/// `desktop/updater.py`): the release must not be a draft or pre-release,
+/// `v2.0.0:desktop/updater.py`): the release must not be a draft or pre-release,
 /// its tag must be `vMAJOR.MINOR.PATCH`, and it must publish the installer
 /// named for that version at exactly
 /// `<repository>/releases/download/<tag>/<name>` in one of

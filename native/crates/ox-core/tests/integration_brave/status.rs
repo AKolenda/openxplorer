@@ -21,7 +21,7 @@ fn process_table_with(root: &Path, cmdline: &[u8]) -> PathBuf {
     proc_root
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_detect_profiles`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_detect_profiles`
 /// parity: INT-019
 #[test]
 fn native_profiles_are_detected_with_their_names() {
@@ -34,7 +34,7 @@ fn native_profiles_are_detected_with_their_names() {
     assert_eq!(status.profiles[0].download_path, "/old/downloads");
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_nonregular_pref_file_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_nonregular_pref_file_rejected`
 /// parity: INT-019, SAFE-020
 #[test]
 fn a_profile_whose_preferences_are_not_a_file_is_not_offered() {
@@ -45,7 +45,7 @@ fn a_profile_whose_preferences_are_not_a_file_is_not_offered() {
     assert!(fixture.brave().profiles().is_empty());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_profile_symlink_ignored`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_profile_symlink_ignored`
 /// parity: INT-019
 #[test]
 fn a_symlinked_profile_folder_is_ignored() {
@@ -56,7 +56,7 @@ fn a_symlinked_profile_folder_is_ignored() {
     assert_eq!(fixture.brave().profiles().len(), 1);
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_sandbox_detected_manual_only`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_sandbox_detected_manual_only`
 /// parity: INT-019
 #[test]
 fn flatpak_and_snap_installs_are_reported_for_manual_setup() {
@@ -73,7 +73,7 @@ fn flatpak_and_snap_installs_are_reported_for_manual_setup() {
     assert_eq!(status.profiles.len(), 1);
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_proc_brave_detected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_proc_brave_detected`
 /// parity: INT-019
 #[test]
 fn a_brave_process_is_detected() {
@@ -83,7 +83,7 @@ fn a_brave_process_is_detected() {
     assert!(ProcessTable::at(&proc_root).is_running());
 }
 
-/// Ported from `desktop/tests/test_v07.py::BraveTests::test_proc_unrelated_ignored`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::BraveTests::test_proc_unrelated_ignored`
 /// parity: INT-019
 #[test]
 fn other_processes_are_not_brave() {

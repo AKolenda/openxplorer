@@ -2,7 +2,7 @@
 //! The `GObject` side of [`super::BrowserWindow`]: its template children,
 //! the state of its tabs and of each feature, and the class and lifetime
 //! hooks GTK calls. The frame is the template `resources/ui/window.ui`,
-//! the static layout of `desktop/ui/index.html`.
+//! the static layout of `v2.0.0:desktop/ui/index.html`.
 
 use std::cell::{Cell, OnceCell, RefCell};
 

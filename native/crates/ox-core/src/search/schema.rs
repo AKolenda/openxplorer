@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The database layout, shared with the Python app, and its upgrades.
 //!
-//! Ports the schema of `SearchIndex.__init__` in `desktop/search_index.py`.
+//! Ports the schema of `SearchIndex.__init__` in `v2.0.0:desktop/search_index.py`.
 //! Both apps open the same `search.sqlite3`, so the tables, columns and
 //! stored words are Python's. The additions for pinned folders (SRCH-040),
 //! the `roots.pin_added` column with a default and the `index_migrations`

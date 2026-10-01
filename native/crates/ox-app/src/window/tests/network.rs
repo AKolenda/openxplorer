@@ -4,7 +4,7 @@
 //! Network and Remove saved location, This PC's network and drive cards,
 //! and connecting and removing drives, against `renderNetwork`,
 //! `connectDialog`, `signOut`, `networkLocationMenu`, `mountVolume` and
-//! `unmount` in `desktop/ui/app.js`.
+//! `unmount` in `v2.0.0:desktop/ui/app.js`.
 //!
 //! No test mounts anything or reaches a network: discovery finds what the
 //! test gives it, the keyring is in memory, and each mount or removal
@@ -149,7 +149,7 @@ fn closing_the_window_aborts_its_sign_ins() {
 /// The first visit of Network discovers servers, shows them with their
 /// count, and offers Stop while more passes follow.
 ///
-/// Ported from `desktop/tests/ui_release.py::Network discovery populates sample servers`
+/// Ported from `v2.0.0:desktop/tests/ui_release.py::Network discovery populates sample servers`
 ///
 /// parity: HOME-006, HOME-007, HOME-008, NET-024
 #[gtk::test]
@@ -423,7 +423,7 @@ fn signing_out_without_a_keyring_says_the_credentials_remain() {
 /// Keep in Network saves a browsed share with its label and no
 /// credentials; Remove saved location deletes only that entry.
 ///
-/// Ported from `desktop/tests/ui_v07.py::Keep in Network explicitly persists location`
+/// Ported from `v2.0.0:desktop/tests/ui_v07.py::Keep in Network explicitly persists location`
 ///
 /// parity: NET-016, NET-017, SIDE-009, SIDE-019, SIDE-020
 #[gtk::test]

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! One dialog: its title, message, body, error line and buttons.
 //!
-//! Ports the box `showModal` in `desktop/ui/app.js` fills (`#modal`, its
+//! Ports the box `showModal` in `v2.0.0:desktop/ui/app.js` fills (`#modal`, its
 //! `h2`, `p`, body, `.modal-error` and `.modal-actions`), drawn as
 //! `native/docs/ui-spec.md` §4.11 refines `.modal`. [`DialogFrame`] is a
 //! widget subclass whose layout is the template

@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Prove that the in-app updater of OpenXplorer 1.1.x installs a native package.
 
-Runs Updater.check and Updater.install from desktop/updater.py, the code
-every 1.1.x user runs, against a built package. A simulated GitHub answer
+Runs Updater.check and Updater.install from the 1.1.x updater
+(v2.0.0:desktop/updater.py, unchanged since 1.1.4), the code every 1.1.x
+user runs, against a built package. python_app.py provides its sources. A simulated GitHub answer
 publishes the package's file under its own name; the updater must find it
 under the asset name it expects, download it with the size and SHA-256
 checks, read its fields with the real dpkg-deb and hand it to APT. Only
@@ -15,6 +16,7 @@ import hashlib
 import importlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -22,9 +24,8 @@ import tempfile
 from types import ModuleType
 from typing import Any
 
-from package_data import REPOSITORY
+import python_app
 
-DESKTOP = REPOSITORY / 'desktop'
 # The folder the Python package runs from, which the updater requires.
 PYTHON_PACKAGE_ROOT = '/opt/openxplorer'
 PROMPT = '/usr/bin/pkexec'
@@ -35,10 +36,28 @@ class UpdaterRefused(Exception):
     """The 1.1.x updater would not offer or install the package; the message says why."""
 
 
+# The Python app's sources when $OX_PYTHON_APP does not name them: a temporary
+# copy and its desktop/ directory, kept until the process exits, because the
+# updater is imported from it.
+_EXTRACTED: list[tuple[tempfile.TemporaryDirectory[str], Path]] = []
+
+
+def python_app_directory() -> Path:
+    """Return the Python app's desktop/ directory, extracting it once if needed."""
+    named = os.environ.get(python_app.VARIABLE)
+    if named:
+        return Path(named)
+    if not _EXTRACTED:
+        temporary = tempfile.TemporaryDirectory(prefix='openxplorer-python-app-')
+        _EXTRACTED.append((temporary, python_app.extract(Path(temporary.name))))
+    return _EXTRACTED[0][1]
+
+
 def python_updater() -> ModuleType:
-    """Import desktop/updater.py as the Python app does, with desktop/ on the path."""
-    if str(DESKTOP) not in sys.path:
-        sys.path.insert(0, str(DESKTOP))
+    """Import the 1.1.x updater as the Python app does, with its directory on the path."""
+    desktop = python_app_directory()
+    if str(desktop) not in sys.path:
+        sys.path.insert(0, str(desktop))
     return importlib.import_module('updater')
 
 

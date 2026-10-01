@@ -2,7 +2,7 @@
 //! The app's previous-versions write protection for the `ops_*` tests: the
 //! guard double of the transfer tests (`tests/transfer_support/versions.rs`,
 //! a port of `PreviousVersions.assert_writable` in
-//! `desktop/previous_versions.py`), installed as an operation's
+//! `v2.0.0:desktop/previous_versions.py`), installed as an operation's
 //! [`WriteProtection`].
 
 #[path = "../transfer_support/versions.rs"]

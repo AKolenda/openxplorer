@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The navigation pane (sidebar).
 //!
-//! Ports `renderSidebar` and `.sidebar` in `desktop/ui/app.js` and
+//! Ports `renderSidebar` and `.sidebar` in `v2.0.0:desktop/ui/app.js` and
 //! `style.css`: the rows of [`entries::sidebar_entries`], separated by
 //! list-row headers so keyboard and screen-reader users never land on an
 //! empty separator row, and the "Map network location" button pinned below

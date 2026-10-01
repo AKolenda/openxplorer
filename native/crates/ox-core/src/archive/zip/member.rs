@@ -87,7 +87,7 @@ impl DosDateTime {
     }
 
     /// Seconds since the Unix epoch, reading the time as local time like
-    /// `datetime(*date_time).timestamp()` in `desktop/archives.py`; `None`
+    /// `datetime(*date_time).timestamp()` in `v2.0.0:desktop/archives.py`; `None`
     /// for an impossible date or time, where Python reported 0.
     pub(crate) fn to_unix_seconds(self) -> Option<u64> {
         let year = 1980 + i32::from(self.date >> 9);

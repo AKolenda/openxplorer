@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Rename (F2).
 //!
-//! Ports `rename_item` in `desktop/gio_backend.py` and the check the
-//! `rename` branch of `dispatch` in `desktop/winspace.py` runs first. The
+//! Ports `rename_item` in `v2.0.0:desktop/gio_backend.py` and the check the
+//! `rename` branch of `dispatch` in `v2.0.0:desktop/winspace.py` runs first. The
 //! rules (OPS-008): the new name is one valid path component; a whole
 //! share, a device or a filesystem root is never renamed; the same name is
 //! a no-op; the whole tree is checked against the write protection first
@@ -140,7 +140,7 @@ fn move_within_folder(
 ) -> Result<(), OpsError> {
     // XFER-020: every location in the renamed tree and its new location,
     // as `_check_write_tree` with `source_writable=True`, which
-    // `rename_item` in `desktop/gio_backend.py` runs.
+    // `rename_item` in `v2.0.0:desktop/gio_backend.py` runs.
     let protection = &context.protection;
     protection.check_tree(source, destination, &context.cancel, SourceChange::Changed)?;
     source.move_native(destination, Some(&context.cancel))?;

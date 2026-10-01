@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The package-manager commands of an installation, and what their output
 //! must say. Ports the `run` calls of `Updater.install` in
-//! `desktop/updater.py`.
+//! `v2.0.0:desktop/updater.py`.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -77,7 +77,7 @@ impl PackageCommand {
     /// How long the command may run before it is stopped.
     ///
     /// Safety rule "never interrupt the package manager"
-    /// (`desktop/updater.py`: "No timeout: killing apt/dpkg mid-install can
+    /// (`v2.0.0:desktop/updater.py`: "No timeout: killing apt/dpkg mid-install can
     /// damage package state"): the installation has no limit.
     pub fn time_limit(&self) -> Option<Duration> {
         match self {

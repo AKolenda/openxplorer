@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Naming items in a real window, beyond `rename` of `desktop/ui/app.js`:
+//! Naming items in a real window, beyond `rename` of `v2.0.0:desktop/ui/app.js`:
 //! Tab moving an in-place rename on (OPS-012), the question before a name
 //! hides an item (OPS-013) and the warnings under a name field while the
 //! user types (OPS-007), as Dolphin has them.

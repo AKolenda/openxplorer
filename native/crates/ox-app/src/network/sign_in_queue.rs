@@ -2,7 +2,7 @@
 //! One sign-in dialog at a time for a window's network challenges.
 //!
 //! Ports `receiveAuth`, `pumpAuth`, `dismissAuth` and `answerAuth` in
-//! `desktop/ui/app.js`. ox-core's
+//! `v2.0.0:desktop/ui/app.js`. ox-core's
 //! [`MountPrompts`](ox_core::network::MountPrompts) asks through the
 //! [`SignInPrompter`] this queue implements:
 //!

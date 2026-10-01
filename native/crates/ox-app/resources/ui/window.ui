@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  The browsing window's frame: the static layout of desktop/ui/index.html,
+  The browsing window's frame: the static layout of v2.0.0:desktop/ui/index.html,
   top to bottom. src/window/mod.rs binds the parts it updates by id. On
   the Settings tab the Settings page takes the place of the navigation
   row, the command bar, the workspace and the status bar
@@ -16,10 +16,10 @@
   <requires lib="gtk" version="4.14"/>
   <template class="OxBrowserWindow" parent="GtkApplicationWindow">
     <property name="title">OpenXplorer</property>
-    <!-- set_default_size(1320, 810) in desktop/winspace.py. -->
+    <!-- set_default_size(1320, 810) in v2.0.0:desktop/winspace.py. -->
     <property name="default-width">1320</property>
     <property name="default-height">810</property>
-    <!-- set_size_request(670, 470) in desktop/winspace.py. -->
+    <!-- set_size_request(670, 470) in v2.0.0:desktop/winspace.py. -->
     <property name="width-request">670</property>
     <property name="height-request">470</property>
     <style>

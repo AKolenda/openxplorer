@@ -6,7 +6,7 @@
 //! of about 4,000 characters, passes every extraction limit. When the check
 //! stored every folder's whole path, the Extract dialog's automatic check
 //! of that file peaked at 1.5 GB, where `plan` in
-//! `desktop/zip_extraction.py` stays under 300 MB. This test checks a
+//! `v2.0.0:desktop/zip_extraction.py` stays under 300 MB. This test checks a
 //! smaller archive of the same shape and measures the heap with a counting
 //! allocator.
 //!

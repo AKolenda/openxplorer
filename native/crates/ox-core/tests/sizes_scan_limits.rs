@@ -3,7 +3,7 @@
 //! PROP-029): the scanned folder it refuses, its limits, cancellation,
 //! progress, and errors on the scanned folder itself.
 //!
-//! Ports the rest of `FolderSizeTests` in `desktop/tests/test_v06.py`; the
+//! Ports the rest of `FolderSizeTests` in `v2.0.0:desktop/tests/test_v06.py`; the
 //! totals and exclusions are in `sizes_scan.rs`. Where a Python test
 //! subclasses `LocalSizeProvider`, the test here uses a `TestProvider`
 //! from `sizes_support`. Every file is inside a temporary directory.
@@ -23,7 +23,7 @@ use ox_core::sizes::{
 use ox_core::transfer::Cancellation;
 use sizes_support::{scan, Folder, Listing, TestProvider};
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_root_symlink_refused`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_root_symlink_refused`
 ///
 /// parity: PROP-028, PROP-029
 #[test]
@@ -43,7 +43,7 @@ fn a_link_to_a_folder_is_refused_as_the_scanned_folder() {
     );
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_regular_file_refused`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_regular_file_refused`
 ///
 /// parity: PROP-028, PROP-029
 #[test]
@@ -54,7 +54,7 @@ fn a_file_is_refused_as_the_scanned_folder() {
     assert_eq!(scan(&file_uri(&file)), Err(SizeError::NotAFolder));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_server_root_refused`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_server_root_refused`
 ///
 /// parity: PROP-026, PROP-029
 #[test]
@@ -68,7 +68,7 @@ fn a_whole_smb_server_is_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_entry_limit_marks_partial`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_entry_limit_marks_partial`
 ///
 /// parity: PROP-027, PROP-029
 #[test]
@@ -112,7 +112,7 @@ fn limits_of_zero_are_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_cancellation_returns_partial_progress`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_cancellation_returns_partial_progress`
 ///
 /// parity: PROP-029, PROP-026
 #[test]
@@ -133,7 +133,7 @@ fn cancelling_returns_the_totals_counted_so_far() {
     assert_eq!(size.status.reason(), "Cancelled by user");
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_progress_and_completion_published`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_progress_and_completion_published`
 ///
 /// parity: PROP-026
 #[test]
@@ -156,7 +156,7 @@ fn progress_and_completion_are_published() {
     assert!(size.finished_at.is_some());
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_root_enumeration_error_propagates_for_native_retry`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_root_enumeration_error_propagates_for_native_retry`
 ///
 /// parity: PROP-029
 #[test]
@@ -168,7 +168,7 @@ fn a_listing_error_on_the_scanned_folder_is_returned_for_a_retry() {
     assert_eq!(folder.scan_through(&provider), Err(SizeError::Read(refusal)));
 }
 
-/// Ported from `desktop/tests/test_v06.py::FolderSizeTests::test_root_inspect_error_is_not_an_empty_directory`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::FolderSizeTests::test_root_inspect_error_is_not_an_empty_directory`
 ///
 /// parity: PROP-029
 #[test]
@@ -181,7 +181,7 @@ fn an_error_reading_the_scanned_folder_is_not_an_empty_folder() {
 }
 
 /// An unmounted share reaches the caller, which mounts it and scans again,
-/// as `start_worker` with `mount_retry` does in `desktop/winspace.py`.
+/// as `start_worker` with `mount_retry` does in `v2.0.0:desktop/winspace.py`.
 ///
 /// parity: PROP-029
 #[test]

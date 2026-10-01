@@ -3,12 +3,12 @@
 //! link, and the backup kept of a file that could not be read completely.
 //!
 //! Ports the settings cases of
-//! `desktop/tests/test_terminal_security.py::PrivateStorageTests` and the
-//! "never erase unreadable settings" rule of `desktop/core.py`.
+//! `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests` and the
+//! "never erase unreadable settings" rule of `v2.0.0:desktop/core.py`.
 
 use super::*;
 
-/// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_lock_symlink_refused`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_lock_symlink_refused`
 /// parity: SAFE-009
 #[test]
 fn settings_lock_symlink_refused() {
@@ -27,7 +27,7 @@ fn settings_lock_symlink_refused() {
     assert_eq!(fs::read_to_string(&target).unwrap(), "unchanged");
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_json_symlink_not_overwritten`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_json_symlink_not_overwritten`
 ///
 /// Python calls `save()`; the native app writes only through changes, so
 /// the write goes through one. It must not move the link aside either.
@@ -52,7 +52,7 @@ fn settings_json_symlink_not_overwritten() {
     assert_eq!(backups(&directory), Vec::<String>::new());
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_still_persist`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_still_persist`
 /// parity: SET-012, SAFE-009
 #[test]
 fn preferences_still_persist_in_private_storage() {

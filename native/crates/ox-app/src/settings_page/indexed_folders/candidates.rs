@@ -2,7 +2,7 @@
 //! The folders Settings offers the search index, and why.
 //!
 //! Ports the candidate list of `renderSettingsCache` in
-//! `desktop/ui/app.js` (SET-006): the folder shown before Settings opened,
+//! `v2.0.0:desktop/ui/app.js` (SET-006): the folder shown before Settings opened,
 //! the folders indexed before, Home, Quick access, saved shares, the Local
 //! Disk and mounted drives, once each and in that order, never pages, GIO
 //! virtual folders, devices or SMB servers. Each carries the reason the
@@ -291,7 +291,7 @@ mod tests {
     }
 
     /// Ported from the candidate rules of `renderSettingsCache` in
-    /// `desktop/ui/app.js`.
+    /// `v2.0.0:desktop/ui/app.js`.
     ///
     /// parity: SET-006
     #[test]

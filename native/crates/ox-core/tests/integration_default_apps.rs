@@ -2,7 +2,7 @@
 //! Making the app the default file manager and ZIP handler, and
 //! restoring the previous handlers, against a recorded desktop.
 //!
-//! Ports `DefaultsTests` of `desktop/tests/test_rc3.py`, whose `run` double
+//! Ports `DefaultsTests` of `v2.0.0:desktop/tests/test_rc3.py`, whose `run` double
 //! answers `xdg-mime` from a dictionary; [`RecordedDesktop`] does the same
 //! for [`MimeDefaults`]. The record file is real and lives in a temporary
 //! folder.
@@ -126,7 +126,7 @@ impl Fixture {
     }
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_folders_and_zip_report_independently`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_folders_and_zip_report_independently`
 /// parity: INT-008, INT-010
 #[test]
 fn folder_and_zip_defaults_are_reported_independently() {
@@ -144,7 +144,7 @@ fn folder_and_zip_defaults_are_reported_independently() {
     assert_eq!(status.handler(MimeType::Zip), DOLPHIN);
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_existing_make_default_does_not_hijack_zip`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_existing_make_default_does_not_hijack_zip`
 /// parity: INT-008, INT-009
 #[test]
 fn making_the_folder_default_leaves_zip_files_alone() {
@@ -158,7 +158,7 @@ fn making_the_folder_default_leaves_zip_files_alone() {
     assert_eq!(fixture.handlers_of(&MimeType::ZIP_TYPES), [DOLPHIN; 3]);
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_explicit_zip_option_changes_all_zip_aliases`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_explicit_zip_option_changes_all_zip_aliases`
 /// parity: INT-009, INT-012
 #[test]
 fn including_zip_takes_over_every_zip_alias() {
@@ -173,7 +173,7 @@ fn including_zip_takes_over_every_zip_alias() {
     assert_eq!(fixture.handlers_of(&MimeType::ALL), [APP_ID; 5]);
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_zip_only_keeps_folder_default`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_zip_only_keeps_folder_default`
 /// parity: INT-012
 #[test]
 fn the_zip_default_leaves_folder_types_with_their_handler() {
@@ -185,7 +185,7 @@ fn the_zip_default_leaves_folder_types_with_their_handler() {
     assert!(fixture.defaults.status().expect("status").is_zip_default());
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_zip_restore_does_not_restore_folders`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_zip_restore_does_not_restore_folders`
 /// parity: INT-011, INT-012
 #[test]
 fn restoring_zip_keeps_openxplorer_for_folders() {
@@ -205,7 +205,7 @@ fn restoring_zip_keeps_openxplorer_for_folders() {
     assert!(!status.is_zip_default());
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_restore_does_not_overwrite_new_user_choice`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_restore_does_not_overwrite_new_user_choice`
 /// parity: INT-011
 #[test]
 fn restoring_keeps_a_handler_the_user_chose_later() {
@@ -226,7 +226,7 @@ fn restoring_keeps_a_handler_the_user_chose_later() {
     );
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_reapply_preserves_original_backup`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_reapply_preserves_original_backup`
 /// parity: INT-008
 #[test]
 fn reapplying_keeps_the_original_handler_on_record() {
@@ -242,7 +242,7 @@ fn reapplying_keeps_the_original_handler_on_record() {
     assert_eq!(fixture.desktop.handler(MimeType::Zip), DOLPHIN);
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_unconfirmed_install_is_read_only`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_unconfirmed_install_is_read_only`
 /// parity: INT-010
 #[test]
 fn reading_the_status_only_queries() {
@@ -259,7 +259,7 @@ fn reading_the_status_only_queries() {
     assert!(!fixture.defaults.record_path().exists());
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_restore_all`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_restore_all`
 /// parity: INT-011
 #[test]
 fn restoring_everything_puts_every_recorded_handler_back() {
@@ -277,7 +277,7 @@ fn restoring_everything_puts_every_recorded_handler_back() {
     assert_eq!(fixture.handlers_of(&MimeType::ALL), [DOLPHIN; 5]);
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_bad_previous_handler_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_bad_previous_handler_rejected`
 /// parity: INT-008, SAFE-020
 #[test]
 fn a_handler_that_cannot_be_recorded_is_refused_before_any_change() {
@@ -298,7 +298,7 @@ fn a_handler_that_cannot_be_recorded_is_refused_before_any_change() {
     assert!(!fixture.defaults.record_path().exists());
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_missing_handler_not_overpromised`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_missing_handler_not_overpromised`
 /// parity: INT-010
 #[test]
 fn a_missing_handler_is_reported_empty_and_not_as_openxplorer() {
@@ -311,7 +311,7 @@ fn a_missing_handler_is_reported_empty_and_not_as_openxplorer() {
     assert!(!status.is_zip_default());
 }
 
-/// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_backup_is_private`
+/// Ported from `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::test_backup_is_private`
 /// parity: INT-008
 #[test]
 fn the_record_of_previous_handlers_is_private() {
@@ -323,7 +323,7 @@ fn the_record_of_previous_handlers_is_private() {
     assert_eq!(metadata.mode() & 0o777, 0o600);
 }
 
-/// Ported from `desktop/tests/test_v08.py::RebrandTests::test_desktop_id_retained`
+/// Ported from `v2.0.0:desktop/tests/test_v08.py::RebrandTests::test_desktop_id_retained`
 /// parity: INT-029
 #[test]
 fn the_desktop_id_is_the_legacy_one() {

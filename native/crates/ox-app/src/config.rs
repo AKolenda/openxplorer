@@ -2,7 +2,7 @@
 //! The application's identity on the session bus, and the name of the
 //! build.
 //!
-//! Ports `APP_ID` in `desktop/runtime_guard.py`.
+//! Ports `APP_ID` in `v2.0.0:desktop/runtime_guard.py`.
 
 /// The application ID, which `build.rs` chooses. It is the preview's
 /// `io.winspace.Development.Native` unless the build sets `OX_APP_ID` to
@@ -17,7 +17,7 @@ pub(crate) const APP_ID: &str = env!("OX_APP_ID");
 pub(crate) const IS_PREVIEW: bool = ends_with(APP_ID, ".Native");
 
 /// What this build is called in the status bar, About this build and the
-/// About settings (`#status-mode` in `desktop/ui/app.js`): the product and
+/// About settings (`#status-mode` in `v2.0.0:desktop/ui/app.js`): the product and
 /// its version, and "native preview" in the preview.
 pub(crate) const BUILD_NAME: &str = if IS_PREVIEW {
     concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"), " native preview")

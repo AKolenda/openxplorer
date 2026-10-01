@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The index service's periodic work.
 //!
-//! Ports `refresh_due` and `overflow` in `desktop/index_service.py`
+//! Ports `refresh_due` and `overflow` in `v2.0.0:desktop/index_service.py`
 //! (SRCH-026 to SRCH-030): requests from other processes, live changes,
 //! the rescan at start-up, the Auto-index switch and the timed checks of
 //! roots that cannot be watched.

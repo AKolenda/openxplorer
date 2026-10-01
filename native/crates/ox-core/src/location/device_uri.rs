@@ -3,7 +3,7 @@
 //! bracketed bus identifiers ordinary URL parsers refuse as malformed IPv6
 //! hosts.
 //!
-//! Ports `DEVICE_URI` in `desktop/core.py`, which `split_location`,
+//! Ports `DEVICE_URI` in `v2.0.0:desktop/core.py`, which `split_location`,
 //! `normalise_location` and the device labels try before the ordinary URL
 //! rules.
 

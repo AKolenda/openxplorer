@@ -2,7 +2,7 @@
 //! Finding the previous versions of one item (PROP-032).
 //!
 //! Ports `PreviousVersions.candidates` and `PreviousVersions.list` from
-//! `desktop/previous_versions.py`. The lookup reads the metadata of
+//! `v2.0.0:desktop/previous_versions.py`. The lookup reads the metadata of
 //! snapshot folders the server already exposes. It is not an SMB
 //! `FSCTL_SRV_ENUMERATE_SNAPSHOTS` client and never creates snapshots, so
 //! finding nothing does not prove that there is no history.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The body of the Properties dialog: its tabs and their panels.
 //!
-//! Ports `propertiesDialog` in `desktop/ui/app.js` (PROP-001, PROP-003,
+//! Ports `propertiesDialog` in `v2.0.0:desktop/ui/app.js` (PROP-001, PROP-003,
 //! PROP-006): the tabs General, Sharing (local folders only), Location
 //! (standard folders only), Permissions, Checksums (files only, PROP-014)
 //! and Previous versions, the item's properties read once

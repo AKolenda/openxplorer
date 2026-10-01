@@ -2,7 +2,7 @@
 //! Unix permissions for real local staging.
 //!
 //! Ports `_secure_local_staging`, `_set_local_directory_mode` and
-//! `_restore_directory_modes` in `desktop/operations.py`.
+//! `_restore_directory_modes` in `v2.0.0:desktop/operations.py`.
 //!
 //! Rules enforced here:
 //! - XFER-004: only `file:` items with a real path get Unix modes. MTP, AFC
@@ -66,7 +66,7 @@ pub(crate) fn path_for_unix_modes(node: &(impl Node + ?Sized)) -> Option<PathBuf
 /// `GVfs` backends (MTP, AFC, SMB), even when they expose a FUSE path, and
 /// returns `None` for them. The ZIP extractor in [`crate::archive`]
 /// secures its staging folder with this too, as
-/// `desktop/zip_extraction.py` calls `_secure_local_staging`.
+/// `v2.0.0:desktop/zip_extraction.py` calls `_secure_local_staging`.
 ///
 /// # Errors
 ///

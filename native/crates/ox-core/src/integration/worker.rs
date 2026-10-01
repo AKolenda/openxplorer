@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Running blocking integration work off the main thread. Ports the
 //! `start_worker` calls of the integration branches of `dispatch` in
-//! `desktop/winspace.py`, which run every file-association, Brave,
+//! `v2.0.0:desktop/winspace.py`, which run every file-association, Brave,
 //! opening and terminal request on a worker thread.
 
 /// Runs `job` on a GIO worker thread and resolves with its result, so the

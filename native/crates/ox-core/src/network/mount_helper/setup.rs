@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Setting up, removing and printing a managed mount: `main` of
-//! `desktop/mount_share.py`.
+//! `v2.0.0:desktop/mount_share.py`.
 
 use std::fs::{self, DirBuilder};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};

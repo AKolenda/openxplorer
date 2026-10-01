@@ -2,8 +2,8 @@
 //! The app's drop-down and context menus: a glyph, a label and a shortcut
 //! per item, in the classic or the compact style.
 //!
-//! Ports `openMenu` in `desktop/ui/app.js` with `.menu.win10` and
-//! `.menu.win11` in `desktop/ui/style.css`. GTK's `PopoverMenu` hides the
+//! Ports `openMenu` in `v2.0.0:desktop/ui/app.js` with `.menu.win10` and
+//! `.menu.win11` in `v2.0.0:desktop/ui/style.css`. GTK's `PopoverMenu` hides the
 //! icon of a labelled item, so the items are rows of a `GtkListBox`, which
 //! also gives arrow-key movement and Enter activation. Each row runs a
 //! window or application action: a disabled action, or an item disabled

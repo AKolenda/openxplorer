@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The Previous versions tab of the Properties dialog (PROP-019).
 //!
-//! Ports `renderVersionsPanel` in `desktop/ui/app.js`: what the tab can and
+//! Ports `renderVersionsPanel` in `v2.0.0:desktop/ui/app.js`: what the tab can and
 //! cannot find, Refresh and Snapshot source…, "Checking readable snapshot
 //! folders…" while the lookup runs, then the versions under their column
 //! titles, or "No accessible previous versions" with the reason, and the

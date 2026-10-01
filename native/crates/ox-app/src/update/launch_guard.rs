@@ -4,9 +4,9 @@
 //! instance an upgrade left outdated; and the `runtime-info` action that
 //! lets a later launch run that check against this process.
 //!
-//! Ports `main` and `confirm_restart` in `desktop/winspace.py` and the
+//! Ports `main` and `confirm_restart` in `v2.0.0:desktop/winspace.py` and the
 //! `runtime-info` action of `OpenXplorer.startup`; the guard itself is
-//! ox-core's port of `desktop/runtime_guard.py`
+//! ox-core's port of `v2.0.0:desktop/runtime_guard.py`
 //! ([`InstanceGuard`]). Its safety rules hold here: a running instance
 //! is asked to quit, never killed, and only after the user agreed or
 //! asked for `--restart`.

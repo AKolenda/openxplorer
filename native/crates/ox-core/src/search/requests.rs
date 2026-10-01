@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Requests other windows and processes leave for the index owner.
 //!
-//! Ports `enqueue` and `drain_requests` in `desktop/search_index.py` and
-//! the request kinds `refresh_due` in `desktop/index_service.py` handles
+//! Ports `enqueue` and `drain_requests` in `v2.0.0:desktop/search_index.py` and
+//! the request kinds `refresh_due` in `v2.0.0:desktop/index_service.py` handles
 //! (SRCH-027). The `index_requests` table is shared with the Python app,
 //! so the kind words are Python's, and a change is stored as the JSON
 //! array `[root, folder]` that both apps read.
@@ -135,7 +135,7 @@ impl SearchIndex {
 mod tests {
     use super::*;
 
-    /// Ported from `desktop/tests/test_v05.py::IndexTests::test_command_queue_deduplicates`
+    /// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_command_queue_deduplicates`
     /// parity: SRCH-027
     #[test]
     fn repeated_requests_are_queued_once() {

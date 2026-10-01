@@ -2,7 +2,7 @@
 //! Which colour art a file gets: its type, from its extension or, for a name
 //! without a known one, its content type.
 //!
-//! Replaces the `map` of `fileIcon` and `isZipEntry` in `desktop/ui/app.js`.
+//! Replaces the `map` of `fileIcon` and `isZipEntry` in `v2.0.0:desktop/ui/app.js`.
 //! Files are grouped by the Fluent colour icon that shows them. The Word,
 //! Excel and PDF letter badges of app.js are gone: an open icon set cannot
 //! use Office logos (owner, 2026-09-27), so those files show the document.

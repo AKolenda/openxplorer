@@ -3,8 +3,8 @@
 //! Restore can put back, and who answers Show in folder.
 //!
 //! Ports the `desktopStatus` branch of `dispatch` and `reveal_status` in
-//! `desktop/winspace.py`, and the status texts of `renderDefaultStatus`
-//! in `desktop/ui/app.js` (INT-010, INT-012, INT-016). Reading the status
+//! `v2.0.0:desktop/winspace.py`, and the status texts of `renderDefaultStatus`
+//! in `v2.0.0:desktop/ui/app.js` (INT-010, INT-012, INT-016). Reading the status
 //! only reads: `xdg-mime query`, the two session files and the bus
 //! daemon, which is asked without starting any service.
 
@@ -165,7 +165,7 @@ mod tests {
         DefaultsReport { status, names }
     }
 
-    /// Ported from `renderDefaultStatus` in `desktop/ui/app.js`.
+    /// Ported from `renderDefaultStatus` in `v2.0.0:desktop/ui/app.js`.
     ///
     /// parity: INT-010
     #[test]

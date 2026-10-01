@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The keyring the SMB credential store reads and writes through.
 //!
-//! Ports the libsecret calls of `desktop/session_credentials.py`
+//! Ports the libsecret calls of `v2.0.0:desktop/session_credentials.py`
 //! (`password_lookup_sync`, `password_store_sync`, `password_clear_sync`)
 //! and the GNOME `NetworkPassword` clear of `sign_out` in
-//! `desktop/winspace.py`. [`Keyring`] is the seam: production code uses
+//! `v2.0.0:desktop/winspace.py`. [`Keyring`] is the seam: production code uses
 //! [`SecretService`](super::SecretService), tests an in-memory keyring.
 //!
 //! libsecret names an item's schema in the `xdg:schema` attribute. Items

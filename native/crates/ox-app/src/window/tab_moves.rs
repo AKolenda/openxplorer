@@ -4,8 +4,8 @@
 //!
 //! Ports `prepareTabTransfer`, `detachTab`, `moveTabMenu`,
 //! `moveTabToWindow`, `reorderTab`, `receiveTransferredTab` and
-//! `applyPendingTabRestore` of `desktop/ui/app.js`, and the handoff of
-//! `desktop/tab_transfers.py`. Every window lives in this process, so a
+//! `applyPendingTabRestore` of `v2.0.0:desktop/ui/app.js`, and the handoff of
+//! `v2.0.0:desktop/tab_transfers.py`. Every window lives in this process, so a
 //! tab moves as a [`MovedTab`], the state `prepareTabTransfer` sent: its
 //! history, selection, scroll position, view, sort and Settings page. The
 //! destination restores the history, view and sort at once, and the
