@@ -361,7 +361,9 @@ mod tests {
     }
 
     /// Date modified starts wide enough for a late date and time at 125%
-    /// text size (13-pixel text grows to 16.25 pixels).
+    /// text size (13-pixel text grows to 16.25 pixels) in the window's font
+    /// stack (`base.css`), whichever of its fonts is installed; without any
+    /// of them it is `DejaVu Sans`, the widest common fallback.
     ///
     /// parity: VIEW-028
     #[gtk::test]
@@ -370,7 +372,8 @@ mod tests {
         let layout = view
             .column_view()
             .create_pango_layout(Some("12/31/2026 11:59 PM"));
-        let mut font = gtk::pango::FontDescription::from_string("Sans");
+        let mut font =
+            gtk::pango::FontDescription::from_string("Segoe UI Variable,Segoe UI,Noto Sans,Arial,sans-serif");
         font.set_absolute_size(16.25 * f64::from(gtk::pango::SCALE));
         layout.set_font_description(Some(&font));
         let text = layout.pixel_size().0;

@@ -600,7 +600,7 @@ mod tests {
         let expected = [
             ColumnWidth {
                 column: Column::Modified,
-                pixels: 176.0,
+                pixels: 184.0,
             },
             ColumnWidth {
                 column: Column::ParentUri,

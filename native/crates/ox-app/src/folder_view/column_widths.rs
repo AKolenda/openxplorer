@@ -4,7 +4,7 @@
 //!
 //! Ports `columnDefaults` and `applyColumnLayout` in `desktop/ui/app.js`:
 //! Name takes the remaining width until the user resizes it, the other
-//! columns default to 176 (Date modified), 330 (Folder path), 135 and 90
+//! columns default to 184 (Date modified), 330 (Folder path), 135 and 90
 //! pixels, and saved widths are clamped to the limits the Python app uses (ox-core's [`Column::width_range`]).
 //! The details view applies these widths and saves them after a resize.
 
@@ -49,7 +49,7 @@ const fn edge_gutter(column: SortColumn) -> u32 {
 const fn default_width(column: SortColumn) -> Option<u32> {
     match column {
         SortColumn::Name => None,
-        SortColumn::Modified => Some(176),
+        SortColumn::Modified => Some(184),
         SortColumn::FolderPath => Some(330),
         SortColumn::Type => Some(135),
         SortColumn::Size => Some(90),
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn unsaved_columns_start_at_the_python_defaults() {
         assert_eq!(start_width(SortColumn::Name, None), None);
-        assert_eq!(start_width(SortColumn::Modified, None), Some(176));
+        assert_eq!(start_width(SortColumn::Modified, None), Some(184));
         assert_eq!(start_width(SortColumn::FolderPath, None), Some(330));
         assert_eq!(start_width(SortColumn::Type, None), Some(135));
         assert_eq!(start_width(SortColumn::Size, None), Some(90));
