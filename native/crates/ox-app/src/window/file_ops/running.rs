@@ -20,6 +20,7 @@ use ox_core::ops::{
 };
 use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
+use crate::window::background_notice::Destination;
 use crate::window::dialog;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::TransferPanel;
@@ -178,8 +179,9 @@ impl BrowserWindow {
                 if let Some(record) = finished.undo {
                     self.context().record_operation(record);
                 }
+                let destination = Destination::items(finished.created.clone());
                 self.reload_selecting(finished.created);
-                self.report(finished.summary).await;
+                self.report(finished.summary, destination).await;
             }
             Err(error) => {
                 self.reload_selecting(Vec::new());
@@ -191,9 +193,9 @@ impl BrowserWindow {
     /// Shows `summary`: a toast for complete success, otherwise the
     /// "Operation result" dialog.
     /// A desktop notification says it too while no window has focus
-    /// (INT-026).
-    pub(super) async fn report(&self, summary: OperationSummary) {
-        self.notify_if_in_background(&summary);
+    /// (INT-026), whose Show button opens `destination`.
+    pub(super) async fn report(&self, summary: OperationSummary, destination: Destination) {
+        self.notify_if_in_background(&summary, destination);
         match summary {
             OperationSummary::Toast(text) => self.show_message(&text),
             OperationSummary::Report(text) => dialog::show_message(self, RESULT_TITLE, &text).await,

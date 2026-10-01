@@ -18,6 +18,7 @@ use ox_core::transfer::{ConflictPolicy, TransferMode};
 
 use crate::properties::RestoreRequest;
 
+use super::background_notice::Destination;
 use super::BrowserWindow;
 
 /// Shown when Restore a copy is asked for while a write runs, as the
@@ -73,7 +74,10 @@ impl BrowserWindow {
                 // Listing a folder hides the toast, so the report comes last.
                 window.reload_tabs_showing(&destination);
                 match outcome {
-                    Ok(outcome) => window.report_transfer(&summarize(TransferMode::Copy, &outcome.result)),
+                    Ok(outcome) => window.report_transfer(
+                        &summarize(TransferMode::Copy, &outcome.result),
+                        Destination::items(outcome.created),
+                    ),
                     Err(error) => window.show_result_dialog(STOPPED_TITLE, &error.to_string()),
                 }
             }
@@ -82,8 +86,8 @@ impl BrowserWindow {
 
     /// Shows how a copy ended: a toast for complete success, else the
     /// Operation result dialog.
-    fn report_transfer(&self, summary: &OperationSummary) {
-        self.notify_if_in_background(summary);
+    fn report_transfer(&self, summary: &OperationSummary, destination: Destination) {
+        self.notify_if_in_background(summary, destination);
         match summary {
             OperationSummary::Toast(text) => self.show_message(text),
             OperationSummary::Report(text) => self.show_result_dialog(RESULT_TITLE, text),

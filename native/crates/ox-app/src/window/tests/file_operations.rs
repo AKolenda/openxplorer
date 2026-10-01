@@ -15,6 +15,7 @@ use super::file_ops_support::{
 };
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use crate::window::file_drop::DropAction;
 
 /// parity: OPS-001, CMD-004
 #[gtk::test]
@@ -395,13 +396,15 @@ fn a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast() 
     assert!(crate::window::background_notice::take_sent().is_empty());
 }
 
-/// A duplicate that ends while a window outside the application has
-/// focus, as another app's would, sends one notification with the toast's words, which brings
-/// back the window that ran it.
+/// A drop into a subfolder that ends while a window outside the
+/// application has focus, as another app's would, sends one notification
+/// with the toast's words. Clicking it brings back the window that ran
+/// it; its Show button opens the subfolder there with the copy selected.
 ///
 /// parity: INT-026
 #[gtk::test]
 fn an_operation_ending_in_the_background_notifies_the_desktop() {
+    let source = Fixture::standard();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     crate::window::background_notice::take_sent();
@@ -412,16 +415,35 @@ fn an_operation_ending_in_the_background_notifies_the_desktop() {
         other.is_active() && !test.window.is_active()
     });
 
-    select_names(&test, &["Notes 2.txt"]);
-    test.activate("duplicate", None);
-    wait_until("the toast", || {
-        test.window.shown_message() == "1 item(s) duplicated."
+    let taken = test.window.drop_files(
+        &[source.uri_of("Notes 2.txt")],
+        Some(test.position_of("Documents")),
+        DropAction::Copy,
+    );
+    assert!(taken);
+    wait_until("the notice", || {
+        crate::window::background_notice::SENT.with(|sent| !sent.borrow().is_empty())
     });
 
     let sent = crate::window::background_notice::take_sent();
     other.destroy();
     assert_eq!(sent.len(), 1);
-    assert_eq!(sent[0].title, "1 item(s) duplicated.");
     assert_eq!(sent[0].body, None);
     assert_eq!(sent[0].window, test.window.id());
+    let copy = fixture.uri_of("Documents/Notes 2.txt");
+    assert_eq!(sent[0].destination.items, [copy.clone()]);
+    let (action, target) = sent[0].show_action();
+    assert_eq!(action, "app.show-destination");
+    let (id, folder, items) = target
+        .get::<(u32, String, Vec<String>)>()
+        .expect("the Show target");
+    assert_eq!(id, test.window.id());
+    assert_eq!(folder, "");
+    assert_eq!(items, [copy]);
+
+    test.window.show_destination(None, items);
+    wait_until("the subfolder with the copy selected", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents"))
+            && test.selected_names() == ["Notes 2.txt"]
+    });
 }
