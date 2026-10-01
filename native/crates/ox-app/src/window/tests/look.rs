@@ -351,6 +351,7 @@ fn menus_and_the_sign_in_dialog_paint_each_appearance() {
         show_theme(&test, theme);
         test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
         let menu = test.window.context_menu();
+        wait_until("the menu to be drawn", || menu.is_mapped() && menu.width() > 0);
         wait_for_frames(&test.window, 2);
         let contents = menu.child().expect("the menu has contents");
         let place = bounds_in(&contents, &menu);
@@ -366,6 +367,9 @@ fn menus_and_the_sign_in_dialog_paint_each_appearance() {
         let sign_in = test.window.network().sign_in().clone();
         wait_until("the sign-in dialog", || sign_in.shown_dialog().is_some());
         let dialog = sign_in.shown_dialog().expect("the sign-in dialog");
+        wait_until("the sign-in dialog to be drawn", || {
+            dialog.is_mapped() && dialog.width() > 0
+        });
         wait_for_frames(&dialog, 3);
         let caption_colour = painted_colour(&dialog, 10, 20);
         assert_same_colour(caption_colour, css_colour(caption), &format!("{theme} caption"));

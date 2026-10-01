@@ -452,6 +452,12 @@ fn warning() -> gtk::Box {
     warning.append(&glyph);
     let text = quiet_text(FILES_STAY);
     text.set_hexpand(true);
-    warning.append(&text);
+    // A vertical box reports no baseline, so the row does not align the
+    // text's baseline with the glyph's, which GTK 4.14 does only when it
+    // measures for a given width and then reports two pixels more.
+    let text_column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    text_column.set_hexpand(true);
+    text_column.append(&text);
+    warning.append(&text_column);
     warning
 }
