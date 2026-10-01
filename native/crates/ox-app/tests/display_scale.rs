@@ -12,8 +12,8 @@
 use std::path::Path;
 use std::process::Command;
 
-use gtk::gdk;
 use gtk::prelude::*;
+use gtk::{gdk, gdk_pixbuf};
 
 /// The window's size in logical pixels: near its 670 by 470 minimum, so it
 /// fits the test display at twice the scale.
@@ -26,6 +26,15 @@ const BARS: std::ops::Range<i32> = 42..159;
 
 /// How far a channel may stray between the two pictures.
 const CHANNEL_TOLERANCE: u8 = 2;
+
+/// The edge of a details row's icon in logical pixels
+/// (`ROW_ICON_SIZE` in `src/folder_view/details.rs`).
+const ROW_ICON: i32 = 21;
+
+/// Where the file list's rows start, in logical pixels: below the column
+/// headers and right of the sidebar.
+const ROWS_TOP: i32 = 200;
+const ROWS_LEFT: i32 = 220;
 
 /// Whether the test runs in `native/tools/check.py`'s isolation: temporary
 /// files in a private run directory rather than `/tmp`, the home folder and
@@ -76,6 +85,49 @@ fn pixel_at((bytes, stride): &(Vec<u8>, usize), x: i32, y: i32) -> [u8; 4] {
     bytes[start..start + 4].try_into().expect("four channels")
 }
 
+/// The bundled folder artwork (`ox-file-folder-flat`) drawn straight from
+/// its vector file at `edge` device pixels over the white of a row, as
+/// GTK's icon loader draws it.
+fn folder_artwork(edge: i32) -> (Vec<u8>, usize) {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("resources/icons/hicolor/scalable/places/ox-file-folder-flat")
+        .with_extension("svg");
+    let artwork = gdk_pixbuf::Pixbuf::from_file_at_size(&file, edge, edge).expect("the bundled folder");
+    assert!(artwork.has_alpha() && artwork.n_channels() == 4);
+    let stride = usize::try_from(artwork.rowstride()).expect("a row length");
+    let bytes = artwork.read_pixel_bytes();
+    let over_white = |colour: u8, alpha: u8| {
+        let (colour, alpha) = (u32::from(colour), u32::from(alpha));
+        u8::try_from((colour * alpha + 255 * (255 - alpha) + 127) / 255).expect("a channel")
+    };
+    let mut pixels = Vec::with_capacity(bytes.len());
+    for pixel in bytes.chunks(4) {
+        if let [red, green, blue, alpha] = *pixel {
+            // GDK's default memory format is B, G, R, A, premultiplied:
+            // opaque here, so only the order changes.
+            let [red, green, blue] = [red, green, blue].map(|colour| over_white(colour, alpha));
+            pixels.extend_from_slice(&[blue, green, red, 255]);
+        }
+    }
+    (pixels, stride)
+}
+
+/// The top-left corner of the folder's yellow in `pixels`, searched from
+/// (`left`, `top`) over `width` by `height` pixels.
+fn yellow_corner(pixels: &(Vec<u8>, usize), (left, top, width, height): (i32, i32, i32, i32)) -> (i32, i32) {
+    let is_yellow = |[blue, green, red, _]: [u8; 4]| red > 240 && (200..230).contains(&green) && blue < 90;
+    let mut corner: Option<(i32, i32)> = None;
+    for y in top..top + height {
+        for x in left..left + width {
+            if is_yellow(pixel_at(pixels, x, y)) {
+                let (min_x, min_y) = corner.unwrap_or((x, y));
+                corner = Some((min_x.min(x), min_y.min(y)));
+            }
+        }
+    }
+    corner.expect("the folder's yellow is in the area")
+}
+
 /// Whether two pixels are the same colour.
 fn same(first: [u8; 4], second: [u8; 4]) -> bool {
     first
@@ -89,6 +141,9 @@ fn same(first: [u8; 4], second: [u8; 4]) -> bool {
 /// navigation row and the command bar each line and fill covers exactly two
 /// device pixels of the same colour, where an enlarged picture would blur
 /// them into their neighbours.
+///
+/// The folder artwork of the first row is checked the same way: at twice
+/// the scale it is the vector file drawn at 42 device pixels.
 ///
 /// parity: LOOK-028
 #[test]
@@ -114,6 +169,7 @@ fn twice_the_scale_draws_the_bars_on_whole_device_pixels() {
 
     let column = single.width() - 5;
     let (single, double) = (pixels(&single), pixels(&double));
+    folder_artwork_is_drawn_from_its_vector_at_twice_the_scale(&double);
     for y in BARS {
         let logical = pixel_at(&single, column, y);
         for device_y in [2 * y, 2 * y + 1] {
@@ -121,6 +177,29 @@ fn twice_the_scale_draws_the_bars_on_whole_device_pixels() {
             assert!(
                 same(logical, device),
                 "row {y}: {logical:?} at 1x, {device:?} at 2x"
+            );
+        }
+    }
+}
+
+/// The folder of the first row, at twice the scale, is the bundled vector
+/// artwork drawn at 42 device pixels, pixel for pixel: drawn at the
+/// device's resolution, not the 21-pixel picture enlarged, which would
+/// blur its edges.
+fn folder_artwork_is_drawn_from_its_vector_at_twice_the_scale(double: &(Vec<u8>, usize)) {
+    let edge = 2 * ROW_ICON;
+    let artwork = folder_artwork(edge);
+    let (artwork_x, artwork_y) = yellow_corner(&artwork, (0, 0, edge, edge));
+    let rows = (2 * ROWS_LEFT, 2 * ROWS_TOP, 2 * 120, 2 * 40);
+    let (shown_x, shown_y) = yellow_corner(double, rows);
+    let (left, top) = (shown_x - artwork_x, shown_y - artwork_y);
+    for y in 0..edge {
+        for x in 0..edge {
+            let drawn = pixel_at(&artwork, x, y);
+            let shown = pixel_at(double, left + x, top + y);
+            assert!(
+                same(drawn, shown),
+                "({x}, {y}) of the folder: {drawn:?} drawn, {shown:?} shown"
             );
         }
     }
