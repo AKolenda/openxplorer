@@ -111,9 +111,10 @@ impl BrowserWindow {
         ));
     }
 
-    /// Enter and double-click open the one selected item. With several
-    /// selected, Enter opens nothing, as app.js does, so an item outside
-    /// the selection is never opened.
+    /// Enter and double-click open the activated item. When it is one of
+    /// several selected items, all of them open, as Dolphin's
+    /// `itemsActivated` does (OPEN-003); an item outside a selection of
+    /// several is never opened.
     pub(super) fn connect_view_activation(&self) {
         let activate = glib::clone!(
             #[weak(rename_to = window)]
@@ -125,9 +126,10 @@ impl BrowserWindow {
                     return;
                 }
                 let selected = window.folder_pane().model().selected_positions();
-                let is_the_selection = selected.is_empty() || selected == [position];
-                if is_the_selection {
+                if selected.is_empty() || selected == [position] {
                     window.activate_item(position);
+                } else if selected.contains(&position) {
+                    window.open_selection();
                 }
             }
         );

@@ -323,6 +323,14 @@ impl Dialog {
         }
     }
 
+    /// Shows the dialog with `widget` focused, for a dialog whose first
+    /// button must not be the one a reflexive Enter presses.
+    pub(super) fn open_focusing(&self, widget: &impl IsA<gtk::Widget>) {
+        GtkWindowExt::set_focus(self, Some(widget));
+        self.present();
+        widget.grab_focus();
+    }
+
     /// Waits for the next answer: the button pressed, or `None` for
     /// Cancel, Escape or closing, which also closes the dialog. After a
     /// button the dialog stays open; call [`Self::finish`] once the answer

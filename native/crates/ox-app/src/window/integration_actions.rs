@@ -10,9 +10,9 @@
 //! `desktop/winspace.py`, UPD-005). The work itself is in
 //! [`crate::integration`] and [`crate::update`].
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
 use ox_core::integration::TerminalError;
 use ox_core::location::{is_smb_server, parent_location};
 use ox_core::update::Activity;
@@ -354,9 +354,7 @@ impl BrowserWindow {
         };
         let launcher = self.application_launcher();
         let app_id = app_id.to_owned();
-        let name = gio::AppInfo::all()
-            .into_iter()
-            .find(|app| app.id().is_some_and(|id| id == app_id.as_str()))
+        let name = integration::installed_application(&app_id)
             .map_or_else(|| app_id.clone(), |app| app.display_name().to_string());
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

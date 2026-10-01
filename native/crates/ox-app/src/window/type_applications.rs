@@ -31,6 +31,22 @@ fn chosen(dropdown: &gtk::DropDown) -> Option<usize> {
         .filter(|_| dropdown.selected() != gtk::INVALID_LIST_POSITION)
 }
 
+/// Asks over `parent` before the applications of a type described as
+/// `description` go back to the system's; true when the user agreed.
+async fn confirm_reset(parent: &Dialog, description: &str) -> bool {
+    let message = format!(
+        "Reset the apps for {description} files to the system defaults? Your default app and the apps \
+         you added are forgotten."
+    );
+    let question = Dialog::new(parent, "Reset apps", &message);
+    question.add_cancel_button();
+    let reset = question.add_button("Reset", ButtonStyle::Primary);
+    question.open();
+    let answer = question.next_response().await;
+    question.finish();
+    answer == Some(reset)
+}
+
 impl BrowserWindow {
     /// Shows the applications of `content_type` and applies each change
     /// the user makes until the dialog is closed.
@@ -68,7 +84,8 @@ impl BrowserWindow {
             )));
             others.set_model(Some(&gtk::StringList::new(&names)));
             if !is_open {
-                dialog.open_on_first_button();
+                // Not Reset, the first button: Enter must never reset.
+                dialog.open_focusing(&associated);
                 is_open = true;
             }
             let Some(answer) = dialog.next_response().await else {
@@ -78,6 +95,9 @@ impl BrowserWindow {
             let change = if answer == close {
                 break;
             } else if answer == reset {
+                if !confirm_reset(&dialog, &description).await {
+                    continue;
+                }
                 Ok(TypeChange::Reset)
             } else if answer == make_default {
                 selected

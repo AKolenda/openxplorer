@@ -13,9 +13,10 @@ use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 
 use super::command_line::CommandRequest;
 use super::state::{active_window, browser_windows_of, open_window, AppState};
+use super::AppAction;
 use crate::app_context::AppContext;
 use crate::settings_page::SettingsView;
-use crate::window::QUIT_WHILE_WRITING;
+use crate::window::{BrowserWindow, QUIT_WHILE_WRITING};
 
 impl AppState {
     /// Does what `request` asks.
@@ -121,6 +122,20 @@ impl AppState {
         // Data safety: Quit never cuts off a write, in any window.
         if browser_windows_of(app).any(|window| window.has_running_write()) {
             report_in_every_window(app, QUIT_WHILE_WRITING);
+            return false;
+        }
+        // SET-010: one question for every window with several tabs, then
+        // Quit again, so the windows close without asking each.
+        let asking: Vec<BrowserWindow> = browser_windows_of(app)
+            .filter(BrowserWindow::asks_before_closing_tabs)
+            .collect();
+        if let Some(parent) = active_window(app).filter(|_| !asking.is_empty()) {
+            let app = app.clone();
+            glib::spawn_future_local(async move {
+                if parent.confirm_quit_with_tabs(&asking).await {
+                    app.activate_action(AppAction::Quit.name(), None);
+                }
+            });
             return false;
         }
         for window in app.windows() {

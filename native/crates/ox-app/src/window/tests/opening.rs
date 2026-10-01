@@ -238,7 +238,9 @@ fn enter_on_several_items_opens_each_and_asks_for_many() {
     let test = TestWindow::open(&fixture.uri());
 
     select_names(&test, &["Documents", "Notes 2.txt", "Résumé.txt"]);
-    test.activate("open", None);
+    // Enter on the focused row is the column view's activate signal.
+    let column_view = test.window.folder_pane().details().column_view();
+    column_view.emit_by_name::<()>("activate", &[&test.position_of("Notes 2.txt")]);
     wait_until("both files to open", || {
         test.context.recorded_launches().len() == 2
     });
@@ -258,8 +260,9 @@ fn enter_on_several_items_opens_each_and_asks_for_many() {
 }
 
 /// An executable script opens in its application; with "Ask whether to
-/// run programs and scripts" on, opening it asks first, and Open opens it
-/// without running it.
+/// run programs and scripts" on, opening it asks first: Open opens it
+/// without running it, Cancel does nothing and Run runs it. An executable
+/// text file is not a program and opens without asking.
 ///
 /// parity: OPEN-008
 #[gtk::test]
@@ -297,6 +300,35 @@ fn opening_a_script_asks_to_run_it_only_when_the_settings_say_so() {
         test.context.recorded_launches().len() == 2
     });
     assert!(!fixture.path("ran").exists(), "nothing ran");
+
+    test.window.activate_item(test.position_of("tidy.sh"));
+    open_dialog(&test).press("Cancel");
+    wait_for(std::time::Duration::from_millis(200));
+    assert_eq!(
+        test.context.recorded_launches().len(),
+        2,
+        "Cancel opens and runs nothing"
+    );
+
+    test.window.activate_item(test.position_of("tidy.sh"));
+    open_dialog(&test).press("Run");
+    wait_until("the script to run", || {
+        test.context.recorded_launches().len() == 3
+    });
+    assert_eq!(
+        test.context.recorded_launches()[2],
+        format!("run {}", fixture.uri_of("tidy.sh"))
+    );
+
+    // On FAT, NTFS and SMB mounts every file may be executed; a text
+    // file there opens without the question.
+    let notes = fixture.path("Notes 2.txt");
+    fs::set_permissions(&notes, fs::Permissions::from_mode(0o755)).expect("executable");
+    test.window.activate_item(test.position_of("Notes 2.txt"));
+    wait_until("the text file to open", || {
+        test.context.recorded_launches().len() == 4
+    });
+    assert_eq!(test.context.recorded_launches()[3], fixture.uri_of("Notes 2.txt"));
 }
 
 /// Shift+F4 opens a terminal in the folder shown and Shift+Alt+F4 one per

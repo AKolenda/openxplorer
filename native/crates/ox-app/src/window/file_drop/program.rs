@@ -5,8 +5,8 @@
 //! them ([`super::launcher`], DND-020).
 //!
 //! New in the native app, promised by the owner. A file under a drag is a
-//! program when GIO says it is a regular file the user may execute; the
-//! answer is looked up once per file while the drag hovers
+//! program when GIO says it is a regular file the user may execute and its
+//! content type is a binary's or a script's; the answer is looked up once per file while the drag hovers
 //! ([`ProgramChecks`]) and checked again before anything runs. A binary
 //! or an `AppImage` runs directly; a script (a text file) runs in the
 //! user's terminal, which stays open after it ends so its output can be
@@ -44,6 +44,22 @@ const PROGRAM_ATTRIBUTES: &str = "standard::type,standard::content-type,access::
 
 /// The content type every script is a kind of.
 const TEXT_CONTENT_TYPE: &str = "text/plain";
+
+/// The content types of programs: binaries, and the scripts that
+/// shared-mime-info declares or older versions only name. A file of any
+/// other type is never run, whatever its execute bit says, since on FAT,
+/// NTFS and SMB mounts every file has it. This is the list Dolphin offers
+/// "Execute" for, less `.desktop` launchers, which [`launcher`] handles.
+const PROGRAM_CONTENT_TYPES: [&str; 8] = [
+    "application/x-executable",
+    "application/x-sharedlib",
+    "application/x-pie-executable",
+    "application/x-shellscript",
+    "application/x-perl",
+    "application/x-ruby",
+    "text/x-python",
+    "text/x-python3",
+];
 
 /// The name the hold script runs under (`$0`).
 const HOLD_SCRIPT_NAME: &str = "openxplorer-drop";
@@ -94,12 +110,14 @@ pub(crate) struct ProgramChecks {
 fn program_from_info(entry: &Entry, info: &gio::FileInfo) -> Option<ProgramTarget> {
     let is_regular = info.file_type() == gio::FileType::Regular;
     let may_execute = info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE);
-    if !is_regular || !may_execute {
+    let content_type = info.content_type()?;
+    let is_program_type = PROGRAM_CONTENT_TYPES
+        .iter()
+        .any(|program_type| gio::content_type_is_a(&content_type, program_type));
+    if !is_regular || !may_execute || !is_program_type {
         return None;
     }
-    let is_script = info
-        .content_type()
-        .is_some_and(|content_type| gio::content_type_is_a(&content_type, TEXT_CONTENT_TYPE));
+    let is_script = gio::content_type_is_a(&content_type, TEXT_CONTENT_TYPE);
     let kind = if is_script {
         ProgramKind::Script
     } else {
@@ -260,6 +278,12 @@ impl BrowserWindow {
 
     /// Starts `program`, at `path`, with the local paths of `items`.
     fn start_program(&self, program: &ProgramTarget, path: &Path, items: &[String]) -> Result<(), String> {
+        // Test safety: tests record the run instead of starting a program
+        // or a terminal on the developer's desktop.
+        #[cfg(test)]
+        if self.context().record_run(&program.uri) {
+            return Ok(());
+        }
         let sandbox = Sandbox::detect();
         let arguments: Vec<OsString> = items.iter().map(|uri| item_argument(uri)).collect();
         let (command, folder) = match program.kind {
@@ -336,7 +360,7 @@ mod tests {
 
     /// parity: DND-026
     #[test]
-    fn only_executable_regular_files_are_programs_and_scripts_are_text() {
+    fn only_executable_programs_of_a_program_type_are_programs() {
         let tool = file_entry("convert");
         let binary = program_from_info(
             &tool,
@@ -351,11 +375,16 @@ mod tests {
             &info(gio::FileType::Regular, "application/x-executable", false),
         );
         let folder = program_from_info(&tool, &info(gio::FileType::Directory, "inode/directory", true));
+        // On FAT, NTFS and SMB mounts every file may be executed.
+        let text = program_from_info(&tool, &info(gio::FileType::Regular, "text/plain", true));
+        let photo = program_from_info(&tool, &info(gio::FileType::Regular, "image/jpeg", true));
 
         assert_eq!(binary.map(|program| program.kind), Some(ProgramKind::Binary));
         assert_eq!(script.map(|program| program.kind), Some(ProgramKind::Script));
         assert_eq!(not_executable, None);
         assert_eq!(folder, None);
+        assert_eq!(text, None, "a text file is not a script");
+        assert_eq!(photo, None, "a photo is not a program");
     }
 
     /// parity: DND-026

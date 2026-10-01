@@ -17,13 +17,12 @@ use std::path::PathBuf;
 use gtk::gio;
 use gtk::prelude::*;
 use ox_core::entry::{inspect, Entry, EntryError, EntryKind};
-use ox_core::integration::{unique_applications, APP_ID, UNKNOWN_CONTENT_TYPE};
+use ox_core::integration::{unique_applications, APP_ID, FOLDER_CONTENT_TYPE, UNKNOWN_CONTENT_TYPE};
 use ox_core::location::{normalise, LocationError};
 use ox_core::network::local_path;
 use ox_core::transfer::Cancellation;
 
-/// The content type of a folder.
-const FOLDER_CONTENT_TYPE: &str = "inode/directory";
+use super::tools::installed_application;
 
 /// Why Open with could not list or launch. `Display` is the message the
 /// window shows.
@@ -366,15 +365,6 @@ pub(crate) fn launch(
     Ok(default_after_launch(&app, prepared, default))
 }
 
-/// The installed application with desktop ID `app_id`, as `prepare_launch`
-/// finds it among every installed application.
-fn installed_application(app_id: &str) -> Option<gio::AppInfo> {
-    let installed = gio::AppInfo::all();
-    installed
-        .into_iter()
-        .find(|app| app.id().as_deref() == Some(app_id))
-}
-
 /// Makes `app` the default when asked, and returns the toast.
 fn default_after_launch(
     app: &gio::AppInfo,
@@ -508,5 +498,63 @@ mod tests {
         assert_eq!(message, "Opened with the selected application.");
         let default = gio::AppInfo::default_for_type("application/x-openxplorer-test", false);
         assert_eq!(default.and_then(|default| default.id()), app.id());
+    }
+
+    /// The menu offers the installed applications of a file's type up to
+    /// its limit, without the file's default, which Open starts.
+    ///
+    /// parity: OPEN-013
+    #[gtk::test]
+    fn the_menu_offers_other_applications_up_to_its_limit() {
+        const MENU_TYPE: &str = "application/x-openxplorer-menu-test";
+        let data = gtk::glib::user_data_dir();
+        let config = gtk::glib::user_config_dir();
+        let temp = std::env::temp_dir();
+        assert!(
+            data.starts_with(&temp) && config.starts_with(&temp),
+            "private folders"
+        );
+        let folder = data.join("applications");
+        std::fs::create_dir_all(&folder).expect("the data folder is writable");
+        let names = [
+            ("org.openxplorer.MenuA.desktop", "Menu viewer A"),
+            ("org.openxplorer.MenuB.desktop", "Menu viewer B"),
+            ("org.openxplorer.MenuC.desktop", "Menu viewer C"),
+        ];
+        for (id, name) in names {
+            let entry = format!(
+                "[Desktop Entry]\nType=Application\nName={name}\nExec=true %F\nMimeType={MENU_TYPE};\n"
+            );
+            std::fs::write(folder.join(id), entry).expect("the data folder is writable");
+        }
+        crate::test_support::harness::wait_until("GIO to list the viewers", || {
+            names.iter().all(|(id, _)| installed_application(id).is_some())
+        });
+        // GIO lists an application for a type that shared-mime-info does
+        // not know only once the user associates them.
+        for (id, _) in names {
+            let viewer = installed_application(id).expect("installed");
+            viewer
+                .add_supports_type(MENU_TYPE)
+                .expect("the private config folder is writable");
+        }
+        let viewer_a = installed_application(names[0].0).expect("installed");
+        viewer_a
+            .set_as_default_for_type(MENU_TYPE)
+            .expect("the private config folder is writable");
+        let offered = |limit| -> Vec<String> {
+            menu_applications("file:///tmp/example", Some(MENU_TYPE), false, limit)
+                .into_iter()
+                .map(|choice| choice.id)
+                .collect()
+        };
+
+        assert_eq!(offered(3), [names[1].0, names[2].0]);
+        assert_eq!(offered(1), [names[1].0]);
+
+        gio::AppInfo::reset_type_associations(MENU_TYPE);
+        for (id, _) in names {
+            std::fs::remove_file(folder.join(id)).expect("the test entry is removed");
+        }
     }
 }

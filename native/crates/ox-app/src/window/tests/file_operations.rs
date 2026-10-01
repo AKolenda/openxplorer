@@ -13,11 +13,12 @@ use ox_core::settings::{PreferencesUpdate, Settings};
 use ox_core::transfer::{Progress, ProgressScope};
 
 use super::file_ops_support::{
-    is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash, select_names,
-    text_field, wait_for_no_dialog,
+    dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
+    select_names, text_field, wait_for_no_dialog,
 };
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use crate::window::dialog::Dialog;
 
 /// parity: OPS-001, CMD-004
 #[gtk::test]
@@ -322,8 +323,10 @@ fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
 }
 
 /// With "Ask before moving items to the Recycle Bin" off, Delete trashes
-/// at once; with "Ask before closing a window with several tabs" on,
-/// closing a window with two tabs asks first.
+/// at once, and with "Ask before deleting permanently" off Shift+Delete
+/// deletes at once; with "Ask before closing a window with several tabs"
+/// on, closing a window with two tabs asks first, once however often it
+/// is asked, and "Close all tabs" closes it.
 ///
 /// parity: SET-010
 #[gtk::test]
@@ -333,6 +336,7 @@ fn the_confirmation_settings_decide_what_asks() {
     let test = TestWindow::open(&fixture.uri());
     let update = PreferencesUpdate {
         confirm_trash: Some(false),
+        confirm_delete: Some(false),
         confirm_close_tabs: Some(true),
         ..PreferencesUpdate::default()
     };
@@ -349,16 +353,30 @@ fn the_confirmation_settings_decide_what_asks() {
     wait_until("the file to go to the Trash unasked", || {
         !fixture.path("Résumé.txt").exists()
     });
+    select_names(&test, &["Notes 10.txt"]);
+    test.activate("delete-permanently", None);
+    wait_until("the file to be deleted unasked", || {
+        !fixture.path("Notes 10.txt").exists()
+    });
+    assert!(dialog_over(&test).is_none(), "nothing asked");
 
     test.activate("new-tab", None);
     test.window.close();
+    test.window.close();
     let dialog = open_dialog(&test);
     assert_eq!(dialog.title_text(), "Close all tabs?");
+    let questions = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter(|window| window.is_visible() && window.downcast_ref::<Dialog>().is_some())
+        .count();
+    assert_eq!(questions, 1, "a second close asks no second question");
     dialog.press("Cancel");
     wait_for_no_dialog(&test);
     assert!(test.window.is_visible(), "the window stays open");
-    // The test window closes without asking again.
-    test.window.imp().closing_tabs_confirmed.set(true);
+
+    test.window.close();
+    open_dialog(&test).press("Close all tabs");
+    wait_until("the window to close", || !test.window.is_visible());
 }
 
 /// parity: OPS-015

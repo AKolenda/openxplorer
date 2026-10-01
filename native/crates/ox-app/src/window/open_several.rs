@@ -8,7 +8,7 @@
 use gtk::glib;
 use ox_core::entry::Entry;
 
-use super::activation::{activation_for, Activation};
+use super::activation::{activation_for, desktop_link, Activation};
 use super::dialog::{ButtonStyle, Dialog};
 use super::session::TabPlacement;
 use super::BrowserWindow;
@@ -53,14 +53,20 @@ impl BrowserWindow {
         ));
     }
 
-    /// Opens each of `entries`: folders in background tabs, in the order
-    /// of the view, and files and archives in their default applications.
-    /// An item that cannot be opened from here is left out.
+    /// Opens each of `entries`: folders, and `.desktop` links to folders,
+    /// in background tabs, in the order of the view, and files in their
+    /// default applications. An archive opens in its default application
+    /// too, since browsing one is a dialog of its own and several would
+    /// stack. An item that cannot be opened from here is left out.
     fn open_each(&self, entries: &[Entry]) {
         for entry in entries {
             match activation_for(entry) {
                 Activation::Folder(uri) => self.open_tab_or_report(&uri, TabPlacement::Background),
-                Activation::File | Activation::Archive => self.open_file(entry),
+                Activation::File => match desktop_link(entry) {
+                    Some(target) => self.follow_link_in_background(entry, target),
+                    None => self.open_file(entry),
+                },
+                Activation::Archive => self.open_file(entry),
                 Activation::Refused(_) => {}
             }
         }

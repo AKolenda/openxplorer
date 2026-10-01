@@ -58,6 +58,12 @@ const CLOSE_TABS_TITLE: &str = "Close all tabs?";
 /// The answer that closes the window and its tabs.
 const CLOSE_TABS: &str = "Close all tabs";
 
+/// The question before Quit closes windows with several tabs.
+const QUIT_TABS_TITLE: &str = "Quit OpenXplorer?";
+
+/// The answer that closes every window and quits.
+const QUIT_TABS: &str = "Quit";
+
 /// How often a window that should close looks whether it may.
 const CLOSE_POLL: Duration = Duration::from_millis(100);
 
@@ -122,11 +128,15 @@ impl BrowserWindow {
     /// the running write and close afterwards, and the close waits.
     pub(super) fn may_close_now(&self) -> bool {
         if self.asks_before_closing_tabs() {
-            glib::spawn_future_local(glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                async move { window.ask_to_close_tabs().await }
-            ));
+            // One question at a time, however often the shell asks.
+            if self.imp().closing.get() == ClosingState::Open {
+                self.imp().closing.set(ClosingState::Asking);
+                glib::spawn_future_local(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    async move { window.ask_to_close_tabs().await }
+                ));
+            }
             return false;
         }
         if !self.is_writing_files() {
@@ -145,14 +155,48 @@ impl BrowserWindow {
 
     /// Whether closing must first ask about the window's tabs: the
     /// settings ask for it, it has several, and nobody agreed yet.
-    fn asks_before_closing_tabs(&self) -> bool {
+    pub(crate) fn asks_before_closing_tabs(&self) -> bool {
         let asks = self.context().settings_data().preferences.confirm_close_tabs;
-        asks && !self.imp().closing_tabs_confirmed.get() && self.imp().session.borrow().tabs().len() > 1
+        asks && !self.imp().closing_tabs_confirmed.get() && self.tab_count() > 1
+    }
+
+    /// Asks once, for Quit, whether to close `windows`, the windows with
+    /// several tabs, as Dolphin asks on Quit; when the user agrees, none of
+    /// them asks again as it closes. False, without a second question,
+    /// while a question is already open over this window.
+    pub(crate) async fn confirm_quit_with_tabs(&self, windows: &[BrowserWindow]) -> bool {
+        if self.imp().closing.get() != ClosingState::Open {
+            return false;
+        }
+        self.imp().closing.set(ClosingState::Asking);
+        let tabs: usize = windows.iter().map(BrowserWindow::tab_count).sum();
+        let question = if windows.len() == 1 {
+            format!("This window has {tabs} tabs open. Close them all and quit?")
+        } else {
+            format!(
+                "{} windows have {tabs} tabs open. Close them all and quit?",
+                windows.len()
+            )
+        };
+        let dialog = Dialog::new(self, QUIT_TABS_TITLE, &question);
+        dialog.add_cancel_button();
+        let quit = dialog.add_button(QUIT_TABS, ButtonStyle::Primary);
+        dialog.open();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        self.imp().closing.set(ClosingState::Open);
+        let confirmed = answer == Some(quit);
+        if confirmed {
+            for window in windows {
+                window.imp().closing_tabs_confirmed.set(true);
+            }
+        }
+        confirmed
     }
 
     /// Asks whether to close the window with its tabs, and closes it.
     async fn ask_to_close_tabs(&self) {
-        let count = self.imp().session.borrow().tabs().len();
+        let count = self.tab_count();
         let question = format!("This window has {count} tabs open. Close them all?");
         let dialog = Dialog::new(self, CLOSE_TABS_TITLE, &question);
         dialog.add_cancel_button();
@@ -160,6 +204,7 @@ impl BrowserWindow {
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();
+        self.imp().closing.set(ClosingState::Open);
         if answer == Some(close) {
             self.imp().closing_tabs_confirmed.set(true);
             self.close();

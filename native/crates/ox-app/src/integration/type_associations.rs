@@ -16,6 +16,8 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::integration::{MimeType, APP_ID};
 
+use super::tools::installed_application;
+
 /// The `mimeapps.list` group of associations the user added.
 const ADDED_GROUP: &str = "Added Associations";
 
@@ -121,10 +123,7 @@ pub(crate) fn change_type(content_type: &str, change: &TypeChange) -> Result<(),
 
 /// The installed application `id`.
 fn application(id: &str) -> Result<gio::AppInfo, String> {
-    gio::AppInfo::all()
-        .into_iter()
-        .find(|app| app.id().is_some_and(|app_id| app_id == id))
-        .ok_or_else(|| "That application is not installed.".to_owned())
+    installed_application(id).ok_or_else(|| "That application is not installed.".to_owned())
 }
 
 /// The applications the user added to `content_type`, from the user's
@@ -159,6 +158,12 @@ mod tests {
     fn an_added_application_is_removed_made_default_and_reset() {
         let data = glib::user_data_dir();
         assert!(data.starts_with(std::env::temp_dir()), "a private data folder");
+        // GIO writes the associations to mimeapps.list in the config folder.
+        let config = glib::user_config_dir();
+        assert!(
+            config.starts_with(std::env::temp_dir()),
+            "a private config folder"
+        );
         let folder = data.join("applications");
         fs::create_dir_all(&folder).expect("the data folder is writable");
         let entry = "[Desktop Entry]\nType=Application\nName=Test viewer\nExec=true %F\n";

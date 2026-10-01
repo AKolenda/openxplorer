@@ -27,7 +27,7 @@ mod previous_versions;
 mod saved_searches;
 mod search_cache;
 
-pub(crate) use default_open::{add_to_desktop_history, FOLDER_CONTENT_TYPE};
+pub(crate) use default_open::add_to_desktop_history;
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -339,6 +339,17 @@ impl AppContext {
     #[cfg(test)]
     pub(crate) fn record_launches(&self) {
         self.imp().recorded_launches.replace(Some(Vec::new()));
+    }
+
+    /// Records that the program at `uri` would run, as "run <uri>"; false
+    /// when launches are not being recorded.
+    #[cfg(test)]
+    pub(crate) fn record_run(&self, uri: &str) -> bool {
+        let mut recorded = self.imp().recorded_launches.borrow_mut();
+        recorded
+            .as_mut()
+            .map(|launches| launches.push(format!("run {uri}")))
+            .is_some()
     }
 
     /// The files recorded since [`Self::record_launches`].
