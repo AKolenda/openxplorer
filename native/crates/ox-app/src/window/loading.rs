@@ -444,9 +444,11 @@ impl BrowserWindow {
         pane.set_loading(loading && page.is_none());
         if page.is_some() {
             pane.show_page(PanePage::Landing);
-        } else if loading && reloading && pane.page() == Some(PanePage::Empty) {
+        } else if loading && reloading && pane.model().n_items() == 0 && pane.page() == Some(PanePage::Empty)
+        {
             // Listing an empty or unavailable location again keeps its
-            // page until the listing ends, as a reload keeps its rows.
+            // page until the listing ends, as a reload keeps its rows. A
+            // tab with rows never keeps the page another tab left.
         } else if pane.model().n_items() > 0 || (loading && error.is_none()) {
             // A folder being listed keeps the blank list, with its column
             // titles, until items come: no "Loading" text, no page swap.

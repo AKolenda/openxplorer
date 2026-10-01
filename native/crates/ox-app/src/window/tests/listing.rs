@@ -18,7 +18,7 @@ use crate::test_support::harness::{
 use crate::window::folder_pane::{FolderView, PanePage};
 use crate::window::listing_state::ListingState;
 use crate::window::loading_line::APPEARANCE_DELAY;
-use crate::window::session::Direction;
+use crate::window::session::{Direction, TabPlacement};
 
 use super::geometry::bounds;
 
@@ -502,6 +502,50 @@ fn switching_pages_never_flashes_a_loading_state() {
     assert!(test.window.is_loading(), "F5 lists the folder again");
     assert_no_loading_state(&test, "F5 in the empty folder", PanePage::Empty);
     assert_eq!(pane.page(), Some(PanePage::Empty));
+}
+
+/// A tab whose reload is still running shows its own rows when it comes
+/// back to the front, not the empty page of the tab shown meanwhile.
+///
+/// parity: VIEW-047
+#[gtk::test]
+fn a_reloading_tab_shows_its_rows_after_an_empty_tab() {
+    let fixture = Fixture::standard();
+    let empty = Fixture::empty();
+    let test = TestWindow::open(&fixture.uri());
+    let pane = test.window.folder_pane();
+    let rows_tab = test.active_tab().expect("one tab");
+    test.window
+        .open_tab(&empty.uri(), TabPlacement::Background)
+        .expect("a tab on the empty folder");
+    let empty_tab = {
+        let session = test.window.imp().session.borrow();
+        session.tabs().last().expect("two tabs").id
+    };
+    // A reload that never ends, as on a slow share after F5.
+    set_active_listing(
+        &test,
+        ListingState::Listing {
+            listed_before: true,
+            reload_pending: false,
+        },
+    );
+    test.window
+        .imp()
+        .session
+        .borrow_mut()
+        .active_mut()
+        .expect("a tab")
+        .reloading = true;
+
+    test.activate_tab(empty_tab);
+    test.wait_for_listing("the empty folder");
+    let empty_page = pane.page();
+    test.activate_tab(rows_tab);
+
+    assert_eq!(empty_page, Some(PanePage::Empty));
+    assert_eq!(pane.page(), Some(PanePage::Listing));
+    assert_eq!(test.names(), STANDARD_NAMES);
 }
 
 /// A listing that runs past the delay shows the loading line, and the
