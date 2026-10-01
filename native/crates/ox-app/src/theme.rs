@@ -11,6 +11,7 @@
 pub(crate) mod accent;
 mod appearance_button;
 pub(crate) mod contrast;
+pub(crate) mod desktop_text;
 mod fonts;
 mod providers;
 mod stylesheets;
@@ -27,6 +28,7 @@ use crate::icons;
 use crate::text_size::TextSize;
 use accent::Accent;
 use contrast::Contrast;
+use desktop_text::{drawn_text_size, DesktopText};
 use providers::Providers;
 
 /// Emitted when the palette or the theme choice changed.
@@ -35,15 +37,23 @@ const APPEARANCE_CHANGED: &str = "appearance-changed";
 /// Emitted when text is drawn at another size.
 const TEXT_SIZE_CHANGED: &str = "text-size-changed";
 
+/// The text the skin draws: its size and, when the desktop's font is in
+/// use, that font's family.
+#[derive(Debug, Clone, PartialEq)]
+struct DrawnText {
+    size: TextSize,
+    family: Option<String>,
+}
+
 mod imp {
-    use std::cell::{Cell, OnceCell};
+    use std::cell::{Cell, OnceCell, RefCell};
     use std::sync::OnceLock;
 
     use gtk::glib;
     use gtk::glib::subclass::Signal;
     use gtk::subclass::prelude::*;
 
-    use super::{Accent, Appearance, Contrast, Providers, TextSize, Theme};
+    use super::{Accent, Appearance, Contrast, DesktopText, DrawnText, Providers, TextSize, Theme};
     use super::{APPEARANCE_CHANGED, TEXT_SIZE_CHANGED};
 
     /// Private state of [`super::Skin`].
@@ -57,8 +67,14 @@ mod imp {
         pub(super) accent: Cell<Accent>,
         /// Whether the high-contrast rules are loaded.
         pub(super) contrast: Cell<Contrast>,
-        /// The size text is drawn at.
+        /// The text size the user chose.
         pub(super) text_size: Cell<TextSize>,
+        /// The text size and desktop font family drawn, once drawn.
+        pub(super) drawn_text: RefCell<Option<DrawnText>>,
+        /// What the desktop asks of text.
+        pub(super) desktop_text: RefCell<DesktopText>,
+        /// Whether text uses the desktop's font instead of the Windows one.
+        pub(super) uses_desktop_font: Cell<bool>,
         /// The user's theme choice.
         pub(super) theme: Cell<Theme>,
         /// The desktop's colour scheme, which [`Theme::System`] follows.
@@ -173,18 +189,63 @@ impl Skin {
         self.emit_by_name::<()>(APPEARANCE_CHANGED, &[]);
     }
 
-    /// The size text is drawn at.
+    /// The text size the user chose, which Ctrl+plus steps from and
+    /// Settings shows.
     pub(crate) fn text_size(&self) -> TextSize {
         self.imp().text_size.get()
     }
 
-    /// Draws text at `size` and tells the windows when it changed.
+    /// The text size drawn: the chosen one at the desktop's text factor,
+    /// which the windows lay rows and tiles out for.
+    pub(crate) fn drawn_text_size(&self) -> TextSize {
+        let drawn = self.imp().drawn_text.borrow();
+        drawn
+            .as_ref()
+            .map_or_else(|| self.text_size(), |drawn| drawn.size)
+    }
+
+    /// Chooses the text size `size` and tells the windows when it changed.
     pub(crate) fn set_text_size(&self, size: TextSize) {
-        if self.imp().text_size.replace(size) == size {
+        let chosen_changed = self.imp().text_size.replace(size) != size;
+        let drawn_changed = self.draw_text();
+        if chosen_changed && !drawn_changed {
+            self.emit_by_name::<()>(TEXT_SIZE_CHANGED, &[]);
+        }
+    }
+
+    /// Records what the desktop asks of text and redraws it.
+    pub(crate) fn set_desktop_text(&self, desktop: DesktopText) {
+        if *self.imp().desktop_text.borrow() == desktop {
             return;
         }
-        self.providers().draw_text_size(size);
+        self.imp().desktop_text.replace(desktop);
+        self.draw_text();
+    }
+
+    /// Uses the desktop's font, or the Windows font stack, and redraws text.
+    pub(crate) fn set_uses_desktop_font(&self, uses_desktop_font: bool) {
+        if self.imp().uses_desktop_font.replace(uses_desktop_font) != uses_desktop_font {
+            self.draw_text();
+        }
+    }
+
+    /// Draws text at the chosen size, the desktop's factor and the font in
+    /// use; tells the windows and returns true when that changed anything.
+    fn draw_text(&self) -> bool {
+        let imp = self.imp();
+        let uses_desktop_font = imp.uses_desktop_font.get();
+        let desktop = imp.desktop_text.borrow().clone();
+        let text = DrawnText {
+            size: drawn_text_size(imp.text_size.get(), desktop.factor(uses_desktop_font)),
+            family: desktop.family.filter(|_| uses_desktop_font),
+        };
+        if imp.drawn_text.borrow().as_ref() == Some(&text) {
+            return false;
+        }
+        self.providers().draw_text_size(text.size, text.family.as_deref());
+        imp.drawn_text.replace(Some(text));
         self.emit_by_name::<()>(TEXT_SIZE_CHANGED, &[]);
+        true
     }
 
     /// The desktop's accent drawn now.

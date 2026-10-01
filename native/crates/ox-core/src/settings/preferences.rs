@@ -234,6 +234,10 @@ pub struct Preferences {
     /// new tab (Dolphin's `OpenExternallyCalledFolderInNewTab`, inverted).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub external_folders_in_new_window: bool,
+    /// Text uses the desktop's interface font and its size instead of the
+    /// Windows font stack. Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub desktop_font: bool,
 }
 
 impl Default for Preferences {
@@ -253,6 +257,7 @@ impl Default for Preferences {
             show_full_path: false,
             editable_location: false,
             external_folders_in_new_window: false,
+            desktop_font: false,
         }
     }
 }
@@ -285,6 +290,7 @@ impl Preferences {
             &mut self.external_folders_in_new_window,
             update.external_folders_in_new_window,
         );
+        replace_if_some(&mut self.desktop_font, update.desktop_font);
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
@@ -329,6 +335,8 @@ pub struct PreferencesUpdate {
     pub editable_location: Option<bool>,
     /// Open folders from other apps in a new window, or in a new tab.
     pub external_folders_in_new_window: Option<bool>,
+    /// Use the desktop's font, or the Windows font stack.
+    pub desktop_font: Option<bool>,
 }
 
 impl PreferencesUpdate {
@@ -361,6 +369,7 @@ impl PreferencesUpdate {
             show_full_path: flag("showFullPath"),
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
+            desktop_font: flag("desktopFont"),
         })
     }
 }

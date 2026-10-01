@@ -10,6 +10,7 @@ use gtk::gdk;
 
 use super::accent::{self, Accent};
 use super::contrast::Contrast;
+use super::desktop_text::font_family_rule;
 use super::fonts::css_for_text_size;
 use super::stylesheets;
 use super::Appearance;
@@ -120,9 +121,14 @@ impl Providers {
             .load_from_string(&accent::stylesheet(accent, appearance));
     }
 
-    /// Loads the font sizes and heights of `size`.
-    pub(super) fn draw_text_size(&self, size: TextSize) {
-        self.text_size.load_from_string(&css_for_text_size(size));
+    /// Loads the font sizes and heights of `size`, and the font `family`
+    /// over the Windows stack when one is given.
+    pub(super) fn draw_text_size(&self, size: TextSize, family: Option<&str>) {
+        let mut css = css_for_text_size(size);
+        if let Some(family) = family {
+            css.push_str(&font_family_rule(family));
+        }
+        self.text_size.load_from_string(&css);
     }
 
     /// Loads the high-contrast rules for [`Contrast::High`] and empties

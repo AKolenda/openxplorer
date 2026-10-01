@@ -14522,8 +14522,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE general font via the Qt platform theme"
 gnome = "org.gnome.desktop.interface font-name / text-scaling-factor; org.gnome.desktop.interface font-name → GtkSettings gtk-font-name"
-native = "todo"
-native_note = "Porting notes: A product decision under rule 3 (Windows look)."
+native = "done"
+native_note = "native/crates/ox-app/src/theme/desktop_text.rs: the skin reads the desktop's interface font (gtk-font-name) and its accessibility text scaling (gtk-xft-dpi, which GNOME's Large Text / text-scaling-factor sets) live from the display's GTK settings. Text, rows, menus and tiles are drawn at the app's text size times the desktop factor, rounded to the nearest level (Large Text turns 100% into 125%); the chosen size stays what Ctrl+plus steps from and Settings shows. The Windows font stack stays the default; Settings > Appearance > \"Use the desktop font\" (saved as desktopFont) switches to the desktop's family and scales text by its size against the Windows 13-pixel text. The Text size choice remains the in-app override. Test: theme/desktop_text.rs (the_desktops_font_and_large_text_reach_the_text_size). The desktop's high-contrast setting is followed separately (ACC-011)."
 
 [[feature]]
 id = "LOOK-026"

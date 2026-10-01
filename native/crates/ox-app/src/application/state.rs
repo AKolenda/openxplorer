@@ -24,6 +24,7 @@ use crate::snapshot::SnapshotRequest;
 use crate::text_size::TextSize;
 use crate::theme::accent::AccentSetting;
 use crate::theme::contrast::ContrastSetting;
+use crate::theme::desktop_text::DesktopTextWatch;
 use crate::theme::system::{self, SystemScheme};
 use crate::theme::Skin;
 use crate::window::BrowserWindow;
@@ -37,6 +38,8 @@ pub(super) struct AppState {
     _system_scheme: Rc<SystemScheme>,
     /// Kept alive so the skin follows the desktop's high-contrast setting.
     _contrast_setting: ContrastSetting,
+    /// Kept alive so text follows the desktop's font and text scaling.
+    _desktop_text: Option<DesktopTextWatch>,
     /// Kept alive so the skin follows the desktop's accent colour.
     _accent_setting: AccentSetting,
     /// Kept alive so Properties timestamps follow the desktop's clock.
@@ -61,7 +64,9 @@ impl AppState {
     fn with_skin(app: &gtk::Application, skin: Skin, gtk_preference: Appearance, settings: Settings) -> Self {
         let preferences = &settings.data().preferences;
         skin.set_theme(preferences.theme);
+        skin.set_uses_desktop_font(preferences.desktop_font);
         skin.set_text_size(TextSize::from_percent(preferences.text_size));
+        let desktop_text = follow_desktop_text(&skin);
         let system_scheme = follow_system_scheme(&skin, gtk_preference);
         let contrast_setting = follow_contrast(&skin);
         let accent_setting = follow_accent(&skin);
@@ -74,6 +79,7 @@ impl AppState {
             context,
             _system_scheme: system_scheme,
             _contrast_setting: contrast_setting,
+            _desktop_text: desktop_text,
             _accent_setting: accent_setting,
             _clock_setting: clock_setting,
         }
@@ -267,6 +273,20 @@ fn follow_contrast(skin: &Skin) -> ContrastSetting {
     ));
     skin.set_contrast(setting.contrast());
     setting
+}
+
+/// Applies the desktop's font and text scaling to `skin` now and on every
+/// change; `None` without a display.
+fn follow_desktop_text(skin: &Skin) -> Option<DesktopTextWatch> {
+    let settings = gtk::Settings::default()?;
+    Some(DesktopTextWatch::new(
+        &settings,
+        glib::clone!(
+            #[weak]
+            skin,
+            move |desktop| skin.set_desktop_text(desktop)
+        ),
+    ))
 }
 
 /// Applies the desktop's accent colour to `skin` now and on every change.
