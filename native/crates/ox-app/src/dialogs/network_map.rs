@@ -152,9 +152,11 @@ mod tests {
     #[gtk::test]
     fn a_connection_that_answers_after_cancel_is_ignored() {
         let parent = gtk::Window::new();
+        let started = Rc::new(Cell::new(false));
         let answered = Rc::new(Cell::new(false));
-        let heard = Rc::clone(&answered);
+        let (begun, heard) = (Rc::clone(&started), Rc::clone(&answered));
         let dialog = map_network_dialog(&parent, move |dialog, _| {
+            begun.set(true);
             let heard = Rc::clone(&heard);
             dialog.run("Connecting…", async move {
                 glib::timeout_future(Duration::from_millis(100)).await;
@@ -162,8 +164,10 @@ mod tests {
             });
         });
         dialog.present();
+        descendants::<gtk::Entry>(&dialog)[0].set_text("\\\\nas\\Projects");
 
         dialog.press_confirm();
+        assert!(started.get(), "Connect started the connection");
         dialog.press_cancel();
         wait_for(Duration::from_millis(300));
 

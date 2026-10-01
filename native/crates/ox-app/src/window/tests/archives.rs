@@ -95,7 +95,7 @@ fn opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy() {
 }
 
 /// Opening a folder and going back before it is listed shows the top:
-/// the older listing never replaces the newer one.
+/// the Docs listing, answered after the top's, changes nothing.
 ///
 /// parity: SAFE-013
 #[gtk::test]
@@ -106,14 +106,15 @@ fn a_late_archive_listing_never_replaces_a_newer_one() {
     test.activate("open", None);
     let browser = archive_browser(&test);
     wait_until("the listing", || !browser.row_names().is_empty());
+    let docs = browser.list_now("Docs/");
+    assert_eq!(docs.entries.len(), 1, "the late answer has a row to show");
 
-    browser.show_folder("Docs/");
+    let docs_listing = browser.show_folder_numbered("Docs/");
     browser.show_folder("");
-
     wait_until("the top again", || browser.row_names().len() == 2);
-    wait_for(Duration::from_millis(300));
+    browser.deliver_listing(docs_listing, docs);
+
     assert_eq!(browser.row_names(), ["Docs", "readme.txt"]);
-    assert!(!browser.path_text().contains(" › "), "{}", browser.path_text());
 }
 
 /// Closing the Extract dialog cancels its check of the archive, and an

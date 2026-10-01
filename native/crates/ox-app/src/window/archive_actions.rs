@@ -91,41 +91,44 @@ impl BrowserWindow {
 
     /// Enables the archive commands for what is selected and where.
     pub(super) fn update_archive_actions(&self) {
-        let is_idle = !self.is_writing_files();
-        let has_archive = self.selected_archive().is_some();
-        let folder_is_writable = self
-            .current_uri()
-            .is_some_and(|uri| self.is_writable_folder(&uri));
-        let selected = self.folder_pane().model().summary().count;
-        self.set_action_enabled(WindowAction::ExtractAll, is_idle && has_archive);
-        self.set_action_enabled(
-            WindowAction::ExtractHere,
-            is_idle && has_archive && folder_is_writable,
-        );
-        let can_compress = is_idle && selected > 0 && folder_is_writable;
-        self.set_action_enabled(WindowAction::CompressToZip, can_compress);
+        for (action, refusal) in self.archive_command_refusals() {
+            self.set_action_enabled(action, refusal.is_none());
+        }
     }
 
     /// Why the archive command `action` is disabled, when it is one.
     pub(super) fn archive_refusal(&self, action: WindowAction) -> Option<&'static str> {
-        let is_archive_command = matches!(
-            action,
-            WindowAction::ExtractAll | WindowAction::ExtractHere | WindowAction::CompressToZip
-        );
-        if !is_archive_command {
-            return None;
-        }
-        if self.is_writing_files() {
-            return Some("Wait for the running file operation to finish.");
-        }
-        let is_compress = action == WindowAction::CompressToZip;
-        if !is_compress && self.selected_archive().is_none() {
-            return Some("Select one ZIP archive.");
-        }
-        if is_compress && self.folder_pane().model().summary().count == 0 {
-            return Some("Select the items to compress.");
-        }
-        Some("This folder is read-only.")
+        self.archive_command_refusals()
+            .into_iter()
+            .find(|(command, _)| *command == action)
+            .and_then(|(_, refusal)| refusal)
+    }
+
+    /// Each archive command with why it is disabled, `None` when it is
+    /// enabled: the one rule both the enabled state and the explanation
+    /// come from.
+    fn archive_command_refusals(&self) -> [(WindowAction, Option<&'static str>); 3] {
+        let busy = self
+            .is_writing_files()
+            .then_some("Wait for the running file operation to finish.");
+        let no_archive = self
+            .selected_archive()
+            .is_none()
+            .then_some("Select one ZIP archive.");
+        let nothing_selected =
+            (self.folder_pane().model().summary().count == 0).then_some("Select the items to compress.");
+        let read_only = !self
+            .current_uri()
+            .is_some_and(|uri| self.is_writable_folder(&uri));
+        let read_only = read_only.then_some("This folder is read-only.");
+        [
+            (WindowAction::ExtractAll, busy.or(no_archive)),
+            (WindowAction::ExtractHere, busy.or(no_archive).or(read_only)),
+            (
+                WindowAction::CompressToZip,
+                busy.or(nothing_selected).or(read_only),
+            ),
+        ]
     }
 
     /// The one selected item, when it is a ZIP archive.

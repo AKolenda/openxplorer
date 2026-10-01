@@ -56,15 +56,27 @@ impl LaunchCheck {
     /// Runs the launch checks of `main` on `arguments`, the whole command
     /// line including the program: prints the version, asks the running
     /// instance to quit for `--quit` and `--restart`, and asks the user
-    /// before replacing an outdated instance.
+    /// before replacing an outdated instance. Root is refused after
+    /// `--version` and before everything else.
     pub(crate) fn run(arguments: Vec<String>) -> Self {
+        Self::run_as(arguments, effective_user_id())
+    }
+
+    /// The root check alone, for a launch that skips the others (a
+    /// snapshot): `Some` exit when the effective user is root.
+    pub(crate) fn root_refusal() -> Option<glib::ExitCode> {
+        refuse_root(effective_user_id())
+    }
+
+    /// [`Self::run`] for the effective user `user_id`.
+    fn run_as(arguments: Vec<String>, user_id: u32) -> Self {
         let has = |option: &str| arguments.iter().skip(1).any(|argument| argument == option);
         if has(VERSION_OPTION) {
             println!("OpenXplorer {}", running_version());
             return Self::Exit(glib::ExitCode::SUCCESS);
         }
-        if let Some(refusal) = refuse_root(effective_user_id()) {
-            return refusal;
+        if let Some(status) = refuse_root(user_id) {
+            return Self::Exit(status);
         }
         let outcome = if has(QUIT_OPTION) {
             quit_running_instance().map(|()| Self::Exit(glib::ExitCode::SUCCESS))
@@ -89,13 +101,13 @@ impl LaunchCheck {
 /// folders and bypass every permission. A launch whose effective user is
 /// root says so and exits with status 1; only `--version` runs before
 /// this check.
-fn refuse_root(user_id: u32) -> Option<LaunchCheck> {
+fn refuse_root(user_id: u32) -> Option<glib::ExitCode> {
     if user_id != ROOT_USER_ID {
         return None;
     }
     eprintln!("{RUN_AS_USER}");
     let _ = std::io::stderr().flush();
-    Some(LaunchCheck::Exit(glib::ExitCode::FAILURE))
+    Some(glib::ExitCode::FAILURE)
 }
 
 /// This process's effective user ID, which `GCredentials` records on
@@ -224,11 +236,18 @@ mod tests {
     /// parity: SAFE-008
     #[test]
     fn a_launch_as_root_is_refused_with_status_1() {
-        assert_eq!(
-            refuse_root(ROOT_USER_ID),
-            Some(LaunchCheck::Exit(glib::ExitCode::FAILURE))
-        );
+        assert_eq!(refuse_root(ROOT_USER_ID), Some(glib::ExitCode::FAILURE));
         assert_eq!(refuse_root(1000), None);
+        assert_eq!(
+            LaunchCheck::run_as(arguments(&["openxplorer", "--version"]), ROOT_USER_ID),
+            LaunchCheck::Exit(glib::ExitCode::SUCCESS),
+            "--version runs before the root check"
+        );
+        assert_eq!(
+            LaunchCheck::run_as(arguments(&["openxplorer", "--quit"]), ROOT_USER_ID),
+            LaunchCheck::Exit(glib::ExitCode::FAILURE),
+            "root is refused before --quit reaches the running instance"
+        );
         assert_eq!(
             RUN_AS_USER,
             "Run OpenXplorer as your regular desktop user, not with sudo."

@@ -16,7 +16,7 @@ use crate::test_support::harness::{capture, descendants, wait_until, Fixture, Te
 use crate::window::widget_tree::children;
 
 /// The name of the snapshot the fixtures create.
-const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
+pub(super) const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
 
 impl TestWindow {
     /// Selects only the item called `name`.
@@ -43,7 +43,7 @@ impl TestWindow {
 }
 
 /// The Properties view inside `frame`.
-fn properties_view(frame: &DialogFrame) -> PropertiesView {
+pub(super) fn properties_view(frame: &DialogFrame) -> PropertiesView {
     descendants::<PropertiesView>(frame)
         .into_iter()
         .next()
@@ -57,7 +57,7 @@ pub(super) fn texts(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
 }
 
 /// The value shown after the name `name` in `widget`'s name-value grids.
-fn value_after(widget: &impl IsA<gtk::Widget>, name: &str) -> Option<String> {
+pub(super) fn value_after(widget: &impl IsA<gtk::Widget>, name: &str) -> Option<String> {
     let shown = texts(widget);
     let index = shown.iter().position(|text| text == name)?;
     shown.get(index + 1).cloned()
@@ -91,7 +91,7 @@ fn tab_tooltips(test: &TestWindow) -> Vec<String> {
 
 /// A standard fixture whose Documents folder holds a file and a snapshot
 /// collection with one snapshot of the folder.
-fn fixture_with_snapshot() -> Fixture {
+pub(super) fn fixture_with_snapshot() -> Fixture {
     let fixture = Fixture::standard();
     let documents = fixture.path("Documents");
     fs::write(documents.join("plan.txt"), b"live plan").expect("fixture file");
