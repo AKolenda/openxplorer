@@ -314,6 +314,30 @@ pub(crate) async fn prepare_launch(uri: String, app_id: String) -> Result<Prepar
     prepared.await.map_err(|_| OpenWithError::Interrupted)?
 }
 
+/// The item at `uri` as a custom command gets it (OPEN-014): read again,
+/// never a symbolic link, by its local path when it has one.
+///
+/// # Errors
+///
+/// As [`prepare_launch`], without the application checks.
+pub(crate) async fn prepare_target(uri: String) -> Result<PreparedLaunch, OpenWithError> {
+    let prepared = gio::spawn_blocking(move || {
+        let cancel = Cancellation::new();
+        let entry = inspect(&uri, Some(cancel.cancellable()))?;
+        if entry.kind == EntryKind::Symlink {
+            return Err(OpenWithError::Symlink);
+        }
+        let uri = normalise(&uri)?;
+        let target = local_path(&uri).map_or(LaunchTarget::Uri(uri), LaunchTarget::Path);
+        Ok(PreparedLaunch {
+            target,
+            content_type: content_type_of(&entry),
+            is_folder: entry.is_dir,
+        })
+    });
+    prepared.await.map_err(|_| OpenWithError::Interrupted)?
+}
+
 /// Whether "Always use this app for this file type" was ticked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DefaultChoice {

@@ -34,10 +34,12 @@
 mod applications;
 mod brave_dialog;
 mod changes;
+mod custom_command;
 mod editors;
 mod file_manager_service;
 mod mime_backend;
 mod open_with_dialog;
+pub(crate) mod process;
 mod status;
 mod terminal;
 #[cfg(test)]

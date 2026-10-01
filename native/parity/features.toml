@@ -11785,8 +11785,8 @@ python_tests = []
 bridge = ["openWith"]
 dolphin = "KOpenWithDialog command line / terminal options; KOpenWithDialog command-line field"
 gnome = "g_app_info_create_from_commandline (GNOME 46's GtkAppChooser no longer offers custom commands)"
-native = "todo"
-native_note = "Porting notes: Security-sensitive: current policy allows only installed launchers (“That installed application is unavailable for this file/location.”)."
+native = "done"
+native_note = "Open with has 'Or run a command' under the application list, with 'Run in terminal' and 'Keep the terminal open when the command ends' (resources/ui/open-with-dialog.ui, src/integration/custom_command.rs). The command is split as a shell splits it (g_shell_parse_argv) but no shell runs it: %f/%F become the item's local path and %u/%U its address, each as one argument whatever the name, and without a placeholder the item is the last argument; %f for an item with no local path is refused with a message. It runs in the item's folder, on the host from the Flatpak, and in the terminal through the same fixed hold script as drop-to-run (src/integration/process.rs, shared with window/file_drop/program.rs). The installed-launcher policy for the application list is unchanged; a typed command is the user's explicit choice. Tests: native/crates/ox-app/src/integration/custom_command.rs (placeholders_take_the_item_as_one_argument_and_it_is_last_without_one), native/crates/ox-app/src/integration/tests.rs (open_with_runs_a_typed_command_with_the_item)."
 
 [[feature]]
 id = "OPEN-015"
