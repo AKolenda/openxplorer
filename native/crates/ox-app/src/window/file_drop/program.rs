@@ -51,7 +51,6 @@ const HOLD_SCRIPT_NAME: &str = "openxplorer-drop";
 /// Why a program cannot run.
 const NO_LOCAL_PATH: &str = "This program has no local path. Mount its share before dropping files on it.";
 
-
 /// How a program runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ProgramKind {

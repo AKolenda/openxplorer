@@ -3,7 +3,7 @@
 //!
 //! Dolphin asks "Open" or "Execute" when an executable file is opened.
 //! Here that question is a choice in Settings ("Ask whether to run
-//! programs and scripts"), off by default, so OpenXplorer keeps its rule
+//! programs and scripts"), off by default, so `OpenXplorer` keeps its rule
 //! that opening never runs anything (OPEN-007): without the setting a
 //! program opens in its viewer or editor, as before. There is no setting
 //! that runs programs without asking. Running goes through the same

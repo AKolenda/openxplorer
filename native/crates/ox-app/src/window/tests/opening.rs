@@ -239,11 +239,16 @@ fn enter_on_several_items_opens_each_and_asks_for_many() {
 
     select_names(&test, &["Documents", "Notes 2.txt", "Résumé.txt"]);
     test.activate("open", None);
-    wait_until("both files to open", || test.context.recorded_launches().len() == 2);
+    wait_until("both files to open", || {
+        test.context.recorded_launches().len() == 2
+    });
 
     assert_eq!(tab_uris(&test), [fixture.uri(), fixture.uri_of("Documents")]);
     assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the tab stays");
-    select_names(&test, &["Notes 2.txt", "Notes 10.txt", "Résumé.txt", "A", "B", "C"]);
+    select_names(
+        &test,
+        &["Notes 2.txt", "Notes 10.txt", "Résumé.txt", "A", "B", "C"],
+    );
     test.activate("open", None);
     let dialog = open_dialog(&test);
     assert_eq!(dialog.message_text(), "Are you sure you want to open 6 items?");
@@ -268,7 +273,9 @@ fn opening_a_script_asks_to_run_it_only_when_the_settings_say_so() {
     let test = TestWindow::open(&fixture.uri());
 
     test.window.activate_item(test.position_of("tidy.sh"));
-    wait_until("the script to open", || test.context.recorded_launches().len() == 1);
+    wait_until("the script to open", || {
+        test.context.recorded_launches().len() == 1
+    });
 
     let update = PreferencesUpdate {
         ask_to_run_programs: Some(true),
@@ -286,7 +293,9 @@ fn opening_a_script_asks_to_run_it_only_when_the_settings_say_so() {
     assert_eq!(dialog.title_text(), "Run this program?");
     assert_eq!(dialog.button_labels(), ["Cancel", "Open", "Run"]);
     dialog.press("Open");
-    wait_until("the script to open again", || test.context.recorded_launches().len() == 2);
+    wait_until("the script to open again", || {
+        test.context.recorded_launches().len() == 2
+    });
     assert!(!fixture.path("ran").exists(), "nothing ran");
 }
 

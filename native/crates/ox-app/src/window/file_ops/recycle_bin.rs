@@ -11,7 +11,8 @@
 //! settings say not to (SET-010).
 
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, restore_from_recycle_bin, summarize, summarize_restore, DeleteConfirmation,
+    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, restore_from_recycle_bin, summarize,
+    summarize_restore, DeleteConfirmation,
 };
 use ox_core::transfer::TransferMode;
 

@@ -188,7 +188,11 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     let open_with = item(open_with_label, Icon::Apps, WindowAction::OpenWith);
     let mut entries: Vec<MenuEntry> = vec![terminal.disabled_when(is_unavailable).into()];
     for application in &facts.applications {
-        entries.push(open_with_application(application).disabled_when(is_unavailable).into());
+        entries.push(
+            open_with_application(application)
+                .disabled_when(is_unavailable)
+                .into(),
+        );
     }
     entries.push(open_with.disabled_when(is_unavailable).into());
     for editor in &facts.editors {
@@ -350,7 +354,11 @@ pub(crate) fn background_menu(
         .into(),
     ];
     // The folder's applications and Open folder with… (OPEN-013).
-    entries.extend(applications.iter().map(|application| open_with_application(application).into()));
+    entries.extend(
+        applications
+            .iter()
+            .map(|application| open_with_application(application).into()),
+    );
     entries.push(item("Open folder with…", Icon::Apps, WindowAction::OpenWith).into());
     entries.extend([
         MenuEntry::Divider,

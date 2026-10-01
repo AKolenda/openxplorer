@@ -201,7 +201,7 @@ pub(crate) fn menu_applications(
         has_local_path: local_path(uri).is_some(),
     };
     let mut choices = facts.choices(recommended);
-    choices.retain(|choice| choice.is_available && !(choice.is_default && !is_folder));
+    choices.retain(|choice| choice.is_available && (is_folder || !choice.is_default));
     choices.truncate(limit);
     choices
 }

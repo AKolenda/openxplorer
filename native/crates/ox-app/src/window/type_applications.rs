@@ -45,9 +45,8 @@ impl BrowserWindow {
 
     async fn run_type_applications(&self, content_type: &str) {
         let description = gio::content_type_get_description(content_type);
-        let message = format!(
-            "What opens {description} files ({content_type}). Changes apply to your account only."
-        );
+        let message =
+            format!("What opens {description} files ({content_type}). Changes apply to your account only.");
         let dialog = Dialog::new(self, "Apps for this type", &message);
         let associated = gtk::DropDown::from_strings(&[]);
         dialog.add_labelled("Associated apps", &associated);
@@ -86,7 +85,9 @@ impl BrowserWindow {
                     .ok_or_else(String::new)
             } else if answer == remove {
                 match selected {
-                    Some(application) if application.is_added => Ok(TypeChange::Remove(application.id.clone())),
+                    Some(application) if application.is_added => {
+                        Ok(TypeChange::Remove(application.id.clone()))
+                    }
                     _ => Err(NOT_ADDED.to_owned()),
                 }
             } else if answer == add {

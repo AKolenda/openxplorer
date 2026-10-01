@@ -39,7 +39,9 @@ pub(crate) struct TypeApplication {
 /// True for a type whose associations only Settings > Default apps
 /// changes.
 pub(crate) fn is_protected(content_type: &str) -> bool {
-    MimeType::ALL.iter().any(|protected| protected.as_str() == content_type)
+    MimeType::ALL
+        .iter()
+        .any(|protected| protected.as_str() == content_type)
 }
 
 /// The applications associated with `content_type`, the default first,
@@ -49,7 +51,7 @@ pub(crate) fn type_applications(content_type: &str) -> Vec<TypeApplication> {
     let added = added_ids(content_type);
     let mut applications: Vec<TypeApplication> = gio::AppInfo::all_for_type(content_type)
         .into_iter()
-        .filter(|app| app.should_show())
+        .filter(AppInfoExt::should_show)
         .filter_map(|app| {
             let id = app.id()?.to_string();
             (id != APP_ID).then(|| TypeApplication {

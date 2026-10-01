@@ -135,7 +135,9 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
     if !entry.is_dir && !is_read_only {
         row.append(&change_app_button(&entry.uri));
         let content_type = entry.content_type.as_deref();
-        if let Some(content_type) = content_type.filter(|content_type| !integration::is_protected(content_type)) {
+        if let Some(content_type) =
+            content_type.filter(|content_type| !integration::is_protected(content_type))
+        {
             row.append(&type_applications_button(content_type));
         }
     }

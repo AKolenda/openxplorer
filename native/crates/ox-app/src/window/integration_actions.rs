@@ -10,9 +10,9 @@
 //! `desktop/winspace.py`, UPD-005). The work itself is in
 //! [`crate::integration`] and [`crate::update`].
 
-use gtk::{gio, glib};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::integration::TerminalError;
 use ox_core::location::{is_smb_server, parent_location};
 use ox_core::update::Activity;
@@ -363,8 +363,8 @@ impl BrowserWindow {
             self,
             async move {
                 let prepared = integration::prepare_launch(subject.uri, app_id.clone()).await;
-                let launched =
-                    prepared.and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
+                let launched = prepared
+                    .and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
                 let message = match launched {
                     Ok(_) => format!("Opened with {name}"),
                     Err(error) => error.to_string(),

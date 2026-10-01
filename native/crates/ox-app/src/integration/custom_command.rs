@@ -90,7 +90,8 @@ pub(crate) fn run_custom_command(command: &CustomCommand, prepared: &PreparedLau
     let mut arguments = command_arguments(&command.text, &prepared.target)?;
     let sandbox = Sandbox::detect();
     if command.in_terminal {
-        let terminal = find_terminal(&ExecutableSearch::for_sandbox(sandbox)).map_err(|error| error.to_string())?;
+        let terminal =
+            find_terminal(&ExecutableSearch::for_sandbox(sandbox)).map_err(|error| error.to_string())?;
         let hold = command.keep_open.then_some(HOLD_SCRIPT_NAME);
         arguments = in_terminal(&terminal, hold, arguments);
     }
@@ -99,7 +100,8 @@ pub(crate) fn run_custom_command(command: &CustomCommand, prepared: &PreparedLau
         LaunchTarget::Path(path) => path.parent().unwrap_or(Path::new("/")).to_path_buf(),
         LaunchTarget::Uri(_) => glib::home_dir(),
     };
-    spawn_command(&arguments, &folder, sandbox).map_err(|error| format!("The command could not be started: {error}"))
+    spawn_command(&arguments, &folder, sandbox)
+        .map_err(|error| format!("The command could not be started: {error}"))
 }
 
 #[cfg(test)]
@@ -109,7 +111,10 @@ mod tests {
     use super::*;
 
     fn words(arguments: &[OsString]) -> Vec<&str> {
-        arguments.iter().map(|argument| argument.to_str().unwrap()).collect()
+        arguments
+            .iter()
+            .map(|argument| argument.to_str().unwrap())
+            .collect()
     }
 
     /// parity: OPEN-014
@@ -121,9 +126,15 @@ mod tests {
         let with = command_arguments("gimp --new-window %f", &report).unwrap();
         let without = command_arguments("'my viewer' -n", &share).unwrap();
 
-        assert_eq!(words(&with), ["gimp", "--new-window", "/home/anna/My report; rm -rf ~.txt"]);
+        assert_eq!(
+            words(&with),
+            ["gimp", "--new-window", "/home/anna/My report; rm -rf ~.txt"]
+        );
         assert_eq!(words(&without), ["my viewer", "-n", "smb://nas/share/a b.txt"]);
-        assert_eq!(command_arguments("viewer %f", &share), Err(NO_LOCAL_PATH.to_owned()));
+        assert_eq!(
+            command_arguments("viewer %f", &share),
+            Err(NO_LOCAL_PATH.to_owned())
+        );
         assert!(command_arguments("  ", &share).is_err());
     }
 }
