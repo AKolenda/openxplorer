@@ -5,16 +5,20 @@
 //! buttons, and the folder listed again afterwards. The tests that move
 //! items to the Trash use the test run's private Recycle Bin.
 
+use std::cell::RefCell;
 use std::fs;
+use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
+use ox_core::transfer::Cancellation;
 
 use super::file_ops_support::{
     is_enabled, open_dialog, require_private_trash, select_names, text_field, wait_for_no_dialog,
 };
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{application, descendants, wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
 
 /// parity: OPS-001, CMD-004
@@ -394,6 +398,51 @@ fn a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast() 
     });
     assert!(test.window.is_active(), "the test window has focus");
     assert!(crate::window::background_notice::take_sent().is_empty());
+}
+
+/// While a transfer or an archive operation runs, its panel tells the
+/// dock: an `Update` with the bar shown when it starts and with the bar
+/// hidden when it ends.
+///
+/// parity: INT-027
+#[gtk::test]
+fn running_operations_show_their_progress_on_the_dock_icon() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let connection = application().dbus_connection().expect("the test bus");
+    let updates: Rc<RefCell<Vec<bool>>> = Rc::default();
+    let recorded = Rc::clone(&updates);
+    let _subscription = connection.subscribe_to_signal(
+        None,
+        Some("com.canonical.Unity.LauncherEntry"),
+        Some("Update"),
+        None,
+        None,
+        gio::DBusSignalFlags::NONE,
+        move |signal| {
+            let properties = signal.parameters.child_value(1);
+            let visible = glib::VariantDict::new(Some(&properties))
+                .lookup::<bool>("progress-visible")
+                .ok()
+                .flatten();
+            recorded.borrow_mut().push(visible.unwrap_or_default());
+        },
+    );
+
+    let context = test.window.begin_operation("Preparing copy…");
+    assert!(context.is_some());
+    wait_until("the bar on the icon", || *updates.borrow() == [true]);
+    test.window.end_operation();
+    wait_until("the bar hidden", || *updates.borrow() == [true, false]);
+
+    test.window
+        .operation_panel()
+        .start("Preparing…", Cancellation::new());
+    wait_until("the archive operation's bar", || updates.borrow().len() == 3);
+    test.window.finish_archive_operation();
+    wait_until("the bar hidden again", || {
+        *updates.borrow() == [true, false, true, false]
+    });
 }
 
 /// A drop into a subfolder that ends while a window outside the
