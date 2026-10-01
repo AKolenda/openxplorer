@@ -9,11 +9,14 @@
 //! copyright, where the corresponding source is, the full AGPL-3.0 text
 //! and the original MIT notice (UPD-016). Both texts are compiled in from
 //! the repository's licence files, which every package installs too.
+//! About also offers "Report an issue" and the website, which open in the
+//! browser only when pressed (CMD-033, SAFE-002).
 
 use gtk::glib;
 use ox_core::update::REPOSITORY;
 
-use super::dialog::Dialog;
+use super::dialog::{Dialog, DialogButton};
+use super::help::REPORT_ISSUE;
 use super::BrowserWindow;
 use super::ButtonStyle;
 use crate::config::{BUILD_NAME, IS_PREVIEW};
@@ -39,6 +42,9 @@ fn about_text() -> String {
     };
     format!("{ABOUT_INTRODUCTION}\n\n{channel} {ABOUT_LIMITS}")
 }
+
+/// The project's website.
+const WEBSITE: &str = "https://openxplorer.app";
 
 /// The heading of License & source.
 const LICENSE_TITLE: &str = "OpenXplorer · License & source";
@@ -69,9 +75,24 @@ const WINSPACE_NOTICE: &str = include_str!(concat!(
 const LICENSE_TEXT_HEIGHT: i32 = 320;
 
 impl BrowserWindow {
-    /// Shows About this build over the window.
+    /// Shows About this build over the window; its link buttons open
+    /// the issue tracker or the website.
     pub(super) fn show_about(&self) {
-        show_until_dismissed(self.about_dialog());
+        let (dialog, [report, website]) = self.about_dialog();
+        dialog.open();
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let answer = dialog.next_response().await;
+                dialog.finish();
+                if answer == Some(report) {
+                    window.open_issue_tracker();
+                } else if answer == Some(website) {
+                    window.open_web_page(WEBSITE);
+                }
+            }
+        ));
     }
 
     /// Shows License & source over the window.
@@ -79,10 +100,14 @@ impl BrowserWindow {
         show_until_dismissed(self.license_dialog());
     }
 
-    fn about_dialog(&self) -> Dialog {
+    /// About this build, and its "Report an issue" and "Website"
+    /// buttons.
+    fn about_dialog(&self) -> (Dialog, [DialogButton; 2]) {
         let dialog = Dialog::new(self, BUILD_NAME, &about_text());
+        let report = dialog.add_button(REPORT_ISSUE, ButtonStyle::Bordered);
+        let website = dialog.add_button("Website", ButtonStyle::Bordered);
         dialog.add_button("OK", ButtonStyle::Accent);
-        dialog
+        (dialog, [report, website])
     }
 
     fn license_dialog(&self) -> Dialog {
@@ -119,7 +144,7 @@ mod tests {
     fn about_names_the_native_stack_and_its_limits() {
         let fixture = Fixture::standard();
         let test = TestWindow::open(&fixture.uri());
-        let dialog = test.window.about_dialog();
+        let (dialog, _) = test.window.about_dialog();
         assert_eq!(dialog.title_text(), BUILD_NAME);
         let text = dialog.message_text();
         let channel = if IS_PREVIEW {
@@ -131,7 +156,7 @@ mod tests {
         assert!(text.contains("Desktop: Rust + GTK 4 + GIO/GVfs."), "{text}");
         assert!(text.contains("Thumbnails are not implemented."), "{text}");
         assert!(!text.contains("no permanent-delete fallback"), "{text}");
-        assert_eq!(dialog.button_labels(), ["OK"]);
+        assert_eq!(dialog.button_labels(), [REPORT_ISSUE, "Website", "OK"]);
         dialog.finish();
     }
 

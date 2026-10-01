@@ -40,13 +40,24 @@ const FILE_SHORTCUTS: [(WindowAction, &str); 11] = [
     (WindowAction::Redo, "<Primary><Shift>z|<Primary>y"),
 ];
 
+/// Ctrl+A, which runs before the focused widget.
+const SELECT_ALL: [(WindowAction, &str); 1] = [(WindowAction::SelectAll, "<Primary>a")];
+
+/// Each file command's keys and the action's detailed name (the keyboard
+/// shortcuts window, CMD-032).
+pub(in crate::window) fn file_key_bindings() -> impl Iterator<Item = (String, &'static str)> {
+    FILE_SHORTCUTS
+        .into_iter()
+        .chain(SELECT_ALL)
+        .map(|(action, keys)| (action.detailed_name(), keys))
+}
+
 impl BrowserWindow {
     /// Adds the file commands' keys to the window.
     pub(super) fn install_file_shortcuts(&self) {
         let shortcuts = file_shortcuts(gtk::PropagationPhase::Bubble, &FILE_SHORTCUTS);
         self.add_controller(shortcuts);
-        let select_all = [(WindowAction::SelectAll, "<Primary>a")];
-        self.add_controller(file_shortcuts(gtk::PropagationPhase::Capture, &select_all));
+        self.add_controller(file_shortcuts(gtk::PropagationPhase::Capture, &SELECT_ALL));
     }
 
     /// Runs `action` for its key, unless focus is where the key means

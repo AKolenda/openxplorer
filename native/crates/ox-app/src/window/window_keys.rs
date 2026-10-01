@@ -99,6 +99,19 @@ const WINDOW_KEYS: [(KeyCommand, &str); 21] = [
     (KeyCommand::Window(WindowAction::Up), "<Alt>Up"),
 ];
 
+/// Each of these keys and the action it runs, by its detailed name; a
+/// tab number's as `win.show-tab-number::<n>` (the keyboard shortcuts
+/// window, CMD-032).
+pub(super) fn window_key_bindings() -> impl Iterator<Item = (String, &'static str)> {
+    WINDOW_KEYS.into_iter().map(|(command, keys)| {
+        let name = match command {
+            KeyCommand::TabNumber(number) => format!("{}::{number}", command.detailed_name()),
+            KeyCommand::Window(_) | KeyCommand::NewWindow => command.detailed_name(),
+        };
+        (name, keys)
+    })
+}
+
 impl BrowserWindow {
     /// Adds the tab, window and history keys to the window.
     pub(super) fn install_window_keys(&self) {

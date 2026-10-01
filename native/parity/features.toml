@@ -6440,8 +6440,8 @@ python_tests = []
 bridge = []
 dolphin = "Settings › Configure Keyboard Shortcuts… (KShortcutsDialog) lists every action with its keys; rebinding is CMD-029"
 gnome = "GtkShortcutsWindow as win.show-help-overlay with <Primary>question, as Nautilus 46 offers under 'Keyboard Shortcuts'"
-native = "todo"
-native_note = "Porting notes: Shortcuts are discoverable today only through menu hints and tooltips (CMD-016)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/shortcuts_window.rs: Ctrl+? and More options > Keyboard shortcuts open a dialog (the app's Dialog) with a 'Search shortcuts' field and one list per group (Navigation, Tabs and windows, Selection, Files, View, Search, Text size). The keys are read from the live bindings: the application's accelerators as GTK holds them (gtk_application_list_action_descriptions/accels_for_action) and the key tables the window installs its shortcut controllers from (window_keys, file_ops/shortcuts, selection_keys, navigation_buttons, focus_regions, the context menu key), labelled by gtk_accelerator_get_label; only names and groups are written in the module. The accelerator works from any tab, Settings included, and nothing goes online. Test: shortcuts_window.rs (the_shortcuts_window_lists_every_live_binding_and_searches_them), which also fails when a binding has no name."
 
 [[feature]]
 id = "CMD-033"
@@ -6460,8 +6460,8 @@ python_tests = []
 bridge = []
 dolphin = "Help menu (KHelpMenu): Dolphin Handbook (F1), What's This? (Shift+F1), Report Bug…, Donate, About Dolphin"
 gnome = "app.help opening help: URIs in Yelp (Nautilus 46), or a bundled HTML manual opened with gtk_uri_launcher; AdwAboutDialog issue-url and website"
-native = "todo"
-native_note = "Porting notes: v2.0.0:desktop/MANUAL.md ships with the package, but nothing in the app opens it. UPD-015 and UPD-016 cover About and License only. Windows Explorer's F1 opens online help; this manual must stay offline."
+native = "done"
+native_note = "native/crates/ox-app/src/window/help.rs: F1 and More options > Help open the user manual, native/crates/ox-app/resources/manual.md, compiled into the program so every package installs it and it works offline, in the app's Dialog with a Topic list, at the topic of what the window shows (Settings, Search, Recycle Bin, Network locations, Drives and phones, else Getting started). F1 is an application accelerator, so it works from every tab including Settings. 'Report an issue' in Help and in About this build, and About's 'Website', open the project's issue tracker or https://openxplorer.app in the default browser only when pressed (SAFE-002). Test: help.rs (f1_opens_the_offline_manual_and_report_an_issue_opens_the_tracker); about.rs (about_names_the_native_stack_and_its_limits)."
 
 [[feature]]
 id = "CMD-034"

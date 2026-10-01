@@ -110,6 +110,11 @@ pub(crate) enum WindowAction {
     /// Copies the path of the selection, or of the folder.
     CopyPath,
     /// Shows what this build is.
+    /// Opens the offline user manual at the topic of what the window
+    /// shows (F1, CMD-033).
+    Help,
+    /// Opens the keyboard shortcuts window (Ctrl+?, CMD-032).
+    KeyboardShortcuts,
     About,
     /// Opens the folder view's context menu from the keyboard.
     ContextMenu,
@@ -417,6 +422,8 @@ impl WindowAction {
             WindowAction::PinFolder => "pin-folder",
             WindowAction::CopyPath => "copy-path",
             WindowAction::About => "about",
+            WindowAction::Help => "help",
+            WindowAction::KeyboardShortcuts => "keyboard-shortcuts",
             WindowAction::ContextMenu => "context-menu",
             WindowAction::View => "view",
             WindowAction::Hidden => "hidden",

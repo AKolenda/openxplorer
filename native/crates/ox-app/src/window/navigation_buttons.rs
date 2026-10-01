@@ -80,6 +80,14 @@ const NAVIGATION_KEYS: [(WindowAction, &str); 7] = [
     (WindowAction::Home, "HomePage"),
 ];
 
+/// The history keys and their actions' detailed names (the keyboard
+/// shortcuts window, CMD-032).
+pub(super) fn navigation_key_bindings() -> impl Iterator<Item = (String, &'static str)> {
+    NAVIGATION_KEYS
+        .into_iter()
+        .map(|(action, keys)| (action.detailed_name(), keys))
+}
+
 impl BrowserWindow {
     /// Fills the template's `.nav-buttons` row and adds the keys that
     /// press its buttons.

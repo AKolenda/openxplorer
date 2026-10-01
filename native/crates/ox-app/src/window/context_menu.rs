@@ -351,11 +351,14 @@ fn context_menu_of(view: &gtk::Widget) -> Option<MenuPopover> {
     children(view).find_map(|child| child.downcast::<MenuPopover>().ok())
 }
 
+/// The keys of [`context_menu_shortcut`].
+pub(super) const CONTEXT_MENU_KEYS: &str = "Menu|<Shift>F10";
+
 /// The Menu key and Shift+F10 open the context menu. They are view
 /// shortcuts, not application accelerators, so the address and search
 /// entries keep their own text menus on those keys.
 fn context_menu_shortcut() -> gtk::ShortcutController {
-    let trigger = gtk::ShortcutTrigger::parse_string("Menu|<Shift>F10");
+    let trigger = gtk::ShortcutTrigger::parse_string(CONTEXT_MENU_KEYS);
     let action = gtk::NamedAction::new(&WindowAction::ContextMenu.detailed_name());
     let shortcuts = gtk::ShortcutController::new();
     shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));

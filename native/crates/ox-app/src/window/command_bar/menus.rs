@@ -182,6 +182,12 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
         MenuEntry::Divider,
         // app.js asked for a `code` glyph it did not have and drew a
         // document; the native app has the code glyph.
+        MenuItem::new("Keyboard shortcuts", Icon::Table, WindowAction::KeyboardShortcuts)
+            .with_shortcut("Ctrl+?")
+            .into(),
+        MenuItem::new("Help", Icon::DocumentText, WindowAction::Help)
+            .with_shortcut("F1")
+            .into(),
         item("License & source", Icon::Code, WindowAction::License),
         item("About this build", Icon::Info, WindowAction::About),
     ]);

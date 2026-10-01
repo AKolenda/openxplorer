@@ -79,6 +79,7 @@ use ox_core::clipboard::ClipboardFiles;
 use ox_core::transfer::Cancellation;
 
 pub(super) use availability::FileCommand;
+pub(super) use shortcuts::file_key_bindings;
 pub(super) use transfer::IncomingItems;
 pub(super) use trash_support::TrashSupport;
 

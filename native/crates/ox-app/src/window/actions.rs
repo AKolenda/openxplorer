@@ -238,6 +238,11 @@ impl BrowserWindow {
             plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
             plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),
             plain_action(WindowAction::About, BrowserWindow::show_about),
+            plain_action(WindowAction::Help, BrowserWindow::show_help),
+            plain_action(
+                WindowAction::KeyboardShortcuts,
+                BrowserWindow::show_keyboard_shortcuts,
+            ),
             plain_action(WindowAction::License, BrowserWindow::show_license),
             plain_action(
                 WindowAction::ContextMenu,
@@ -422,7 +427,7 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 9] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 11] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
@@ -434,6 +439,9 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 9] = [
     (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
     // Dolphin's Open Preferred Search Tool (OPEN-024).
     (WindowAction::SearchTool, &["<Primary><Shift>f"]),
+    // Dolphin's Handbook and GNOME's Keyboard Shortcuts (CMD-033, CMD-032).
+    (WindowAction::Help, &["F1"]),
+    (WindowAction::KeyboardShortcuts, &["<Primary>question"]),
 ];
 
 /// Ctrl+Q: quit the application, from any window and any focus (TAB-058).
