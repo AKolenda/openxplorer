@@ -117,7 +117,7 @@ pub(crate) fn make_titles_keyboard_operable(view: &DetailsView) {
             }
         ));
         title.add_controller(keys);
-        add_column_resizer(&view, column, &title);
+        add_column_resizer(view, column, &title);
     }
 }
 
