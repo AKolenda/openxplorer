@@ -18,6 +18,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use ox_core::ops::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
@@ -59,15 +61,27 @@ fn recycle_bin() -> Vec<RecycledItem> {
 }
 
 /// The Recycle Bin item that came from `path`.
+///
+/// `GVfs`'s Trash backend learns of a new item from a file monitor, so a
+/// listing right after a trash or a delete can still miss it; this waits
+/// up to five seconds for it.
 fn recycled_from(path: &Path) -> RecycledItem {
-    let items = recycle_bin();
-    let found = items
-        .iter()
-        .find(|item| item.original_path.as_deref() == Some(path));
-    let Some(item) = found else {
-        panic!("{} is not in the Recycle Bin: {items:?}", path.display());
-    };
-    item.clone()
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let items = recycle_bin();
+        let found = items
+            .iter()
+            .find(|item| item.original_path.as_deref() == Some(path));
+        if let Some(item) = found {
+            return item.clone();
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{} is not in the Recycle Bin: {items:?}",
+            path.display()
+        );
+        thread::sleep(Duration::from_millis(50));
+    }
 }
 
 #[test]
