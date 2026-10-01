@@ -14,10 +14,9 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use gtk::glib;
-use ox_core::integration::{find_terminal, ExecutableSearch, Sandbox};
+use ox_core::integration::{command_in_terminal, find_terminal, spawn_program, ExecutableSearch, Sandbox};
 
 use super::applications::{LaunchTarget, PreparedLaunch};
-use super::process::{in_terminal, spawn_command};
 
 /// The name the hold script runs under (`$0`).
 const HOLD_SCRIPT_NAME: &str = "openxplorer-command";
@@ -93,14 +92,14 @@ pub(crate) fn run_custom_command(command: &CustomCommand, prepared: &PreparedLau
         let terminal =
             find_terminal(&ExecutableSearch::for_sandbox(sandbox)).map_err(|error| error.to_string())?;
         let hold = command.keep_open.then_some(HOLD_SCRIPT_NAME);
-        arguments = in_terminal(&terminal, hold, arguments);
+        arguments = command_in_terminal(&terminal, hold, arguments);
     }
     let folder = match &prepared.target {
         LaunchTarget::Path(path) if prepared.is_folder => path.clone(),
         LaunchTarget::Path(path) => path.parent().unwrap_or(Path::new("/")).to_path_buf(),
         LaunchTarget::Uri(_) => glib::home_dir(),
     };
-    spawn_command(&arguments, &folder, sandbox)
+    spawn_program(&arguments, &folder, sandbox)
         .map_err(|error| format!("The command could not be started: {error}"))
 }
 

@@ -26,7 +26,8 @@ const START_CHECK: Duration = Duration::from_millis(250);
 
 /// Variables that would make GNOME Terminal open a tab in the terminal
 /// the app was started from, instead of a new window.
-const INHERITED_TERMINAL_VARIABLES: [&str; 2] = ["GNOME_TERMINAL_SCREEN", "GNOME_TERMINAL_SERVICE"];
+pub(crate) const INHERITED_TERMINAL_VARIABLES: [&str; 2] =
+    ["GNOME_TERMINAL_SCREEN", "GNOME_TERMINAL_SERVICE"];
 
 /// A terminal that was started.
 #[derive(Debug, Clone, PartialEq, Eq)]

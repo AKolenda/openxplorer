@@ -53,6 +53,7 @@
 //! | `mime_type` | The handled MIME types | `desktop_integration.py`, `activation.py` |
 //! | `sandbox`, `host_command` | Flatpak detection; running host programs | (new) |
 //! | `disk_tools` | Disks, the Disk Image Mounter and a disk-usage analyser | (new) |
+//! | `program` | Starting a program the user chose: drops, custom commands | (new) |
 //! | `private_file`, `worker` | Atomic private writes; worker threads | the Python modules' helpers |
 
 mod activation;
@@ -68,6 +69,7 @@ pub(crate) mod host_command;
 mod mime_type;
 mod opening;
 mod private_file;
+mod program;
 mod reveal;
 mod sandbox;
 mod terminal;
@@ -99,13 +101,14 @@ pub use mime_type::MimeType;
 pub use opening::{
     DefaultOpener, Launcher, OpenTarget, PreparedOpen, FOLDER_CONTENT_TYPE, UNKNOWN_CONTENT_TYPE,
 };
+pub use program::spawn_program;
 pub use reveal::{
     DisabledReveal, RevealError, RevealPaths, RevealRegistration, AUTOSTART_FILE, FLATPAK_OPT_IN_FILE,
     MANAGED_MARKER, SERVICE_FILE,
 };
 pub use sandbox::Sandbox;
 pub use terminal::{
-    checked_directory, find_terminal, launch_terminal, open_terminal_in_background, prepare_directory,
-    terminal_arguments, DirectoryChecks, ExecutableSearch, LaunchedTerminal, PreparedDirectory, Terminal,
-    TerminalError, TerminalKind, SYSTEM_PATH,
+    checked_directory, command_in_terminal, find_terminal, launch_terminal, open_terminal_in_background,
+    prepare_directory, terminal_arguments, DirectoryChecks, ExecutableSearch, LaunchedTerminal,
+    PreparedDirectory, Terminal, TerminalError, TerminalKind, HOLD_SCRIPT, SYSTEM_PATH,
 };

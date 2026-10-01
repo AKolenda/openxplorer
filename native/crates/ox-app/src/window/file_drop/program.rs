@@ -31,11 +31,12 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
-use ox_core::integration::{find_terminal, ExecutableSearch, Sandbox, Terminal};
+use ox_core::integration::{
+    command_in_terminal, find_terminal, spawn_program, ExecutableSearch, Sandbox, Terminal,
+};
 use ox_core::network::local_path;
 
 use super::launcher;
-use crate::integration::process::{in_terminal, spawn_command};
 use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
@@ -143,7 +144,9 @@ pub(super) fn program_command(
     let mut command = vec![program.as_os_str().to_owned()];
     command.extend(items.iter().cloned());
     match (kind, terminal) {
-        (ProgramKind::Script, Some(terminal)) => in_terminal(terminal, Some(HOLD_SCRIPT_NAME), command),
+        (ProgramKind::Script, Some(terminal)) => {
+            command_in_terminal(terminal, Some(HOLD_SCRIPT_NAME), command)
+        }
         _ => command,
     }
 }
@@ -304,7 +307,7 @@ impl BrowserWindow {
                 (command, path.parent().unwrap_or(Path::new("/")).to_path_buf())
             }
         };
-        spawn_command(&command, &folder, sandbox).map_err(|error| error.to_string())?;
+        spawn_program(&command, &folder, sandbox).map_err(|error| error.to_string())?;
         self.show_message(&format!("Opened {} item(s) with {}.", items.len(), program.name));
         Ok(())
     }
@@ -345,10 +348,9 @@ mod tests {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
-    use ox_core::integration::TerminalKind;
+    use ox_core::integration::{TerminalKind, HOLD_SCRIPT};
 
     use super::*;
-    use crate::integration::process::HOLD_SCRIPT;
     use crate::test_support::file_entry;
 
     fn info(file_type: gio::FileType, content_type: &str, can_execute: bool) -> gio::FileInfo {

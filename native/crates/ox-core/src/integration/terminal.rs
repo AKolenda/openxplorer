@@ -15,8 +15,10 @@
 //! | `preference` | The desktop's configured terminal: [`desktop_terminal`] |
 //! | `directory` | Which folder: [`prepare_directory`], [`checked_directory`] |
 //! | `launch` | Starting it: [`launch_terminal`] |
+//! | `command` | A chosen program run in it: [`command_in_terminal`] |
 //! | `error` | [`TerminalError`] |
 
+mod command;
 mod directory;
 mod emulator;
 mod error;
@@ -25,9 +27,11 @@ mod preference;
 
 use std::future::Future;
 
+pub use command::{command_in_terminal, HOLD_SCRIPT};
 pub use directory::{checked_directory, prepare_directory, DirectoryChecks, PreparedDirectory};
 pub use emulator::{find_terminal, ExecutableSearch, Terminal, TerminalKind, SYSTEM_PATH};
 pub use error::TerminalError;
+pub(crate) use launch::INHERITED_TERMINAL_VARIABLES;
 pub use launch::{launch_terminal, terminal_arguments, LaunchedTerminal};
 pub use preference::{desktop_terminal, DesktopTerminalConfig};
 

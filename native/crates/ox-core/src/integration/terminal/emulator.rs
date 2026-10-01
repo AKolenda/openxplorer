@@ -92,6 +92,16 @@ impl TerminalKind {
         }
     }
 
+    /// The option after which the terminal runs the rest of its arguments
+    /// as a command.
+    pub fn command_option(self) -> &'static str {
+        match self {
+            Self::GnomeTerminal | Self::Console => "--",
+            Self::XfceTerminal => "-x",
+            Self::Konsole | Self::XTerm | Self::UXTerm => "-e",
+        }
+    }
+
     /// The terminal whose program is named `name`, if it is a known one.
     pub fn from_program_name(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.program_name() == name)
