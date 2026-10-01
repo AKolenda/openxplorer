@@ -11,8 +11,8 @@
 //! settings say not to (SET-010).
 
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, restore_from_recycle_bin, summarize,
-    summarize_restore, DeleteConfirmation,
+    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, restore_from_recycle_bin,
+    starting_label, summarize, summarize_restore, DeleteConfirmation,
 };
 use ox_core::transfer::TransferMode;
 
@@ -22,9 +22,6 @@ use crate::window::BrowserWindow;
 
 /// The panel's label while items are restored.
 const RESTORING: &str = "Restoring items…";
-
-/// The panel's label while items are deleted for good.
-const DELETING: &str = "Deleting items…";
 
 /// The question Empty Recycle Bin asks.
 fn empty_confirmation() -> DeleteConfirmation {
@@ -81,7 +78,7 @@ impl BrowserWindow {
             return;
         }
         let uris: Vec<String> = items.into_iter().map(|item| item.uri).collect();
-        let Some(context) = self.begin_operation(DELETING) else {
+        let Some(context) = self.begin_operation(starting_label(TransferMode::Delete)) else {
             return;
         };
         let outcome = delete_from_recycle_bin(&uris, &context.cancel).await;
@@ -110,7 +107,7 @@ impl BrowserWindow {
         if asks && !self.confirm_deletion(&empty_confirmation()).await {
             return;
         }
-        let Some(context) = self.begin_operation(DELETING) else {
+        let Some(context) = self.begin_operation(starting_label(TransferMode::Delete)) else {
             return;
         };
         let outcome = empty_recycle_bin(&context.cancel).await;
