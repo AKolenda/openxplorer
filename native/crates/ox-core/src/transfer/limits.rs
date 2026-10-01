@@ -141,7 +141,9 @@ impl Incoming<'_> {
     /// only renames, and items Skip will leave alone, need no space. An
     /// item that cannot be measured counts as empty: its copy reports the
     /// problem. `on_folder` is called before each folder is listed, so the
-    /// caller can show that a long walk is under way.
+    /// caller can show that a long walk is under way. Returns what the run
+    /// writes, when the destination's free space is known and so the
+    /// items were measured.
     ///
     /// # Errors
     ///
@@ -152,9 +154,9 @@ impl Incoming<'_> {
         uris: &[&str],
         cancel: &Cancellation,
         on_folder: &mut dyn FnMut(),
-    ) -> Result<(), TransferError> {
+    ) -> Result<Option<u64>, TransferError> {
         let Some(free) = self.filesystem.free else {
-            return Ok(());
+            return Ok(None);
         };
         let mut needed = 0_u64;
         for uri in uris {
@@ -174,7 +176,7 @@ impl Incoming<'_> {
                 )));
             }
         }
-        Ok(())
+        Ok(Some(needed))
     }
 
     /// True when the run will write `source`'s bytes into the folder. A

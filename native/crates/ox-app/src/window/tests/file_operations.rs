@@ -520,6 +520,7 @@ fn a_full_file_bar_is_never_shown_as_the_batch_finishing() {
         label: label.to_owned(),
         fraction,
         scope,
+        bytes: None,
     };
     let _context = test.window.begin_operation("Preparing copy…");
 

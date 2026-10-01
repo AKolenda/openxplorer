@@ -100,5 +100,7 @@ pub use names::{is_own_backup_name, is_own_staging_name};
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;
 pub(crate) use staging::{clean_staging, STAGING_LEVELS};
-pub use types::{ConflictPolicy, Landed, Operation, Progress, ProgressScope, TransferMode, TransferResult};
+pub use types::{
+    ByteProgress, ConflictPolicy, Landed, Operation, Progress, ProgressScope, TransferMode, TransferResult,
+};
 pub use unstorable::{UnstorableAnswer, UnstorableItem, UnstorableQuestion, UnstorableReason};

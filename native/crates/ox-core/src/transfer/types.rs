@@ -158,6 +158,20 @@ pub struct Progress {
     pub fraction: f64,
     /// Whether `fraction` is the batch's or the current file's.
     pub scope: ProgressScope,
+    /// The bytes behind a file report, for the panel's size, speed and
+    /// time left (OPS-021); `None` for the other reports.
+    pub bytes: Option<ByteProgress>,
+}
+
+/// How far a copy is in bytes (OPS-021).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ByteProgress {
+    /// The bytes of the current file written so far.
+    pub file_written: u64,
+    /// The current file's size.
+    pub file_size: u64,
+    /// What the whole batch writes, when the free-space check measured it.
+    pub batch_size: Option<u64>,
 }
 
 /// `part / whole` as a [`Progress::fraction`], at most 1; 0 when `whole` is

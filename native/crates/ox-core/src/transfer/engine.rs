@@ -255,10 +255,14 @@ impl TransferEngine {
                     label: CHECKING_SPACE_LABEL.to_owned(),
                     fraction: 0.0,
                     scope: ProgressScope::Batch,
+                    bytes: None,
                 });
             }
         };
-        incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)?;
+        let batch_size = incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)?;
+        if batch_size.is_some() {
+            self.report_batch_size(batch_size);
+        }
         let placement = Placement {
             mode,
             policy,
@@ -266,6 +270,18 @@ impl TransferEngine {
             name,
         };
         Ok(self.run_items(ItemAction::Transfer(placement), uris, cancel))
+    }
+
+    /// Makes every byte report of this run say that the batch writes
+    /// `batch_size` bytes, for the panel's time left (OPS-021).
+    fn report_batch_size(&mut self, batch_size: Option<u64>) {
+        let mut emit = std::mem::replace(&mut self.emit, Box::new(|_| {}));
+        self.emit = Box::new(move |mut progress: Progress| {
+            if let Some(bytes) = progress.bytes.as_mut() {
+                bytes.batch_size = batch_size;
+            }
+            emit(progress);
+        });
     }
 
     /// Runs `action` over the distinct `uris` of an accepted request, then
@@ -290,6 +306,7 @@ impl TransferEngine {
             label: completed_label(state.result.done.len()),
             fraction: 1.0,
             scope: ProgressScope::Batch,
+            bytes: None,
         });
         state.result
     }
@@ -337,6 +354,8 @@ impl TransferEngine {
     /// Resolves the selected item at `uri` and announces it on the progress
     /// panel.
     fn start_item(&mut self, batch: &Batch, index: usize, uri: &str) -> Result<SelectedItem, TransferError> {
+        // OPS-021: a paused run waits before its next item.
+        batch.cancel.wait_while_paused();
         batch.cancel.check()?;
         let node = (self.factory)(uri)?;
         // XFER-019: a root has no name to copy, move or trash it under.
@@ -350,6 +369,7 @@ impl TransferEngine {
             label: item_label(batch.mode(), &node.display_name(), index + 1, batch.total),
             fraction: batch.start_fraction(index),
             scope: ProgressScope::Batch,
+            bytes: None,
         });
         Ok(SelectedItem {
             node,
