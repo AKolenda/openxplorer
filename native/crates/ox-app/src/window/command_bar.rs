@@ -190,7 +190,7 @@ impl CommandBar {
     fn add_file_commands(&self) {
         let imp = self.imp();
         let group = &*imp.file_commands;
-        let new_button = text_menu_button("New", Icon::Add, "new-command", new_menu());
+        let new_button = text_menu_button("New", Icon::Add, "new-command", new_menu(Vec::new()));
         group.append(&new_button);
         imp.new_button
             .set(new_button)
@@ -269,6 +269,12 @@ impl CommandBar {
     }
 
     /// Enables or disables New ▾ (`$('new').disabled` in app.js).
+    /// The New button's menu.
+    pub(super) fn new_menu_popover(&self) -> Option<MenuPopover> {
+        let button = self.imp().new_button.get()?;
+        button.popover().and_downcast::<MenuPopover>()
+    }
+
     pub(super) fn set_new_enabled(&self, enabled: bool) {
         if let Some(button) = self.imp().new_button.get() {
             button.set_sensitive(enabled);

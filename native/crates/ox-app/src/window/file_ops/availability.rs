@@ -95,6 +95,7 @@ impl FileCommand {
                 WindowAction::NewJsonFile,
                 WindowAction::NewHtmlDocument,
                 WindowAction::NewFromTemplate,
+                WindowAction::NewFromUserTemplate,
                 WindowAction::NewLink,
                 WindowAction::ShowNewMenu,
             ],

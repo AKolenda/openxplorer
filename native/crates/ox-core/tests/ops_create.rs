@@ -367,3 +367,37 @@ fn a_template_never_overwrites_and_never_goes_to_a_server_listing() {
     );
     assert_eq!(names_in(temp.path()), ["New document.txt"]);
 }
+
+/// Templates in subfolders of Templates are listed by their path, and New
+/// copies one into the folder under its file name, never overwriting.
+///
+/// parity: OPS-003
+#[test]
+fn templates_in_subfolders_are_listed_by_path_and_copied_without_overwriting() {
+    let temp = tempfile::tempdir().expect("a temporary folder");
+    let templates = temp.path().join("Templates");
+    fs::create_dir_all(templates.join("Office/Invoices")).expect("nested template folders");
+    fs::create_dir(templates.join(".hidden")).expect("a hidden folder");
+    fs::write(templates.join("Letter.odt"), b"letter").expect("a template");
+    fs::write(templates.join("Office/Invoices/Invoice.ods"), b"invoice").expect("a nested template");
+    fs::write(templates.join(".hidden/Secret.txt"), b"x").expect("a hidden template");
+    let target = temp.path().join("target");
+    fs::create_dir(&target).expect("a target folder");
+    let nested = TemplateId::User("Office/Invoices/Invoice.ods".to_owned());
+
+    let ids = user_template_ids(&templates);
+    let created = new_from(&target, "Invoice.ods", nested.clone(), &templates);
+    let again = new_from(&target, "Invoice.ods", nested, &templates);
+
+    assert_eq!(ids, ["user:Letter.odt", "user:Office/Invoices/Invoice.ods"]);
+    assert!(created.is_ok(), "{created:?}");
+    assert_eq!(
+        fs::read(target.join("Invoice.ods")).expect("the copy"),
+        b"invoice"
+    );
+    assert!(again.is_err(), "an existing name is never overwritten");
+    assert_eq!(
+        fs::read(target.join("Invoice.ods")).expect("the copy"),
+        b"invoice"
+    );
+}

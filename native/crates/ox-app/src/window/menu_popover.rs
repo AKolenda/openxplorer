@@ -398,6 +398,11 @@ impl MenuPopover {
     /// Closes the menu, then runs `item`'s action, as `closeMenu()` before
     /// `it.fn()` in app.js, so an item may open another menu here.
     fn choose(&self, item: &MenuItem) {
+        if !item.submenu.is_empty() {
+            self.set_entries(item.submenu.clone());
+            self.focus_first_item();
+            return;
+        }
         self.popdown();
         // GTK fails only when no ancestor has the action. Every browser
         // window and the application register them all, so that is a menu
@@ -478,6 +483,9 @@ fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
         label.set_attributes(Some(&bold));
     }
     content.append(&label);
+    if !item.submenu.is_empty() {
+        content.append(&icons::image(Icon::ChevronRight16, ROW_GLYPH));
+    }
     if let Some(shortcut) = item.shortcut {
         let shortcut = gtk::Label::builder()
             .label(shortcut)

@@ -6580,8 +6580,8 @@ python_tests = []
 bridge = ["templates", "createTemplate"]
 dolphin = "KNewFileMenu “Create New” (~/Templates and ~/.local/share/templates/*.desktop)"
 gnome = "XDG TEMPLATES directory (Nautilus “New Document” submenu, subfolders shown as submenus)"
-native = "todo"
-native_note = "Porting notes: No automated test for list_templates or create_from_template. KNewFileMenu at KF 5.115 lists .desktop template entries directly in Create New, including those in XDG_TEMPLATES_DIR; plain files in Templates and subfolder submenus are the Nautilus behaviour. OPS-048 defines the template safety rules that must stay."
+native = "done"
+native_note = "native/crates/ox-core/src/ops/templates.rs lists the user templates of the XDG Templates folder and of its subfolders (not hidden, not links, three levels deep, each folder in name order, 100 templates at most), a nested one by its path such as Office/Letter.odt; new_from_template.rs opens it one component at a time with openat(O_NOFOLLOW) from the Templates folder, so a folder swapped for a link is refused, and publishes without overwriting (OPS-048 unchanged). native/crates/ox-app/src/window/file_ops/template_menu.rs puts every template directly in the New menu (command bar and the folder menu's New…), named by its file name without the extension, with each subfolder as a submenu that opens in place (menu_popover MenuItem::submenu, with a chevron); choosing one opens the New from template dialog with it chosen. The list is read when the window opens and whenever a New menu opens. The built-in starters and From template… stay. Tests: native/crates/ox-core/tests/ops_create.rs (templates_in_subfolders_are_listed_by_path_and_copied_without_overwriting); template_menu.rs (templates_are_listed_directly_with_subfolders_as_submenus)."
 
 [[feature]]
 id = "OPS-004"

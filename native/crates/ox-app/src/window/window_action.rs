@@ -170,6 +170,10 @@ pub(crate) enum WindowAction {
     NewHtmlDocument,
     /// New ▸ From template….
     NewFromTemplate,
+    /// Opens the New from template dialog with the template whose id is
+    /// the string target chosen: a user template listed in the New menu
+    /// (OPS-003).
+    NewFromUserTemplate,
     /// New ▸ Link to file or folder… (OPS-004).
     NewLink,
     /// Cut (Ctrl+X).
@@ -449,6 +453,7 @@ impl WindowAction {
             WindowAction::NewJsonFile => "new-json-file",
             WindowAction::NewHtmlDocument => "new-html-document",
             WindowAction::NewFromTemplate => "new-from-template",
+            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::NewLink => "new-link",
             WindowAction::Cut => "cut",
             WindowAction::Copy => "copy",

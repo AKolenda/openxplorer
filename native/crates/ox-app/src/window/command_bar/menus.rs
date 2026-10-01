@@ -24,9 +24,10 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuEntry {
 }
 
 /// The New menu (`openNewMenu`), which the folder background's "New…"
-/// opens too, and Dolphin's link item (OPS-004).
-pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
-    vec![
+/// opens too, with the user's `templates` before "From template…"
+/// (OPS-003) and Dolphin's link item (OPS-004).
+pub(in crate::window) fn new_menu(templates: Vec<MenuEntry>) -> Vec<MenuEntry> {
+    let mut entries = vec![
         MenuItem::new("Folder", Icon::FolderAdd, WindowAction::NewFolder)
             .with_shortcut("Ctrl+Shift+N")
             .into(),
@@ -42,6 +43,12 @@ pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
         item("JSON file", Icon::Braces, WindowAction::NewJsonFile),
         item("HTML document", Icon::Code, WindowAction::NewHtmlDocument),
         MenuEntry::Divider,
+    ];
+    if !templates.is_empty() {
+        entries.extend(templates);
+        entries.push(MenuEntry::Divider);
+    }
+    entries.extend([
         item(
             "From template…",
             Icon::DocumentCopy,
@@ -49,7 +56,8 @@ pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
         ),
         MenuEntry::Divider,
         item("Link to file or folder…", Icon::Link, WindowAction::NewLink),
-    ]
+    ]);
+    entries
 }
 
 /// The Sort menu's item for `column`.

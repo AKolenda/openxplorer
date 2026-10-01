@@ -7,9 +7,11 @@
 //!
 //! - A user template must be in a fresh template list, so only a bounded,
 //!   regular, visible, non-link file in the Templates folder is copied.
-//! - It is opened without following links and without blocking, and
-//!   checked on the open descriptor, so a template swapped for a link, a
-//!   FIFO or a device after the list was read is refused.
+//! - It is opened without following links and without blocking, one path
+//!   component at a time from the Templates folder (a template may be in
+//!   a subfolder, OPS-003), and checked on the open descriptor, so a
+//!   template or a subfolder swapped for a link, a FIFO or a device after
+//!   the list was read is refused.
 //! - It is read in 64 KiB blocks that check for cancellation, and refused
 //!   past [`MAX_TEMPLATE_BYTES`].
 //! - The content goes to a private (0600) hidden stage file in the target
@@ -18,21 +20,20 @@
 //!   permissions, execute bits included, are never copied, and a template
 //!   is never run.
 
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{ErrorKind, Read};
 use std::path::{Path, PathBuf};
 
 use gio::prelude::*;
-use rustix::fs::OFlags;
+use rustix::fs::{Mode, OFlags};
 use rustix::io::Errno;
 
 use super::context::{on_worker, unless_cancelled, OperationContext};
 use super::create::CreatedItem;
 use super::error::OpsError;
-use super::templates::{list_templates_blocking, TemplateId, MAX_TEMPLATE_BYTES};
+use super::templates::{list_templates_blocking, TemplateId, MAX_TEMPLATE_BYTES, TEMPLATE_PATH_SEPARATOR};
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name, ItemKind};
-use crate::private_storage::KernelOpenFlags;
 use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{Cancellation, Node};
 
@@ -112,42 +113,63 @@ fn template_contents(request: &NewFromTemplate, cancel: &Cancellation) -> Result
     }
 }
 
-/// OPS-048: the content of the user template `file_name`, only when a
-/// fresh listing still offers it.
+/// OPS-048: the content of the user template at `path` below the
+/// Templates folder, only when a fresh listing still offers it.
 fn read_user_template(
-    file_name: &str,
+    path: &str,
     templates_folder: &Path,
     cancel: &Cancellation,
 ) -> Result<Vec<u8>, OpsError> {
-    // One path component, so the template cannot come from another folder.
-    validate_name(file_name)?;
-    let id = TemplateId::User(file_name.to_owned());
+    // Each folder and the file name are one path component, so the
+    // template cannot come from outside the Templates folder.
+    for part in path.split(TEMPLATE_PATH_SEPARATOR) {
+        validate_name(part)?;
+    }
+    let id = TemplateId::User(path.to_owned());
     if !list_templates_blocking(templates_folder, cancel)?.contains(&id) {
         return Err(OpsError::failed(
             "This template is unavailable, too large, or not a regular template file.",
         ));
     }
-    let template = open_regular_file(&templates_folder.join(file_name))?;
+    let template = open_template(templates_folder, path)?;
     read_bounded(template, cancel)
 }
 
-/// OPS-048: opens `path` without following a link (`O_NOFOLLOW`) and
+/// OPS-048: opens the template at `path` below `templates_folder` one
+/// component at a time without following a link (`O_NOFOLLOW`), the file
 /// without waiting for a FIFO's writer (`O_NONBLOCK`), then checks the
 /// open descriptor, closing the race between the listing and the open.
-fn open_regular_file(path: &Path) -> Result<File, OpsError> {
-    let opened = OpenOptions::new()
-        .read(true)
-        .kernel_flags(OFlags::NOFOLLOW | OFlags::NONBLOCK)
-        .open(path);
-    let file = match opened {
-        Ok(file) => file,
-        Err(error) if error.raw_os_error() == Some(Errno::LOOP.raw_os_error()) => return Err(not_regular()),
-        Err(error) => return Err(error.into()),
-    };
+fn open_template(templates_folder: &Path, path: &str) -> Result<File, OpsError> {
+    let mut folders: Vec<&str> = path.split(TEMPLATE_PATH_SEPARATOR).collect();
+    let file_name = folders.pop().unwrap_or_default();
+    let folder_flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
+    let mut folder = rustix::fs::open(templates_folder, folder_flags, Mode::empty()).map_err(io_error)?;
+    for name in folders {
+        folder = rustix::fs::openat(&folder, name, folder_flags | OFlags::NOFOLLOW, Mode::empty())
+            .map_err(refused_link)?;
+    }
+    let file_flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
+    let file =
+        File::from(rustix::fs::openat(&folder, file_name, file_flags, Mode::empty()).map_err(refused_link)?);
     if !file.metadata()?.file_type().is_file() {
         return Err(not_regular());
     }
     Ok(file)
+}
+
+/// The refusal of a component that is a link (`ELOOP`, or `ENOTDIR` for a
+/// folder that is not one), else the system's error.
+fn refused_link(errno: Errno) -> OpsError {
+    if errno == Errno::LOOP || errno == Errno::NOTDIR {
+        not_regular()
+    } else {
+        io_error(errno)
+    }
+}
+
+/// The system's error `errno`.
+fn io_error(errno: Errno) -> OpsError {
+    std::io::Error::from(errno).into()
 }
 
 /// The refusal of a template that is a link, FIFO or device.
@@ -261,12 +283,17 @@ mod tests {
         let pipe = temp.path().join("pipe.txt");
         make_fifo(&pipe);
 
-        let through_link = open_regular_file(&link).map(|_| ());
-        let from_pipe = open_regular_file(&pipe).map(|_| ());
+        fs::create_dir(temp.path().join("Office")).expect("a subfolder");
+        symlink(temp.path(), temp.path().join("Linked")).expect("a linked folder");
+
+        let through_link = open_template(temp.path(), "link.txt").map(|_| ());
+        let from_pipe = open_template(temp.path(), "pipe.txt").map(|_| ());
+        let through_linked_folder = open_template(temp.path(), "Linked/regular.txt").map(|_| ());
 
         assert_eq!(through_link, Err(not_regular()));
         assert_eq!(from_pipe, Err(not_regular()));
-        assert!(open_regular_file(&regular).is_ok());
+        assert_eq!(through_linked_folder, Err(not_regular()));
+        assert!(open_template(temp.path(), "regular.txt").is_ok());
     }
 
     #[test]

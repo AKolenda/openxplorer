@@ -258,7 +258,8 @@ impl BrowserWindow {
         self.add_action_entries([
             plain_action(WindowAction::ShowMoreOptions, BrowserWindow::show_more_options),
             plain_action(WindowAction::ShowNewMenu, |window| {
-                window.show_menu_in_place(new_menu())
+                window.refresh_template_menu();
+                window.show_menu_in_place(new_menu(window.template_menu_entries()));
             }),
             plain_action(WindowAction::ShowSortMenu, |window| {
                 window.show_menu_in_place(sort_menu())
