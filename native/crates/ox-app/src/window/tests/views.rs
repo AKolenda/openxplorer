@@ -592,15 +592,16 @@ fn text_size_keys_work_inside_dialogs() {
 }
 
 /// Ctrl+wheel zooming changes the view, its menu state and the saved
-/// preference, as choosing the view does.
+/// preference, as choosing the view does: past Details and List it steps
+/// through every icon size, which the status bar's slider shows and sets.
 ///
-/// parity: VIEW-011
+/// parity: VIEW-010, VIEW-011
 #[gtk::test]
 fn zooming_changes_and_saves_the_view() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.window.folder_pane().model().select_only(3);
-    test.window.zoom_view(2);
+    test.window.zoom_view(6);
     assert_eq!(
         test.window.folder_pane().view(),
         FolderView::Icons(IconSize::MEDIUM)
@@ -610,4 +611,8 @@ fn zooming_changes_and_saves_the_view() {
         test.context.settings_data().preferences.view == View::Grid
     });
     assert_eq!(test.selected_names().len(), 1, "zooming keeps the selection");
+    let slider = test.window.status_bar().zoom_slider();
+    assert!(slider.is_visible());
+    slider.set_value(slider.value() + 1.0);
+    assert_eq!(test.window.folder_pane().view().as_str(), "icons-48");
 }

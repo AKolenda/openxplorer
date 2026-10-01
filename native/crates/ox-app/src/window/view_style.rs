@@ -154,10 +154,8 @@ impl BrowserWindow {
     pub(super) fn apply_style(&self, style: &ViewProperties) {
         let applying = self.imp().applying_style.replace(true);
         let view = FolderView::from_style(&style.mode, style.icon_size);
-        if self.folder_pane().view() != view {
-            self.set_action_state(WindowAction::View, &view.as_str().to_variant());
-            self.show_view(view);
-        }
+        self.set_action_state(WindowAction::View, &view.as_str().to_variant());
+        self.show_view(view);
         self.show_folders_first(style.folders_first);
         let by = SortBy::from_key(&style.sort).unwrap_or(SortBy::Column(SortColumn::Name));
         let direction = if style.descending {

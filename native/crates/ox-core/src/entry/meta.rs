@@ -38,7 +38,12 @@ impl EntryMeta {
             owner: string_attribute(info, "owner::user"),
             group: string_attribute(info, "owner::group"),
             permissions,
-            link_target: string_attribute(info, "standard::symlink-target"),
+            // A byte string, so not one of the text attributes.
+            link_target: info
+                .has_attribute("standard::symlink-target")
+                .then(|| info.symlink_target())
+                .flatten()
+                .map(|target| target.display().to_string()),
         }
     }
 

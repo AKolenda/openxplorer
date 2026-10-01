@@ -243,8 +243,7 @@ mod imp {
             self.parent_constructed();
             let column_view = &self.column_view;
             column_view.add_css_class("files");
-            column_view.set_enable_rubberband(true);
-            column_view.set_show_row_separators(false);
+                        column_view.set_show_row_separators(false);
             column_view.set_show_column_separators(false);
             column_view.set_reorderable(false);
             column_view.set_tab_behavior(gtk::ListTabBehavior::Item);

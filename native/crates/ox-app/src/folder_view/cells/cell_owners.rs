@@ -333,6 +333,26 @@ impl CellOwners {
             .find_map(|cell| cell.downcast::<FileCell>().ok())
     }
 
+    /// The rows or tiles on screen inside `view`, each once, with the
+    /// position each shows, for a rubber band to test against.
+    pub(crate) fn shown_items(&self, view: &impl IsA<gtk::Widget>) -> Vec<(u32, gtk::Widget)> {
+        let view = view.as_ref();
+        let mut shown: Vec<(u32, gtk::Widget)> = Vec::new();
+        for owner in self.owners.borrow().iter() {
+            let Some(list_item) = owner.list_item.upgrade() else {
+                continue;
+            };
+            let (Some(position), Some(cell)) = (bound_position(&list_item), owner.cell.upgrade()) else {
+                continue;
+            };
+            let row = item_widget(&cell).filter(|row| row.is_ancestor(view));
+            if let Some(row) = row.filter(|_| !shown.iter().any(|(seen, _)| *seen == position)) {
+                shown.push((position, row));
+            }
+        }
+        shown
+    }
+
     /// The list item whose content widget is `widget`.
     fn owner_of(&self, widget: &gtk::Widget) -> Option<gtk::ListItem> {
         let owners = self.owners.borrow();

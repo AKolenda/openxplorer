@@ -114,9 +114,13 @@ impl FolderPane {
     /// Builds the pages, empty and in the details view.
     fn build_parts(&self) {
         let parts = PaneParts::new();
-        let overlay = gtk::Overlay::builder().child(&parts.stack).build();
+        let overlay = gtk::Overlay::builder()
+            .child(&parts.stack)
+            .css_classes(["folder-pane-overlay"])
+            .build();
         overlay.add_overlay(&parts.loading_line);
         overlay.add_overlay(&parts.drag_hint);
+        overlay.add_overlay(&parts.rubber_band);
         overlay.set_parent(self);
         self.imp()
             .parts
@@ -198,6 +202,34 @@ impl FolderPane {
         let label = &self.parts().drag_hint;
         label.set_label(hint.unwrap_or_default());
         label.set_visible(hint.is_some());
+    }
+
+    /// Draws a rubber band over `view` at `rect`, in the view's
+    /// coordinates and clipped to it, or hides it with `None`.
+    pub(super) fn show_rubber_band(&self, view: &gtk::Widget, rect: Option<&gtk::graphene::Rect>) {
+        let band = &self.parts().rubber_band;
+        let origin = view.compute_point(self, &gtk::graphene::Point::zero());
+        let (Some(rect), Some(origin)) = (rect, origin) else {
+            band.set_visible(false);
+            return;
+        };
+        let shown = gtk::graphene::Rect::new(0.0, 0.0, view.width() as f32, view.height() as f32);
+        let Some(clipped) = rect.intersection(&shown) else {
+            band.set_visible(false);
+            return;
+        };
+        // Whole pixels, as GTK lays widgets out.
+        #[expect(clippy::cast_possible_truncation, reason = "pixel coordinates")]
+        let pixel = |value: f32| value.round() as i32;
+        band.set_margin_start(pixel(origin.x() + clipped.x()));
+        band.set_margin_top(pixel(origin.y() + clipped.y()));
+        band.set_size_request(pixel(clipped.width()).max(1), pixel(clipped.height()).max(1));
+        band.set_visible(true);
+    }
+
+    /// Whether a rubber band is drawn now.
+    pub(super) fn rubber_band_shown(&self) -> bool {
+        self.parts().rubber_band.is_visible()
     }
 
     /// The note over the pane while a drag shows one, for tests.

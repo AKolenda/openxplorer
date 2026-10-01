@@ -326,6 +326,12 @@ impl StatusBar {
         self.imp().typeahead_hint.get()
     }
 
+    /// The icon-size slider, for tests.
+    #[cfg(test)]
+    pub(super) fn zoom_slider(&self) -> gtk::Scale {
+        self.imp().zoom_slider.get()
+    }
+
     /// The view buttons that show as active, for tests.
     #[cfg(test)]
     pub(super) fn active_view_buttons(&self) -> Vec<String> {

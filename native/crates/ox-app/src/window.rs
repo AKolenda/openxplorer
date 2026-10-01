@@ -113,6 +113,7 @@ mod quick_look;
 mod recycle_bin_place;
 mod relocated_files;
 mod result_location;
+mod rubber_band;
 mod run_on_open;
 mod saved_search;
 mod search_box;

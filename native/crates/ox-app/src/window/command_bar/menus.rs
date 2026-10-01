@@ -108,9 +108,9 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
         .into()
 }
 
-/// The View menu: the views (every icon size the native app has), the
-/// hidden-files, details-pane and navigation-pane toggles, then the text
-/// size.
+/// The View menu: the views (Details, List and Explorer's four icon
+/// sizes), the hidden-files, details-pane and navigation-pane toggles,
+/// Dolphin's display style dialog, then the text size.
 pub(super) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item("Details", Icon::TextBulletList, FolderView::Details);
     let compact = view_item("List", Icon::Table, FolderView::Compact);
@@ -132,15 +132,15 @@ pub(super) fn view_menu() -> Vec<MenuEntry> {
             .with_shortcut("F9")
             .into(),
         MenuEntry::Divider,
-        text_size_item("Larger text", Icon::Add, Step::Increase, "Ctrl++"),
-        text_size_item("Smaller text", Icon::Subtract, Step::Decrease, "Ctrl+−"),
-        text_size_item("Reset text size", Icon::ArrowReset, Step::Reset, "Ctrl+0"),
-        MenuEntry::Divider,
         item(
             "Adjust view display style…",
             Icon::Settings,
             WindowAction::ViewProperties,
         ),
+        MenuEntry::Divider,
+        text_size_item("Larger text", Icon::Add, Step::Increase, "Ctrl++"),
+        text_size_item("Smaller text", Icon::Subtract, Step::Decrease, "Ctrl+−"),
+        text_size_item("Reset text size", Icon::ArrowReset, Step::Reset, "Ctrl+0"),
     ]);
     entries
 }

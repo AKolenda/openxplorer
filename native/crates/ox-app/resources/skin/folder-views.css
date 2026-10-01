@@ -101,7 +101,8 @@ columnview.files .row-icon { margin-top: 1px; }
 /* A cut hidden item fades further, so the cut still shows (0.6 x 0.5). */
 .files .hidden-item.cut { opacity: 0.3; }
 
-columnview.files rubberband, gridview.files rubberband {
+/* The rubber band the window draws over the views (SEL-012). */
+.folder-pane-overlay > .rubber-band {
   border: 1px solid @ox_accent;
   background-color: alpha(@ox_accent, .15);
   border-radius: 0;

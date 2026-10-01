@@ -15,6 +15,7 @@ use gtk::{gdk, glib};
 
 use super::file_ops_support::{is_triggered_by, press_shortcut_where_focused, shortcuts_of};
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use crate::window::rubber_band::BandMode;
 
 /// A folder long enough to scroll.
 const LONG_FOLDER: usize = 300;
@@ -116,16 +117,6 @@ fn blank_point(test: &TestWindow) -> (f64, f64) {
     (20.0, f64::from(view.height()) - 10.0)
 }
 
-/// Whether the visible view starts a rubber band.
-fn allows_rubber_band(test: &TestWindow) -> bool {
-    let view = test.window.folder_pane().view_widget();
-    if let Some(columns) = view.downcast_ref::<gtk::ColumnView>() {
-        return columns.enables_rubberband();
-    }
-    view.downcast_ref::<gtk::GridView>()
-        .is_some_and(gtk::GridView::enables_rubberband)
-}
-
 /// parity: SEL-001
 #[gtk::test]
 fn click_ctrl_click_and_shift_click_select_like_explorer() {
@@ -160,33 +151,37 @@ fn a_click_on_blank_space_clears_the_selection_and_focuses_the_list() {
     }
 }
 
+/// A band drawn from blank space selects the rows it crosses while it
+/// moves, and Ctrl toggles them in the selection it started from; a press
+/// on an item starts none.
+///
 /// parity: SEL-012
 #[gtk::test]
-fn a_rubber_band_starts_on_blank_space_only() {
+fn a_rubber_band_selects_the_rows_it_crosses_as_it_moves() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    for view in ["details", "large"] {
-        show_view(&test, view);
-        let item = test
-            .window
-            .folder_pane()
-            .owners()
-            .widget_at(1)
-            .expect("on screen");
-        let view_widget = test.window.folder_pane().view_widget();
-        let bounds = item
-            .compute_bounds(&view_widget)
-            .expect("a shown item has bounds");
-        press_at(
-            &test,
-            f64::from(bounds.x() + 4.0),
-            f64::from(bounds.y() + bounds.height() / 2.0),
-        );
-        assert!(!allows_rubber_band(&test), "{view}: dragging an item drags it");
-        let (x, y) = blank_point(&test);
-        press_at(&test, x, y);
-        assert!(allows_rubber_band(&test), "{view}: blank space starts a band");
-    }
+    let pane = test.window.folder_pane();
+    let view = pane.view_widget();
+    let center_of = |position: u32| {
+        let row = pane.owners().widget_at(position).expect("on screen");
+        let bounds = row.compute_bounds(&view).expect("a shown item has bounds");
+        f64::from(bounds.y() + bounds.height() / 2.0)
+    };
+    assert!(!test.window.is_blank_space(&view, 30.0, center_of(1)), "an item drags, not bands");
+    let (x, y) = blank_point(&test);
+    assert!(test.window.is_blank_space(&view, x, y));
+    let last = pane.model().n_items() - 1;
+
+    test.window.begin_band(&view, (x, y), BandMode::Replace);
+    test.window.move_band((x + 40.0, center_of(1)));
+    let crossed: Vec<u32> = (1..=last).collect();
+    assert_eq!(selected(&test), crossed, "the selection follows the band before it ends");
+    test.window.end_band();
+
+    test.window.begin_band(&view, (x, y), BandMode::Toggle);
+    test.window.move_band((x, center_of(last)));
+    test.window.end_band();
+    assert_eq!(selected(&test), (1..last).collect::<Vec<u32>>(), "Ctrl toggles the crossed row");
 }
 
 /// parity: SEL-004, SEL-005

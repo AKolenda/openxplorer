@@ -42,6 +42,8 @@ pub(super) struct PaneParts {
     /// The note over the pane that says what a drag would do there, such
     /// as "Open with convert".
     pub(super) drag_hint: gtk::Label,
+    /// The rubber band over the views while one is drawn (SEL-012).
+    pub(super) rubber_band: gtk::Box,
 }
 
 impl PaneParts {
@@ -66,6 +68,7 @@ impl PaneParts {
             landing,
             loading_line: LoadingLine::new(),
             drag_hint: drag_hint(),
+            rubber_band: rubber_band(),
         }
     }
 }
@@ -80,6 +83,18 @@ fn drag_hint() -> gtk::Label {
         .can_target(false)
         .visible(false)
         .css_classes(["drag-hint"])
+        .build()
+}
+
+/// The rectangle a rubber band draws, hidden until one is drawn. It never
+/// takes the pointer.
+fn rubber_band() -> gtk::Box {
+    gtk::Box::builder()
+        .halign(gtk::Align::Start)
+        .valign(gtk::Align::Start)
+        .can_target(false)
+        .visible(false)
+        .css_classes(["rubber-band"])
         .build()
 }
 

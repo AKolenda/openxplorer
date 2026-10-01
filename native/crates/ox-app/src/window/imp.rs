@@ -159,6 +159,8 @@ pub(crate) struct BrowserWindow {
     /// Set while the window shows a folder's saved display style, so
     /// showing it is not saved as the user's change.
     pub(super) applying_style: Cell<bool>,
+    /// The rubber band being drawn, while one is (SEL-012).
+    pub(super) rubber_band: super::rubber_band::BandState,
     /// Set until the file list takes keyboard focus in a new window or
     /// after Settings hides; see
     /// [`super::BrowserWindow::focus_new_file_list`].

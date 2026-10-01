@@ -114,8 +114,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.grid.add_css_class("files");
-            self.grid.set_enable_rubberband(true);
-            self.grid.set_tab_behavior(gtk::ListTabBehavior::Item);
+                        self.grid.set_tab_behavior(gtk::ListTabBehavior::Item);
             super::cells::label_view(self.grid.upcast_ref());
             self.scroller.set_child(Some(&self.grid));
             self.scroller.set_parent(&*self.obj());
