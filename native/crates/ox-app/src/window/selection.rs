@@ -65,7 +65,7 @@ impl BrowserWindow {
         self.update_details_pane();
         self.follow_quick_look();
         let selected = self.folder_pane().model().summary().count;
-        self.set_action_enabled(WindowAction::Open, selected == 1);
+        self.set_action_enabled(WindowAction::Open, selected >= 1);
         // Copy path copies one item, or the folder when none is selected.
         self.set_action_enabled(WindowAction::CopyPath, selected <= 1);
         self.set_action_enabled(WindowAction::PinSelected, selected == 1);

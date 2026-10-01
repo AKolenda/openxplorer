@@ -157,6 +157,8 @@ pub(crate) struct BrowserWindow {
     pub(super) file_operations: RefCell<FileOperations>,
     /// Whether a close waits for a running write (TAB-049).
     pub(super) closing: Cell<ClosingState>,
+    /// The user agreed to close every tab of the window (SET-010).
+    pub(super) closing_tabs_confirmed: Cell<bool>,
     /// The file drag this window started, while it lasts.
     pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
     /// Until when clicks that open items are ignored, around a drag.

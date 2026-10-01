@@ -374,6 +374,17 @@ impl Dialog {
         }
     }
 
+    /// Shows the dialog with `widget` focused, for a dialog whose first
+    /// button must not be the one a reflexive Enter presses.
+    pub(super) fn open_focusing(&self, widget: &impl IsA<gtk::Widget>) {
+        GtkWindowExt::set_focus(self, Some(widget));
+        if let Some(parent) = self.transient_for().and_downcast::<super::BrowserWindow>() {
+            parent.quiet_for_dialog();
+        }
+        self.present();
+        widget.grab_focus();
+    }
+
     /// Waits for the next answer: the button pressed, or `None` for
     /// Cancel, Escape or closing, which also closes the dialog and drops
     /// the work [`Self::run`] started. After a button the dialog stays
@@ -441,6 +452,11 @@ impl Dialog {
         if let Some(work) = self.imp().work.take() {
             work.abort();
         }
+    }
+
+    /// Hides the line that said why the last try failed.
+    pub(super) fn hide_error(&self) {
+        self.imp().frame.show_error("");
     }
 
     /// Disables the buttons while `running` carries out an answer, as

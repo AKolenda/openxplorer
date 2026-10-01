@@ -10,10 +10,11 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::TRASH_URI;
 use ox_core::ops::{list_recycle_bin, JournalDirection};
+use ox_core::settings::{PreferencesUpdate, Settings};
 use ox_core::transfer::Cancellation;
 
 use super::file_ops_support::{
-    is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
+    dialog_over, is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
 };
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
@@ -132,6 +133,36 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
         .block_on(list_recycle_bin(&Cancellation::new()))
         .expect("a readable Recycle Bin");
     assert!(left.is_empty(), "{left:?}");
+}
+
+/// With "Ask before emptying the Recycle Bin" off, Empty Recycle Bin
+/// empties it at once.
+///
+/// parity: SET-010
+#[gtk::test]
+fn empty_recycle_bin_asks_nothing_when_the_settings_say_so() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Old note.txt");
+    trash(&fixture.path("Old note.txt"));
+    require_only_test_items_in_the_recycle_bin();
+    let test = TestWindow::open(TRASH_URI);
+    let update = PreferencesUpdate {
+        confirm_empty_trash: Some(false),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        !test.context.settings_data().preferences.confirm_empty_trash
+    });
+    wait_until("the trashed file to be listed", || !test.names().is_empty());
+
+    test.activate("empty-recycle-bin", None);
+    wait_until("the Recycle Bin to be empty", || test.names().is_empty());
+    assert!(dialog_over(&test).is_none(), "nothing asked");
 }
 
 /// parity: OPS-045

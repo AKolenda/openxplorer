@@ -25,7 +25,7 @@ use super::{
     BraveDialog, DesktopIntegration, IntegrationFolders, MimeBackend, OpenWithDialog, OpenWithSubject,
 };
 use crate::test_support::harness::{
-    application, capture_dialog, descendants, wait_until, Fixture, TestWindow,
+    application, capture_dialog, descendants, settle, wait_until, Fixture, TestWindow,
 };
 
 /// Requests the service handed to the application.
@@ -364,6 +364,38 @@ fn applications_start_with_the_windows_display() {
     );
 }
 
+/// A command typed into Open with runs with the item's path as one
+/// argument, instead of an application.
+///
+/// parity: OPEN-014
+#[gtk::test]
+fn open_with_runs_a_typed_command_with_the_item() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let launches: Launches = Rc::default();
+    let subject = OpenWithSubject {
+        uri: fixture.uri_of("Résumé.txt"),
+        name: "Résumé.txt".to_owned(),
+        is_folder: false,
+    };
+    let reports: Rc<RefCell<Vec<String>>> = Rc::default();
+    let report = Rc::clone(&reports);
+    let dialog = OpenWithDialog::present_for(
+        &test.window,
+        subject,
+        recording_launcher(&launches),
+        move |message| report.borrow_mut().push(message.to_owned()),
+    );
+    let copy = fixture.path("copy of the résumé.txt");
+
+    dialog.type_command(&format!("cp %f '{}'", copy.display()));
+    dialog.click_open();
+
+    wait_until("the command to copy the file", || copy.is_file());
+    assert_eq!(*reports.borrow(), ["Ran the command."]);
+    assert!(launches.borrow().is_empty(), "no application started");
+}
+
 /// For a folder every installed application is listed, and the
 /// file-manager default is never offered for change.
 ///
@@ -416,6 +448,10 @@ fn the_brave_dialog_lists_profiles_and_needs_consent() {
         !dialog.profile_labels().is_empty(),
         "the profiles are listed before it shows"
     );
+    wait_until("the dialog to have its size", || dialog.height() > 0);
+    let first_height = dialog.height();
+    settle();
+    assert_eq!(dialog.height(), first_height, "the dialog keeps its first size");
 
     assert_eq!(dialog.profile_labels(), ["Personal · Brave-Browser\n/tmp/old"]);
     capture_dialog(&dialog, "native-brave-dialog.png");

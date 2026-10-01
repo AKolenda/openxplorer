@@ -33,9 +33,10 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::{Entry, EntryError};
+use ox_core::integration::FOLDER_CONTENT_TYPE;
 use ox_core::location::{is_smb_location, parent_location};
 
-use crate::app_context::{add_to_desktop_history, FOLDER_CONTENT_TYPE};
+use crate::app_context::add_to_desktop_history;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::{loader, reconcile, watch};
 use crate::locations::Page;

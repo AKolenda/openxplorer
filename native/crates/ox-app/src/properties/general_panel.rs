@@ -20,6 +20,7 @@ use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::{ItemProperties, MountFacts};
 use crate::dialog_layer::{note, quiet_text, DialogFrame, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
+use crate::integration;
 use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};
 
 /// The size of the item's picture at the top of the General tab
@@ -241,6 +242,12 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
         snapshot_location(&entry.uri, facts.snapshot_roots).is_some() || is_conventional_snapshot(&entry.uri);
     if !entry.is_dir && !is_read_only {
         row.append(&change_app_button(&entry.uri));
+        let content_type = entry.content_type.as_deref();
+        if let Some(content_type) =
+            content_type.filter(|content_type| !integration::is_protected(content_type))
+        {
+            row.append(&type_applications_button(content_type));
+        }
     }
     row.append(&copy_path_button(facts.locations.display_location(&entry.uri)));
     if entry.is_dir && !is_smb_server(&entry.uri) {
@@ -279,6 +286,14 @@ pub(super) fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
 fn change_app_button(uri: &str) -> gtk::Button {
     let button = glyph_button("Change app…", Icon::Grid);
     WindowAction::ChangeApp.assign_with_target_to(&button, &uri.to_variant());
+    button
+}
+
+/// Apps for this type…: the applications associated with the file's
+/// type (OPEN-026).
+fn type_applications_button(content_type: &str) -> gtk::Button {
+    let button = glyph_button("Apps for this type…", Icon::Apps);
+    WindowAction::TypeApplications.assign_with_target_to(&button, &content_type.to_variant());
     button
 }
 

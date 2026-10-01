@@ -5,8 +5,8 @@
 //! them ([`super::launcher`], DND-020).
 //!
 //! New in the native app, promised by the owner. A file under a drag is a
-//! program when GIO says it is a regular file the user may execute; the
-//! answer is looked up once per file while the drag hovers
+//! program when GIO says it is a regular file the user may execute and its
+//! content type is a binary's or a script's; the answer is looked up once per file while the drag hovers
 //! ([`ProgramChecks`]) and checked again before anything runs. A binary
 //! or an `AppImage` runs directly; a script (a text file) runs in the
 //! user's terminal, which stays open after it ends so its output can be
@@ -25,18 +25,17 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
-use ox_core::integration::{find_terminal, ExecutableSearch, Sandbox, Terminal, TerminalKind};
+use ox_core::integration::{find_terminal, ExecutableSearch, Sandbox, Terminal};
 use ox_core::network::local_path;
 
 use super::launcher;
+use crate::integration::process::{in_terminal, spawn_command};
 use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
@@ -47,24 +46,27 @@ const PROGRAM_ATTRIBUTES: &str = "standard::type,standard::content-type,access::
 /// The content type every script is a kind of.
 const TEXT_CONTENT_TYPE: &str = "text/plain";
 
-/// The shell script a terminal runs a dropped-on script through: it runs
-/// the program with its arguments, then waits for Enter so the output
-/// stays on screen. Names reach it only as positional arguments.
-const HOLD_SCRIPT: &str =
-    r#""$@"; status=$?; printf '\n%s' 'Press Enter to close this window.'; read -r _; exit "$status""#;
+/// The content types of programs: binaries, and the scripts that
+/// shared-mime-info declares or older versions only name. A file of any
+/// other type is never run, whatever its execute bit says, since on FAT,
+/// NTFS and SMB mounts every file has it. This is the list Dolphin offers
+/// "Execute" for, less `.desktop` launchers, which [`launcher`] handles.
+const PROGRAM_CONTENT_TYPES: [&str; 8] = [
+    "application/x-executable",
+    "application/x-sharedlib",
+    "application/x-pie-executable",
+    "application/x-shellscript",
+    "application/x-perl",
+    "application/x-ruby",
+    "text/x-python",
+    "text/x-python3",
+];
 
 /// The name the hold script runs under (`$0`).
 const HOLD_SCRIPT_NAME: &str = "openxplorer-drop";
 
 /// Why a program cannot run.
 const NO_LOCAL_PATH: &str = "This program has no local path. Mount its share before dropping files on it.";
-
-/// Runs a program on the host from inside Flatpak.
-const FLATPAK_SPAWN: &str = "flatpak-spawn";
-
-/// Variables that would make GNOME Terminal open a tab in the terminal the
-/// app was started from, instead of a window of its own.
-const INHERITED_TERMINAL_VARIABLES: [&str; 2] = ["GNOME_TERMINAL_SCREEN", "GNOME_TERMINAL_SERVICE"];
 
 /// How a program runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,12 +111,14 @@ pub(crate) struct ProgramChecks {
 fn program_from_info(entry: &Entry, info: &gio::FileInfo) -> Option<ProgramTarget> {
     let is_regular = info.file_type() == gio::FileType::Regular;
     let may_execute = info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE);
-    if !is_regular || !may_execute {
+    let content_type = info.content_type()?;
+    let is_program_type = PROGRAM_CONTENT_TYPES
+        .iter()
+        .any(|program_type| gio::content_type_is_a(&content_type, program_type));
+    if !is_regular || !may_execute || !is_program_type {
         return None;
     }
-    let is_script = info
-        .content_type()
-        .is_some_and(|content_type| gio::content_type_is_a(&content_type, TEXT_CONTENT_TYPE));
+    let is_script = gio::content_type_is_a(&content_type, TEXT_CONTENT_TYPE);
     let kind = if is_script {
         ProgramKind::Script
     } else {
@@ -127,16 +131,6 @@ fn program_from_info(entry: &Entry, info: &gio::FileInfo) -> Option<ProgramTarge
     })
 }
 
-/// The option after which `kind` runs the rest of its arguments as a
-/// command.
-fn command_option(kind: TerminalKind) -> &'static str {
-    match kind {
-        TerminalKind::GnomeTerminal | TerminalKind::Console => "--",
-        TerminalKind::XfceTerminal => "-x",
-        TerminalKind::Konsole | TerminalKind::XTerm | TerminalKind::UXTerm => "-e",
-    }
-}
-
 /// The command that gives `items` to the program at `program`: the
 /// program itself for a binary, or `terminal` running it through the hold
 /// script for a script. Each item stays one argument, whatever its name.
@@ -146,15 +140,12 @@ pub(super) fn program_command(
     items: &[OsString],
     terminal: Option<&Terminal>,
 ) -> Vec<OsString> {
-    let mut command = Vec::new();
-    if let (ProgramKind::Script, Some(terminal)) = (kind, terminal) {
-        command.push(terminal.executable().as_os_str().to_owned());
-        command.push(command_option(terminal.kind()).into());
-        command.extend(["/bin/sh", "-c", HOLD_SCRIPT, HOLD_SCRIPT_NAME].map(OsString::from));
-    }
-    command.push(program.as_os_str().to_owned());
+    let mut command = vec![program.as_os_str().to_owned()];
     command.extend(items.iter().cloned());
-    command
+    match (kind, terminal) {
+        (ProgramKind::Script, Some(terminal)) => in_terminal(terminal, Some(HOLD_SCRIPT_NAME), command),
+        _ => command,
+    }
 }
 
 /// The argument that names the dropped item at `uri`: its local path, or
@@ -168,35 +159,6 @@ fn item_argument(uri: &str) -> OsString {
 /// that can be removed (`is_removable`).
 fn needs_run_confirmation(uri: &str, is_network: bool, is_removable: bool) -> bool {
     !uri.starts_with("file:") || is_network || is_removable
-}
-
-/// Runs `command` in `folder` without waiting for it: on the host through
-/// `flatpak-spawn --host` when the app is a Flatpak, in a process group of
-/// its own, and without GNOME Terminal's variables, so a terminal opens a
-/// window of its own.
-fn spawn_command(command: &[OsString], folder: &Path, sandbox: Sandbox) -> std::io::Result<()> {
-    let Some((program, arguments)) = command.split_first() else {
-        return Ok(());
-    };
-    let mut process = if sandbox.is_flatpak() {
-        let mut directory = OsString::from("--directory=");
-        directory.push(folder);
-        let mut host = Command::new(FLATPAK_SPAWN);
-        host.arg("--host").arg(directory).arg(program);
-        host
-    } else {
-        let mut local = Command::new(program);
-        local.current_dir(folder);
-        local
-    };
-    process.args(arguments).stdin(Stdio::null()).process_group(0);
-    for variable in INHERITED_TERMINAL_VARIABLES {
-        process.env_remove(variable);
-    }
-    let mut child = process.spawn()?;
-    // Reaped when it exits, so it never lingers as a zombie.
-    std::thread::spawn(move || child.wait());
-    Ok(())
 }
 
 impl BrowserWindow {
@@ -259,7 +221,11 @@ impl BrowserWindow {
 
     /// Checks, confirms and starts `program` with `items`; the message to
     /// show when it does not start.
-    async fn run_program(&self, program: &ProgramTarget, items: &[String]) -> Result<(), String> {
+    pub(in crate::window) async fn run_program(
+        &self,
+        program: &ProgramTarget,
+        items: &[String],
+    ) -> Result<(), String> {
         let file = gio::File::for_uri(&program.uri);
         let info = file
             .query_info_future(
@@ -313,6 +279,12 @@ impl BrowserWindow {
 
     /// Starts `program`, at `path`, with the local paths of `items`.
     fn start_program(&self, program: &ProgramTarget, path: &Path, items: &[String]) -> Result<(), String> {
+        // Test safety: tests record the run instead of starting a program
+        // or a terminal on the developer's desktop.
+        #[cfg(test)]
+        if self.context().record_run(&program.uri) {
+            return Ok(());
+        }
         let sandbox = Sandbox::detect();
         let arguments: Vec<OsString> = items.iter().map(|uri| item_argument(uri)).collect();
         let (command, folder) = match program.kind {
@@ -351,7 +323,7 @@ fn is_on_removable_drive(uri: &str) -> bool {
 
 /// Asks GIO whether `entry` is a program or a launcher; `None` for a file
 /// that is neither or cannot be read.
-async fn query_program(entry: &Entry) -> Option<ProgramTarget> {
+pub(in crate::window) async fn query_program(entry: &Entry) -> Option<ProgramTarget> {
     let file = gio::File::for_uri(&entry.uri);
     let info = file
         .query_info_future(
@@ -371,8 +343,12 @@ async fn query_program(entry: &Entry) -> Option<ProgramTarget> {
 #[cfg(test)]
 mod tests {
     use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    use ox_core::integration::TerminalKind;
 
     use super::*;
+    use crate::integration::process::HOLD_SCRIPT;
     use crate::test_support::file_entry;
 
     fn info(file_type: gio::FileType, content_type: &str, can_execute: bool) -> gio::FileInfo {
@@ -385,7 +361,7 @@ mod tests {
 
     /// parity: DND-026
     #[test]
-    fn only_executable_regular_files_are_programs_and_scripts_are_text() {
+    fn only_executable_programs_of_a_program_type_are_programs() {
         let tool = file_entry("convert");
         let binary = program_from_info(
             &tool,
@@ -400,11 +376,16 @@ mod tests {
             &info(gio::FileType::Regular, "application/x-executable", false),
         );
         let folder = program_from_info(&tool, &info(gio::FileType::Directory, "inode/directory", true));
+        // On FAT, NTFS and SMB mounts every file may be executed.
+        let text = program_from_info(&tool, &info(gio::FileType::Regular, "text/plain", true));
+        let photo = program_from_info(&tool, &info(gio::FileType::Regular, "image/jpeg", true));
 
         assert_eq!(binary.map(|program| program.kind), Some(ProgramKind::Binary));
         assert_eq!(script.map(|program| program.kind), Some(ProgramKind::Script));
         assert_eq!(not_executable, None);
         assert_eq!(folder, None);
+        assert_eq!(text, None, "a text file is not a script");
+        assert_eq!(photo, None, "a photo is not a program");
     }
 
     /// parity: DND-026

@@ -697,6 +697,64 @@ mod tests {
         assert!(browser_windows().is_empty());
     }
 
+    /// With "Ask before closing a window with several tabs" on, Quit asks
+    /// one question for every window with several tabs, however often it
+    /// is asked, and Cancel keeps every window open.
+    ///
+    /// parity: SET-010
+    #[gtk::test]
+    fn quit_asks_once_about_the_tabs_of_every_window() {
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        let set_asking = |asks: bool| {
+            let update = PreferencesUpdate {
+                confirm_close_tabs: Some(asks),
+                ..PreferencesUpdate::default()
+            };
+            app.state
+                .context
+                .update_preferences(update, |result| result.expect("saved"));
+            wait_until("the saved option", || {
+                app.state.context.settings_data().preferences.confirm_close_tabs == asks
+            });
+        };
+        set_asking(true);
+        let windows: Vec<gtk::Window> = (0..2)
+            .map(|_| {
+                let window = app.state.open_window(&application(), Some(&fixture.uri()));
+                window.add_tab(&fixture.uri()).expect("valid folder");
+                window.upcast()
+            })
+            .collect();
+        let questions = || {
+            gtk::Window::list_toplevels()
+                .into_iter()
+                .filter_map(|window| window.downcast::<gtk::Window>().ok())
+                .filter(WidgetExt::is_visible)
+                .filter(|window| {
+                    window
+                        .transient_for()
+                        .is_some_and(|parent| windows.contains(&parent))
+                })
+                .collect::<Vec<_>>()
+        };
+
+        assert!(!app.state.quit_safely(&application()));
+        assert!(!app.state.quit_safely(&application()));
+        wait_until("the question", || !questions().is_empty());
+        settle();
+
+        let [question] = &questions()[..] else {
+            panic!("one question for both windows");
+        };
+        assert_eq!(question.title().as_deref(), Some("Quit OpenXplorer?"));
+        question.close();
+        wait_until("the question to close", || questions().is_empty());
+        assert_eq!(browser_windows().len(), 2, "Cancel keeps every window");
+        // The windows close at the end of the test without asking.
+        set_asking(false);
+    }
+
     /// A resized window saves its size, and every new window opens at it:
     /// Ctrl+N's, Open in new window's and Move tab to new window's.
     ///

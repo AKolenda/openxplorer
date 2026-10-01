@@ -28,6 +28,9 @@ use crate::transfer::Cancellation;
 /// The content type of a file GIO could not identify.
 pub const UNKNOWN_CONTENT_TYPE: &str = "application/octet-stream";
 
+/// The content type of a folder.
+pub const FOLDER_CONTENT_TYPE: &str = "inode/directory";
+
 /// What opens the file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Launcher {

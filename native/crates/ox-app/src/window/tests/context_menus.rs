@@ -51,8 +51,14 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     assert!(menu.is_visible());
     assert_eq!(menu.style(), MenuStyle::Classic);
     assert!(menu.strip_labels().is_empty());
+    // "Open with <app>" rows name whatever the machine has installed.
+    let rows: Vec<String> = menu
+        .row_labels()
+        .into_iter()
+        .filter(|label| !label.starts_with("Open with "))
+        .collect();
     assert_eq!(
-        menu.row_labels(),
+        rows,
         [
             "Open",
             "Open containing folder in Terminal",
@@ -128,15 +134,16 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    for disabled in ["Open", "Copy path"] {
+    for disabled in ["Copy path"] {
         assert!(!menu.row(disabled).is_sensitive(), "{disabled}");
     }
     // CMD-031: a disabled item says why.
     let tooltip = menu.row("Copy path").tooltip_text().unwrap_or_default();
     assert_eq!(tooltip, "Copy path\nSelect only one item for this command.");
-    // Rename renames them together (OPS-014); Properties describe them
-    // together (PROP-002).
+    // Open opens each of them (OPEN-003); Rename renames them together
+    // (OPS-014); Properties describe them together (PROP-002).
     for enabled in [
+        "Open",
         "Cut",
         "Copy",
         "Rename",

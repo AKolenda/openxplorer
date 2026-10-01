@@ -11502,7 +11502,7 @@ python_tests = [
 bridge = ["activateItem", "list"]
 dolphin = "Dolphin: Enter opens all selected items."
 native = "done"
-native_note = "The file list's activate signal and win.open open the item only when it is the one selected item or nothing is selected (native/crates/ox-app/src/window/input.rs, actions.rs); GTK activates a focused toolbar button, menu item, tab, crumb or sidebar row itself. Test: native/crates/ox-app/src/window/tests/input.rs (enter_opens_only_a_single_selected_item). Porting notes: Multi-selection Enter is a gap vs Dolphin/Windows (OPEN-003)."
+native_note = "The file list's activate signal and win.open open the selected item when it is the one selected item or nothing is selected (native/crates/ox-app/src/window/input.rs, actions.rs); with several selected, Enter on one of them opens them all (OPEN-003, as Dolphin and Windows do, replacing app.js's do-nothing rule), and Enter on an item outside the selection opens nothing. GTK activates a focused toolbar button, menu item, tab, crumb or sidebar row itself. Test: native/crates/ox-app/src/window/tests/input.rs (enter_never_opens_an_item_outside_the_selection)."
 
 [[feature]]
 id = "OPEN-003"
@@ -11521,8 +11521,8 @@ sources = [
 python_tests = []
 bridge = ["activateItem", "open"]
 dolphin = "itemsActivated / runPreferredApplications"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's Enter opens only when exactly one item is selected."
+native = "done"
+native_note = "Enter (the list's activate signal, window/input.rs connect_view_activation), Open and the item menu's Open act on every selected item (native/crates/ox-app/src/window/open_several.rs): one item opens as a double-click does; with several, each folder and each .desktop link to a folder opens in a background tab in the order of the view, and each file or archive in its default application (an archive is not browsed, since the archive browser is a dialog and several would stack), one launch per file; an item outside a selection of several is never opened; more than five ask 'Are you sure you want to open <n> items?' first (Cancel / Open all). Shift+Enter does not open new windows. Test: native/crates/ox-app/src/window/tests/opening.rs (enter_on_several_items_opens_each_and_asks_for_many). Porting notes: OpenXplorer's Enter opened only when exactly one item was selected."
 
 [[feature]]
 id = "OPEN-004"
@@ -11662,8 +11662,8 @@ python_tests = ["desktop/tests/test_v05.py::OpeningTests::test_unknown_not_direc
 bridge = ["open", "activateItem"]
 dolphin = "ConfirmationsSettingsPage 'When opening an executable file'; Dolphin asks whether to execute or open an executable script, and runs .desktop launchers"
 gnome = "g_app_info_create_from_commandline / g_desktop_app_info_new_from_filename with trust metadata; Nautilus “Run as a Program”"
-native = "todo"
-native_note = "Porting notes: The 'never run silently' safety rule must be kept. The never-execute-on-open rule is a safety behaviour and must not regress."
+native = "done"
+native_note = "Settings > Windows & tabs > Confirmations has 'Ask whether to run programs and scripts' (off). Off, an executable file or script opens in its viewer or editor and nothing runs, as before (OPEN-007). On, opening a regular file the user may execute whose content type is a program's (an executable or shared library, or a shell, Perl, Python or Ruby script, as Dolphin offers Execute only for those), or an application launcher, asks 'Run this program?' with Cancel, Open (primary, so Enter never runs it) and Run (native/crates/ox-app/src/window/run_on_open.rs). Run goes through the drop-to-run checks (window/file_drop/program.rs): the execute permission is read again, a program on a share or removable drive asks again, a script runs in the terminal, and arguments never pass through a shell. A text file, photo or document with the execute bit, as on FAT, NTFS and SMB mounts, opens without the question. Dolphin's third choice, running without asking, is deliberately not offered: the never-run-silently rule stays. Tests: native/crates/ox-app/src/window/tests/opening.rs (opening_a_script_asks_to_run_it_only_when_the_settings_say_so: Open, Cancel and Run, and an executable text file), native/crates/ox-app/src/window/file_drop/program.rs (only_executable_programs_of_a_program_type_are_programs)."
 
 [[feature]]
 id = "OPEN-009"
@@ -11794,8 +11794,8 @@ python_tests = [
 bridge = ["applications", "openWith"]
 dolphin = "KFileItemActions::insertOpenWithActionsTo; Context menu “Open With” submenu (KFileItemActions::addOpenWithActionsTo)"
 gnome = "g_app_info_get_recommended_for_type"
-native = "todo"
-native_note = "Porting notes: OpenXplorer lists only editor shortcuts (VS Code, VSCodium) plus 'Open with…'. Explorer's 'Open with' submenu lists the recommended applications. Existing OpenXplorer part is protected by OPEN-011 and OPEN-015."
+native = "done"
+native_note = "The item menu of one item lists up to three other applications registered for its type, each as 'Open with <App>' before 'Open with…', and the folder background menu lists the folder's applications and 'Open folder with…' after Open in Terminal (native/crates/ox-app/src/integration/applications.rs menu_applications, window/context_menu/entries.rs). They are ordered as Open with orders them, only those that can open the item, never OpenXplorer itself, and without a file's default application, which Open already starts. Choosing one launches through Open with's checks (prepare_launch) and says 'Opened with <App>'. The rows are in the menu itself, as Nautilus has them, rather than in a submenu: the menu has no submenus. Tests: native/crates/ox-app/src/window/context_menu/entries.rs (the_items_other_applications_are_offered_before_open_with, the_background_menu_acts_on_the_folder), native/crates/ox-app/src/integration/applications.rs (the_menu_offers_other_applications_up_to_its_limit)."
 
 [[feature]]
 id = "OPEN-014"
@@ -11815,8 +11815,8 @@ python_tests = []
 bridge = ["openWith"]
 dolphin = "KOpenWithDialog command line / terminal options; KOpenWithDialog command-line field"
 gnome = "g_app_info_create_from_commandline (GNOME 46's GtkAppChooser no longer offers custom commands)"
-native = "todo"
-native_note = "Porting notes: Security-sensitive: current policy allows only installed launchers (“That installed application is unavailable for this file/location.”)."
+native = "done"
+native_note = "Open with has 'Or run a command' under the application list, with 'Run in terminal' and 'Keep the terminal open when the command ends' (resources/ui/open-with-dialog.ui, src/integration/custom_command.rs). The command is split as a shell splits it (g_shell_parse_argv) but no shell runs it: %f/%F become the item's local path and %u/%U its address, each as one argument whatever the name, and without a placeholder the item is the last argument; %f for an item with no local path is refused with a message. It runs in the item's folder, on the host from the Flatpak, and in the terminal through the same fixed hold script as drop-to-run (src/integration/process.rs, shared with window/file_drop/program.rs). The installed-launcher policy for the application list is unchanged; a typed command is the user's explicit choice. Tests: native/crates/ox-app/src/integration/custom_command.rs (placeholders_take_the_item_as_one_argument_and_it_is_last_without_one), native/crates/ox-app/src/integration/tests.rs (open_with_runs_a_typed_command_with_the_item)."
 
 [[feature]]
 id = "OPEN-015"
@@ -12147,8 +12147,8 @@ python_tests = []
 bridge = ["applications", "openWith"]
 dolphin = "Properties › General › file-type options button (KFilePropsPlugin::slotEditFileType)"
 gnome = "g_app_info_set_as_default_for_type, g_app_info_add_supports_type, g_app_info_remove_supports_type and g_app_info_reset_type_associations"
-native = "todo"
-native_note = "Porting notes: OPEN-012 can only set a new default through 'Always use this app'. Nothing lists, removes or resets associations."
+native = "done"
+native_note = "A file's Properties has 'Apps for this type…' beside 'Change app…' (native/crates/ox-app/src/properties/general_panel.rs). It opens 'Apps for this type' (window/type_applications.rs): every application associated with the file's content type, the default first and the ones the user added marked, and a list of the other installed applications; Set as default, Remove (only an association the user added), Add and Reset (the system's associations) apply at once through GIO (g_app_info_set_as_default_for_type, add_supports_type, remove_supports_type, reset_type_associations in integration/type_associations.rs), which writes only the user's ~/.config/mimeapps.list. Folder, SMB and ZIP types are refused, and their Properties show no button: Settings > Default apps changes those (INT-008 to INT-012). Test: native/crates/ox-app/src/integration/type_associations.rs (an_added_application_is_removed_made_default_and_reset)."
 
 [[feature]]
 id = "ARC-001"
@@ -13886,8 +13886,8 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "Settings › General › Confirmations; ConfirmTrash (kiorc, default false); Settings → Confirmations (kiorc ConfirmTrash/ConfirmDelete)"
 gnome = "App preference (Nautilus never confirms Trash and offers Undo instead)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer always confirms Trash and permanent deletion, and never confirms closing a window. OpenXplorer always asks. Explorer does not ask by default."
+native = "done"
+native_note = "Settings > Windows & tabs > Confirmations has four switches (native/crates/ox-app/src/settings_page/windows_tabs.rs), saved in the preferences (confirmTrash, confirmDelete, confirmEmptyTrash, confirmCloseTabs in native/crates/ox-core/src/settings/preferences.rs): 'Ask before moving items to the Recycle Bin' (on), 'Ask before deleting permanently' (on; Shift+Delete, Delete where a drive has no Trash, Delete in the Recycle Bin), 'Ask before emptying the Recycle Bin' (on) and 'Ask before closing a window with several tabs' (off; 'Close all tabs?' with Cancel / Close all tabs, one question per window however often it is closed, window/closing.rs; Quit asks once for every window with several tabs, 'Quit OpenXplorer?' with Cancel / Quit, then quits, application/requests.rs). The defaults keep OpenXplorer's behaviour: it always asked before deleting and never before closing. The choices are OpenXplorer's own, not KDE's desktop-wide kiorc, and there is no terminal panel to ask about (OPEN-022). Tests: native/crates/ox-core/src/settings/preferences.rs (the_confirmations_ask_by_default_and_are_stored_only_when_changed), native/crates/ox-app/src/window/tests/file_operations.rs (the_confirmation_settings_decide_what_asks), native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_nothing_when_the_settings_say_so), native/crates/ox-app/src/application/state.rs (quit_asks_once_about_the_tabs_of_every_window)."
 
 [[feature]]
 id = "SET-011"
@@ -13904,7 +13904,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "Settings › Startup"
-native = "todo"
+native = "done"
+native_note = "Settings > Windows & tabs has Dolphin's startup options that apply here: 'Make the address bar editable in new windows' (NAV-029), 'Show full path in the address bar' (NAV-024), 'Open folders from other apps in a new window' (off: in a new tab, Dolphin's 'Open new folders in tabs') and 'Show full path in the title bar', which titles the window with the folder's path (window/location_view.rs render_title). 'Begin in split view mode' and 'Show filter bar' have nothing to start: there is no split view (VIEW-059, Explorer has none) and the search box in the navigation row is always shown and filters the folder. Tests: native/crates/ox-app/src/window/tests/address_bar.rs (the_title_shows_the_full_path_when_the_settings_ask); the other options are tested under NAV-024 and NAV-029."
 
 [[feature]]
 id = "SET-012"

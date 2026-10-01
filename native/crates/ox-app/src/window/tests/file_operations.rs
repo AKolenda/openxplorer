@@ -9,14 +9,16 @@ use std::fs;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::settings::{PreferencesUpdate, Settings};
 use ox_core::transfer::{Progress, ProgressScope};
 
 use super::file_ops_support::{
-    is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash, select_names,
-    text_field, wait_for_no_dialog,
+    dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
+    select_names, text_field, wait_for_no_dialog,
 };
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use crate::window::dialog::Dialog;
 
 /// parity: OPS-001, CMD-004
 #[gtk::test]
@@ -346,6 +348,65 @@ fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
     toast.press_action();
     wait_until("the file to come back", || fixture.path("Résumé.txt").is_file());
     assert_eq!(toast.action_label(), None, "the step is undone");
+}
+
+/// With "Ask before moving items to the Recycle Bin" off, Delete trashes
+/// at once, and with "Ask before deleting permanently" off Shift+Delete
+/// deletes at once; with "Ask before closing a window with several tabs"
+/// on, closing a window with two tabs asks first, once however often it
+/// is asked, and "Close all tabs" closes it.
+///
+/// parity: SET-010
+#[gtk::test]
+fn the_confirmation_settings_decide_what_asks() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let update = PreferencesUpdate {
+        confirm_trash: Some(false),
+        confirm_delete: Some(false),
+        confirm_close_tabs: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choices");
+    test.context.reload_settings();
+    wait_until("the window to read the choices", || {
+        !test.context.settings_data().preferences.confirm_trash
+    });
+    select_names(&test, &["Résumé.txt"]);
+
+    test.activate("trash", None);
+    wait_until("the file to go to the Trash unasked", || {
+        !fixture.path("Résumé.txt").exists()
+    });
+    select_names(&test, &["Notes 10.txt"]);
+    test.activate("delete-permanently", None);
+    wait_until("the file to be deleted unasked", || {
+        !fixture.path("Notes 10.txt").exists()
+    });
+    assert!(dialog_over(&test).is_none(), "nothing asked");
+
+    test.activate("new-tab", None);
+    test.window.close();
+    test.window.close();
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.title_text(), "Close all tabs?");
+    let over_window = Some(test.window.upcast_ref::<gtk::Window>());
+    let questions = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|window| window.downcast::<Dialog>().ok())
+        .filter(|dialog| dialog.is_visible() && dialog.transient_for().as_ref() == over_window)
+        .count();
+    assert_eq!(questions, 1, "a second close asks no second question");
+    dialog.press("Cancel");
+    wait_for_no_dialog(&test);
+    assert!(test.window.is_visible(), "the window stays open");
+
+    test.window.close();
+    open_dialog(&test).press("Close all tabs");
+    wait_until("the window to close", || !test.window.is_visible());
 }
 
 /// parity: OPS-015

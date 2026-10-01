@@ -62,9 +62,6 @@ impl AppContext {
     }
 }
 
-/// The content type of a folder.
-pub(crate) const FOLDER_CONTENT_TYPE: &str = "inode/directory";
-
 /// Adds `uri`, of `content_type`, to the desktop's recently used list,
 /// named as `OpenXplorer`'s. Tests add only with a private data folder
 /// (native/tools/check.py), never to the user's.
