@@ -70,6 +70,7 @@ mod external_requests;
 mod file_drag;
 mod file_drop;
 mod file_ops;
+mod focus_regions;
 mod folder_pane;
 mod folder_search;
 mod folder_size_scan;

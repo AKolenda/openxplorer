@@ -23,6 +23,7 @@ use crate::test_support::harness::{
 };
 use crate::text_size::TextSize;
 use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::focus_regions::Region;
 
 /// Emits `key` with `modifiers` on the key controller of `widget`;
 /// returns true when the widget handled it.
@@ -60,7 +61,10 @@ fn the_file_list_its_items_and_every_icon_button_are_named() {
             gtk::AccessibleProperty::Description
         ));
     }
-    for count in [gtk::AccessibleRelation::RowCount, gtk::AccessibleRelation::ColCount] {
+    for count in [
+        gtk::AccessibleRelation::RowCount,
+        gtk::AccessibleRelation::ColCount,
+    ] {
         assert!(gtk::test_accessible_has_relation(&details, count), "{count:?}");
     }
     let rows: Vec<gtk::Widget> = descendants::<gtk::Widget>(&details)
@@ -136,6 +140,45 @@ fn the_file_list_is_one_tab_stop_that_focuses_the_item_itself() {
         &focus,
         gtk::AccessibleProperty::Label
     ));
+}
+
+/// parity: ACC-015
+#[gtk::test]
+fn f6_moves_focus_round_the_regions_and_back_to_the_same_item() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_pane().focus_view();
+    let item = test.window.folder_pane().focused_position();
+    let selected = test.window.folder_pane().model().selected_items().len();
+
+    let mut visited = Vec::new();
+    for _ in 0..7 {
+        visited.push(
+            test.window
+                .focus_next_region(false)
+                .expect("a region takes focus"),
+        );
+        assert_eq!(test.window.focused_region(), visited.last().copied());
+    }
+    assert_eq!(
+        visited,
+        [
+            Region::Details,
+            Region::Tabs,
+            Region::Address,
+            Region::Search,
+            Region::Commands,
+            Region::Sidebar,
+            Region::Files
+        ]
+    );
+    assert_eq!(
+        test.window.folder_pane().focused_position(),
+        item,
+        "the same item"
+    );
+    assert_eq!(test.window.focus_next_region(true), Some(Region::Sidebar));
+    assert_eq!(test.window.folder_pane().model().selected_items().len(), selected);
 }
 
 /// parity: ACC-004

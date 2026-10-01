@@ -58,6 +58,7 @@ impl BrowserWindow {
             self,
             move || window.finish_address()
         ));
+        self.install_focus_regions();
     }
 
     /// Focuses the file list once GTK has finished showing the window,

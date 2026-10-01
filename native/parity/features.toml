@@ -16280,8 +16280,8 @@ sources = ["desktop/ui/app.js:1000-1034", "dolphin:src/dolphinmainwindow.cpp:178
 python_tests = []
 bridge = []
 gnome = "GtkPaned cycle-child-focus key binding (F6 and Shift+F6), gtk_widget_child_focus"
-native = "todo"
-native_note = "Porting notes: Windows 11 Explorer also cycles panes with F6; today only Tab order moves between regions. Dolphin binds F6 to Editable Location instead, and NAV-029 already decides not to follow that."
+native = "done"
+native_note = "native/crates/ox-app/src/window/focus_regions.rs (f6_goes_round_the_shown_regions_and_shift_goes_back); native/crates/ox-app/src/window/tests/accessibility.rs (f6_moves_focus_round_the_regions_and_back_to_the_same_item). F6 and Shift+F6 are captured by the window, so they work from text fields too, and do nothing while a dialog is open. They visit the tab strip, the address bar, the search box, the command bar, the sidebar, the file list and the Details pane in that order, wrapping round and skipping regions that are hidden (unmapped) or disabled. Focus lands on the front tab, the highlighted sidebar row, the file list's current item or the region's first control; the selection is unchanged."
 
 [[feature]]
 id = "PERF-001"
