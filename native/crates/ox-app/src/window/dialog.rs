@@ -343,6 +343,11 @@ impl Dialog {
         error_label.set_visible(true);
     }
 
+    /// Hides the line that said why the last try failed.
+    pub(super) fn hide_error(&self) {
+        self.imp().error_label.set_visible(false);
+    }
+
     /// Disables the buttons while an answer is carried out, as `Create`
     /// is disabled while it runs, and enables them again afterwards.
     pub(super) fn set_busy(&self, busy: bool) {

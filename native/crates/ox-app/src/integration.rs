@@ -43,6 +43,7 @@ mod terminal;
 #[cfg(test)]
 mod tests;
 mod tools;
+mod type_associations;
 
 use std::path::{Path, PathBuf};
 
@@ -62,6 +63,9 @@ pub(crate) use open_with_dialog::{Launcher, OpenWithDialog, OpenWithSubject};
 pub(crate) use status::{DefaultsReport, IntegrationStatus};
 pub(crate) use terminal::open_terminal;
 pub(crate) use tools::{installed_application, Tool};
+pub(crate) use type_associations::{
+    change_type, is_protected, other_applications, type_applications, TypeApplication, TypeChange,
+};
 
 /// Emitted when something the Settings status shows may have changed: the
 /// `FileManager1` name was acquired, lost or released.

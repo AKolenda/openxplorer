@@ -72,6 +72,12 @@ impl BrowserWindow {
             text_action(WindowAction::OpenWithOf, BrowserWindow::open_folder_with),
             text_action(WindowAction::OpenInEditor, BrowserWindow::open_in_editor),
             text_action(WindowAction::OpenWithApp, BrowserWindow::open_with_app),
+            text_action(WindowAction::TypeApplications, |window, content_type| {
+                if let Some(properties) = window.dialog_layer().shown() {
+                    properties.close();
+                }
+                window.manage_type_applications(content_type);
+            }),
             plain_action(WindowAction::CheckUpdates, BrowserWindow::check_for_updates),
         ]);
         self.follow_selection_for_integration();

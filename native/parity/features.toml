@@ -12117,8 +12117,8 @@ python_tests = []
 bridge = ["applications", "openWith"]
 dolphin = "Properties › General › file-type options button (KFilePropsPlugin::slotEditFileType)"
 gnome = "g_app_info_set_as_default_for_type, g_app_info_add_supports_type, g_app_info_remove_supports_type and g_app_info_reset_type_associations"
-native = "todo"
-native_note = "Porting notes: OPEN-012 can only set a new default through 'Always use this app'. Nothing lists, removes or resets associations."
+native = "done"
+native_note = "A file's Properties has 'Apps for this type…' beside 'Change app…' (native/crates/ox-app/src/properties/general_panel.rs). It opens 'Apps for this type' (window/type_applications.rs): every application associated with the file's content type, the default first and the ones the user added marked, and a list of the other installed applications; Set as default, Remove (only an association the user added), Add and Reset (the system's associations) apply at once through GIO (g_app_info_set_as_default_for_type, add_supports_type, remove_supports_type, reset_type_associations in integration/type_associations.rs), which writes only the user's ~/.config/mimeapps.list. Folder, SMB and ZIP types are refused, and their Properties show no button: Settings > Default apps changes those (INT-008 to INT-012). Test: native/crates/ox-app/src/integration/type_associations.rs (an_added_application_is_removed_made_default_and_reset)."
 
 [[feature]]
 id = "ARC-001"

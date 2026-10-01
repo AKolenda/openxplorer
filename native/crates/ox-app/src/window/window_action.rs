@@ -307,6 +307,9 @@ pub(crate) enum WindowAction {
     /// Opens the selected item in the application whose desktop ID is
     /// the string target (the item menu's "Open with <app>").
     OpenWithApp,
+    /// The applications of the file type that is the string target
+    /// (Properties' "Apps for this type…").
+    TypeApplications,
 }
 
 impl WindowAction {
@@ -444,6 +447,7 @@ impl WindowAction {
             WindowAction::SearchTool => "search-tool",
             WindowAction::OpenInEditor => "open-in-editor",
             WindowAction::OpenWithApp => "open-with-app",
+            WindowAction::TypeApplications => "type-applications",
         }
     }
 
