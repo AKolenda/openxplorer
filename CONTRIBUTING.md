@@ -82,7 +82,7 @@ Keep documentation and release claims synchronized with behavior and tests. Gene
 
 ## Compatibility and license
 
-The `winspace` configuration paths, `io.winspace.Development` application/desktop identity and credential schemas are stable compatibility contracts. Propose an explicit migration before renaming them. Preserve existing notices.
+The `winspace` configuration paths, `io.winspace.Development` application/desktop identity and credential schemas are stable compatibility contracts. Propose an explicit migration before renaming them. Pinning a folder also adds a line to the desktop's `~/.config/gtk-3.0/bookmarks`; the app records the lines it added in `desktop-bookmarks` in its settings folder and removes only those. Preserve existing notices.
 
 Contributions are submitted under AGPL-3.0-only unless a documented file-level exception applies. Preserve the root [LICENSE](LICENSE), [NOTICE](NOTICE), upstream [MIT notice](licenses/Winspace-MIT.txt), desktop copies and [third-party notices](THIRD_PARTY_NOTICES.md). Include provenance for copied code/assets and ensure you are authorized to contribute them. No CLA is required by this repository.
 
