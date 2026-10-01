@@ -40,6 +40,23 @@ pub(super) fn selected_name_length(entry: &Entry) -> usize {
     }
 }
 
+/// Where `shown` is after the folder `old` was renamed to `new`: `None`
+/// unless `shown` is `old` or inside it.
+fn moved_location(shown: &str, old: &str, new: &str) -> Option<String> {
+    let shown_file = gio::File::for_uri(shown);
+    let old_file = gio::File::for_uri(old);
+    if shown_file.equal(&old_file) {
+        return Some(new.to_owned());
+    }
+    let inside = old_file.relative_path(&shown_file)?;
+    Some(
+        gio::File::for_uri(new)
+            .resolve_relative_path(inside)
+            .uri()
+            .to_string(),
+    )
+}
+
 impl BrowserWindow {
     /// F2: renames the selected item in place, or with the dialog when its
     /// cell is not on screen; several selected items are renamed together
@@ -78,14 +95,39 @@ impl BrowserWindow {
         let info = file
             .query_info_future(ATTRIBUTES, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
             .await;
-        match info {
-            Ok(info) => self.rename_with_dialog(&entry_from_info(&file, &info)).await,
-            Err(error) => self.show_message(error.message()),
+        let info = match info {
+            Ok(info) => info,
+            Err(error) => {
+                self.show_message(error.message());
+                return;
+            }
+        };
+        let Some(renamed) = self.ask_and_rename(&entry_from_info(&file, &info)).await else {
+            return;
+        };
+        // The folder shown, or one it is in, moves with its new name, as
+        // Dolphin's view follows a renamed folder.
+        let shown = self.current_uri().filter(|_| !renamed.is_unchanged());
+        let moved = shown.and_then(|shown| moved_location(&shown, &renamed.original_uri, &renamed.uri));
+        match moved {
+            Some(moved) => {
+                self.remember_rename(&renamed);
+                self.navigate_or_report(&moved);
+            }
+            None => self.finish_rename(renamed),
         }
     }
 
     /// Asks for `entry`'s new name in the Rename dialog and renames it.
     async fn rename_with_dialog(&self, entry: &Entry) {
+        if let Some(renamed) = self.ask_and_rename(entry).await {
+            self.finish_rename(renamed);
+        }
+    }
+
+    /// Asks for `entry`'s new name in the Rename dialog and renames it;
+    /// the renamed item, or `None` when the user cancelled.
+    async fn ask_and_rename(&self, entry: &Entry) -> Option<RenamedItem> {
         let selection = if entry.is_dir {
             NameSelection::Whole
         } else {
@@ -99,7 +141,7 @@ impl BrowserWindow {
             folder: &folder,
         };
         let protection = self.context().write_protection();
-        let renamed = ask_for_name(self, request, |name, cancel| {
+        ask_for_name(self, request, |name, cancel| {
             let uri = entry.uri.clone();
             let old_name = entry.name.clone();
             let context = OperationContext {
@@ -117,10 +159,7 @@ impl BrowserWindow {
                     .map_err(|error| error.to_string())
             }
         })
-        .await;
-        if let Some(renamed) = renamed {
-            self.finish_rename(renamed);
-        }
+        .await
     }
 
     /// Renames the item at `uri` to `name`, as the name field of
