@@ -4234,8 +4234,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "KItemListController::onPress (empty area)"
-native = "done"
-native_note = "native/crates/ox-app/src/window/input.rs (blank_space_press): a primary press below the rows or between tiles clears the selection and focuses the list; Ctrl or Shift keeps it. The same press allows the rubber band only from blank space (SEL-012). GTK keeps its range anchor, so a later Shift+click selects from the last clicked item, as in Windows Explorer; clearing the anchor too awaits the owner's confirmation. native/crates/ox-app/src/window/tests/selection.rs (a_click_on_blank_space_clears_the_selection_and_focuses_the_list), input.rs (ctrl_or_shift_keeps_the_selection_on_blank_space)."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/input.rs (blank_space_press): a primary press below the rows or between tiles clears the selection and focuses the list; Ctrl or Shift keeps it. The same press allows the rubber band only from blank space (SEL-012). Partial: the anchor is not cleared. GTK keeps its range anchor, so a later Shift+click selects from the last clicked item, as Windows Explorer does with its focused item; clearing the anchor as well awaits the owner's confirmation. native/crates/ox-app/src/window/tests/selection.rs (a_click_on_blank_space_clears_the_selection_and_focuses_the_list), input.rs (ctrl_or_shift_keeps_the_selection_on_blank_space)."
 
 [[feature]]
 id = "SEL-003"
