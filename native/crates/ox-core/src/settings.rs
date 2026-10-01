@@ -39,6 +39,7 @@ mod preferences;
 mod python_conversions;
 mod read;
 mod save;
+mod stored_location;
 #[cfg(test)]
 mod test_support;
 

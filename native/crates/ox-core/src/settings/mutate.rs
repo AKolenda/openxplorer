@@ -10,8 +10,9 @@
 
 use super::labels::{bookmark_fallback_label, pin_fallback_label};
 use super::model::{Bookmark, RecentEntry, SettingsData, MAX_BOOKMARKS, MAX_ORDER, MAX_RECENT};
+use super::stored_location::{normalise, require_share};
 use super::SettingsError;
-use crate::location::{normalise, require_share, safe_label};
+use crate::location::safe_label;
 
 /// Whether [`Settings::bookmark`](super::Settings::bookmark) adds or
 /// removes the location.
