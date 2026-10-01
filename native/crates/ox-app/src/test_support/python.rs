@@ -26,11 +26,17 @@ from core import Settings
 Settings(Path(sys.argv[1])).update_preferences(ast.literal_eval(sys.argv[2]))
 ";
 
-/// Runs `script` with `desktop/` on the module path and `arguments` as
-/// `sys.argv[1:]`, and returns what it printed; a failing script fails the
-/// test with its error output.
+/// Runs `script` with the Python app's modules on the module path and
+/// `arguments` as `sys.argv[1:]`, and returns what it printed; a failing
+/// script fails the test with its error output.
+///
+/// The modules are `v2.0.0:desktop/`, which `native/tools/check.py`
+/// extracts and names in `OX_PYTHON_APP`; without it the test fails.
 fn run_python(script: &str, arguments: &[&str]) -> String {
-    let desktop = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../desktop");
+    let desktop = PathBuf::from(std::env::var_os("OX_PYTHON_APP").expect(
+        "OX_PYTHON_APP names the Python app's modules (v2.0.0:desktop/); run the tests through \
+         native/tools/check.py, which extracts them",
+    ));
     let output = Command::new("python3")
         .arg("-c")
         .arg(script)

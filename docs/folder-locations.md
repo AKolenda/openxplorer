@@ -26,7 +26,7 @@ brave://settings/downloads
 
 ## Review the optional mount helper
 
-The optional helper prepares persistent systemd mount/automount configuration. It needs administrator approval and uses a root-readable plaintext CIFS credential file, separate from the desktop keyring. It is not invoked during package installation. See desktop/ZORIN-SETUP.md before using it.
+The optional helper prepares persistent systemd mount/automount configuration. It needs administrator approval and uses a root-readable plaintext CIFS credential file, separate from the desktop keyring. It is not invoked during package installation. The stable packages install it as /usr/bin/openxplorer-mount-share (the Flatpak cannot), and the mount assistant in a folder's Location tab prints the command for an administrator to run; the app never runs it. Read "Mount helper" in native/packaging/README.md before using it.
 
 ---
 

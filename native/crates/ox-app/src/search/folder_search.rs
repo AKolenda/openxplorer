@@ -2,7 +2,7 @@
 //! The search one window runs from its search box: what was typed, where
 //! it looks, and which run's results may still be shown.
 //!
-//! Ports the search state of `desktop/ui/app.js` (`state.query`,
+//! Ports the search state of `v2.0.0:desktop/ui/app.js` (`state.query`,
 //! `searchScope`, `searchGeneration`, `searchToken`, `searchResults`,
 //! `searchBusy`, `searchError`) and the bookkeeping of `queueSearch`,
 //! `resetSearch` and `runSearch` (SRCH-002, SRCH-017, SAFE-013). Each edit

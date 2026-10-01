@@ -2,7 +2,7 @@
 //! The tab, window and history keys, and where they work (CMD-017,
 //! TAB-005).
 //!
-//! Ports the keys `onKey` in `desktop/ui/app.js` handles after its
+//! Ports the keys `onKey` in `v2.0.0:desktop/ui/app.js` handles after its
 //! `if(input)return`: Ctrl+H, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab and
 //! Ctrl+Shift+Tab, and Alt+Left, Alt+Right and Alt+Up. A text field keeps
 //! them, and while a dialog is open they do nothing. The one exception is

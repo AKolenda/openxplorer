@@ -6,7 +6,7 @@
 //! scroll a zone the drag hovers near the edge of.
 //!
 //! Ports `publishFileDragLayout` and `showFileDropHint` of
-//! `desktop/ui/app.js`. The web app published rectangles for the native
+//! `v2.0.0:desktop/ui/app.js`. The web app published rectangles for the native
 //! side to hit-test; here each part answers for a point itself, in its
 //! own coordinates at its real size, so scaling and clipping need no
 //! arithmetic.

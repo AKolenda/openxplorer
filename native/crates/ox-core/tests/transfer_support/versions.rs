@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Test double of the write guard the app passes to the engine:
-//! `PreviousVersions.assert_writable` in `desktop/previous_versions.py`.
+//! `PreviousVersions.assert_writable` in `v2.0.0:desktop/previous_versions.py`.
 //!
 //! A location is protected when a path component is a conventional snapshot
 //! folder (`.snapshot`, `.snapshots`, `#snapshot`, `@GMT-…`, `.zfs/snapshot`)
@@ -44,7 +44,7 @@ impl PreviousVersions {
     }
 
     /// Refuses protected locations with [`READ_ONLY`]. Ported from
-    /// `PreviousVersions.assert_writable` in `desktop/previous_versions.py`,
+    /// `PreviousVersions.assert_writable` in `v2.0.0:desktop/previous_versions.py`,
     /// which raises the refusal where this returns it.
     ///
     /// # Errors
@@ -67,7 +67,7 @@ impl PreviousVersions {
     }
 }
 
-/// Ported from `conventional_snapshot` in `desktop/previous_versions.py`.
+/// Ported from `conventional_snapshot` in `v2.0.0:desktop/previous_versions.py`.
 fn is_conventional_snapshot(uri: &str) -> bool {
     let after_scheme = uri.split_once("://").map_or(uri, |(_, rest)| rest);
     let path = after_scheme.find('/').map_or("", |slash| &after_scheme[slash..]);
@@ -80,7 +80,7 @@ fn is_conventional_snapshot(uri: &str) -> bool {
     marked || zfs
 }
 
-/// Ported from `within` in `desktop/previous_versions.py`.
+/// Ported from `within` in `v2.0.0:desktop/previous_versions.py`.
 fn is_within(uri: &str, root: &str) -> bool {
     let root = root.trim_end_matches('/');
     uri.trim_end_matches('/') == root || uri.starts_with(&format!("{root}/"))

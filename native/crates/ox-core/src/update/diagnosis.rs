@@ -3,7 +3,7 @@
 //! and which runs, the folder and ZIP associations, and who answers Show
 //! in folder.
 //!
-//! Ports the `args.diagnose` branch of `main` in `desktop/winspace.py`,
+//! Ports the `args.diagnose` branch of `main` in `v2.0.0:desktop/winspace.py`,
 //! key for key: `Session.status` from `runtime_guard.py`, with
 //! `associations` (`DesktopIntegration.status`) and `showInFolder`
 //! (`FileManagerBus.status` plus whether the session files are enabled).

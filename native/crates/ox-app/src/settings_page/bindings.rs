@@ -3,7 +3,7 @@
 //! changes made elsewhere and save the user's changes.
 //!
 //! Ports the `onchange` handlers of the Python settings page
-//! (`fire('preferences', {...})` in `desktop/ui/app.js`). A control shows
+//! (`fire('preferences', {...})` in `v2.0.0:desktop/ui/app.js`). A control shows
 //! the preference as last read or saved, and follows changes made in
 //! another window or by the Python app. Only a change the user makes is
 //! saved: while the page shows the current values, the handlers stand by,

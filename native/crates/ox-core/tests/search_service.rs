@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The index service's scans, checks and commands through its public API.
 //!
-//! Covers what `desktop/index_service.py` and the cache operations of
-//! `desktop/winspace.py` do beyond live local events, with an SMB share
+//! Covers what `v2.0.0:desktop/index_service.py` and the cache operations of
+//! `v2.0.0:desktop/winspace.py` do beyond live local events, with an SMB share
 //! held in memory: the start-up rescan, network checks, the scan limits,
 //! re-reading folders the app changed, and the Search settings' commands.
 

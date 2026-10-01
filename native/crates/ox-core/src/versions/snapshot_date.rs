@@ -2,7 +2,7 @@
 //! The date a snapshot's folder name carries (PROP-020).
 //!
 //! Ports `parse` and the wording of `describe` in
-//! `desktop/ui/snapshot-meta.js`. A date is read only from the name: a
+//! `v2.0.0:desktop/ui/snapshot-meta.js`. A date is read only from the name: a
 //! Windows `@GMT-YYYY.MM.DD-HH.MM.SS` version, which is in UTC, or a
 //! `YYYY-MM-DD` inside the name, optionally followed by a time whose
 //! timezone the server did not say and which is never converted. The
@@ -389,7 +389,7 @@ mod tests {
         },
     ];
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Parse …").
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Parse …").
     ///
     /// parity: PROP-020
     #[test]
@@ -406,7 +406,7 @@ mod tests {
         }
     }
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Reject invalid
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Reject invalid
     /// / unknown …").
     ///
     /// parity: PROP-020
@@ -431,7 +431,7 @@ mod tests {
         }
     }
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Does not invent
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Does not invent
     /// a timezone" and "GMT has explicit timezone").
     ///
     /// parity: PROP-020
@@ -453,7 +453,7 @@ mod tests {
         );
     }
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Name source
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Name source
     /// made explicit"), with the texts `describe` shows for a name without
     /// a date.
     ///

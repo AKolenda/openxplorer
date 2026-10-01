@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! An update service over the updater doubles, for `update_service.rs` and
 //! `update_restart.rs`. Ports the doubles of `BridgeTests` in
-//! `desktop/tests/test_updater.py`. The launcher double never starts the
+//! `v2.0.0:desktop/tests/test_updater.py`. The launcher double never starts the
 //! real launcher.
 
 use std::cell::RefCell;

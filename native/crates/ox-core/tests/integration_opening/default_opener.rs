@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Preparing a file for its default application: real temporary files
 //! queried through GIO, applications from [`TestApplications`]. Ports
-//! `prepare_default` of `desktop/native_opening.py`, which the Python app
+//! `prepare_default` of `v2.0.0:desktop/native_opening.py`, which the Python app
 //! had no unit tests for.
 
 use std::fs;

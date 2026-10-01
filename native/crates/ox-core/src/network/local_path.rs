@@ -2,7 +2,7 @@
 //! A local path for an SMB location, for applications, terminals and drags
 //! that need one.
 //!
-//! Ports `local_path` in `desktop/native_opening.py`: a kernel CIFS mount
+//! Ports `local_path` in `v2.0.0:desktop/native_opening.py`: a kernel CIFS mount
 //! of the share is preferred ([`resolve_smb_path`]), then the user's `GVfs`
 //! FUSE export under `$XDG_RUNTIME_DIR/gvfs`. Nothing is mounted.
 

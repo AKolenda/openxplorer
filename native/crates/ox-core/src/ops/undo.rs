@@ -2,7 +2,7 @@
 //! The undo journal: what the last file operations did, so Undo can
 //! reverse them one step at a time (OPS-029).
 //!
-//! New in the native app; the Python app has no Undo (`desktop/MANUAL.md`,
+//! New in the native app; the Python app has no Undo (`v2.0.0:desktop/MANUAL.md`,
 //! "Important limitations"). The journal follows Dolphin's and Nautilus's
 //! undo managers, restricted to steps that can be reversed without ever
 //! overwriting or permanently deleting anything:

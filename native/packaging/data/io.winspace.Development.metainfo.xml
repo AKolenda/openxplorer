@@ -3,7 +3,7 @@
 <!--
   The AppStream description of the native app once it replaces the Python
   app: the same ID, name, licences and release history as
-  desktop/packaging/io.winspace.Development.metainfo.xml, so GNOME Software
+  v2.0.0:desktop/packaging/io.winspace.Development.metainfo.xml, so GNOME Software
   shows one application across the switch. The release that ships the native
   app adds its own <release> entry at the top.
 -->

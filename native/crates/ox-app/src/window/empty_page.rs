@@ -2,7 +2,7 @@
 //! The folder pane's empty page: an empty or filtered-out folder, and a
 //! location that could not be listed, with Try again.
 //!
-//! Ports the empty-state branch of `renderRows` in `desktop/ui/app.js`.
+//! Ports the empty-state branch of `renderRows` in `v2.0.0:desktop/ui/app.js`.
 //! A folder that is still being listed shows no page of its own: the
 //! pane keeps its blank list, as Windows Explorer and Dolphin do (see
 //! [`super::loading`]).

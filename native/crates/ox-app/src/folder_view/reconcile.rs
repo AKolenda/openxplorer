@@ -3,7 +3,7 @@
 //!
 //! A reload of the same folder (F5, a change the directory monitor saw)
 //! keeps the rows on screen until the new listing is complete, as
-//! `load(t, false)` in `desktop/ui/app.js` does. GTK's list views follow the
+//! `load(t, false)` in `v2.0.0:desktop/ui/app.js` does. GTK's list views follow the
 //! item objects for their scroll anchor, keyboard focus and selection, so
 //! the listing is merged by URI: items that are gone are removed, new ones
 //! are appended (the views sort them), and only items whose details changed

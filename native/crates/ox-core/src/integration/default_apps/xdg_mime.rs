@@ -2,7 +2,7 @@
 //! Reading and setting per-user default handlers with `xdg-mime`.
 //!
 //! Ports `DesktopIntegration._run` and its `xdg-mime query default` and
-//! `xdg-mime default` calls in `desktop/desktop_integration.py`.
+//! `xdg-mime default` calls in `v2.0.0:desktop/desktop_integration.py`.
 //! `xdg-mime` writes only the user's own `mimeapps.list`; the app
 //! never runs it with `sudo`.
 
@@ -116,7 +116,7 @@ mod tests {
         message: &'static str,
     }
 
-    /// Ported from the `run` double of `desktop/tests/test_rc3.py::DefaultsTests::setUp`,
+    /// Ported from the `run` double of `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::setUp`,
     /// which checked `args[1:3] == ['query', 'default']`.
     /// parity: INT-010, SAFE-020
     #[test]
@@ -128,7 +128,7 @@ mod tests {
         assert_eq!(XDG_MIME_TIMEOUT, Duration::from_secs(8));
     }
 
-    /// Ported from the `run` double of `desktop/tests/test_rc3.py::DefaultsTests::setUp`,
+    /// Ported from the `run` double of `v2.0.0:desktop/tests/test_rc3.py::DefaultsTests::setUp`,
     /// which took the handler from `args[2]` and the type from `args[3]`.
     /// parity: INT-008, SAFE-020
     #[test]

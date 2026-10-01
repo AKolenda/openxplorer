@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Listing a tab's folder and keeping it current.
 //!
-//! Ports `load` and the directory-monitor refresh in `desktop/ui/app.js`
-//! and `desktop/winspace.py`:
+//! Ports `load` and the directory-monitor refresh in `v2.0.0:desktop/ui/app.js`
+//! and `v2.0.0:desktop/winspace.py`:
 //!
 //! - Moving to a folder clears the rows and fills them batch by batch. The
 //!   blank list shows at once, with no "Loading" text; only a listing that

@@ -2,9 +2,9 @@
 //! One window's network state: its sign-in prompts, the queue of dialogs
 //! that answers them, and its server discovery.
 //!
-//! Ports what `desktop/winspace.py` creates for each window (`MountPrompts`
+//! Ports what `v2.0.0:desktop/winspace.py` creates for each window (`MountPrompts`
 //! over the window's `SessionCredentials`) and the discovery state of
-//! `desktop/ui/app.js`. Each window keeps its own credentials in memory,
+//! `v2.0.0:desktop/ui/app.js`. Each window keeps its own credentials in memory,
 //! over the keyring every window shares; closing the window wipes them
 //! (SAFE-011, TAB-050).
 

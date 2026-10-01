@@ -2,7 +2,7 @@
 //! What a folder-size scan reads about each item, and the trait through
 //! which it reads it.
 //!
-//! Ports the provider contract of `desktop/folder_sizes.py`: the entry
+//! Ports the provider contract of `v2.0.0:desktop/folder_sizes.py`: the entry
 //! dictionaries `LocalSizeProvider` and `GioSizeProvider` produce, and
 //! their `inspect` and `children` methods. The contract lets the scan be
 //! tested without GIO or a NAS.

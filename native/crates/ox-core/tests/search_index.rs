@@ -2,7 +2,7 @@
 //! The search cache's private storage through its public API.
 //!
 //! Ports the search database tests of
-//! `desktop/tests/test_terminal_security.py::PrivateStorageTests`: a
+//! `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests`: a
 //! database or sidecar replaced by a symlink is refused, and the file the
 //! link points to is never changed.
 
@@ -19,7 +19,7 @@ fn link_target(directory: &Path) -> std::path::PathBuf {
     target
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_database_symlink_refused`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_database_symlink_refused`
 ///
 /// parity: SAFE-009
 #[test]
@@ -36,7 +36,7 @@ fn a_symlinked_database_is_refused() {
     assert_eq!(fs::read(&target).unwrap(), b"unchanged");
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_database_sidecar_symlink_refused`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_database_sidecar_symlink_refused`
 ///
 /// parity: SAFE-009
 #[test]

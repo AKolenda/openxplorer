@@ -3,7 +3,7 @@
 //! and when the scan ends.
 //!
 //! Ports the result dictionary of `scan_folder` in
-//! `desktop/folder_sizes.py`: its counters, `status` and `reason`.
+//! `v2.0.0:desktop/folder_sizes.py`: its counters, `status` and `reason`.
 
 use std::fmt;
 use std::time::{Duration, SystemTime};

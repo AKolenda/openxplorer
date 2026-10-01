@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The command bar under the navigation row.
 //!
-//! Ports `section.commandbar` in `desktop/ui/index.html` and its menus in
-//! `setup()` and `openNewMenu` of `desktop/ui/app.js`, in the same order:
+//! Ports `section.commandbar` in `v2.0.0:desktop/ui/index.html` and its menus in
+//! `setup()` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`, in the same order:
 //! New ▾ │ Cut, Copy, Paste, Rename, Copy path, Move to Trash │ Sort ▾,
 //! View ▾, More options, then at the right the appearance toggle, Settings
 //! and the Details toggle. Every control runs a window or application

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  "Software updates": `updatesDialog` of desktop/ui/app.js in the app's
-  modal dialog frame (`.modal` of desktop/ui/style.css, refined to WinUI's
+  "Software updates": `updatesDialog` of v2.0.0:desktop/ui/app.js in the app's
+  modal dialog frame (`.modal` of v2.0.0:desktop/ui/style.css, refined to WinUI's
   ContentDialog, native/docs/ui-spec.md §4.11). The installed and
   available versions, a live status line, what updates a build that cannot
   install itself, then Close, Check again, Install update… and Restart

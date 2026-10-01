@@ -2,7 +2,7 @@
 //! The name-conflict dialog before a paste or drop (OPS-026, OPS-028).
 //!
 //! Ports the "Items already exist" dialog of `transferWithConflicts` in
-//! `desktop/ui/app.js`, with its message and its Cancel, "Skip
+//! `v2.0.0:desktop/ui/app.js`, with its message and its Cancel, "Skip
 //! duplicates" and "Replace existing" buttons. The native dialog adds
 //! "Keep both" (the engine's `(copy N)` names) and, with several
 //! conflicts, "Apply to all": cleared, the answer is for the first

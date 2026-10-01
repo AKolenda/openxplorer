@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Doubles shared by the updater tests: a GitHub that answers from
 //! fixtures and a package manager that checks and records its commands.
-//! Ports the fixtures of `desktop/tests/test_updater.py` (`release`,
+//! Ports the fixtures of `v2.0.0:desktop/tests/test_updater.py` (`release`,
 //! `open_fixture`, `run_fixture` and `assert_idle_and_clean`). No network
 //! connection, administrator prompt or package installation is made.
 

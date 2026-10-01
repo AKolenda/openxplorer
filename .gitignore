@@ -39,15 +39,14 @@ service-account*.json
 
 # Build and release output, and files regenerated from their sources.
 # .next/ and out/ hold the Next.js website build and its static export.
-# dist/ matches at any depth, so it covers desktop/dist/ as well.
+# dist/ matches at any depth.
 .next/
 out/
 dist/
 designs/
 apps/web/public/downloads/
-apps/web/public/app-preview.html
 apps/web/public/assets/site.js
-desktop/preview.html
+apps/web/public/tour/scenes.js
 
 # Built packages and archives, in any directory.
 *.deb

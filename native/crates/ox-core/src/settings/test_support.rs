@@ -23,7 +23,7 @@ pub(super) fn pin(uri: &str) -> BookmarkRequest {
 }
 
 /// The `quick_order` a window sends when its sidebar shows Desktop,
-/// Downloads and Documents, as in `desktop/tests/test_pins.py`.
+/// Downloads and Documents, as in `v2.0.0:desktop/tests/test_pins.py`.
 pub(super) fn shown_quick_order() -> Vec<String> {
     [DESKTOP, DOWNLOADS, DOCUMENTS].map(String::from).to_vec()
 }

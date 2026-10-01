@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* Dark palette: the colour tokens of native/docs/ui-spec.md §3.1 (IDs in
    brackets), which start from the :root[data-theme="dark"] tokens in
-   desktop/ui/style.css. Tokens tagged "visible" in the spec keep the
+   v2.0.0:desktop/ui/style.css. Tokens tagged "visible" in the spec keep the
    current app's value until the product owner signs them off (§3.8,
    "Staging"); the comment names the Windows value waiting for that.
    light.css defines the same names. */

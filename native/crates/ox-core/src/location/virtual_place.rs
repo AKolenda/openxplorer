@@ -3,7 +3,7 @@
 //! folders.
 //!
 //! The web UI used the bare strings `home:`, `pc:`, `network:` and
-//! `settings:` (see `VIRTUAL` in `desktop/window_state.py`). The native app
+//! `settings:` (see `VIRTUAL` in `v2.0.0:desktop/window_state.py`). The native app
 //! writes its own pages under an `ox:` scheme that no GIO backend claims,
 //! and uses GIO's own URIs for the folders GIO can list:
 //!
@@ -186,7 +186,7 @@ pub(crate) fn is_in_virtual_folder(uri: &str) -> bool {
 /// Normalises a location the app can navigate to: everything
 /// [`normalise_location`] accepts plus the virtual places. Use it for the
 /// tab history and command-line arguments; the port of `location()` in
-/// `desktop/window_state.py`.
+/// `v2.0.0:desktop/window_state.py`.
 ///
 /// # Errors
 ///

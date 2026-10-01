@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The Explorer skin: stylesheets, light and dark palettes and text size.
 //!
-//! Ports `applyTheme` in `desktop/ui/app.js` and `system_dark` /
-//! `apply_native_theme` in `desktop/winspace.py`. One [`Skin`] per display
+//! Ports `applyTheme` in `v2.0.0:desktop/ui/app.js` and `system_dark` /
+//! `apply_native_theme` in `v2.0.0:desktop/winspace.py`. One [`Skin`] per display
 //! holds the providers ([`providers`]) and what they draw; windows connect
 //! to its `appearance-changed` and `text-size-changed` signals, as they
 //! connect to `places-changed` on the shared

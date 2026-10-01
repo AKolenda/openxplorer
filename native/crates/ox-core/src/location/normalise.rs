@@ -3,7 +3,7 @@
 //!
 //! Ports `normalise_location`, `_normalise_device_location`,
 //! `require_share`, `require_item_uri` and `is_smb_server` from
-//! `desktop/core.py`. The output is byte-for-byte what the Python app
+//! `v2.0.0:desktop/core.py`. The output is byte-for-byte what the Python app
 //! produces, because both apps store these URIs in the shared
 //! `settings.json` and compare them as strings.
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Unix modes of staged and published folders on backends that do not
 //! implement `chmod`. Ports the remote-mode cases of
-//! `desktop/tests/test_operations.py`.
+//! `v2.0.0:desktop/tests/test_operations.py`.
 
 use std::sync::{Arc, Mutex};
 

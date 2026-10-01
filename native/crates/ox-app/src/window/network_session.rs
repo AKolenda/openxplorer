@@ -2,7 +2,7 @@
 //! The window's side of the network service: its sign-in prompts and
 //! their dialogs.
 //!
-//! Ports the `MountPrompts` wiring of `desktop/winspace.py`
+//! Ports the `MountPrompts` wiring of `v2.0.0:desktop/winspace.py`
 //! (`self.prompts`, `authReply` and `close`). The window creates its
 //! [`WindowNetwork`] when it is built and closes it when it goes, which
 //! aborts every open sign-in and wipes the window's credentials

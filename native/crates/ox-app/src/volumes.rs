@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Drives, volumes, phones and connected shares from the volume monitor.
 //!
-//! Ports `desktop/volume_locations.py` and its tests
-//! (`desktop/tests/test_volume_locations.py`). The volume monitor's current
+//! Ports `v2.0.0:desktop/volume_locations.py` and its tests
+//! (`v2.0.0:desktop/tests/test_volume_locations.py`). The volume monitor's current
 //! state is turned into rows without mounting, probing or listing anything.
 //!
 //! Every root is canonicalised with [`location::normalise`], as the Python
@@ -55,7 +55,7 @@ impl VolumeKind {
 )]
 pub(crate) struct MountControls {
     /// The mount can be unmounted: Disconnect (`canUnmount` in
-    /// `desktop/volume_locations.py`).
+    /// `v2.0.0:desktop/volume_locations.py`).
     pub can_unmount: bool,
     /// The medium can be ejected: Eject, for removable drives, SD cards
     /// and optical discs (`g_mount_can_eject`).
@@ -208,7 +208,7 @@ impl VolumeFacts {
     }
 
     /// A stable-enough identifier for a single mount request, as
-    /// `volume_id` in `desktop/volume_locations.py`: the UUID, else the
+    /// `volume_id` in `v2.0.0:desktop/volume_locations.py`: the UUID, else the
     /// device path, else the activation root, else the name. ox-core's
     /// [`volume_id_from`] decides, so a row and the mount it requests
     /// always agree.
@@ -268,7 +268,7 @@ fn mountable_row(volume: &VolumeFacts) -> Option<VolumeRow> {
 }
 
 /// Mounted rows first, then unmounted volumes, as `locations()` in
-/// `desktop/volume_locations.py` lists them.
+/// `v2.0.0:desktop/volume_locations.py` lists them.
 pub(crate) fn locations(mounts: &[MountFacts], volumes: &[VolumeFacts]) -> Vec<VolumeRow> {
     let mounted = mounts.iter().filter_map(mounted_row);
     let mountable = volumes.iter().filter_map(mountable_row);
@@ -304,7 +304,7 @@ mod tests {
         row.uri().map(str::to_owned)
     }
 
-    /// Ported from `desktop/tests/test_volume_locations.py::test_mounted_mtp_phone_and_afc_device_are_visible`
+    /// Ported from `v2.0.0:desktop/tests/test_volume_locations.py::test_mounted_mtp_phone_and_afc_device_are_visible`
     ///
     /// parity: DEV-001
     #[test]
@@ -322,7 +322,7 @@ mod tests {
         assert!(rows.iter().all(|row| row.uri().is_some()), "every row is mounted");
     }
 
-    /// Ported from `desktop/tests/test_volume_locations.py::test_unmounted_phone_is_click_to_connect_device`
+    /// Ported from `v2.0.0:desktop/tests/test_volume_locations.py::test_unmounted_phone_is_click_to_connect_device`
     ///
     /// parity: DEV-001
     #[test]
@@ -347,7 +347,7 @@ mod tests {
         assert_eq!(phone.id(), "mtp://[usb:001,011]/");
     }
 
-    /// Ported from `desktop/tests/test_volume_locations.py::test_unsupported_and_shadowed_mounts_stay_hidden`
+    /// Ported from `v2.0.0:desktop/tests/test_volume_locations.py::test_unsupported_and_shadowed_mounts_stay_hidden`
     ///
     /// parity: DEV-001
     #[test]

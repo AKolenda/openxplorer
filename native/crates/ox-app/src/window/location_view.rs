@@ -3,7 +3,7 @@
 //! the history buttons, the address bar, the tabs, the search box and the
 //! sidebar highlight.
 //!
-//! Ports `renderNavigation` and `renderTabs` in `desktop/ui/app.js`, and
+//! Ports `renderNavigation` and `renderTabs` in `v2.0.0:desktop/ui/app.js`, and
 //! `editAddress` and `finishAddress`. Titles, addresses and crumbs come
 //! from the window's [`LocationContext`], so a phone is called by its mount
 //! name everywhere.
@@ -410,7 +410,7 @@ mod tests {
     /// network bar like an SMB tab; a folder whose name only starts like
     /// the mount point does not.
     ///
-    /// Ported from `desktop/tests/ui_v06.py::Mounted CIFS paths are recognized`
+    /// Ported from `v2.0.0:desktop/tests/ui_v06.py::Mounted CIFS paths are recognized`
     ///
     /// parity: NET-006
     #[test]

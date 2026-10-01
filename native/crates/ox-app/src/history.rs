@@ -2,7 +2,7 @@
 //! Per-tab navigation history.
 //!
 //! Ports the history handling of `navigate` and `goHistory` in
-//! `desktop/ui/app.js`: navigating somewhere new drops the forward entries,
+//! `v2.0.0:desktop/ui/app.js`: navigating somewhere new drops the forward entries,
 //! navigating to the current location does not add a duplicate, and Back and
 //! Forward move within the list without changing it.
 //!

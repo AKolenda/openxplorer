@@ -3,7 +3,7 @@
 //! main actions at the right.
 //!
 //! Replaces a Python section's summary and main buttons in
-//! `renderSettingsPage` (`desktop/ui/app.js`), such as the "Default file
+//! `renderSettingsPage` (`v2.0.0:desktop/ui/app.js`), such as the "Default file
 //! explorer" card and its main button, in the look of the settings
 //! mockup's `.hero`. The static layout is the template
 //! `resources/ui/status-card.ui`. The settings search finds a card by its

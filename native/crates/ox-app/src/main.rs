@@ -2,7 +2,7 @@
 //! The `openxplorer-native` executable: a GTK4 file manager with the
 //! Explorer skin.
 //!
-//! The native counterpart of `main()` in `desktop/winspace.py`; everything
+//! The native counterpart of `main()` in `v2.0.0:desktop/winspace.py`; everything
 //! it does lives in [`ox_app::application::run`].
 
 fn main() -> gtk::glib::ExitCode {

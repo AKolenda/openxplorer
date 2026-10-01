@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Test-only local provider: the Rust counterpart of
-//! `desktop/tests/local_provider.py`. Never used by the application.
+//! `v2.0.0:desktop/tests/local_provider.py`. Never used by the application.
 //!
 //! It exercises the transfer orchestration against temporary real files. It
 //! cannot validate the production GIO/GVfs adapter or SMB behaviour.

@@ -2,7 +2,7 @@
 //! Measuring folders on request (PROP-026, PROP-027, PROP-029).
 //!
 //! Ports `scanFolderSizes`, `receiveFolderSize` and `stopSizeScan` of
-//! `desktop/ui/app.js`. Calculate folder size measures the selected
+//! `v2.0.0:desktop/ui/app.js`. Calculate folder size measures the selected
 //! folders, Calculate folder sizes every folder shown, and Properties the
 //! folder it describes. A window runs one scan at a time and measures the
 //! folders of a run one after another; the bar at the bottom follows the

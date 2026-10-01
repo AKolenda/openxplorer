@@ -1,0 +1,468 @@
+{
+ "generator": "tools/capture-native-tour.py",
+ "app": "OpenXplorer 2.0.0, the native GTK 4 app",
+ "width": 1440,
+ "height": 900,
+ "start": "home",
+ "scenes": [
+  {
+   "id": "home",
+   "title": "Home",
+   "caption": "Your home folder, with the sidebar on the left and the details pane on the right.",
+   "images": {
+    "light": "home-light.png",
+    "dark": "home-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Open Documents",
+     "goesTo": "documents",
+     "x": 228,
+     "y": 240,
+     "width": 938,
+     "height": 36
+    },
+    {
+     "label": "Open Pictures",
+     "goesTo": "pictures",
+     "x": 11,
+     "y": 339,
+     "width": 188,
+     "height": 35
+    },
+    {
+     "label": "Open This PC",
+     "goesTo": "this-pc",
+     "x": 7,
+     "y": 509,
+     "width": 196,
+     "height": 35
+    },
+    {
+     "label": "Open Network",
+     "goesTo": "network",
+     "x": 7,
+     "y": 605,
+     "width": 196,
+     "height": 35
+    },
+    {
+     "label": "Search for “budget”",
+     "goesTo": "search",
+     "x": 1190,
+     "y": 57,
+     "width": 207,
+     "height": 32
+    },
+    {
+     "label": "Open more tabs",
+     "goesTo": "tabs",
+     "x": 229,
+     "y": 8,
+     "width": 38,
+     "height": 34
+    },
+    {
+     "label": "Open Settings",
+     "goesTo": "settings",
+     "x": 1293,
+     "y": 114,
+     "width": 38,
+     "height": 34
+    }
+   ]
+  },
+  {
+   "id": "documents",
+   "title": "Documents",
+   "caption": "Documents in the Details view, with folders first. The details pane describes the folder shown.",
+   "images": {
+    "light": "documents-light.png",
+    "dark": "documents-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Open Launch planning",
+     "goesTo": "folder",
+     "x": 228,
+     "y": 240,
+     "width": 938,
+     "height": 36
+    },
+    {
+     "label": "Back to Home",
+     "goesTo": "home",
+     "x": 217,
+     "y": 57,
+     "width": 54,
+     "height": 32
+    },
+    {
+     "label": "Open Pictures",
+     "goesTo": "pictures",
+     "x": 11,
+     "y": 339,
+     "width": 188,
+     "height": 35
+    },
+    {
+     "label": "Open This PC",
+     "goesTo": "this-pc",
+     "x": 7,
+     "y": 509,
+     "width": 196,
+     "height": 35
+    }
+   ]
+  },
+  {
+   "id": "folder",
+   "title": "A selected file",
+   "caption": "Launch planning, with Budget.ods selected. The details pane shows its type, size and dates.",
+   "images": {
+    "light": "folder-light.png",
+    "dark": "folder-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Right-click Budget.ods",
+     "goesTo": "context-menu",
+     "x": 228,
+     "y": 202,
+     "width": 938,
+     "height": 36
+    },
+    {
+     "label": "Back to Documents",
+     "goesTo": "documents",
+     "x": 282,
+     "y": 57,
+     "width": 84,
+     "height": 32
+    },
+    {
+     "label": "Back to Home",
+     "goesTo": "home",
+     "x": 217,
+     "y": 57,
+     "width": 54,
+     "height": 32
+    }
+   ]
+  },
+  {
+   "id": "context-menu",
+   "title": "Context menu",
+   "caption": "The right-click menu of a file, in the classic Windows 10 style. Settings also offer the compact Windows 11 menu.",
+   "images": {
+    "light": "context-menu-light.png",
+    "dark": "context-menu-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Show previous versions",
+     "goesTo": "versions",
+     "x": 286,
+     "y": 665,
+     "width": 256,
+     "height": 33
+    },
+    {
+     "label": "Open Properties",
+     "goesTo": "properties",
+     "x": 286,
+     "y": 698,
+     "width": 256,
+     "height": 33
+    }
+   ]
+  },
+  {
+   "id": "properties",
+   "title": "Properties",
+   "caption": "Properties of a file: its type, size, location, dates and attributes, on tabs.",
+   "images": {
+    "light": "properties-light.png",
+    "dark": "properties-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Show previous versions",
+     "goesTo": "versions",
+     "x": 718,
+     "y": 218,
+     "width": 130,
+     "height": 35
+    },
+    {
+     "label": "Close Properties",
+     "goesTo": "folder",
+     "x": 871,
+     "y": 736,
+     "width": 124,
+     "height": 32
+    }
+   ]
+  },
+  {
+   "id": "versions",
+   "title": "Previous versions",
+   "caption": "Snapshots the storage already exposes, newest first, with the date read from each snapshot’s name. Restore a copy never overwrites the file.",
+   "images": {
+    "light": "versions-light.png",
+    "dark": "versions-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Show the General tab",
+     "goesTo": "properties",
+     "x": 315,
+     "y": 237,
+     "width": 77,
+     "height": 35
+    },
+    {
+     "label": "Close Properties",
+     "goesTo": "folder",
+     "x": 1001,
+     "y": 717,
+     "width": 124,
+     "height": 32
+    }
+   ]
+  },
+  {
+   "id": "pictures",
+   "title": "Large icons",
+   "caption": "Pictures in the Large icons view. The buttons at the bottom right switch views.",
+   "images": {
+    "light": "pictures-light.png",
+    "dark": "pictures-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Open Documents",
+     "goesTo": "documents",
+     "x": 11,
+     "y": 304,
+     "width": 188,
+     "height": 35
+    },
+    {
+     "label": "Open Home",
+     "goesTo": "home",
+     "x": 7,
+     "y": 173,
+     "width": 196,
+     "height": 35
+    },
+    {
+     "label": "Open This PC",
+     "goesTo": "this-pc",
+     "x": 7,
+     "y": 509,
+     "width": 196,
+     "height": 35
+    }
+   ]
+  },
+  {
+   "id": "this-pc",
+   "title": "This PC",
+   "caption": "Quick access folders, drives and saved network locations.",
+   "images": {
+    "light": "this-pc-light.png",
+    "dark": "this-pc-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Open Network",
+     "goesTo": "network",
+     "x": 7,
+     "y": 605,
+     "width": 196,
+     "height": 35
+    },
+    {
+     "label": "Open Home",
+     "goesTo": "home",
+     "x": 7,
+     "y": 173,
+     "width": 196,
+     "height": 35
+    },
+    {
+     "label": "Open Documents",
+     "goesTo": "documents",
+     "x": 11,
+     "y": 304,
+     "width": 188,
+     "height": 35
+    }
+   ]
+  },
+  {
+   "id": "network",
+   "title": "Network",
+   "caption": "Find servers, type a \\\\server\\share address, or open a saved share. The sample share is shown offline: this tour has no network.",
+   "images": {
+    "light": "network-light.png",
+    "dark": "network-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Open This PC",
+     "goesTo": "this-pc",
+     "x": 7,
+     "y": 509,
+     "width": 196,
+     "height": 35
+    },
+    {
+     "label": "Open Home",
+     "goesTo": "home",
+     "x": 7,
+     "y": 173,
+     "width": 196,
+     "height": 35
+    }
+   ]
+  },
+  {
+   "id": "search",
+   "title": "Search",
+   "caption": "Search finds names in this folder and its subfolders, here from the search cache of the pinned folder, and shows each result’s folder.",
+   "images": {
+    "light": "search-light.png",
+    "dark": "search-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Clear the search",
+     "goesTo": "home",
+     "x": 217,
+     "y": 57,
+     "width": 54,
+     "height": 32
+    },
+    {
+     "label": "Open Documents",
+     "goesTo": "documents",
+     "x": 11,
+     "y": 304,
+     "width": 188,
+     "height": 35
+    }
+   ]
+  },
+  {
+   "id": "tabs",
+   "title": "Tabs",
+   "caption": "Tabs keep several places open in one window. The amber tab shows a previous version of the folder.",
+   "images": {
+    "light": "tabs-light.png",
+    "dark": "tabs-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Show the previous version",
+     "goesTo": "snapshot",
+     "x": 231,
+     "y": 7,
+     "width": 335,
+     "height": 35
+    },
+    {
+     "label": "Show the This PC tab",
+     "goesTo": "this-pc",
+     "x": 568,
+     "y": 7,
+     "width": 220,
+     "height": 35
+    },
+    {
+     "label": "Right-click Budget.ods",
+     "goesTo": "context-menu",
+     "x": 228,
+     "y": 202,
+     "width": 938,
+     "height": 36
+    }
+   ]
+  },
+  {
+   "id": "snapshot",
+   "title": "A previous version",
+   "caption": "A snapshot folder opens in a tab marked Previous version, with a read-only banner.",
+   "images": {
+    "light": "snapshot-light.png",
+    "dark": "snapshot-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Back to Documents",
+     "goesTo": "documents",
+     "x": 282,
+     "y": 57,
+     "width": 84,
+     "height": 32
+    },
+    {
+     "label": "Open Home",
+     "goesTo": "home",
+     "x": 7,
+     "y": 209,
+     "width": 196,
+     "height": 35
+    }
+   ]
+  },
+  {
+   "id": "settings",
+   "title": "Settings",
+   "caption": "Settings open in a tab: appearance, search and indexing, default apps, windows and tabs.",
+   "images": {
+    "light": "settings-light.png",
+    "dark": "settings-dark.png"
+   },
+   "hotspots": [
+    {
+     "label": "Back to files",
+     "goesTo": "home",
+     "x": 18,
+     "y": 848,
+     "width": 121,
+     "height": 34
+    }
+   ]
+  }
+ ],
+ "sha256": {
+  "context-menu-dark.png": "5422b257dae2f79aef4cf5d013b6762441c3e7d1b211fe40e3952a01ee429a98",
+  "context-menu-light.png": "e4cc4fbe090834e7fe89ee381da2778ada3075333bfbb529aacf902167769894",
+  "documents-dark.png": "263a6fbbc54f5d7a955633f074fc51a6fdcaf339f9ba79034e13a1a86eed2a3f",
+  "documents-light.png": "8d64cc29111260764ea0204d3fababb84f59502a589996c75649db8cb5424206",
+  "folder-dark.png": "bfa99391c318319091a893e75268bfee7925af72398074378860556a1e69702e",
+  "folder-light.png": "1d1145a9f2edcba9a6ef21fdad3865fe11c7f07df74bbcd1e6cee60b6901cb6d",
+  "home-dark.png": "8e2cfda6bbc8e2bf614ba598f196cfa213fdbb76129b9a3804f26ba4024e7ea7",
+  "home-light.png": "9bc70ef9867e3caf413993140cea510bc88f019058ac8c8381e1c01fc18a9c07",
+  "network-dark.png": "517a5d917a5d335db34809defe185d5956e6c8c6a7c9b3e459e7c29956e08857",
+  "network-light.png": "f922d85a0f041b9e2df586a2f5e026c38c941caf6b7c54f7a4df36a6f1958fa3",
+  "pictures-dark.png": "f789adf2b939d1ade65f5d014c6083f7e5a6d1384dbba7f90570822292b269aa",
+  "pictures-light.png": "05582342ec68c9cd5cbbc45d8d4057c81f81e8ee92dbda8d804b3036d7b9efb8",
+  "properties-dark.png": "94084fce0d88570bb097ec37aaaf1c03ca322cc0e391454339ba66e124fd7ed7",
+  "properties-light.png": "c5e9c7c8d36761290bf60700033df1add638e13e79709ad87f84e9067c648cc0",
+  "search-dark.png": "92183e239c58b9d8f48f262592e053607375407d5a39d4f3b2be0e873dd78c57",
+  "search-light.png": "b75be1673a3ddcda79e111c74589e019d6fc3311f907d91598c8db87718ca603",
+  "settings-dark.png": "a6c012af6b16671afd0450bbea531467212e7fb9ddccc087fc658c0472f20c05",
+  "settings-light.png": "91ebb189cde698ab7d40778b29a4eb6443af06fdf5b899f205049703ec268214",
+  "snapshot-dark.png": "fbd795c6009cfa0f023d437156fd9ada7e53329894f02c57547259d1493afab9",
+  "snapshot-light.png": "e66978ec9a0a6dd67bab184d4b39ce7479786aeff0126a009fc2b12a4cae5bad",
+  "tabs-dark.png": "c9ea436333d7bb663e19c7f55536f06e957081be37aae6d410cf57107f7f4840",
+  "tabs-light.png": "fbdfae311d8fa5bae2e572ba6cf825541e4c7f0aa748a7df504c043c4b4c7985",
+  "this-pc-dark.png": "9a5589124e755713169c7d1de753d3b2acbd5cc2a16da70f66c842eb91f944b2",
+  "this-pc-light.png": "c5fd3a3b4d344cf3114b35063354e6b61de77de5861a8b8080ed95f5cb59e4ac",
+  "versions-dark.png": "ec7119a0781cf73518e8f3dd5cf472b0dc3b70f25970c4b028419e7d9d1933a0",
+  "versions-light.png": "6fdb28019080671228e6cf3a97493f55cda22e33cce6537836660704cc0f8ef1"
+ }
+}

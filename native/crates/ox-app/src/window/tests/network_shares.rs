@@ -5,8 +5,8 @@
 //!
 //! Ports the share rows of `fileIcon` and `activate`, `connectDialog`'s
 //! success path, `networkLocation` and `renderTabs` in
-//! `desktop/ui/app.js`, and `watch` and `remember_network` in
-//! `desktop/winspace.py`. No test reaches a server: shares are mounted
+//! `v2.0.0:desktop/ui/app.js`, and `watch` and `remember_network` in
+//! `v2.0.0:desktop/winspace.py`. No test reaches a server: shares are mounted
 //! only by the test's own answer, and a listing on a host that does not
 //! exist fails before any network is used.
 
@@ -45,7 +45,7 @@ fn tab_tooltips(test: &TestWindow) -> Vec<String> {
 /// on the network bar, opens its target (on activation and middle-click
 /// alike), and as a share root is not an item the edit commands act on.
 ///
-/// Ported from `desktop/tests/ui_rc4.py::Share opens its target URI, not a fabricated local folder`
+/// Ported from `v2.0.0:desktop/tests/ui_rc4.py::Share opens its target URI, not a fabricated local folder`
 ///
 /// parity: NET-003
 #[test]
@@ -75,7 +75,7 @@ fn a_share_in_a_server_listing_is_a_network_folder_that_opens_its_target() {
 /// Connecting itself needs a server, so the test starts where the mount
 /// succeeded.
 ///
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_success_saved_after_finish`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_success_saved_after_finish`
 ///
 /// parity: NET-001
 #[gtk::test]
@@ -109,7 +109,7 @@ fn a_connected_share_is_saved_listed_and_opened() {
 /// address says so and its icon stands on the network bar, as soon as the
 /// mount is known.
 ///
-/// Ported from `desktop/tests/test_v07.py::NetworkTests::test_stable_cifs_mount`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_stable_cifs_mount`
 ///
 /// parity: NET-006
 #[gtk::test]

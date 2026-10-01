@@ -3,7 +3,7 @@
 //! another filesystem mounted inside the scanned folder.
 //!
 //! Ports the mount points part of `read_mounts`, `parse_mounts` and
-//! `unescape_mount` in `desktop/mount_support.py`. Paths are kept as bytes,
+//! `unescape_mount` in `v2.0.0:desktop/mount_support.py`. Paths are kept as bytes,
 //! so mount points whose names are not UTF-8 are found too.
 
 use std::collections::HashSet;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The running-instance guard over a scripted bus, and build identities.
-//! Ports `RuntimeTests` of `desktop/tests/test_rc2.py`;
+//! Ports `RuntimeTests` of `v2.0.0:desktop/tests/test_rc2.py`;
 //! `update_instance_bus.rs` runs the guard over a real session bus.
 
 use std::cell::{Cell, RefCell};
@@ -114,7 +114,7 @@ fn impatient(bus: ScriptedBus) -> InstanceGuard<ScriptedBus> {
     InstanceGuard::with_timing(bus, timing)
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_identity_changes_with_python_and_ui`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_identity_changes_with_python_and_ui`
 /// parity: UPD-008
 #[test]
 fn the_identity_changes_with_the_python_and_ui_files() {
@@ -156,7 +156,7 @@ fn identity_ignores_files_that_are_not_part_of_the_build() {
     assert_eq!(before.version, "1.1.4");
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_new_process`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_new_process`
 /// parity: UPD-008
 #[test]
 fn a_launch_with_no_running_instance_continues_without_asking_anything_to_quit() {
@@ -171,7 +171,7 @@ fn a_launch_with_no_running_instance_continues_without_asking_anything_to_quit()
     assert!(guard.bus().quit_requests().is_empty());
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_existing_current_process`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_existing_current_process`
 /// parity: UPD-008
 #[test]
 fn a_current_running_instance_is_left_running() {
@@ -204,7 +204,7 @@ fn a_starting_instance_is_waited_for_before_it_counts_as_outdated() {
     assert!(guard.bus().quit_requests().is_empty());
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_old_process_needs_consent`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_old_process_needs_consent`
 /// parity: UPD-008
 #[test]
 fn an_outdated_instance_is_not_stopped_without_consent() {
@@ -219,7 +219,7 @@ fn an_outdated_instance_is_not_stopped_without_consent() {
     assert!(guard.bus().quit_requests().is_empty());
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_decline_never_stops`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_decline_never_stops`
 /// parity: UPD-008
 #[test]
 fn declining_the_restart_never_stops_the_instance() {
@@ -232,7 +232,7 @@ fn declining_the_restart_never_stops_the_instance() {
     assert!(guard.bus().quit_requests().is_empty());
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_confirm_stops_only_exact_owner`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_confirm_stops_only_exact_owner`
 /// parity: UPD-008
 #[test]
 fn confirming_asks_only_the_exact_owner_to_quit() {
@@ -253,7 +253,7 @@ fn confirming_asks_only_the_exact_owner_to_quit() {
     assert_eq!(asked.matches(), Some(false));
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_explicit_restart_of_current_process`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_explicit_restart_of_current_process`
 /// parity: UPD-008, UPD-009
 #[test]
 fn an_explicit_restart_asks_even_a_current_instance_to_quit() {
@@ -269,7 +269,7 @@ fn an_explicit_restart_asks_even_a_current_instance_to_quit() {
     assert_eq!(guard.bus().quit_requests(), [OWNER]);
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_refused_quit_is_not_ignored`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_refused_quit_is_not_ignored`
 ///
 /// Python's mocked `stop` raises; here the instance refuses the quit
 /// request and keeps its name, which is what a writing instance does.
@@ -289,7 +289,7 @@ fn a_refused_quit_stops_the_launch() {
     assert!(error.to_string().contains("active file operations"), "{error}");
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_session_stop_waits_for_release`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_session_stop_waits_for_release`
 /// parity: UPD-008, UPD-009
 #[test]
 fn stopping_waits_until_the_instance_releases_its_name() {
@@ -300,7 +300,7 @@ fn stopping_waits_until_the_instance_releases_its_name() {
     assert_eq!(guard.bus().quit_requests(), [OWNER]);
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_busy_process_is_never_forced`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_busy_process_is_never_forced`
 /// parity: UPD-008, UPD-009
 #[test]
 fn a_busy_instance_is_never_killed() {
@@ -313,7 +313,7 @@ fn a_busy_instance_is_never_killed() {
     assert_eq!(guard.bus().quit_requests().len(), 1);
 }
 
-/// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_owner_changed_during_restart`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_owner_changed_during_restart`
 /// parity: UPD-009
 #[test]
 fn another_instance_taking_the_name_during_restart_is_reported() {

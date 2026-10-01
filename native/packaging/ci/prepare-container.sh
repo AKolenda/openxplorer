@@ -9,7 +9,7 @@
 # display and session bus check.py runs tests on (xvfb-run, Xvfb, xauth,
 # dbus-run-session); GVfs with its SMB backend, PyGObject, GNOME Keyring and
 # libsecret for the Recycle Bin, share and keyring tests; Node.js, which the
-# location fixture test runs desktop/ui/app.js with; a font and an icon theme
+# location fixture test runs v2.0.0:desktop/ui/app.js with; a font and an icon theme
 # for GTK; the desktop validators; and the family's package tools.
 # Rust itself comes from rustup (install-rust.sh), except the distribution
 # compiler RPM builds use. Then it adds the unprivileged user "builder",

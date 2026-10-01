@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The addresses the updater may contact. Ports `REPOSITORY`,
 //! `REPOSITORIES`, `LATEST`, `HOSTS`, `trusted_url` and `TrustedRedirect`
-//! in `desktop/updater.py`.
+//! in `v2.0.0:desktop/updater.py`.
 
 use std::fmt;
 
@@ -48,7 +48,7 @@ const HTTP_URI_FLAGS: glib::UriFlags = glib::UriFlags::ENCODED_PATH
 /// An address the updater may contact.
 ///
 /// Safety rule "only fixed upstream HTTPS endpoints" (`trusted_url` in
-/// `desktop/updater.py`): the scheme is `https`, the host is one of
+/// `v2.0.0:desktop/updater.py`): the scheme is `https`, the host is one of
 /// [`TRUSTED_HOSTS`], there are no credentials and the port is the
 /// standard one. The only way to get a `TrustedUrl` is to pass this check,
 /// and the HTTP client accepts nothing else, so no address from the UI or
@@ -88,7 +88,7 @@ impl TrustedUrl {
     /// `location` is resolved against this address, as a browser would.
     ///
     /// Safety rule "redirects cross the same trust boundary"
-    /// (`TrustedRedirect` in `desktop/updater.py`): the target must pass
+    /// (`TrustedRedirect` in `v2.0.0:desktop/updater.py`): the target must pass
     /// the same check as the address that was asked.
     ///
     /// # Errors

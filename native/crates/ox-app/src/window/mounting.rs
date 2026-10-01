@@ -2,8 +2,8 @@
 //! Connecting a drive or device from the sidebar or This PC, and taking
 //! one away: Disconnect, Eject and Safely remove.
 //!
-//! Ports `mountVolume` and `unmount` in `desktop/ui/app.js` and the
-//! `mountVolume` and `unmount` operations of `desktop/winspace.py`, and
+//! Ports `mountVolume` and `unmount` in `v2.0.0:desktop/ui/app.js` and the
+//! `mountVolume` and `unmount` operations of `v2.0.0:desktop/winspace.py`, and
 //! adds Dolphin's Eject and Safely remove ([`Removal`]). Each runs through
 //! GTK's mount operation without blocking the window: the desktop's own
 //! dialogs ask for an encrypted disk's password, show the programs that

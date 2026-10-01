@@ -2,7 +2,7 @@
 //! What the window says about its tabs: how many there are, where the
 //! active one is and whether it is listed.
 //!
-//! Ports `active()` and the tab bookkeeping reads of `desktop/ui/app.js`.
+//! Ports `active()` and the tab bookkeeping reads of `v2.0.0:desktop/ui/app.js`.
 //! The application, the snapshot tool and the tests ask these questions;
 //! the tabs themselves are kept by [`super::session`].
 

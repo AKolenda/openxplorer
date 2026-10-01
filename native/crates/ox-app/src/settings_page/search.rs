@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Finding settings by what they say and show.
 //!
-//! Ports `settingsSearch` in `desktop/ui/app.js` (SET-004): every word
+//! Ports `settingsSearch` in `v2.0.0:desktop/ui/app.js` (SET-004): every word
 //! typed into "Search settings" must appear, ignoring case, in what a
 //! setting says or shows. For a row that is its title, its description,
 //! its keywords (the Python app's `data-search-terms`), the labels of its

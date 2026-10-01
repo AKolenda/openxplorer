@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The desktop keyring through the freedesktop Secret Service.
 //!
-//! Replaces the libsecret calls of `desktop/session_credentials.py` and
-//! `desktop/winspace.py` with the pure-Rust `oo7` client: GNOME Keyring,
+//! Replaces the libsecret calls of `v2.0.0:desktop/session_credentials.py` and
+//! `v2.0.0:desktop/winspace.py` with the pure-Rust `oo7` client: GNOME Keyring,
 //! `KWallet` and `oo7-daemon` all implement the Secret Service D-Bus API.
 //! The session is encrypted where the service supports it, as libsecret's
 //! is, so secrets do not cross the session bus in the clear.

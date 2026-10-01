@@ -3,7 +3,7 @@
 //! category list, the settings search and the keyboard.
 //!
 //! Ports `settingsSearch` and the section links of `renderSettingsPage` in
-//! `desktop/ui/app.js`. The search filters the rows of every category at
+//! `v2.0.0:desktop/ui/app.js`. The search filters the rows of every category at
 //! once; the list then shows only the categories with matches, each with
 //! its count, and "N matching settings" under the search box. Enter jumps
 //! to the first match, Escape leaves the search, and arrow keys move

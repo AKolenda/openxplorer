@@ -3,7 +3,7 @@
 //! their default application.
 //!
 //! Ports `openEntry`, `submitAddress` and `openIncoming` in
-//! `desktop/ui/app.js` and `activation_kind` in `desktop/activation.py`.
+//! `v2.0.0:desktop/ui/app.js` and `activation_kind` in `v2.0.0:desktop/activation.py`.
 //! An address or command-line argument is looked up first, so a file is
 //! opened without moving the tab or adding a history entry, and a typed
 //! page title ("Network") names a folder of that name when one exists.

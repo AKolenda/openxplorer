@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Which SMB server a location belongs to.
 //!
-//! Ports `server_key` in `desktop/session_credentials.py`. Credentials are
+//! Ports `server_key` in `v2.0.0:desktop/session_credentials.py`. Credentials are
 //! kept per server, never per share, so every share on a server reuses one
 //! sign-in. Host names compare case-insensitively, but ports and aliases
 //! stay distinct: `nas.local` and `10.0.0.1` are different servers even if
 //! they resolve to the same machine.
 //!
 //! `host_name` and `smb_host` are the `urlsplit(uri).hostname` of
-//! `desktop/winspace.py` and `desktop/auth_bridge.py`: the host the sign-in
+//! `v2.0.0:desktop/winspace.py` and `v2.0.0:desktop/auth_bridge.py`: the host the sign-in
 //! dialog names, the server Sign out disconnects and the server of a
 //! Network list entry.
 
@@ -90,7 +90,7 @@ mod tests {
         ServerKey::for_location(uri)
     }
 
-    /// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_host_key_not_share_key`
+    /// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_host_key_not_share_key`
     ///
     /// parity: NET-011, NET-014
     #[test]
@@ -99,7 +99,7 @@ mod tests {
         assert!(key("smb://nas/b").is_some());
     }
 
-    /// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_distinct_ports`
+    /// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_distinct_ports`
     ///
     /// parity: NET-014
     #[test]
@@ -108,7 +108,7 @@ mod tests {
         assert_eq!(key("smb://nas:445/a"), key("smb://nas/a"));
     }
 
-    /// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_no_alias_sharing`
+    /// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_no_alias_sharing`
     ///
     /// parity: NET-014
     #[test]

@@ -2,16 +2,16 @@
 //! The `org.freedesktop.FileManager1` service on a real, private D-Bus
 //! daemon.
 //!
-//! Ports `BusTests` of `desktop/tests/test_v07.py`. The Python tests used
+//! Ports `BusTests` of `v2.0.0:desktop/tests/test_v07.py`. The Python tests used
 //! doubles for GIO; these start their own `dbus-daemon` with no service
 //! directories, so a test can own the name without reaching the session
 //! bus, and nothing can be activated. This file holds the shared fixture.
 //!
 //! | Case file | What it covers | Ports |
 //! |---|---|---|
-//! | `service` | Owning the name and answering calls | `BusTests` of `desktop/tests/test_v07.py` |
-//! | `requests` | The checks every request passes | `HandoffTests` of `desktop/tests/test_v07.py` |
-//! | `status` | Who owns the name | `FileManagerBus.status` of `desktop/filemanager_bus.py` |
+//! | `service` | Owning the name and answering calls | `BusTests` of `v2.0.0:desktop/tests/test_v07.py` |
+//! | `requests` | The checks every request passes | `HandoffTests` of `v2.0.0:desktop/tests/test_v07.py` |
+//! | `status` | Who owns the name | `FileManagerBus.status` of `v2.0.0:desktop/filemanager_bus.py` |
 
 use std::cell::{Cell, RefCell};
 use std::fs;

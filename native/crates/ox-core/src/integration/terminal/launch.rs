@@ -2,7 +2,7 @@
 //! Starting the terminal in the prepared folder.
 //!
 //! Ports `terminal_argv` and `launch_terminal` in
-//! `desktop/terminal_integration.py` (OPEN-020). The terminal gets its
+//! `v2.0.0:desktop/terminal_integration.py` (OPEN-020). The terminal gets its
 //! program path and, where it has one, its working-directory option;
 //! never `-c`, `-e`, a shell, a `cd` command or a script string, so a
 //! folder named like code stays a name.

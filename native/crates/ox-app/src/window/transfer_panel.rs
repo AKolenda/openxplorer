@@ -2,8 +2,8 @@
 //! The transfer panel: what the running operation is doing, how far it
 //! is, and Cancel (OPS-019, ARC-011).
 //!
-//! Ports `#transfer` in `desktop/ui/index.html`, `.transfer` in
-//! `style.css` and `updateTransfer` in `desktop/ui/app.js`. One panel
+//! Ports `#transfer` in `v2.0.0:desktop/ui/index.html`, `.transfer` in
+//! `style.css` and `updateTransfer` in `v2.0.0:desktop/ui/app.js`. One panel
 //! shows every write the window runs, one at a time: a file operation,
 //! an extraction, a compression or a restored copy of a previous version.
 //! The label starts as the operation's starting text ("Moving to Trash…",

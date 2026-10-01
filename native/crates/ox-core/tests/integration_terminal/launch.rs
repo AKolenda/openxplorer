@@ -34,7 +34,7 @@ fn wait_for_file(path: &Path) {
     }
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_no_terminal_actionable`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_no_terminal_actionable`
 /// parity: OPEN-018
 #[test]
 fn without_a_terminal_the_message_says_how_to_install_one() {
@@ -49,7 +49,7 @@ fn without_a_terminal_the_message_says_how_to_install_one() {
         .contains("sudo apt install gnome-terminal"));
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_only_trusted_path_searched`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_only_trusted_path_searched`
 /// parity: OPEN-018, SAFE-015
 #[test]
 fn only_the_system_folders_are_searched() {
@@ -63,7 +63,7 @@ fn only_the_system_folders_are_searched() {
     assert!(matches!(refused, Err(TerminalError::NoTerminal)), "{refused:?}");
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_debian_gnome_alternative`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_debian_gnome_alternative`
 /// parity: OPEN-018
 #[test]
 fn debians_gnome_wrapper_alternative_runs_the_real_gnome_terminal() {
@@ -137,7 +137,7 @@ fn without_an_alternative_the_first_installed_terminal_in_order_is_used() {
     assert_eq!(terminal.executable(), Path::new("/usr/bin/konsole"));
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_all_cli_styles`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_all_cli_styles`
 /// parity: OPEN-020
 #[test]
 fn each_terminal_gets_its_own_working_directory_option() {
@@ -184,7 +184,7 @@ fn each_terminal_gets_its_own_working_directory_option() {
     }
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_unknown_executable_kind_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_unknown_executable_kind_rejected`
 /// parity: OPEN-018, SAFE-015
 #[test]
 fn only_known_terminals_with_absolute_programs_are_started() {
@@ -197,7 +197,7 @@ fn only_known_terminals_with_absolute_programs_are_started() {
     );
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_real_process_preserves_literal_shell_metacharacters`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_real_process_preserves_literal_shell_metacharacters`
 /// parity: OPEN-018, OPEN-020, SAFE-015
 #[test]
 fn a_folder_named_like_shell_code_stays_a_name() {
@@ -234,7 +234,7 @@ fn a_folder_named_like_shell_code_stays_a_name() {
     assert!(!root.path().join("PWNED").exists());
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_immediate_failure_reported`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_immediate_failure_reported`
 /// parity: OPEN-020
 #[test]
 fn a_terminal_that_fails_at_once_is_reported() {

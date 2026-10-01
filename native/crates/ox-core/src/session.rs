@@ -2,7 +2,7 @@
 //! Window state that crosses a trust boundary: a tab's navigation state
 //! when it moves to another window or comes back from a saved session, and
 //! the arguments of `org.freedesktop.FileManager1` requests from other
-//! applications. Ports `desktop/window_state.py`.
+//! applications. Ports `v2.0.0:desktop/window_state.py`.
 //!
 //! Both are validated as untrusted data: only whitelisted fields survive,
 //! lists are bounded, and every location passes the location rules of

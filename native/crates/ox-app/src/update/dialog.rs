@@ -2,7 +2,7 @@
 //! "Software updates": the installed and available versions, a live
 //! status, and Close, Check again, Install update… and Restart now.
 //!
-//! Ports `updatesDialog` in `desktop/ui/app.js` (UPD-001, UPD-003,
+//! Ports `updatesDialog` in `v2.0.0:desktop/ui/app.js` (UPD-001, UPD-003,
 //! UPD-005 to UPD-007). Opening it checks at once; release notes are
 //! never shown. "Install update…" shows only when a newer release exists
 //! and is enabled only when this build may install it; a build that

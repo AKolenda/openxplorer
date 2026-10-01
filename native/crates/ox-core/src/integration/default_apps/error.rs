@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Why a default-application change or status read failed, in the words
-//! of `desktop/desktop_integration.py`.
+//! of `v2.0.0:desktop/desktop_integration.py`.
 
 use std::io;
 use std::path::PathBuf;

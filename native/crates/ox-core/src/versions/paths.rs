@@ -3,7 +3,7 @@
 //! a snapshot is built.
 //!
 //! Ports `conventional_snapshot`, `within`, `child_uri` and `relative_uri`
-//! from `desktop/previous_versions.py`. All of them compare canonical URIs
+//! from `v2.0.0:desktop/previous_versions.py`. All of them compare canonical URIs
 //! as text, as the Python app does, because configured snapshot roots are
 //! stored in that form.
 
@@ -157,10 +157,10 @@ mod tests {
         },
     ];
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` (the historical
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` (the historical
     /// paths, "Encoded markers recognized" and "Ordinary share not
     /// misidentified"), for the markers `conventional_snapshot` in
-    /// `desktop/previous_versions.py` shares with the web UI.
+    /// `v2.0.0:desktop/previous_versions.py` shares with the web UI.
     ///
     /// parity: PROP-021
     #[test]
@@ -181,7 +181,7 @@ mod tests {
         assert!(is_conventional_snapshot("smb://[nas/share"));
     }
 
-    /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Location
+    /// Ported from `v2.0.0:desktop/tests/snapshot_meta.test.cjs` ("Location
     /// boundary not prefix coincidence").
     ///
     /// parity: PROP-021

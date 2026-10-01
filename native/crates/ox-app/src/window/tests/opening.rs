@@ -46,7 +46,7 @@ fn a_failing_command_says_why_in_the_toast() {
 /// is dropped: the file does not open and the tab stays where the user
 /// went.
 ///
-/// Ported from `desktop/tests/ui_regressions.cjs::Navigation supersedes a delayed activation`
+/// Ported from `v2.0.0:desktop/tests/ui_regressions.cjs::Navigation supersedes a delayed activation`
 ///
 /// parity: SAFE-013
 #[gtk::test]

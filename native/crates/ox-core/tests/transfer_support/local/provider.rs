@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The overridable behaviour of the local test double: the Rust stand-in
-//! for subclassing `LocalNode` in `desktop/tests/local_provider.py`.
+//! for subclassing `LocalNode` in `v2.0.0:desktop/tests/local_provider.py`.
 
 use std::path::PathBuf;
 use std::sync::Arc;

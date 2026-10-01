@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Browsing a ZIP read-only and opening one member as a private copy.
-//! Ports `ZipTests` of `desktop/tests/test_v05.py` and the ZIP cases of
-//! `AdditionalSecurityTests` in `desktop/tests/test_terminal_security.py`
+//! Ports `ZipTests` of `v2.0.0:desktop/tests/test_v05.py` and the ZIP cases of
+//! `AdditionalSecurityTests` in `v2.0.0:desktop/tests/test_terminal_security.py`
 //! (the name rules alone are unit tests of `member_names`).
 
 mod archive_support;
@@ -21,7 +21,7 @@ use archive_support::{
 };
 
 /// The archive and preview folder of `ZipTests.setUp` in
-/// `desktop/tests/test_v05.py`.
+/// `v2.0.0:desktop/tests/test_v05.py`.
 struct BrowseFixture {
     _temporary: tempfile::TempDir,
     archive: PathBuf,
@@ -87,7 +87,7 @@ fn files_below(folder: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_listing_extracts_nothing`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_listing_extracts_nothing`.
 ///
 /// parity: ARC-003
 #[test]
@@ -99,7 +99,7 @@ fn listing_extracts_nothing() {
     assert!(!fixture.previews.exists());
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_nested_virtual_directory`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_nested_virtual_directory`.
 ///
 /// parity: ARC-003
 #[test]
@@ -112,7 +112,7 @@ fn a_folder_inside_the_archive_lists_its_members() {
     assert_eq!(listing.prefix, "Documents/");
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_dangerous_members_hidden`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_dangerous_members_hidden`.
 ///
 /// parity: ARC-004
 #[test]
@@ -125,7 +125,7 @@ fn dangerous_members_are_hidden_and_counted() {
     assert!(listing.entries.iter().all(|entry| !entry.member.contains("..")));
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_selected_member_only_temp_copy`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_selected_member_only_temp_copy`.
 ///
 /// parity: ARC-006
 #[test]
@@ -150,7 +150,7 @@ fn only_the_selected_member_is_copied_read_only() {
     );
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_traversal_rejected`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_traversal_rejected`.
 ///
 /// parity: ARC-006
 #[test]
@@ -163,7 +163,7 @@ fn a_traversal_member_is_not_opened() {
     assert!(!fixture.previews.exists());
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_script_preview_rejected`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_script_preview_rejected`.
 ///
 /// parity: ARC-006
 #[test]
@@ -175,7 +175,7 @@ fn a_script_is_not_opened() {
     assert_eq!(result.unwrap_err(), ArchiveError::UnsafePreviewType);
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_symlink_hidden_and_rejected`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_symlink_hidden_and_rejected`.
 ///
 /// parity: ARC-004, ARC-006
 #[test]
@@ -190,7 +190,7 @@ fn a_link_is_hidden_and_not_opened() {
     assert_eq!(result.unwrap_err(), ArchiveError::MemberNotPreviewable);
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_duplicate_member_preview_rejected`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_duplicate_member_preview_rejected`.
 ///
 /// parity: ARC-006
 #[test]
@@ -202,7 +202,7 @@ fn a_duplicated_member_is_not_opened() {
     assert_eq!(result.unwrap_err(), ArchiveError::MissingOrDuplicatedMember);
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_invalid_zip_reports_error`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_invalid_zip_reports_error`.
 ///
 /// parity: ARC-005
 #[test]
@@ -216,7 +216,7 @@ fn a_file_that_is_not_a_zip_reports_a_bad_zip() {
     assert_eq!(error.to_string(), "File is not a zip file");
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_central_directory_allocation_bounded`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_central_directory_allocation_bounded`.
 /// Python checked its bounded reader alone; here a whole listing stops
 /// before the directory is read.
 ///
@@ -235,7 +235,7 @@ fn a_central_directory_over_32_mib_is_not_read() {
     );
 }
 
-/// ARC-005: `Archives.opened` in `desktop/archives.py` refuses more than
+/// ARC-005: `Archives.opened` in `v2.0.0:desktop/archives.py` refuses more than
 /// 100,000 members.
 ///
 /// parity: ARC-005
@@ -258,7 +258,7 @@ fn more_than_100000_members_are_left_to_an_archive_manager() {
     );
 }
 
-/// Ported from `desktop/tests/test_v05.py::ZipTests::test_empty_zip`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_empty_zip`.
 ///
 /// parity: ARC-003
 #[test]
@@ -271,7 +271,7 @@ fn an_empty_archive_lists_nothing() {
     assert!(!listing.is_truncated);
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_preview_rejects_special_members`.
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_preview_rejects_special_members`.
 ///
 /// parity: ARC-004, ARC-006
 #[test]

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Python's `str()` and `int()` applied to the JSON values of a recent file.
 //!
-//! Ports the conversions `Settings.__init__` in `desktop/core.py` makes on
+//! Ports the conversions `Settings.__init__` in `v2.0.0:desktop/core.py` makes on
 //! each `recent` entry: `str(item['name'])` and
 //! `max(0, int(item.get('size') or 0))`. Both applications must keep and
 //! skip the same entries, so every JSON type converts the way it does in

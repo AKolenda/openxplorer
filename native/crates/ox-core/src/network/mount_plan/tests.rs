@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Mount assistant cases, including
 //! `test_mapped_path_plan_requires_admin_not_automatic` of
-//! `desktop/tests/test_v05.py`. Expected plans were produced by
-//! `mount_plan` in `desktop/mount_support.py`, so the helper finds units
+//! `v2.0.0:desktop/tests/test_v05.py`. Expected plans were produced by
+//! `mount_plan` in `v2.0.0:desktop/mount_support.py`, so the helper finds units
 //! written by either app.
 
 use std::path::PathBuf;
@@ -16,7 +16,7 @@ fn plan(address: &str) -> MountPlan {
     mount_plan(address, DESKTOP_USER).expect("a plannable share")
 }
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_mapped_path_plan_requires_admin_not_automatic`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_mapped_path_plan_requires_admin_not_automatic`
 ///
 /// parity: NET-027, SAFE-021
 #[test]

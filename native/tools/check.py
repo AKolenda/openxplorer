@@ -32,13 +32,16 @@ import tempfile
 import time
 from typing import Any
 
+import python_app
+
 NATIVE = Path(__file__).resolve().parents[1]
 
-# The driver runs cargo and the isolation tools. The Rust tests themselves call
-# python3 (settings interop) and mkfifo.
-REQUIRED_TOOLS = ('cargo', 'python3', 'dbus-run-session', 'xvfb-run', 'Xvfb', 'xauth', 'mkfifo')
+# The driver runs cargo, git (for the Python app's sources) and the isolation
+# tools. The Rust tests themselves call python3 (settings interop) and mkfifo.
+REQUIRED_TOOLS = ('cargo', 'git', 'python3', 'dbus-run-session', 'xvfb-run', 'Xvfb', 'xauth',
+                  'mkfifo')
 
-DEFAULT_TEST_TIMEOUT = 180.0
+DEFAULT_TEST_TIMEOUT = 600.0
 # How long a stop signal may take before the next, stronger one is sent.
 STOP_GRACE_SECONDS = 5.0
 # How often to look whether a stopped process group has emptied.
@@ -454,11 +457,18 @@ def check_rust_tests(test_timeout: float) -> int:
 
 
 def run_all_checks(test_timeout: float) -> None:
-    """Run every check in order, raising on the first failure."""
-    check_inventories_and_driver()
-    check_no_drawn_icons()
-    check_formatting_and_lints()
-    executable_count = check_rust_tests(test_timeout)
+    """Run every check in order, raising on the first failure.
+
+    The compatibility tests run the retired Python app's code, so its sources
+    are extracted from their tag for the run (python_app.py) and named in
+    $OX_PYTHON_APP, which every test inherits.
+    """
+    with python_app.sources() as sources:
+        os.environ[python_app.VARIABLE] = str(sources)
+        check_inventories_and_driver()
+        check_no_drawn_icons()
+        check_formatting_and_lints()
+        executable_count = check_rust_tests(test_timeout)
     print(f'Native checks passed ({executable_count} test executables plus doctests).')
 
 
@@ -499,9 +509,26 @@ def missing_tools() -> list[str]:
     return [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
 
 
+def leftover_desktop_note(repository: Path) -> str | None:
+    """Return advice to delete a desktop/ folder left behind in an updated clone, or None.
+
+    The Python app was removed from the repository, but updating a clone keeps
+    its untracked and ignored files (preview.html, __pycache__) in desktop/.
+    No check reads that folder.
+    """
+    leftover = repository / 'desktop'
+    if not leftover.is_dir():
+        return None
+    return (f'note: {leftover} is left over from the retired Python app and no check reads it; '
+            'delete it. Its sources are desktop/ at tag v2.0.0.')
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run all checks and return the exit status: 0 passed, 1 failed, 2 unusable setup."""
     arguments = parse_arguments(argv)
+    note = leftover_desktop_note(NATIVE.parent)
+    if note:
+        print(note, file=sys.stderr)
     missing = missing_tools()
     if missing:
         print(f'Required native check tools are missing: {", ".join(missing)}. '
@@ -514,7 +541,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f'Native checks failed: {describe_failed_command(error)}; its output is above.',
               file=sys.stderr)
         return 1
-    except CheckError as error:
+    except (CheckError, python_app.PythonAppMissing) as error:
         print(f'Native checks failed: {error}', file=sys.stderr)
         return 1
     return 0

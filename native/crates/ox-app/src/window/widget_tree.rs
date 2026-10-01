@@ -7,7 +7,7 @@
 //! pages by replacing their children, and its layouts measure the children
 //! they place, so these helpers keep that walk in one place. The web app
 //! does the same with `innerHTML = ''` and `children` in
-//! `desktop/ui/app.js`.
+//! `v2.0.0:desktop/ui/app.js`.
 
 use gtk::prelude::*;
 

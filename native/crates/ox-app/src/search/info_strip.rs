@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The search information strip above the columns while searching.
 //!
-//! Ports `renderSearchInfo` in `desktop/ui/app.js` and `.search-info` in
-//! `desktop/ui/style.css` (SRCH-012): a search glyph; the caption (the
+//! Ports `renderSearchInfo` in `v2.0.0:desktop/ui/app.js` and `.search-info` in
+//! `v2.0.0:desktop/ui/style.css` (SRCH-012): a search glyph; the caption (the
 //! error, "Searching…" or where the search looked); the "Search scope"
 //! list; the search options Dolphin and Windows offer: file names or
 //! names and contents (SRCH-036), kind and date modified (SRCH-037);

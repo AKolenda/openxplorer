@@ -3,7 +3,7 @@
 //! Restore previous can put them back.
 //!
 //! Ports `VALID_DESKTOP`, `DesktopIntegration.previous` and
-//! `DesktopIntegration._save` in `desktop/desktop_integration.py`. The
+//! `DesktopIntegration._save` in `v2.0.0:desktop/desktop_integration.py`. The
 //! file lives in the settings folder shared with the Python app, so both
 //! apps read what the other wrote: a JSON object from MIME type name to a
 //! desktop ID, or to `""` when the type had no handler.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! One item on its own, and pinning it to Quick access.
 //!
-//! Ports `inspect` and `verify_pin` in `desktop/gio_backend.py`. A pin
+//! Ports `inspect` and `verify_pin` in `v2.0.0:desktop/gio_backend.py`. A pin
 //! inspects only the dropped item, never its children, so a share need not
 //! be mounted to pin the validated target from a server listing.
 
@@ -92,7 +92,7 @@ mod tests {
         entry_for_uri, file_info, smb_share_info, with_target, FOLDER_MIME_TYPE,
     };
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_pin_inspects_browse_item_but_saves_real_share_target`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_pin_inspects_browse_item_but_saves_real_share_target`
     ///
     /// parity: SIDE-007
     #[test]
@@ -111,7 +111,7 @@ mod tests {
         assert_eq!(queried, ["smb://nas/._work"]);
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_verify_pin_uses_validated_target_not_browse_uri`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_verify_pin_uses_validated_target_not_browse_uri`
     ///
     /// parity: SIDE-007
     #[test]
@@ -124,7 +124,7 @@ mod tests {
         assert_eq!(pin.map(|pin| pin.uri).as_deref(), Ok("smb://alpha/"));
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_verify_pin_rejects_regular_file`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_verify_pin_rejects_regular_file`
     ///
     /// parity: SIDE-007
     #[test]

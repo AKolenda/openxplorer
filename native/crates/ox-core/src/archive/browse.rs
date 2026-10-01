@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Browsing a ZIP as read-only folders without extracting it. Ports
-//! `Archives.list` in `desktop/archives.py`.
+//! `Archives.list` in `v2.0.0:desktop/archives.py`.
 //!
 //! A listing reads the central directory only; no member is decompressed
 //! and nothing is written (ARC-003). Members with unsafe names, altered

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Why a folder could not be listed, or an item inspected or pinned.
 //!
-//! Ports `error_payload` in `desktop/gio_backend.py`: GIO failures are
+//! Ports `error_payload` in `v2.0.0:desktop/gio_backend.py`: GIO failures are
 //! sorted into the cases the interface handles differently, and each has
 //! the code the Python backend reports.
 
@@ -62,7 +62,7 @@ impl EntryError {
 
     /// True when mounting the location may make the request succeed. The
     /// Python app mounts and retries exactly once in that case
-    /// (`start_worker` and `retry_list` in `desktop/winspace.py`).
+    /// (`start_worker` and `retry_list` in `v2.0.0:desktop/winspace.py`).
     pub fn needs_mount(&self) -> bool {
         matches!(self, Self::NotMounted(_))
     }

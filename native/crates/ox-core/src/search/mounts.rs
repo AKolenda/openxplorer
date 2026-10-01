@@ -3,7 +3,7 @@
 //! filesystem is mounted and its type.
 //!
 //! Ports `unescape_mount`, `parse_mounts`, `read_mounts` and
-//! `mount_for_path` from `desktop/mount_support.py`. Nothing here mounts
+//! `mount_for_path` from `v2.0.0:desktop/mount_support.py`. Nothing here mounts
 //! anything or asks for privileges.
 //!
 //! The table is read as bytes: the kernel escapes only space, tab, newline

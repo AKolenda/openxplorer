@@ -3,7 +3,7 @@
 //! (DND-009, DND-014).
 //!
 //! Ports the sidebar half of `publishFileDragLayout` and the pin half of
-//! `showFileDropHint` in `desktop/ui/app.js`. Quick access always pins,
+//! `showFileDropHint` in `v2.0.0:desktop/ui/app.js`. Quick access always pins,
 //! also over a pinned folder: before the pin whose vertical middle is
 //! below the pointer, with an accent line above it, or after the last pin,
 //! with the line under it. Any other row that opens a location is that

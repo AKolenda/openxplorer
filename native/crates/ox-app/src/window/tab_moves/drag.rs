@@ -3,7 +3,7 @@
 //! strip to move it there, or out of the window to tear it into a new one
 //! (TAB-032 to TAB-035, TAB-040).
 //!
-//! Ports `NativeTabDrag` of `desktop/native_tab_drag.py` on GTK 4's drag
+//! Ports `NativeTabDrag` of `v2.0.0:desktop/native_tab_drag.py` on GTK 4's drag
 //! and drop. The tab strip is the drag source; every window takes tab
 //! drops with one target over the whole window, which finds the spot
 //! itself: the title bar from the first tab to the open-windows button

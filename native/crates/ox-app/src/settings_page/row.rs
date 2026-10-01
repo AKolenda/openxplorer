@@ -2,7 +2,7 @@
 //! One setting: a title and a one-line description on the left, a compact
 //! control on the right.
 //!
-//! Replaces the `.settings-line` rows of `desktop/ui/app.js`
+//! Replaces the `.settings-line` rows of `v2.0.0:desktop/ui/app.js`
 //! (`renderSettingsPage`), whose controls sat under long paragraphs. The
 //! static layout is the template `resources/ui/settings-row.ui`.
 

@@ -2,7 +2,7 @@
 //! What a name must hold to match a search: every word, ignoring case,
 //! where a word with wildcards matches the whole name.
 //!
-//! Ports the filter of `filtered()` in `desktop/ui/app.js` (every
+//! Ports the filter of `filtered()` in `v2.0.0:desktop/ui/app.js` (every
 //! whitespace-separated word occurs in the name) and adds the wildcards of
 //! Dolphin's filter bar (`KFileItemModelFilter::setPattern`, SRCH-004): a
 //! word holding `*`, `?` or `[` is a pattern for the whole name, so

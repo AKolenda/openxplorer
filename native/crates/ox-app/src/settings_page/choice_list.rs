@@ -3,7 +3,7 @@
 //! options open in a list under it.
 //!
 //! Replaces the `<select>` elements of the Python settings page
-//! (`renderSettingsPage` and `textSizeControls` in `desktop/ui/app.js`).
+//! (`renderSettingsPage` and `textSizeControls` in `v2.0.0:desktop/ui/app.js`).
 //! GTK's own drop-down draws its arrow and check mark with icons from the
 //! desktop theme, which the app does not use (`native/README.md`, Icons),
 //! so the button shows the bundled chevron and the list the bundled check

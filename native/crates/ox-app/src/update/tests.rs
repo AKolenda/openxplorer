@@ -3,8 +3,8 @@
 //! package manager and restart launcher: nothing is downloaded, installed
 //! or restarted.
 //!
-//! Ports the dialog behaviour of `updatesDialog` in `desktop/ui/app.js`
-//! and the doubles of `desktop/tests/test_rc2.py` (`UpdaterTests`), whose
+//! Ports the dialog behaviour of `updatesDialog` in `v2.0.0:desktop/ui/app.js`
+//! and the doubles of `v2.0.0:desktop/tests/test_rc2.py` (`UpdaterTests`), whose
 //! release, `dpkg-deb`, APT and `dpkg-query` answers these fakes give.
 
 use std::io::{Cursor, Read};
@@ -452,8 +452,8 @@ fn a_flatpak_is_told_to_update_through_flatpak() {
 /// window or the dialog reads its text as markup, so a file named like
 /// markup or a server's notes cannot draw anything but text.
 ///
-/// Ported from `desktop/tests/ui_regressions.cjs::Folder browsing and search do not initiate update checks`
-/// and `desktop/tests/ui_regressions.cjs::Update dialog shows versions and availability without release notes or boilerplate`
+/// Ported from `v2.0.0:desktop/tests/ui_regressions.cjs::Folder browsing and search do not initiate update checks`
+/// and `v2.0.0:desktop/tests/ui_regressions.cjs::Update dialog shows versions and availability without release notes or boilerplate`
 ///
 /// parity: SAFE-002, SAFE-003
 #[gtk::test]

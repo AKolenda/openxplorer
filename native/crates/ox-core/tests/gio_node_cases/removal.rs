@@ -219,7 +219,7 @@ fn cancellation_during_local_delete_preflight_preserves_the_file() {
     assert_eq!(fs::read(source).expect("the file can be read"), b"retained");
 }
 
-/// Like `can_trash` in `desktop/gio_backend.py`: a share unmounted in the
+/// Like `can_trash` in `v2.0.0:desktop/gio_backend.py`: a share unmounted in the
 /// background is reported, so the caller mounts it and asks again instead
 /// of offering a permanent delete. Any other failure means "no Trash".
 #[test]

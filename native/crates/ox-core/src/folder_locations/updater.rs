@@ -2,7 +2,7 @@
 //! Changing a standard folder in `user-dirs.dirs` with
 //! `xdg-user-dirs-update`.
 //!
-//! Ports `FolderLocations._run` in `desktop/folder_locations.py`: the
+//! Ports `FolderLocations._run` in `v2.0.0:desktop/folder_locations.py`: the
 //! program runs from an argument list, never through a shell, and is
 //! stopped after 15 seconds (SAFE-020).
 

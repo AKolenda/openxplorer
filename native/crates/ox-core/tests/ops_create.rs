@@ -2,9 +2,9 @@
 //! New folder, New file and New from template on temporary local folders.
 //!
 //! The Python suite covers creation only in
-//! `desktop/tests/gio_integration.py`; its template rules had no desktop
+//! `v2.0.0:desktop/tests/gio_integration.py`; its template rules had no desktop
 //! test (see OPS-048), so the template cases here are new and follow
-//! `desktop/file_services.py` line by line.
+//! `v2.0.0:desktop/file_services.py` line by line.
 
 #[path = "common/fifo.rs"]
 mod fifo;
@@ -74,7 +74,7 @@ fn user_template_ids(templates: &Path) -> Vec<String> {
     ids
 }
 
-/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_enumeration_and_creation`
+/// Ported from `v2.0.0:desktop/tests/gio_integration.py::GioLocalIntegration::test_enumeration_and_creation`
 /// (the creation half; the listing half is in `gio_node.rs`).
 ///
 /// parity: OPS-008

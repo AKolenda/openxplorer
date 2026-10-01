@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Reading one folder for the index.
 //!
-//! Ports `index_directory` in `desktop/gio_backend.py`, which the Python
+//! Ports `index_directory` in `v2.0.0:desktop/gio_backend.py`, which the Python
 //! service receives as its `list_directory` function. The service takes
 //! any [`FolderReader`]; the app passes [`GioFolderReader`].
 

@@ -2,8 +2,8 @@
 //! The opt-in "Show in folder" registration against disposable XDG
 //! folders.
 //!
-//! Ports `RevealTests` of `desktop/tests/test_v07.py` and the
-//! compatibility checks of `RebrandTests` in `desktop/tests/test_v08.py`.
+//! Ports `RevealTests` of `v2.0.0:desktop/tests/test_v07.py` and the
+//! compatibility checks of `RebrandTests` in `v2.0.0:desktop/tests/test_v08.py`.
 //! The files are real; the folders are temporary.
 
 use std::fs;
@@ -55,7 +55,7 @@ impl Fixture {
     }
 }
 
-/// Ported from `desktop/tests/test_v07.py::RevealTests::test_disabled_by_default`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::RevealTests::test_disabled_by_default`
 /// parity: INT-015, INT-016
 #[test]
 fn show_in_folder_is_off_until_enabled() {
@@ -65,7 +65,7 @@ fn show_in_folder_is_off_until_enabled() {
     assert!(fixture.is_root_empty());
 }
 
-/// Ported from `desktop/tests/test_v07.py::RevealTests::test_enable_exact_per_user_files`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::RevealTests::test_enable_exact_per_user_files`
 /// parity: INT-015
 #[test]
 fn enabling_writes_exactly_two_private_per_user_files() {
@@ -86,7 +86,7 @@ fn enabling_writes_exactly_two_private_per_user_files() {
     }
 }
 
-/// Ported from `desktop/tests/test_v07.py::RevealTests::test_enable_idempotent`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::RevealTests::test_enable_idempotent`
 /// parity: INT-015
 #[test]
 fn enabling_twice_is_harmless() {
@@ -98,7 +98,7 @@ fn enabling_twice_is_harmless() {
     assert!(fixture.registration.is_enabled());
 }
 
-/// Ported from `desktop/tests/test_v07.py::RevealTests::test_disable_exact_files`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::RevealTests::test_disable_exact_files`
 /// parity: INT-015
 #[test]
 fn disabling_removes_exactly_the_managed_files() {
@@ -112,7 +112,7 @@ fn disabling_removes_exactly_the_managed_files() {
     assert!(disabled.preserved_modified_files.is_empty());
 }
 
-/// Ported from `desktop/tests/test_v07.py::RevealTests::test_refuse_foreign_override`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::RevealTests::test_refuse_foreign_override`
 /// parity: INT-015, INT-016
 #[test]
 fn a_foreign_override_is_refused_and_left_unchanged() {
@@ -136,7 +136,7 @@ fn a_foreign_override_is_refused_and_left_unchanged() {
     assert_eq!(fs::read_to_string(&service).expect("read"), "other manager");
 }
 
-/// Ported from `desktop/tests/test_v07.py::RevealTests::test_preserve_modified_override`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::RevealTests::test_preserve_modified_override`
 /// parity: INT-015
 #[test]
 fn disabling_keeps_a_file_the_user_modified() {
@@ -154,7 +154,7 @@ fn disabling_keeps_a_file_the_user_modified() {
     assert!(disabled.preserved_modified_files.contains(&service));
 }
 
-/// Ported from `desktop/tests/test_v07.py::RevealTests::test_refuse_symlink`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::RevealTests::test_refuse_symlink`
 /// parity: INT-015
 #[test]
 fn a_symlinked_file_is_refused() {
@@ -171,7 +171,7 @@ fn a_symlinked_file_is_refused() {
     assert!(!fixture.root.path().join("elsewhere").exists());
 }
 
-/// Ported from `desktop/tests/test_v07.py::RevealTests::test_activation_does_not_open_ui`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::RevealTests::test_activation_does_not_open_ui`
 /// parity: INT-015
 #[test]
 fn both_files_start_the_service_without_a_window() {
@@ -180,7 +180,7 @@ fn both_files_start_the_service_without_a_window() {
     assert!(AUTOSTART_FILE.contains("NoDisplay=true\n"));
 }
 
-/// Ported from `desktop/tests/test_v07.py::RevealTests::test_no_kill_or_system_files`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::RevealTests::test_no_kill_or_system_files`
 /// parity: INT-015
 #[test]
 fn nothing_outside_the_user_folders_is_written_or_stopped() {
@@ -193,7 +193,7 @@ fn nothing_outside_the_user_folders_is_written_or_stopped() {
         .all(|file| file.starts_with(fixture.root.path())));
 }
 
-/// Ported from `desktop/tests/test_v08.py::RebrandTests::test_marker_retained`
+/// Ported from `v2.0.0:desktop/tests/test_v08.py::RebrandTests::test_marker_retained`
 /// parity: INT-029
 #[test]
 fn the_managed_marker_is_the_legacy_one() {
@@ -205,7 +205,7 @@ fn the_managed_marker_is_the_legacy_one() {
     assert!(AUTOSTART_FILE.starts_with(MANAGED_MARKER));
 }
 
-/// Ported from `desktop/tests/test_v08.py::RebrandTests::test_previous_service_exact`
+/// Ported from `v2.0.0:desktop/tests/test_v08.py::RebrandTests::test_previous_service_exact`
 /// parity: INT-015, INT-029
 #[test]
 fn the_service_file_is_byte_for_byte_the_legacy_one() {
@@ -217,14 +217,14 @@ fn the_service_file_is_byte_for_byte_the_legacy_one() {
     assert_eq!(SERVICE_FILE, expected);
 }
 
-/// Ported from `desktop/tests/test_v08.py::RebrandTests::test_previous_autostart_recognized`
+/// Ported from `v2.0.0:desktop/tests/test_v08.py::RebrandTests::test_previous_autostart_recognized`
 /// parity: INT-015, INT-029
 #[test]
 fn the_autostart_entry_keeps_the_legacy_name() {
     assert!(AUTOSTART_FILE.contains("Name=Winspace Show in Folder integration\n"));
 }
 
-/// The whole text of `AUTOSTART` in `desktop/reveal_integration.py`:
+/// The whole text of `AUTOSTART` in `v2.0.0:desktop/reveal_integration.py`:
 /// enabling and disabling compare the file byte for byte, so any change
 /// would make an entry the Python app wrote look like a foreign override.
 /// parity: INT-015, INT-029

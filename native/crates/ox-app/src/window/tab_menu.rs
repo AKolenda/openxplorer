@@ -2,7 +2,7 @@
 //! A tab's context menu.
 //!
 //! Ports the `contextmenu` handler of `setupTabDrag` in
-//! `desktop/ui/app.js`: Move tab to new window, Move tab to window…,
+//! `v2.0.0:desktop/ui/app.js`: Move tab to new window, Move tab to window…,
 //! Duplicate tab, Open windows… and Close tab, and Dolphin's Close other
 //! tabs (TAB-015). The two moves are [`super::tab_moves`]'s.
 

@@ -2,8 +2,8 @@
 //! The details view: Name, Date modified, Type and Size columns, with
 //! Folder path in place of Date modified while searching.
 //!
-//! Matches the `.column-head` / `.file-row` grid in `desktop/ui/style.css`
-//! and `renderRows` / `applyColumnLayout` in `desktop/ui/app.js`. Columns
+//! Matches the `.column-head` / `.file-row` grid in `v2.0.0:desktop/ui/style.css`
+//! and `renderRows` / `applyColumnLayout` in `v2.0.0:desktop/ui/app.js`. Columns
 //! start at the widths [`column_widths`] works out and sort by clicking
 //! their headers; sizes and the Size title are right-aligned.
 //! [`DetailsView`] is the widget; it keeps its titles' sort arrows in step

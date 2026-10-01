@@ -2,11 +2,11 @@
 //! The mounts in progress and their open challenges.
 //!
 //! Ports the `operations` and `pending` tables of `MountPrompts` in
-//! `desktop/auth_bridge.py` and the methods that change them (`create`,
+//! `v2.0.0:desktop/auth_bridge.py` and the methods that change them (`create`,
 //! `_ask_question`, `_show_processes`, `_new`, `_consume`, `_dismiss`,
 //! `_expire`, `finish` and `close`). Password requests are answered in
 //! `password`. A successful SMB mount is reported to the window, which
-//! resumes the server's indexing as `mount` in `desktop/winspace.py` does.
+//! resumes the server's indexing as `mount` in `v2.0.0:desktop/winspace.py` does.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};

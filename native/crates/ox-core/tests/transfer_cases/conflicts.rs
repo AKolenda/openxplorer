@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Name conflicts on copy and move: Skip, Keep both, the policies side by
 //! side, and moves into the item's own folder. Ports the conflict cases of
-//! `TransferTests` in `desktop/tests/test_operations.py`.
+//! `TransferTests` in `v2.0.0:desktop/tests/test_operations.py`.
 
 use ox_core::transfer::{ConflictPolicy, TransferMode};
 
 use crate::transfer_support::{local, *};
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_keep_both`:
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_keep_both`:
 /// a taken `(copy 2)` name is skipped too, and
 /// both existing files stay untouched.
 ///
@@ -33,7 +33,7 @@ fn keep_both_skips_every_taken_copy_name() {
     fixture.assert_no_staging();
 }
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_same_directory_is_noop`, for every policy: moving an
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_move_same_directory_is_noop`, for every policy: moving an
 /// item into the folder it is already in is skipped (XFER-012). With Keep
 /// both it would otherwise be renamed to "(copy 2)"; with Replace it would
 /// be replaced by itself.
@@ -117,7 +117,7 @@ fn rename_uses_the_typed_name_and_nothing_replaces_itself() {
     fixture.assert_no_staging();
 }
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_collision_keeps_source`: Skip leaves both the source
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_move_collision_keeps_source`: Skip leaves both the source
 /// and the item that holds its name alone (XFER-006, XFER-012).
 ///
 /// parity: XFER-006, XFER-012

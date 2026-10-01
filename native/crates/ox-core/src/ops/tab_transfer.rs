@@ -2,7 +2,7 @@
 //! Moving a tab to another window without ever losing it: the broker half
 //! of TAB-036.
 //!
-//! Ports `TabTransfers` in `desktop/tab_transfers.py`. A move has two
+//! Ports `TabTransfers` in `v2.0.0:desktop/tab_transfers.py`. A move has two
 //! phases: the destination window receives the tab and inserts it
 //! tentatively, and only its acknowledgement retires the source tab. Every
 //! other ending keeps the source tab, tells the destination to remove its
@@ -15,7 +15,7 @@
 //! offer the token as its only payload. The broker moves the app's tab
 //! state as it gets it (`Tab`), so the rest of TAB-036 belongs to that
 //! type: keeping only the listed state and dropping passwords and other
-//! fields, as `tab_snapshot` in `desktop/window_state.py` does. The
+//! fields, as `tab_snapshot` in `v2.0.0:desktop/window_state.py` does. The
 //! windows' Move tab menu (TAB-030) and the tab drag target (TAB-040) are
 //! the interface's.
 //!
@@ -197,7 +197,7 @@ impl<Tab> TabTransfers<Tab> {
 
     /// Takes the destination's answer after it tried to insert the tab
     /// (the bridge's `tabTransferReady`, `ready` in
-    /// `desktop/tab_transfers.py`). Only an acceptance from the claiming
+    /// `v2.0.0:desktop/tab_transfers.py`). Only an acceptance from the claiming
     /// window, while both windows are ready, commits the move; a refusal or
     /// a closed window rolls it back. An answer that matches no pending
     /// move changes nothing.

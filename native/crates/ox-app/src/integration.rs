@@ -6,8 +6,8 @@
 //!
 //! Ports the integration branches of `dispatch` and the `enable_reveal`,
 //! `disable_reveal`, `reveal_status` and `handle_reveal` methods of
-//! `desktop/winspace.py`, with the controls of `appendV07Settings`,
-//! `braveDialog` and `openWithDialog` in `desktop/ui/app.js`. The rules
+//! `v2.0.0:desktop/winspace.py`, with the controls of `appendV07Settings`,
+//! `braveDialog` and `openWithDialog` in `v2.0.0:desktop/ui/app.js`. The rules
 //! themselves are ox-core's ([`ox_core::integration`]); this module
 //! runs them off the main thread and shows their results. Everything
 //! stays opt-in: nothing changes a default, writes a session file or

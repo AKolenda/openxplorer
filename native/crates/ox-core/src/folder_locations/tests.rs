@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Tests of moving a standard folder. `desktop/tests` has only
+//! Tests of moving a standard folder. `v2.0.0:desktop/tests` has only
 //! `test_mount_resolution` for this; the rest follow `folder_locations.py`.
 
 use std::fs;
@@ -245,7 +245,7 @@ fn a_folder_without_write_access_is_refused() {
     }
 }
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_mount_resolution`.
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_mount_resolution`.
 ///
 /// parity: PROP-031
 #[test]

@@ -3,7 +3,7 @@
 //! question under "Network connection".
 //!
 //! Ports `renderAuth`, `submitAuth`, `answerAuth` and `authKeys` in
-//! `desktop/ui/app.js`. The layout is the template
+//! `v2.0.0:desktop/ui/app.js`. The layout is the template
 //! `resources/ui/network-sign-in.ui`. One dialog shows one ox-core
 //! [`Challenge`] and reports the user's [`Answer`] to the handler of
 //! [`SignInDialog::connect_answered`]; the window's

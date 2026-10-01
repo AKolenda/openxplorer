@@ -4,7 +4,7 @@
 //! [`crate::location::new_copy_name`], shared with the rest of the app.
 //!
 //! Ports the `.winspace-transfer-` and `.winspace-replaced-` names and
-//! `is_own_staging_name` of `desktop/operations.py`.
+//! `is_own_staging_name` of `v2.0.0:desktop/operations.py`.
 //!
 //! Staging and backup names carry 128 random bits from the kernel, so another
 //! program cannot predict (and pre-create or swap) them. A name the engine
@@ -61,7 +61,7 @@ fn staging_name_failure(error: &io::Error) -> TransferError {
 }
 
 /// The error when no backup name could be generated, worded like
-/// `_replace_via_backup` in `desktop/operations.py`. It says nothing about
+/// `_replace_via_backup` in `v2.0.0:desktop/operations.py`. It says nothing about
 /// earlier changes: during a folder merge, other items may already have
 /// been replaced.
 fn backup_name_failure(error: &io::Error) -> TransferError {
@@ -153,7 +153,7 @@ mod tests {
         assert!(!is_own_backup_name(".winspace-replaced-x.backup"));
     }
 
-    /// Ported from `desktop/tests/test_device_staging.py::StagingNameTests::test_only_exact_generated_names_match`
+    /// Ported from `v2.0.0:desktop/tests/test_device_staging.py::StagingNameTests::test_only_exact_generated_names_match`
     ///
     /// parity: XFER-002
     #[test]

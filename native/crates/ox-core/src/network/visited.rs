@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Servers and shares browsed this session, for the Network list.
 //!
-//! Ports `remember_network` and `visited_network` in `desktop/winspace.py`.
+//! Ports `remember_network` and `visited_network` in `v2.0.0:desktop/winspace.py`.
 //! Browsing adds the share root (or the server) to the session's Network
 //! list, never every subfolder, and never saves anything: only the user
 //! keeps a share in settings. Sign out removes the server's entries.
@@ -112,7 +112,7 @@ mod tests {
         assert_eq!(visited.iter().count(), 1);
     }
 
-    /// Ported from `desktop/tests/test_v07.py::AppManagerTests::test_session_network_root_not_every_child`
+    /// Ported from `v2.0.0:desktop/tests/test_v07.py::AppManagerTests::test_session_network_root_not_every_child`
     ///
     /// parity: NET-016, NET-018
     #[test]

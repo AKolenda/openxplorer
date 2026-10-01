@@ -89,12 +89,12 @@ phones, work again and are tested on local folders and a simulated MTP device.
 Real SMB and phone deletion must still be checked by hand before replacing the
 existing desktop; passing simulated transfer tests does not close that.
 
-Behavioural sources: [operations.py](../desktop/operations.py),
-[file_clipboard.py](../desktop/file_clipboard.py),
-[native_file_drag.py](../desktop/native_file_drag.py),
-[native_file_drop.py](../desktop/native_file_drop.py),
-[native_tab_drag.py](../desktop/native_tab_drag.py),
-[tab_transfers.py](../desktop/tab_transfers.py) and the corresponding tests.
+Behavioural sources: [operations.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/operations.py),
+[file_clipboard.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/file_clipboard.py),
+[native_file_drag.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/native_file_drag.py),
+[native_file_drop.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/native_file_drop.py),
+[native_tab_drag.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/native_tab_drag.py),
+[tab_transfers.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/tab_transfers.py) and the corresponding tests.
 
 ## Then: recover the remaining Python application services
 
@@ -103,15 +103,15 @@ service or UI:
 
 | Area | Work still needed before replacement | Existing behaviour |
 | --- | --- | --- |
-| Network and devices | The sign-in dialog, Map network location (SMB, SFTP, FTP, WebDAV and NFS), Sign out, discovery, mounting before a listing and before the other reads, Disconnect, Eject and Safely remove, the Sharing tab, the persistent mount helper program (`openxplorer-mount-share`, in Rust) and its Location-tab section are in place. Still needed: acceptance on real SMB, SFTP, FTP, WebDAV and NFS servers, drives and phones | [auth_bridge.py](../desktop/auth_bridge.py), [session_credentials.py](../desktop/session_credentials.py), [volume_locations.py](../desktop/volume_locations.py), [mount_share.py](../desktop/mount_share.py) |
-| Search and metadata | Open-with flows (cached search, the index service with live changes and the Search & indexing settings are in place: `crates/ox-app/src/search/`; folder sizes and the Properties dialog are ported; Change app… waits for Open with, and a share is not mounted before its size is measured) | [search_index.py](../desktop/search_index.py), [index_service.py](../desktop/index_service.py), [folder_sizes.py](../desktop/folder_sizes.py), [file_services.py](../desktop/file_services.py), [app_catalog.py](../desktop/app_catalog.py) |
-| Archives and recovery | Non-ZIP archives, flattening a single top-level folder in Extract here, a name prompt for Compress; the Properties Location tab (moving a standard folder, `folder_locations.py`); read-only marking of snapshot rows in listings (ZIP browsing, extraction and compression, previous-version browsing and restore are ported) | [archives.py](../desktop/archives.py), [zip_extraction.py](../desktop/zip_extraction.py), [previous_versions.py](../desktop/previous_versions.py), [folder_locations.py](../desktop/folder_locations.py) |
-| Preferences and sessions | Full settings UI, cross-window preference refresh, known-folder reload/relocation, session/window state and recents presentation | [core.py](../desktop/core.py), [folder_locations.py](../desktop/folder_locations.py), [window_state.py](../desktop/window_state.py) |
-| Desktop integration | Explicit default-file-manager setup, FileManager1 reveal/open, external activation, terminal/editor shortcuts, browser integration | [desktop_integration.py](../desktop/desktop_integration.py), [filemanager_bus.py](../desktop/filemanager_bus.py), [activation.py](../desktop/activation.py), [terminal_integration.py](../desktop/terminal_integration.py), [brave_integration.py](../desktop/brave_integration.py) |
-| Distribution | Packaging, runtime/dependency diagnostics, update flow, migration and rollback | [runtime_guard.py](../desktop/runtime_guard.py), [updater.py](../desktop/updater.py), [README](README.md) |
+| Network and devices | The sign-in dialog, Map network location (SMB, SFTP, FTP, WebDAV and NFS), Sign out, discovery, mounting before a listing and before the other reads, Disconnect, Eject and Safely remove, the Sharing tab, the persistent mount helper program (`openxplorer-mount-share`, in Rust) and its Location-tab section are in place. Still needed: acceptance on real SMB, SFTP, FTP, WebDAV and NFS servers, drives and phones | [auth_bridge.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/auth_bridge.py), [session_credentials.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/session_credentials.py), [volume_locations.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/volume_locations.py), [mount_share.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/mount_share.py) |
+| Search and metadata | Open-with flows (cached search, the index service with live changes and the Search & indexing settings are in place: `crates/ox-app/src/search/`; folder sizes and the Properties dialog are ported; Change app… waits for Open with, and a share is not mounted before its size is measured) | [search_index.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/search_index.py), [index_service.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/index_service.py), [folder_sizes.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/folder_sizes.py), [file_services.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/file_services.py), [app_catalog.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/app_catalog.py) |
+| Archives and recovery | Non-ZIP archives, flattening a single top-level folder in Extract here, a name prompt for Compress; the Properties Location tab (moving a standard folder, `folder_locations.py`); read-only marking of snapshot rows in listings (ZIP browsing, extraction and compression, previous-version browsing and restore are ported) | [archives.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/archives.py), [zip_extraction.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/zip_extraction.py), [previous_versions.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/previous_versions.py), [folder_locations.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/folder_locations.py) |
+| Preferences and sessions | Full settings UI, cross-window preference refresh, known-folder reload/relocation, session/window state and recents presentation | [core.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/core.py), [folder_locations.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/folder_locations.py), [window_state.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/window_state.py) |
+| Desktop integration | Explicit default-file-manager setup, FileManager1 reveal/open, external activation, terminal/editor shortcuts, browser integration | [desktop_integration.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/desktop_integration.py), [filemanager_bus.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/filemanager_bus.py), [activation.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/activation.py), [terminal_integration.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/terminal_integration.py), [brave_integration.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/brave_integration.py) |
+| Distribution | Packaging, runtime/dependency diagnostics, update flow, migration and rollback | [runtime_guard.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/runtime_guard.py), [updater.py](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/updater.py), [README](README.md) |
 
-The [Python bridge](../desktop/winspace.py) and
-[desktop UI](../desktop/ui/app.js) remain the behavioural references. This table
+The [Python bridge](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/winspace.py) and
+[desktop UI](https://github.com/AKolenda/openxplorer/blob/v2.0.0/desktop/ui/app.js) remain the behavioural references. This table
 groups the work; [parity/features.toml](parity/features.toml) and
 [parity/bridge.json](parity/bridge.json) enumerate every behaviour and bridge
 operation, so update their native status as ports land.

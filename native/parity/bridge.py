@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Load and validate bridge.json, the Python bridge operation inventory.
 
-Every operation that desktop/winspace.py dispatches must appear exactly
-once, with a status and a note. A tested status must cite the Rust tests
+Every operation that the retired Python app's bridge dispatched
+(``v2.0.0:desktop/winspace.py``, recorded in legacy.json) must appear
+exactly once, with a status and a note. A tested status must cite the Rust tests
 that prove it, each as ``path/to/file.rs::test_name`` relative to the
 repository root. README.md in this directory explains the statuses.
 """
@@ -14,10 +15,7 @@ from pathlib import Path
 import re
 from typing import Any, TypeAlias
 
-from dispatch import bridge_methods
-
 BRIDGE = 'native/parity/bridge.json'
-LEGACY_DISPATCHER = 'desktop/winspace.py'
 STATUSES = frozenset({'pending', 'core-tested', 'native-tested'})
 CITATION = re.compile(r'(?P<path>[^:]+\.rs)::(?P<test>[A-Za-z_]\w*)')
 TEST_ATTRIBUTES = frozenset({'#[test]', '#[gtk::test]'})
@@ -39,34 +37,26 @@ def load(root: Path) -> Inventory:
     return data
 
 
-def validate(root: Path, inventory: Inventory) -> list[str]:
+def validate(root: Path, inventory: Inventory,
+             operations: frozenset[str]) -> list[str]:
     """Return every problem with the inventory, or an empty list.
 
-    The inventory must list exactly the operations that the legacy
-    dispatcher handles, so none can be dropped or forgotten while
-    porting.
+    The inventory must list exactly the legacy bridge's ``operations``,
+    so none can be dropped or forgotten while porting.
     """
     methods = inventory.get('methods')
     if inventory.get('schema') != 1 or not isinstance(methods, dict):
         return ['Expected schema 1 with a methods object.']
-    errors = coverage_problems(root, methods.keys())
+    errors = coverage_problems(operations, methods.keys())
     for name, entry in methods.items():
         errors += [f'{name}: {problem}'
                    for problem in entry_problems(root, entry)]
     return errors
 
 
-def coverage_problems(root: Path, listed: Iterable[str]) -> list[str]:
-    """Return operations dispatched but not listed, and listed but gone.
-
-    An unreadable dispatcher is reported as a problem rather than
-    raised, so the message names the file to fix.
-    """
-    source = (root / LEGACY_DISPATCHER).read_text(encoding='utf-8')
-    try:
-        actual = bridge_methods(source)
-    except ValueError as error:
-        return [f'{LEGACY_DISPATCHER}: {error}']
+def coverage_problems(actual: frozenset[str],
+                      listed: Iterable[str]) -> list[str]:
+    """Return operations dispatched but not listed, and listed but gone."""
     listed = set(listed)
     errors = [f'Untracked bridge operation: {name}'
               for name in sorted(actual - listed)]

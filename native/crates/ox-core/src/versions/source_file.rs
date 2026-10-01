@@ -3,7 +3,7 @@
 //! directory, shared with the Python app.
 //!
 //! Ports `PreviousVersions.sources` and the saving half of
-//! `PreviousVersions.configure` in `desktop/previous_versions.py`, built on
+//! `PreviousVersions.configure` in `v2.0.0:desktop/previous_versions.py`, built on
 //! the checks and the atomic replace in `crate::private_storage`.
 
 use std::fs::OpenOptions;

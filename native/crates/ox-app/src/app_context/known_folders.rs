@@ -2,7 +2,7 @@
 //! The standard folders Quick access shows (Desktop, Downloads, ...), kept
 //! current without reading a file on the main thread.
 //!
-//! Ports the known-folder part of `environment()` in `desktop/winspace.py`,
+//! Ports the known-folder part of `environment()` in `v2.0.0:desktop/winspace.py`,
 //! which read `user-dirs.dirs` on every call so that a folder moved with
 //! `xdg-user-dirs-update` showed at once. Here the file is read off the
 //! main thread when the application starts and again whenever it changes;

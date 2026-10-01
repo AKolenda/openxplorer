@@ -41,9 +41,9 @@ Bandit/Semgrep, dependency auditing or manual review. `tools/audit-public-data.p
 checks known private-name fingerprints, recursively inspected archives and public
 screenshot provenance. It is not a universal secret detector.
 
-`desktop/tests/test_terminal_security.py` exercises real temporary state files,
+`v2.0.0:desktop/tests/test_terminal_security.py` exercises real temporary state files,
 symlinks, FIFOs, ZIP data, a benign process recorder and delayed fake keyring I/O.
-`desktop/tests/ui_terminal.py` clicks the actual interface in Chromium, including
+`v2.0.0:desktop/tests/ui_terminal.py` clicks the actual interface in Chromium, including
 folder/file/background/sidebar/SMB actions and protected/virtual contexts. The
 public transport reports simulation and cannot launch a process.
 

@@ -2,8 +2,8 @@
 //! Sign out of server: disconnect a server's mounts and forget its
 //! credentials.
 //!
-//! Ports `signOut` in `desktop/ui/app.js` and the window's part of
-//! `sign_out` in `desktop/winspace.py` around ox-core's
+//! Ports `signOut` in `v2.0.0:desktop/ui/app.js` and the window's part of
+//! `sign_out` in `v2.0.0:desktop/winspace.py` around ox-core's
 //! [`begin_sign_out`] and [`finish_sign_out`]:
 //!
 //! 1. The dialog asks what to forget ([`sign_out_dialog`]).

@@ -6,8 +6,8 @@
 //!
 //! | Case file | What it covers | Ports |
 //! |---|---|---|
-//! | `folder` | The folder a terminal opens in | `TerminalTests` of `desktop/tests/test_terminal_security.py`, `DispatchTests` of `desktop/tests/test_rc2.py` |
-//! | `launch` | Which terminal, and starting it | `TerminalTests` of `desktop/tests/test_terminal_security.py` |
+//! | `folder` | The folder a terminal opens in | `TerminalTests` of `v2.0.0:desktop/tests/test_terminal_security.py`, `DispatchTests` of `v2.0.0:desktop/tests/test_rc2.py` |
+//! | `launch` | Which terminal, and starting it | `TerminalTests` of `v2.0.0:desktop/tests/test_terminal_security.py` |
 
 mod integration_support;
 

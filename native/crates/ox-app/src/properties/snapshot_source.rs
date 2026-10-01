@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The Snapshot source form of the Previous versions tab (PROP-023).
 //!
-//! Ports `renderSnapshotSource` in `desktop/ui/app.js`: the user maps a
+//! Ports `renderSnapshotSource` in `v2.0.0:desktop/ui/app.js`: the user maps a
 //! live folder (the item's folder, or an SMB share's root) to a folder of
 //! dated snapshots, in one of two layouts, and saves or removes the
 //! mapping. The sources file is written on a GIO worker thread; errors

@@ -2,7 +2,7 @@
 //! The file commands' keys, and the selection keys, and where they work
 //! (CMD-016, CMD-017, SEL-004, SEL-005).
 //!
-//! Ports the file keys, Ctrl+A and Escape of `onKey` in `desktop/ui/app.js`:
+//! Ports the file keys, Ctrl+A and Escape of `onKey` in `v2.0.0:desktop/ui/app.js`:
 //! Ctrl+A selects every shown item and Escape clears the selection wherever
 //! focus is outside a text field, not only in the folder view. It adds
 //! Undo, Redo, Shift+Delete and Copy path's keys (Explorer's Ctrl+Shift+C

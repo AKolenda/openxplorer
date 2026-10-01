@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! File clipboard formats shared with GNOME, KDE and the Python application.
 //!
-//! Ports the pure functions of `desktop/file_clipboard.py`
+//! Ports the pure functions of `v2.0.0:desktop/file_clipboard.py`
 //! (`validate_clipboard`, `encode_clipboard`, `decode_clipboard`). This
 //! module does not claim or clear the system clipboard. A GTK caller must
 //! also reject reads whose owner changed while the payload was being
@@ -159,7 +159,7 @@ impl ClipboardFiles {
             // URIs enter a selection, so no payload can carry credentials, a
             // share or device root, or an encoded line break into the GNOME
             // or URI-list formats (`validate_clipboard` in
-            // desktop/file_clipboard.py, `require_item_uri` in desktop/core.py).
+            // v2.0.0:desktop/file_clipboard.py, `require_item_uri` in v2.0.0:desktop/core.py).
             let uri = require_item_uri(uri)?;
             if seen.insert(uri.clone()) {
                 canonical.push(uri);

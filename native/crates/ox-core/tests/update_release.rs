@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Release metadata, the URL trust boundary and installation detection.
-//! Ports `MetadataTests` and `UrlTests` of `desktop/tests/test_updater.py`;
+//! Ports `MetadataTests` and `UrlTests` of `v2.0.0:desktop/tests/test_updater.py`;
 //! `update_python.rs` runs the same functions through both apps.
 
 mod update_support;
@@ -27,7 +27,7 @@ fn version(text: &str) -> ReleaseVersion {
     text.parse().unwrap()
 }
 
-/// Ported from `desktop/tests/test_updater.py::MetadataTests::test_stable_versions_are_compared_numerically`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::MetadataTests::test_stable_versions_are_compared_numerically`
 /// parity: UPD-002
 #[test]
 fn stable_versions_are_compared_numerically() {
@@ -43,7 +43,7 @@ fn stable_versions_are_compared_numerically() {
     assert!(!older.is_newer);
 }
 
-/// Ported from `desktop/tests/test_updater.py::MetadataTests::test_versions_reject_prereleases_path_fragments_and_shell_content`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::MetadataTests::test_versions_reject_prereleases_path_fragments_and_shell_content`
 ///
 /// Python's `None` and `1` cases cannot be written: a version is parsed
 /// from text.
@@ -71,7 +71,7 @@ fn versions_reject_prereleases_path_fragments_and_shell_content() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::MetadataTests::test_only_stable_public_release_records_are_used`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::MetadataTests::test_only_stable_public_release_records_are_used`
 /// parity: UPD-002
 #[test]
 fn only_stable_public_release_records_are_used() {
@@ -109,7 +109,7 @@ fn only_stable_public_release_records_are_used() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::MetadataTests::test_installer_must_have_exact_upstream_name_and_url`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::MetadataTests::test_installer_must_have_exact_upstream_name_and_url`
 /// parity: UPD-002
 #[test]
 fn installer_must_have_exact_upstream_name_and_url() {
@@ -142,7 +142,7 @@ fn installer_must_have_exact_upstream_name_and_url() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::MetadataTests::test_installer_size_and_digest_are_required`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::MetadataTests::test_installer_size_and_digest_are_required`
 /// parity: UPD-002
 #[test]
 fn installer_size_and_digest_are_required() {
@@ -182,7 +182,7 @@ fn installer_size_and_digest_are_required() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::MetadataTests::test_malformed_asset_list_is_rejected_with_actionable_error`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::MetadataTests::test_malformed_asset_list_is_rejected_with_actionable_error`
 /// parity: UPD-002
 #[test]
 fn malformed_asset_list_is_rejected_with_actionable_error() {
@@ -196,7 +196,7 @@ fn malformed_asset_list_is_rejected_with_actionable_error() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::MetadataTests::test_notes_and_release_link_are_bounded_or_derived_locally`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::MetadataTests::test_notes_and_release_link_are_bounded_or_derived_locally`
 /// parity: UPD-002
 #[test]
 fn notes_and_release_link_are_bounded_or_derived_locally() {
@@ -210,7 +210,7 @@ fn notes_and_release_link_are_bounded_or_derived_locally() {
     assert_eq!(release.release_url, format!("{REPOSITORY}/releases/tag/v{NEXT}"));
 }
 
-/// Ported from `desktop/tests/test_updater.py::MetadataTests::test_releases_from_the_organization_repository_are_accepted`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::MetadataTests::test_releases_from_the_organization_repository_are_accepted`
 /// parity: UPD-002
 #[test]
 fn releases_from_the_organization_repository_are_accepted() {
@@ -244,7 +244,7 @@ fn a_release_carries_its_installer_digest_and_size() {
     assert_eq!(release.installer.name, "openxplorer_1.0.1_all.deb");
 }
 
-/// Ported from `desktop/tests/test_updater.py::UrlTests::test_only_allowlisted_https_hosts_and_standard_ports_are_accepted`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UrlTests::test_only_allowlisted_https_hosts_and_standard_ports_are_accepted`
 /// parity: UPD-002
 #[test]
 fn only_allowlisted_https_hosts_and_standard_ports_are_accepted() {
@@ -271,7 +271,7 @@ fn only_allowlisted_https_hosts_and_standard_ports_are_accepted() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::UrlTests::test_redirects_apply_the_same_trust_boundary`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UrlTests::test_redirects_apply_the_same_trust_boundary`
 /// parity: UPD-002
 #[test]
 fn redirects_apply_the_same_trust_boundary() {
@@ -297,7 +297,7 @@ fn install_tools(root: &Path, mode: u32) {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::UrlTests::test_install_capability_requires_exact_system_install_and_executable_tools`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UrlTests::test_install_capability_requires_exact_system_install_and_executable_tools`
 ///
 /// Python patches `Path.is_file` and `os.access`; here the tools are real
 /// files in a fake file-system root.

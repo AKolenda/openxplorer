@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Fetching from the update server, and reading the release answer. Ports
 //! `open_url` and the reading part of `Updater.check` in
-//! `desktop/updater.py`.
+//! `v2.0.0:desktop/updater.py`.
 
 use std::io::Read;
 
@@ -75,7 +75,7 @@ impl FetchError {
 /// Asks the "latest release" endpoint and parses its JSON answer.
 ///
 /// Safety rule "bounded answers" (`Updater.check` in
-/// `desktop/updater.py`): at most [`MAX_RELEASE_ANSWER`] bytes are read,
+/// `v2.0.0:desktop/updater.py`): at most [`MAX_RELEASE_ANSWER`] bytes are read,
 /// and a longer answer is refused rather than cut.
 ///
 /// # Errors

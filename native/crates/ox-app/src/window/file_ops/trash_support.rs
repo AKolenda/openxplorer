@@ -3,7 +3,7 @@
 //! (CMD-003).
 //!
 //! Ports `trashKnown`, `refreshTrashSupport` and `deleteLabel` of
-//! `desktop/ui/app.js`. When the window shows a folder it has not asked
+//! `v2.0.0:desktop/ui/app.js`. When the window shows a folder it has not asked
 //! about, it asks GIO once, off the main thread, and remembers the answer
 //! for the window's life. Delete reads "Delete permanently" only where the
 //! folder is known to have no Trash (SMB shares, most remote backends);

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The storage abstraction the transfer engine works on.
 //!
-//! Ports the `Node` protocol and `Info` of `desktop/operations.py`.
+//! Ports the `Node` protocol and `Info` of `v2.0.0:desktop/operations.py`.
 //! Production uses [`crate::gio_node::GioNode`]; tests use a local-disk fake
 //! with the same contract (the Rust counterpart of
-//! `desktop/tests/local_provider.py`, in `tests/transfer_support/`).
+//! `v2.0.0:desktop/tests/local_provider.py`, in `tests/transfer_support/`).
 
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
@@ -80,7 +80,7 @@ pub struct ItemIdentity {
 }
 
 /// One file or folder in some backend. Mirrors the Python `Node` protocol in
-/// `desktop/operations.py`, plus the device capabilities added for MTP.
+/// `v2.0.0:desktop/operations.py`, plus the device capabilities added for MTP.
 ///
 /// Every query that inspects an item (`info`, `children`) must not follow
 /// symbolic links: the engine copies links as links and never traverses them.
@@ -100,7 +100,7 @@ pub struct ItemIdentity {
 ///   staging or backups, or one source item a move has already copied:
 ///   that cleanup must finish even after the user
 ///   cancelled (`_clean_staging` and `_discard_stage` in
-///   `desktop/operations.py` take no cancellation either).
+///   `v2.0.0:desktop/operations.py` take no cancellation either).
 pub trait Node: Send + Sync {
     /// The canonical URI.
     fn uri(&self) -> String;
@@ -235,7 +235,7 @@ pub trait Node: Send + Sync {
     /// [`TransferError::NotMounted`] when the share or device must be
     /// mounted first, so the caller can mount it and ask again. Every other
     /// failure answers `Ok(false)`, like `can_trash` in
-    /// `desktop/gio_backend.py`.
+    /// `v2.0.0:desktop/gio_backend.py`.
     fn can_trash(&self, cancel: Option<&Cancellation>) -> Result<bool, TransferError>;
 
     /// Explicit, user-confirmed permanent delete of a whole tree. Symbolic

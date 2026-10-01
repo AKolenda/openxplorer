@@ -3,7 +3,7 @@
 //! from a folder, and recording it among the recent files.
 //!
 //! Ports `resolve_activation` and `launch_default` in
-//! `desktop/winspace.py` over ox-core's [`DefaultOpener`] (OPEN-005 to
+//! `v2.0.0:desktop/winspace.py` over ox-core's [`DefaultOpener`] (OPEN-005 to
 //! OPEN-007): the file is queried again on a worker thread, its
 //! application is chosen by content type and never `OpenXplorer`, a file on
 //! a share is handed over by its local path when it has one, and nothing

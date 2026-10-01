@@ -2,7 +2,7 @@
 //! The Settings page: categories on the left, the chosen one on the right.
 //!
 //! Ports `renderSettingsPage`, `settingsSearch` and `appendV07Settings` in
-//! `desktop/ui/app.js`, laid out as the owner asked (SET-019 and the
+//! `v2.0.0:desktop/ui/app.js`, laid out as the owner asked (SET-019 and the
 //! settings mockup its note names): a list of categories with a
 //! settings search at its top, and only the chosen category on the right,
 //! as flat groups of rows. [`SettingsPage`] is a `GtkBox` subclass whose

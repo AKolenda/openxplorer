@@ -2,7 +2,7 @@
 //! Applying and saving the window's view preferences.
 //!
 //! Ports `applyLayout`, `saveLayout`, `resetLayout` and the
-//! `fire('preferences', …)` calls in `desktop/ui/app.js`. A window starts
+//! `fire('preferences', …)` calls in `v2.0.0:desktop/ui/app.js`. A window starts
 //! from the shared settings; view, hidden files, details pane, theme, text
 //! size, sidebar width and column widths are saved when the user changes
 //! them, off the main thread, through the Python app's own settings file

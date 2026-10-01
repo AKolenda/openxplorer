@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Which items of a folder are shown: hidden files and the search box.
 //!
-//! Matches the filter in `filtered()` in `desktop/ui/app.js`: hidden items
+//! Matches the filter in `filtered()` in `v2.0.0:desktop/ui/app.js`: hidden items
 //! only with "Show hidden files", and every whitespace-separated search term
 //! must occur somewhere in the name, ignoring case. A term with the
 //! wildcards `*`, `?` or `[ ]` must match the whole name instead, as in

@@ -5,8 +5,8 @@
 //! folder in a tab, and activation. The typed prefix itself lives in
 //! [`super::type_to_select`], the context menu in [`super::context_menu`].
 //!
-//! Ports `onKey` and the type-select glue in `desktop/ui/app.js`
-//! (`desktop/tests/ui_type_select.py` is its specification): Escape first
+//! Ports `onKey` and the type-select glue in `v2.0.0:desktop/ui/app.js`
+//! (`v2.0.0:desktop/tests/ui_type_select.py` is its specification): Escape first
 //! clears the prefix and only then the selection; arrows, clicks,
 //! shortcuts and leaving the view start a new prefix.
 

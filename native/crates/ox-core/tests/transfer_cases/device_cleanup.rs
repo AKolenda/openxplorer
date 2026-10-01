@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Cleanup and verification after failed uploads to simulated MTP devices.
 //! Ports the cleanup cases of `DeviceStagingTests` in
-//! `desktop/tests/test_device_staging.py`. No real devices.
+//! `v2.0.0:desktop/tests/test_device_staging.py`. No real devices.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -185,7 +185,7 @@ fn photo(fixture: &Fixture) -> PathBuf {
     source
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_cleanup_retries_a_transient_device_error`, with a device
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_cleanup_retries_a_transient_device_error`, with a device
 /// that stays busy for two attempts.
 ///
 /// parity: XFER-022
@@ -204,7 +204,7 @@ fn aborted_device_upload_cleanup_retries_transient_errors() {
     fixture.assert_no_staging();
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_persistent_cleanup_failure_reports_exact_location`: after
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_persistent_cleanup_failure_reports_exact_location`: after
 /// every retry fails, the leftover is reported with its exact location.
 ///
 /// parity: XFER-003, XFER-022
@@ -229,7 +229,7 @@ fn a_device_stage_that_cannot_be_deleted_is_reported_with_its_location() {
     assert_eq!(phone.stage_deletions(), 3);
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_missing_stage_after_aborted_upload_is_not_reported_as_leftover`:
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_missing_stage_after_aborted_upload_is_not_reported_as_leftover`:
 /// an upload the device discarded needs no cleanup and no retry.
 ///
 /// parity: XFER-022
@@ -251,7 +251,7 @@ fn a_discarded_device_upload_is_not_reported_as_a_leftover() {
     fixture.assert_no_staging();
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_not_found_for_an_existing_stage_is_confirmed_by_listing`: a
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_not_found_for_an_existing_stage_is_confirmed_by_listing`: a
 /// "not found" the folder listing contradicts is retried, and the stage is
 /// then removed without being reported.
 ///
@@ -301,7 +301,7 @@ fn device_not_found_requires_a_successful_parent_listing_without_the_stage() {
     }
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_success_report_without_rename_is_an_error`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_success_report_without_rename_is_an_error`.
 ///
 /// parity: XFER-021
 #[test]

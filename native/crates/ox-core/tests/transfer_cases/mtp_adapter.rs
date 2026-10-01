@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The production GIO adapter on a simulated MTP device: which device calls
 //! each move, rename and deletion makes. Ports `GioMtpAdapterTests` in
-//! `desktop/tests/test_device_staging.py`.
+//! `v2.0.0:desktop/tests/test_device_staging.py`.
 
 use std::sync::{Arc, Mutex};
 
@@ -10,7 +10,7 @@ use ox_core::transfer::{Cancellation, Node, Operation, TransferError, TransferRe
 use crate::transfer_support::gio_engine;
 use crate::transfer_support::mtp_device::{DeviceCall, FakeDevice, RenameAnswer};
 
-/// The flags of every native move: `MOVE_FLAGS` in `desktop/gio_backend.py`.
+/// The flags of every native move: `MOVE_FLAGS` in `v2.0.0:desktop/gio_backend.py`.
 fn move_flags() -> gio::FileCopyFlags {
     gio::FileCopyFlags::NOFOLLOW_SYMLINKS | gio::FileCopyFlags::NO_FALLBACK_FOR_MOVE
 }
@@ -36,7 +36,7 @@ fn delete_through_engine(uri: &str, protected: Option<String>) -> (TransferResul
     (result, asked)
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_same_folder_move_is_set_display_name`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_same_folder_move_is_set_display_name`.
 ///
 /// parity: XFER-024
 #[test]
@@ -59,7 +59,7 @@ fn a_same_folder_move_is_one_device_rename() {
     assert_eq!(device.items(), ["t3code.apk"]);
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_same_folder_move_onto_taken_name_is_refused_before_device_call`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_same_folder_move_onto_taken_name_is_refused_before_device_call`.
 ///
 /// parity: XFER-024
 #[test]
@@ -75,7 +75,7 @@ fn a_rename_onto_a_taken_name_is_refused_before_any_device_call() {
     assert_eq!(device.items(), [".stage", "a"]);
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_cross_folder_move_with_new_name_is_refused_without_device_call`:
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_cross_folder_move_with_new_name_is_refused_without_device_call`:
 /// `GVfs` would report success and keep the old name.
 ///
 /// parity: XFER-024
@@ -95,7 +95,7 @@ fn a_move_to_another_folder_under_a_new_name_is_refused_without_a_device_call() 
     assert!(device.calls().is_empty());
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_cross_folder_move_with_same_name_uses_no_fallback_move`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_cross_folder_move_with_same_name_uses_no_fallback_move`.
 ///
 /// parity: XFER-011, XFER-024
 #[test]
@@ -117,7 +117,7 @@ fn a_move_to_another_folder_keeps_the_name_and_never_falls_back_to_copying() {
     );
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_replace_never_uses_device_overwrite` (XFER-026): `GVfs`
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_replace_never_uses_device_overwrite` (XFER-026): `GVfs`
 /// deletes the existing item before it moves and cannot restore it.
 ///
 /// parity: XFER-010, XFER-026
@@ -136,7 +136,7 @@ fn replace_on_a_device_is_never_attempted_in_one_step() {
     assert!(device.calls().is_empty());
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_rename_the_device_finished_after_an_error_is_success`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_rename_the_device_finished_after_an_error_is_success`.
 ///
 /// parity: XFER-024
 #[test]

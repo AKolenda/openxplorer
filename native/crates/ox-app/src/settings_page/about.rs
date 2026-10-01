@@ -2,7 +2,7 @@
 //! About: what this build is, its updates and its licence.
 //!
 //! Ports the "`OpenXplorer` · License & source" section of
-//! `renderSettingsPage` in `desktop/ui/app.js` (SET-009, UPD-016) and the
+//! `renderSettingsPage` in `v2.0.0:desktop/ui/app.js` (SET-009, UPD-016) and the
 //! status bar's "Check for updates" (UPD-001). "About this build" runs the
 //! window's `win.about`, as the More menu does; "Check for updates" runs
 //! `win.check-updates`, the Software updates dialog, and its row says what

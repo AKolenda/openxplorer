@@ -3,7 +3,7 @@
 //! status bar's count and the empty page's message.
 //!
 //! Ports `renderSearchInfo`, the search branch of `updateStatus` and the
-//! empty-state message of `renderRows` in `desktop/ui/app.js` (SRCH-012,
+//! empty-state message of `renderRows` in `v2.0.0:desktop/ui/app.js` (SRCH-012,
 //! SRCH-013, VIEW-050), with their wording.
 
 use super::source::SearchSource;
@@ -178,7 +178,7 @@ mod tests {
         SearchProgress::Shown { is_truncated }
     }
 
-    /// Ported from `renderSearchInfo` in `desktop/ui/app.js`.
+    /// Ported from `renderSearchInfo` in `v2.0.0:desktop/ui/app.js`.
     ///
     /// parity: SRCH-012
     #[test]
@@ -221,7 +221,7 @@ mod tests {
     }
 
     /// Ported from the search branch of `updateStatus` in
-    /// `desktop/ui/app.js`.
+    /// `v2.0.0:desktop/ui/app.js`.
     ///
     /// parity: VIEW-050
     #[test]
@@ -236,7 +236,7 @@ mod tests {
         assert_eq!(many_cached.count(500).text(), "500 results (first 500) · Cached");
     }
 
-    /// Ported from the empty state of `renderRows` in `desktop/ui/app.js`.
+    /// Ported from the empty state of `renderRows` in `v2.0.0:desktop/ui/app.js`.
     ///
     /// parity: SRCH-013
     #[test]

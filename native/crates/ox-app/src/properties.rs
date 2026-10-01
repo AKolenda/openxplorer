@@ -4,9 +4,9 @@
 //! Ports `propertiesDialog`, `renderVersionsPanel`, `renderSnapshotSource`,
 //! `restoreVersion`, `renderSnapshotBanner` and the folder-size functions
 //! (`scanFolderSizes`, `folderSizeText`, `updateSizeLabels`) of
-//! `desktop/ui/app.js`, over the ox-core services that port
-//! `desktop/file_services.py`, `desktop/previous_versions.py` and
-//! `desktop/folder_sizes.py`.
+//! `v2.0.0:desktop/ui/app.js`, over the ox-core services that port
+//! `v2.0.0:desktop/file_services.py`, `v2.0.0:desktop/previous_versions.py` and
+//! `v2.0.0:desktop/folder_sizes.py`.
 //!
 //! The dialog belongs to the tab that opened it (PROP-008): the window
 //! shows it on an in-window [`DialogLayer`](crate::dialog_layer::DialogLayer),

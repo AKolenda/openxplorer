@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Runs the network service and the Python modules it ports over the same
 //! inputs, which must give the same answers: `server_key` of
-//! `desktop/session_credentials.py`, `split_identity` of
-//! `desktop/auth_bridge.py`, `parse_mounts`, `remote_root`,
-//! `resolve_smb_path` and `mount_plan` of `desktop/mount_support.py`, and
-//! `local_path` of `desktop/native_opening.py`. The keyring items are
+//! `v2.0.0:desktop/session_credentials.py`, `split_identity` of
+//! `v2.0.0:desktop/auth_bridge.py`, `parse_mounts`, `remote_root`,
+//! `resolve_smb_path` and `mount_plan` of `v2.0.0:desktop/mount_support.py`, and
+//! `local_path` of `v2.0.0:desktop/native_opening.py`. The keyring items are
 //! compared in `network_keyring_python.rs`.
 //!
 //! Each Python script reads its inputs from the JSON file named by
@@ -37,7 +37,7 @@ for uri in json.load(open(sys.argv[1])):
 print(json.dumps(answers))
 ";
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_host_key_not_share_key`,
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_host_key_not_share_key`,
 /// `test_distinct_ports` and `test_no_alias_sharing`, over more addresses.
 ///
 /// Where Python raises for an address that is not a valid location, the
@@ -87,7 +87,7 @@ for username, domain in json.load(open(sys.argv[1])):
 print(json.dumps(answers))
 ";
 
-/// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_domain_username_supported`,
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_domain_username_supported`,
 /// over the refused and edge cases of the sign-in dialog too.
 ///
 /// parity: NET-011
@@ -136,7 +136,7 @@ for address, uid, gid in json.load(open(sys.argv[1])):
 print(json.dumps(answers))
 ";
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_mapped_path_plan_requires_admin_not_automatic`,
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_mapped_path_plan_requires_admin_not_automatic`,
 /// comparing every field of every plan and every refusal.
 ///
 /// parity: NET-027, SAFE-021
@@ -216,7 +216,7 @@ for uri in inputs['uris']:
 print(json.dumps({'mounts': mounts, 'roots': [remote_root(m) for m in mounts], 'resolved': resolved}))
 ";
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_mount_resolution`,
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_mount_resolution`,
 /// over a whole mount table.
 ///
 /// parity: NET-026

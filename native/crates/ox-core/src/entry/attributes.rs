@@ -2,7 +2,7 @@
 //! Typed readers for optional `GFileInfo` attributes.
 //!
 //! Replaces the `info.get_*()` calls of `entry_from_info` in
-//! `desktop/gio_backend.py`. Only attributes that are present are read:
+//! `v2.0.0:desktop/gio_backend.py`. Only attributes that are present are read:
 //! since version 2.76 the typed getters (`g_file_info_get_size` and friends)
 //! log a critical warning for a missing attribute, and backends such as
 //! gvfsd-smb-browse omit many of them.
@@ -29,7 +29,7 @@ pub(super) fn optional_boolean(info: &gio::FileInfo, attribute: &str) -> Option<
 ///
 /// A reported 0 is unknown too. The Python app sent 0 for a missing time
 /// and the web interface showed every 0 as unknown (`dateText` and
-/// `timestamp` in `desktop/ui/app.js`), never as 1 January 1970.
+/// `timestamp` in `v2.0.0:desktop/ui/app.js`), never as 1 January 1970.
 pub(super) fn time_attribute(info: &gio::FileInfo, attribute: &str) -> Option<u64> {
     if !info.has_attribute(attribute) {
         return None;

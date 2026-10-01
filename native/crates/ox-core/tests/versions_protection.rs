@@ -2,15 +2,15 @@
 //! Snapshot and backup locations are read-only (PROP-024), through the
 //! transfer engine too (XFER-020).
 //!
-//! Ports `test_snapshot_guard` from `desktop/tests/test_v05.py` and runs
+//! Ports `test_snapshot_guard` from `v2.0.0:desktop/tests/test_v05.py` and runs
 //! the cases of `ProtectedTransferTests` in
-//! `desktop/tests/test_operations.py` and of
+//! `v2.0.0:desktop/tests/test_operations.py` and of
 //! `test_recursive_replace_and_delete_preserve_backup_descendant` in
-//! `desktop/tests/gio_integration.py` with the real
+//! `v2.0.0:desktop/tests/gio_integration.py` with the real
 //! [`PreviousVersions::write_guard`] and the GIO engine; the transfer
 //! tests in `transfer_cases/snapshots.rs` run them with a test double of
 //! the guard. The read-only rule is also compared with
-//! `PreviousVersions.protected` in `desktop/previous_versions.py`. Every
+//! `PreviousVersions.protected` in `v2.0.0:desktop/previous_versions.py`. Every
 //! file is inside a temporary directory.
 
 mod python_support;
@@ -108,7 +108,7 @@ fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap()
 }
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_snapshot_guard`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_snapshot_guard`
 ///
 /// parity: PROP-024, XFER-020
 #[test]
@@ -123,7 +123,7 @@ fn a_location_inside_a_snapshot_folder_is_refused_as_read_only() {
     assert_eq!(refusal.to_string(), READ_ONLY);
 }
 
-/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_replace_cannot_overwrite_nested_snapshot`
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::ProtectedTransferTests::test_replace_cannot_overwrite_nested_snapshot`
 ///
 /// parity: XFER-020, PROP-024
 #[test]
@@ -143,7 +143,7 @@ fn replace_cannot_overwrite_nested_snapshot() {
     fixture.assert_only_items_in_destination(&["project"]);
 }
 
-/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_removal_or_move_preserves_whole_tree_containing_snapshot`
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::ProtectedTransferTests::test_removal_or_move_preserves_whole_tree_containing_snapshot`
 ///
 /// parity: XFER-020, PROP-024
 #[test]
@@ -174,7 +174,7 @@ fn removal_or_move_preserves_whole_tree_containing_snapshot() {
     }
 }
 
-/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_configured_backup_descendant_is_protected`
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::ProtectedTransferTests::test_configured_backup_descendant_is_protected`
 ///
 /// parity: XFER-020, PROP-024, PROP-023
 #[test]
@@ -195,7 +195,7 @@ fn configured_backup_descendant_is_protected() {
     assert_eq!(read(&backup.join("version.txt")), "backup");
 }
 
-/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_snapshot_file_can_be_restored_to_another_folder`
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::ProtectedTransferTests::test_snapshot_file_can_be_restored_to_another_folder`
 ///
 /// parity: XFER-020, PROP-025
 #[test]
@@ -212,7 +212,7 @@ fn snapshot_file_can_be_restored_to_another_folder() {
     assert_eq!(read(&fixture.destination_folder.join("document.txt")), "saved");
 }
 
-/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_symlink_to_snapshot_is_removed_without_traversal`
+/// Ported from `v2.0.0:desktop/tests/test_operations.py::ProtectedTransferTests::test_symlink_to_snapshot_is_removed_without_traversal`
 ///
 /// parity: XFER-020
 #[test]
@@ -231,7 +231,7 @@ fn symlink_to_snapshot_is_removed_without_traversal() {
     assert_eq!(read(&snapshot.join("version.txt")), "backup");
 }
 
-/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_recursive_replace_and_delete_preserve_backup_descendant`
+/// Ported from `v2.0.0:desktop/tests/gio_integration.py::GioLocalIntegration::test_recursive_replace_and_delete_preserve_backup_descendant`
 ///
 /// parity: XFER-020
 #[test]
@@ -284,7 +284,7 @@ fn a_configured_backup_folder_can_be_copied_from_but_not_into() {
     );
 }
 
-/// "Restore a copy" (`restoreVersion` in `desktop/ui/app.js`) refuses a
+/// "Restore a copy" (`restoreVersion` in `v2.0.0:desktop/ui/app.js`) refuses a
 /// destination inside a snapshot or backup folder before anything is
 /// copied, and copies into a live folder with Keep both.
 ///

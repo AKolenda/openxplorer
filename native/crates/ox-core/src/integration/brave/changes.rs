@@ -2,7 +2,7 @@
 //! Syncing the download folder into Brave profiles, and restoring it.
 //!
 //! Ports `BraveIntegration.sync` and `BraveIntegration.restore` in
-//! `desktop/brave_integration.py` (INT-020, INT-021).
+//! `v2.0.0:desktop/brave_integration.py` (INT-020, INT-021).
 
 use std::collections::HashSet;
 use std::fs::{self, DirBuilder, Permissions};

@@ -63,7 +63,6 @@ class PublicDataAuditTests(unittest.TestCase):
         With isolated, valid provenance, unrelated repository captures do not
         determine whether these privacy regression checks pass.
         """
-        source = self.put('desktop/ui/app.js', '// Synthetic fixture only.\n')
         screenshots = {}
         for number in range(SCREENSHOT_COUNT):
             name = f'fixture-{number}.png'
@@ -71,7 +70,7 @@ class PublicDataAuditTests(unittest.TestCase):
             screenshots[name] = self.audit.digest(ONE_PIXEL_PNG)
         self.put(f'{SCREENSHOTS}/manifest.json', json.dumps({
             'fixturePolicy': 'Fictional one-pixel test fixtures only.',
-            'fixtureSourceSha256': self.audit.digest(source.read_bytes()),
+            'nativeRuntime': True,
             'sha256': screenshots,
         }))
 

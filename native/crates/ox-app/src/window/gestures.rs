@@ -2,8 +2,8 @@
 //! Mouse gestures: middle-click to open in a tab or close a tab, and the
 //! mouse's Back and Forward buttons.
 //!
-//! Ports `bindMiddleClick` and `bindMiddleOpen` in `desktop/ui/app.js` and
-//! the mouse-button history keys in `desktop/winspace.py`. A middle-click
+//! Ports `bindMiddleClick` and `bindMiddleOpen` in `v2.0.0:desktop/ui/app.js` and
+//! the mouse-button history keys in `v2.0.0:desktop/winspace.py`. A middle-click
 //! acts on release, only when the press started on the same widget (GTK
 //! cancels the gesture when the pointer drags away), never changes the
 //! selection and never launches a file. It opens a folder in a background

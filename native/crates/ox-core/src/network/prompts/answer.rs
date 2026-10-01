@@ -2,7 +2,7 @@
 //! Checking the user's answer against the challenge it answers.
 //!
 //! Ports the validation in `MountPrompts.answer` of
-//! `desktop/auth_bridge.py`. An answer that is not valid leaves the
+//! `v2.0.0:desktop/auth_bridge.py`. An answer that is not valid leaves the
 //! challenge open, so the dialog can show why.
 
 use super::challenge::{split_identity, validate_password, Answer, SignIn, SignInError};

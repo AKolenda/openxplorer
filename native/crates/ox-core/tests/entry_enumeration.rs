@@ -3,7 +3,7 @@
 //! `glib::MainContext` without GTK or a display.
 //!
 //! Complements the hand-filled `GFileInfo` tests in `ox-core/src/entry`,
-//! which port `desktop/tests/test_gio_serialization.py`, with what the
+//! which port `v2.0.0:desktop/tests/test_gio_serialization.py`, with what the
 //! local GIO backend actually reports.
 
 use std::fs;

@@ -88,7 +88,7 @@ fn prepare(uri: &str, checks: &TestChecks) -> Result<PreparedDirectory, Terminal
     prepare_directory(uri, checks, &Cancellation::new())
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_local_directory`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_local_directory`
 /// parity: OPEN-017
 #[test]
 fn a_local_folder_opens_in_itself() {
@@ -100,7 +100,7 @@ fn a_local_folder_opens_in_itself() {
     assert!(!prepared.is_network);
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_fresh_file_uses_parent`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_fresh_file_uses_parent`
 /// parity: OPEN-017
 #[test]
 fn a_file_opens_its_folder() {
@@ -113,7 +113,7 @@ fn a_file_opens_its_folder() {
     assert_eq!(prepared.uri, root_uri);
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_folder_with_file_extension`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_folder_with_file_extension`
 /// parity: OPEN-017
 #[test]
 fn a_folder_named_like_a_file_opens_in_itself() {
@@ -126,7 +126,7 @@ fn a_folder_named_like_a_file_opens_in_itself() {
     assert_eq!(prepared.uri, file_uri(&folder));
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_smb_export_is_local_shell`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_smb_export_is_local_shell`
 /// parity: OPEN-006, OPEN-017
 #[test]
 fn a_share_opens_as_a_local_shell_in_its_mount() {
@@ -139,7 +139,7 @@ fn a_share_opens_as_a_local_shell_in_its_mount() {
     assert_eq!(prepared.path, real_path(root.path()));
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_bare_server_rejected_before_inspection`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_bare_server_rejected_before_inspection`
 /// parity: OPEN-017
 #[test]
 fn a_server_listing_is_refused_before_it_is_queried() {
@@ -155,7 +155,7 @@ fn a_server_listing_is_refused_before_it_is_queried() {
     assert!(checks.inspected.borrow().is_empty());
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_smb_missing_fuse_mount_explains`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_smb_missing_fuse_mount_explains`
 /// parity: OPEN-006, OPEN-017
 #[test]
 fn a_share_without_a_local_mount_explains_how_to_mount_it() {
@@ -170,7 +170,7 @@ fn a_share_without_a_local_mount_explains_how_to_mount_it() {
     assert!(refused.expect_err("refused").to_string().contains("gvfs-fuse"));
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_symbolic_link_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_symbolic_link_rejected`
 /// parity: OPEN-017
 #[test]
 fn a_symbolic_link_is_refused() {
@@ -191,7 +191,7 @@ fn a_symbolic_link_is_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_special_file_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_special_file_rejected`
 /// parity: OPEN-017
 #[test]
 fn a_special_file_is_refused() {
@@ -206,7 +206,7 @@ fn a_special_file_is_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_unknown_metadata_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_unknown_metadata_rejected`
 /// parity: OPEN-017
 #[test]
 fn an_item_of_unknown_type_is_refused() {
@@ -221,7 +221,7 @@ fn an_item_of_unknown_type_is_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_snapshot_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_snapshot_rejected`
 /// parity: OPEN-017
 #[test]
 fn a_snapshot_folder_is_refused() {
@@ -236,7 +236,7 @@ fn a_snapshot_folder_is_refused() {
     assert!(message.starts_with("Previous-version"), "{message}");
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_snapshot_alias_rejected_after_resolving`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_snapshot_alias_rejected_after_resolving`
 /// parity: OPEN-017
 #[test]
 fn a_link_into_a_snapshot_is_refused_after_resolving() {
@@ -275,7 +275,7 @@ fn a_link_into_a_snapshot_with_a_non_utf8_name_is_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_custom_snapshot_guard_called_for_local_alias`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_custom_snapshot_guard_called_for_local_alias`
 /// parity: OPEN-017
 #[test]
 fn the_write_guard_also_checks_the_resolved_local_folder() {
@@ -292,7 +292,7 @@ fn the_write_guard_also_checks_the_resolved_local_folder() {
     );
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_absolute_cwd_required`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_absolute_cwd_required`
 /// parity: OPEN-020
 #[test]
 fn a_relative_folder_is_refused() {
@@ -304,7 +304,7 @@ fn a_relative_folder_is_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_directory_must_exist`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_directory_must_exist`
 /// parity: OPEN-020
 #[test]
 fn a_missing_folder_is_refused() {
@@ -316,7 +316,7 @@ fn a_missing_folder_is_refused() {
     assert!(is_not_found, "{refused:?}");
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_cwd_file_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_cwd_file_rejected`
 /// parity: OPEN-020
 #[test]
 fn a_file_is_not_a_starting_folder() {
@@ -332,7 +332,7 @@ fn a_file_is_not_a_starting_folder() {
     );
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_cwd_controls_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_cwd_controls_rejected`
 /// parity: OPEN-020
 #[test]
 fn a_folder_with_control_characters_is_refused() {
@@ -346,7 +346,7 @@ fn a_folder_with_control_characters_is_refused() {
     );
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_uri_schemes_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_uri_schemes_rejected`
 /// parity: OPEN-017
 #[test]
 fn web_script_and_credential_addresses_are_refused() {
@@ -368,7 +368,7 @@ fn web_script_and_credential_addresses_are_refused() {
     assert!(checks.inspected.borrow().is_empty());
 }
 
-/// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_cancellation_checked`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::TerminalTests::test_cancellation_checked`
 /// parity: OPEN-017
 #[test]
 fn a_cancelled_request_stops() {
@@ -385,7 +385,7 @@ fn a_cancelled_request_stops() {
     assert!(matches!(refused, Err(TerminalError::Cancelled)), "{refused:?}");
 }
 
-/// Ported from `desktop/tests/test_rc2.py::DispatchTests::test_terminal_branch_connected`
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::DispatchTests::test_terminal_branch_connected`
 /// parity: OPEN-017
 #[test]
 fn a_real_folder_is_prepared_through_gio() {

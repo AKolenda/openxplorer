@@ -2,12 +2,12 @@
 //! Desktop integration: default applications, "Show in folder", Brave's
 //! download folder, opening files and Open in Terminal.
 //!
-//! Ports `desktop/desktop_integration.py`, `desktop/filemanager_bus.py`,
-//! `desktop/reveal_integration.py`, `desktop/brave_integration.py`,
-//! `desktop/activation.py`, `desktop/native_opening.py`
-//! (`prepare_default`), `desktop/terminal_integration.py`,
-//! `desktop/app_catalog.py` and `filemanager_request` of
-//! `desktop/window_state.py`. Nothing here depends on GTK.
+//! Ports `v2.0.0:desktop/desktop_integration.py`, `v2.0.0:desktop/filemanager_bus.py`,
+//! `v2.0.0:desktop/reveal_integration.py`, `v2.0.0:desktop/brave_integration.py`,
+//! `v2.0.0:desktop/activation.py`, `v2.0.0:desktop/native_opening.py`
+//! (`prepare_default`), `v2.0.0:desktop/terminal_integration.py`,
+//! `v2.0.0:desktop/app_catalog.py` and `filemanager_request` of
+//! `v2.0.0:desktop/window_state.py`. Nothing here depends on GTK.
 //!
 //! The rules every part keeps:
 //!

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The running-instance guard over a real session bus, against a stand-in
 //! application that exports its actions as `org.gtk.Actions`, as
-//! `GApplication` does. Ports `desktop/tests/native_runtime_guard.py`,
+//! `GApplication` does. Ports `v2.0.0:desktop/tests/native_runtime_guard.py`,
 //! which drives the production `Session` against a stand-in application on
 //! an isolated bus.
 //!
@@ -191,7 +191,7 @@ fn guard(bus: SessionBus) -> InstanceGuard<SessionBus> {
     InstanceGuard::with_timing(bus, timing)
 }
 
-/// Ported from `desktop/tests/native_runtime_guard.py` ("No pre-existing
+/// Ported from `v2.0.0:desktop/tests/native_runtime_guard.py` ("No pre-existing
 /// isolated application owner").
 /// parity: UPD-008
 #[test]
@@ -207,9 +207,9 @@ fn nobody_owns_an_application_that_does_not_run() {
     assert!(!status.is_legacy_process());
 }
 
-/// Ported from `desktop/tests/native_runtime_guard.py` ("current actual
+/// Ported from `v2.0.0:desktop/tests/native_runtime_guard.py` ("current actual
 /// bus owner found", "Runtime identity read through real org.gtk.Actions")
-/// and `desktop/tests/test_rc2.py::RuntimeTests::test_runtime_response_parsed`.
+/// and `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_runtime_response_parsed`.
 /// parity: UPD-008
 #[test]
 fn the_identity_is_read_through_org_gtk_actions() {
@@ -222,7 +222,7 @@ fn the_identity_is_read_through_org_gtk_actions() {
     assert_eq!(bus.reported_identity(&stand_in.unique_name), Some(current()));
 }
 
-/// Ported from `desktop/tests/native_runtime_guard.py` ("Normal
+/// Ported from `v2.0.0:desktop/tests/native_runtime_guard.py` ("Normal
 /// current-version activation leaves process running").
 /// parity: UPD-008
 #[test]
@@ -241,7 +241,7 @@ fn a_normal_launch_leaves_the_current_instance_running() {
     );
 }
 
-/// Ported from `desktop/tests/native_runtime_guard.py` ("Explicit restart
+/// Ported from `v2.0.0:desktop/tests/native_runtime_guard.py` ("Explicit restart
 /// waits for exact owner to exit").
 /// parity: UPD-008, UPD-009
 #[test]
@@ -256,7 +256,7 @@ fn an_explicit_restart_waits_for_the_exact_owner_to_exit() {
     assert_eq!(guard.bus().owner().unwrap(), None);
 }
 
-/// Ported from `desktop/tests/native_runtime_guard.py` ("Busy server
+/// Ported from `v2.0.0:desktop/tests/native_runtime_guard.py` ("Busy server
 /// refuses restart without being killed").
 /// parity: UPD-008, UPD-009
 #[test]
@@ -275,10 +275,10 @@ fn a_busy_instance_refuses_restart_and_is_not_killed() {
     );
 }
 
-/// Ported from `desktop/tests/native_runtime_guard.py` ("legacy child
+/// Ported from `v2.0.0:desktop/tests/native_runtime_guard.py` ("legacy child
 /// registered", "Legacy process detected without identity action", "Legacy
 /// safe quit releases the bus name") and
-/// `desktop/tests/test_rc2.py::RuntimeTests::test_legacy_missing_action`.
+/// `v2.0.0:desktop/tests/test_rc2.py::RuntimeTests::test_legacy_missing_action`.
 /// parity: UPD-008
 #[test]
 fn a_legacy_instance_is_detected_and_quits_safely() {

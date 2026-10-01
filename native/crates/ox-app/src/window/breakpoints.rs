@@ -2,7 +2,7 @@
 //! The narrow-window layouts.
 //!
 //! Ports the `@media(max-width: 1190px / 1050px / 960px / 680px)` rules of
-//! `desktop/ui/style.css`. [`WindowWidth`] names the band the window's
+//! `v2.0.0:desktop/ui/style.css`. [`WindowWidth`] names the band the window's
 //! width falls in; the window carries a CSS class for every limit it is
 //! within (`max-1190` and so on), so `resources/skin/breakpoints.css`
 //! narrows paddings and widths, and [`BrowserWindow::fit_to_width`] hides

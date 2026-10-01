@@ -2,7 +2,7 @@
 //! A titled group of settings in a thin frame, its rows divided by thin
 //! lines.
 //!
-//! Replaces the heavy `.settings-section` cards of `desktop/ui/app.js`
+//! Replaces the heavy `.settings-section` cards of `v2.0.0:desktop/ui/app.js`
 //! with the flat groups of the settings mockup (SET-019). The static
 //! layout is the template `resources/ui/settings-group.ui`.
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Checking for updates, one task at a time, and which builds may install.
 //! Ports the check tests of `UpdaterTests` in
-//! `desktop/tests/test_updater.py`, with fictional HTTP bytes. No network
+//! `v2.0.0:desktop/tests/test_updater.py`, with fictional HTTP bytes. No network
 //! connection, administrator prompt or package installation is made.
 
 mod update_support;
@@ -13,7 +13,7 @@ use ox_core::transfer::Cancellation;
 use ox_core::update::{FetchError, Installation, UpdateError, LATEST_RELEASE_URL};
 use update_support::{install, Response, UpdaterFixture, CURRENT, NEXT};
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_check_uses_fixed_endpoint_and_only_returns_public_metadata`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_check_uses_fixed_endpoint_and_only_returns_public_metadata`
 ///
 /// The installer's address, digest, size and name are not fields of
 /// [`ox_core::update::UpdateStatus`], so they cannot leave the updater.
@@ -36,7 +36,7 @@ fn check_uses_fixed_endpoint_and_only_returns_public_metadata() {
     fixture.assert_idle_and_clean(&updater);
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_failed_check_discards_stale_release_and_releases_lock`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_failed_check_discards_stale_release_and_releases_lock`
 ///
 /// Python's `TimeoutError` is a connection failure like any other here.
 /// parity: UPD-001, UPD-002
@@ -69,7 +69,7 @@ fn failed_check_discards_stale_release_and_releases_lock() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_oversized_or_invalid_metadata_response_fails_and_releases_lock`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_oversized_or_invalid_metadata_response_fails_and_releases_lock`
 /// parity: UPD-001, UPD-002
 #[test]
 fn oversized_or_invalid_metadata_response_fails_and_releases_lock() {
@@ -88,7 +88,7 @@ fn oversized_or_invalid_metadata_response_fails_and_releases_lock() {
     }
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_concurrent_tasks_are_rejected_without_network_or_processes`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_concurrent_tasks_are_rejected_without_network_or_processes`
 ///
 /// Python holds the lock by hand; here a first check holds it while the
 /// package manager of a second task is never reached.
@@ -122,7 +122,7 @@ fn concurrent_tasks_are_rejected_without_network_or_processes() {
     fixture.assert_idle_and_clean(&updater);
 }
 
-/// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_source_build_cannot_install`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::UpdaterTests::test_source_build_cannot_install`
 /// parity: UPD-004
 #[test]
 fn source_build_cannot_install() {

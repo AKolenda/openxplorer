@@ -1,9 +1,10 @@
 # OpenXplorer native (Rust + GTK4)
 
 OpenXplorer since 2.0.0: the same Explorer skin, drawn with native GTK4
-widgets instead of an HTML page in WebKit. It replaces the deprecated
-Python/WebKit app in `desktop/`, which is no longer released. Releases ship the
-stable channel (`io.winspace.Development`, see
+widgets instead of an HTML page in WebKit. It replaces the Python/WebKit app
+of OpenXplorer 1.x, which is no longer released and has left the tree: its last
+release is tag `v1.1.4`, and its final sources are `desktop/` at tag `v2.0.0`.
+Releases ship the stable channel (`io.winspace.Development`, see
 [packaging/README.md](packaging/README.md)); the parity items still open when
 2.0.0 shipped are in [BACKLOG.md](BACKLOG.md). The preview channel below
 remains for trying a development build beside an installed release.
@@ -24,8 +25,9 @@ and interaction performance must be measured before claiming an improvement.
 | `docs/ui-spec.md` | The visual specification: the current skin, refined toward Windows 11 File Explorer. |
 | `tools/check.py` | The check driver described below. |
 
-The Python modules in `desktop/` are the behavioural specification. Each Rust
-module names the Python file it ports; port its tests along with it.
+The Python modules of the 1.x app are the behavioural specification. Each Rust
+module names the Python file it ports, as `v2.0.0:desktop/<file>` (read it with
+`git show v2.0.0:desktop/<file>`).
 
 ## Install
 
@@ -77,7 +79,9 @@ python3 native/tools/check.py
 `gvfs` provides the `trash:///` backend the Recycle Bin and Undo tests use, and
 `gvfs-backends` the `smb://` backend of the not-mounted share tests.
 `python3-gi` lets the interoperability tests import the Python app's GIO
-modules. With `gnome-keyring` and `gir1.2-secret-1`, the keyring tests use a
+modules: the driver extracts `desktop/` of tag `v2.0.0` for the run
+(`tools/python_app.py`, which fetches the tag from `origin` when a shallow
+checkout lacks it) and names it in `OX_PYTHON_APP`. With `gnome-keyring` and `gir1.2-secret-1`, the keyring tests use a
 disposable GNOME Keyring on the private bus and the Python app's libsecret
 calls; without them they only check that the keyring is reported unavailable.
 CI sets `OX_REQUIRE_KEYRING=1`, which makes a missing keyring fail them instead.
@@ -89,7 +93,7 @@ test binary, and the doctests, on its own Xvfb display with a private D-Bus
 session and disposable home, config, cache and runtime directories, so tests
 never see the user's display, session bus, settings or remote volume monitors.
 Each run starts in a new process session. When it finishes, fails or exceeds
-`--test-timeout` (180 seconds by default), every process it started, including
+`--test-timeout` (600 seconds by default), every process it started, including
 Xvfb and the bus daemon, is stopped before its temporary directories are
 deleted.
 
@@ -109,8 +113,7 @@ deliberately fails while bridge operations, existing OpenXplorer behaviours or
 Dolphin must-haves still lack native verification. `parity/features.toml` lists
 every behaviour the native app must provide; [parity/README.md](parity/README.md)
 explains how a feature is marked done. See [ROADMAP.md](ROADMAP.md) for the
-manual acceptance work that local tests cannot cover. The Python application
-remains the shipped desktop while this preview is incomplete.
+manual acceptance work that local tests cannot cover.
 
 The [browsing milestone validation record](VALIDATION.md) lists the local checks
 actually run and their limitations.
@@ -170,12 +173,12 @@ Rust:
   invariants and return errors for everything else.
 - Every public item has a doc comment saying what it is for, with `# Errors`
   and `# Panics` sections where they apply.
-- Code and tests ported from Python say so: "Ported from `desktop/core.py`".
+- Code and tests ported from Python say so: "Ported from `v2.0.0:desktop/core.py`".
 - Tests accompany behaviour. A test that proves an inventory feature carries a
   parity marker in its doc comment, such as `/// parity: NAV-001` (see
   [parity/README.md](parity/README.md)).
 - The transfer engine is ported test-first from the Python suite and must keep
-  every safety rule in `desktop/operations.py`.
+  every safety rule in `v2.0.0:desktop/operations.py`.
 
 Python tooling (`native/tools`, `native/parity`, and the repository tools and
 tests the native work changes):
@@ -191,7 +194,7 @@ tests the native work changes):
 
 Everything else:
 
-- User-facing text keeps the existing app's wording (see `desktop/ui/app.js`
+- User-facing text keeps the 1.x app's wording (see `v2.0.0:desktop/ui/app.js`
   and `apps/web/lib/docs.json`).
 - Each source file starts with an `SPDX-License-Identifier: AGPL-3.0-only`
   comment.

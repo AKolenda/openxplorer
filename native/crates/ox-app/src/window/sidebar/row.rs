@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! One sidebar row as a widget: the `.side-entry` button of `renderSidebar`
-//! in `desktop/ui/app.js`, styled by `.side-entry` in `style.css`.
+//! in `v2.0.0:desktop/ui/app.js`, styled by `.side-entry` in `style.css`.
 //!
 //! A row is an expander chevron (This PC, Network), a 20-pixel icon box, the
 //! name (with a capacity bar under a drive's) and, on Quick access rows, the

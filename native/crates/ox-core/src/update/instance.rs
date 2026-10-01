@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Finding a running instance whose files were replaced by an upgrade, and
 //! asking it to quit. Ports `Session.status`, `Session.stop` and
-//! `require_current` in `desktop/runtime_guard.py`.
+//! `require_current` in `v2.0.0:desktop/runtime_guard.py`.
 //!
 //! Safety rules of the whole module: no process-name matching, no
 //! signals, no root actions and no shell. Requests go only to the exact
@@ -102,7 +102,7 @@ impl InstanceStatus {
 }
 
 /// The running-instance guard on a bus. Ports `Session` in
-/// `desktop/runtime_guard.py`.
+/// `v2.0.0:desktop/runtime_guard.py`.
 #[derive(Debug)]
 pub struct InstanceGuard<B> {
     bus: B,

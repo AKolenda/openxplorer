@@ -3,7 +3,7 @@
 //! both.
 //!
 //! Ports `cacheRootsFor`, `cacheCovers` and the choice `runSearch` and
-//! `renderSearchInfo` make in `desktop/ui/app.js` (SRCH-003, SRCH-007,
+//! `renderSearchInfo` make in `v2.0.0:desktop/ui/app.js` (SRCH-003, SRCH-007,
 //! SRCH-011). A folder no indexed folder covers, contains or sits under
 //! is filtered at once and then searched live with its subfolders, as
 //! Dolphin does (SRCH-035; Python filtered it only); one an indexed folder
@@ -170,7 +170,7 @@ mod tests {
     ];
 
     /// Ported from `cacheRootsFor`, `cacheCovers` and `runSearch` in
-    /// `desktop/ui/app.js`, including the 1.1.0 fix for a folder with only
+    /// `v2.0.0:desktop/ui/app.js`, including the 1.1.0 fix for a folder with only
     /// a cached child.
     ///
     /// parity: SRCH-003, SRCH-007, SRCH-011

@@ -3,7 +3,7 @@
 //! chosen Brave profiles at the Linux Downloads folder, and putting one
 //! profile's previous folder back.
 //!
-//! Ports `braveDialog` in `desktop/ui/app.js` (INT-019 to INT-021). Every
+//! Ports `braveDialog` in `v2.0.0:desktop/ui/app.js` (INT-019 to INT-021). Every
 //! profile starts ticked and the consent check box unticked; Apply to
 //! Brave needs the consent and at least one profile, Restore previous the
 //! consent and exactly one. The sync and its safety rules (never while
@@ -448,7 +448,7 @@ mod tests {
         }
     }
 
-    /// Ported from the status lines of `braveDialog` in `desktop/ui/app.js`.
+    /// Ported from the status lines of `braveDialog` in `v2.0.0:desktop/ui/app.js`.
     ///
     /// parity: INT-019, INT-020
     #[test]

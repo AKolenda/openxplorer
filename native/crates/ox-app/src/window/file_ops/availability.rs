@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! When each file command is enabled (CMD-002).
 //!
-//! Ports `updateToolbar` in `desktop/ui/app.js`. The rules read a few
+//! Ports `updateToolbar` in `v2.0.0:desktop/ui/app.js`. The rules read a few
 //! facts about the selection, the folder and the running operation
 //! ([`CommandFacts`]) and decide each [`FileCommand`]; the window gathers
 //! the facts and enables the window actions, so the command bar, the

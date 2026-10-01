@@ -2,7 +2,7 @@
 //! The dialog that asks for a name: New folder and Rename (OPS-001,
 //! OPS-006, OPS-009).
 //!
-//! Ports `nameDialog` in `desktop/ui/app.js`: the title, "Names must not
+//! Ports `nameDialog` in `v2.0.0:desktop/ui/app.js`: the title, "Names must not
 //! contain slashes.", a Name field and Cancel and Save. Save checks the
 //! name ([`check_typed_name`]), then tries the operation; a refusal, such
 //! as a taken name, appears inside the dialog, which stays open for

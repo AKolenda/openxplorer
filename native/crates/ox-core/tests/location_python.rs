@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Compares the location functions with `desktop/core.py`, using the
+//! Compares the location functions with `v2.0.0:desktop/core.py`, using the
 //! answers `generate_python.py` captured in `python.json`; see
 //! `location_fixtures/README.md`. `location_fixture_drift.rs` proves the
 //! captured answers are still what `core.py` says.

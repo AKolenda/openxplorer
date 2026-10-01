@@ -2,7 +2,7 @@
 //! Cell widgets shared by the details and icon views.
 //!
 //! Both views show an item as its icon art beside or above its name
-//! ([`FileCell`]), as the name cell of `renderRows` in `desktop/ui/app.js`
+//! ([`FileCell`]), as the name cell of `renderRows` in `v2.0.0:desktop/ui/app.js`
 //! does. Every cell shows its row's tooltip ([`row_tooltip`]), as
 //! `row.title` does. While the item is renamed in place, a text field
 //! takes the name's place. [`CellOwners`] follows the cells the views

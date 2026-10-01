@@ -3,7 +3,7 @@
 //! make the session start the app's `org.freedesktop.FileManager1`
 //! service.
 //!
-//! Ports `desktop/reveal_integration.py`. Enabling writes exactly a D-Bus
+//! Ports `v2.0.0:desktop/reveal_integration.py`. Enabling writes exactly a D-Bus
 //! service file and a hidden autostart entry, both running
 //! `/usr/bin/winspace --filemanager-service` (INT-015); serving requests
 //! without a window (INT-017) is the app's job. Nothing else changes: no

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! "Sign out of `<host>`?": what Sign out of server forgets.
 //!
-//! Ports the dialog of `signOut` in `desktop/ui/app.js` (NET-020). It only
+//! Ports the dialog of `signOut` in `v2.0.0:desktop/ui/app.js` (NET-020). It only
 //! asks; the window signs out.
 
 use gtk::prelude::*;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A simulated MTP device behind real `mtp://` URIs: the counterpart of
-//! `FakeGFile` in `desktop/tests/test_device_staging.py`.
+//! `FakeGFile` in `v2.0.0:desktop/tests/test_device_staging.py`.
 //!
 //! GIO lets a process add its own handler for a URI scheme. Every
 //! `mtp://fake-device-N/...` URI of a [`FakeDevice`] resolves to a

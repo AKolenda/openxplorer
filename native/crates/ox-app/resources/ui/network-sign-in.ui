@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
   The network sign-in dialog: `#auth-dialog` as `renderAuth` in
-  desktop/ui/app.js builds it, with `.auth-*` of desktop/ui/style.css,
+  v2.0.0:desktop/ui/app.js builds it, with `.auth-*` of v2.0.0:desktop/ui/style.css,
   refined to WinUI's ContentDialog (native/docs/ui-spec.md §4.11). The
   caption bar says who asks, the "password" page asks for an account and
   the "question" page shows a server's question with one button per

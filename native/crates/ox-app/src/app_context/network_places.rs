@@ -4,7 +4,7 @@
 //! and the kernel's SMB mounts.
 //!
 //! Ports `visited_network`, `remember_network` and the stable-mount part
-//! of `environment` in `desktop/winspace.py`. A change tells every window
+//! of `environment` in `v2.0.0:desktop/winspace.py`. A change tells every window
 //! through `places-changed`; a finished sign-out through
 //! `server-signed-out`.
 

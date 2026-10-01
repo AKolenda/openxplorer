@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! How this build of the app was installed, which decides whether it may
-//! update itself. Ports `can_install` in `desktop/updater.py`; the
+//! update itself. Ports `can_install` in `v2.0.0:desktop/updater.py`; the
 //! Flatpak and other-package cases are new.
 
 use std::ffi::OsStr;
@@ -65,7 +65,7 @@ impl Installation {
     /// in a temporary folder.
     ///
     /// Safety rule "in-app installation only for the packaged build"
-    /// (`can_install` in `desktop/updater.py`): only the Debian package's
+    /// (`can_install` in `v2.0.0:desktop/updater.py`): only the Debian package's
     /// exact folder with executable `pkexec`, `apt-get`, `dpkg-deb` and
     /// `openxplorer` may install; a source build never runs the package
     /// manager.

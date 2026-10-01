@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Rename on temporary local files through the production GIO adapter,
 //! and renaming back for Undo. The rename cases of
-//! `desktop/tests/gio_integration.py` are ported here; renames on phones
+//! `v2.0.0:desktop/tests/gio_integration.py` are ported here; renames on phones
 //! are covered by the adapter's MTP tests (`transfer_cases/mtp_adapter.rs`).
 
 mod ops_support;
@@ -15,7 +15,7 @@ use ox_core::ops::{rename_item, undo, OperationContext, OpsError, UndoRecord};
 use ops_support::{block_on, file_uri};
 use snapshots::{snapshot_protection, snapshot_protection_with_folders, READ_ONLY};
 
-/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_rename_does_not_overwrite`.
+/// Ported from `v2.0.0:desktop/tests/gio_integration.py::GioLocalIntegration::test_rename_does_not_overwrite`.
 ///
 /// parity: OPS-008
 #[test]
@@ -38,7 +38,7 @@ fn rename_onto_a_taken_name_changes_nothing() {
     assert_eq!(fs::read(&competing).unwrap(), b"competing");
 }
 
-/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_rename_parent_of_backup_is_rejected`.
+/// Ported from `v2.0.0:desktop/tests/gio_integration.py::GioLocalIntegration::test_rename_parent_of_backup_is_rejected`.
 ///
 /// parity: OPS-008, XFER-020
 #[test]
@@ -60,7 +60,7 @@ fn a_folder_holding_a_protected_backup_is_not_renamed() {
 }
 
 /// The rename counterpart of
-/// `desktop/tests/test_operations.py::ProtectedTransferTests::test_configured_backup_descendant_is_protected`:
+/// `v2.0.0:desktop/tests/test_operations.py::ProtectedTransferTests::test_configured_backup_descendant_is_protected`:
 /// a snapshot folder configured in the previous-versions settings is
 /// protected like a conventional `.snapshot` folder.
 ///

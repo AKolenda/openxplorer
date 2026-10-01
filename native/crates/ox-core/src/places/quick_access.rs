@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Quick access: the standard folders and the user's pins, in saved order.
 //!
-//! Ports the Quick access part of `environment` in `desktop/winspace.py`.
+//! Ports the Quick access part of `environment` in `v2.0.0:desktop/winspace.py`.
 //! Standard folders come first unless the user hid them, pins follow, and
 //! the saved order then ranks them all.
 

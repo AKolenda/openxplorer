@@ -3,8 +3,8 @@
 //! how its yes-or-no questions to GIO honour the cancellation.
 //!
 //! The Python bridge gives each write a `GioCancellation` and the
-//! `assert_writable` guard of `desktop/previous_versions.py`, and runs it
-//! on a worker thread (`start_worker` in `desktop/winspace.py`). Here an
+//! `assert_writable` guard of `v2.0.0:desktop/previous_versions.py`, and runs it
+//! on a worker thread (`start_worker` in `v2.0.0:desktop/winspace.py`). Here an
 //! [`OperationContext`] carries the first two, and [`on_worker`] runs the
 //! blocking part on GIO's pool of blocking-I/O threads, so the GTK main
 //! loop keeps running while the caller awaits the result.
@@ -35,7 +35,7 @@ impl WriteProtection {
 
     /// Protects every location `guard` refuses. The guard returns the
     /// refusal the user sees, like the previous-versions refusal of
-    /// `PreviousVersions.assert_writable` in `desktop/previous_versions.py`.
+    /// `PreviousVersions.assert_writable` in `v2.0.0:desktop/previous_versions.py`.
     pub fn new(guard: impl Fn(&str) -> Result<(), TransferError> + Send + Sync + 'static) -> Self {
         Self {
             guard: Some(Arc::new(guard)),

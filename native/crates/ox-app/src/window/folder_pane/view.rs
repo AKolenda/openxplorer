@@ -2,7 +2,7 @@
 //! Which view lists a folder's items: the details view, or icons of one
 //! size.
 //!
-//! Ports `state.view` of `desktop/ui/app.js` (`details` or `grid`) and
+//! Ports `state.view` of `v2.0.0:desktop/ui/app.js` (`details` or `grid`) and
 //! the Python app's saved `view` preference, which the native app extends
 //! with the four icon sizes of Windows 11 File Explorer.
 

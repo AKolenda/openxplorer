@@ -7,7 +7,7 @@
 //! has a width of its own; wider columns then scroll sideways.
 //!
 //! Ports `fitColumn`, `setColumnWidth` and the `.column-resizer` handlers
-//! of `renderColumns` in `desktop/ui/app.js` (VIEW-028, VIEW-029,
+//! of `renderColumns` in `v2.0.0:desktop/ui/app.js` (VIEW-028, VIEW-029,
 //! VIEW-030). GTK draws the resize edge itself and has no widget for it,
 //! so the title stands in for the web app's focusable separator. Every
 //! change goes through the column's fixed width, so it is saved like a

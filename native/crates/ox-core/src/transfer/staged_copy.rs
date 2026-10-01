@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Copying one top-level item: build it in private staging, then publish it
 //! under its final name. Ports the copy branch of `_run_items` in
-//! `desktop/operations.py`.
+//! `v2.0.0:desktop/operations.py`.
 //!
 //! Rules enforced here:
 //! - XFER-001: a copy is built under an unguessable

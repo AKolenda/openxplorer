@@ -3,7 +3,7 @@
 //! bar, the details pane and the commands that act on one item follow it.
 //!
 //! Ports `updateStatus`, `renderDetails` and the selection bookkeeping of
-//! `desktop/ui/app.js` (each tab's `selected` set). When the window swaps,
+//! `v2.0.0:desktop/ui/app.js` (each tab's `selected` set). When the window swaps,
 //! reloads or clears the folder model, GTK reports selection changes the
 //! user did not make; [`BrowserWindow::change_model`] keeps those from
 //! overwriting the tab's saved selection.
@@ -32,6 +32,17 @@ fn position_after_removal(count: u32, selected: &[u32]) -> Option<u32> {
 }
 
 impl BrowserWindow {
+    /// Selects only the item called `name` in the active tab, as the
+    /// snapshot hook's scene asks; `false` when no such item is listed.
+    pub(crate) fn select_named(&self, name: &str) -> bool {
+        let model = self.folder_pane().model();
+        let position =
+            (0..model.n_items()).find(|position| model.name_at(*position).as_deref() == Some(name));
+        position
+            .inspect(|position| model.select_only(*position))
+            .is_some()
+    }
+
     /// The item to select after the selection is moved to the Trash or
     /// deleted, so that Delete can be pressed again; `None` when nothing
     /// would be left.

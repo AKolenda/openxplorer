@@ -3,7 +3,7 @@
 //! locations, read into one [`CommandRequest`].
 //!
 //! Ports `CLI_OPTIONS`, `argument_parser` and the parsing half of
-//! `command_line` in `desktop/winspace.py` (INT-004). A later launch hands
+//! `command_line` in `v2.0.0:desktop/winspace.py` (INT-004). A later launch hands
 //! its whole command line and working directory to the running instance
 //! and exits (INT-001), so relative paths are resolved against the
 //! directory the command was typed in, not the running instance's.
@@ -201,7 +201,7 @@ mod tests {
     }
 
     /// Ported from the branches of `command_line` in
-    /// `desktop/winspace.py`, in their order.
+    /// `v2.0.0:desktop/winspace.py`, in their order.
     ///
     /// parity: INT-004, INT-006
     #[test]

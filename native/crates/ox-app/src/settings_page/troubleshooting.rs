@@ -3,7 +3,7 @@
 //! Troubleshooting row of Default apps opens.
 //!
 //! Ports the `zorin-guide` details of `appendV07Settings` in
-//! `desktop/ui/app.js`: the same steps, numbered again and pointing at
+//! `v2.0.0:desktop/ui/app.js`: the same steps, numbered again and pointing at
 //! where the controls are in the native Settings, then how Restore
 //! previous undoes the changes.
 

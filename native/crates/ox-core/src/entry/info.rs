@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Builds an [`Entry`] from a queried `GFileInfo`.
 //!
-//! Ports `entry_from_info` in `desktop/gio_backend.py`, extended with the
+//! Ports `entry_from_info` in `v2.0.0:desktop/gio_backend.py`, extended with the
 //! Trash, access and icon attributes in [`super::ATTRIBUTES`]. It never
 //! queries, stats or mounts anything itself: only the attributes the
 //! backend already reported are read.
@@ -145,7 +145,7 @@ mod tests {
     };
     use crate::format::date_text;
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_mountable_network_share_has_directory_icon_flag_and_unknown_size`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_mountable_network_share_has_directory_icon_flag_and_unknown_size`
     ///
     /// parity: VIEW-002, NET-003
     #[test]
@@ -159,7 +159,7 @@ mod tests {
         assert_eq!(share.modified, None);
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_gvfs_mountable_browse_uri_and_target_remain_distinct`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_gvfs_mountable_browse_uri_and_target_remain_distinct`
     ///
     /// parity: NET-003
     #[test]
@@ -175,7 +175,7 @@ mod tests {
         assert!(!share.can_operate);
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_directory_metadata`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_directory_metadata`
     ///
     /// parity: VIEW-002
     #[test]
@@ -191,7 +191,7 @@ mod tests {
     }
 
     /// The Python app sent 0 for a missing time, and the web interface
-    /// showed `—` for every 0 (`dateText` in `desktop/ui/app.js`).
+    /// showed `—` for every 0 (`dateText` in `v2.0.0:desktop/ui/app.js`).
     ///
     /// parity: VIEW-001, VIEW-002
     #[test]
@@ -203,7 +203,7 @@ mod tests {
         assert_eq!(date_text(file.modified), "—");
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_zero_byte_file_remains_zero_bytes`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_zero_byte_file_remains_zero_bytes`
     ///
     /// parity: VIEW-002
     #[test]
@@ -216,7 +216,7 @@ mod tests {
         assert_eq!(file.type_label, "Text document");
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_missing_file_size_does_not_claim_zero`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_missing_file_size_does_not_claim_zero`
     ///
     /// parity: VIEW-002
     #[test]
@@ -225,7 +225,7 @@ mod tests {
         assert_eq!(entry_for_uri("smb://nas/work/README", &info).size, None);
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_server_shortcut_resolves_to_target_server`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_server_shortcut_resolves_to_target_server`
     ///
     /// parity: NET-003
     #[test]
@@ -238,7 +238,7 @@ mod tests {
         assert!(!server.can_operate);
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_serialization_requests_no_extra_filesystem_queries`
+    /// Ported from `v2.0.0:desktop/tests/test_gio_serialization.py::GioSerializationTests::test_serialization_requests_no_extra_filesystem_queries`
     ///
     /// parity: VIEW-002
     #[test]

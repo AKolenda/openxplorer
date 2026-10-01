@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Differential tests against `desktop/core.py` with the home folder
+//! Differential tests against `v2.0.0:desktop/core.py` with the home folder
 //! `/home/demo`: the `external` table of `python.json`, which
 //! `generate_python.py` captures by running `normalise_location(value,
 //! home=Path('/home/demo'))` and `require_item_uri` on the result. These
@@ -38,7 +38,7 @@ fn external_cases() -> ExternalCases {
     fixture.external
 }
 
-/// Ported from `desktop/core.py::normalise_location` (differential table):
+/// Ported from `v2.0.0:desktop/core.py::normalise_location` (differential table):
 /// the behaviour the entry classifier, the clipboard and file drops rely on.
 ///
 /// parity: NAV-034, NAV-035
@@ -53,7 +53,7 @@ fn normalise_matches_python() {
     mismatches.assert_none();
 }
 
-/// Ported from `desktop/core.py::require_item_uri` (differential table).
+/// Ported from `v2.0.0:desktop/core.py::require_item_uri` (differential table).
 ///
 /// parity: OPS-035
 #[test]

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Discover servers, on the Network page.
 //!
-//! Ports `discoverNetwork` and `cancelDiscovery` in `desktop/ui/app.js`.
+//! Ports `discoverNetwork` and `cancelDiscovery` in `v2.0.0:desktop/ui/app.js`.
 //! ox-core's [`discover_servers`] reads `GVfs`'s network browser once;
 //! advertisements arrive over a few seconds, so the page reads it up to
 //! three times, 2.5 seconds apart, and merges the servers by address. The

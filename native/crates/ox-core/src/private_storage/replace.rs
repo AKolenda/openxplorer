@@ -4,8 +4,8 @@
 //! over it, so a reader sees the old or the new file, never a mix.
 //!
 //! Ports the `tempfile.mkstemp`, `os.fchmod`, `os.fsync` and `os.replace`
-//! sequence that `Settings.save` in `desktop/core.py` and
-//! `PreviousVersions.configure` in `desktop/previous_versions.py` share.
+//! sequence that `Settings.save` in `v2.0.0:desktop/core.py` and
+//! `PreviousVersions.configure` in `v2.0.0:desktop/previous_versions.py` share.
 //! Whether an existing target may be replaced is the caller's decision:
 //! the settings refuse a linked `settings.json` first, while the snapshot
 //! sources replace a link as `os.replace` does.

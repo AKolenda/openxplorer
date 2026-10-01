@@ -2,7 +2,7 @@
 //! Window actions shared by buttons, menus, rows and keyboard shortcuts,
 //! and the application's keyboard accelerators.
 //!
-//! Ports the command handlers and the keyboard table of `desktop/ui/app.js`
+//! Ports the command handlers and the keyboard table of `v2.0.0:desktop/ui/app.js`
 //! (`onKey`, the `keydown` handler of `setup`). Every action is a
 //! `gio::ActionEntry` on the window, so a widget only names the action
 //! ([`WindowAction`]) and its target.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What every window shares for network locations.
 //!
-//! Ports the application-wide network state of `desktop/winspace.py`: the
+//! Ports the application-wide network state of `v2.0.0:desktop/winspace.py`: the
 //! keyring and sign-out generations behind `SessionCredentials` (class
 //! attributes there), the servers being signed out
 //! (`signing_out_hosts`), the servers and shares browsed this session

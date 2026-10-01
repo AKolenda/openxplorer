@@ -3,7 +3,7 @@
 //! searching.
 //!
 //! Ports `row.title=state.query?displayUri(e.uri):e.name` of `renderRows`
-//! in `desktop/ui/app.js` (VIEW-001, VIEW-042). GTK reuses cells for other
+//! in `v2.0.0:desktop/ui/app.js` (VIEW-001, VIEW-042). GTK reuses cells for other
 //! items, so the text is worked out when the tooltip is asked for, from
 //! the item the cell shows then and whether the window searches then.
 

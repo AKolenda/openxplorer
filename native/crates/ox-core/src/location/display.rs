@@ -4,7 +4,7 @@
 //!
 //! Ports `baseName`, `parentUri`, `displayUri`, `titleFor`, `locationParts`,
 //! `deviceParts`, `deviceRoot`, `deviceMountName`, `breadcrumbSegments` and
-//! `sameLocation` from `desktop/ui/app.js`, and the crumb dividers of its
+//! `sameLocation` from `v2.0.0:desktop/ui/app.js`, and the crumb dividers of its
 //! `renderNavigation`, extended with the virtual places in [`VirtualPlace`].
 //! Whether a location is writable, a snapshot or a network folder is
 //! decided in `classify.rs`.

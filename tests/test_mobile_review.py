@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-only
-"""0.9.1 mobile reading, conditional embeds and compact dates regression checks."""
+"""Mobile reading, conditional embeds and the standalone tour regression checks."""
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 import json,os
 from playwright.sync_api import sync_playwright,expect
 ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'test-results';OUT.mkdir(exist_ok=True)
 checks=[];errors=[]
+D=ROOT/'designs'
+# The pages are served over local HTTP: a script-only sandboxed frame cannot
+# load the tour's files from file:// URLs.
+class QuietHandler(SimpleHTTPRequestHandler):
+ def log_message(self,*_args):pass
+SERVER=ThreadingHTTPServer(('127.0.0.1',0),partial(QuietHandler,directory=str(D)))
+Thread(target=SERVER.serve_forever,daemon=True).start()
+BASE=f'http://127.0.0.1:{SERVER.server_port}/'
 def check(name,condition=True):
  assert condition,name
  checks.append(name);print('PASS',name,flush=True)
@@ -14,7 +25,7 @@ with sync_playwright() as pw:
  def page_for(name,width=390):
   p=b.new_page(viewport={'width':width,'height':844});p.set_default_timeout(8000)
   p.on('pageerror',lambda e:errors.append(str(e)))
-  p.set_content((ROOT/'designs'/name).read_text(),wait_until='load');return p
+  p.goto(BASE+name,wait_until='load');return p
  for width in (320,360,390,430,600,768,959):
   for filename in ('index.html','docs-introduction.html'):
    p=page_for(filename,width)
@@ -46,14 +57,14 @@ with sync_playwright() as pw:
  # Breakpoint creates/destroys the iframe, not just a display:none wrapper.
  p.set_viewport_size({'width':1440,'height':1000});p.locator('[data-product-demo]').scroll_into_view_if_needed()
  p.wait_for_function('document.querySelector("[data-product-demo]").dataset.phase==="ready"')
- check('Desktop restores the actual sandboxed preview',p.locator('iframe').count()==1)
+ check('Desktop restores the sandboxed tour',p.locator('iframe').count()==1)
  check('Script-only sandbox preserved',p.locator('iframe').get_attribute('sandbox')=='allow-scripts')
  check('Desktop three-column documentation unchanged',p.locator('.docs-sidebar').is_visible() and p.locator('.docs-toc').is_visible())
  p.set_viewport_size({'width':390,'height':844});p.wait_for_timeout(100)
  check('Shrinking viewport disposes the iframe',p.locator('iframe').count()==0 and len(p.frames)==1)
  p.set_viewport_size({'width':1440,'height':1000});p.locator('[data-product-demo]').scroll_into_view_if_needed()
  p.wait_for_function('document.querySelector("[data-product-demo]").dataset.phase==="ready"')
- check('Re-expanding creates a clean usable preview',p.locator('iframe').count()==1)
+ check('Re-expanding creates a clean usable tour',p.locator('iframe').count()==1)
  p.close()
  # Every guide uses the same mobile topic menu, not a horizontal strip.
  for doc in json.loads((ROOT/'apps/web/lib/docs.json').read_text()):
@@ -61,29 +72,24 @@ with sync_playwright() as pw:
   check(doc['slug']+': menu marks current guide',p.locator('.mobile-doc-group a[aria-current="page"]').inner_text()==doc['title'])
   check(doc['slug']+': no live explorer on phones',p.locator('iframe').count()==0)
   p.close()
- # Actual app date columns, not website imitation.
+ # The tour of the native app: real pictures with keyboard-reachable controls.
  p=b.new_page(viewport={'width':1280,'height':900});p.set_default_timeout(8000)
  p.on('pageerror',lambda e:errors.append(str(e)))
- p.evaluate('''()=>{const data={'winspace-preview-v3':JSON.stringify({pins:[{uri:'smb://legacy-demo/old-preview',label:'legacy-pin-must-not-import'}]})};Object.defineProperty(window,'localStorage',{value:{getItem:k=>data[k]??null,setItem:(k,v)=>data[k]=String(v),removeItem:k=>delete data[k]}})}''')
- p.set_content((ROOT/'desktop/preview.html').read_text(),wait_until='load')
- p.wait_for_function('()=>window.OpenXplorerTour && OpenXplorer.state.ready')
- p.evaluate("()=>{OpenXplorer.applyTheme('dark',false);void OpenXplorerTour.scene('snapshots')}")
- expect(p.locator('.version-row')).to_have_count(3)
- date=p.locator('.version-date').first;time=p.locator('.version-time').first;day=p.locator('.version-calendar-date').first
- check('Date and time occupy one readable line',abs(day.bounding_box()['y']-time.bounding_box()['y'])<4)
- check('Repeated per-row date-source labels removed',p.locator('.version-date-source').count()==0)
- check('One clear date-source note',p.locator('.version-date-note').count()==1)
- check('Date stays between the name and actions',date.bounding_box()['x']>p.locator('.version-text').first.bounding_box()['x'] and date.bounding_box()['x']+date.bounding_box()['width']<=p.locator('.version-actions').first.bounding_box()['x'])
- check('Semantic timestamp retains precision',p.locator('.version-stamp').first.get_attribute('datetime')=='2026-09-05T18:00:00')
- check('Source timezone caveat retained','not supplied' in date.get_attribute('title'))
- check('No stale personal fixture pins',p.locator('#quick-access').inner_text().find('legacy-pin-must-not-import')<0)
- p.locator('#modal').screenshot(path=str(OUT/'previous-versions-dark.png'))
- # Changing application window width does not collide columns.
+ p.goto(BASE+'tour/index.html?theme=dark')
+ tour=json.loads((ROOT/'apps/web/public/tour/scenes.json').read_text())
+ first=tour['scenes'][0]
+ check('Tour opens on its first scene in the requested theme',p.locator('#picture').get_attribute('src')==first['images']['dark'])
+ check('Every hotspot is a labelled button',p.locator('.hotspot').count()==len(first['hotspots']) and all(p.locator('.hotspot').nth(i).get_attribute('aria-label') for i in range(len(first['hotspots']))))
+ check('Back is disabled on the first scene',p.locator('#back').is_disabled())
+ p.keyboard.press('Tab');p.keyboard.press('Tab');p.keyboard.press('Enter')
+ check('Enter on a hotspot opens the scene it names',p.locator('#title').inner_text()!=first['title'])
+ p.locator('#back').click()
+ check('Back returns to the previous scene',p.locator('#title').inner_text()==first['title'])
+ check('Captions say the pictures are the real app','Real app' in p.locator('.badge').inner_text())
  p.set_viewport_size({'width':740,'height':900});p.wait_for_timeout(100)
- check('Narrow application modal fits viewport',p.locator('#modal').bounding_box()['width']<=740)
- check('Narrow dialog actions are visible',p.locator('.version-actions').first.is_visible())
+ check('Narrow tour keeps the picture inside the viewport',p.locator('#frame').bounding_box()['width']<=740)
  p.close();b.close()
 check('No JavaScript errors',not errors)
-report={'passed':True,'checks':len(checks),'details':checks,'errors':errors,'scope':'Chromium standalone HTML and real application preview with fictional fixtures; mobile screen sizes 320–959px plus desktop re-entry; not native WebKit or physical Android.'}
+report={'passed':True,'checks':len(checks),'details':checks,'errors':errors,'scope':'Chromium standalone HTML and the tour of native app pictures with fictional fixtures; mobile screen sizes 320–959px plus desktop re-entry; not physical Android.'}
 (OUT/'mobile-review.json').write_text(json.dumps(report,indent=2)+'\n')
-print('Passed',len(checks),'mobile/date checks')
+print('Passed',len(checks),'mobile and tour checks')

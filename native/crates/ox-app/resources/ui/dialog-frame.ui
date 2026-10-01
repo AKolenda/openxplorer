@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  One dialog: section.modal of desktop/ui/index.html (the title, the
+  One dialog: section.modal of v2.0.0:desktop/ui/index.html (the title, the
   message, the body, `.modal-error` and `.modal-actions`) as
   native/docs/ui-spec.md §4.11 refines it to WinUI's ContentDialog. The
   title, an optional message, the body the dialog fills in, the error line

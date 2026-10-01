@@ -6,7 +6,7 @@ The release is the native app (native/): the stable Debian package
 openxplorer_<version>_all.deb, which the in-app updater of OpenXplorer 1.1.x
 downloads and installs, any RPM, Arch package and Flatpak bundle built for
 the release, the corresponding-source archive and their SHA256SUMS, all in
-dist/. The Python app in desktop/ is deprecated and no longer shipped.
+dist/. The Python app of 1.x is retired (tag v1.1.4) and no longer shipped.
 
 The Debian package is built here unless --packages names a folder that
 already holds it (the continuous-integration build); --flatpak also builds
@@ -35,13 +35,11 @@ from typing import NoReturn
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-DESKTOP = ROOT / 'desktop'
 NATIVE = ROOT / 'native'
 NATIVE_TOOLS = NATIVE / 'tools'
 CARGO_MANIFEST = NATIVE / 'Cargo.toml'
 DIST = ROOT / 'dist'
 TEST_RESULTS = ROOT / 'test-results'
-DESIGNS = ROOT / 'designs'
 
 # The source-archive policy below must agree with .gitignore;
 # tests/test_release_source.py checks that it does.
@@ -71,8 +69,7 @@ OMITTED_NAMES = (
 SAFE_EXAMPLE_NAMES = frozenset({'.env.example', '.dev.vars.example'})
 # Files the release regenerates from sources that the archive does include.
 GENERATED_SOURCE_PATHS = frozenset({
-    'desktop/preview.html', 'apps/web/public/app-preview.html',
-    'apps/web/public/assets/site.js',
+    'apps/web/public/assets/site.js', 'apps/web/public/tour/scenes.js',
 })
 
 # The application ID of the released app: the Python app's, which the native
@@ -103,12 +100,6 @@ WEBSITE_DOWNLOADS = (
     ROOT / 'designs/downloads',
     ROOT / 'apps/web/out/downloads',
 )
-# Where the offline preview is copied: the website and the design review.
-PREVIEW_COPIES = (
-    ROOT / 'apps/web/public/app-preview.html',
-    DESIGNS / 'app-preview.html',
-)
-
 # Every archive entry gets the same timestamp and mode, so the same tree always
 # produces the same archive.
 ARCHIVE_PREFIX = 'openxplorer/'
@@ -222,11 +213,10 @@ def prepare_output_directories() -> None:
         if is_previous_artifact(path):
             path.unlink()
     TEST_RESULTS.mkdir(exist_ok=True)  # For the package verification report.
-    DESIGNS.mkdir(exist_ok=True)  # For a copy of the preview.
 
 
 def debian_package_name(version: str) -> str:
-    """Return the only installer name the 1.1.x updater accepts (desktop/updater.py)."""
+    """Return the only installer name the 1.1.x updater accepts (v2.0.0:desktop/updater.py)."""
     return f'openxplorer_{version}_all.deb'
 
 
@@ -315,19 +305,12 @@ def write_checksums(artifacts: Iterable[Path], destination: Path) -> None:
     destination.write_text(''.join(lines))
 
 
-def publish_preview() -> None:
-    """Rebuild the offline preview and copy it to the website and the design review."""
-    run_python(DESKTOP / 'tools/build_preview.py')
-    for destination in PREVIEW_COPIES:
-        shutil.copyfile(DESKTOP / 'preview.html', destination)
-
-
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     """Read the options; a mistyped option stops before anything is built."""
     parser = argparse.ArgumentParser(
         description='Build and verify the native Debian package, gather the other native '
-                    'packages, write the corresponding-source archive and SHA256SUMS in '
-                    'dist/, and refresh the offline preview copies.')
+                    'packages, and write the corresponding-source archive and SHA256SUMS in '
+                    'dist/.')
     parser.add_argument('--packages', type=Path,
                         help='a folder holding the release packages built elsewhere (CI): '
                              'openxplorer_<version>_all.deb and any RPM, Arch package and '
@@ -356,7 +339,6 @@ def build_release(arguments: argparse.Namespace) -> None:
     source = DIST / f'openxplorer-{version}-source.zip'
     write_source_archive(source)
     write_checksums([*artifacts, source], DIST / 'SHA256SUMS')
-    publish_preview()
 
 
 def describe_failed_command(error: subprocess.CalledProcessError) -> str:

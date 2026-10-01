@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Character, escaping and path rules shared by the location parsers.
 //!
-//! `desktop/core.py` leans on a handful of Python standard-library functions
+//! `v2.0.0:desktop/core.py` leans on a handful of Python standard-library functions
 //! (`str.strip`, `str.isspace`, `urllib.parse.quote`/`unquote`,
 //! `posixpath.normpath`) and the web UI on `decodeURIComponent`. Each helper
 //! here reproduces exactly one of those behaviours so that the native app

@@ -4,7 +4,7 @@
 
 use ox_core::integration::{FileManagerMethod, FileManagerRequest, FileManagerRequestError};
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_showitems_keeps_file_path`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_showitems_keeps_file_path`
 /// parity: INT-013, INT-014
 #[test]
 fn show_items_keeps_the_file_itself() {
@@ -14,7 +14,7 @@ fn show_items_keeps_the_file_itself() {
     assert_eq!(request.uris(), ["file:///tmp/movie.mp4"]);
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_showfolders_and_properties`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_showfolders_and_properties`
 /// parity: INT-014
 #[test]
 fn show_folders_and_show_item_properties_are_accepted() {
@@ -25,7 +25,7 @@ fn show_folders_and_show_item_properties_are_accepted() {
     }
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_unsupported_method_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_unsupported_method_rejected`
 /// parity: INT-013, SAFE-017
 #[test]
 fn an_unsupported_method_is_rejected() {
@@ -35,7 +35,7 @@ fn an_unsupported_method_is_rejected() {
     assert_eq!(refused.expect_err("refused").to_string(), "Unsupported method.");
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_empty_request_rejected`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_empty_request_rejected`
 /// parity: INT-013, SAFE-017
 #[test]
 fn a_request_without_locations_is_rejected() {
@@ -50,7 +50,7 @@ fn a_request_without_locations_is_rejected() {
     );
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_reveal_limit`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_reveal_limit`
 /// parity: INT-013, SAFE-017
 #[test]
 fn more_than_100_locations_are_rejected() {
@@ -64,7 +64,7 @@ fn more_than_100_locations_are_rejected() {
     );
 }
 
-/// Ported from `desktop/tests/test_v07.py::HandoffTests::test_no_virtual_locations_in_external_requests`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_no_virtual_locations_in_external_requests`
 /// parity: INT-013, SAFE-017
 #[test]
 fn app_pages_cannot_be_requested_from_outside() {

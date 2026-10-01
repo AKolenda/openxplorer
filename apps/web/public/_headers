@@ -11,8 +11,5 @@
   ! Cache-Control
   Cache-Control: public, max-age=31536000, immutable, no-transform
 
-/app-preview
-  X-Robots-Tag: noindex
-
-/app-preview.html
+/tour/*
   X-Robots-Tag: noindex

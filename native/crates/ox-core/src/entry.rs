@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! One row of a folder listing.
 //!
-//! Ports `desktop/entry_model.py` (`classify_entry`) and `entry_from_info`,
+//! Ports `v2.0.0:desktop/entry_model.py` (`classify_entry`) and `entry_from_info`,
 //! `enumerate_folder`, `inspect` and `verify_pin` in
-//! `desktop/gio_backend.py`. Navigability is kept separate from mutability:
+//! `v2.0.0:desktop/gio_backend.py`. Navigability is kept separate from mutability:
 //! an SMB share in a server listing can be opened but not renamed or
 //! trashed.
 //!

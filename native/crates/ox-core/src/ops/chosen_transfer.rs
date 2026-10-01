@@ -4,7 +4,7 @@
 //!
 //! The Python app asked once per paste, "Skip duplicates" or "Replace
 //! existing", and ran the whole batch with that policy
-//! (`transferWithConflicts` in `desktop/ui/app.js`). The native conflict
+//! (`transferWithConflicts` in `v2.0.0:desktop/ui/app.js`). The native conflict
 //! dialog also offers Keep both and, when "Apply to all" is cleared, an
 //! answer per item. The engine takes one policy per run, so the items are
 //! grouped by their answer and each group runs on one engine, Skip first,

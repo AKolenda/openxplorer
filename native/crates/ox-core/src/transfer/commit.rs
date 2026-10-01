@@ -2,7 +2,7 @@
 //! Installing a completed item under its final name.
 //!
 //! Ports `_publish_staged`, `_commit_replace` and `_replace_via_backup` in
-//! `desktop/operations.py`.
+//! `v2.0.0:desktop/operations.py`.
 //!
 //! Rules enforced here:
 //! - XFER-007: publishing ([`Node::publish`]) is a native rename that never

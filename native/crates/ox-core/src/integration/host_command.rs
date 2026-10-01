@@ -2,8 +2,8 @@
 //! Running a desktop program on the host: `xdg-mime` for the default
 //! applications and the terminal emulator for Open in Terminal.
 //!
-//! Ports the `subprocess` calls of `desktop/desktop_integration.py`
-//! (`DesktopIntegration._run`) and `desktop/terminal_integration.py`
+//! Ports the `subprocess` calls of `v2.0.0:desktop/desktop_integration.py`
+//! (`DesktopIntegration._run`) and `v2.0.0:desktop/terminal_integration.py`
 //! (`launch_terminal`). A command is always an argument list; no shell
 //! ever parses it, so nothing in a folder name can become code.
 //!

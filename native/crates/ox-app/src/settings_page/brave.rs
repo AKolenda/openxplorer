@@ -2,7 +2,7 @@
 //! Brave & downloads: Brave's download folder.
 //!
 //! Ports the "Brave & downloads" section of `appendV07Settings` in
-//! `desktop/ui/app.js` (INT-020, SET-009). "Use Linux Downloads in
+//! `v2.0.0:desktop/ui/app.js` (INT-020, SET-009). "Use Linux Downloads in
 //! Brave…" opens the Brave dialog (`braveDialog`) on the user's Downloads
 //! folder, as `user-dirs.dirs` names it; the Python section's advice
 //! stays as notes.

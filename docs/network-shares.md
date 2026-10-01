@@ -13,9 +13,9 @@ Windows-style paths use backslashes, not backticks: \\studio-nas\Projects. You c
 smb://nas/Projects
 ```
 
-![Actual SMB address bar with clickable server, share and directory segments](../apps/web/public/assets/screenshots/network-path.png)
+![The Network page with its address box, and the sample share \\studio-nas\Projects saved (shown offline in this picture)](../apps/web/public/assets/screenshots/network-path.png)
 
-*Actual HTML interface. Sample files; no live NAS connection.*
+*The native app, captured with fictional sample files. No live NAS connection.*
 
 ## Sign in, once per server when possible
 
@@ -27,11 +27,11 @@ Accounts are scoped by server and port. Different host aliases, rejected credent
 
 Successfully browsed locations appear beneath Network for the session. Right-click a share and choose Keep in Network to save it. Pin a share or a nested folder into the sidebar for a direct route back. Green marks indicate network-backed locations, not guaranteed online status.
 
-The website’s replayable pointer demonstration opens a sample NAS by its UNC path, drags Design to the sidebar, and opens the resulting pin. This goes through the preview’s existing pointer handlers. It is a deterministic demonstration on fictional files, not a recording of a live NAS.
+The picture shows the sidebar with the sample folder Launch planning pinned to Quick access and the saved share Projects under Network. It was captured from the native app with fictional files and no network, so the share is shown offline.
 
-![A sample Design folder pinned in the real sidebar, with its network marker](../apps/web/public/assets/screenshots/pinned-sidebar.png)
+![The sidebar with the sample Launch planning folder pinned to Quick access and the saved share Projects under Network](../apps/web/public/assets/screenshots/pinned-sidebar.png)
 
-*Actual HTML interface. Sample files; no live NAS connection.*
+*The native app, captured with fictional sample files. No live NAS connection.*
 
 ## Discover nearby servers
 

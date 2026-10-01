@@ -4,7 +4,7 @@
 //! several at once.
 //!
 //! Ports the unchecked rows of `renderSettingsCache` in
-//! `desktop/ui/app.js` (SET-006) as the settings mockup's power-user table:
+//! `v2.0.0:desktop/ui/app.js` (SET-006) as the settings mockup's power-user table:
 //! a check box per folder, the folder's picture, name and path, the reason
 //! it is suggested, its location, and an Index button; under the table,
 //! how many are selected, Clear and "Index selected". [`IndexSuggestions`]

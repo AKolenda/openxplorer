@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Why a tab's state or a `FileManager1` request was refused. The messages
-//! are those of `desktop/window_state.py`, word for word.
+//! are those of `v2.0.0:desktop/window_state.py`, word for word.
 
 use crate::location::LocationError;
 

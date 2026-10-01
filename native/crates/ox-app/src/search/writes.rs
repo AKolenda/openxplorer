@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Which folders a file operation changed, for the search cache.
 //!
-//! Ports `invalidate_cache_for_write` in `desktop/winspace.py`
+//! Ports `invalidate_cache_for_write` in `v2.0.0:desktop/winspace.py`
 //! (SRCH-033): after every write, the folder written into and the folders
 //! that held the changed items are read again in every indexed folder that
 //! holds them, so a search shows the app's own changes at once, also on a

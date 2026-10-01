@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The checks the `archiveExtract` and `archiveInspect` branches of
-//! `dispatch` in `desktop/winspace.py` add around the extractor:
+//! `dispatch` in `v2.0.0:desktop/winspace.py` add around the extractor:
 //! normalised locations, the write guard on the destination folder, no
 //! server listing as a destination, and no merging into an existing
 //! folder. Ports the archive cases of `DispatchTests` in
-//! `desktop/tests/test_rc2.py`; the dispatcher's busy check belongs to the
+//! `v2.0.0:desktop/tests/test_rc2.py`; the dispatcher's busy check belongs to the
 //! app, which runs one extraction at a time.
 
 mod archive_support;
@@ -22,7 +22,7 @@ use ox_core::archive::{ArchiveError, ExtractionRequest};
 use archive_support::{file_uri, ExtractionFixture, TestMember};
 use transfer_support::versions::{PreviousVersions, READ_ONLY};
 
-/// The `archiveExtract` branch of `dispatch` in `desktop/winspace.py`
+/// The `archiveExtract` branch of `dispatch` in `v2.0.0:desktop/winspace.py`
 /// asks the guard about the destination folder itself first.
 ///
 /// parity: ARC-020
@@ -47,7 +47,7 @@ fn a_protected_destination_folder_is_refused() {
     assert_eq!(fs::read_dir(&snapshot).expect("list the snapshot").count(), 0);
 }
 
-/// The `archiveExtract` branch of `dispatch` in `desktop/winspace.py`
+/// The `archiveExtract` branch of `dispatch` in `v2.0.0:desktop/winspace.py`
 /// refuses a server's list of shares before resolving it.
 ///
 /// parity: ARC-010, OPS-036
@@ -108,7 +108,7 @@ fn locations_are_normalised_first() {
     assert!(matches!(error, ArchiveError::Location(_)), "{error:?}");
 }
 
-/// Ported from `desktop/tests/test_rc2.py::DispatchTests::test_extract_dispatch_checks_member_destinations`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::DispatchTests::test_extract_dispatch_checks_member_destinations`.
 ///
 /// parity: ARC-020
 #[test]
@@ -126,7 +126,7 @@ fn member_destinations_are_checked_before_any_staging() {
     fixture.assert_no_output();
 }
 
-/// Ported from `desktop/tests/test_rc2.py::DispatchTests::test_inspect_and_extract_actual_actions`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::DispatchTests::test_inspect_and_extract_actual_actions`.
 ///
 /// parity: ARC-008, ARC-014
 #[test]
@@ -156,7 +156,7 @@ fn inspection_and_extraction_agree() {
     assert!(fixture.archive.exists());
 }
 
-/// Ported from `desktop/tests/test_rc2.py::DispatchTests::test_extract_collision_never_merges`.
+/// Ported from `v2.0.0:desktop/tests/test_rc2.py::DispatchTests::test_extract_collision_never_merges`.
 ///
 /// parity: ARC-011, ARC-012
 #[test]

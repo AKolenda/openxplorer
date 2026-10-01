@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Downloading the installer into a private folder and verifying it.
-//! Ports the download part of `Updater.install` in `desktop/updater.py`.
+//! Ports the download part of `Updater.install` in `v2.0.0:desktop/updater.py`.
 
 use std::fs::{File, OpenOptions, Permissions};
 use std::io::{self, Read, Write};

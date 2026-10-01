@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Searching the cache.
 //!
-//! Ports `search` in `desktop/search_index.py` (SRCH-007 to SRCH-011 and
+//! Ports `search` in `v2.0.0:desktop/search_index.py` (SRCH-007 to SRCH-011 and
 //! SRCH-017).
 
 use std::time::{Duration, Instant};

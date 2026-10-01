@@ -2,7 +2,7 @@
 //! The Windows 11 look as the window draws it: the bars in Explorer's
 //! order and heights, the palette of each appearance from the first frame,
 //! the frame and its identity, the fields, the command bar, menus,
-//! dialogs and the toast, against `desktop/ui/style.css` and the
+//! dialogs and the toast, against `v2.0.0:desktop/ui/style.css` and the
 //! reference captures (see [`super::geometry`] for where the numbers come
 //! from).
 

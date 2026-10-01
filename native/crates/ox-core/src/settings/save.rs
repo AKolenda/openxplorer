@@ -2,7 +2,7 @@
 //! The settings lock and the atomic, private replace of `settings.json`.
 //!
 //! Ports the `flock` of `settings_mutation` and the temporary-file-and-
-//! rename of `Settings.save` in `desktop/core.py`, built on the checks and
+//! rename of `Settings.save` in `v2.0.0:desktop/core.py`, built on the checks and
 //! the atomic replace in `crate::private_storage`, whose [`StorageError`]
 //! every step here returns. Keeping an unreadable file as a backup
 //! ([`OldFile::KeepAsBackup`]) goes beyond the Python app.

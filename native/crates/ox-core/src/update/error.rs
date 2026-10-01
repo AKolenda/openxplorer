@@ -2,8 +2,8 @@
 //! The errors of updating and of the running-instance guard.
 //!
 //! Every message is the Python app's, word for word, where Python has one:
-//! `desktop/updater.py`, `desktop/runtime_guard.py` and the update rules in
-//! `desktop/winspace.py`. Where Python let a library exception through (an
+//! `v2.0.0:desktop/updater.py`, `v2.0.0:desktop/runtime_guard.py` and the update rules in
+//! `v2.0.0:desktop/winspace.py`. Where Python let a library exception through (an
 //! HTTP error while downloading, invalid JSON, a failed `dpkg-deb`), the
 //! message is in the app's wording instead; those variants say so.
 

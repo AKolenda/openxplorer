@@ -3,8 +3,8 @@
 //!
 //! Every message is the Python app's, word for word: the `ValueError`,
 //! `FileExistsError`, `OSError` and `RuntimeError` texts of
-//! `desktop/archives.py`, `desktop/zip_extraction.py` and the archive
-//! branches of `dispatch` in `desktop/winspace.py`.
+//! `v2.0.0:desktop/archives.py`, `v2.0.0:desktop/zip_extraction.py` and the archive
+//! branches of `dispatch` in `v2.0.0:desktop/winspace.py`.
 
 use crate::location::LocationError;
 use crate::transfer::{Cancellation, TransferError};
@@ -40,7 +40,7 @@ pub enum ArchiveError {
     #[error("This archive is damaged or is not a TAR archive. Use an archive manager.")]
     DamagedArchive,
 
-    // Reading: desktop/archives.py and desktop/native_opening.py.
+    // Reading: v2.0.0:desktop/archives.py and v2.0.0:desktop/native_opening.py.
     /// ARC-005: the central directory is over 32 MiB.
     #[error("ZIP directory is too large for the built-in viewer. Use an archive manager.")]
     DirectoryTooLarge,
@@ -51,7 +51,7 @@ pub enum ArchiveError {
     #[error("This share does not support seekable ZIP reading. Mount it locally or use an archive manager.")]
     NotSeekable,
 
-    // Browsing and previewing: desktop/archives.py.
+    // Browsing and previewing: v2.0.0:desktop/archives.py.
     /// The folder to list is not a safe member path.
     #[error("Invalid archive folder.")]
     InvalidFolder,
@@ -77,7 +77,7 @@ pub enum ArchiveError {
     #[error("Decompression safety limit reached.")]
     PreviewLimitReached,
 
-    // Checking members before extraction: desktop/zip_extraction.py.
+    // Checking members before extraction: v2.0.0:desktop/zip_extraction.py.
     /// ARC-014: a member name is empty, over 4,096 characters, or hides a
     /// NUL or a different Unicode name.
     #[error("The archive contains an invalid or overlong member name.")]
@@ -130,7 +130,7 @@ pub enum ArchiveError {
     #[error("The archive exceeds the 20 GiB extraction limit. Use an archive manager.")]
     ArchiveTooLarge,
 
-    // Extracting: desktop/zip_extraction.py and desktop/winspace.py.
+    // Extracting: v2.0.0:desktop/zip_extraction.py and v2.0.0:desktop/winspace.py.
     /// The destination is an SMB server's list of shares.
     #[error("Open a network share before choosing it as an extraction destination.")]
     ServerListingDestination,

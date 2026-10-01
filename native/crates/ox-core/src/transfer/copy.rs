@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Recursive copy into staging. Ports `TransferEngine._copy` in
-//! `desktop/operations.py`.
+//! `v2.0.0:desktop/operations.py`.
 //!
 //! Rules enforced here:
 //! - XFER-017: items are inspected without following symbolic links; links

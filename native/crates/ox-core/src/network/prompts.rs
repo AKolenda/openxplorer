@@ -2,7 +2,7 @@
 //! Network sign-in: `GVfs`'s password and question prompts, answered by the
 //! window's own dialog.
 //!
-//! Ports `MountPrompts` in `desktop/auth_bridge.py`. `OpenXplorer` owns the
+//! Ports `MountPrompts` in `v2.0.0:desktop/auth_bridge.py`. `OpenXplorer` owns the
 //! prompt, not a credential database: `GVfs` keeps remembered passwords in
 //! the keyring, and [`SessionCredentials`] keeps the account so other
 //! shares on the server sign in without asking again.
@@ -30,7 +30,7 @@
 //!
 //! A successful mount of an SMB location is reported to the handlers of
 //! [`MountPrompts::connect_server_mounted`], where the window resumes the
-//! server's indexing, as `mount` in `desktop/winspace.py` does (NET-022).
+//! server's indexing, as `mount` in `v2.0.0:desktop/winspace.py` does (NET-022).
 //!
 //! | Module | Responsibility |
 //! |---|---|

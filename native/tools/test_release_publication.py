@@ -95,12 +95,10 @@ class ReleasePublicationTest(unittest.TestCase):
             stubs = {
                 'DIST': dist,
                 'TEST_RESULTS': folder / 'test-results',
-                'DESIGNS': folder / 'designs',
                 'WEBSITE_DOWNLOADS': (),
                 'release_version': lambda: '2.0.0',
                 'verify_debian_package': lambda package: None,
                 'write_source_archive': lambda archive: archive.write_bytes(b'source'),
-                'publish_preview': lambda: None,
             }
             with mock.patch.multiple(release, **stubs):
                 release.build_release(release.parse_arguments(['--packages', str(packages)]))

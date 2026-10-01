@@ -2,7 +2,7 @@
 //! The desktop's high-contrast setting.
 //!
 //! Ports the `@media (prefers-contrast: more)` rules of
-//! `desktop/ui/style.css`. On GNOME the user asks for more contrast with
+//! `v2.0.0:desktop/ui/style.css`. On GNOME the user asks for more contrast with
 //! `org.gnome.desktop.a11y.interface high-contrast` (Settings >
 //! Accessibility), so the skin follows that key (ui-spec.md §4.13, §8).
 //! Without the schema the contrast stays normal.

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Text size: the app's own zoom, independent of desktop scaling.
 //!
-//! Ports `desktop/ui/text-size.js` and its tests
-//! (`desktop/tests/text_size.test.cjs`). Ctrl+plus makes text larger,
+//! Ports `v2.0.0:desktop/ui/text-size.js` and its tests
+//! (`v2.0.0:desktop/tests/text_size.test.cjs`). Ctrl+plus makes text larger,
 //! Ctrl+minus smaller and Ctrl+0 resets it; row heights and icon-view cells
 //! follow the text so large text never clips.
 //!
@@ -203,7 +203,7 @@ mod tests {
         Step::ALL.into_iter().find(|step| step.keys().contains(&key))
     }
 
-    /// Ported from `desktop/tests/text_size.test.cjs::supported`
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::supported`
     ///
     /// parity: VIEW-044
     #[test]
@@ -213,7 +213,7 @@ mod tests {
         }
     }
 
-    /// Ported from `desktop/tests/text_size.test.cjs::fallback`
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::fallback`
     ///
     /// parity: VIEW-044
     #[test]
@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(TextSize::default(), TextSize::DEFAULT);
     }
 
-    /// Ported from `desktop/tests/text_size.test.cjs::Ctrl + / Ctrl - / Ctrl 0`
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::Ctrl + / Ctrl - / Ctrl 0`
     ///
     /// parity: VIEW-043
     #[test]
@@ -249,7 +249,7 @@ mod tests {
         assert_eq!(step_for("0"), Some(Step::Reset));
     }
 
-    /// Ported from `desktop/tests/text_size.test.cjs` (keypad add, keypad
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs` (keypad add, keypad
     /// subtract and keypad zero)
     ///
     /// parity: VIEW-043
@@ -261,7 +261,7 @@ mod tests {
         assert_eq!(step_for("KP_Insert"), Some(Step::Reset));
     }
 
-    /// Ported from `desktop/tests/text_size.test.cjs::Ctrl+C not captured`
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::Ctrl+C not captured`
     ///
     /// parity: VIEW-043
     #[test]
@@ -282,7 +282,7 @@ mod tests {
         assert_eq!(Step::Increase.accelerators()[0], "<Primary>plus");
     }
 
-    /// Ported from `desktop/tests/text_size.test.cjs::bounded stepping`
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::bounded stepping`
     ///
     /// parity: VIEW-044
     #[test]
@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(Step::Decrease.apply(TextSize::from_percent(0)).percent(), 90);
     }
 
-    /// Ported from `desktop/tests/text_size.test.cjs::default metrics unchanged`
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::default metrics unchanged`
     ///
     /// parity: VIEW-044
     #[test]
@@ -315,7 +315,7 @@ mod tests {
         assert_eq!(metrics(size(100)), expected);
     }
 
-    /// Ported from `desktop/tests/text_size.test.cjs::large text row clearance`
+    /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::large text row clearance`
     ///
     /// parity: VIEW-044
     #[test]

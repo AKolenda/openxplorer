@@ -4,7 +4,7 @@
 //!
 //! Ports `driveMenu`, `networkLocationMenu` and the menus of This PC's
 //! cards (`shares()` and the Devices and drives cards of `renderLanding`)
-//! in `desktop/ui/app.js`, with Dolphin's Eject and Safely remove added
+//! in `v2.0.0:desktop/ui/app.js`, with Dolphin's Eject and Safely remove added
 //! where a drive allows them. A menu is data ([`PlaceMenu`]); its items
 //! run window actions with the place as their target, and the menu opens
 //! where the pointer is ([`popup_place_menu`]).

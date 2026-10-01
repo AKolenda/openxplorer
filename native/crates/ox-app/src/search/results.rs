@@ -3,7 +3,7 @@
 //! the cached ones, once each and at most 500.
 //!
 //! Ports `currentFolderMatches` and the merge in `runSearch` in
-//! `desktop/ui/app.js` (SRCH-007, and the 1.1.0 fix for a folder whose
+//! `v2.0.0:desktop/ui/app.js` (SRCH-007, and the 1.1.0 fix for a folder whose
 //! only indexed folder is a child: a cached child does not cover its
 //! parent, so the listing's own matches come first).
 
@@ -129,7 +129,7 @@ mod tests {
     }
 
     /// Ported from `runSearch` and `currentFolderMatches` in
-    /// `desktop/ui/app.js`.
+    /// `v2.0.0:desktop/ui/app.js`.
     ///
     /// parity: SRCH-007
     #[test]

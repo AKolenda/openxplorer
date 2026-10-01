@@ -2,8 +2,8 @@
 //! "Set up network mount (SMB)" at the end of the Location tab (NET-027).
 //!
 //! Ports the `network-mount-assistant` part of `renderLocationPanel` in
-//! `desktop/ui/app.js` over ox-core's [`mount_plan`], which ports
-//! `mount_plan` in `desktop/mount_support.py`. The assistant only prepares
+//! `v2.0.0:desktop/ui/app.js` over ox-core's [`mount_plan`], which ports
+//! `mount_plan` in `v2.0.0:desktop/mount_support.py`. The assistant only prepares
 //! a command for the user to review and run in a terminal; it never runs
 //! anything and never asks for an administrator itself.
 

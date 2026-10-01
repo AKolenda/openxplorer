@@ -2,7 +2,7 @@
 //! Sign out of an SMB server: disconnect its mounts and forget its
 //! credentials.
 //!
-//! Ports `sign_out` in `desktop/winspace.py`, which checks every
+//! Ports `sign_out` in `v2.0.0:desktop/winspace.py`, which checks every
 //! precondition before it changes anything. The server's part comes in two
 //! steps, and the window does the rest of the Python method between and
 //! after them:

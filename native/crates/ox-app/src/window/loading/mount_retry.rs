@@ -3,7 +3,7 @@
 //! more.
 //!
 //! Ports `retry_list` and the `mount_retry` branch of `start_worker` in
-//! `desktop/winspace.py` (NET-004): the share is mounted once, asking for
+//! `v2.0.0:desktop/winspace.py` (NET-004): the share is mounted once, asking for
 //! credentials through the window's sign-in dialog if needed, and listed
 //! again from empty rows. A second "not mounted" is reported, never
 //! mounted again, and only listings come here: a write is never replayed

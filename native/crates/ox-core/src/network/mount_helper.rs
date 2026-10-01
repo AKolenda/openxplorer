@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The administrator mount helper, `openxplorer-mount-share`.
 //!
-//! Ports `desktop/mount_share.py`, the program that `sudo` runs from the
+//! Ports `v2.0.0:desktop/mount_share.py`, the program that `sudo` runs from the
 //! plan's command ([`MountPlan`](super::MountPlan)) in the user's own
 //! terminal. The GUI never runs it and never gains privileges. It prints
 //! the plan, asks for `SETUP` (or `REMOVE`) and the SMB account, writes a

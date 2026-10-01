@@ -3,7 +3,7 @@
 //! and the compact controls of a row.
 //!
 //! Ports the buttons, checkboxes and help paragraphs of
-//! `renderSettingsPage` in `desktop/ui/app.js` in the look of the settings
+//! `renderSettingsPage` in `v2.0.0:desktop/ui/app.js` in the look of the settings
 //! mockup: a checkbox becomes a switch and a paragraph a short note; a
 //! section's summary is a [`super::status_card::StatusCard`].
 //! `resources/skin/settings.css` styles the classes named here.

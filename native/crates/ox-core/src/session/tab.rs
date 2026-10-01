@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A tab's navigation state, as it moves to another window. Ports
-//! `tab_snapshot` and `location` in `desktop/window_state.py`.
+//! `tab_snapshot` and `location` in `v2.0.0:desktop/window_state.py`.
 //!
 //! The JSON form is the Python app's tab handoff format, so a snapshot
 //! also suits a saved session. Locations are the native app's: the Python
@@ -143,7 +143,7 @@ impl TabSnapshot {
     /// Validates a tab's state in the Python app's JSON form.
     ///
     /// Safety rule "only whitelisted tab state moves" (`tab_snapshot` in
-    /// `desktop/window_state.py`): every other field (a password, for
+    /// `v2.0.0:desktop/window_state.py`): every other field (a password, for
     /// example) is dropped; every location must pass the location rules,
     /// which refuse unknown schemes; history and selection are bounded; the
     /// scroll position must be finite and is clamped. A history that does

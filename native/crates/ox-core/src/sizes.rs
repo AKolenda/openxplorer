@@ -2,9 +2,9 @@
 //! On-demand folder sizes: a bounded, read-only scan that totals the
 //! logical size of the files below a folder.
 //!
-//! Ports `desktop/folder_sizes.py` (`scan_folder`, `LocalSizeProvider` and
+//! Ports `v2.0.0:desktop/folder_sizes.py` (`scan_folder`, `LocalSizeProvider` and
 //! `GioSizeProvider`) and the mount-point part of
-//! `desktop/mount_support.py`. A scan reads metadata only, never file
+//! `v2.0.0:desktop/mount_support.py`. A scan reads metadata only, never file
 //! contents, and is separate from the filename search index.
 //!
 //! The rules this module keeps:

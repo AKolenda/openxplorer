@@ -3,7 +3,7 @@
 //! and folder sizes.
 //!
 //! Ports the "Search cache" and "Folder sizes" sections of
-//! `renderSettingsPage` in `desktop/ui/app.js` (SET-006, SET-008,
+//! `renderSettingsPage` in `v2.0.0:desktop/ui/app.js` (SET-006, SET-008,
 //! SET-009), with the options of the settings mockup, including "Index
 //! pinned folders automatically" (the owner's decision of 2026-09-28 that
 //! anything pinned is indexed by default, SRCH-040). A status card says

@@ -3,7 +3,7 @@
 //! file's type, a ZIP archive, or a network location on the green bar.
 //!
 //! Replaces the choice between `icon()`, `folderIcon`, `zipFolderIcon`,
-//! `fileIcon` and `networkIcon` in `desktop/ui/app.js`. [`ArtImage`] shows
+//! `fileIcon` and `networkIcon` in `v2.0.0:desktop/ui/app.js`. [`ArtImage`] shows
 //! the result from real icons.
 //!
 //! Network locations follow the owner's reading of Windows Explorer (icon

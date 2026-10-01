@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The skin's stylesheets: the rules and the two palettes.
 //!
-//! Ports `desktop/ui/style.css` as `native/docs/ui-spec.md` refines it.
+//! Ports `v2.0.0:desktop/ui/style.css` as `native/docs/ui-spec.md` refines it.
 //! The rules live in `resources/skin/`, one file per region of the
 //! window, and refer to colours only by `@ox_*` tokens (or `transparent`).
 //! `light.css` and `dark.css` define every token, one palette per

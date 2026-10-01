@@ -2,7 +2,7 @@
 //! The name-conflict check before a paste or drop (OPS-026, OPS-027).
 //!
 //! Ports the `transferConflicts` branch of `dispatch` in
-//! `desktop/winspace.py`. The interface asks "Items already exist" only
+//! `v2.0.0:desktop/winspace.py`. The interface asks "Items already exist" only
 //! when this finds a taken name, and otherwise copies at once with the
 //! Skip policy, so a name that appears after the check is still never
 //! overwritten.

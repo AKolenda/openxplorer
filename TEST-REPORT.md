@@ -251,7 +251,7 @@ not claim a fix for every Software center's pre-install local-package view.
 
 The existing browser subtotal is 68 + 61 + 65 + 53 + 27 + 52 + 19.
 Including the new middle-click suite, application-browser checks total **374**.
-Logs and machine-readable results are in `desktop/test-results/` and
+Logs and machine-readable results are in `v2.0.0:desktop/test-results/` and
 `test-results/` in the complete bundle. Source ZIPs omit generated evidence,
 not the scripts needed to reproduce it.
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The command bar and its menus against `section.commandbar` in
-//! `desktop/ui/index.html` and the menus of `setup()` and `openNewMenu` in
-//! `desktop/ui/app.js`: the same controls in the same order, the same menu
+//! `v2.0.0:desktop/ui/index.html` and the menus of `setup()` and `openNewMenu` in
+//! `v2.0.0:desktop/ui/app.js`: the same controls in the same order, the same menu
 //! items and dividers, and the commands that are not ported yet shown
 //! disabled with the milestone that brings them.
 

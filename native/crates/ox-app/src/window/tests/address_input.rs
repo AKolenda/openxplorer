@@ -2,7 +2,7 @@
 //! Using the address bar: the crumbs' clicks, keys and wheel, editing
 //! the address and submitting it, against `renderNavigation`,
 //! `editAddress`, `finishAddress` and `submitAddress` in
-//! `desktop/ui/app.js`.
+//! `v2.0.0:desktop/ui/app.js`.
 //!
 //! GTK has no public way to synthesise input events, so these tests emit
 //! the signals of the controllers a real click, key or wheel reaches.

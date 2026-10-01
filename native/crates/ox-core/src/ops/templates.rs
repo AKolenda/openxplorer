@@ -2,7 +2,7 @@
 //! The templates New offers: six built-in starters and the files in the
 //! user's Templates folder.
 //!
-//! Ports `PRESETS` and `list_templates` in `desktop/file_services.py`.
+//! Ports `PRESETS` and `list_templates` in `v2.0.0:desktop/file_services.py`.
 //! OPS-048 limits which files count as user templates: at most
 //! [`MAX_USER_TEMPLATES`] regular files of at most [`MAX_TEMPLATE_BYTES`]
 //! that are neither hidden, links nor `.desktop` launchers, listed without

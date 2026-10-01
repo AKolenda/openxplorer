@@ -2,9 +2,9 @@
 //! Network shares in the app: what every window shares, each window's
 //! sign-in and server discovery.
 //!
-//! Ports the network half of `desktop/winspace.py` (the application's
+//! Ports the network half of `v2.0.0:desktop/winspace.py` (the application's
 //! `visited_network`, `signing_out_hosts` and keyring, each window's
-//! `MountPrompts`) and of `desktop/ui/app.js` (`receiveAuth`,
+//! `MountPrompts`) and of `v2.0.0:desktop/ui/app.js` (`receiveAuth`,
 //! `discoverNetwork`). The work itself is ox-core's
 //! [`network`](ox_core::network) service; this module keeps its state for
 //! the app and shows its questions. The window's own commands (Map network

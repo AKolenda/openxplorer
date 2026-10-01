@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! One entry per visible application for Open with, and the code-editor
-//! shortcuts. Ports `CatalogTests` of `desktop/tests/test_v06.py`.
+//! shortcuts. Ports `CatalogTests` of `v2.0.0:desktop/tests/test_v06.py`.
 
 use ox_core::integration::{editor_shortcuts, unique_applications};
 
@@ -18,7 +18,7 @@ fn ids(applications: &[TestApplication]) -> Vec<&str> {
         .collect()
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_duplicate_desktop_id`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_duplicate_desktop_id`
 /// parity: OPEN-011
 #[test]
 fn a_launcher_listed_twice_is_offered_once() {
@@ -27,7 +27,7 @@ fn a_launcher_listed_twice_is_offered_once() {
     assert_eq!(unique_applications([editor.clone(), editor], None).len(), 1);
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_duplicate_visible_name_prefers_primary`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_duplicate_visible_name_prefers_primary`
 /// parity: OPEN-011, OPEN-015
 #[test]
 fn of_two_launchers_with_one_name_the_primary_one_is_offered() {
@@ -37,7 +37,7 @@ fn of_two_launchers_with_one_name_the_primary_one_is_offered() {
     assert_eq!(unique_applications([flatpak, primary.clone()], None), [primary]);
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_preferred_default_wins`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_preferred_default_wins`
 /// parity: OPEN-011
 #[test]
 fn the_current_default_represents_its_name() {
@@ -49,14 +49,14 @@ fn the_current_default_represents_its_name() {
     assert_eq!(offered, [flatpak]);
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_url_helper_omitted`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_url_helper_omitted`
 /// parity: OPEN-011, OPEN-015
 #[test]
 fn url_handler_helpers_are_not_offered() {
     assert!(unique_applications([code("code-url-handler.desktop")], None).is_empty());
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_hidden_omitted`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_hidden_omitted`
 /// parity: OPEN-011
 #[test]
 fn hidden_launchers_are_not_offered() {
@@ -68,7 +68,7 @@ fn hidden_launchers_are_not_offered() {
     assert!(unique_applications([hidden], None).is_empty());
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_missing_identifier_omitted`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_missing_identifier_omitted`
 /// parity: OPEN-011
 #[test]
 fn launchers_without_an_id_are_not_offered() {
@@ -80,14 +80,14 @@ fn launchers_without_an_id_are_not_offered() {
     assert!(unique_applications([without_id], None).is_empty());
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_self_excluded`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_self_excluded`
 /// parity: OPEN-011
 #[test]
 fn openxplorer_is_not_offered_to_open_items() {
     assert!(unique_applications([code(OWN_ID)], None).is_empty());
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_no_argument_support_omitted`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_no_argument_support_omitted`
 /// parity: OPEN-011
 #[test]
 fn launchers_that_take_neither_files_nor_uris_are_not_offered() {
@@ -100,7 +100,7 @@ fn launchers_that_take_neither_files_nor_uris_are_not_offered() {
     assert!(unique_applications([no_arguments], None).is_empty());
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_distinct_editors_preserved`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_distinct_editors_preserved`
 /// parity: OPEN-015
 #[test]
 fn distinct_editors_each_get_a_shortcut() {
@@ -113,14 +113,14 @@ fn distinct_editors_each_get_a_shortcut() {
     assert_eq!(editor_shortcuts(editors).len(), 3);
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_other_app_not_editor_shortcut`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_other_app_not_editor_shortcut`
 /// parity: OPEN-015
 #[test]
 fn other_applications_get_no_editor_shortcut() {
     assert!(editor_shortcuts([app("evince.desktop", "Document Viewer")]).is_empty());
 }
 
-/// Ported from `desktop/tests/test_v06.py::CatalogTests::test_name_case_and_space_dedup`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::CatalogTests::test_name_case_and_space_dedup`
 /// parity: OPEN-011
 #[test]
 fn names_differing_in_case_and_spacing_are_one_application() {

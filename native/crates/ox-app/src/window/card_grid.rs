@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The landing pages' card grids.
 //!
-//! Ports `.quick-grid` and `.drive-grid` in `desktop/ui/style.css`:
+//! Ports `.quick-grid` and `.drive-grid` in `v2.0.0:desktop/ui/style.css`:
 //! `grid-template-columns: repeat(auto-fit, minmax(<narrowest>, 1fr))`. As
 //! many columns as fit at the narrowest width share the row; with fewer
 //! cards than columns, the cards share the whole width. `GtkFlowBox` keeps

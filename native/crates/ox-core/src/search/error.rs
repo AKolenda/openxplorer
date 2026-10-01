@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The error of every search cache operation.
 //!
-//! Mirrors the exceptions `desktop/search_index.py` and
-//! `desktop/index_service.py` raise. Messages that Python wrote itself are
+//! Mirrors the exceptions `v2.0.0:desktop/search_index.py` and
+//! `v2.0.0:desktop/index_service.py` raise. Messages that Python wrote itself are
 //! kept word for word, because the Search cache settings show them; GIO,
 //! location and storage failures keep the wording of the module that
 //! reports them.

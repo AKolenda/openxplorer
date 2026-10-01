@@ -2,8 +2,8 @@
 //! Type-to-select in the folder views: the typed prefix, the timer that
 //! ends it and its hint in the status bar.
 //!
-//! Ports the type-select glue in `desktop/ui/app.js`
-//! (`desktop/tests/ui_type_select.py` is its specification): typed
+//! Ports the type-select glue in `v2.0.0:desktop/ui/app.js`
+//! (`v2.0.0:desktop/tests/ui_type_select.py` is its specification): typed
 //! characters jump to the next name with that prefix, Backspace shortens
 //! it, and a pause ends it. [`crate::typeahead`] holds the matching rules;
 //! [`super::input`] decides which keys and clicks reach them.
@@ -175,7 +175,7 @@ mod tests {
         }
     }
 
-    /// Ported from `desktop/tests/ui_type_select.py` (the "Jump to" hint).
+    /// Ported from `v2.0.0:desktop/tests/ui_type_select.py` (the "Jump to" hint).
     #[test]
     fn the_hint_names_the_item_it_jumped_to() {
         let hint = typeahead_hint(&result("SC", Some(3)), Some("scripts"));

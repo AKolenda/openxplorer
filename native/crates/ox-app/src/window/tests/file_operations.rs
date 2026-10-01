@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! New, Rename, Delete, Duplicate, Undo and the transfer panel in a real
 //! window, against `newItem`, `newTemplateDialog`, `rename`, `trash` and
-//! `runOperation` of `desktop/ui/app.js`: the same dialogs, messages and
+//! `runOperation` of `v2.0.0:desktop/ui/app.js`: the same dialogs, messages and
 //! buttons, and the folder listed again afterwards. The tests that move
 //! items to the Trash use the test run's private Recycle Bin.
 

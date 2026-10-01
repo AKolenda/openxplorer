@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Cooperative cancellation of a running operation. Ports `Cancellation` in
-//! `desktop/operations.py`.
+//! `v2.0.0:desktop/operations.py`.
 //!
 //! The token wraps the [`gio::Cancellable`] that in-flight GIO calls receive,
 //! so cancelling it both stops the engine between steps and aborts a copy

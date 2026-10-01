@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Verify a native Debian package without installing it.
 
-Ports desktop/tools/verify_deb.py. It checks the package's identity and
+Ports v2.0.0:desktop/tools/verify_deb.py. It checks the package's identity and
 dependencies, that its payload is safe to unpack (no absolute or traversing
 paths, no links out of the package, root-owned, nothing group- or
 world-writable), the maintainer scripts, the checksums, the processor the
 program is built for and the AppStream catalog; verify_layout.py checks the
 installed files. For the stable package it also proves that the in-app
-updater of OpenXplorer 1.1.x in desktop/updater.py downloads, inspects and
+updater of OpenXplorer 1.1.x in v2.0.0:desktop/updater.py downloads, inspects and
 installs it. It is not a runtime test of the app.
 """
 from __future__ import annotations

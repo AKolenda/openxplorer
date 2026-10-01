@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Uploads to simulated MTP devices, and the moves a device can perform.
 //! Ports the staging and move cases of `DeviceStagingTests` in
-//! `desktop/tests/test_device_staging.py`; copies within one device are in
+//! `v2.0.0:desktop/tests/test_device_staging.py`; copies within one device are in
 //! `same_device.rs`, Replace in `device_replace.rs`. No real devices.
 
 use std::fs;
@@ -25,7 +25,7 @@ struct UploadShapeCase {
     content_file: &'static str,
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_file_copy_publishes_by_same_folder_rename` and
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_file_copy_publishes_by_same_folder_rename` and
 /// `test_partial_copy_never_visible_under_final_name`: files and folders
 /// are built under a staging name beside the final name and published by
 /// exactly one same-folder rename.
@@ -110,7 +110,7 @@ impl Provider for WatchedPhone {
     }
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_partial_copy_never_visible_under_final_name`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_partial_copy_never_visible_under_final_name`.
 ///
 /// parity: XFER-001, XFER-021
 #[test]
@@ -144,7 +144,7 @@ fn a_partial_folder_upload_is_never_visible_under_its_final_name() {
     phone.device.assert_only_moves_a_device_can_do();
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_second_copy_into_same_folder_succeeds`. The old engine
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_second_copy_into_same_folder_succeeds`. The old engine
 /// left the first copy as "payload", and the second failed with "libmtp
 /// error: could not move object".
 ///
@@ -240,7 +240,7 @@ fn folder_uploads_work_on_devices_without_move_object() {
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_skip_never_touches_existing` for devices.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_skip_never_touches_existing` for devices.
 ///
 /// parity: XFER-006
 #[test]
@@ -258,7 +258,7 @@ fn skip_on_a_device_never_touches_the_existing_item() {
     assert!(phone.moves().is_empty());
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_cancel_mid_copy_leaves_no_stage_and_no_final_name`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_cancel_mid_copy_leaves_no_stage_and_no_final_name`.
 ///
 /// parity: OPS-022, XFER-021
 #[test]
@@ -281,7 +281,7 @@ fn cancelling_an_upload_leaves_no_stage_and_no_final_name() {
     );
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_device_move_relists_each_source_folder_once`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_device_move_relists_each_source_folder_once`.
 ///
 /// parity: XFER-025
 #[test]
@@ -310,7 +310,7 @@ fn device_moves_relist_the_old_folder_once_per_batch() {
     device.assert_only_moves_a_device_can_do();
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_device_move_with_new_name_is_refused_not_misnamed`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_device_move_with_new_name_is_refused_not_misnamed`.
 ///
 /// parity: XFER-024
 #[test]

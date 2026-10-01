@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The contents of `settings.json` and the limits each list obeys.
 //!
-//! Ports the `Settings.data` layout of `desktop/core.py`. Field order
+//! Ports the `Settings.data` layout of `v2.0.0:desktop/core.py`. Field order
 //! matches the Python dictionaries, so both applications write the same
 //! file layout. The preferences themselves are in the `preferences` module.
 

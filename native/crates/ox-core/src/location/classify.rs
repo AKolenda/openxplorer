@@ -4,7 +4,7 @@
 //! folder that gets the network icon, or a whole SMB server or share.
 //!
 //! Ports `readonlyLocation`, `writableLocation`, `networkLocation` and
-//! `isSmbShareRoot` from `desktop/ui/app.js`, extended with the virtual
+//! `isSmbShareRoot` from `v2.0.0:desktop/ui/app.js`, extended with the virtual
 //! places in [`VirtualPlace`]. The session facts they read live in
 //! [`LocationContext`].
 

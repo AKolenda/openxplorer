@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The error of every settings change.
 //!
-//! Mirrors the exceptions `desktop/core.py` raises, including those of the
-//! private storage it relies on (`desktop/private_storage.py`, ported in
+//! Mirrors the exceptions `v2.0.0:desktop/core.py` raises, including those of the
+//! private storage it relies on (`v2.0.0:desktop/private_storage.py`, ported in
 //! `crate::private_storage`). Python raises `ValueError` for a request or
 //! stored data that fails validation, for a location or label it refuses,
 //! and for a file private storage refuses; here they are

@@ -4,8 +4,8 @@
 //!
 //! Ports the `cacheSet`, `cacheRefresh`, `cacheStop`, `cacheClear` and
 //! `cacheRemove` bridge operations and `invalidate_cache_for_write` in
-//! `desktop/winspace.py`, and `cancel`, `pause_server` and
-//! `resume_server` in `desktop/index_service.py` (SRCH-019 to SRCH-023,
+//! `v2.0.0:desktop/winspace.py`, and `cancel`, `pause_server` and
+//! `resume_server` in `v2.0.0:desktop/index_service.py` (SRCH-019 to SRCH-023,
 //! SRCH-033). A process that does not own the index passes each request
 //! on to the owner through the database.
 

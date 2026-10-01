@@ -3,7 +3,7 @@
 //! alone without contacting a device: where copies are staged, whether MTP
 //! `CopyObject` keeps the source's name, and which device moves are
 //! refused. Ports the capability cases of
-//! `desktop/tests/test_device_staging.py`.
+//! `v2.0.0:desktop/tests/test_device_staging.py`.
 
 use ox_core::gio_node::GioNode;
 use ox_core::transfer::{Node, TransferError};
@@ -11,7 +11,7 @@ use ox_core::transfer::{Node, TransferError};
 /// A photo on an MTP device. No test here contacts a device.
 const DEVICE_PHOTO: &str = "mtp://test-device/Internal/source/photo.jpg";
 
-/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_device_schemes_request_sibling_staging`:
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_device_schemes_request_sibling_staging`:
 /// only MTP locations stage beside the final name; cameras on gphoto2 keep
 /// folder staging.
 ///
@@ -30,7 +30,7 @@ fn only_mtp_destinations_stage_beside_the_final_name() {
     assert_eq!(others_stage_beside, [false, false, false], "{others:?}");
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_same_device_copies_are_detected`:
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_same_device_copies_are_detected`:
 /// MTP `CopyObject` keeps the source's name, which only matters for a copy
 /// within one device.
 ///

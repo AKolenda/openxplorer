@@ -2,7 +2,7 @@
 //! The check a typed name passes before any file operation sees it
 //! (OPS-006).
 //!
-//! Ports `validateName` in `desktop/ui/app.js`. The dialog shows its
+//! Ports `validateName` in `v2.0.0:desktop/ui/app.js`. The dialog shows its
 //! message and stays open; the operation then checks the name again with
 //! ox-core's own rules ([`ox_core::location::validate_name`]), whose
 //! messages the dialog shows the same way.
@@ -68,7 +68,7 @@ mod tests {
         assert_eq!(name_warning("Notes", false), None);
     }
 
-    /// Ported from the name rules of `desktop/tests/test_core.py::CoreTests::test_names`,
+    /// Ported from the name rules of `v2.0.0:desktop/tests/test_core.py::CoreTests::test_names`,
     /// as `validateName` applies them before the backend.
     ///
     /// parity: OPS-006

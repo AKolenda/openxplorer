@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Live local change events: one inotify watch per indexed directory.
 //!
-//! Ports `LocalWatch` in `desktop/local_watch.py` (SRCH-028, SRCH-029).
+//! Ports `LocalWatch` in `v2.0.0:desktop/local_watch.py` (SRCH-028, SRCH-029).
 //! No file contents are read here. Watch exhaustion and queue overflow are
 //! reported to the service, never passed off as complete live coverage.
 //!
@@ -383,7 +383,7 @@ mod tests {
         Vec::new()
     }
 
-    /// Ported from `desktop/tests/test_v05.py::LiveTests::test_watch_limit_fallback_is_reported`
+    /// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_watch_limit_fallback_is_reported`
     /// (the watch half; the service half is in `service_tests.rs`).
     ///
     /// parity: SRCH-029

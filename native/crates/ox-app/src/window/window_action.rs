@@ -2,7 +2,7 @@
 //! The names of the window's actions (`win.*`).
 //!
 //! Buttons, menus, sidebar rows and keyboard shortcuts run the command
-//! handlers of `desktop/ui/app.js` as window actions, by name. GTK ignores
+//! handlers of `v2.0.0:desktop/ui/app.js` as window actions, by name. GTK ignores
 //! a name it does not know, so a misspelt name would leave a control that
 //! silently does nothing. [`WindowAction`] keeps every name in one table,
 //! which turns such a typo into a compile error. The templates in

@@ -3,7 +3,7 @@
 //! undo record of a sync.
 //!
 //! Ports `read_object` and `atomic_bytes` of
-//! `desktop/brave_integration.py` and the record format of
+//! `v2.0.0:desktop/brave_integration.py` and the record format of
 //! `BraveIntegration.sync`. Only `download.default_directory` and
 //! `savefile.default_directory` are ever changed; every other preference
 //! is written back with the value it was read with. Numbers are parsed

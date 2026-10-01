@@ -3,8 +3,8 @@
 //! the chosen one.
 //!
 //! Ports `list_applications` and `prepare_launch` of
-//! `desktop/file_services.py` and `launch_selected` of
-//! `desktop/winspace.py` (OPEN-011, OPEN-012, OPEN-015). The list is one
+//! `v2.0.0:desktop/file_services.py` and `launch_selected` of
+//! `v2.0.0:desktop/winspace.py` (OPEN-011, OPEN-012, OPEN-015). The list is one
 //! entry per visible name ([`unique_applications`]), never the app itself,
 //! a hidden launcher or one that takes neither files nor URIs; on a share
 //! without a local mount only applications that read URIs are available.
@@ -418,7 +418,7 @@ mod tests {
     }
 
     /// Ported from the row labels of `openWithDialog` in
-    /// `desktop/ui/app.js`.
+    /// `v2.0.0:desktop/ui/app.js`.
     ///
     /// parity: OPEN-011
     #[test]

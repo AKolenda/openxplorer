@@ -3,8 +3,8 @@
 //! memory, so no test changes the associations of the session it runs in.
 //!
 //! Ports the page behaviour of `renderDefaultStatus`, `changeDefault` and
-//! `changeZipDefault` in `desktop/ui/app.js`, and `DefaultsTests` of
-//! `desktop/tests/test_rc3.py` as seen from the page.
+//! `changeZipDefault` in `v2.0.0:desktop/ui/app.js`, and `DefaultsTests` of
+//! `v2.0.0:desktop/tests/test_rc3.py` as seen from the page.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};

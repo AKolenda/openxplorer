@@ -4,12 +4,12 @@
 //! moving tabs between windows.
 //!
 //! Ports the file-operation branches of `dispatch` in
-//! `desktop/winspace.py` (`create`, `rename`, `templates`,
+//! `v2.0.0:desktop/winspace.py` (`create`, `rename`, `templates`,
 //! `createTemplate`, `transferConflicts`, `operate`, `trashSupport`), the
-//! template half of `desktop/file_services.py`, `create_item`,
-//! `rename_item` and `trash_support` in `desktop/gio_backend.py`,
-//! `desktop/tab_transfers.py`, and the delete confirmation, progress and
-//! completion text of `desktop/ui/app.js`. Copies, moves, Trash and
+//! template half of `v2.0.0:desktop/file_services.py`, `create_item`,
+//! `rename_item` and `trash_support` in `v2.0.0:desktop/gio_backend.py`,
+//! `v2.0.0:desktop/tab_transfers.py`, and the delete confirmation, progress and
+//! completion text of `v2.0.0:desktop/ui/app.js`. Copies, moves, Trash and
 //! permanent deletion run on the transfer engine of [`crate::transfer`]
 //! with all of its safety rules.
 //!
@@ -62,12 +62,12 @@
 //! | `unfinished` | Marks of running copies, and what a crashed run left |
 //! | `tab_transfer` | Moving a tab to another window |
 //!
-//! The tests of this service in `desktop/tests` are ported to
+//! The tests of this service in `v2.0.0:desktop/tests` are ported to
 //! `tests/ops_*.rs`, each naming the test it comes from;
 //! `ops_tab_transfer.rs` names the two that the typed interface makes
 //! unnecessary. Not ported here:
 //! `properties`, `list_applications`, `prepare_launch` and
-//! `SnapshotProvider` of `desktop/file_services.py`, which belong to the
+//! `SnapshotProvider` of `v2.0.0:desktop/file_services.py`, which belong to the
 //! Properties and Open with services.
 
 mod batch_rename;

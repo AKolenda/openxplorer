@@ -4,7 +4,7 @@
    of the window (§4); src/theme/stylesheets.rs joins them in this order:
    base, title-bar, navigation, command-bar, sidebar, folder-views,
    details-pane, status-bar, landing, menus, settings, breakpoints.
-   Measurements follow desktop/ui/style.css; colours are the @ox_* tokens
+   Measurements follow v2.0.0:desktop/ui/style.css; colours are the @ox_* tokens
    of light.css and dark.css; font sizes and text-dependent heights are
    generated from the text size (src/theme/fonts.rs). This provider sits
    above GTK's built-in theme, which the app forces underneath. */

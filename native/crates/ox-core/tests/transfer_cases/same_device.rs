@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Copies within one simulated MTP device, where `CopyObject` keeps the
 //! source's name whatever target is asked for. Ports the same-device cases
-//! of `DeviceStagingTests` in `desktop/tests/test_device_staging.py`. No
+//! of `DeviceStagingTests` in `v2.0.0:desktop/tests/test_device_staging.py`. No
 //! real devices.
 
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use crate::transfer_support::{
     *,
 };
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_same_device_keep_both_renames_inside_the_private_folder`
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_same_device_keep_both_renames_inside_the_private_folder`
 /// and `test_same_device_file_copy_is_built_inside_a_private_folder`.
 ///
 /// parity: XFER-023
@@ -104,7 +104,7 @@ impl Provider for FailingSameDeviceCopy {
     }
 }
 
-/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_same_device_copy_failure_leaves_nothing_under_the_final_name`.
+/// Ported from `v2.0.0:desktop/tests/test_device_staging.py::DeviceStagingTests::test_same_device_copy_failure_leaves_nothing_under_the_final_name`.
 ///
 /// parity: XFER-001, XFER-023
 #[test]

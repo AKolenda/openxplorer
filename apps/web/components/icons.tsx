@@ -29,7 +29,7 @@ export function Icon({name = 'folder',size = 20,className = '',style}:{name?:str
  };
  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} style={style} aria-hidden="true">{(paths[name]||paths.folder).map((d,i)=><path key={i} d={d}/>)}</svg>;
 }
-/** The application icon (desktop/ui/winspace.svg), inline so standalone pages need no extra request. */
+/** The application icon (public/assets/folder.svg, from v2.0.0:desktop/ui/winspace.svg), inline so standalone pages need no extra request. */
 export function AppIcon({size=36}:{size?:number}) {
  return <svg className="app-icon" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true"><path d="M4 12a3 3 0 0 1 3-3h12l5 5h17a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z" fill="#d99a22"/><path d="M5 16h36v6H5z" fill="#fff0bd"/><path d="M4 20h17l4-4h17a3 3 0 0 1 3 3l-2 19a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z" fill="#ffce56"/><path d="M4 25h40l-1 13a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z" fill="#f7bd40"/><path d="M6 21h15l4-4h16" fill="none" stroke="#fff0a9"/></svg>;
 }

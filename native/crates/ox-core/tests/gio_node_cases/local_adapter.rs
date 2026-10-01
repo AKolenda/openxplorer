@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The production GIO adapter on local files: listing, copying, moving and
 //! publishing, each without following links and without overwriting.
-//! Ports `desktop/tests/gio_integration.py`.
+//! Ports `v2.0.0:desktop/tests/gio_integration.py`.
 
 use std::ffi::OsString;
 use std::fs;
@@ -14,7 +14,7 @@ use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeKind, Operation,
 use super::shared::{gio_engine, mode_of, set_mode, temporary_folder, RestoreOwnerAccess};
 use super::{node, LinkedFolder};
 
-/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_enumeration_and_creation`
+/// Ported from `v2.0.0:desktop/tests/gio_integration.py::GioLocalIntegration::test_enumeration_and_creation`
 /// (the listing half).
 ///
 /// parity: XFER-017
@@ -126,7 +126,7 @@ fn replace_native_overwrites_the_existing_file() {
     );
 }
 
-/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_enumeration_and_creation`
+/// Ported from `v2.0.0:desktop/tests/gio_integration.py::GioLocalIntegration::test_enumeration_and_creation`
 /// (the creation half): copies, moves and new folders never take a name
 /// that exists.
 ///
@@ -269,7 +269,7 @@ fn names_that_are_not_utf8_are_listed_and_copied_byte_for_byte() {
     );
 }
 
-/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_recursive_copy_preserves_link_and_source`
+/// Ported from `v2.0.0:desktop/tests/gio_integration.py::GioLocalIntegration::test_recursive_copy_preserves_link_and_source`
 ///
 /// parity: XFER-001, XFER-005, XFER-017
 #[test]

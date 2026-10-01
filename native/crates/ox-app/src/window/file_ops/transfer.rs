@@ -2,7 +2,7 @@
 //! Paste (Ctrl+V), and copies and moves into a folder with the
 //! name-conflict check (CLIP-003, OPS-026, OPS-027, OPS-028, OPS-036).
 //!
-//! Ports `paste` and `transferWithConflicts` of `desktop/ui/app.js`.
+//! Ports `paste` and `transferWithConflicts` of `v2.0.0:desktop/ui/app.js`.
 //! Paste reads the desktop's clipboard again first. Before anything is
 //! copied, the destination is checked for every incoming name; without a
 //! conflict the copy starts at once with the Skip policy, so a name that

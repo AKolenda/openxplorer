@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The sign-in dialog and its queue, against `renderAuth`, `submitAuth`,
-//! `receiveAuth` and `dismissAuth` in `desktop/ui/app.js` and the
-//! `desktop/tests/ui_release.py` checks of the dialog. ox-core's real
+//! `receiveAuth` and `dismissAuth` in `v2.0.0:desktop/ui/app.js` and the
+//! `v2.0.0:desktop/tests/ui_release.py` checks of the dialog. ox-core's real
 //! prompts ask through the queue: each test emits `GVfs`'s signals on a
 //! `gio::MountOperation` and reads its replies, with an in-memory keyring,
 //! so nothing is mounted.
@@ -104,8 +104,8 @@ fn assert_shows(widget: &impl IsA<gtk::Widget>, expected: &[&str]) {
     }
 }
 
-/// Ported from `desktop/tests/ui_release.py::Credentials default to remembered`
-/// and `desktop/tests/ui_release.py::No separate domain field`
+/// Ported from `v2.0.0:desktop/tests/ui_release.py::Credentials default to remembered`
+/// and `v2.0.0:desktop/tests/ui_release.py::No separate domain field`
 ///
 /// parity: NET-007
 #[gtk::test]
@@ -144,7 +144,7 @@ fn the_dialog_names_the_server_and_preselects_remember() {
 /// Connect hands `GVfs` the account typed, with the password field
 /// emptied before the answer leaves the dialog, and the dialog goes.
 ///
-/// Ported from `desktop/tests/ui_release.py::Session-only credential form submits and clears its DOM`
+/// Ported from `v2.0.0:desktop/tests/ui_release.py::Session-only credential form submits and clears its DOM`
 ///
 /// Neither field is spell-checked, which would hand the typed account
 /// to a spelling service (`spellcheck=false` in app.js).
@@ -201,7 +201,7 @@ fn a_refused_answer_keeps_the_dialog_open_with_the_reason() {
 /// Unchecked, the note says the account is kept for the login session,
 /// and `GVfs` is asked to keep it for exactly that.
 ///
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_unchecked_session_not_never`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_unchecked_session_not_never`
 ///
 /// parity: NET-007, NET-011
 #[gtk::test]
@@ -328,7 +328,7 @@ fn duplicate_of_the_shown(fixture: &PromptsFixture) -> Challenge {
 /// Closing the dialog (×, Escape or the window's close) cancels its
 /// challenge only, which aborts that mount.
 ///
-/// Ported from `desktop/tests/test_v05.py::AuthTests::test_cancelled_challenge_dismisses`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_cancelled_challenge_dismisses`
 ///
 /// parity: NET-009, NET-012
 #[gtk::test]
@@ -369,7 +369,7 @@ fn the_dialog_opens_over_the_windows_own_dialog() {
 /// Enter in a field presses Connect; the user name has focus when the
 /// dialog opens, and the eye shows and hides the password.
 ///
-/// Ported from `desktop/tests/ui_v093.py::Delayed autofocus does not steal password input`
+/// Ported from `v2.0.0:desktop/tests/ui_v093.py::Delayed autofocus does not steal password input`
 ///
 /// parity: NET-007, NET-008, NET-009
 #[gtk::test]

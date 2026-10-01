@@ -21,6 +21,8 @@ TEXT = {
     '.rs', '.toml', '.lock',
 }
 SKIP={'.git','node_modules','.next','.pnpm-store','__pycache__'}
+# The tour's scenes and the hashes of its pictures (tools/capture-native-tour.py).
+TOUR_FILE='apps/web/public/tour/scenes.json'
 
 
 def audit_files(directory: Path) -> Iterator[Path]:
@@ -63,8 +65,9 @@ def contains_private_term(value):
 deny_terms(os.environ.get('OX_PRIVATE_TERMS','').split(','))
 def audit(paths):
     seen=set();issues=[];texts=archives=images=0
+    TOUR=ROOT/TOUR_FILE
     known_images=set()
-    for manifest in (ROOT/'apps/web/public/assets/screenshots/manifest.json',ROOT/'docs/assets/manifest.json'):
+    for manifest in (ROOT/'apps/web/public/assets/screenshots/manifest.json',ROOT/'docs/assets/manifest.json',TOUR):
         if manifest.exists():known_images.update(json.loads(manifest.read_text()).get('sha256',{}).values())
     def visit(name,data,depth=0):
         nonlocal texts,archives,images
@@ -90,7 +93,7 @@ def audit(paths):
                     if m.isfile():visit(name+'!/'+m.name,t.extractfile(m).read(),depth+1)
         elif suffix in {'.png','.jpg','.jpeg','.webp'}:
             images+=1
-            if any(part in name for part in ('assets/screenshots/','docs/assets/')) and h not in known_images:issues.append(name+': unregistered image inside publication/archive')
+            if any(part in name for part in ('assets/screenshots/','docs/assets/','public/tour/')) and h not in known_images:issues.append(name+': unregistered image inside publication/archive')
         elif suffix in TEXT or suffix=='':
             try:s=html.unescape(unquote(data.decode('utf-8'))).casefold()
             except UnicodeError:return
@@ -114,21 +117,32 @@ def audit(paths):
     if manifest_path.exists():
         manifest=json.loads(manifest_path.read_text())
         if not manifest.get('fixturePolicy'):issues.append('Screenshot manifest missing fixture policy')
-        if manifest.get('fixtureSourceSha256')!=digest((ROOT/'desktop/ui/app.js').read_bytes()):issues.append('Screenshot fixture source has changed since capture')
+        if manifest.get('nativeRuntime') is not True:issues.append('Screenshots must be captured from the native app')
         for name,expected in manifest.get('sha256',{}).items():
             path=manifest_path.parent/name
             if not path.exists() or digest(path.read_bytes())!=expected:issues.append('Screenshot hash mismatch: '+name)
             else:provenance.append(name)
         if len(provenance)!=7:issues.append('Expected seven regenerated product screenshots')
     else:issues.append('Missing screenshot manifest')
+    # The tour's pictures, registered with their hashes in scenes.json.
+    tour_pictures=[]
+    if TOUR.exists():
+        tour=json.loads(TOUR.read_text())
+        hashes=tour.get('sha256',{})
+        for scene in tour.get('scenes',[]):
+            for name in scene.get('images',{}).values():
+                path=TOUR.parent/name
+                if name not in hashes or not path.exists() or digest(path.read_bytes())!=hashes[name]:issues.append('Tour picture hash mismatch: '+name)
+                else:tour_pictures.append(name)
     # Every published PNG must come from the screenshot tools, not an attachment.
     web_manifest=ROOT/'docs/assets/manifest.json'
     trusted=set(json.loads(manifest_path.read_text()).get('sha256',{}).values()) if manifest_path.exists() else set()
-    if web_manifest.exists():trusted.update(json.loads(web_manifest.read_text()).get('sha256',{}).values())
+    for registry in (web_manifest,TOUR):
+        if registry.exists():trusted.update(json.loads(registry.read_text()).get('sha256',{}).values())
     for directory in ['apps/web/public','docs/assets','designs']:
         for p in (ROOT/directory).rglob('*.png'):
             if digest(p.read_bytes()) not in trusted:issues.append('Unregistered public screenshot: '+str(p.relative_to(ROOT)))
-    return {'passed':not issues,'privateIdentifierRules':len(DENIED),'uniqueTextFiles':texts,'uniqueArchives':archives,'uniqueImages':images,'verifiedProductScreenshots':provenance,'issues':issues,'scope':'Known private-data fingerprints in UTF-8 text, URL/HTML-decoded text, and recursively inspected ZIP/deb payloads; public PNG hashes verified against regenerated capture manifests. No OCR; visual review also required.'}
+    return {'passed':not issues,'privateIdentifierRules':len(DENIED),'uniqueTextFiles':texts,'uniqueArchives':archives,'uniqueImages':images,'verifiedProductScreenshots':provenance,'verifiedTourPictures':len(tour_pictures),'issues':issues,'scope':'Known private-data fingerprints in UTF-8 text, URL/HTML-decoded text, and recursively inspected ZIP/deb payloads; public PNG hashes verified against regenerated capture manifests. No OCR; visual review also required.'}
 if __name__=='__main__':
     ap=argparse.ArgumentParser();ap.add_argument('paths',nargs='*',type=Path);ap.add_argument('--json',type=Path);ap.add_argument('--private-terms',type=Path,help='Local JSON array, kept outside the repository');a=ap.parse_args()
     if a.private_terms:

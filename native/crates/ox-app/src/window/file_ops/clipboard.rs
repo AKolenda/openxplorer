@@ -3,7 +3,7 @@
 //! CLIP-016).
 //!
 //! Ports `copySelection`, `refreshClipboard` and `clipboardConsume` of
-//! `desktop/ui/app.js` with the GTK half of `desktop/file_clipboard.py`.
+//! `v2.0.0:desktop/ui/app.js` with the GTK half of `v2.0.0:desktop/file_clipboard.py`.
 //! ox-core encodes and decodes the formats ([`ox_core::clipboard`]); this
 //! module claims and reads the display's clipboard:
 //!

@@ -2,7 +2,7 @@
 //! The settings shared by every item of one run, and what they imply for
 //! each item: whether it is copied, moved, trashed or deleted, its start
 //! progress, and whether the write guard checks its source. Ports the batch
-//! arguments of `TransferEngine._run_items` in `desktop/operations.py`.
+//! arguments of `TransferEngine._run_items` in `v2.0.0:desktop/operations.py`.
 
 use super::cancellation::Cancellation;
 use super::conflicts::Placement;

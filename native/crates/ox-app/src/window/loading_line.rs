@@ -2,8 +2,8 @@
 //! The thin line that runs over the top of the folder pane while a folder
 //! is listed.
 //!
-//! Ports `#loading-line` in `desktop/ui/index.html` and `.loading-line` in
-//! `desktop/ui/style.css`: a 2-pixel line laid over the pane, so showing it
+//! Ports `#loading-line` in `v2.0.0:desktop/ui/index.html` and `.loading-line` in
+//! `v2.0.0:desktop/ui/style.css`: a 2-pixel line laid over the pane, so showing it
 //! never moves the items, with a bar sliding across it
 //! (`resources/skin/folder-views.css`). It appears only when a listing
 //! takes longer than [`APPEARANCE_DELAY`], so folders that list at once

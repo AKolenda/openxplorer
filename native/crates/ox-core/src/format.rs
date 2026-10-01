@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Text formatting shared by the list, status bar and dialogs.
 //!
-//! Ports `prettyBytes` and `dateText` from `desktop/ui/app.js`, and
+//! Ports `prettyBytes` and `dateText` from `v2.0.0:desktop/ui/app.js`, and
 //! replaces its Properties dialog `timestamp`.
 //!
 //! Dates follow the user's `LC_TIME` locale as the web UI followed the
@@ -324,7 +324,7 @@ mod tests {
         DateTime::from_utc(2026, 9, 21, 14, 13, 20.0).expect("valid date")
     }
 
-    /// Ported from the size examples in `desktop/ui/app.js::prettyBytes`.
+    /// Ported from the size examples in `v2.0.0:desktop/ui/app.js::prettyBytes`.
     ///
     /// parity: VIEW-003
     #[test]
@@ -370,7 +370,7 @@ mod tests {
         assert_eq!(pretty_bytes(u64::MAX), "16777216 TB");
     }
 
-    /// Ported from `desktop/ui/app.js::dateText` (`n ? … : '—'`) and
+    /// Ported from `v2.0.0:desktop/ui/app.js::dateText` (`n ? … : '—'`) and
     /// `timestamp` (`value ? … : 'Not provided'`). The web interface got 0
     /// for an unknown time; here it is `None`, and the entry module reads a
     /// reported 0 as `None` too.

@@ -2,7 +2,7 @@
 //! Pointing Brave's download folder at the user's Downloads folder, and
 //! putting the previous folder back.
 //!
-//! Ports `desktop/brave_integration.py` (INT-019 to INT-021). The change
+//! Ports `v2.0.0:desktop/brave_integration.py` (INT-019 to INT-021). The change
 //! is explicit and offline, and every rule of the Python module holds:
 //!
 //! - Only detected native profiles are changed; Flatpak and Snap installs

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The sidebar's rows as data, in the order of `renderSidebar` in
-//! `desktop/ui/app.js`: Home (the home folder), the Quick access folders
+//! `v2.0.0:desktop/ui/app.js`: Home (the home folder), the Quick access folders
 //! and pins, the searches saved to the sidebar (SRCH-038), This PC with
 //! Local Disk and the drives and devices, and
 //! Network with the merged network locations, then Recent files and the

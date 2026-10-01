@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Windows-style type-ahead: typing a filename prefix selects the next match.
 //!
-//! Ports `desktop/ui/type-select.js` and its tests
-//! (`desktop/tests/type_select.test.cjs`). The search runs over the list in
+//! Ports `v2.0.0:desktop/ui/type-select.js` and its tests
+//! (`v2.0.0:desktop/tests/type_select.test.cjs`). The search runs over the list in
 //! display order, wraps around and never activates anything. Apart from
 //! `GLib`'s Unicode normalisation this module is plain Rust, so the behaviour
 //! is unit-tested without a display; the window's key handling that feeds
@@ -245,7 +245,7 @@ impl Controller {
 }
 
 /// Each test ports the test of the same name in
-/// `desktop/tests/type_select.test.cjs`.
+/// `v2.0.0:desktop/tests/type_select.test.cjs`.
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -19,7 +19,7 @@ pub fn parse_fixture<T: DeserializeOwned>(json: &str) -> T {
     serde_json::from_str(json).expect("the committed fixture matches its Rust types")
 }
 
-/// What `desktop/core.py` answered for one input; see `generate_python.py`.
+/// What `v2.0.0:desktop/core.py` answered for one input; see `generate_python.py`.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Outcome<T> {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The lock that elects one index owner among all `OpenXplorer` processes.
 //!
-//! Ports `owner_fd`, `elect` and `_release` in `desktop/index_service.py`
+//! Ports `owner_fd`, `elect` and `_release` in `v2.0.0:desktop/index_service.py`
 //! (SRCH-027). The Python app takes the same `flock`, so a Python and a
 //! Rust process never both crawl.
 

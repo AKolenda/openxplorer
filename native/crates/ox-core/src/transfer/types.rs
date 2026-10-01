@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Transfer request and progress types: the operation of a run, the
 //! protocol names of modes and conflict policies accepted by
-//! `TransferEngine.run` in `desktop/operations.py`, its progress events and
+//! `TransferEngine.run` in `v2.0.0:desktop/operations.py`, its progress events and
 //! its `Result`.
 
 use std::str::FromStr;
@@ -206,7 +206,7 @@ pub struct Landed {
 mod tests {
     use super::*;
 
-    /// Ported from `desktop/tests/test_operations.py::TransferTests::test_unknown_operation_rejected`.
+    /// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_unknown_operation_rejected`.
     /// Only the parsing can be tested:
     /// an unknown name never becomes a [`TransferMode`] or
     /// [`ConflictPolicy`], so the engine cannot be asked to run one.

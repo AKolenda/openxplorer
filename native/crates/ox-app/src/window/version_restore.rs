@@ -2,7 +2,7 @@
 //! Restore a copy of a previous version (PROP-025).
 //!
 //! Ports `restoreVersion` and the `runOperation('copy', …, 'keep-both')`
-//! it ends with in `desktop/ui/app.js`: the Restore dialog checks the
+//! it ends with in `v2.0.0:desktop/ui/app.js`: the Restore dialog checks the
 //! destination, then the transfer engine copies the version there with
 //! Keep both, with progress and Cancel in the transfer panel, so neither
 //! the live original nor the snapshot is replaced. The end is reported

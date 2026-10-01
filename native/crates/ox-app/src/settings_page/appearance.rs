@@ -4,7 +4,7 @@
 //!
 //! Ports the "Appearance & layout" section of `renderSettingsPage`,
 //! `textSizeControls` and `menuPreferenceControls` in
-//! `desktop/ui/app.js` (SET-005). The theme is chosen from three preview
+//! `v2.0.0:desktop/ui/app.js` (SET-005). The theme is chosen from three preview
 //! cards, as in the settings mockup. Each card's radio button, one group
 //! of three, runs the window's `win.theme` action, as the Appearance menu
 //! does, so every window changes at once; screen readers hear one choice

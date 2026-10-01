@@ -3,8 +3,8 @@
 //! windows, and to other apps a file list with a mounted share's items as
 //! local files, the paths as text, and KDE's list of the own addresses.
 //!
-//! Ports `file_uri` and `prepare_files` of `desktop/native_file_drag.py`
-//! and `fileDragEntry` of `desktop/ui/app.js`. Only real local and SMB
+//! Ports `file_uri` and `prepare_files` of `v2.0.0:desktop/native_file_drag.py`
+//! and `fileDragEntry` of `v2.0.0:desktop/ui/app.js`. Only real local and SMB
 //! files, folders and links can leave, 1 to 200 of them, and one item that
 //! may not refuses the whole drag with the Python app's message.
 //!
@@ -248,7 +248,7 @@ mod tests {
         assert!(!is_draggable_location("trash:///"));
     }
 
-    /// Ported from `desktop/tests/test_native_file_drag.py::PayloadTests::test_existing_smb_mount_exports_local_path_and_keeps_original`
+    /// Ported from `v2.0.0:desktop/tests/test_native_file_drag.py::PayloadTests::test_existing_smb_mount_exports_local_path_and_keeps_original`
     /// and `test_unmounted_smb_remains_a_uri_without_implicit_download`.
     ///
     /// parity: DND-004, NET-026
@@ -279,7 +279,7 @@ mod tests {
         );
     }
 
-    /// Ported from `desktop/tests/test_native_file_drag.py::PayloadTests::test_local_files_never_consult_mount_resolver`.
+    /// Ported from `v2.0.0:desktop/tests/test_native_file_drag.py::PayloadTests::test_local_files_never_consult_mount_resolver`.
     ///
     /// parity: DND-004
     #[test]
@@ -294,7 +294,7 @@ mod tests {
         assert_eq!(payload.remote_only, 0);
     }
 
-    /// Ported from `desktop/tests/test_native_file_drag.py::PayloadTests::test_rejects_oversized_individual_uri_and_total_payload`.
+    /// Ported from `v2.0.0:desktop/tests/test_native_file_drag.py::PayloadTests::test_rejects_oversized_individual_uri_and_total_payload`.
     ///
     /// parity: DND-003
     #[test]

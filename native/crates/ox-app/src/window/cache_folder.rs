@@ -3,7 +3,7 @@
 //! for search, and opening a search result's folder.
 //!
 //! Ports `cacheMenuItems`, `setCache` and the "Open file location" item of
-//! `entryMenu` in `desktop/ui/app.js` (SRCH-015, SRCH-020), with Dolphin's
+//! `entryMenu` in `v2.0.0:desktop/ui/app.js` (SRCH-015, SRCH-020), with Dolphin's
 //! "in new tab" and "in new window" forms (SRCH-016). "Cache this
 //! folder for search" is a check item: checked while the folder is an
 //! indexed folder, and unchecking it stops caching it, as "Stop caching

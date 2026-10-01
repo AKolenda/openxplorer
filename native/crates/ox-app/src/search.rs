@@ -2,10 +2,10 @@
 //! Searching: the search cache every window shares and what a window's
 //! search box does with it.
 //!
-//! Ports the search parts of `desktop/ui/app.js` (`queueSearch`,
+//! Ports the search parts of `v2.0.0:desktop/ui/app.js` (`queueSearch`,
 //! `runSearch`, `renderSearchInfo`, `refreshCacheStatus`, `setCache`) on
-//! top of ox-core's port of `desktop/search_index.py` and
-//! `desktop/index_service.py`. The window's search box searches the
+//! top of ox-core's port of `v2.0.0:desktop/search_index.py` and
+//! `v2.0.0:desktop/index_service.py`. The window's search box searches the
 //! current folder: a folder no indexed folder covers is filtered as it is
 //! listed, and an indexed one is searched in the cache of names and
 //! paths, with the folder's own matches first.

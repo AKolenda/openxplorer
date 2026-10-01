@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Index service tests that need the crate's internals: lowered limits, a
 //! scan a stopped app left running, and the changed-folder limit. The
-//! other `LiveTests` of `desktop/tests/test_v05.py` run against the public
+//! other `LiveTests` of `v2.0.0:desktop/tests/test_v05.py` run against the public
 //! API in `tests/search_live.rs`.
 
 use std::fs;
@@ -11,7 +11,7 @@ use super::fixtures::{found_names, LocalRoot};
 use super::limits::ServiceLimits;
 use super::root::{RootStatus, UpdateMode};
 
-/// Ported from `desktop/tests/test_v05.py::LiveTests::test_watch_limit_fallback_is_reported`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_watch_limit_fallback_is_reported`
 /// (the service half; the watch half is in `watch.rs`).
 ///
 /// parity: SRCH-022, SRCH-028, SRCH-029

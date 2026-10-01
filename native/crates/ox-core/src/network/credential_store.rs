@@ -4,7 +4,7 @@
 //! keyring writes.
 //!
 //! Ports the class attributes of `SessionCredentials` in
-//! `desktop/session_credentials.py` (`_generations`, `_io_locks`) and its
+//! `v2.0.0:desktop/session_credentials.py` (`_generations`, `_io_locks`) and its
 //! libsecret calls. Each window keeps its accepted credentials in its own
 //! [`SessionCredentials`](super::SessionCredentials), which orchestrates
 //! these calls and holds the server locks around them.

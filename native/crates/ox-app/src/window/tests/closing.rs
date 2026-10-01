@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Closing a window: every close asks first while a write runs, so no
-//! close cuts off a running write (`askClose` in `desktop/ui/app.js`,
-//! `on_delete` in `desktop/winspace.py`).
+//! close cuts off a running write (`askClose` in `v2.0.0:desktop/ui/app.js`,
+//! `on_delete` in `v2.0.0:desktop/winspace.py`).
 
 use gtk::prelude::*;
 

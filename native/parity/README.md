@@ -1,8 +1,14 @@
 # Parity inventories and the regression process
 
-The native Rust + GTK4 app replaces the Python/WebKit app in `desktop/` only
-when it can do everything the Python app does. This directory records what that
-means and checks it.
+The native Rust + GTK4 app replaces the Python/WebKit app of OpenXplorer 1.x
+only when it can do everything the Python app does. This directory records what
+that means and checks it.
+
+The Python app has left the tree. Its last release is tag `v1.1.4`; its final
+sources, 1.1.4 with fixes that were never released, are `desktop/` at tag
+`v2.0.0`. Features cite those sources as `v2.0.0:desktop/<path>`, which
+`git show` reads directly. `legacy.json` records what the checks need from
+them: the bridge's operations and the names of its tests.
 
 ## The rules
 
@@ -23,10 +29,11 @@ The product owner set four rules. The inventory exists to enforce the first two.
 | File | Purpose |
 | --- | --- |
 | `features.toml` | Every behaviour the native app must provide, one `[[feature]]` per behaviour. |
-| `bridge.json` | Every operation of the Python bridge in `desktop/winspace.py`, with its native status. |
+| `bridge.json` | Every operation of the Python bridge in `v2.0.0:desktop/winspace.py`, with its native status. |
+| `legacy.json` | The Python app's bridge operations and tests, read from tag `v2.0.0` when the app was removed. It never changes. |
 | `check.py` | Validates both inventories, the parity markers and the cited tests, and applies the gates. |
-| `bridge.py`, `dispatch.py` | The checks for `bridge.json`, and the reader that lists the operations `desktop/winspace.py` dispatches. |
-| `features.py`, `desktop_tests.py`, `markers.py` | The checks for features, desktop test citations and parity markers. |
+| `bridge.py` | The checks for `bridge.json`. |
+| `features.py`, `legacy.py`, `markers.py` | The checks for features, Python test citations and parity markers. |
 | `test_check.py` | Tests for all of the above. |
 
 `features.toml` merges six inventories: the current app's UI surfaces, its
@@ -47,7 +54,7 @@ The header of `features.toml` documents each key. In short:
   `must`.
 - `openxplorer`: what the Python app does today: `has`, `partial` or `missing`.
 - `sources`, `python_tests`, `bridge`: where the behaviour is defined, which
-  tests in `desktop/tests` exercise it, and which bridge operations it uses.
+  tests in `v2.0.0:desktop/tests` exercise it, and which bridge operations it uses.
 - `dolphin`, `gnome`: optional references to the Dolphin action and the GNOME
   mechanism.
 - `native`: the native status, see below.
@@ -96,21 +103,18 @@ unknown feature, and `done` without a marker.
   and reviews refer to them. A behaviour that stops applying keeps its id and
   becomes `n-a` with a note. New behaviours get the next free number in their
   area.
-- Add a feature when you find a behaviour that is missing, including new
-  behaviour added to the Python app while both apps exist.
+- Add a feature when you find a behaviour that is missing.
 - Keep keys in the documented order. Every cited test and bridge operation
   must exist, and every bridge operation must be cited by some feature.
-- When the Python app changes, update the affected features and their
-  `python_tests` in the same change.
 
 ## Bridge operations
 
-`bridge.json` lists every operation that `dispatch` in `desktop/winspace.py`
-handles, exactly once. `dispatch.py` reads the names from the source without
-running it. It fails closed: if the dispatcher uses the operation name in a
-form it cannot read, such as a handler table, `getattr` or
-`method.startswith(...)` as a branch, the check fails instead of skipping a
-possible operation.
+`bridge.json` lists every operation that `dispatch` in `v2.0.0:desktop/winspace.py`
+handled, exactly once: the operations `legacy.json` records. They were read
+from the dispatcher's source by a reader that failed closed on any use of the
+operation name it could not read (see `native/parity/dispatch.py` at tag
+`v2.0.0`). An operation missing from `bridge.json`, or one that the Python app
+never had, fails the check.
 
 | Status | Meaning |
 | --- | --- |
@@ -148,7 +152,7 @@ library. From the repository root:
 
 ```sh
 python3 native/parity/check.py                   # validate, print status per area
-python3 native/parity/check.py --python-tests    # also list desktop tests no feature cites
+python3 native/parity/check.py --python-tests    # also list Python tests no feature cites
 python3 native/parity/check.py --gate replace --gate dolphin
 python3 -m unittest discover -s native/parity -p 'test_*.py'
 ```
@@ -156,7 +160,7 @@ python3 -m unittest discover -s native/parity -p 'test_*.py'
 `python3 native/tools/check.py` runs the validation and these unit tests along
 with the native build and test suite.
 
-`--python-tests` lists tests in `desktop/tests` that no feature cites. Every
+`--python-tests` lists tests of `v2.0.0:desktop/tests` that no feature cites. Every
 test there that checks a user-visible behaviour should be cited by the feature
 it protects; the remaining entries are harness checks such as "No JavaScript
 exceptions".

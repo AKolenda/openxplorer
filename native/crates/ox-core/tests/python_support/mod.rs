@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Runs Python scripts against the modules in `desktop/`, the behavioural
-//! specification, for the interoperability tests of `settings_interop.rs`,
+//! Runs Python scripts against the modules of the retired Python app
+//! (`v2.0.0:desktop/`, the behavioural specification), for the
+//! interoperability tests of `settings_interop.rs`,
 //! `places_composition.rs`, `network_python.rs`,
 //! `network_keyring_python.rs` and `network_secret_service.rs`.
+//!
+//! `native/tools/check.py` extracts those modules from their tag and names
+//! the directory in `OX_PYTHON_APP` (`native/tools/python_app.py`).
 #![allow(
     dead_code,
     reason = "each test crate that includes this module uses a different part of it"
@@ -14,10 +18,24 @@ use std::process::Command;
 
 use serde_json::Value;
 
-/// `python3 -u -c <script> <paths...>` with `desktop/` on the module path.
-/// The script reads the paths as `sys.argv[1:]`.
+/// The Python app's modules: the directory `OX_PYTHON_APP` names.
+///
+/// # Panics
+///
+/// When the variable is not set: the test must run through
+/// `native/tools/check.py`, or with the variable set as
+/// `native/tools/python_app.py` describes.
+pub fn python_app() -> PathBuf {
+    std::env::var_os("OX_PYTHON_APP").map(PathBuf::from).expect(
+        "OX_PYTHON_APP names the Python app's modules (v2.0.0:desktop/); run the tests through \
+         native/tools/check.py, which extracts them",
+    )
+}
+
+/// `python3 -u -c <script> <paths...>` with the Python app's modules on the
+/// module path. The script reads the paths as `sys.argv[1:]`.
 pub fn python(script: &str, paths: &[&Path]) -> Command {
-    let desktop = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../desktop");
+    let desktop = python_app();
     let mut command = Command::new("python3");
     command
         .arg("-u")

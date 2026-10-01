@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Why a previous-versions request was refused or could not be completed.
 //!
-//! Mirrors the `ValueError`s `desktop/previous_versions.py` raises, word
+//! Mirrors the `ValueError`s `v2.0.0:desktop/previous_versions.py` raises, word
 //! for word, plus the private-storage failures of saving the snapshot
 //! sources (`crate::private_storage`), which name the affected path as
 //! Python's `OSError` does.

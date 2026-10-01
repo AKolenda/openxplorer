@@ -2,8 +2,8 @@
 //! Mounting network locations: shares on demand and Map network location.
 //!
 //! Ports `mount`, `after_connect`, `retry_list` and the `connect` operation
-//! of `desktop/winspace.py`, and `verify_folder` of
-//! `desktop/gio_backend.py`. Every function is asynchronous on the main
+//! of `v2.0.0:desktop/winspace.py`, and `verify_folder` of
+//! `v2.0.0:desktop/gio_backend.py`. Every function is asynchronous on the main
 //! loop; dropping its future cancels the GIO call and aborts any sign-in
 //! dialog it opened.
 //!
@@ -166,7 +166,7 @@ pub async fn connect_share(
 
 /// The folder's own name, for a mapped share without a label: the last
 /// segment of its path, as the settings name a saved share
-/// (`Settings.bookmark` in `desktop/core.py`).
+/// (`Settings.bookmark` in `v2.0.0:desktop/core.py`).
 fn share_name(uri: &str) -> String {
     let Ok(parts) = split_location(uri) else {
         return FALLBACK_SHARE_LABEL.to_owned();

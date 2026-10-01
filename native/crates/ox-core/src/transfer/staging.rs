@@ -2,7 +2,7 @@
 //! Removing the engine's own staging after a failed or cancelled copy.
 //!
 //! Ports `_discard_stage`, `_confirmed_absent` and `_clean_staging` in
-//! `desktop/operations.py`.
+//! `v2.0.0:desktop/operations.py`.
 //!
 //! Rules enforced here:
 //! - XFER-002: only a staging item this engine created (an exclusive
@@ -72,7 +72,7 @@ impl StagingPlace {
 }
 
 /// XFER-003: the message for staging that could not be removed, with its
-/// exact location, as `desktop/operations.py` reports it.
+/// exact location, as `v2.0.0:desktop/operations.py` reports it.
 pub(crate) fn leftover_report(stage: &dyn Node, place: StagingPlace, problem: &TransferError) -> String {
     let what = match place {
         StagingPlace::LocalOrNetwork => "folder",
@@ -90,7 +90,7 @@ pub(crate) fn leftover_report(stage: &dyn Node, place: StagingPlace, problem: &T
 /// Folders are made owner-writable first (a restored restrictive mode must
 /// not block cleanup), then emptied, then removed. The ZIP extractor in
 /// [`crate::archive`] removes its staging folder through
-/// [`Node::delete_staging`] too, as `desktop/zip_extraction.py` calls
+/// [`Node::delete_staging`] too, as `v2.0.0:desktop/zip_extraction.py` calls
 /// `_clean_staging`. Never call this on a user-selected path.
 ///
 /// # Errors

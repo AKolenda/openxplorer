@@ -14,7 +14,7 @@ OpenXplorer 2.x is a volunteer-maintained file manager. It is not supported unde
 - The persistent mount helper, `openxplorer-mount-share`, is a Rust program shipped by the stable distribution packages, not the Flatpak. The app never runs it and never gains privileges: it prints the `sudo` command for the administrator to review and run. The helper writes a root-only plaintext credential file and systemd units without replacing existing files. Review it before use.
 - Downloads relocation and Brave profile edits need explicit confirmation; quit Brave before modifying its preferences.
 - Third-party files, archive members and SMB metadata are untrusted. Keep traversal, symlink, staging and explicit-conflict protections intact.
-- The website is a separate static project. It cannot mount shares or reach the desktop app. Its previews contain fixtures, not personal data.
+- The website is a separate static project. It cannot mount shares or reach the desktop app. Its tour shows pictures of the native app taken with fictional files, not personal data.
 
 ## Reporting a problem
 

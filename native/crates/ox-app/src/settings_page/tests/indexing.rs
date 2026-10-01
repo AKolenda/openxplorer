@@ -84,7 +84,7 @@ fn label_with_class(widget: &impl IsA<gtk::Widget>, class: &str) -> String {
 }
 
 /// Ported from the enabled rows of `renderSettingsCache` in
-/// `desktop/ui/app.js`: an indexed folder shows its state and how many
+/// `v2.0.0:desktop/ui/app.js`: an indexed folder shows its state and how many
 /// names it holds, and is no longer offered to add.
 ///
 /// parity: SET-006, SRCH-022
@@ -123,7 +123,7 @@ fn an_indexed_folder_shows_its_state_and_leaves_the_suggestions() {
 }
 
 /// Ported from the Add button of `renderSettingsPage` in
-/// `desktop/ui/app.js`: the typed folder is read relative to the folder
+/// `v2.0.0:desktop/ui/app.js`: the typed folder is read relative to the folder
 /// shown before Settings, indexed, and the field empties.
 ///
 /// parity: SET-007, SRCH-019

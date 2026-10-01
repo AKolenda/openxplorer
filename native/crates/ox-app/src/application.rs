@@ -2,8 +2,8 @@
 //! Application lifetime: startup, launches, command-line options and the
 //! application actions.
 //!
-//! Ports `OpenXplorer` and `main` in `desktop/winspace.py` and the window
-//! commands of `windowsMenu` in `desktop/ui/app.js`. The application is
+//! Ports `OpenXplorer` and `main` in `v2.0.0:desktop/winspace.py` and the window
+//! commands of `windowsMenu` in `v2.0.0:desktop/ui/app.js`. The application is
 //! unique: a later launch hands its command line and working directory to
 //! the running instance and exits (INT-001). Launching again presents the
 //! open window, or lists the windows when several are open; locations

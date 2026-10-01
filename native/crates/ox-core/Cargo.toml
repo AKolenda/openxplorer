@@ -27,7 +27,7 @@ percent-encoding.workspace = true
 thiserror.workspace = true
 # `event`: the search index's inotify watcher waits on its descriptor with
 # poll(2). `process` gives `setsid`, which starts `openxplorer --restart` in its
-# own session as desktop/winspace.py does (`update::SessionLauncher`), and the
+# own session as v2.0.0:desktop/winspace.py does (`update::SessionLauncher`), and the
 # user IDs the mount helper checks. `termios` turns echo off while the mount
 # helper reads the SMB password.
 rustix = { workspace = true, features = ["event", "process", "termios"] }

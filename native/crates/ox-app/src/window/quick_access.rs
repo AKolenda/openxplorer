@@ -2,8 +2,8 @@
 //! Pinning folders to Quick access, and unpinning them.
 //!
 //! Ports `pinEntry`, `pinEntries`, `pinCurrent` and the pin half of
-//! `removeBookmark` in `desktop/ui/app.js` and the `pin` request of
-//! `desktop/winspace.py`: the one selected folder, or the folder the tab
+//! `removeBookmark` in `v2.0.0:desktop/ui/app.js` and the `pin` request of
+//! `v2.0.0:desktop/winspace.py`: the one selected folder, or the folder the tab
 //! shows, goes at the end of Quick access; folders dropped on Quick access
 //! go where they were dropped (DND-014); and "Unpin from Quick access"
 //! removes only the pin (a standard folder's pin is hidden), with the

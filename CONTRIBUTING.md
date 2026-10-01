@@ -62,11 +62,11 @@ python3 native/tools/build_deb.py --app-id io.winspace.Development
 python3 native/tools/verify_deb.py dist/native/<package>.deb
 ```
 
-For website and repository changes, also run `pnpm check`, `pnpm build`, `pnpm security:source` and `python3 -m unittest discover -s tests -p 'test_*.py'`.
+For website and repository changes, also run `pnpm check`, `pnpm build`, `pnpm security:source`, `python3 -m unittest discover -s tests -p 'test_release_source.py'` and `python3 -m unittest discover -s tests -p 'test_public_data.py'`. The other scripts in `tests/` drive Chromium with Playwright (see [apps/web/README.md](apps/web/README.md)).
 
 GitHub checks use a read-only token. Pull requests run the native checks and the per-distribution package builds (Fedora, openSUSE Tumbleweed, Arch Linux, Ubuntu 24.04, Debian 13 and the Flatpak); the release and website jobs run only after a merge to `main`. A workflow file existing in the repository is not evidence that its hosted run passed.
 
-The deprecated 1.x Python/GTK 3/WebKitGTK app in `desktop/` is kept as the behavioural specification. Its own tests and preview tools are described in [desktop/README.md](desktop/README.md); they do not test the native app.
+The 1.x Python/GTK 3/WebKitGTK app has left the tree. Its last release is tag `v1.1.4`; its final sources, the behavioural specification that `native/parity/` cites as `v2.0.0:desktop/<file>`, are `desktop/` at tag `v2.0.0`. The native check driver extracts them from that tag for the compatibility tests (`native/tools/python_app.py`).
 
 ## File-operation changes
 
@@ -76,7 +76,7 @@ Use disposable directory trees and non-critical shares. Test collisions, cancell
 
 Follow [native/docs/ui-spec.md](native/docs/ui-spec.md) for the look. Use only the Fluent icon files bundled under `native/crates/ox-app/resources/icons`; never draw icons in code. Preserve keyboard access, accessible names and reduced-motion behaviour. For the website, change shared TSX/CSS sources, then regenerate designs; do not hand-edit generated pitches. `apps/web/lib/docs.json` is the canonical guide source. Regenerate its Markdown with `python3 tools/sync-docs.py`; use `pnpm designs` to rebuild standalone designs.
 
-Use only fictional names, paths and shares in examples and screenshots, following [docs/PRIVACY.md](docs/PRIVACY.md). Use the capture scripts for public images, then run `python3 tools/audit-public-data.py`. Keep private denylist files outside the repository. The default audit verifies packaging and provenance; private identifiers require the optional external denylist and visual review.
+Use only fictional names, paths and shares in examples and screenshots, following [docs/PRIVACY.md](docs/PRIVACY.md). Use the capture scripts for public images (`python3 tools/capture-screenshots.py` and `python3 tools/capture-native-tour.py`, which picture the native app in an isolated session with a fictional demo tree), review every picture, then run `python3 tools/audit-public-data.py`. Keep private denylist files outside the repository. The default audit verifies packaging and provenance; private identifiers require the optional external denylist and visual review.
 
 Keep documentation and release claims synchronized with behavior and tests. Generated installers, archives, previews, local logs and `test-results/` stay out of Git. Preserve the corresponding-source build tools and visible website source link; see the [public-release checklist](docs/PUBLIC-RELEASE-CHECKLIST.md).
 

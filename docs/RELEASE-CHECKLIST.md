@@ -1,8 +1,8 @@
 # Release checklist
 
 **Current status: this source tree prepares 2.0.0, the native GTK 4 app
-(`native/`) that replaces the deprecated Python app (`desktop/`, no longer
-shipped).** The remaining parity items, known gaps and owed hardware
+(`native/`) that replaces the retired Python app (last released as tag
+v1.1.4, no longer in the tree or shipped).** The remaining parity items, known gaps and owed hardware
 acceptance are in [native/BACKLOG.md](../native/BACKLOG.md). Built packages,
 source inspection and isolated tests are useful evidence, but do not prove
 native compatibility or the absence of vulnerabilities. Treat the gates below as the standing per-release list: the

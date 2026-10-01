@@ -2,7 +2,7 @@
 //! The standard `org.freedesktop.FileManager1` session-bus service, which
 //! browsers and other applications call for "Show in folder".
 //!
-//! Ports `desktop/filemanager_bus.py`. The service is registered only
+//! Ports `v2.0.0:desktop/filemanager_bus.py`. The service is registered only
 //! after the user enables "Show in folder" (INT-013). Its three methods
 //! accept 1 to 100 locations, which are checked by
 //! [`FileManagerRequest`] and handed to the app with the caller's startup

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Shared by the `archive_*` integration tests: the extraction fixture of
-//! `desktop/tests/test_zip_extract.py`, test doubles for the extraction
+//! `v2.0.0:desktop/tests/test_zip_extract.py`, test doubles for the extraction
 //! output, archive openers and the ZIP writer of `zip_writer`. Include it
 //! with `mod archive_support;`.
 //!
@@ -222,7 +222,7 @@ impl OutputFile for LocalOutputFile {
 }
 
 /// The temporary folders and recorded progress of one extraction test:
-/// `setUp` of `ZipExtractTests` in `desktop/tests/test_zip_extract.py`.
+/// `setUp` of `ZipExtractTests` in `v2.0.0:desktop/tests/test_zip_extract.py`.
 pub struct ExtractionFixture {
     _temporary: tempfile::TempDir,
     /// The temporary folder holding everything else.

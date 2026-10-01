@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Per-window tabs. Stable IDs and load generations reject stale callbacks.
 //!
-//! Ports the tab state of `desktop/ui/app.js` (`addTab`, `closeTab`,
+//! Ports the tab state of `v2.0.0:desktop/ui/app.js` (`addTab`, `closeTab`,
 //! `switchTab` and each tab's `history`, `scroll`, `loaded` and `busy`).
 //! [`Session`] keeps its tabs and the active one private, so the active
 //! id always names an open tab.

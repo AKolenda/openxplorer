@@ -76,15 +76,16 @@ h1 { font-size: clamp(46px, 5vw, 70px); font-weight: 600; line-height: 1.03; let
 .tour-topline { position: absolute; inset: 18px 22px auto; display: flex; justify-content: space-between; font-size: 12px; color: #cbd7fb; letter-spacing: .1px; }
 .tour-topline span:first-child { font-weight: 650; }
 .tour-stage { position: relative; }
-/* Top-left 940 × 620 of the 1440 × 900 capture: address bar, sidebar and folder list. */
+/* Top-left 940 × 620 of the 1440 × 900 native capture: address bar, sidebar and folder list.
+   The targets point at the address, the Launch planning row and its Quick access pin. */
 .tour-frame { aspect-ratio: 940 / 620; border-radius: 13px; overflow: hidden; background: #fff; box-shadow: 0 20px 46px #020a20aa; }
 .tour-frame img { width: 153.19%; max-width: none; height: auto; }
 /* Click targets and cursors share one coordinate system: percentages of the frame.
    The cursor's arrow tip sits exactly on its left/top point (the SVG tip is at 3,2). */
 .click-target { position: absolute; width: 24px; height: 24px; margin: -12px 0 0 -12px; border: 2px solid currentColor; border-radius: 50%; opacity: 0; pointer-events: none; }
 .target-path, .cursor-path { left: 39.6%; top: 11.9%; }
-.target-folder, .cursor-folder { left: 31.5%; top: 47.9%; }
-.target-pin, .cursor-pin { left: 8.5%; top: 52.1%; }
+.target-folder, .cursor-folder { left: 34.0%; top: 41.5%; }
+.target-pin, .cursor-pin { left: 8.5%; top: 74.4%; }
 .target-path { color: var(--pink); animation: target-path 9s ease-in-out infinite; }
 .target-folder { color: var(--violet); animation: target-folder 9s ease-in-out infinite; }
 .target-pin { color: var(--mint); animation: target-pin 9s ease-in-out infinite; }
@@ -239,7 +240,7 @@ h2 { font-size: 38px; line-height: 1.17; letter-spacing: -1.3px; font-weight: 60
 .demo-controls button:disabled { opacity: .55; cursor: wait; }
 .demo-scenes { display: flex; flex-wrap: wrap; gap: 3px; margin-right: auto; padding-right: 10px; border-right: 1px solid var(--line); }
 .demo-viewport { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
-.demo-viewport iframe { display: block; width: 100%; min-width: 1024px; height: 620px; border: 0; background: #f7f7f7; }
+.demo-viewport iframe { display: block; width: 100%; height: 620px; border: 0; background: #f7f7f7; }
 .compact-demo .demo-viewport iframe { height: 550px; }
 .live-product .demo-status { margin: 0; padding: 13px 20px; min-height: 46px; background: var(--canvas); border-top: 1px solid var(--line); font-size: 14px; line-height: 1.6; color: var(--muted); }
 .live-product[data-phase="complete"] .demo-status { color: #117a57; }

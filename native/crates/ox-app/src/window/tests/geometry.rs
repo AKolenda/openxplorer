@@ -2,7 +2,7 @@
 //! Helpers for the tests that measure the window against the current app.
 //!
 //! The expected numbers in those tests are the current app's layout as
-//! Chromium draws `desktop/ui/index.html` with `style.css` at 100% text
+//! Chromium draws `v2.0.0:desktop/ui/index.html` with `style.css` at 100% text
 //! size (the reference captures of `tools/capture-screenshots.py`), in
 //! window coordinates.
 

@@ -2,7 +2,7 @@
 //! Text rules shared by the cache and the service: folding for matching,
 //! the path shown for a location, and URI containment.
 //!
-//! Ports `fold`, `display_path` and `below` from `desktop/search_index.py`
+//! Ports `fold`, `display_path` and `below` from `v2.0.0:desktop/search_index.py`
 //! and the parent rule both of its write paths use.
 
 use std::path::PathBuf;

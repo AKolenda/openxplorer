@@ -3,7 +3,7 @@
 //! package tools and the fixed restart launcher.
 //!
 //! Ports the module-level `Updater(root=ROOT)` and `RUNTIME` of
-//! `desktop/winspace.py`: the service compares the build installed after
+//! `v2.0.0:desktop/winspace.py`: the service compares the build installed after
 //! an update with the one running, which the Python app identified by
 //! hashing its files at startup.
 

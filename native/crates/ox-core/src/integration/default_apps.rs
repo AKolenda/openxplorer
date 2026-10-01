@@ -2,7 +2,7 @@
 //! Making the app the user's default file manager and ZIP handler,
 //! and putting the previous handlers back.
 //!
-//! Ports `desktop/desktop_integration.py`. Nothing changes unless the
+//! Ports `v2.0.0:desktop/desktop_integration.py`. Nothing changes unless the
 //! user asks: installing the app never touches a default, reading the
 //! status only queries (INT-010), and every change is per user, through
 //! `xdg-mime`, never with `sudo`. Before a type is taken over its current

@@ -2,7 +2,7 @@
 //! Map network location: a share's address, its sidebar label and whether
 //! to keep it.
 //!
-//! Ports `connectDialog` in `desktop/ui/app.js` (NET-001), with the other
+//! Ports `connectDialog` in `v2.0.0:desktop/ui/app.js` (NET-001), with the other
 //! protocols of Dolphin and Files (NET-002). The dialog only
 //! asks; the window connects ([`crate::window`]'s Map network location),
 //! showing "Connecting…" meanwhile and any error inside the dialog.

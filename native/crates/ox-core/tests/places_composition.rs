@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Sidebar regression cases: the `NetworkTests` of `desktop/tests/test_v07.py`,
-//! the Quick access rules of `environment` in `desktop/winspace.py`, and
-//! `read_user_dirs` in `desktop/folder_locations.py`, which runs on the same
+//! Sidebar regression cases: the `NetworkTests` of `v2.0.0:desktop/tests/test_v07.py`,
+//! the Quick access rules of `environment` in `v2.0.0:desktop/winspace.py`, and
+//! `read_user_dirs` in `v2.0.0:desktop/folder_locations.py`, which runs on the same
 //! files as the Rust parser. Every file is inside a temporary directory.
 
 mod python_support;
@@ -157,9 +157,9 @@ fn mount_badges_respect_path_boundaries_and_escaping() {
     assert!(!rows[1].is_shared);
 }
 
-/// Ported from `desktop/tests/test_v07.py::NetworkTests::test_default_port_and_case`,
-/// `desktop/tests/test_v07.py::NetworkTests::test_custom_port_distinct` and
-/// `desktop/tests/test_v07.py::NetworkTests::test_host_aliases_not_merged`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_default_port_and_case`,
+/// `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_custom_port_distinct` and
+/// `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_host_aliases_not_merged`
 ///
 /// parity: NET-018, SIDE-019
 #[test]
@@ -179,7 +179,7 @@ fn network_identity_preserves_custom_ports_and_host_aliases() {
     );
 }
 
-/// Ported from `desktop/tests/test_v07.py::NetworkTests::test_saved_label_preserved_and_mount_deduplicated`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_saved_label_preserved_and_mount_deduplicated`
 ///
 /// parity: NET-018, SIDE-019
 #[test]
@@ -194,7 +194,7 @@ fn saved_labels_win_and_connected_state_merges() {
     assert!(rows[0].is_connected);
 }
 
-/// Ported from `desktop/tests/test_v07.py::NetworkTests::test_connected_unsaved_share`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_connected_unsaved_share`
 ///
 /// parity: NET-018
 #[test]
@@ -207,7 +207,7 @@ fn a_mounted_share_is_listed_connected_but_not_saved() {
     assert!(!rows[0].is_saved);
 }
 
-/// Ported from `desktop/tests/test_v07.py::NetworkTests::test_uri_not_label_is_unique_key`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_uri_not_label_is_unique_key`
 ///
 /// parity: NET-018
 #[test]
@@ -219,8 +219,8 @@ fn rows_are_told_apart_by_location_not_label() {
     assert_eq!(merge_network_locations(&saved, &[], &[], &[]).len(), 2);
 }
 
-/// Ported from `desktop/tests/test_v07.py::NetworkTests::test_unsaved_host_session_entry`
-/// and `desktop/tests/test_v07.py::NetworkTests::test_stable_cifs_mount`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_unsaved_host_session_entry`
+/// and `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_stable_cifs_mount`
 ///
 /// parity: NET-006, NET-018, SIDE-019
 #[test]
@@ -274,8 +274,8 @@ fn a_browsed_sftp_folder_joins_its_servers_mount() {
     assert_eq!(rows.len(), 2, "another account is another row");
 }
 
-/// Ported from `desktop/tests/test_v07.py::NetworkTests::test_ignore_local_and_unmounted`
-/// and `desktop/tests/test_v07.py::NetworkTests::test_invalid_saved_ignored`
+/// Ported from `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_ignore_local_and_unmounted`
+/// and `v2.0.0:desktop/tests/test_v07.py::NetworkTests::test_invalid_saved_ignored`
 ///
 /// parity: NET-018, SAFE-010
 #[test]
@@ -385,7 +385,7 @@ const USER_DIRS_CASES: [UserDirsCase; 10] = [
     },
 ];
 
-/// Prints `FolderLocations.paths()` from `desktop/folder_locations.py` for
+/// Prints `FolderLocations.paths()` from `v2.0.0:desktop/folder_locations.py` for
 /// every case directory under `sys.argv[1]`, with `sys.argv[2]` as the home
 /// folder, as `{case: {XDG key: path}}`.
 const PYTHON_PRINTS_FOLDER_PATHS: &str = r"

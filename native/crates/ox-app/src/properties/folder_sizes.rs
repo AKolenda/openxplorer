@@ -2,7 +2,7 @@
 //! Measured folder sizes as the window shows them (PROP-027).
 //!
 //! Ports `folderSizeText`, `updateSizeLabels`, `sizeKey` and the
-//! `state.folderSizes` map of `desktop/ui/app.js`. A folder is measured
+//! `state.folderSizes` map of `v2.0.0:desktop/ui/app.js`. A folder is measured
 //! only on request; its result lasts for the window's session, is never
 //! updated after later changes, and is never shown as a false zero: a
 //! partial or cancelled total reads `≥ 1.2 MB`.

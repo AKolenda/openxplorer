@@ -2,7 +2,7 @@
 //! The thread that opens the search cache, starts the index service and
 //! ticks it once a second for as long as the app runs.
 //!
-//! Ports the start of `IndexService` in `desktop/winspace.py` and its
+//! Ports the start of `IndexService` in `v2.0.0:desktop/winspace.py` and its
 //! `refresh_due` timer (`winspace.py:148-163`): the index owner's periodic
 //! work runs off the main thread, about once a second, and never overlaps
 //! itself (PERF-006), because the next tick waits for the one before.

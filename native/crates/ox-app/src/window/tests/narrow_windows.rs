@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Narrow windows, against the `@media(max-width)` rules of
-//! `desktop/ui/style.css`: the details pane gives way at 960 pixels
+//! `v2.0.0:desktop/ui/style.css`: the details pane gives way at 960 pixels
 //! without changing the preference, tabs narrow, and a compact window
 //! drops the search box, some commands and two columns.
 

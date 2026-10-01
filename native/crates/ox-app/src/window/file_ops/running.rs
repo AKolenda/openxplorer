@@ -4,7 +4,7 @@
 //! OPS-022, OPS-023, OPS-024).
 //!
 //! Ports `runOperation`, `updateTransfer` and the `cancel` request of
-//! `desktop/ui/app.js`. The operation's blocking work runs on GIO's worker
+//! `v2.0.0:desktop/ui/app.js`. The operation's blocking work runs on GIO's worker
 //! threads; its progress reports cross to the main loop through a
 //! channel, and the panel shows them until the user cancels. When the
 //! operation ends, the panel hides, the folder is listed again with the

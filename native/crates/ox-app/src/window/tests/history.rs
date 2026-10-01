@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Back, Forward, Up, Refresh and Home: the navigation buttons, their
 //! keys and the mouse's side buttons, against `goHistory`, `onKey` and
-//! `renderNavigation` in `desktop/ui/app.js` and the mouse-button
-//! handling of `desktop/winspace.py`.
+//! `renderNavigation` in `v2.0.0:desktop/ui/app.js` and the mouse-button
+//! handling of `v2.0.0:desktop/winspace.py`.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;

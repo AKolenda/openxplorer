@@ -5,9 +5,9 @@
 //!
 //! Ports `openWithDialog`, `terminalMenuItem`, the editor items of
 //! `entryMenu` and the status bar's `check-updates` button in
-//! `desktop/ui/app.js` (OPEN-011, OPEN-015, OPEN-017, UPD-001), and the
+//! `v2.0.0:desktop/ui/app.js` (OPEN-011, OPEN-015, OPEN-017, UPD-001), and the
 //! window's part of the update lock (`on_delete` in
-//! `desktop/winspace.py`, UPD-005). The work itself is in
+//! `v2.0.0:desktop/winspace.py`, UPD-005). The work itself is in
 //! [`crate::integration`] and [`crate::update`].
 
 use gtk::glib;

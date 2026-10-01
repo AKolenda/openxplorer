@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The details pane: the selection's properties.
 //!
-//! Ports `renderDetails` in `desktop/ui/app.js`, laid out as §4.8 of
+//! Ports `renderDetails` in `v2.0.0:desktop/ui/app.js`, laid out as §4.8 of
 //! `native/docs/ui-spec.md`: a header with a close button, a preview, the
 //! name and type, an Open or "Pin to Quick access" button, a Properties
 //! grid and a note. What the pane says is computed by [`pane_content`]
@@ -30,7 +30,7 @@ use super::window_action::WindowAction;
 pub(super) use content::{pane_content, PaneFacts};
 use content::{PaneAction, PaneContent, Preview, Property};
 
-/// Width of the pane (`.details` in `desktop/ui/style.css`).
+/// Width of the pane (`.details` in `v2.0.0:desktop/ui/style.css`).
 pub(super) const PANE_WIDTH: i32 = 262;
 
 /// Preview size in the pane: app.js draws `fileIcon(e, 84)` and

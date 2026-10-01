@@ -290,7 +290,8 @@ class OptionTests(unittest.TestCase):
             status = check.main([])
         self.assertEqual(status, 2)
         run_all_checks.assert_not_called()
-        self.assertIn('Required native check tools are missing: cargo, python3', stderr.getvalue())
+        self.assertIn('Required native check tools are missing: cargo, git, python3',
+                      stderr.getvalue())
 
 
 class FailureReportTests(unittest.TestCase):
@@ -321,6 +322,7 @@ class FailureReportTests(unittest.TestCase):
         failure = subprocess.CalledProcessError(101, ('cargo', 'clippy', '--workspace'))
         stderr = io.StringIO()
         with (patch.object(check, 'missing_tools', return_value=[]),
+              patch.object(check, 'leftover_desktop_note', return_value=None),
               patch.object(check, 'run_all_checks', side_effect=failure),
               contextlib.redirect_stderr(stderr)):
             status = check.main([])
@@ -333,6 +335,7 @@ class FailureReportTests(unittest.TestCase):
         failure = check.CheckTimeoutError(['/target/debug/deps/browsing-1'], 180.0)
         stderr = io.StringIO()
         with (patch.object(check, 'missing_tools', return_value=[]),
+              patch.object(check, 'leftover_desktop_note', return_value=None),
               patch.object(check, 'run_all_checks', side_effect=failure),
               contextlib.redirect_stderr(stderr)):
             status = check.main([])
@@ -494,6 +497,19 @@ class DrawnIconTests(unittest.TestCase):
         self.assertEqual(check.drawn_icon_lines(crates), [])
         self.assertEqual(check.stray_images(crates), [])
 
+
+
+class LeftoverDesktopTests(unittest.TestCase):
+    """An updated clone is told to delete the retired app's leftover folder."""
+
+    def test_a_leftover_desktop_folder_is_named(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            self.assertIsNone(check.leftover_desktop_note(repository))
+            (repository / 'desktop/__pycache__').mkdir(parents=True)
+            note = check.leftover_desktop_note(repository)
+            self.assertIn(str(repository / 'desktop'), note)
+            self.assertIn('delete it', note)
 
 if __name__ == '__main__':
     unittest.main()

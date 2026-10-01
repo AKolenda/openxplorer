@@ -3,8 +3,8 @@
 //! DND-017 to DND-021, DND-025, DND-026, TAB-018).
 //!
 //! Ports `decode_uris` and `NativeFileDrop` of
-//! `desktop/native_file_drop.py` and `receiveFileDrop` and
-//! `showFileDropHint` of `desktop/ui/app.js` on GTK's asynchronous drop
+//! `v2.0.0:desktop/native_file_drop.py` and `receiveFileDrop` and
+//! `showFileDropHint` of `v2.0.0:desktop/ui/app.js` on GTK's asynchronous drop
 //! target. The folder views, the sidebar, the breadcrumbs and the tabs
 //! take drops ([`targets`]). Where the items go is a [`DropDestination`]:
 //! a folder, Quick access, a program or launcher ([`program`],

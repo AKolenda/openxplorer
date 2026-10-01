@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! XFER-016: a folder is never copied or moved into itself or one of its
-//! descendants. Ports `guard_destination` in `desktop/operations.py`.
+//! descendants. Ports `guard_destination` in `v2.0.0:desktop/operations.py`.
 //!
 //! Local paths are compared after resolving symbolic links, so an alias of a
 //! descendant is caught. URIs on the same host are compared textually

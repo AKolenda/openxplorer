@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The Location tab of a standard folder's Properties (PROP-017, PROP-018).
 //!
-//! Ports `renderLocationPanel` in `desktop/ui/app.js` over ox-core's
-//! [`FolderRelocation`], which ports `desktop/folder_locations.py`: the
+//! Ports `renderLocationPanel` in `v2.0.0:desktop/ui/app.js` over ox-core's
+//! [`FolderRelocation`], which ports `v2.0.0:desktop/folder_locations.py`: the
 //! Folder location field, a picker of mounted network drives, Check
 //! location, Restore default, Use previous, the status line, the warning
 //! about existing files, Brave's follow-up for Downloads, the consent box

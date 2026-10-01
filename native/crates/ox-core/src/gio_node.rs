@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Synchronous GIO/GVfs adapter for the transfer engine.
 //!
-//! Ports `GioNode` in `desktop/gio_backend.py`. Calls block, so they belong
+//! Ports `GioNode` in `v2.0.0:desktop/gio_backend.py`. Calls block, so they belong
 //! on a worker, never the GTK main thread. The transfer rules this adapter
 //! enforces carry the feature ids of [`crate::transfer`]:
 //!
@@ -71,7 +71,7 @@ impl GioNode {
     }
 
     /// OPS-035: refuses filesystem roots, whole shares and whole devices, like
-    /// `require_item_uri` in `desktop/core.py`.
+    /// `require_item_uri` in `v2.0.0:desktop/core.py`.
     fn require_item(&self) -> Result<(), TransferError> {
         if self.file.parent().is_none() {
             return Err(TransferError::failed(
@@ -259,7 +259,7 @@ impl Node for GioNode {
 }
 
 /// True when both URIs name the same host or device, like comparing
-/// `uri.split('/')[2]` in `desktop/gio_backend.py`.
+/// `uri.split('/')[2]` in `v2.0.0:desktop/gio_backend.py`.
 fn same_authority(first: &str, second: &str) -> bool {
     match (split_location(first), split_location(second)) {
         (Ok(first), Ok(second)) => first.authority == second.authority,

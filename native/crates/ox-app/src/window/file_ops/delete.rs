@@ -2,7 +2,7 @@
 //! Delete and Shift+Delete, with their confirmations (OPS-015, OPS-016,
 //! OPS-017, OPS-018).
 //!
-//! Ports `trash` in `desktop/ui/app.js`. Delete decides each item by its
+//! Ports `trash` in `v2.0.0:desktop/ui/app.js`. Delete decides each item by its
 //! own folder: where the folder has a Trash the item goes there, elsewhere
 //! it is deleted permanently, and the confirmation says which (a folder
 //! GIO cannot be asked about counts as having a Trash, so a failed check

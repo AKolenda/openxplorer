@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Regression tests for the parity tooling.
 
-They cover inventory drift, the fail-closed dispatch extractor, cited
-Rust tests, desktop test citations, parity markers and the gates.
+They cover inventory drift, the frozen record of the Python app, cited
+Rust tests, Python test citations, parity markers and the gates.
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import textwrap
 from typing import Any
@@ -15,9 +16,9 @@ import unittest
 
 import bridge
 import check
-from desktop_tests import Catalog, discover, node_tests, python_tests
-from dispatch import bridge_methods
 import features
+import legacy
+from legacy import Catalog, LegacyTest
 import markers
 
 
@@ -34,10 +35,13 @@ def write(path: Path, text: str) -> None:
     path.write_text(textwrap.dedent(text).lstrip(), encoding='utf-8')
 
 
-def dispatcher(*statements: str) -> str:
-    """Return the source of a dispatch function with the given body."""
-    body = textwrap.indent('\n'.join(statements), '    ')
-    return f'def dispatch(self, request):\n{body}\n'
+def legacy_record(operations: list[str], tests: list[list[Any]]) -> str:
+    """Return the text of a legacy.json with these operations and tests."""
+    return json.dumps({'tag': legacy.TAG, 'bridge_operations': operations,
+                       'tests': tests})
+
+
+CITED_FILE = 'v2.0.0:desktop/tests/ui_a.py'
 
 
 def pending() -> dict[str, Any]:
@@ -45,101 +49,13 @@ def pending() -> dict[str, Any]:
     return {'status': 'pending', 'note': 'Not implemented.', 'evidence': []}
 
 
-class DispatchExtractionTests(unittest.TestCase):
-    """The extractor finds every operation or refuses to guess."""
-
-    def test_grouped_branches_and_guards_are_understood(self) -> None:
-        """Grouped ``in`` branches count; ``not in`` guards do not."""
-        source = dispatcher(
-            "if method not in ('list', 'normalise'):",
-            "    return",
-            "if method == 'list':",
-            "    return 1",
-            "elif method in ('normalise', 'open'):",
-            "    return 2",
-        )
-        self.assertEqual(bridge_methods(source),
-                         {'list', 'normalise', 'open'})
-
-    def test_reversed_comparisons_and_match_cases_are_found(self) -> None:
-        """Operations cannot hide in ``'x' == method`` or ``match``."""
-        source = dispatcher(
-            "if 'list' == method:",
-            "    return",
-            "match method:",
-            "    case 'newWorkflow' | 'anotherWorkflow':",
-            "        return",
-            "    case _:",
-            "        return",
-        )
-        self.assertEqual(bridge_methods(source),
-                         {'list', 'newWorkflow', 'anotherWorkflow'})
-
-    def test_the_legacy_dispatchers_other_uses_are_accepted(self) -> None:
-        """The request read, prefix guard and error message all pass."""
-        source = dispatcher(
-            "method, a = request['method'], request['args']",
-            "if self.clipboard is None and method.startswith('clipboard'):",
-            "    raise ValueError('The clipboard is unavailable.')",
-            "if method == 'list':",
-            "    return",
-            "raise ValueError('Unknown action: ' + method)",
-        )
-        self.assertEqual(bridge_methods(source), {'list'})
-
-    def test_forms_that_could_hide_an_operation_are_refused(self) -> None:
-        """Every use the extractor cannot read raises ValueError."""
-        cases = {
-            'nonliteral operand': 'if method == operation: pass',
-            'reversed nonliteral operand': 'if operation == method: pass',
-            'chained comparison': "if 'a' == method == 'b': pass",
-            'membership in a name': 'if method in NAMES: pass',
-            'substring test': "if 'list' in method: pass",
-            'identity test': 'if method is LIST: pass',
-            'nonliteral match case': 'match method:\n    case Ops.x: pass',
-            'prefix test as a branch': "if method.startswith('zip'): zip()",
-            'prefix guard with an else': (
-                "if method.startswith('zip'):\n    raise E\nelse:\n    zip()"),
-            'request read in a comparison': (
-                "if request['method'] == 'newOp': pass"),
-            'request read into another name': (
-                "op, a = request['method'], request['args']"),
-            'string-built attribute': "getattr(self, 'on_' + method)()",
-            'handler table': 'HANDLERS[method]()',
-            'handler lookup': 'HANDLERS.get(method)()',
-            'alias': 'operation = method',
-        }
-        known = "if method == 'list': pass"
-        self.assertEqual(bridge_methods(dispatcher(known)), {'list'})
-        for name, statement in cases.items():
-            with self.subTest(name):
-                with self.assertRaises(ValueError):
-                    bridge_methods(dispatcher(known, statement))
-
-    def test_a_missing_or_empty_dispatcher_is_refused(self) -> None:
-        """Finding no operations must fail, not pass as an empty set."""
-        cases = {
-            'no dispatch function': 'def no_dispatch(): pass\n',
-            'no operations': 'def dispatch(method): pass\n',
-        }
-        for name, source in cases.items():
-            with self.subTest(name):
-                with self.assertRaises(ValueError):
-                    bridge_methods(source)
-
-
 class BridgeInventoryTests(unittest.TestCase):
-    """bridge.json must match the dispatcher and cite real tests."""
+    """bridge.json must match the legacy operations and cite real tests."""
 
     def setUp(self) -> None:
         """Create a repository with three operations and a Rust test."""
         self.root = temporary_root(self)
-        write(self.root / 'desktop/winspace.py', dispatcher(
-            "if method == 'list':",
-            "    return 1",
-            "elif method in ('normalise', 'open'):",
-            "    return 2",
-        ))
+        self.operations = frozenset({'list', 'normalise', 'open'})
         write(self.root / 'native/tests.rs', '''
             #[test]
             fn lists_a_folder() {}
@@ -149,7 +65,7 @@ class BridgeInventoryTests(unittest.TestCase):
 
     def problems(self) -> list[str]:
         """Return the problems bridge.validate finds in the fixture."""
-        return bridge.validate(self.root, self.inventory)
+        return bridge.validate(self.root, self.inventory, self.operations)
 
     def claim(self, name: str, *evidence: str) -> None:
         """Record an operation as core-tested with the given tests."""
@@ -157,7 +73,7 @@ class BridgeInventoryTests(unittest.TestCase):
             status='core-tested', evidence=list(evidence))
 
     def test_a_complete_inventory_passes(self) -> None:
-        """Every dispatched operation is listed exactly once."""
+        """Every legacy operation is listed exactly once."""
         self.assertEqual(self.problems(), [])
 
     def test_added_or_removed_operations_cannot_disappear(self) -> None:
@@ -227,21 +143,10 @@ class BridgeInventoryTests(unittest.TestCase):
 
     def test_bad_schema_and_status_are_reported(self) -> None:
         """A missing schema and an unknown status are both refused."""
-        self.assertEqual(bridge.validate(self.root, {}),
+        self.assertEqual(bridge.validate(self.root, {}, self.operations),
                          ['Expected schema 1 with a methods object.'])
         self.inventory['methods']['list']['status'] = 'done-ish'
         self.assertIn('list: invalid status', self.problems())
-
-    def test_an_unreadable_dispatcher_is_reported_not_raised(self) -> None:
-        """The error names the dispatcher file; nothing is raised."""
-        write(self.root / 'desktop/winspace.py', dispatcher(
-            "if method == 'list': pass",
-            'HANDLERS[method]()',
-        ))
-        self.assertEqual(self.problems(), [
-            'desktop/winspace.py: Unsupported use of the bridge method name '
-            'at line 3.'])
-
 
 class RustTestDiscoveryTests(unittest.TestCase):
     """Only functions that ``cargo test`` runs count as evidence."""
@@ -249,7 +154,7 @@ class RustTestDiscoveryTests(unittest.TestCase):
     def test_only_running_test_functions_are_found(self) -> None:
         """Comments and attributes may follow #[test]; #[ignore] not."""
         source = textwrap.dedent('''
-            /// Ported from desktop/tests/test_core.py::CoreTests::test_a
+            /// Ported from v2.0.0:desktop/tests/test_core.py::CoreTests::test_a
             #[test]
             // parity: NAV-001
             fn with_a_comment_between() {}
@@ -301,8 +206,8 @@ def valid_feature(**changes: Any) -> dict[str, Any]:
         'id': 'NAV-001', 'area': 'NAV', 'title': 'Back returns',
         'behaviour': 'Back opens the previous location of the active tab.',
         'origin': ['openxplorer', 'dolphin'], 'priority': 'must',
-        'openxplorer': 'has', 'sources': ['desktop/ui/app.js:351'],
-        'python_tests': ['desktop/tests/ui_a.py::Back works'],
+        'openxplorer': 'has', 'sources': ['v2.0.0:desktop/ui/app.js:351'],
+        'python_tests': [f'{CITED_FILE}::Back works'],
         'bridge': ['list'], 'native': 'todo',
     }
     feature.update(changes)
@@ -310,52 +215,44 @@ def valid_feature(**changes: Any) -> dict[str, Any]:
     return ordered | feature
 
 
-class DesktopTestDiscoveryTests(unittest.TestCase):
-    """Desktop tests are found so that features can cite them."""
+class LegacyRecordTests(unittest.TestCase):
+    """The frozen record of the Python app resolves citations."""
 
-    def test_unittest_methods_and_computed_labels_are_found(self) -> None:
-        """Computed label parts match any text but not nothing."""
-        tests = python_tests(textwrap.dedent('''
-            class CoreTests:
-                def test_unc(self): pass
-                def helper(self): pass
-            def check(name, value=True): pass
-            check('Back works')
-            check('Menu includes ' + label)
-            check(f'Moved to {window} safely')
-        '''), 'desktop/tests/ui_a.py')
-        self.assertEqual([test.name for test in tests], [
-            'CoreTests::test_unc', 'Back works', 'Menu includes …',
-            'Moved to … safely'])
-        self.assertTrue(tests[2].matches('Menu includes Open with…'))
-        self.assertFalse(tests[2].matches('Menu includes '))
-        self.assertFalse(tests[1].matches('Back works twice'))
-
-    def test_node_labels_skip_the_helper_definition(self) -> None:
-        """Only calls count, not ``function check`` or regex.test()."""
-        tests = node_tests(textwrap.dedent('''
-            function check(label, value) {assert.ok(value, label);}
-            check('Enter opens it', true);
-            for (const key of keys) test('Ctrl '+key, () => ok(key));
-            test(`fits at ${size}%`, () => {});
-            if (/x/.test(name)) {}
-        '''), 'desktop/tests/a.cjs')
-        self.assertEqual([test.name for test in tests],
-                         ['Enter opens it', 'Ctrl …', 'fits at …%'])
+    def test_computed_label_parts_match_any_text_but_not_nothing(self) -> None:
+        """A null part stands for text only known at run time."""
+        test = LegacyTest(CITED_FILE, ('Menu includes ', None))
+        self.assertEqual(test.name, 'Menu includes …')
+        self.assertTrue(test.matches('Menu includes Open with…'))
+        self.assertFalse(test.matches('Menu includes '))
+        self.assertFalse(LegacyTest(CITED_FILE, ('Back works',)).matches(
+            'Back works twice'))
 
     def test_catalog_resolves_citations_and_reports_uncited(self) -> None:
         """Citations need the right file and the full test name."""
-        tests = python_tests(textwrap.dedent('''
-            class A:
-                def test_x(self): pass
-            check('Label ' + n)
-        '''), 'desktop/tests/t.py')
-        catalog = Catalog(tests)
-        self.assertEqual(len(catalog.find('desktop/tests/t.py::A::test_x')), 1)
-        self.assertEqual(catalog.find('desktop/tests/t.py::test_x'), [])
-        self.assertEqual(catalog.find('desktop/tests/other.py::A::test_x'), [])
-        uncited = catalog.unreferenced({'desktop/tests/t.py::Label 3'})
+        file = 'v2.0.0:desktop/tests/t.py'
+        catalog = Catalog([LegacyTest(file, ('A::test_x',)),
+                           LegacyTest(file, ('Label ', None))])
+        self.assertEqual(len(catalog.find(f'{file}::A::test_x')), 1)
+        self.assertEqual(catalog.find(f'{file}::test_x'), [])
+        self.assertEqual(catalog.find('desktop/tests/t.py::A::test_x'), [],
+                         'an untagged path names no test')
+        uncited = catalog.unreferenced({f'{file}::Label 3'})
         self.assertEqual([test.name for test in uncited], ['A::test_x'])
+
+    def test_a_malformed_record_is_refused(self) -> None:
+        """Rows and operations of the wrong shape raise ValueError."""
+        root = temporary_root(self)
+        cases = {
+            'no operations': legacy_record([], []),
+            'a test without parts': legacy_record(['list'], [[CITED_FILE, []]]),
+            'a part of the wrong type': legacy_record(['list'], [[CITED_FILE, [3]]]),
+            'not an object': '[]',
+        }
+        for name, text in cases.items():
+            with self.subTest(name):
+                write(root / legacy.LEGACY, text)
+                with self.assertRaises(ValueError):
+                    legacy.load(root)
 
 
 class FeatureValidationTests(unittest.TestCase):
@@ -363,8 +260,7 @@ class FeatureValidationTests(unittest.TestCase):
 
     def setUp(self) -> None:
         """Provide a catalog holding the test valid_feature cites."""
-        self.catalog = Catalog(
-            python_tests("check('Back works')\n", 'desktop/tests/ui_a.py'))
+        self.catalog = Catalog([LegacyTest(CITED_FILE, ('Back works',))])
 
     def problems(self, *items: dict[str, Any],
                  bridge_operations: frozenset[str] = frozenset({'list'}),
@@ -453,7 +349,7 @@ class FeatureValidationTests(unittest.TestCase):
         """Unknown citations and uncited operations are reported."""
         self.assertIn("NAV-001: unknown bridge operation 'lst'",
                       self.problems(valid_feature(bridge=['lst'])))
-        broken = 'desktop/tests/ui_a.py::Back broke'
+        broken = f'{CITED_FILE}::Back broke'
         self.assertIn(f'NAV-001: python test not found: {broken}',
                       self.problems(valid_feature(python_tests=[broken])))
         self.assertIn('Bridge operation open is not cited by any feature',
@@ -538,18 +434,31 @@ class MarkerTests(unittest.TestCase):
 class RepositoryTests(unittest.TestCase):
     """The checked-in inventories pass; broken files are reported."""
 
-    def test_checked_in_bridge_inventory_matches_the_dispatcher(self) -> None:
-        """bridge.json lists exactly what the dispatcher handles."""
+    def test_checked_in_bridge_inventory_matches_the_legacy_bridge(self) -> None:
+        """bridge.json lists exactly what the Python app's bridge handled."""
         inventory = bridge.load(check.ROOT)
-        self.assertEqual(bridge.validate(check.ROOT, inventory), [])
+        operations = legacy.load(check.ROOT).bridge_operations
+        self.assertEqual(bridge.validate(check.ROOT, inventory, operations), [])
 
     def test_checked_in_feature_inventory_is_valid(self) -> None:
         """features.toml, the markers and the citations all agree."""
         inventories = check.check_inventories(check.ROOT)
         self.assertEqual(inventories.errors, [])
         self.assertTrue(inventories.features)
-        self.assertEqual(len(inventories.catalog.tests),
-                         len(discover(check.ROOT)))
+        self.assertEqual(len(inventories.catalog.tests), 1249)
+
+    def test_the_checks_need_only_the_native_tree(self) -> None:
+        """A copy holding only native/ passes, so nothing reads the retired desktop/.
+
+        An existing clone can keep an untracked desktop/ folder after an update,
+        so the test checks what the checks read, not what the checkout holds.
+        """
+        root = temporary_root(self)
+        shutil.copytree(check.ROOT / 'native', root / 'native',
+                        ignore=shutil.ignore_patterns('target', '__pycache__'))
+        copy = check.check_inventories(root)
+        self.assertEqual(copy.errors, [])
+        self.assertEqual(len(copy.features), len(check.check_inventories(check.ROOT).features))
 
     def test_a_broken_feature_file_is_reported_not_raised(self) -> None:
         """A TOML syntax error becomes one message naming the file."""
@@ -562,6 +471,14 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertTrue(errors[0].startswith('native/parity/features.toml: '))
 
+    def test_a_broken_legacy_record_is_reported_not_raised(self) -> None:
+        """A malformed legacy.json becomes one message naming the file."""
+        root = self.minimal_repository()
+        write(root / legacy.LEGACY, '{"tag": "v2.0.0"}')
+        errors = check.check_inventories(root).errors
+        self.assertEqual(len(errors), 1)
+        self.assertTrue(errors[0].startswith('native/parity/legacy.json: '))
+
     def test_a_broken_bridge_file_is_reported_not_raised(self) -> None:
         """A JSON syntax error becomes one message naming the file."""
         root = self.minimal_repository()
@@ -571,11 +488,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertTrue(errors[0].startswith('native/parity/bridge.json: '))
 
     def minimal_repository(self) -> Path:
-        """Return a repository with bridge.json but no features.toml."""
+        """Return a repository with legacy.json and bridge.json but no features.toml."""
         root = temporary_root(self)
-        (root / 'desktop/tests').mkdir(parents=True)
-        write(root / 'desktop/winspace.py',
-              dispatcher("if method == 'list': pass"))
+        write(root / legacy.LEGACY, legacy_record(['list'], []))
         inventory = {'schema': 1, 'methods': {'list': pending()}}
         write(root / 'native/parity/bridge.json', json.dumps(inventory))
         return root

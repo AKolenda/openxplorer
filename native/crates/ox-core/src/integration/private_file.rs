@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Replacing a small file atomically with a private (0600) one.
 //!
-//! Ports `DesktopIntegration._save` in `desktop/desktop_integration.py`,
-//! `atomic_text` in `desktop/reveal_integration.py` and `atomic_bytes` in
-//! `desktop/brave_integration.py`, which are the same steps: write a
+//! Ports `DesktopIntegration._save` in `v2.0.0:desktop/desktop_integration.py`,
+//! `atomic_text` in `v2.0.0:desktop/reveal_integration.py` and `atomic_bytes` in
+//! `v2.0.0:desktop/brave_integration.py`, which are the same steps: write a
 //! temporary file beside the target, make it 0600, flush it to disk, then
 //! rename it over the target.
 

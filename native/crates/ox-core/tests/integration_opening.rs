@@ -7,9 +7,9 @@
 //!
 //! | Case file | What it covers | Ports |
 //! |---|---|---|
-//! | `activation` | What activating does; the application chosen | `OpeningTests` of `desktop/tests/test_v05.py` |
-//! | `app_catalog` | Open with and the editor shortcuts | `CatalogTests` of `desktop/tests/test_v06.py` |
-//! | `default_opener` | Preparing a real file for its application | `prepare_default` of `desktop/native_opening.py` |
+//! | `activation` | What activating does; the application chosen | `OpeningTests` of `v2.0.0:desktop/tests/test_v05.py` |
+//! | `app_catalog` | Open with and the editor shortcuts | `CatalogTests` of `v2.0.0:desktop/tests/test_v06.py` |
+//! | `default_opener` | Preparing a real file for its application | `prepare_default` of `v2.0.0:desktop/native_opening.py` |
 
 mod integration_support;
 

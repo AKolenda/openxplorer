@@ -2,10 +2,10 @@
 //! Scanning a folder with the provider its location needs, blocking or on
 //! a worker thread.
 //!
-//! Ports the start of `scan_folder` in `desktop/folder_sizes.py`, which
+//! Ports the start of `scan_folder` in `v2.0.0:desktop/folder_sizes.py`, which
 //! reads `file:` locations with `LocalSizeProvider` and everything else
 //! with `GioSizeProvider`, and the `folderSize` request of
-//! `desktop/winspace.py`, which runs the scan on a worker thread with a
+//! `v2.0.0:desktop/winspace.py`, which runs the scan on a worker thread with a
 //! cancellation the window controls.
 
 use super::{FolderSize, FolderSizeScan, GioSizeProvider, LocalSizeProvider, SizeError};

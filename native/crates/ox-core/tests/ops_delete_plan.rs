@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Trash support and the Delete plan (`trashSupport` in
-//! `desktop/winspace.py` and `trash` in `desktop/ui/app.js`) on temporary
+//! `v2.0.0:desktop/winspace.py` and `trash` in `v2.0.0:desktop/ui/app.js`) on temporary
 //! local folders and a share that is not mounted. The Python suite has no
 //! test of them, so none is ported here; the confirmation texts are unit
 //! tests of `ops::delete_plan`.
@@ -24,7 +24,7 @@ fn set_folder_mode(path: &Path, mode: u32) {
 }
 
 /// A GIO query that fails for any other reason than an unmounted share
-/// answers "no Trash", as `trash_support` in `desktop/gio_backend.py`
+/// answers "no Trash", as `trash_support` in `v2.0.0:desktop/gio_backend.py`
 /// does, so the confirmation says the item is deleted permanently.
 #[test]
 fn an_item_whose_folder_cannot_be_queried_is_planned_for_permanent_delete_like_python() {

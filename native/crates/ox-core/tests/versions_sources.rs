@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Snapshot source mappings (PROP-023): saving, replacing, removing and
 //! reading them, and sharing `snapshot-sources.json` with
-//! `desktop/previous_versions.py`.
+//! `v2.0.0:desktop/previous_versions.py`.
 //!
-//! `desktop/tests` has no backend test of `configure` or `sources`, so the
+//! `v2.0.0:desktop/tests` has no backend test of `configure` or `sources`, so the
 //! rules are checked here, and the file is checked against the Python
 //! app in both directions. Every file is inside a temporary directory.
 

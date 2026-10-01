@@ -3,7 +3,7 @@
 //! read-only locations and the real file system.
 //!
 //! Ports `checked_directory` and `prepare_directory` in
-//! `desktop/terminal_integration.py` (OPEN-017, OPEN-020). A location is
+//! `v2.0.0:desktop/terminal_integration.py` (OPEN-017, OPEN-020). A location is
 //! the only input; no command, program, argument or environment is ever
 //! taken from the caller. A file opens its folder, and a folder on a share
 //! opens through its local mount: a local shell, never an SSH session.

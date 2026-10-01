@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Opening one archive member as a private, read-only copy. Ports
-//! `Archives.preview_member` in `desktop/archives.py`.
+//! `Archives.preview_member` in `v2.0.0:desktop/archives.py`.
 //!
 //! Safety and privacy rules (ARC-006):
 //! - Only the one member the user chose is decompressed; nothing else of

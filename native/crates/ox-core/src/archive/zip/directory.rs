@@ -5,7 +5,7 @@
 //! front of them (self-extracting archives) and its ZIP-bomb check for
 //! members whose data overlaps the next member.
 //!
-//! Safety rule (ARC-005, `BoundedReader` in `desktop/archives.py`): the
+//! Safety rule (ARC-005, `BoundedReader` in `v2.0.0:desktop/archives.py`): the
 //! directory is read into memory only when it is at most
 //! [`MAX_DIRECTORY_BYTES`] long, so a forged size cannot make the reader
 //! allocate gigabytes before anything else is checked.

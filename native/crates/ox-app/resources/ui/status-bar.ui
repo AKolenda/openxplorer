@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- The status bar (footer.statusbar in desktop/ui/index.html): the item
+<!-- The status bar (footer.statusbar in v2.0.0:desktop/ui/index.html): the item
      count, the selection and the type-to-select hint, then at the right
      the build, "Check for updates" and the two view buttons
      (src/window/status_bar.rs). -->

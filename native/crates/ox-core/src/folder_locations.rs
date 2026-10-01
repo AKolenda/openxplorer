@@ -3,7 +3,7 @@
 //! existing folder, safely and reversibly.
 //!
 //! Ports `FolderLocations.validate`, `apply` and `snapshot` of
-//! `desktop/folder_locations.py` (PROP-031); the Properties Location tab
+//! `v2.0.0:desktop/folder_locations.py` (PROP-031); the Properties Location tab
 //! (PROP-017) is its interface. Reading `user-dirs.dirs` is
 //! [`places::FolderLocations`](crate::places::FolderLocations).
 //!

@@ -3,7 +3,7 @@
 //! check boxes and key-value grids.
 //!
 //! Ports `textField`, `propertyRow` and the `.modal-note`, `.hint`,
-//! `.checkbox-row` and `.property-grid` markup of `desktop/ui/app.js`;
+//! `.checkbox-row` and `.property-grid` markup of `v2.0.0:desktop/ui/app.js`;
 //! `resources/skin/in-window-dialogs.css` draws them.
 
 use std::cell::Cell;

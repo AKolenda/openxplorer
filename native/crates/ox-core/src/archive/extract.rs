@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Extracting a ZIP into a new folder, all or nothing. Ports
-//! `ZipExtractor` of `desktop/zip_extraction.py` and the checks the
-//! `archiveExtract` branch of `dispatch` in `desktop/winspace.py` runs
+//! `ZipExtractor` of `v2.0.0:desktop/zip_extraction.py` and the checks the
+//! `archiveExtract` branch of `dispatch` in `v2.0.0:desktop/winspace.py` runs
 //! before it.
 //!
 //! An extraction never touches existing content:

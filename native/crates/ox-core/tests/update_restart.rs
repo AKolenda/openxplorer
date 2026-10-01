@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! After an installation: waiting for a restart when the installed files
 //! changed, and restarting only through the fixed launcher. Ports the
-//! restart tests of `BridgeTests` in `desktop/tests/test_updater.py`.
+//! restart tests of `BridgeTests` in `v2.0.0:desktop/tests/test_updater.py`.
 
 mod update_support;
 
@@ -13,7 +13,7 @@ use ox_core::update::{Activity, AppRequest, UpdateCheck, UpdatePhase, RESTART_CO
 use update_support::service::{confirmed, ServiceFixture};
 use update_support::{failure, NEXT};
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_installed_update_blocks_files_but_allows_status_without_new_check`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_installed_update_blocks_files_but_allows_status_without_new_check`
 /// parity: UPD-005, UPD-006
 #[test]
 fn installed_update_blocks_files_but_allows_status_without_new_check() {
@@ -54,7 +54,7 @@ fn installed_update_blocks_files_but_allows_status_without_new_check() {
     );
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_modified_installed_files_require_restart_after_success_or_failure`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_modified_installed_files_require_restart_after_success_or_failure`
 /// parity: UPD-005, UPD-006
 #[test]
 fn modified_installed_files_require_restart_after_success_or_failure() {
@@ -95,7 +95,7 @@ fn an_installation_that_changed_nothing_needs_no_restart() {
     assert!(fixture.service.check_request(AppRequest::Files).is_ok());
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_identity_read_failure_always_clears_busy_and_requires_restart`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_identity_read_failure_always_clears_busy_and_requires_restart`
 /// parity: UPD-005, UPD-006
 #[test]
 fn identity_read_failure_always_clears_busy_and_requires_restart() {
@@ -109,7 +109,7 @@ fn identity_read_failure_always_clears_busy_and_requires_restart() {
     assert_eq!(fixture.service.phase(), UpdatePhase::RestartRequired);
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_pending_restart_allows_safe_quit`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_pending_restart_allows_safe_quit`
 /// parity: UPD-007
 #[test]
 fn pending_restart_allows_safe_quit() {
@@ -119,7 +119,7 @@ fn pending_restart_allows_safe_quit() {
     assert!(fixture.service.check_close_window().is_ok());
 }
 
-/// Ported from `desktop/tests/test_updater.py::BridgeTests::test_restart_requires_pending_update_idle_writes_and_fixed_launcher`
+/// Ported from `v2.0.0:desktop/tests/test_updater.py::BridgeTests::test_restart_requires_pending_update_idle_writes_and_fixed_launcher`
 /// parity: UPD-007
 #[test]
 fn restart_requires_pending_update_idle_writes_and_fixed_launcher() {

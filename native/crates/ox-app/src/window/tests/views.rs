@@ -297,7 +297,7 @@ fn changed_view_preferences_are_saved_for_new_windows() {
     assert!(second.names().contains(&".private".to_owned()));
 }
 
-/// Ported from `desktop/tests/text_size.test.cjs` (unmodified typing
+/// Ported from `v2.0.0:desktop/tests/text_size.test.cjs` (unmodified typing
 /// ignored, `AltGraph` ignored and Alt ignored): GTK matches an accelerator
 /// only with exactly its modifiers, and every text-size accelerator holds
 /// Ctrl alone, so plain, Alt and `AltGr` presses never resize text. (The web

@@ -3,8 +3,8 @@
 //! (DND-001 to DND-008).
 //!
 //! Ports `makeFileDraggable`, `beginNativeFileDrag`, `markNativeFileDrag`
-//! and `finishNativeFileDrag` of `desktop/ui/app.js` and `NativeFileDrag`
-//! of `desktop/native_file_drag.py` on GTK's own drag source. Dragging a
+//! and `finishNativeFileDrag` of `v2.0.0:desktop/ui/app.js` and `NativeFileDrag`
+//! of `v2.0.0:desktop/native_file_drag.py` on GTK's own drag source. Dragging a
 //! selected item carries the whole selection; dragging another item
 //! selects only it first; a sidebar row carries its folder. What the drag
 //! offers is built in [`payload`]. While the drag lasts its items are

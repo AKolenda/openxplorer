@@ -2,7 +2,7 @@
 //! Validating a run's request before anything changes: the operation and
 //! its destination folder, the number of items, and items selected twice.
 //! Ports the checks at the start of `TransferEngine.run` in
-//! `desktop/operations.py` (XFER-019).
+//! `v2.0.0:desktop/operations.py` (XFER-019).
 
 use std::collections::HashSet;
 
@@ -112,7 +112,7 @@ mod tests {
         names.iter().map(ToString::to_string).collect()
     }
 
-    /// Ported from `desktop/tests/test_operations.py::TransferTests::test_duplicate_sources_deduplicated`,
+    /// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_duplicate_sources_deduplicated`,
     /// at the level of the request.
     ///
     /// parity: XFER-019

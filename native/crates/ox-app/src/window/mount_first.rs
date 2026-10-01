@@ -6,7 +6,7 @@
 //! Properties, Open in Terminal and opening an archive, ask here first.
 //! When `GVfs` says the share is not mounted (another app or a sign-out
 //! unmounted it since it was listed), it is mounted once through the
-//! window's sign-in dialog, as `mount` in `desktop/winspace.py` does
+//! window's sign-in dialog, as `mount` in `v2.0.0:desktop/winspace.py` does
 //! before retrying a read, and the read then runs. A failed or cancelled
 //! mount is reported and the read never runs.
 //!
@@ -71,7 +71,7 @@ mod tests {
 
     use crate::test_support::harness::{wait_until, Fixture, TestWindow};
 
-    /// Ported from `desktop/tests/test_v05.py`'s mount-then-retry checks
+    /// Ported from `v2.0.0:desktop/tests/test_v05.py`'s mount-then-retry checks
     /// for reads other than listings. `example.invalid` never resolves, so
     /// `GVfs` reports it not mounted without reaching a network.
     ///

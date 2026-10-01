@@ -2,8 +2,8 @@
 //! What the window knows about the desktop: mounted volumes, device names,
 //! pins and network locations, drawn into the sidebar and landing pages.
 //!
-//! Ports `refreshEnvironment` in `desktop/ui/app.js` and `environment` in
-//! `desktop/winspace.py`. The volume monitor's changes to mounts, volumes
+//! Ports `refreshEnvironment` in `v2.0.0:desktop/ui/app.js` and `environment` in
+//! `v2.0.0:desktop/winspace.py`. The volume monitor's changes to mounts, volumes
 //! and drives (DEV-002) and the application's `places-changed` signal (a
 //! pin, a saved share, a visited server, a kernel SMB mount or the
 //! settings file changed) redraw the sidebar, the landing page, the icons

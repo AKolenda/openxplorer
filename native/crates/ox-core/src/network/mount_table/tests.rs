@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Mount table cases, including `test_mount_resolution` of
-//! `desktop/tests/test_v05.py`. The expected values were produced by
-//! `desktop/mount_support.py`.
+//! `v2.0.0:desktop/tests/test_v05.py`. The expected values were produced by
+//! `v2.0.0:desktop/mount_support.py`.
 
 use std::path::PathBuf;
 
@@ -78,7 +78,7 @@ fn smb_mounts_name_their_share_or_bound_subfolder() {
     assert_eq!(roots, expected);
 }
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_mount_resolution`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_mount_resolution`
 ///
 /// parity: NET-026
 #[test]
@@ -134,7 +134,7 @@ fn the_longest_mount_point_holds_a_path_and_names_are_whole() {
 }
 
 /// Only kernel SMB mounts become Network rows, named after their mount
-/// point (`stable` in `environment` of `desktop/winspace.py`).
+/// point (`stable` in `environment` of `v2.0.0:desktop/winspace.py`).
 ///
 /// parity: NET-006, NET-018
 #[test]

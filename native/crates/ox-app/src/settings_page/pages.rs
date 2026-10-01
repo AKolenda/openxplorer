@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The pages of Settings: its categories, and the pages their rows open.
 //!
-//! The Python app's Settings (`renderSettingsPage` in `desktop/ui/app.js`)
+//! The Python app's Settings (`renderSettingsPage` in `v2.0.0:desktop/ui/app.js`)
 //! was one long page of sections. The native page shows one [`Category`]
 //! at a time, chosen in a list on the left, as the `ChatGPT` and T3 Code
 //! settings do (SET-019), and long lists open as a [`Subpage`] of their

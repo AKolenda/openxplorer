@@ -2,7 +2,7 @@
 //! What a sign-in dialog shows, and what the user answers.
 //!
 //! Ports the `auth` event data and the `authReply` validation of
-//! `desktop/auth_bridge.py` (`MountPrompts._show_password`,
+//! `v2.0.0:desktop/auth_bridge.py` (`MountPrompts._show_password`,
 //! `_ask_question`, `answer` and `split_identity`).
 
 use std::fmt;
@@ -155,7 +155,7 @@ pub enum SignInError {
 
 /// Splits `username` into user and domain: `DOMAIN\user`, or the user with
 /// `default_domain`. The dialog has no domain field; advanced accounts use
-/// `DOMAIN\user`. Ports `split_identity` in `desktop/auth_bridge.py`.
+/// `DOMAIN\user`. Ports `split_identity` in `v2.0.0:desktop/auth_bridge.py`.
 ///
 /// # Errors
 ///
@@ -207,7 +207,7 @@ mod tests {
         }
     }
 
-    /// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_domain_username_supported`
+    /// Ported from `v2.0.0:desktop/tests/test_v05.py::CredentialsTests::test_domain_username_supported`
     ///
     /// parity: NET-007, NET-011
     #[test]

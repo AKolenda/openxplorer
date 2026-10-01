@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The Network landing page.
 //!
-//! Ports `renderNetwork` in `desktop/ui/app.js`: the "Computers & network
+//! Ports `renderNetwork` in `v2.0.0:desktop/ui/app.js`: the "Computers & network
 //! storage" banner with Discover servers (Stop while it runs), the server
 //! address field with Open address and Map location, the discovered
 //! servers with their count, the note on how discovery works, and every

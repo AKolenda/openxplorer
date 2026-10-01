@@ -38,10 +38,9 @@ for(const d of docs)routes['/docs/'+d.slug+'/']='docs-'+d.slug+'.html';
 function rewrite(html){return html.replace(/(href|src)="([^\"]+)"/g,(all,attr,url)=>{const [base,hash]=url.split('#');if(routes[base])return attr+'="'+routes[base]+(hash?'#'+hash:'')+'"';if(base.startsWith('/'))return attr+'="'+url.slice(1)+'"';return all;});}
 function page(name,component,title){
  let markup=rewrite(render(component));
- // Standalone HTML remains reviewable without a server: actual preview in
- // a script-only sandboxed srcdoc; screenshots are the captured PNG bytes.
- const app=fs.readFileSync(path.join(web,'public/app-preview.html'),'utf8');
- markup=markup.replace(/(<iframe[^>]*?) src="[^"]*"/g,(_,prefix)=>prefix+' srcdoc="'+escape(app)+'"');
+ // Standalone HTML remains reviewable without a server: the tour iframe
+ // loads designs/tour/ (prepare-web.cjs copies it); screenshots are the
+ // captured PNG bytes.
  markup=markup.replace(/(<img[^>]*?) src="(assets\/screenshots\/[^"]+)"/g,(_,prefix,asset)=>{
    const f=path.join(web,'public',asset);return prefix+' src="data:image/png;base64,'+fs.readFileSync(f).toString('base64')+'"';
  });const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="OpenXplorer — Windows File Explorer-inspired files for Linux."><title>'+escape(title)+' | OpenXplorer</title><style>'+css+'</style></head><body>'+markup+'<script>window.__OX_OFFLINE__=true;'+js.replace(/<\/script/gi,'<\\/script')+'</script></body></html>';

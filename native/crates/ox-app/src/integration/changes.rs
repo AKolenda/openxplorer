@@ -6,9 +6,9 @@
 //!
 //! Ports the `desktopDefault`, `desktopRestore`, `zipDefault`,
 //! `zipRestore`, `revealEnable`, `revealDisable` and `revealTest`
-//! branches of `dispatch` in `desktop/winspace.py` (INT-008, INT-009,
+//! branches of `dispatch` in `v2.0.0:desktop/winspace.py` (INT-008, INT-009,
 //! INT-011, INT-012, INT-015, INT-016), with the toasts of
-//! `changeDefault` and `changeZipDefault` in `desktop/ui/app.js`. Each
+//! `changeDefault` and `changeZipDefault` in `v2.0.0:desktop/ui/app.js`. Each
 //! change runs off the main thread; the rules (record before replacing,
 //! a later choice wins, never replace a foreign override) are ox-core's.
 

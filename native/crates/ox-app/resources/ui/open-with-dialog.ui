@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  "Open with": `openWithDialog` of desktop/ui/app.js in the app's modal
+  "Open with": `openWithDialog` of v2.0.0:desktop/ui/app.js in the app's modal
   dialog frame (native/docs/ui-spec.md §4.11): the item's name, "Find an
   application", the list of installed applications, "Show all installed
   applications", "Always use this app for this file type", a status line,

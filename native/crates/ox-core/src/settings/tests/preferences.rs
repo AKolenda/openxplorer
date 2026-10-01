@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Preference persistence, validation and cross-window updates.
 //!
-//! Ports the preference cases of `desktop/tests/test_v05.py`,
+//! Ports the preference cases of `v2.0.0:desktop/tests/test_v05.py`,
 //! `test_v06.py` and `test_zip_extract.py`.
 
 use super::*;
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic`
 /// parity: SET-016
 #[test]
 fn the_default_context_menu_is_the_classic_one() {
@@ -15,7 +15,7 @@ fn the_default_context_menu_is_the_classic_one() {
     assert_eq!(preferences.context_menu, ContextMenu::Win10);
 }
 
-/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist`
 /// parity: SET-016
 #[test]
 fn a_network_interval_outside_the_whitelist_is_not_saved() {
@@ -41,7 +41,7 @@ fn the_view_is_details_grid_or_left_as_it_was() {
     assert_eq!(reopened.view, View::Grid);
 }
 
-/// Ported from `desktop/tests/test_v06.py::PrefTests::test_layout_persists`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::PrefTests::test_layout_persists`
 /// parity: SIDE-023, VIEW-028
 #[test]
 fn sidebar_and_column_widths_persist() {
@@ -57,7 +57,7 @@ fn sidebar_and_column_widths_persist() {
     assert_eq!(columns, json!({"name": 460, "size": 100}));
 }
 
-/// Ported from `desktop/tests/test_v06.py::PrefTests::test_sidebar_width_bounds`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::PrefTests::test_sidebar_width_bounds`
 /// parity: SIDE-023
 #[test]
 fn sidebar_widths_out_of_bounds_are_ignored() {
@@ -83,7 +83,7 @@ fn sidebar_widths_out_of_bounds_are_ignored() {
     assert_eq!(store.snapshot().preferences.sidebar_width, None);
 }
 
-/// Ported from `desktop/tests/test_v06.py::PrefTests::test_width_rounding`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::PrefTests::test_width_rounding`
 /// parity: SIDE-023, VIEW-028
 #[test]
 fn sidebar_widths_are_rounded_when_saved() {
@@ -93,7 +93,7 @@ fn sidebar_widths_are_rounded_when_saved() {
     assert_eq!(store.snapshot().preferences.sidebar_width, Some(280));
 }
 
-/// Ported from `desktop/tests/test_v06.py::PrefTests::test_columns_whitelist`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::PrefTests::test_columns_whitelist`
 /// parity: VIEW-028, SAFE-018
 #[test]
 fn only_known_in_range_column_widths_are_saved() {
@@ -105,7 +105,7 @@ fn only_known_in_range_column_widths_are_saved() {
     assert_eq!(columns, json!({"name": 150}));
 }
 
-/// Ported from `desktop/tests/test_v06.py::PrefTests::test_column_reset`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::PrefTests::test_column_reset`
 /// parity: VIEW-028
 #[test]
 fn an_empty_column_widths_object_resets_every_column() {
@@ -117,7 +117,7 @@ fn an_empty_column_widths_object_resets_every_column() {
     assert_eq!(columns, json!({}));
 }
 
-/// Ported from `desktop/tests/test_v06.py::PrefTests::test_other_preferences_retained`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::PrefTests::test_other_preferences_retained`
 /// parity: SET-014, SIDE-023
 #[test]
 fn changing_the_sidebar_width_keeps_other_preferences() {
@@ -132,7 +132,7 @@ fn changing_the_sidebar_width_keeps_other_preferences() {
     );
 }
 
-/// Ported from `desktop/tests/test_v06.py::PrefTests::test_partial_window_updates_do_not_remove_other_preferences`
+/// Ported from `v2.0.0:desktop/tests/test_v06.py::PrefTests::test_partial_window_updates_do_not_remove_other_preferences`
 /// parity: SET-014, VIEW-028
 #[test]
 fn partial_window_updates_do_not_remove_other_preferences() {
@@ -146,7 +146,7 @@ fn partial_window_updates_do_not_remove_other_preferences() {
     assert_eq!(merged.column_widths.unwrap().get(Column::Modified), Some(200));
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_default_round_trip`
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::TextPreferenceTests::test_default_round_trip`
 /// parity: VIEW-045
 #[test]
 fn text_size_defaults_to_100_and_persists() {
@@ -157,7 +157,7 @@ fn text_size_defaults_to_100_and_persists() {
     assert_eq!(Settings::open(root.path()).snapshot().preferences.text_size, 150);
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_invalid_values_ignored`
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::TextPreferenceTests::test_invalid_values_ignored`
 /// parity: VIEW-045
 #[test]
 fn invalid_text_sizes_are_ignored() {
@@ -183,7 +183,7 @@ fn invalid_text_sizes_are_ignored() {
     }
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_all_sizes`
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::TextPreferenceTests::test_all_sizes`
 /// parity: VIEW-045
 #[test]
 fn every_offered_text_size_is_saved() {
@@ -195,7 +195,7 @@ fn every_offered_text_size_is_saved() {
     }
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_preserves_other_settings`
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::TextPreferenceTests::test_preserves_other_settings`
 /// parity: VIEW-045
 #[test]
 fn changing_the_text_size_keeps_other_preferences() {
@@ -212,7 +212,7 @@ fn changing_the_text_size_keeps_other_preferences() {
     assert!(current.show_hidden);
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_multiple_instances_merge`
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::TextPreferenceTests::test_multiple_instances_merge`
 /// parity: VIEW-045, SET-014
 #[test]
 fn text_size_changes_from_two_windows_merge() {

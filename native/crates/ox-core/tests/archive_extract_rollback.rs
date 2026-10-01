@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! An extraction is all or nothing: progress, cancellation, and the
 //! rollback after damaged data, failed writes and a racing folder. Ports
-//! those cases of `ZipExtractTests` in `desktop/tests/test_zip_extract.py`.
+//! those cases of `ZipExtractTests` in `v2.0.0:desktop/tests/test_zip_extract.py`.
 //! Destinations that race or cannot be cleaned up use the local provider
 //! of `transfer_support/`, the counterpart of
-//! `desktop/tests/local_provider.py`.
+//! `v2.0.0:desktop/tests/local_provider.py`.
 
 mod archive_support;
 #[allow(
@@ -26,7 +26,7 @@ use archive_support::{
 };
 use transfer_support::local::{local_path_of, LocalNode, Provider};
 
-/// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_progress_and_cleanup`.
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_progress_and_cleanup`.
 ///
 /// parity: ARC-011, ARC-013
 #[test]
@@ -64,7 +64,7 @@ fn progress_labels_name_the_check_each_file_and_the_result() {
     );
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_cancel_before_start`.
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_cancel_before_start`.
 ///
 /// parity: ARC-013
 #[test]
@@ -79,7 +79,7 @@ fn cancelling_before_the_start_writes_nothing() {
     fixture.assert_no_output();
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_cancel_during_write`.
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_cancel_during_write`.
 ///
 /// parity: ARC-011, ARC-013
 #[test]
@@ -100,7 +100,7 @@ fn cancelling_while_writing_removes_the_staging_folder() {
     assert!(fixture.archive.is_file());
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_crc_failure_rolls_back`.
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_crc_failure_rolls_back`.
 ///
 /// parity: ARC-013
 #[test]
@@ -118,7 +118,7 @@ fn a_crc_failure_rolls_back() {
     fixture.assert_no_output();
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_disk_error_rolls_back`.
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_disk_error_rolls_back`.
 ///
 /// parity: ARC-013
 #[test]
@@ -134,7 +134,7 @@ fn a_failed_write_rolls_back() {
     fixture.assert_no_output();
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_short_write_rolls_back`.
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_short_write_rolls_back`.
 ///
 /// parity: ARC-013
 #[test]
@@ -173,7 +173,7 @@ impl Provider for RacingDestination {
     }
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_racing_destination_is_not_replaced`.
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_racing_destination_is_not_replaced`.
 ///
 /// parity: ARC-012, ARC-013
 #[test]
@@ -194,7 +194,7 @@ fn a_folder_created_meanwhile_is_never_replaced() {
     assert_eq!(fixture.destination_names(), ["Unpacked"]);
 }
 
-/// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_not_a_zip`.
+/// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_not_a_zip`.
 ///
 /// parity: ARC-013, ARC-014
 #[test]
@@ -217,7 +217,7 @@ impl Provider for UndeletableItems {
     }
 }
 
-/// The report of `ZipExtractor.extract` in `desktop/zip_extraction.py`
+/// The report of `ZipExtractor.extract` in `v2.0.0:desktop/zip_extraction.py`
 /// when the staging folder of a failed extraction cannot be removed.
 ///
 /// parity: ARC-013

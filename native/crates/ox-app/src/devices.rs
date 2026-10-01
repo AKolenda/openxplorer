@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Taking a drive or phone away: Disconnect, Eject and Safely remove.
 //!
-//! Ports Disconnect of the This PC cards (`unmount` in `desktop/ui/app.js`
-//! and `desktop/winspace.py`) and adds Dolphin's Eject and Safely remove
+//! Ports Disconnect of the This PC cards (`unmount` in `v2.0.0:desktop/ui/app.js`
+//! and `v2.0.0:desktop/winspace.py`) and adds Dolphin's Eject and Safely remove
 //! (DEV-007, DEV-008), which the Python app lacks. What a mount allows
 //! comes from the volume monitor ([`MountControls`]); ox-core's
 //! [`network`](ox_core::network) service does the removing, with GTK's

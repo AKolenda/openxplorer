@@ -3,7 +3,7 @@
 
 use super::*;
 
-/// Ported from `desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_admin_helper_checks_existing_parent_chain`
+/// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_admin_helper_checks_existing_parent_chain`
 ///
 /// The temporary folder's parents (such as the world-writable `/tmp`,
 /// or a home owned by the user) are unsafe even though the directory

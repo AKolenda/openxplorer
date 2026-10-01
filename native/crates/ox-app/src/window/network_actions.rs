@@ -4,8 +4,8 @@
 //! servers, Sign out, Disconnect, Eject and Safely remove.
 //!
 //! Ports `connectDialog`, `removeBookmark`, the Keep in Network item of
-//! `networkLocationMenu` and `discoverNetwork` in `desktop/ui/app.js`, and
-//! `connect` and `after_connect` in `desktop/winspace.py`. Sign out is in
+//! `networkLocationMenu` and `discoverNetwork` in `v2.0.0:desktop/ui/app.js`, and
+//! `connect` and `after_connect` in `v2.0.0:desktop/winspace.py`. Sign out is in
 //! [`super::network_sign_out`], the device commands in
 //! [`super::mounting`].
 
