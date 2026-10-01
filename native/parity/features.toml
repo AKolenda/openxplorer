@@ -16029,8 +16029,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "KItemListViewAccessible"
-native = "todo"
-native_note = "Porting notes: OpenXplorer marks up a grid with rows, aria-selected and labels but announces no drag-and-drop events. It is not verified with a real screen reader. Existing OpenXplorer part is protected by ACC-001."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drag.rs (a_drag_is_announced_by_its_item_or_its_count); native/crates/ox-app/src/window/tests/accessibility.rs (the_file_list_its_items_and_every_icon_button_are_named). Both views are named 'Files' with the pane description, rows and tiles are named after their items and carry GTK's selected state, keyboard focus sits on the current item itself (ACC-003), and the details view carries the folder's row count and its visible column count. A drag out of the views or the sidebar is announced through GTK 4.14's accessible announcements ('Dragging Report.odt' or 'Dragging 3 items') and so is its end ('Drag ended'). Not checked with Orca here (no screen reader in this environment)."
 
 [[feature]]
 id = "ACC-003"

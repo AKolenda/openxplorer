@@ -43,7 +43,7 @@ fn shows_no_text(widget: &gtk::Widget) -> bool {
     labels.iter().all(|label| label.text().is_empty())
 }
 
-/// parity: ACC-001
+/// parity: ACC-001, ACC-002
 #[gtk::test]
 fn the_file_list_its_items_and_every_icon_button_are_named() {
     let fixture = Fixture::standard();
@@ -60,10 +60,9 @@ fn the_file_list_its_items_and_every_icon_button_are_named() {
             gtk::AccessibleProperty::Description
         ));
     }
-    assert!(gtk::test_accessible_has_relation(
-        &details,
-        gtk::AccessibleRelation::RowCount
-    ));
+    for count in [gtk::AccessibleRelation::RowCount, gtk::AccessibleRelation::ColCount] {
+        assert!(gtk::test_accessible_has_relation(&details, count), "{count:?}");
+    }
     let rows: Vec<gtk::Widget> = descendants::<gtk::Widget>(&details)
         .into_iter()
         .filter(|widget| widget.accessible_role() == gtk::AccessibleRole::Row)
