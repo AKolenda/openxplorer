@@ -230,6 +230,10 @@ fn the_file_keys_leave_text_fields_and_the_settings_page_alone() {
         let keys = app.accels_for_action(action);
         assert!(keys.iter().any(|shown| shown == key), "{action}: {keys:?}");
     }
+    assert!(
+        app.accels_for_action("win.context-menu").is_empty(),
+        "Menu and Shift+F10 belong to the file views; a text field keeps its own menu"
+    );
 }
 
 /// parity: OPS-006, OPS-008, OPS-010

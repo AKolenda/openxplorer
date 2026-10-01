@@ -24,7 +24,9 @@ use ox_core::integration::{
 use super::{
     BraveDialog, DesktopIntegration, IntegrationFolders, MimeBackend, OpenWithDialog, OpenWithSubject,
 };
-use crate::test_support::harness::{application, capture_dialog, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    application, capture_dialog, descendants, wait_until, Fixture, TestWindow,
+};
 
 /// Requests the service handed to the application.
 type Received = Rc<RefCell<Vec<FileManagerRequest>>>;
@@ -304,20 +306,47 @@ fn an_application_is_drawn_with_its_own_icon() {
             .and_then(|info| ox_core::integration::ApplicationInfo::icon(&info))
     };
     wait_until("GIO to read the entry", || fixture_icon().is_some());
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let subject = OpenWithSubject {
+        uri: fixture.uri_of("Documents"),
+        name: "Documents".to_owned(),
+        is_folder: true,
+    };
 
-    // Read the way the worker threads read it, drawn on the main thread.
-    let listed = fixture_icon();
+    let dialog = OpenWithDialog::present_for(
+        &test.window,
+        subject,
+        recording_launcher(&Launches::default()),
+        |_| {},
+    );
+    wait_until("the list", || {
+        dialog.shown_names().iter().any(|name| name == "Fixture Editor")
+    });
+
+    let row = descendants::<gtk::ListBoxRow>(&dialog)
+        .into_iter()
+        .find(|row| {
+            descendants::<gtk::Label>(row)
+                .iter()
+                .any(|label| label.text() == "Fixture Editor")
+        })
+        .expect("the fixture application has a row");
+    let image = descendants::<gtk::Image>(&row)
+        .into_iter()
+        .next()
+        .expect("the row starts with a picture");
+    dialog.close();
     std::fs::remove_file(&entry).expect("the fixture entry");
-    let image = super::application_image(listed.as_deref(), 16).expect("the application has an icon");
-    let missing = super::application_image(None, 16);
-
     let icon = image
         .gicon()
         .and_downcast::<gio::ThemedIcon>()
-        .expect("a named icon");
+        .expect("the row draws the application's named icon");
     assert!(icon.names().iter().any(|name| name == "accessories-text-editor"));
-    assert_eq!(image.pixel_size(), 16);
-    assert!(missing.is_none());
+    assert!(
+        super::application_image(None, 16).is_none(),
+        "no icon keeps the glyph"
+    );
 }
 
 /// Open with starts applications with the launch context of the window's

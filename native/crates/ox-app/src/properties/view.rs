@@ -59,7 +59,7 @@ pub(crate) struct PropertiesContext {
 }
 
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
@@ -69,6 +69,7 @@ mod imp {
     use super::super::general_panel::FolderRows;
     use super::super::versions_panel::VersionsPanel;
     use super::super::PropertiesTarget;
+    use super::PropertiesContext;
 
     /// Private state of [`super::PropertiesView`].
     #[derive(Debug, Default)]
@@ -92,6 +93,10 @@ mod imp {
         /// The Size and Contains values of a folder, once the properties
         /// are read, so a scan's progress can update them.
         pub(super) folder_rows: RefCell<Option<FolderRows>>,
+        /// What the window told the dialog; set by `new`.
+        pub(super) context: OnceCell<PropertiesContext>,
+        /// True once the dialog closed: a late read changes nothing.
+        pub(super) is_closed: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -154,7 +159,8 @@ impl PropertiesView {
         view.add_pages(&context);
         view.select_tab(initial);
         view.follow_selected_tab();
-        view.read_properties(context);
+        imp.context.set(context).expect("a new view has no context yet");
+        view.read_properties();
         view
     }
 
@@ -274,20 +280,28 @@ impl PropertiesView {
 
     /// Reads the item's properties off the main thread and fills the
     /// General and Permissions tabs.
-    fn read_properties(&self, context: PropertiesContext) {
+    fn read_properties(&self) {
         let uri = self.target().uri.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = view)]
             self,
             async move {
                 let read = read_properties(uri).await;
-                view.show_properties(read, &context);
+                view.properties_arrived(read);
             }
         ));
     }
 
-    fn show_properties(&self, read: Result<ItemProperties, EntryError>, context: &PropertiesContext) {
+    /// Shows the read, unless the dialog closed while it ran.
+    fn properties_arrived(&self, read: Result<ItemProperties, EntryError>) {
+        if !self.imp().is_closed.get() {
+            self.show_properties(read);
+        }
+    }
+
+    fn show_properties(&self, read: Result<ItemProperties, EntryError>) {
         let imp = self.imp();
+        let context = imp.context.get().expect("new sets the context");
         let properties = match read {
             Ok(properties) => properties,
             Err(error) => {
@@ -340,9 +354,11 @@ impl PropertiesView {
         }
     }
 
-    /// Stops the work the dialog started: a versions lookup in progress
-    /// (`finish` in `propertiesDialog`).
+    /// Stops the work the dialog started when it closes: a versions
+    /// lookup in progress is cancelled and a properties read still running
+    /// is ignored (`finish` in `propertiesDialog`).
     pub(crate) fn cancel_work(&self) {
+        self.imp().is_closed.set(true);
         self.versions_panel().cancel();
         if let Some(checksums) = self.imp().checksums.get() {
             checksums.cancel();
@@ -353,6 +369,12 @@ impl PropertiesView {
     #[cfg(test)]
     pub(crate) fn checksums(&self) -> Option<&ChecksumsPanel> {
         self.imp().checksums.get()
+    }
+
+    /// Delivers `read` as the properties read does, for tests.
+    #[cfg(test)]
+    pub(crate) fn deliver_properties(&self, read: Result<ItemProperties, EntryError>) {
+        self.properties_arrived(read);
     }
 
     /// The Size value shown, for tests.

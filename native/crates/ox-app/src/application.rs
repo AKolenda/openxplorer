@@ -400,7 +400,10 @@ pub fn run() -> glib::ExitCode {
         return glib::ExitCode::from(INVALID_COMMAND_LINE);
     }
     let arguments = match launch {
-        Launch::Snapshot(_) => arguments,
+        Launch::Snapshot(_) => match LaunchCheck::root_refusal() {
+            Some(status) => return status,
+            None => arguments,
+        },
         Launch::Interactive => match LaunchCheck::run(arguments) {
             LaunchCheck::Continue(arguments) => arguments,
             LaunchCheck::Exit(status) => return status,

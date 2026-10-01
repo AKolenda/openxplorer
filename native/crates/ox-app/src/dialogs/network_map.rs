@@ -132,11 +132,14 @@ impl ServerFields {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::rc::Rc;
+    use std::time::Duration;
+
+    use gtk::glib;
 
     use super::*;
-    use crate::test_support::harness::{descendants, settle};
+    use crate::test_support::harness::{descendants, settle, wait_for};
 
     /// parity: NET-001
     #[gtk::test]
@@ -250,7 +253,7 @@ mod tests {
     }
 
     /// Sets its flag when the work holding it is dropped.
-    struct DropFlag(Rc<std::cell::Cell<bool>>);
+    struct DropFlag(Rc<Cell<bool>>);
 
     impl Drop for DropFlag {
         fn drop(&mut self) {
@@ -266,7 +269,7 @@ mod tests {
     #[gtk::test]
     fn cancel_drops_the_running_connection() {
         let parent = gtk::Window::new();
-        let dropped = Rc::new(std::cell::Cell::new(false));
+        let dropped = Rc::new(Cell::new(false));
         let flag = Rc::clone(&dropped);
         let dialog = map_network_dialog(&parent, move |dialog, _| {
             let guard = DropFlag(Rc::clone(&flag));
@@ -287,6 +290,38 @@ mod tests {
         assert!(connecting, "Connect waits, Cancel does not");
         assert!(dropped.get(), "the connection is dropped");
         assert!(!dialog.is_visible());
+        parent.close();
+    }
+
+    /// Cancel while "Connecting…" drops the connection: a success that
+    /// arrives afterwards is never acted on.
+    ///
+    /// parity: SAFE-013
+    #[gtk::test]
+    fn a_connection_that_answers_after_cancel_is_ignored() {
+        let parent = gtk::Window::new();
+        let started = Rc::new(Cell::new(false));
+        let answered = Rc::new(Cell::new(false));
+        let (begun, heard) = (Rc::clone(&started), Rc::clone(&answered));
+        let dialog = map_network_dialog(&parent, move |dialog, _| {
+            begun.set(true);
+            let heard = Rc::clone(&heard);
+            dialog.run("Connecting…", async move {
+                glib::timeout_future(Duration::from_millis(100)).await;
+                heard.set(true);
+            });
+        });
+        dialog.open();
+        settle();
+        descendants::<gtk::Entry>(&dialog)[0].set_text("\\\\nas\\Projects");
+
+        dialog.press("Connect");
+        settle();
+        assert!(started.get(), "Connect started the connection");
+        dialog.press("Cancel");
+        wait_for(Duration::from_millis(300));
+
+        assert!(!answered.get(), "the late connection was dropped");
         parent.close();
     }
 }

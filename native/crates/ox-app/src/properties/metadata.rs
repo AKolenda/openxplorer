@@ -98,7 +98,7 @@ impl ItemProperties {
     }
 
     /// The item as the Permissions tab changes it.
-    pub(crate) fn edited_item(&self) -> super::permissions_editor::EditedItem {
+    pub(in crate::properties) fn edited_item(&self) -> super::permissions_editor::EditedItem {
         super::permissions_editor::EditedItem {
             uri: self.entry.uri.clone(),
             mode: self.mode.unwrap_or_default() & PERMISSION_BITS,

@@ -23,7 +23,7 @@ use crate::window::widget_tree::children;
 use crate::window::WindowAction;
 
 /// The name of the snapshot the fixtures create.
-const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
+pub(super) const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
 
 impl TestWindow {
     /// Selects only the item called `name`.
@@ -50,7 +50,7 @@ impl TestWindow {
 }
 
 /// The Properties view inside `frame`.
-fn properties_view(frame: &DialogFrame) -> PropertiesView {
+pub(super) fn properties_view(frame: &DialogFrame) -> PropertiesView {
     descendants::<PropertiesView>(frame)
         .into_iter()
         .next()
@@ -64,7 +64,7 @@ pub(super) fn texts(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
 }
 
 /// The value shown after the name `name` in `widget`'s name-value grids.
-fn value_after(widget: &impl IsA<gtk::Widget>, name: &str) -> Option<String> {
+pub(super) fn value_after(widget: &impl IsA<gtk::Widget>, name: &str) -> Option<String> {
     let shown = texts(widget);
     let index = shown.iter().position(|text| text == name)?;
     shown.get(index + 1).cloned()
@@ -98,7 +98,7 @@ fn tab_tooltips(test: &TestWindow) -> Vec<String> {
 
 /// A standard fixture whose Documents folder holds a file and a snapshot
 /// collection with one snapshot of the folder.
-fn fixture_with_snapshot() -> Fixture {
+pub(super) fn fixture_with_snapshot() -> Fixture {
     let fixture = Fixture::standard();
     let documents = fixture.path("Documents");
     fs::write(documents.join("plan.txt"), b"live plan").expect("fixture file");
@@ -492,6 +492,36 @@ fn change_app_closes_properties_and_opens_open_with() {
         .find(|dialog| dialog.transient_for().as_ref() == Some(test.window.upcast_ref()))
         .expect("Open with opened for the file");
     open_with.close();
+}
+
+/// Ctrl+Tab and Ctrl+Shift+Tab switch tabs while a tab's Properties is
+/// open, whatever has focus in it.
+///
+/// parity: CMD-017
+#[gtk::test]
+fn ctrl_tab_switches_tabs_from_inside_a_tabs_properties() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let owner = test.active_tab().expect("a tab");
+    test.activate("new-tab", None);
+    test.activate_tab(owner);
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let in_dialog = descendants::<gtk::Button>(&frame)
+        .iter()
+        .any(WidgetExt::grab_focus);
+    assert!(in_dialog, "a control of the dialog takes focus");
+    let keys_apply = test.window.tab_keys_apply();
+
+    test.activate("next-tab", None);
+    let after_next = (test.active_tab(), test.shown_dialog());
+    test.activate("previous-tab", None);
+
+    assert!(keys_apply, "the tab keys reach the window from the dialog");
+    assert_ne!(after_next.0, Some(owner));
+    assert!(after_next.1.is_none(), "the other tab hides the dialog");
+    assert_eq!(test.active_tab(), Some(owner));
+    assert_eq!(test.shown_dialog(), Some(frame));
 }
 
 /// parity: PROP-008
