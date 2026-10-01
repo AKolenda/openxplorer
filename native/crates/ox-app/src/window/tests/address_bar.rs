@@ -10,6 +10,8 @@ use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use ox_core::settings::{PreferencesUpdate, Settings};
+
 use crate::locations::location_context;
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
 use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
@@ -217,4 +219,29 @@ fn the_title_crumbs_and_address_call_a_phone_by_its_mount_name() {
     assert_eq!(labels, ["Pixel 7", "Internal storage", "DCIM"]);
     let entry = test.window.address_bar().entry();
     assert_eq!(entry.text().as_str(), "Pixel 7 / Internal storage/DCIM");
+}
+
+/// "Show full path in the title bar" titles the window with the folder's
+/// path instead of its name.
+///
+/// parity: SET-011
+#[gtk::test]
+fn the_title_shows_the_full_path_when_the_settings_ask() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    assert_eq!(test.window.title().as_deref(), Some("Documents — OpenXplorer"));
+    let update = PreferencesUpdate {
+        full_path_in_title: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+
+    test.context.reload_settings();
+
+    let path = fixture.path("Documents").display().to_string();
+    wait_until("the title to show the path", || {
+        test.window.title().as_deref() == Some(&format!("{path} — OpenXplorer"))
+    });
 }

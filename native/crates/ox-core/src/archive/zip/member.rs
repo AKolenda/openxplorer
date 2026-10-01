@@ -68,6 +68,24 @@ pub(crate) struct DosDateTime {
 }
 
 impl DosDateTime {
+    /// The MS-DOS form of `seconds` since the Unix epoch in local time,
+    /// for archives that record Unix times; times before 1980 or after 2107
+    /// are clamped to the range the format can hold.
+    pub(crate) fn from_unix_seconds(seconds: u64) -> Self {
+        let local = i64::try_from(seconds)
+            .ok()
+            .and_then(|seconds| glib::DateTime::from_unix_local(seconds).ok());
+        let Some(local) = local else {
+            return Self { date: 0x21, time: 0 };
+        };
+        let year = local.year().clamp(1980, 2107);
+        let field = |value: i32| u16::try_from(value).unwrap_or(0);
+        Self {
+            date: field(year - 1980) << 9 | field(local.month()) << 5 | field(local.day_of_month()),
+            time: field(local.hour()) << 11 | field(local.minute()) << 5 | field(local.second() / 2),
+        }
+    }
+
     /// Seconds since the Unix epoch, reading the time as local time like
     /// `datetime(*date_time).timestamp()` in `desktop/archives.py`; `None`
     /// for an impossible date or time, where Python reported 0.

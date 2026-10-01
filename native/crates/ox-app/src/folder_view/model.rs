@@ -242,6 +242,16 @@ impl FolderModel {
         self.selection.select_item(position, true);
     }
 
+    /// Selects exactly the items at `positions`.
+    pub(crate) fn select_positions(&self, positions: &[u32]) {
+        let selected = gtk::Bitset::new_empty();
+        for &position in positions {
+            selected.add(position);
+        }
+        let everything = gtk::Bitset::new_range(0, self.n_items());
+        self.selection.set_selection(&selected, &everything);
+    }
+
     /// Selects every shown item.
     pub(crate) fn select_all(&self) {
         self.selection.select_all();
@@ -382,6 +392,25 @@ mod tests {
         assert!(model.set_query("a"));
         assert!(changes.get() > 0);
         assert_eq!(model.n_items(), 1);
+    }
+
+    /// Sizes sort by value; folders never measured and files of unknown
+    /// size count as 0.
+    ///
+    /// parity: VIEW-015
+    #[gtk::test]
+    fn unmeasured_folders_and_unknown_sizes_sort_as_nothing() {
+        let mut big = file_entry("big.bin");
+        big.size = Some(10);
+        let big = FileItem::new(big);
+        let folder = FileItem::new(crate::test_support::folder_entry("Photos"));
+        let unknown = FileItem::new(file_entry("unknown.bin"));
+        assert_eq!(compare_column(SortColumn::Size, &folder, &big), Ordering::Less);
+        assert_eq!(compare_column(SortColumn::Size, &unknown, &big), Ordering::Less);
+        assert_eq!(
+            compare_column(SortColumn::Size, &folder, &unknown),
+            Ordering::Equal
+        );
     }
 
     #[gtk::test]

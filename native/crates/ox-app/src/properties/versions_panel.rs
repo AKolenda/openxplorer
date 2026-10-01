@@ -202,12 +202,18 @@ impl VersionsPanel {
             self,
             async move {
                 let result = lookup.await;
-                if panel.imp().generation.get() == generation {
-                    panel.imp().lookup.take();
-                    panel.show_result(result);
-                }
+                panel.lookup_arrived(generation, result);
             }
         ));
+    }
+
+    /// Shows the answer of lookup number `generation`, unless a newer
+    /// lookup started meanwhile.
+    fn lookup_arrived(&self, generation: u64, result: Result<VersionList, VersionsError>) {
+        if self.imp().generation.get() == generation {
+            self.imp().lookup.take();
+            self.show_result(result);
+        }
     }
 
     /// Shows the versions found, or why there are none.
@@ -286,6 +292,25 @@ impl VersionsPanel {
     fn clear(&self) {
         clear_box(self.upcast_ref());
         self.imp().list.replace(None);
+    }
+
+    /// The number of the newest lookup, for tests.
+    #[cfg(test)]
+    pub(crate) fn lookup_number(&self) -> u64 {
+        self.imp().generation.get()
+    }
+
+    /// Delivers `result` as the answer of lookup number `generation`, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn deliver_lookup(&self, generation: u64, result: Result<VersionList, VersionsError>) {
+        self.lookup_arrived(generation, result);
+    }
+
+    /// Shows the list and starts a new lookup, as Refresh does, for tests.
+    #[cfg(test)]
+    pub(crate) fn refresh(&self) {
+        self.load();
     }
 
     /// The labels of the versions listed, for tests.

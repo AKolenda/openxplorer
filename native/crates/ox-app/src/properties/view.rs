@@ -3,8 +3,8 @@
 //!
 //! Ports `propertiesDialog` in `desktop/ui/app.js` (PROP-001, PROP-003,
 //! PROP-006): the tabs General, Sharing (local folders only), Location
-//! (standard folders only),
-//! Permissions and Previous versions, the item's properties read once
+//! (standard folders only), Permissions, Checksums (files only, PROP-014)
+//! and Previous versions, the item's properties read once
 //! when the dialog opens, and the versions looked up the first time their
 //! tab is shown. [`PropertiesView`] is a widget subclass the dialog frame
 //! holds; the window keeps the frame, and so the view with everything it
@@ -16,23 +16,23 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::EntryError;
-use ox_core::location::{ItemKind, LocationContext};
+use ox_core::folder_locations::FolderRelocation;
+use ox_core::location::{is_smb_location, is_smb_server, is_smb_share_root, ItemKind, LocationContext};
 use ox_core::network::Usershares;
+use ox_core::versions::is_conventional_snapshot;
 use ox_core::versions::PreviousVersions;
 
+use super::checksums_panel::ChecksumsPanel;
 use super::folder_sizes::FolderSizeState;
 use super::general_panel::{self, GeneralFacts};
+use super::location_panel::LocationPanel;
 use super::metadata::{read_properties, ItemProperties};
+use super::permissions_editor::{permissions_editor, EditedItems};
 use super::sharing_panel::sharing_panel;
 use super::versions_panel::VersionsPanel;
-use super::{PropertiesTab, PropertiesTarget};
+use super::{PropertiesTab, PropertiesTarget, READING};
 use crate::dialog_layer::{quiet_text, DialogFrame, DialogWidth};
-
-/// Shown on the General tab while the properties are read.
-const READING: &str = "Reading file properties…";
-
-/// The shortest height of a tab's panel (`.properties-panel`).
-const PANEL_MIN_HEIGHT: i32 = 290;
+use ox_core::integration::BraveIntegration;
 
 /// What a Properties dialog needs from the window that opens it.
 #[derive(Debug, Clone)]
@@ -45,38 +45,49 @@ pub(crate) struct PropertiesContext {
     pub folder_size: Option<FolderSizeState>,
     /// Samba's user shares, for the Sharing tab; `None` for no tab.
     pub usershares: Option<Usershares>,
+    /// Moves a standard folder, for the Location tab.
+    pub relocation: Arc<FolderRelocation>,
+    /// Brave's download-folder integration, for the Location tab's
+    /// follow-up.
+    pub brave: BraveIntegration,
 }
 
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
+    use super::super::checksums_panel::ChecksumsPanel;
+    use super::super::general_panel::FolderRows;
+    use super::super::tabs::PropertiesTabs;
     use super::super::versions_panel::VersionsPanel;
     use super::super::PropertiesTarget;
+    use super::PropertiesContext;
 
     /// Private state of [`super::PropertiesView`].
     #[derive(Debug, Default)]
     pub(crate) struct PropertiesView {
         /// The item described; set by `new`.
         pub(super) target: OnceCell<PropertiesTarget>,
-        /// The row under the tab buttons, with its bottom rule.
-        pub(super) tab_row: gtk::Box,
-        /// The tab buttons above the panels.
-        pub(super) switcher: gtk::StackSwitcher,
-        /// One page per tab.
-        pub(super) pages: gtk::Stack,
+        /// The tab buttons and their panels.
+        pub(super) tabs: PropertiesTabs,
         /// The General tab.
         pub(super) general: gtk::Box,
         /// The Permissions tab.
         pub(super) permissions: gtk::Box,
         /// The Previous versions tab; set by `new`.
         pub(super) versions: OnceCell<VersionsPanel>,
-        /// The Size value of a folder, once the properties are read, so a
-        /// scan's progress can update it.
-        pub(super) size_value: RefCell<Option<gtk::Label>>,
+        /// The Checksums tab of a file.
+        pub(super) checksums: OnceCell<ChecksumsPanel>,
+        /// The Size and Contains values of a folder, once the properties
+        /// are read, so a scan's progress can update them.
+        pub(super) folder_rows: RefCell<Option<FolderRows>>,
+        /// What the window told the dialog; set by `new`.
+        pub(super) context: OnceCell<PropertiesContext>,
+        /// True once the dialog closed: a late read changes nothing.
+        pub(super) is_closed: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -99,18 +110,13 @@ mod imp {
                 .expect("class_init sets a box layout")
                 .set_orientation(gtk::Orientation::Vertical);
             view.add_css_class("properties-view");
-            self.switcher.set_stack(Some(&self.pages));
-            // The tabs keep their own width, from the left, as `.properties-tabs`.
-            self.switcher.set_halign(gtk::Align::Start);
-            self.tab_row.add_css_class("properties-tabs");
-            self.tab_row.append(&self.switcher);
-            self.tab_row.set_parent(&*view);
-            self.pages.set_parent(&*view);
+            self.tabs.tab_row().set_parent(&*view);
+            self.tabs.pages().set_parent(&*view);
         }
 
         fn dispose(&self) {
-            self.tab_row.unparent();
-            self.pages.unparent();
+            self.tabs.tab_row().unparent();
+            self.tabs.pages().unparent();
         }
     }
 
@@ -136,10 +142,11 @@ impl PropertiesView {
             .set(versions)
             .expect("a new view has no versions panel yet");
         imp.target.set(target).expect("a new view has no target yet");
-        view.add_pages(context.usershares.as_ref());
+        view.add_pages(&context);
         view.select_tab(initial);
         view.follow_selected_tab();
-        view.read_properties(context);
+        imp.context.set(context).expect("a new view has no context yet");
+        view.read_properties();
         view
     }
 
@@ -153,23 +160,27 @@ impl PropertiesView {
     }
 
     /// Adds one page per tab the item has.
-    fn add_pages(&self, usershares: Option<&Usershares>) {
+    fn add_pages(&self, context: &PropertiesContext) {
         let imp = self.imp();
-        let pages = &imp.pages;
-        pages.set_vhomogeneous(false);
         imp.general.set_orientation(gtk::Orientation::Vertical);
         imp.general.append(&quiet_text(READING));
         imp.permissions.set_orientation(gtk::Orientation::Vertical);
         self.add_page(PropertiesTab::General, imp.general.upcast_ref());
-        if let Some((folder, usershares)) = self.shareable_folder().zip(usershares) {
+        if let Some((folder, usershares)) = self.shareable_folder().zip(context.usershares.as_ref()) {
             let sharing = sharing_panel(folder, usershares.clone());
             self.add_page(PropertiesTab::Sharing, sharing.upcast_ref());
         }
         if let Some(folder) = self.target().known_folder {
-            let location = general_panel::location_panel(folder);
+            let relocation = Arc::clone(&context.relocation);
+            let location = LocationPanel::new(folder, relocation, context.brave.clone());
             self.add_page(PropertiesTab::Location, location.upcast_ref());
         }
         self.add_page(PropertiesTab::Permissions, imp.permissions.upcast_ref());
+        if self.target().kind == ItemKind::File {
+            let checksums = ChecksumsPanel::new(&self.target().uri);
+            self.add_page(PropertiesTab::Checksums, checksums.widget().upcast_ref());
+            imp.checksums.set(checksums).expect("added once");
+        }
         self.add_page(
             PropertiesTab::PreviousVersions,
             self.versions_panel().upcast_ref(),
@@ -187,40 +198,30 @@ impl PropertiesView {
     }
 
     fn add_page(&self, tab: PropertiesTab, panel: &gtk::Widget) {
-        panel.add_css_class("properties-panel");
-        panel.set_size_request(-1, PANEL_MIN_HEIGHT);
-        self.imp()
-            .pages
-            .add_titled(panel, Some(tab.page_name()), tab.label());
+        self.imp().tabs.add_page(tab, panel);
     }
 
     /// Shows `tab`, or General when the item has no such tab.
     pub(crate) fn select_tab(&self, tab: PropertiesTab) {
-        let pages = &self.imp().pages;
-        let name = if pages.child_by_name(tab.page_name()).is_some() {
-            tab.page_name()
-        } else {
-            PropertiesTab::General.page_name()
-        };
-        pages.set_visible_child_name(name);
+        self.imp().tabs.select_tab(tab);
     }
 
     /// The tab shown.
     pub(crate) fn selected_tab(&self) -> PropertiesTab {
-        let name = self.imp().pages.visible_child_name();
-        name.as_deref()
-            .and_then(PropertiesTab::from_page_name)
-            .unwrap_or(PropertiesTab::General)
+        self.imp().tabs.selected_tab()
     }
 
     /// Looks the versions up the first time their tab is shown, and tells
     /// the dialog to widen for the versions list.
     fn follow_selected_tab(&self) {
-        self.imp().pages.connect_visible_child_name_notify(glib::clone!(
-            #[weak(rename_to = view)]
-            self,
-            move |_| view.tab_shown()
-        ));
+        self.imp()
+            .tabs
+            .pages()
+            .connect_visible_child_name_notify(glib::clone!(
+                #[weak(rename_to = view)]
+                self,
+                move |_| view.tab_shown()
+            ));
         self.tab_shown();
     }
 
@@ -253,20 +254,28 @@ impl PropertiesView {
 
     /// Reads the item's properties off the main thread and fills the
     /// General and Permissions tabs.
-    fn read_properties(&self, context: PropertiesContext) {
+    fn read_properties(&self) {
         let uri = self.target().uri.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = view)]
             self,
             async move {
                 let read = read_properties(uri).await;
-                view.show_properties(read, &context);
+                view.properties_arrived(read);
             }
         ));
     }
 
-    fn show_properties(&self, read: Result<ItemProperties, EntryError>, context: &PropertiesContext) {
+    /// Shows the read, unless the dialog closed while it ran.
+    fn properties_arrived(&self, read: Result<ItemProperties, EntryError>) {
+        if !self.imp().is_closed.get() {
+            self.show_properties(read);
+        }
+    }
+
+    fn show_properties(&self, read: Result<ItemProperties, EntryError>) {
         let imp = self.imp();
+        let context = imp.context.get().expect("new sets the context");
         let properties = match read {
             Ok(properties) => properties,
             Err(error) => {
@@ -279,10 +288,33 @@ impl PropertiesView {
             locations: &context.locations,
             folder_size: context.folder_size.as_ref(),
             snapshot_roots: &context.locations.snapshot_roots,
+            can_rename: self.can_rename(&properties, context),
         };
-        let size_value = general_panel::fill_general(&imp.general, &facts);
-        imp.size_value.replace(size_value);
-        general_panel::fill_permissions(&imp.permissions, &properties);
+        let folder_rows = general_panel::fill_general(&imp.general, &facts);
+        imp.folder_rows.replace(folder_rows);
+        let editor = can_edit_permissions(&properties, context).then(|| {
+            let items = EditedItems {
+                items: vec![properties.edited_item()],
+                owner: properties.owner_account(),
+                group: properties.group_account(),
+            };
+            permissions_editor(items, Arc::clone(&context.versions))
+        });
+        general_panel::fill_permissions(&imp.permissions, &properties, editor);
+    }
+
+    /// Whether the name can be edited: an item in a local or shared folder,
+    /// not a standard folder, a share or server, or inside a previous version.
+    fn can_rename(&self, properties: &ItemProperties, context: &PropertiesContext) -> bool {
+        let uri = &properties.entry.uri;
+        let is_share = is_smb_server(uri) || is_smb_share_root(uri);
+        let is_read_only = context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
+        let is_renamable_place = uri.starts_with("file:") || is_smb_location(uri);
+        self.target().known_folder.is_none()
+            && properties.parent_uri.is_some()
+            && !is_share
+            && !is_read_only
+            && is_renamable_place
     }
 
     /// Shows the folder's new measured size, if this dialog describes the
@@ -291,23 +323,39 @@ impl PropertiesView {
         if super::size_key(uri) != super::size_key(&self.target().uri) {
             return;
         }
-        if let Some(label) = self.imp().size_value.borrow().as_ref() {
-            label.set_text(&state.size_text());
-            label.set_tooltip_text(Some(&state.summary_tooltip()));
+        if let Some(rows) = self.imp().folder_rows.borrow().as_ref() {
+            rows.show(state);
         }
     }
 
-    /// Stops the work the dialog started: a versions lookup in progress
-    /// (`finish` in `propertiesDialog`).
+    /// Stops the work the dialog started when it closes: a versions
+    /// lookup in progress is cancelled and a properties read still running
+    /// is ignored (`finish` in `propertiesDialog`).
     pub(crate) fn cancel_work(&self) {
+        self.imp().is_closed.set(true);
         self.versions_panel().cancel();
+        if let Some(checksums) = self.imp().checksums.get() {
+            checksums.cancel();
+        }
+    }
+
+    /// The Checksums tab of a file, for tests.
+    #[cfg(test)]
+    pub(crate) fn checksums(&self) -> Option<&ChecksumsPanel> {
+        self.imp().checksums.get()
+    }
+
+    /// Delivers `read` as the properties read does, for tests.
+    #[cfg(test)]
+    pub(crate) fn deliver_properties(&self, read: Result<ItemProperties, EntryError>) {
+        self.properties_arrived(read);
     }
 
     /// The Size value shown, for tests.
     #[cfg(test)]
     pub(crate) fn size_text(&self) -> Option<String> {
-        let label = self.imp().size_value.borrow().clone()?;
-        Some(label.text().to_string())
+        let rows = self.imp().folder_rows.borrow().clone()?;
+        Some(rows.size.text().to_string())
     }
 
     /// The General tab, for tests.
@@ -331,11 +379,23 @@ impl PropertiesView {
     /// The tab labels, for tests.
     #[cfg(test)]
     pub(crate) fn tab_labels(&self) -> Vec<String> {
-        let pages = self.imp().pages.pages();
+        let pages = self.imp().tabs.pages().pages();
         (0..pages.n_items())
             .filter_map(|position| pages.item(position).and_downcast::<gtk::StackPage>())
             .filter_map(|page| page.title())
             .map(String::from)
             .collect()
     }
+}
+
+/// Whether the permissions can be changed here: the user owns the
+/// item, which has permission bits and is not a link, a share root or
+/// inside a previous version (PROP-007).
+pub(super) fn can_edit_permissions(properties: &ItemProperties, context: &PropertiesContext) -> bool {
+    let uri = &properties.entry.uri;
+    let is_owner = properties.owner.as_deref() == glib::user_name().to_str();
+    let is_link = properties.link_target.is_some();
+    let is_read_only = context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
+    let is_place = uri.starts_with("file:") || (is_smb_location(uri) && !is_smb_share_root(uri));
+    is_owner && properties.mode.is_some() && !is_link && !is_read_only && is_place && !is_smb_server(uri)
 }

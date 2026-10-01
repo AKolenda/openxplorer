@@ -31,92 +31,135 @@
           <object class="GtkBox">
             <property name="orientation">vertical</property>
             <child>
-              <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <style>
-                  <class name="dialog-content"/>
-                </style>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Open with</property>
-                    <property name="xalign">0</property>
+              <!-- The body scrolls when the dialog would be taller than its
+                   window (src/modal.rs); otherwise it is as tall as its content. -->
+              <object class="GtkScrolledWindow" id="scroller">
+                <property name="hscrollbar-policy">never</property>
+                <property name="propagate-natural-width">true</property>
+                <property name="propagate-natural-height">true</property>
+                <property name="vexpand">true</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
                     <style>
-                      <class name="dialog-title"/>
+                      <class name="dialog-content"/>
                     </style>
-                  </object>
-                </child>
-                <child>
-                  <!-- The item, as the Python dialog's description. -->
-                  <object class="GtkLabel" id="item_label">
-                    <property name="xalign">0</property>
-                    <property name="ellipsize">middle</property>
-                    <style>
-                      <class name="dialog-message"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Find an application</property>
-                    <property name="xalign">0</property>
-                    <property name="mnemonic-widget">filter_entry</property>
-                    <style>
-                      <class name="field-label"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkEntry" id="filter_entry">
-                    <property name="placeholder-text">Search installed applications</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkScrolledWindow">
-                    <property name="hscrollbar-policy">never</property>
-                    <property name="min-content-height">240</property>
-                    <property name="max-content-height">240</property>
-                    <property name="margin-top">12</property>
-                    <style>
-                      <class name="app-choices"/>
-                    </style>
-                    <property name="child">
-                      <object class="GtkListBox" id="application_list">
-                        <property name="selection-mode">single</property>
-                        <accessibility>
-                          <property name="label">Installed applications</property>
-                        </accessibility>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Open with</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="dialog-title"/>
+                        </style>
                       </object>
-                    </property>
+                    </child>
+                    <child>
+                      <!-- The item, as the Python dialog's description. -->
+                      <object class="GtkLabel" id="item_label">
+                        <property name="xalign">0</property>
+                        <property name="ellipsize">middle</property>
+                        <style>
+                          <class name="dialog-message"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Find an application</property>
+                        <property name="xalign">0</property>
+                        <property name="mnemonic-widget">filter_entry</property>
+                        <style>
+                          <class name="field-label"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkEntry" id="filter_entry">
+                        <property name="placeholder-text">Search installed applications</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow">
+                        <property name="hscrollbar-policy">never</property>
+                        <property name="min-content-height">240</property>
+                        <property name="max-content-height">240</property>
+                        <property name="margin-top">12</property>
+                        <style>
+                          <class name="app-choices"/>
+                        </style>
+                        <property name="child">
+                          <object class="GtkListBox" id="application_list">
+                            <property name="selection-mode">single</property>
+                            <accessibility>
+                              <property name="label">Installed applications</property>
+                            </accessibility>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="show_all_check">
+                        <property name="label">Show all installed applications</property>
+                        <style>
+                          <class name="dialog-check"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="make_default_check">
+                        <property name="label">Always use this app for this file type</property>
+                        <style>
+                          <class name="dialog-check"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- A command line instead of an application (OPEN-014). -->
+                      <object class="GtkLabel">
+                        <property name="label">Or run a command</property>
+                        <property name="xalign">0</property>
+                        <property name="mnemonic-widget">command_entry</property>
+                        <style>
+                          <class name="field-label"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkEntry" id="command_entry">
+                        <property name="placeholder-text">Such as gimp %f (%f is the file, %u its address)</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="terminal_check">
+                        <property name="label">Run in terminal</property>
+                        <style>
+                          <class name="dialog-check"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="keep_open_check">
+                        <property name="label">Keep the terminal open when the command ends</property>
+                        <property name="sensitive">false</property>
+                        <style>
+                          <class name="dialog-check"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="status_label">
+                        <property name="label">Loading…</property>
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="max-width-chars">60</property>
+                        <property name="accessible-role">status</property>
+                        <style>
+                          <class name="dialog-hint"/>
+                        </style>
+                      </object>
+                    </child>
                   </object>
-                </child>
-                <child>
-                  <object class="GtkCheckButton" id="show_all_check">
-                    <property name="label">Show all installed applications</property>
-                    <style>
-                      <class name="dialog-check"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkCheckButton" id="make_default_check">
-                    <property name="label">Always use this app for this file type</property>
-                    <style>
-                      <class name="dialog-check"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkLabel" id="status_label">
-                    <property name="label">Loading…</property>
-                    <property name="xalign">0</property>
-                    <property name="wrap">true</property>
-                    <property name="max-width-chars">60</property>
-                    <property name="accessible-role">status</property>
-                    <style>
-                      <class name="dialog-hint"/>
-                    </style>
-                  </object>
-                </child>
+                </property>
               </object>
             </child>
             <child>

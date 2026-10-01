@@ -50,7 +50,7 @@ impl BrowserWindow {
     /// explains (TAB-031).
     pub(super) fn prepare_tab_drag(&self, x: f64, y: f64) -> Option<gdk::ContentProvider> {
         let tab = self.tab_strip().draggable_tab_at(x, y)?;
-        if self.is_busy_for_tab_moves() {
+        if self.keeps_tab(tab) {
             self.show_message(&TabMoveRefusal::SourceBusy.to_string());
             return None;
         }

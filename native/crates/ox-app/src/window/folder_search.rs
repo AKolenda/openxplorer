@@ -21,6 +21,7 @@ use gtk::{gio, glib};
 
 use ox_core::search::{HiddenItems, SearchFacets, SearchIn, SearchQuery, SearchResults};
 
+use crate::folder_view::cells::RowTooltip;
 use crate::folder_view::details::DetailsListing;
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
@@ -294,15 +295,16 @@ impl BrowserWindow {
             facets: search.facets(),
         };
         let report = search.report().cloned();
-        let listing = if search.is_active() {
-            DetailsListing::SearchResults
+        let (listing, row_tooltip) = if search.is_active() {
+            (DetailsListing::SearchResults, RowTooltip::FullPath)
         } else {
-            DetailsListing::Folder
+            (DetailsListing::Folder, RowTooltip::Name)
         };
         // Released first: the strip's lists change as it shows them.
         drop(search);
         self.search_strip().show_report(report.as_ref(), options);
         self.folder_pane().details().show_listing(listing);
+        self.folder_pane().owners().set_row_tooltip(row_tooltip);
         self.update_content();
         self.update_details_pane();
     }

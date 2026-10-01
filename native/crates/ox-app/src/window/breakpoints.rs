@@ -256,6 +256,7 @@ mod tests {
         }
     }
 
+    /// parity: LOOK-022
     #[test]
     fn narrow_windows_drop_the_details_pane_and_narrow_the_tabs() {
         assert!(WindowWidth::Reduced.has_room_for_details());

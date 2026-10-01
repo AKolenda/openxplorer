@@ -17,9 +17,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::applications::{
-    list_applications_in_background, prepare_launch, ApplicationChoice, ApplicationList, ApplicationScope,
-    DefaultChoice, OpenWithError, PreparedLaunch,
+    application_image, list_applications_in_background, prepare_launch, prepare_target, ApplicationChoice,
+    ApplicationList, ApplicationScope, DefaultChoice, OpenWithError, PreparedLaunch,
 };
+use super::custom_command::{run_custom_command, CustomCommand};
 use crate::icons::{self, Icon};
 
 /// The glyph of each application row (app.js drew its grid icon at 25).
@@ -58,6 +59,9 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/open-with-dialog.ui")]
     pub(crate) struct OpenWithDialog {
+        /// The scrolling body, capped to the parent window's height.
+        #[template_child]
+        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
         pub(super) item_label: TemplateChild<gtk::Label>,
         #[template_child]
@@ -68,6 +72,12 @@ mod imp {
         pub(super) show_all_check: TemplateChild<gtk::CheckButton>,
         #[template_child]
         pub(super) make_default_check: TemplateChild<gtk::CheckButton>,
+        #[template_child]
+        pub(super) command_entry: TemplateChild<gtk::Entry>,
+        #[template_child]
+        pub(super) terminal_check: TemplateChild<gtk::CheckButton>,
+        #[template_child]
+        pub(super) keep_open_check: TemplateChild<gtk::CheckButton>,
         #[template_child]
         pub(super) status_label: TemplateChild<gtk::Label>,
         #[template_child]
@@ -120,7 +130,15 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for OpenWithDialog {}
+    impl WidgetImpl for OpenWithDialog {
+        /// Fits the dialog to its parent window before its first frame, as
+        /// it is realized when it shows.
+        fn realize(&self) {
+            crate::modal::fit_to_parent(&*self.obj(), &self.scroller);
+            self.parent_realize();
+        }
+    }
+
     impl WindowImpl for OpenWithDialog {}
 }
 
@@ -143,6 +161,7 @@ impl OpenWithDialog {
         report: impl Fn(&str) + 'static,
     ) -> Self {
         let dialog: Self = glib::Object::builder().property("transient-for", parent).build();
+        crate::window::follow_text_size_keys(&dialog);
         let imp = dialog.imp();
         imp.item_label.set_text(&subject.name);
         imp.make_default_check.set_visible(!subject.is_folder);
@@ -185,6 +204,20 @@ impl OpenWithDialog {
             self,
             move |_, row| dialog.choose_row(row)
         ));
+        imp.command_entry.connect_changed(glib::clone!(
+            #[weak(rename_to = dialog)]
+            self,
+            move |_| dialog.update_open_button()
+        ));
+        imp.command_entry.connect_activate(glib::clone!(
+            #[weak(rename_to = dialog)]
+            self,
+            move |_| dialog.open_chosen()
+        ));
+        imp.terminal_check
+            .bind_property("active", &*imp.keep_open_check, "sensitive")
+            .sync_create()
+            .build();
         imp.cancel_button.connect_clicked(glib::clone!(
             #[weak(rename_to = dialog)]
             self,
@@ -261,7 +294,25 @@ impl OpenWithDialog {
         if visible.is_empty() && applications.is_some() {
             list.append(&empty_row());
         }
-        imp.open_button.set_sensitive(imp.chosen.borrow().is_some());
+        self.update_open_button();
+    }
+
+    /// The typed command, if any, and how to run it.
+    fn custom_command(&self) -> Option<CustomCommand> {
+        let imp = self.imp();
+        let text = imp.command_entry.text().trim().to_owned();
+        (!text.is_empty()).then(|| CustomCommand {
+            text,
+            in_terminal: imp.terminal_check.is_active(),
+            keep_open: imp.terminal_check.is_active() && imp.keep_open_check.is_active(),
+        })
+    }
+
+    /// Open works with an application chosen or a command typed.
+    fn update_open_button(&self) {
+        let imp = self.imp();
+        let can_open = imp.chosen.borrow().is_some() || self.custom_command().is_some();
+        imp.open_button.set_sensitive(can_open);
     }
 
     fn choose_row(&self, row: Option<&gtk::ListBoxRow>) {
@@ -281,6 +332,10 @@ impl OpenWithDialog {
     /// a failure stays in the dialog.
     fn open_chosen(&self) {
         let imp = self.imp();
+        if let Some(command) = self.custom_command() {
+            self.run_command(command);
+            return;
+        }
         let Some(app_id) = imp.chosen.borrow().clone() else {
             return;
         };
@@ -297,6 +352,36 @@ impl OpenWithDialog {
             async move {
                 let prepared = prepare_launch(uri, app_id.clone()).await;
                 dialog.finish_open(&app_id, prepared, default);
+            }
+        ));
+    }
+
+    /// Runs the typed command with the item and closes; a failure stays
+    /// in the dialog (OPEN-014).
+    fn run_command(&self, command: CustomCommand) {
+        let imp = self.imp();
+        imp.open_button.set_sensitive(false);
+        let uri = self.subject().uri.clone();
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = dialog)]
+            self,
+            async move {
+                let ran = prepare_target(uri)
+                    .await
+                    .map_err(|error| error.to_string())
+                    .and_then(|prepared| run_custom_command(&command, &prepared));
+                match ran {
+                    Ok(()) => {
+                        if let Some(report) = dialog.imp().report.get() {
+                            report("Ran the command.");
+                        }
+                        dialog.close();
+                    }
+                    Err(message) => {
+                        dialog.imp().status_label.set_text(&message);
+                        dialog.update_open_button();
+                    }
+                }
             }
         ));
     }
@@ -369,10 +454,17 @@ impl OpenWithDialog {
     pub(crate) fn click_open(&self) {
         self.imp().open_button.emit_clicked();
     }
+
+    /// Types `text` as the command to run, for tests.
+    #[cfg(test)]
+    pub(crate) fn type_command(&self, text: &str) {
+        self.imp().command_entry.set_text(text);
+    }
 }
 
-/// The row of one application: its glyph, its name and why it is offered.
-/// An application that cannot open the item is shown but cannot be chosen.
+/// The row of one application: its own icon (the generic glyph without
+/// one), its name and why it is offered. An application that cannot open
+/// the item is shown but cannot be chosen.
 fn application_row(choice: &ApplicationChoice) -> gtk::ListBoxRow {
     let name = gtk::Label::builder().label(&choice.name).xalign(0.0).build();
     name.add_css_class("app-name");
@@ -382,7 +474,9 @@ fn application_row(choice: &ApplicationChoice) -> gtk::ListBoxRow {
     text.append(&name);
     text.append(&note);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    content.append(&icons::image(Icon::Apps, ROW_GLYPH));
+    let icon = application_image(choice.icon.as_deref(), ROW_GLYPH)
+        .unwrap_or_else(|| icons::image(Icon::Apps, ROW_GLYPH));
+    content.append(&icon);
     content.append(&text);
     let row = gtk::ListBoxRow::builder().child(&content).build();
     row.add_css_class("app-choice");

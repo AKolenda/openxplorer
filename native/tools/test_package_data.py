@@ -112,6 +112,7 @@ class InstallTests(StagingTestCase):
         verify_layout.check_metainfo(report, tree)
         return report
 
+    # parity: INT-003, UPD-017
     def test_every_layout_installs_the_promised_files(self) -> None:
         for case in LAYOUT_CASES:
             with self.subTest(channel=case.channel.name, layout=case.layout.name):
@@ -123,6 +124,7 @@ class InstallTests(StagingTestCase):
                 self.assertIn('The D-Bus service starts the app as a GApplication service',
                               report.passed)
 
+    # parity: INT-029, UPD-017
     def test_the_stable_host_packages_keep_the_python_commands(self) -> None:
         for layout in (Layout.DEBIAN, Layout.FHS):
             with self.subTest(layout=layout.name):
@@ -179,6 +181,7 @@ class InstallTests(StagingTestCase):
 class VerifierTests(StagingTestCase):
     """The layout verifier refuses the mistakes that would break an installation."""
 
+    # parity: UPD-018
     def test_a_system_wide_file_manager_service_is_refused(self) -> None:
         tree = self.install(Channel.STABLE, Layout.FHS)
         share = tree.path_of(tree.paths.share)
@@ -189,6 +192,7 @@ class VerifierTests(StagingTestCase):
         with self.assertRaisesRegex(VerificationError, 'FileManager1'):
             verify_layout.check_no_user_state(Report(), tree)
 
+    # parity: UPD-020
     def test_a_metainfo_without_the_package_version_is_refused(self) -> None:
         tree = self.install(Channel.STABLE, Layout.DEBIAN)
         newer = InstalledTree(tree.root, tree.channel, tree.layout, '2.0.1')
@@ -214,6 +218,7 @@ class VerifierTests(StagingTestCase):
 
     @unittest.skipUnless(shutil.which('desktop-file-validate') and shutil.which('appstreamcli'),
                          'needs desktop-file-utils and appstream')
+    # parity: INT-003, UPD-020
     def test_the_desktop_validators_accept_both_channels(self) -> None:
         for channel in Channel:
             with self.subTest(channel=channel.name):

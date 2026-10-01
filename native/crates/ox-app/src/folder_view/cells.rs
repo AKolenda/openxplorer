@@ -3,7 +3,7 @@
 //!
 //! Both views show an item as its icon art beside or above its name
 //! ([`FileCell`]), as the name cell of `renderRows` in `desktop/ui/app.js`
-//! does. Names that are cut off show the full name in a tooltip, as
+//! does. Every cell shows its row's tooltip ([`row_tooltip`]), as
 //! `row.title` does. While the item is renamed in place, a text field
 //! takes the name's place. [`CellOwners`] follows the cells the views
 //! bind and turns a click position back into a row. The art is an [`ArtImage`] of
@@ -11,6 +11,8 @@
 //! screen scale changes.
 
 mod cell_owners;
+mod custom_icon;
+mod row_tooltip;
 
 use std::rc::Rc;
 
@@ -19,6 +21,8 @@ use gtk::subclass::prelude::*;
 use gtk::{glib, pango};
 
 pub(crate) use cell_owners::CellOwners;
+pub(crate) use custom_icon::CUSTOM_ICON;
+pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip};
 
 use crate::folder_view::item::FileItem;
 use crate::icons::Art;
@@ -50,18 +54,6 @@ pub(crate) fn bound_item(list_item: &gtk::ListItem) -> Option<FileItem> {
     list_item.item().and_downcast::<FileItem>()
 }
 
-/// Shows the full label text in a tooltip only while it is ellipsized.
-fn show_tooltip_when_ellipsized(label: &gtk::Label) {
-    label.set_has_tooltip(true);
-    label.connect_query_tooltip(|label, _, _, _, tooltip| {
-        if !label.layout().is_ellipsized() {
-            return false;
-        }
-        tooltip.set_text(Some(&label.text()));
-        true
-    });
-}
-
 /// An ellipsized, left-aligned label in the muted colour of the date,
 /// type and size columns.
 pub(crate) fn dim_cell_label() -> gtk::Label {
@@ -89,7 +81,6 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::show_tooltip_when_ellipsized;
     use crate::icons::ArtImage;
 
     /// Private state of [`super::FileCell`].
@@ -103,6 +94,10 @@ mod imp {
         pub(super) icon_size: Cell<i32>,
         /// The text field in the name's place while the item is renamed.
         pub(super) name_editor: RefCell<Option<gtk::Entry>>,
+        /// The item's custom icon, shown in place of the art (PROP-016).
+        pub(super) custom_icon: gtk::Picture,
+        /// Counts the lookups, so a late custom icon is dropped.
+        pub(super) icon_lookup: Cell<u64>,
     }
 
     #[glib::object_subclass]
@@ -117,8 +112,10 @@ mod imp {
             self.parent_constructed();
             let cell = self.obj();
             cell.append(&self.image);
+            self.custom_icon.set_content_fit(gtk::ContentFit::Contain);
+            self.custom_icon.set_visible(false);
+            cell.append(&self.custom_icon);
             cell.append(&self.label);
-            show_tooltip_when_ellipsized(&self.label);
         }
     }
 
@@ -141,6 +138,7 @@ impl FileCell {
         let cell: Self = glib::Object::new();
         let imp = cell.imp();
         imp.icon_size.set(icon_size);
+        imp.custom_icon.set_size_request(icon_size, icon_size);
         // A folder until bound, so the cell has its full size from the start.
         imp.image.set_art(Art::Folder, icon_size);
         match layout {
@@ -180,7 +178,9 @@ impl FileCell {
     pub(crate) fn bind(&self, item: &FileItem) {
         self.hide_name_editor();
         let imp = self.imp();
-        imp.image.set_art(item.art(), imp.icon_size.get());
+        let icon_size = imp.icon_size.get();
+        imp.image.set_art(item.art(), icon_size);
+        imp.image.set_emblems(item.emblems(), icon_size);
         imp.label.set_text(&item.entry().name);
     }
 
@@ -214,11 +214,27 @@ impl FileCell {
     pub(crate) fn art(&self) -> Option<Art> {
         self.imp().image.art()
     }
+
+    /// The emblems the icon shows, for tests.
+    #[cfg(test)]
+    pub(crate) fn emblems(&self) -> crate::icons::Emblems {
+        self.imp().image.shown_emblems()
+    }
+}
+
+/// Names a file view for screen readers as the current app names its
+/// file list (`#file-canvas` and `#main` in index.html).
+pub(crate) fn label_view(view: &gtk::Widget) {
+    view.update_property(&[
+        gtk::accessible::Property::Label("Files"),
+        gtk::accessible::Property::Description("Folder contents — type a filename prefix to select"),
+    ]);
 }
 
 /// Connects `factory` so every list item shows a [`FileCell`] in
-/// `layout`, with icons of `icon_size` logical pixels and each cell
-/// registered in `owners`, which dims the cells of cut items.
+/// `layout`, with icons of `icon_size` logical pixels, its row's tooltip,
+/// and each cell registered in `owners`, which dims the cells of cut
+/// items.
 pub(crate) fn connect_file_cells(
     factory: &gtk::SignalListItemFactory,
     layout: CellLayout,
@@ -231,13 +247,17 @@ pub(crate) fn connect_file_cells(
         let list_item = as_list_item(object);
         list_item.set_child(Some(&cell));
         setup_owners.register(&cell, list_item);
+        show_row_tooltip(&cell, &setup_owners, |_| None);
     });
     let bind_owners = Rc::clone(owners);
     factory.connect_bind(move |_, object| {
         let list_item = as_list_item(object);
         let cell = list_item.child().and_downcast::<FileCell>();
         if let (Some(item), Some(cell)) = (bound_item(list_item), cell) {
+            // A tile is named after its item (`aria-label` in app.js).
+            list_item.set_accessible_label(&item.entry().name);
             cell.bind(&item);
+            cell.look_up_custom_icon(&item);
             bind_owners.style_cell(&cell, &item);
         }
     });

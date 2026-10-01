@@ -12,6 +12,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::choices::{ContextMenu, Theme, View};
+use super::pane_options::DetailsPaneOptions;
 use super::SettingsError;
 
 /// Text sizes offered in Settings, in percent.
@@ -234,6 +235,82 @@ pub struct Preferences {
     /// new tab (Dolphin's `OpenExternallyCalledFolderInNewTab`, inverted).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub external_folders_in_new_window: bool,
+    /// Archives the app can read open as folders in its archive browser
+    /// (Dolphin's "Open archives as folder", ARC-022); off, they open in
+    /// their default application. Saved only when off, like the options
+    /// below.
+    #[serde(skip_serializing_if = "is_true")]
+    pub browse_archives: bool,
+    /// The details pane's own options; saved only once changed, so the
+    /// settings of a new installation stay as the Python app writes them.
+    #[serde(skip_serializing_if = "DetailsPaneOptions::is_default")]
+    pub details_pane_options: DetailsPaneOptions,
+    /// The window's title is the folder's full path instead of its name
+    /// (Dolphin's `ShowFullPathInTitlebar`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub full_path_in_title: bool,
+    /// Ask before moving items to the Trash. On by default, as the Python
+    /// app always asked; this and the next two are stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub confirm_trash: bool,
+    /// Ask before deleting items permanently.
+    #[serde(skip_serializing_if = "is_true")]
+    pub confirm_delete: bool,
+    /// Ask before emptying the Recycle Bin.
+    #[serde(skip_serializing_if = "is_true")]
+    pub confirm_empty_trash: bool,
+    /// Ask before closing a window with several tabs (Dolphin's
+    /// `ConfirmClosingMultipleTabs`); off, as Explorer never asks.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub confirm_close_tabs: bool,
+    /// Opening a program or script asks whether to run it or open it in
+    /// its application (Dolphin's "Always ask"); off, it only ever opens.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ask_to_run_programs: bool,
+    /// Text uses the desktop's interface font and its size instead of the
+    /// Windows font stack. Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub desktop_font: bool,
+    /// The navigation pane is hidden (Dolphin's Places panel closed,
+    /// Explorer's View > Show > Navigation pane off).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_sidebar: bool,
+    /// The sidebar's icon size in pixels (16, 22, 32 or 48), or 0 for the
+    /// automatic size (Dolphin's Places panel Icon Size). Stored only when
+    /// chosen.
+    #[serde(skip_serializing_if = "is_automatic_icon_size")]
+    pub sidebar_icon_size: u32,
+    /// The sidebar sections the user hid (Dolphin's "Hide Section"), by
+    /// the keys the app gives them. Stored only when one is hidden.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub hidden_sidebar_sections: Vec<String>,
+    /// The sidebar places the user hid one by one (Dolphin's "Hide"), by
+    /// location: drives, network locations, Recent files, the Recycle
+    /// Bin. Hidden standard folders are `hiddenQuick`. Stored only when
+    /// one is hidden.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub hidden_sidebar_places: Vec<String>,
+}
+
+/// The most sidebar sections that may be hidden, and the longest key.
+const MAX_HIDDEN_SECTIONS: usize = 16;
+const MAX_SECTION_KEY: usize = 32;
+
+/// The most sidebar places that may be hidden one by one, and the longest
+/// location.
+const MAX_HIDDEN_PLACES: usize = 64;
+const MAX_PLACE_LOCATION: usize = 4096;
+
+/// The sidebar icon sizes the user may choose, in pixels; 0 is automatic.
+pub const SIDEBAR_ICON_SIZES: [u32; 5] = [0, 16, 22, 32, 48];
+
+/// True for the automatic sidebar icon size, which is not stored.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passes the field by reference"
+)]
+fn is_automatic_icon_size(size: &u32) -> bool {
+    *size == 0
 }
 
 impl Default for Preferences {
@@ -253,6 +330,19 @@ impl Default for Preferences {
             show_full_path: false,
             editable_location: false,
             external_folders_in_new_window: false,
+            browse_archives: true,
+            details_pane_options: DetailsPaneOptions::default(),
+            full_path_in_title: false,
+            confirm_trash: true,
+            confirm_delete: true,
+            confirm_empty_trash: true,
+            confirm_close_tabs: false,
+            ask_to_run_programs: false,
+            desktop_font: false,
+            hide_sidebar: false,
+            sidebar_icon_size: 0,
+            hidden_sidebar_sections: Vec::new(),
+            hidden_sidebar_places: Vec::new(),
         }
     }
 }
@@ -285,6 +375,38 @@ impl Preferences {
             &mut self.external_folders_in_new_window,
             update.external_folders_in_new_window,
         );
+        replace_if_some(&mut self.full_path_in_title, update.full_path_in_title);
+        replace_if_some(&mut self.confirm_trash, update.confirm_trash);
+        replace_if_some(&mut self.confirm_delete, update.confirm_delete);
+        replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
+        replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
+        replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
+        replace_if_some(&mut self.desktop_font, update.desktop_font);
+        replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
+        let icon_size = update
+            .sidebar_icon_size
+            .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
+        replace_if_some(&mut self.sidebar_icon_size, icon_size);
+        let sections = update.hidden_sidebar_sections.as_ref().filter(|sections| {
+            sections.len() <= MAX_HIDDEN_SECTIONS
+                && sections.iter().all(|key| {
+                    !key.is_empty()
+                        && key.len() <= MAX_SECTION_KEY
+                        && key.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+        });
+        if let Some(sections) = sections {
+            self.hidden_sidebar_sections.clone_from(sections);
+        }
+        let places = update.hidden_sidebar_places.as_ref().filter(|places| {
+            places.len() <= MAX_HIDDEN_PLACES
+                && places.iter().all(|uri| {
+                    !uri.is_empty() && uri.len() <= MAX_PLACE_LOCATION && !uri.contains(char::is_control)
+                })
+        });
+        if let Some(places) = places {
+            self.hidden_sidebar_places.clone_from(places);
+        }
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
@@ -293,6 +415,10 @@ impl Preferences {
         }
         if let Some(size) = update.window_size.filter(|size| size.is_valid()) {
             self.window_size = Some(size);
+        }
+        replace_if_some(&mut self.browse_archives, update.browse_archives);
+        if let Some(options) = &update.details_pane_options {
+            self.details_pane_options = options.clone();
         }
     }
 }
@@ -329,6 +455,34 @@ pub struct PreferencesUpdate {
     pub editable_location: Option<bool>,
     /// Open folders from other apps in a new window, or in a new tab.
     pub external_folders_in_new_window: Option<bool>,
+    /// Open archives as folders, or in their default application.
+    pub browse_archives: Option<bool>,
+    /// Replaces the details pane's options.
+    pub details_pane_options: Option<DetailsPaneOptions>,
+    /// Show the folder's full path in the window title.
+    pub full_path_in_title: Option<bool>,
+    /// Ask before moving items to the Trash.
+    pub confirm_trash: Option<bool>,
+    /// Ask before deleting items permanently.
+    pub confirm_delete: Option<bool>,
+    /// Ask before emptying the Recycle Bin.
+    pub confirm_empty_trash: Option<bool>,
+    /// Ask before closing a window with several tabs.
+    pub confirm_close_tabs: Option<bool>,
+    /// Ask whether to run a program or script that is opened.
+    pub ask_to_run_programs: Option<bool>,
+    /// Use the desktop's font, or the Windows font stack.
+    pub desktop_font: Option<bool>,
+    /// Hide or show the navigation pane.
+    pub hide_sidebar: Option<bool>,
+    /// New sidebar icon size; one of [`SIDEBAR_ICON_SIZES`] or ignored.
+    pub sidebar_icon_size: Option<u32>,
+    /// Replaces the hidden sidebar sections; up to 16 short ASCII keys,
+    /// else ignored.
+    pub hidden_sidebar_sections: Option<Vec<String>>,
+    /// Replaces the sidebar places hidden one by one; up to 64 locations,
+    /// else ignored.
+    pub hidden_sidebar_places: Option<Vec<String>>,
 }
 
 impl PreferencesUpdate {
@@ -361,8 +515,35 @@ impl PreferencesUpdate {
             show_full_path: flag("showFullPath"),
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
+            browse_archives: flag("browseArchives"),
+            details_pane_options: values
+                .get("detailsPaneOptions")
+                .and_then(DetailsPaneOptions::from_json),
+            full_path_in_title: flag("fullPathInTitle"),
+            confirm_trash: flag("confirmTrash"),
+            confirm_delete: flag("confirmDelete"),
+            confirm_empty_trash: flag("confirmEmptyTrash"),
+            confirm_close_tabs: flag("confirmCloseTabs"),
+            ask_to_run_programs: flag("askToRunPrograms"),
+            desktop_font: flag("desktopFont"),
+            hide_sidebar: flag("hideSidebar"),
+            sidebar_icon_size: values
+                .get("sidebarIconSize")
+                .and_then(Value::as_u64)
+                .and_then(|size| u32::try_from(size).ok()),
+            hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
+            hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
         })
     }
+}
+
+/// A list of strings, or `None` when `value` is not one.
+fn read_keys(value: &Value) -> Option<Vec<String>> {
+    value
+        .as_array()?
+        .iter()
+        .map(|key| key.as_str().map(str::to_owned))
+        .collect()
 }
 
 /// A text size given as a true integer. Python checks `type(size) is int`,
@@ -409,6 +590,15 @@ fn bounded_width(value: f64, range: RangeInclusive<u32>) -> Option<u32> {
     let high = f64::from(*range.end());
     let in_range = value >= low && value <= high;
     in_range.then(|| value.round_ties_even() as u32)
+}
+
+/// Whether `value` is true, for preferences saved only when turned off.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passes the field by reference"
+)]
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 /// Stores `value` in `slot` if there is one.
@@ -574,6 +764,24 @@ mod tests {
         let stored = serde_json::to_value(&preferences).unwrap();
         assert_eq!(stored["showFullPath"], json!(true));
         assert!(stored.get("editableLocation").is_none());
+    }
+
+    /// parity: SET-010
+    #[test]
+    fn the_confirmations_ask_by_default_and_are_stored_only_when_changed() {
+        let mut preferences = Preferences::default();
+        assert!(preferences.confirm_trash && preferences.confirm_delete && preferences.confirm_empty_trash);
+        assert!(!preferences.confirm_close_tabs);
+        let values = json!({"confirmTrash": false, "confirmCloseTabs": true, "confirmDelete": 0});
+
+        preferences.apply(&PreferencesUpdate::from_json(&values).unwrap());
+
+        assert!(!preferences.confirm_trash && preferences.confirm_close_tabs);
+        assert!(preferences.confirm_delete, "only a JSON boolean counts");
+        let stored = serde_json::to_value(&preferences).unwrap();
+        assert_eq!(stored["confirmTrash"], json!(false));
+        assert_eq!(stored["confirmCloseTabs"], json!(true));
+        assert!(stored.get("confirmDelete").is_none() && stored.get("fullPathInTitle").is_none());
     }
 
     /// parity: SET-016

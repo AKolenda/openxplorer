@@ -11,13 +11,17 @@
 //! icons. The last tests prove that no control is left without either.
 
 use gtk::prelude::*;
+use gtk::{gdk, glib};
 
 use super::geometry::{bounds, button_for, laid_out, Bounds};
+use super::icons::{
+    assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME,
+};
 use super::support::{app_menu, menu_button_with_class};
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for, wait_for_frames, Fixture, TestWindow};
 
-/// parity: TAB-010
+/// parity: TAB-010, LOOK-009
 #[gtk::test]
 fn the_active_tab_starts_9_pixels_in_and_reaches_the_bottom_of_the_42_pixel_title_bar() {
     let fixture = Fixture::standard();
@@ -42,6 +46,7 @@ fn the_active_tab_starts_9_pixels_in_and_reaches_the_bottom_of_the_42_pixel_titl
     assert!(first_tab.has_css_class("active"));
 }
 
+/// parity: LOOK-009
 #[gtk::test]
 fn the_new_tab_button_follows_the_last_tab() {
     let fixture = Fixture::standard();
@@ -60,6 +65,7 @@ fn the_new_tab_button_follows_the_last_tab() {
     assert_eq!((plus.y, plus.width, plus.height), (8, 38, 34));
 }
 
+/// parity: LOOK-009
 #[gtk::test]
 fn the_caption_buttons_are_46_pixels_wide_and_as_tall_as_the_title_bar() {
     let fixture = Fixture::standard();
@@ -86,6 +92,7 @@ fn the_caption_buttons_are_46_pixels_wide_and_as_tall_as_the_title_bar() {
     }
 }
 
+/// parity: LOOK-012
 #[gtk::test]
 fn the_address_and_search_boxes_are_34_pixels_tall_14_pixels_below_the_title_bar() {
     let fixture = Fixture::standard();
@@ -99,6 +106,46 @@ fn the_address_and_search_boxes_are_34_pixels_tall_14_pixels_below_the_title_bar
         test.window.width() - 16,
         "the search box ends 16 pixels from the edge"
     );
+}
+
+/// A tab's close button is 22 pixels square, and Close turns red with a
+/// white glyph under the pointer, as in Windows.
+///
+/// parity: LOOK-009
+#[gtk::test]
+fn the_tab_close_is_22_pixels_and_close_hovers_red() {
+    /// Puts the display's decoration layout back, also when a check fails.
+    struct LayoutGuard(gtk::Settings, Option<glib::GString>);
+    impl Drop for LayoutGuard {
+        fn drop(&mut self) {
+            self.0.set_gtk_decoration_layout(self.1.as_deref());
+        }
+    }
+    let settings = gtk::Settings::default().expect("GTK tests run on a private display");
+    let _layout = LayoutGuard(settings.clone(), settings.gtk_decoration_layout());
+    settings.set_gtk_decoration_layout(Some(":minimize,maximize,close"));
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let buttons = descendants::<gtk::Button>(&test.window);
+    let tab_close = buttons
+        .iter()
+        .find(|button| button.has_css_class("tab-close"))
+        .expect("the tab has a close button");
+    let place = bounds(&test, tab_close);
+    assert_eq!((place.width, place.height), (22, 22));
+    let close = buttons
+        .iter()
+        .find(|button| button.has_css_class("caption") && button.has_css_class("close"))
+        .expect("the layout shows Close");
+    close.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+    wait_for(TRANSITION_TIME);
+    wait_for_frames(&test.window, 2);
+    let rows = pixel_rows(&painted(close));
+    let [red, green, blue] = unpremultiplied_rgb(rows[3][3]);
+    let background = gdk::RGBA::new(red, green, blue, 1.0);
+    assert_same_colour(background, css_colour("#c42b1c"), "Close under the pointer");
+    assert_same_colour(close.color(), css_colour("#ffffff"), "its glyph");
+    close.unset_state_flags(gtk::StateFlags::PRELIGHT);
 }
 
 #[gtk::test]
@@ -136,29 +183,22 @@ fn the_open_windows_menu_lists_every_window_then_new_window_and_quit() {
     second.window.close();
 }
 
+/// Every More menu command works now, License & source included, and a
+/// row's tooltip is its label.
+///
+/// parity: SET-009
 #[gtk::test]
-fn a_disabled_menu_item_names_the_milestone_that_brings_it() {
+fn the_license_menu_item_works_and_its_tooltip_is_its_label() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let more_button = menu_button_with_class(&test, "more-command");
     let more = app_menu(&more_button);
     more_button.popup();
     let license = more.row("License & source");
-    let new_menu = app_menu(&menu_button_with_class(&test, "new-command"));
-    let folder = new_menu
-        .rows()
-        .into_iter()
-        .next()
-        .expect("New lists Folder first");
-    assert!(!license.is_sensitive());
+    assert!(license.is_sensitive());
     assert_eq!(
         license.tooltip_text().unwrap_or_default().as_str(),
-        "License & source\nNot in the native preview yet: arrives with packaging and updates."
-    );
-    assert_eq!(
-        folder.tooltip_text().unwrap_or_default().as_str(),
-        "Folder",
-        "a ported command names no milestone"
+        "License & source"
     );
     more_button.popdown();
 }
@@ -231,8 +271,7 @@ fn every_control_of_the_frame_runs_an_action_the_window_has() {
 
 /// Every image the frame can show is a bundled icon, GTK's own included:
 /// the search box's clear button shows the bundled close glyph, not the
-/// desktop theme's. Only the loading spinner, which is not an image, comes
-/// from the theme (see `empty_page.rs`).
+/// desktop theme's. The frame shows no theme images at all.
 ///
 /// parity: LOOK-015
 #[gtk::test]

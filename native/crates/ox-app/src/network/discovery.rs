@@ -227,7 +227,7 @@ mod tests {
     use std::cell::Cell;
 
     use super::*;
-    use crate::test_support::harness::wait_until;
+    use crate::test_support::harness::{wait_for, wait_until};
 
     fn server(uri: &str, label: &str) -> DiscoveredServer {
         DiscoveredServer {
@@ -313,5 +313,32 @@ mod tests {
         assert!(state.has_started);
         assert_eq!(state.servers, [server("smb://nas/", "NAS")]);
         assert!(discovery.running.borrow().is_none());
+    }
+
+    /// A pass that answers after Stop changes nothing on the page.
+    ///
+    /// parity: SAFE-013
+    #[gtk::test]
+    fn a_pass_that_answers_after_stop_is_ignored() {
+        let discovery = Rc::new(ServerDiscovery::default());
+        let changes = Rc::new(Cell::new(0));
+        let counted = Rc::clone(&changes);
+        let slow = Discoverer(Rc::new(|| {
+            Box::pin(async {
+                glib::timeout_future(Duration::from_millis(100)).await;
+                Ok(Discovery {
+                    servers: vec![server("smb://nas/", "NAS")],
+                    warnings: Vec::new(),
+                })
+            })
+        }));
+
+        discovery.start(slow, move || counted.set(counted.get() + 1));
+        discovery.stop();
+        wait_for(Duration::from_millis(300));
+
+        assert_eq!(changes.get(), 0);
+        assert!(discovery.state().servers.is_empty());
+        assert!(!discovery.state().is_busy);
     }
 }

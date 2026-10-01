@@ -9,7 +9,8 @@
 //! selects only it first; a sidebar row carries its folder. What the drag
 //! offers is built in [`payload`]. While the drag lasts its items are
 //! dimmed, and clicks on items are ignored from its start until shortly
-//! after its end, so the gesture never opens or reselects an item.
+//! after its end, so the gesture never opens or reselects an item. Screen
+//! readers hear the drag start, with what it carries, and end (ACC-002).
 //!
 //! Safety rule "a drag out never deletes" (DND-008): a drag started
 //! without a modifier offers Copy (and Ask, the drop menu) only, so no app
@@ -28,10 +29,11 @@ use std::time::{Duration, Instant};
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
+use gtk::{gdk, gio, glib};
 use ox_core::entry::Entry;
 use ox_core::network::local_path;
 
+use crate::announcement::announce;
 use crate::folder_view::item::FileItem;
 use crate::icons::{Art, ArtImage};
 
@@ -53,6 +55,23 @@ const DRAG_ICON_SIZE: i32 = 48;
 /// Shown when some dragged items have no local path.
 const REMOTE_ONLY_MESSAGE: &str = "This network item needs an app that supports SMB addresses. For a \
                                    local-only editor, open it through an existing local mount.";
+
+/// Said to screen readers when a drag ends, dropped or cancelled.
+const DRAG_ENDED: &str = "Drag ended";
+
+/// What screen readers hear as a drag of `uris` starts: the item's name,
+/// or how many items move.
+fn drag_announcement(uris: &[String]) -> String {
+    match uris {
+        [uri] => {
+            let name = gio::File::for_uri(uri)
+                .basename()
+                .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
+            format!("Dragging {name}")
+        }
+        _ => format!("Dragging {} items", uris.len()),
+    }
+}
 
 /// The drag this window started: what it offers and how its icon looks.
 #[derive(Debug, Clone)]
@@ -79,7 +98,14 @@ fn offered_actions(modifiers: gdk::ModifierType) -> gdk::DragAction {
 }
 
 /// Turns the rubber band of `view`, a column or grid view, on or off.
-fn allow_rubber_band(view: &gtk::Widget, allowed: bool) {
+///
+/// The rubber band starts only from blank space: a press on an item turns
+/// it off until the next press (see `input.rs`, `blank_space_press`), so
+/// dragging an item always drags it. GTK's rubber band takes a drag that
+/// moves past the threshold at once, while a drag source waits 100 ms, so
+/// a quick drag of an item would otherwise select rows instead (seen in a
+/// real drag in GNOME Shell).
+pub(super) fn allow_rubber_band(view: &gtk::Widget, allowed: bool) {
     if let Some(columns) = view.downcast_ref::<gtk::ColumnView>() {
         columns.set_enable_rubberband(allowed);
     } else if let Some(grid) = view.downcast_ref::<gtk::GridView>() {
@@ -119,7 +145,6 @@ pub(super) fn has_open_popover(widget: &gtk::Widget) -> bool {
 impl BrowserWindow {
     /// Lets items of `view` be dragged out to other windows and apps.
     pub(super) fn attach_file_drag(&self, view: &gtk::Widget) {
-        self.start_rubber_bands_on_blank_space_only(view);
         let source = gtk::DragSource::new();
         // Before the gestures of the rows inside the view, which could
         // take the press first.
@@ -140,30 +165,6 @@ impl BrowserWindow {
         ));
         self.follow_file_drag(&source);
         view.add_controller(source);
-    }
-
-    /// Lets the rubber band of `view` start only from blank space: a press
-    /// on an item turns it off until the next press, so dragging an item
-    /// always drags it. GTK's rubber band takes a drag that moves past the
-    /// threshold at once, while a drag source waits 100 ms, so a quick drag
-    /// of an item would otherwise select rows instead (seen in a real drag
-    /// in GNOME Shell).
-    fn start_rubber_bands_on_blank_space_only(&self, view: &gtk::Widget) {
-        let press = gtk::GestureClick::new();
-        press.set_button(gdk::BUTTON_PRIMARY);
-        // Before the rubber band's own gesture sees the press.
-        press.set_propagation_phase(gtk::PropagationPhase::Capture);
-        press.connect_pressed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            #[weak]
-            view,
-            move |_, _, x, y| {
-                let on_item = window.folder_pane().owners().position_at(&view, x, y).is_some();
-                allow_rubber_band(&view, !on_item);
-            }
-        ));
-        view.add_controller(press);
     }
 
     /// Lets the sidebar's folders be dragged out: to pin them, or to copy
@@ -281,6 +282,8 @@ impl BrowserWindow {
         if outgoing.payload.remote_only > 0 {
             self.show_message(REMOTE_ONLY_MESSAGE);
         }
+        let announcement = drag_announcement(&outgoing.payload.uris);
+        announce(self, &announcement, gtk::AccessibleAnnouncementPriority::Medium);
         Some(outgoing)
     }
 
@@ -289,7 +292,9 @@ impl BrowserWindow {
     /// source to delete its data after a move; this window never does
     /// (DND-008), whatever the receiver answered.
     pub(super) fn end_file_drag(&self) {
-        self.imp().outgoing_drag.replace(None);
+        if self.imp().outgoing_drag.replace(None).is_some() {
+            announce(self, DRAG_ENDED, gtk::AccessibleAnnouncementPriority::Medium);
+        }
         self.folder_pane().owners().show_dragged_items(HashSet::new());
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_END);
     }
@@ -349,7 +354,7 @@ mod tests {
         }
     }
 
-    /// parity: DND-001, DND-003
+    /// parity: DND-001, DND-003, SIDE-016
     #[gtk::test]
     fn a_sidebar_folder_can_be_dragged_and_a_page_cannot() {
         let fixture = Fixture::standard();
@@ -370,6 +375,8 @@ mod tests {
             .expect("the drag offers its own items to this process");
         assert_eq!(own.get::<DraggedItems>().expect("the dragged items").0, [home]);
         assert!(page.is_none(), "a page is not a folder to drag");
+        let local_disk = test.window.sidebar_drag_content("file:///".to_owned());
+        assert!(local_disk.is_some(), "a drive is dragged as its folder");
     }
 
     /// parity: DND-004
@@ -390,5 +397,14 @@ mod tests {
         test.window.end_file_drag();
 
         assert_eq!(message, REMOTE_ONLY_MESSAGE);
+    }
+
+    /// parity: ACC-002
+    #[test]
+    fn a_drag_is_announced_by_its_item_or_its_count() {
+        let one = ["file:///home/demo/Report%202026.odt".to_owned()];
+        let two = ["file:///home/demo/a".to_owned(), "file:///home/demo/b".to_owned()];
+        assert_eq!(drag_announcement(&one), "Dragging Report 2026.odt");
+        assert_eq!(drag_announcement(&two), "Dragging 2 items");
     }
 }

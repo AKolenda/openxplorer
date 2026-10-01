@@ -10,11 +10,11 @@ use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
 use super::file_ops_support::select_names;
-use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuStyle;
 
 /// The position of the item called `name` in `test`'s view.
-fn position_of(test: &TestWindow, name: &str) -> u32 {
+pub(super) fn position_of(test: &TestWindow, name: &str) -> u32 {
     let model = test.window.folder_model();
     (0..model.n_items())
         .find(|position| model.name_at(*position).as_deref() == Some(name))
@@ -23,7 +23,7 @@ fn position_of(test: &TestWindow, name: &str) -> u32 {
 
 /// Saves the "Right-click menu" choice `style`, as Settings does, and
 /// waits until the window reads it.
-fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
+pub(super) fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
     let update = PreferencesUpdate {
         context_menu: Some(style),
         ..PreferencesUpdate::default()
@@ -37,7 +37,7 @@ fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
     });
 }
 
-/// parity: CMD-008, CMD-009, CMD-015
+/// parity: CMD-008, CMD-009, CMD-015, SEL-003
 #[gtk::test]
 fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     let fixture = Fixture::standard();
@@ -51,8 +51,14 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     assert!(menu.is_visible());
     assert_eq!(menu.style(), MenuStyle::Classic);
     assert!(menu.strip_labels().is_empty());
+    // "Open with <app>" rows name whatever the machine has installed.
+    let rows: Vec<String> = menu
+        .row_labels()
+        .into_iter()
+        .filter(|label| !label.starts_with("Open with "))
+        .collect();
     assert_eq!(
-        menu.row_labels(),
+        rows,
         [
             "Open",
             "Open containing folder in Terminal",
@@ -67,6 +73,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Duplicate",
             "Copy path",
             "Compress to ZIP file",
+            "Compress to…",
             "-",
             "Previous versions",
             "Properties",
@@ -79,7 +86,40 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
 }
 
-/// parity: CMD-009, OPS-014
+/// The keyboard starts on the first enabled item, Up and Down wrap
+/// around, and closing the menu gives the keyboard back to the file pane.
+///
+/// parity: CMD-015
+#[gtk::test]
+fn the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    wait_for_frames(&test.window, 2);
+    let enabled: Vec<gtk::ListBoxRow> = menu.rows().into_iter().filter(WidgetExt::is_sensitive).collect();
+    let (first, last) = (enabled[0].clone(), enabled[enabled.len() - 1].clone());
+    assert!(first.has_focus(), "the first enabled item has the keyboard");
+
+    let list = first
+        .parent()
+        .and_downcast::<gtk::ListBox>()
+        .expect("rows are in a list");
+    list.emit_move_cursor(gtk::MovementStep::DisplayLines, -1, false, false);
+    assert!(last.has_focus(), "Up on the first item wraps to the last");
+    list.emit_move_cursor(gtk::MovementStep::DisplayLines, 1, false, false);
+    assert!(first.has_focus(), "Down on the last item wraps to the first");
+
+    menu.popdown();
+    let view = test.window.folder_pane().view_widget();
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
+    assert!(
+        focus.is_some_and(|focus| focus == view || focus.is_ancestor(&view)),
+        "the file pane has the keyboard again"
+    );
+}
+
+/// parity: CMD-009, OPS-014, SEL-003
 #[gtk::test]
 fn with_several_items_selected_the_one_item_commands_are_disabled() {
     let fixture = Fixture::standard();
@@ -94,11 +134,21 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    for disabled in ["Open", "Copy path", "Properties"] {
-        assert!(!menu.row(disabled).is_sensitive(), "{disabled}");
-    }
-    // Rename renames them together (OPS-014).
-    for enabled in ["Cut", "Copy", "Rename", "Move to Trash", "Duplicate"] {
+    assert!(!menu.row("Copy path").is_sensitive());
+    // CMD-031: a disabled item says why.
+    let tooltip = menu.row("Copy path").tooltip_text().unwrap_or_default();
+    assert_eq!(tooltip, "Copy path\nSelect only one item for this command.");
+    // Open opens each of them (OPEN-003); Rename renames them together
+    // (OPS-014); Properties describe them together (PROP-002).
+    for enabled in [
+        "Open",
+        "Cut",
+        "Copy",
+        "Rename",
+        "Move to Trash",
+        "Duplicate",
+        "Properties",
+    ] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
     }
 }
@@ -219,8 +269,10 @@ fn right_clicking_a_pin_opens_its_menu() {
     });
 
     // The new row is laid out a frame after it is added.
+    // Until then the click lands on empty space, whose menu differs.
     wait_until("the pin's menu", || {
-        test.window.sidebar().right_click_row("Pinned menu").is_visible()
+        let menu = test.window.sidebar().right_click_row("Pinned menu");
+        menu.is_visible() && menu.row_labels().first().is_some_and(|label| label == "Open")
     });
     let menu = test.window.sidebar().right_click_row("Pinned menu");
 
@@ -279,4 +331,26 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     assert!(!test.window.is_action_enabled("back"), "the history stays behind");
+}
+
+/// Mount disk image and Analyse disk usage start their tool on the
+/// item's local path.
+///
+/// parity: DEV-011, PROP-015
+#[gtk::test]
+fn the_disk_tools_run_on_the_items_local_path() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("distro.iso"), b"image").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.activate("mount-disk-image", Some(&fixture.uri_of("distro.iso")));
+    test.activate("analyse-disk-usage", Some(&fixture.uri_of("Documents")));
+
+    assert_eq!(
+        test.context.recorded_launches(),
+        [
+            format!("MountImage {}", fixture.path("distro.iso").display()),
+            format!("AnalyseUsage {}", fixture.path("Documents").display()),
+        ]
+    );
 }

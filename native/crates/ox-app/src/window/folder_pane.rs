@@ -179,6 +179,19 @@ impl FolderPane {
         self.parts().loading_line.set_loading(loading);
     }
 
+    /// Whether the loading line shows now, which a listing does only once
+    /// it has run for a moment.
+    pub(super) fn shows_loading_line(&self) -> bool {
+        self.parts().loading_line.is_shown()
+    }
+
+    /// Calls `changed` whenever the loading line shows or hides.
+    pub(super) fn connect_loading_line_changed(&self, changed: impl Fn() + 'static) {
+        self.parts()
+            .loading_line
+            .connect_visible_notify(move |_| changed());
+    }
+
     /// Shows `hint` over the pane, saying what a drag would do there, or
     /// hides the note.
     pub(super) fn show_drag_hint(&self, hint: Option<&str>) {
@@ -304,7 +317,7 @@ impl FolderPane {
 
     /// Scrolls to `position` and gives it keyboard focus.
     pub(super) fn reveal(&self, position: u32) {
-        self.focus_position(position, None);
+        self.scroll_to(position, gtk::ListScrollFlags::FOCUS, None);
     }
 
     /// Gives `position` keyboard focus without scrolling the view.
@@ -312,18 +325,28 @@ impl FolderPane {
         let stay = gtk::ScrollInfo::new();
         stay.set_enable_horizontal(false);
         stay.set_enable_vertical(false);
-        self.focus_position(position, Some(stay));
+        self.scroll_to(position, gtk::ListScrollFlags::FOCUS, Some(stay));
     }
 
-    /// Gives `position` keyboard focus, scrolling as `scroll` allows.
-    fn focus_position(&self, position: u32, scroll: Option<gtk::ScrollInfo>) {
-        let focus = gtk::ListScrollFlags::FOCUS;
+    /// Selects only `position`, makes it the anchor Shift extends a range
+    /// from, scrolls to it and gives it keyboard focus, as a click on it
+    /// does.
+    pub(super) fn select_and_reveal(&self, position: u32) {
+        self.scroll_to(
+            position,
+            gtk::ListScrollFlags::FOCUS | gtk::ListScrollFlags::SELECT,
+            None,
+        );
+    }
+
+    /// Moves to `position` with `flags`, scrolling as `scroll` allows.
+    fn scroll_to(&self, position: u32, flags: gtk::ListScrollFlags, scroll: Option<gtk::ScrollInfo>) {
         match self.view() {
             FolderView::Details => self
                 .details()
                 .column_view()
-                .scroll_to(position, None, focus, scroll),
-            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, focus, scroll),
+                .scroll_to(position, None, flags, scroll),
+            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, flags, scroll),
         }
     }
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! One in-window dialog: its title, message, body, error line and buttons.
+//! One dialog: its title, message, body, error line and buttons.
 //!
 //! Ports the box `showModal` in `desktop/ui/app.js` fills (`#modal`, its
 //! `h2`, `p`, body, `.modal-error` and `.modal-actions`), drawn as
@@ -8,9 +8,12 @@
 //! `resources/ui/dialog-frame.ui`; the code that opens a dialog fills its
 //! body and adds its buttons.
 //!
-//! A frame is shown by a [`DialogLayer`](super::DialogLayer). It emits
+//! Every dialog of the app is drawn by a frame. An in-window dialog's
+//! frame is shown by a [`DialogLayer`](super::DialogLayer); it emits
 //! `closed` once, when it is dismissed for good (its Close button, Escape,
-//! or its tab closing), so its owner can cancel the work it started.
+//! or its tab closing), so its owner can cancel the work it started. A
+//! modal dialog window ([`crate::window::Dialog`]) holds a frame as its
+//! content and answers through its own buttons.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -72,6 +75,9 @@ mod imp {
         /// The sentence under the heading, when there is one.
         #[template_child]
         pub(super) message_label: TemplateChild<gtk::Label>,
+        /// Scrolls the body when the dialog would be taller than its room.
+        #[template_child]
+        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
         /// What the dialog shows: fields, notes and lists.
         #[template_child]
         pub(super) body: TemplateChild<gtk::Box>,
@@ -93,6 +99,7 @@ mod imp {
                 column: TemplateChild::default(),
                 title_label: TemplateChild::default(),
                 message_label: TemplateChild::default(),
+                scroller: TemplateChild::default(),
                 body: TemplateChild::default(),
                 error_label: TemplateChild::default(),
                 actions: TemplateChild::default(),
@@ -109,6 +116,7 @@ mod imp {
         type ParentType = gtk::Widget;
 
         fn class_init(klass: &mut Self::Class) {
+            klass.set_css_name("ox-dialog-frame");
             klass.set_layout_manager_type::<gtk::BinLayout>();
             klass.bind_template();
         }
@@ -143,10 +151,25 @@ impl DialogFrame {
     /// An empty dialog titled `title`, `width` wide.
     pub(crate) fn new(title: &str, width: DialogWidth) -> Self {
         let frame: Self = glib::Object::new();
-        frame.imp().title_label.set_text(title);
+        frame.set_title(title);
         frame.update_property(&[gtk::accessible::Property::Label(title)]);
         frame.set_width(width);
         frame
+    }
+
+    /// Shows `title` as the heading.
+    pub(crate) fn set_title(&self, title: &str) {
+        self.imp().title_label.set_text(title);
+    }
+
+    /// The heading, which names the window of a dialog window.
+    pub(crate) fn title_label(&self) -> gtk::Label {
+        self.imp().title_label.get()
+    }
+
+    /// The scrolling part: the body.
+    pub(crate) fn scroller(&self) -> gtk::ScrolledWindow {
+        self.imp().scroller.get()
     }
 
     /// Changes how wide the dialog is, as Properties does on its Previous
@@ -165,6 +188,12 @@ impl DialogFrame {
     #[cfg(test)]
     pub(crate) fn title(&self) -> glib::GString {
         self.imp().title_label.text()
+    }
+
+    /// The message under the heading, for tests.
+    #[cfg(test)]
+    pub(crate) fn message(&self) -> glib::GString {
+        self.imp().message_label.text()
     }
 
     /// Shows `message` under the heading.

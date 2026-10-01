@@ -28,7 +28,8 @@
 //! ([`context_menu`], [`tab_menu`]), searching ([`folder_search`],
 //! [`cache_folder`]), Properties and previous versions ([`item_dialogs`],
 //! [`snapshot_tabs`], [`version_restore`]), folder sizes
-//! ([`folder_size_scan`]), ZIP archives ([`archive_actions`]), requests
+//! ([`folder_size_scan`]), moving a relocated standard folder's files
+//! ([`relocated_files`]), ZIP archives ([`archive_actions`]), requests
 //! from other applications and the command line ([`external_requests`]),
 //! Open with, Open in Terminal and updates ([`integration_actions`]),
 //! closing while files are written ([`closing`]), and what the window
@@ -50,6 +51,7 @@ mod address_options;
 mod address_protocols;
 mod appearance;
 mod archive_actions;
+mod background_notice;
 mod breakpoints;
 mod button_style;
 mod cache_folder;
@@ -57,23 +59,31 @@ mod caption_buttons;
 mod card_grid;
 mod closing;
 mod command_bar;
+mod compress_dialog;
 mod connections;
 mod context_menu;
 mod copy_path;
 mod crumb_drop;
 mod crumb_menus;
+mod desktop_link;
+mod details_hover;
 mod details_pane;
 mod dialog;
+mod disabled_reasons;
+mod disk_tools;
 mod empty_page;
 mod environment;
 mod external_requests;
 mod file_drag;
 mod file_drop;
 mod file_ops;
+mod focus_regions;
 mod folder_pane;
 mod folder_search;
 mod folder_size_scan;
+mod free_space;
 mod gestures;
+mod grid_keys;
 mod history_menu;
 mod imp;
 mod input;
@@ -94,18 +104,29 @@ mod network_actions;
 mod network_page;
 mod network_session;
 mod network_sign_out;
+mod open_several;
+mod place_editor;
 mod place_menus;
 mod preferences;
 mod quick_access;
+mod quick_look;
+mod recycle_bin_place;
+mod relocated_files;
 mod result_location;
+mod run_on_open;
 mod saved_search;
 mod search_box;
+mod select_matching;
 mod selection;
+mod selection_keys;
 mod session;
 mod settings_tab;
 mod sidebar;
+mod sidebar_hiding;
 mod sidebar_resizer;
+mod sidebar_toggle;
 mod snapshot_tabs;
+mod software_search;
 mod status_bar;
 mod tab_commands;
 mod tab_layout;
@@ -115,10 +136,11 @@ mod tab_strip;
 mod title_bar;
 mod toast;
 mod transfer_panel;
+mod type_applications;
 mod type_to_select;
-mod unported;
 mod version_restore;
-mod widget_tree;
+mod view_zoom;
+pub(crate) mod widget_tree;
 mod window_action;
 mod window_keys;
 mod window_size;
@@ -142,13 +164,15 @@ use sidebar::Sidebar;
 use status_bar::StatusBar;
 use tab_strip::TabStrip;
 
+pub(crate) use actions::follow_text_size_keys;
 pub(crate) use actions::install_accelerators;
 pub(crate) use button_style::ButtonStyle;
 pub(crate) use closing::QUIT_WHILE_WRITING;
+pub(crate) use dialog::Dialog;
+pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;
-pub(crate) use unported::Milestone;
 pub(crate) use widget_tree::children;
 pub(crate) use window_action::WindowAction;
 
@@ -179,7 +203,9 @@ impl BrowserWindow {
         window.connect_signals();
         window.connect_settings_page();
         window.watch_environment();
+        window.watch_recycle_bin();
         window.apply_preferences();
+        window.install_sidebar_resizer();
         window.focus_file_list_once_shown();
         window
     }
@@ -275,13 +301,13 @@ impl BrowserWindow {
 
     /// Hides the toast's message at once, as moving to another folder or
     /// tab does.
-    fn hide_message(&self) {
+    pub(crate) fn hide_message(&self) {
         self.imp().toast.hide();
     }
 
     /// The message the toast showed last, for tests.
     #[cfg(test)]
-    fn shown_message(&self) -> glib::GString {
+    pub(crate) fn shown_message(&self) -> glib::GString {
         self.imp().toast.text()
     }
 }

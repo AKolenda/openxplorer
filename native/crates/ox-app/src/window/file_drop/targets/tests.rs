@@ -140,6 +140,76 @@ fn sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows() {
     assert_eq!(test.window.sidebar_spot(this_pc), None, "a page takes no drop");
 }
 
+/// A drive still to be mounted takes a drop, which mounts it first
+/// and then copies the items into its root; a volume that cannot be
+/// mounted says so and copies nothing.
+///
+/// parity: DEV-010
+#[gtk::test]
+fn a_drop_on_an_unmounted_drive_mounts_it_first() {
+    use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.imp().volumes.replace(vec![VolumeRow {
+        label: "USB stick".to_owned(),
+        kind: VolumeKind::Drive,
+        state: VolumeState::Mountable {
+            id: "gone-volume".to_owned(),
+        },
+    }]);
+    test.window.render_places();
+    wait_for_frames(&test.window, 2);
+    let drive = test.window.sidebar().middle_of("USB stick");
+
+    let spot = test.window.sidebar_spot(drive).map(|spot| spot.destination());
+    assert_eq!(spot, Some(DropDestination::Volume("gone-volume".to_owned())));
+    let window = test.window.clone();
+    let dropped = vec![fixture.uri_of("Notes 2.txt")];
+    glib::spawn_future_local(async move {
+        let destination = DropDestination::Volume("gone-volume".to_owned());
+        window.deliver_drop(&dropped, destination, DropAction::Copy).await;
+    });
+    let says_so = |window: gtk::Window| {
+        crate::test_support::harness::descendants::<gtk::Label>(&window)
+            .iter()
+            .any(|label| label.text() == "Could not mount device")
+    };
+    let failure = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<gtk::Window>().ok())
+            .find(|window| window.is_visible() && says_so(window.clone()))
+    };
+    wait_until("the mount failure", || failure().is_some());
+    // A drop waits while a dialog is open (DND-006): OK dismisses it.
+    let ok = failure().and_then(|dialog| {
+        crate::test_support::harness::descendants::<gtk::Button>(&dialog)
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some("OK"))
+    });
+    ok.expect("the failure has OK").emit_clicked();
+    wait_until("the failure to close", || failure().is_none());
+
+    // A drive that mounts receives the items in its root.
+    std::fs::create_dir(fixture.path("USB")).expect("the drive's root");
+    let root = fixture.uri_of("USB");
+    test.window
+        .imp()
+        .test_volume
+        .replace(Some(("usb-volume".to_owned(), root)));
+    let window = test.window.clone();
+    let dropped = vec![fixture.uri_of("Notes 2.txt")];
+    glib::spawn_future_local(async move {
+        let destination = DropDestination::Volume("usb-volume".to_owned());
+        window.deliver_drop(&dropped, destination, DropAction::Copy).await;
+    });
+    wait_until("the copy on the drive", || {
+        fixture.path("USB/Notes 2.txt").exists()
+    });
+    assert!(fixture.path("Notes 2.txt").exists(), "a copy keeps the original");
+}
+
 /// parity: DND-014
 #[gtk::test]
 fn folders_dropped_on_quick_access_are_pinned_and_files_are_not() {

@@ -49,7 +49,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     sync.connect_clicked(glib::clone!(
         #[weak]
         page,
-        move |_| open_brave_dialog(&page)
+        move |button| open_brave_dialog(&page, button)
     ));
     row.add_control(&sync, ControlName::OwnLabel);
     group.add_row(&row);
@@ -60,17 +60,21 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
 }
 
 /// Opens the Brave dialog over the page's window, on the Downloads folder
-/// read off the main thread.
-fn open_brave_dialog(page: &SettingsPage) {
+/// read off the main thread. `button` stays off until the dialog shows,
+/// so a second click while the profiles are read opens no second dialog.
+fn open_brave_dialog(page: &SettingsPage, button: &gtk::Button) {
     let brave = page.context().desktop_integration().brave();
+    button.set_sensitive(false);
     glib::spawn_future_local(glib::clone!(
         #[weak]
         page,
+        #[weak]
+        button,
         async move {
-            let Ok(downloads) = gio::spawn_blocking(downloads_folder).await else {
-                return;
-            };
-            let Some(window) = page.root().and_downcast::<gtk::Window>() else {
+            let downloads = gio::spawn_blocking(downloads_folder).await;
+            let window = page.root().and_downcast::<gtk::Window>();
+            let (Ok(downloads), Some(window)) = (downloads, window) else {
+                button.set_sensitive(true);
                 return;
             };
             let report = glib::clone!(
@@ -78,7 +82,12 @@ fn open_brave_dialog(page: &SettingsPage) {
                 page,
                 move |message: &str| page.report(message)
             );
-            BraveDialog::present_for(&window, brave, &downloads, report);
+            let dialog = BraveDialog::present_for(&window, brave, &downloads, report);
+            dialog.connect_map(glib::clone!(
+                #[weak]
+                button,
+                move |_| button.set_sensitive(true)
+            ));
         }
     ));
 }

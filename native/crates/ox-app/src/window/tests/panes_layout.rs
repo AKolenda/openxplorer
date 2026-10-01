@@ -42,7 +42,7 @@ fn columns_run_from_14_pixels_in_with_the_web_widths() {
     let widths: Vec<i32> = titles.iter().map(|title| title.width).collect();
     assert_eq!(
         &widths[1..],
-        [152, 135, 90 + 14],
+        [176, 135, 90 + 14],
         "Date, Type, and Size with the end padding"
     );
     assert_eq!(titles[0].x, list.x, "Name holds the 14 pixels before the columns");
@@ -74,7 +74,7 @@ fn the_size_title_is_right_aligned_and_only_the_sorted_column_has_an_arrow() {
     );
 }
 
-/// parity: VIEW-001
+/// parity: VIEW-001, LOOK-014
 #[gtk::test]
 fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let fixture = Fixture::standard();

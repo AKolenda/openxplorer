@@ -6,7 +6,7 @@ Install the stable release without replacing your desktop.
 
 For the .deb: Zorin OS 18, Ubuntu 24.04 or newer, or Debian 13 on x86-64, with GTK 4.14 or newer, GIO/GVfs and a graphical user session. The .deb declares its runtime dependencies; APT resolves them. Fedora, openSUSE and Arch users install the release's .rpm or Arch package when it lists one; every other distribution, including Debian 12, uses the Flatpak bundle.
 
-There are no Node.js, pnpm or Python requirements for the application itself; Python is only recommended for the optional persistent mount helper.
+There are no Node.js, pnpm or Python requirements for the application itself. The optional persistent mount helper, openxplorer-mount-share, is a Rust program in the .deb, .rpm and Arch packages (not the Flatpak); it needs cifs-utils.
 
 ## Install OpenXplorer
 

@@ -86,8 +86,6 @@ fn cut_then_paste_moves_the_items_and_empties_the_cut() {
     });
     assert!(fixture.path("Documents/Notes 10.txt").is_file());
     assert!(!fixture.path("Notes 10.txt").exists());
-    // The toast shows for a few seconds only, so it is read first.
-    wait_until("the toast", || test.window.shown_message() == "1 item(s) moved.");
     wait_until("the moved item to leave the clipboard", || {
         !is_enabled(&test, "paste")
     });
@@ -197,6 +195,13 @@ fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
         .filter(|name| name.contains("(copy"))
         .collect();
     assert_eq!(copies.len(), 1, "Notes 2.txt was skipped: {copies:?}");
+    let report = open_dialog(&test);
+    assert_eq!(
+        report.title_text(),
+        "Operation result",
+        "the skipped item is reported"
+    );
+    report.press("OK");
 }
 
 /// parity: OPS-028
@@ -271,6 +276,8 @@ fn replace_older_replaces_only_the_older_existing_files() {
             report != dialog && report.message_text().starts_with("1 completed.\n1 skipped")
         })
     });
+    let report = super::file_ops_support::dialog_over(&test).expect("the report");
+    report.press("OK");
 
     assert_eq!(
         fs::read(fixture.path("Documents/Notes 2.txt")).expect("the older copy was replaced"),
@@ -364,7 +371,7 @@ fn paste_during_a_search_asks_to_open_the_destination_folder() {
     assert!(!fixture.path("Notes 2 (copy 2).txt").exists());
 }
 
-/// parity: CLIP-002, CLIP-009
+/// parity: CLIP-002, CLIP-009, LOOK-014
 #[gtk::test]
 fn a_cut_dims_its_items_in_both_views_until_the_clipboard_changes() {
     let fixture = Fixture::standard();

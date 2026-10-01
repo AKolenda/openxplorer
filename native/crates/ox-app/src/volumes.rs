@@ -21,6 +21,7 @@
 //! `gio::VolumeMonitor`.
 
 use gio::prelude::*;
+use ox_core::integration::DiskTool;
 use ox_core::location;
 use ox_core::network::volume_id_from;
 
@@ -48,6 +49,10 @@ impl VolumeKind {
 /// What the desktop lets the user do with a mount: the commands of its
 /// sidebar row and its This PC card.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is one independent command the desktop allows, not a state"
+)]
 pub(crate) struct MountControls {
     /// The mount can be unmounted: Disconnect (`canUnmount` in
     /// `desktop/volume_locations.py`).
@@ -58,6 +63,9 @@ pub(crate) struct MountControls {
     /// The drive can be powered off: Safely remove, for USB disks
     /// (`g_drive_can_stop`).
     pub can_stop: bool,
+    /// A removable drive with a block device, and GNOME Disks is
+    /// installed: Open in Disks and Format… (DEV-012).
+    pub can_open_in_disks: bool,
 }
 
 impl MountControls {
@@ -66,6 +74,7 @@ impl MountControls {
         can_unmount: false,
         can_eject: false,
         can_stop: false,
+        can_open_in_disks: false,
     };
 
     /// A mount that can only be unmounted, such as an internal partition
@@ -75,15 +84,25 @@ impl MountControls {
         can_unmount: true,
         can_eject: false,
         can_stop: false,
+        can_open_in_disks: false,
     };
 
     /// Reads what `mount` and its drive allow.
     fn of_mount(mount: &gio::Mount) -> Self {
         let drive = mount.drive();
+        let can_eject = mount.can_eject();
+        let can_stop = drive.is_some_and(|drive| drive.can_stop());
+        let has_block_device = mount
+            .volume()
+            .is_some_and(|volume| volume.identifier("unix-device").is_some());
+        let is_removable = can_eject || can_stop;
         Self {
             can_unmount: mount.can_unmount(),
-            can_eject: mount.can_eject(),
-            can_stop: drive.is_some_and(|drive| drive.can_stop()),
+            can_eject,
+            can_stop,
+            can_open_in_disks: is_removable
+                && has_block_device
+                && crate::window::is_disk_tool_installed(DiskTool::OpenInDisks),
         }
     }
 }

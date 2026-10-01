@@ -5,40 +5,41 @@
 //! Ports `archiveDialog`, the `extractDialog` flow after its dialog and
 //! the `isZipEntry` item of `entryMenu` in `desktop/ui/app.js`: opening a
 //! ZIP browses it (ARC-002), Extract all… asks where (ARC-009) and runs
-//! the extraction with the operation panel and Cancel (ARC-011), then
+//! the extraction with the transfer panel and Cancel (ARC-011), then
 //! shows the result in the tab that asked, or a new tab. Extract here
 //! (ARC-025) and Compress to ZIP file (ARC-023) come from the Dolphin
 //! baseline. One archive operation runs at a time per window, and every
 //! write goes through the previous-versions write guard (ARC-020).
 
-use std::cell::OnceCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::archive::{
-    default_preview_root, ArchiveBrowser, ArchiveError, CompressionRequest, ExtractionRequest,
-    GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
+    default_preview_root, lift_single_folder, ArchiveBrowser, ArchiveError, CompressionRequest,
+    ExtractionRequest, GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
 };
 use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;
 use ox_core::integration::Activation;
 use ox_core::location::{is_smb_server, parent_location};
+use ox_core::ops::OperationSummary;
 use ox_core::transfer::{Cancellation, Node, NodeFactory, Progress};
 use ox_core::versions::snapshot_location;
 
 use crate::archive_view::{
     archive_dialog, compressed_file_name, compression_failure_text, compression_success_text, extract_dialog,
     extraction_failure_text, extraction_success_text, unique_folder_names, ArchiveDialogActions,
-    ArchiveTarget, ExtractDialogSetup, ExtractionChoice, OperationPanel, COMPRESSION_STOPPED,
-    EXTRACTION_STOPPED,
+    ArchiveTarget, ExtractDialogSetup, ExtractionChoice, COMPRESSION_STOPPED, EXTRACTION_STOPPED,
 };
 use crate::locations::Page;
 
 use super::actions::plain_action;
+use super::background_notice::Destination;
 use super::session::TabId;
+use super::transfer_panel::TransferKind;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -49,35 +50,9 @@ const PREPARING: &str = "Preparing extraction…";
 /// The panel's first label of a compression.
 const PREPARING_COMPRESSION: &str = "Preparing compression…";
 
-/// The window's archive operation panel.
-#[derive(Debug, Default)]
-pub(super) struct ArchiveOperations {
-    /// Floats over the folder pane; set by `install_archive_actions`.
-    panel: OnceCell<OperationPanel>,
-}
-
 impl BrowserWindow {
-    /// The panel of the running extraction, compression or restored copy.
-    pub(super) fn operation_panel(&self) -> &OperationPanel {
-        self.imp()
-            .archive_operations
-            .panel
-            .get()
-            .expect("BrowserWindow::new installs the operation panel")
-    }
-
-    /// Floats the operation panel over the folder pane and adds the
-    /// archive actions.
+    /// Adds the archive actions.
     pub(super) fn install_archive_actions(&self) {
-        let panel = OperationPanel::default();
-        if let Some(overlay) = self.imp().toast.parent().and_downcast::<gtk::Overlay>() {
-            overlay.add_overlay(&panel);
-        }
-        self.imp()
-            .archive_operations
-            .panel
-            .set(panel)
-            .expect("installed once");
         self.add_action_entries([
             plain_action(WindowAction::ExtractAll, |window| {
                 if let Some(archive) = window.selected_archive() {
@@ -86,24 +61,51 @@ impl BrowserWindow {
             }),
             plain_action(WindowAction::ExtractHere, BrowserWindow::extract_here),
             plain_action(WindowAction::CompressToZip, BrowserWindow::compress_selection),
+            plain_action(WindowAction::CompressTo, BrowserWindow::ask_compress_to),
         ]);
     }
 
     /// Enables the archive commands for what is selected and where.
     pub(super) fn update_archive_actions(&self) {
-        let is_idle = !self.is_writing_files();
-        let has_archive = self.selected_archive().is_some();
-        let folder_is_writable = self
+        for (action, refusal) in self.archive_command_refusals() {
+            self.set_action_enabled(action, refusal.is_none());
+        }
+    }
+
+    /// Why the archive command `action` is disabled, when it is one.
+    pub(super) fn archive_refusal(&self, action: WindowAction) -> Option<&'static str> {
+        self.archive_command_refusals()
+            .into_iter()
+            .find(|(command, _)| *command == action)
+            .and_then(|(_, refusal)| refusal)
+    }
+
+    /// Each archive command with why it is disabled, `None` when it is
+    /// enabled: the one rule both the enabled state and the explanation
+    /// come from.
+    fn archive_command_refusals(&self) -> [(WindowAction, Option<&'static str>); 4] {
+        let busy = self
+            .is_writing_files()
+            .then_some("Wait for the running file operation to finish.");
+        let no_archive = self
+            .selected_archive()
+            .is_none()
+            .then_some("Select one ZIP archive.");
+        let nothing_selected =
+            (self.folder_pane().model().summary().count == 0).then_some("Select the items to compress.");
+        let read_only = !self
             .current_uri()
             .is_some_and(|uri| self.is_writable_folder(&uri));
-        let selected = self.folder_pane().model().summary().count;
-        self.set_action_enabled(WindowAction::ExtractAll, is_idle && has_archive);
-        self.set_action_enabled(
-            WindowAction::ExtractHere,
-            is_idle && has_archive && folder_is_writable,
-        );
-        let can_compress = is_idle && selected > 0 && folder_is_writable;
-        self.set_action_enabled(WindowAction::CompressToZip, can_compress);
+        let read_only = read_only.then_some("This folder is read-only.");
+        [
+            (WindowAction::ExtractAll, busy.or(no_archive)),
+            (WindowAction::ExtractHere, busy.or(no_archive).or(read_only)),
+            (
+                WindowAction::CompressToZip,
+                busy.or(nothing_selected).or(read_only),
+            ),
+            (WindowAction::CompressTo, busy.or(nothing_selected).or(read_only)),
+        ]
     }
 
     /// The one selected item, when it is a ZIP archive.
@@ -164,14 +166,15 @@ impl BrowserWindow {
         self.context().open_uri(uri, self.upcast_ref(), on_error);
     }
 
-    /// True when no write runs in this window; otherwise says so, as one
-    /// operation runs at a time (OPS-024).
-    fn may_start_archive_operation(&self) -> bool {
+    /// True when no write runs in this window and no update waits for its
+    /// restart; otherwise says why, as one operation runs at a time
+    /// (OPS-024) and writes wait for the restart (UPD-006).
+    pub(super) fn may_start_archive_operation(&self) -> bool {
         if self.is_writing_files() {
             self.show_message(OPERATION_RUNNING);
             return false;
         }
-        true
+        !self.refuses_writes_during_update()
     }
 
     /// Asks where to extract `archive` (Extract all…).
@@ -235,12 +238,18 @@ impl BrowserWindow {
             .with_write_guard(self.context().previous_versions().write_guard())
     }
 
-    /// Extracts `archive` as the user chose, with the operation panel, then
+    /// Extracts `archive` as the user chose, with the transfer panel, then
     /// shows the result in `origin` if it is still in front, else in a new
     /// tab, or lists the destination again (ARC-011).
     fn extract_archive(&self, archive: &ArchiveTarget, choice: ExtractionChoice, origin: Option<TabId>) {
+        // The dialog may have stayed open while another write or an
+        // update began.
+        if !self.may_start_archive_operation() {
+            return;
+        }
         let cancel = Cancellation::new();
-        self.operation_panel().start(PREPARING, cancel.clone());
+        self.transfer_panel()
+            .start(TransferKind::Archive, PREPARING, cancel.clone());
         self.update_archive_actions();
         let request = ExtractionRequest {
             archive_uri: archive.uri.clone(),
@@ -260,10 +269,18 @@ impl BrowserWindow {
                     Ok(folder) => {
                         // Listing a folder hides the toast, so it comes last.
                         window.show_extracted(&folder.uri, &choice, origin);
-                        window.show_message(&extraction_success_text(&folder));
+                        let text = extraction_success_text(&folder);
+                        let destination = Destination::items(vec![folder.uri.clone()]);
+                        window.notify_if_in_background(&OperationSummary::Toast(text.clone()), destination);
+                        window.show_message(&text);
                     }
                     Err(error) => {
-                        window.show_result_dialog(EXTRACTION_STOPPED, &extraction_failure_text(&error));
+                        let text = extraction_failure_text(&error);
+                        window.notify_if_in_background(
+                            &OperationSummary::Report(text.clone()),
+                            Destination::default(),
+                        );
+                        window.show_result_dialog(EXTRACTION_STOPPED, &text);
                     }
                 }
             }
@@ -288,7 +305,8 @@ impl BrowserWindow {
     }
 
     /// Extract here: into a new folder beside the archive, named after it,
-    /// or `<name> (2)` and so on while a name is taken (ARC-025).
+    /// or `<name> (2)` and so on while a name is taken; an archive holding
+    /// one top-level folder gives that folder instead (ARC-025).
     fn extract_here(&self) {
         let (Some(archive), Some(folder)) = (self.selected_archive(), self.current_uri()) else {
             return;
@@ -297,7 +315,8 @@ impl BrowserWindow {
             return;
         }
         let cancel = Cancellation::new();
-        self.operation_panel().start(PREPARING, cancel.clone());
+        self.transfer_panel()
+            .start(TransferKind::Archive, PREPARING, cancel.clone());
         self.update_archive_actions();
         let base_name = ox_core::archive::suggested_folder_name(&archive.name).unwrap_or_default();
         glib::spawn_future_local(glib::clone!(
@@ -334,7 +353,12 @@ impl BrowserWindow {
                 .with_progress(self.operation_progress_sender());
             match extractor.extract_in_background(request, cancel.clone()).await {
                 Err(ArchiveError::DestinationExists) => {}
-                Ok(extracted) => return Ok(extraction_success_text(&extracted)),
+                Ok(extracted) => {
+                    // A lone top-level folder becomes the output (ARC-025).
+                    let lifted = gio::spawn_blocking(move || lift_single_folder(extracted)).await;
+                    let lifted = lifted.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+                    return Ok(extraction_success_text(&lifted));
+                }
                 Err(error) => return Err(error),
             }
         }
@@ -354,8 +378,8 @@ impl BrowserWindow {
         let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
         let first_name = first.entry().name.clone();
         let cancel = Cancellation::new();
-        self.operation_panel()
-            .start(PREPARING_COMPRESSION, cancel.clone());
+        self.transfer_panel()
+            .start(TransferKind::Archive, PREPARING_COMPRESSION, cancel.clone());
         self.update_archive_actions();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -406,9 +430,7 @@ impl BrowserWindow {
             let window = window.clone();
             glib::MainContext::default().invoke(move || {
                 if let Some(window) = window.upgrade() {
-                    window
-                        .operation_panel()
-                        .show_progress(&progress.label, progress.fraction);
+                    window.transfer_panel().show_progress(&progress);
                 }
             });
         }
@@ -417,8 +439,18 @@ impl BrowserWindow {
     /// Lists `folder` again, then says how an operation ended: `outcome`'s
     /// message as a toast, or its failure in the dialog titled
     /// `stopped_title`. Listing a folder hides the toast, so it comes last.
-    fn report_in_folder(&self, folder: &str, outcome: Result<String, String>, stopped_title: &str) {
+    pub(super) fn report_in_folder(
+        &self,
+        folder: &str,
+        outcome: Result<String, String>,
+        stopped_title: &str,
+    ) {
         self.reload_tabs_showing(folder);
+        let summary = match &outcome {
+            Ok(message) => OperationSummary::Toast(message.clone()),
+            Err(failure) => OperationSummary::Report(failure.clone()),
+        };
+        self.notify_if_in_background(&summary, Destination::folder(folder));
         match outcome {
             Ok(message) => self.show_message(&message),
             Err(failure) => self.show_result_dialog(stopped_title, &failure),
@@ -427,7 +459,7 @@ impl BrowserWindow {
 
     /// Hides the panel and enables the archive commands again.
     pub(super) fn finish_archive_operation(&self) {
-        self.operation_panel().finish();
+        self.transfer_panel().finish();
         self.update_archive_actions();
     }
 }

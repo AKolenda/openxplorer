@@ -3,7 +3,8 @@
 //!
 //! Ports `footer.statusbar` in `desktop/ui/index.html` and `updateStatus`
 //! in `desktop/ui/app.js`: the item count, the selection, the
-//! type-to-select hint, then at the right the build, "Check for updates"
+//! type-to-select hint, then at the right the volume's free space, the
+//! build, "Check for updates"
 //! and the Details and Large icons view buttons, the current view's
 //! button highlighted. "Check for updates" takes the accent colour when a
 //! check in any window found a newer release (UPD-001).
@@ -17,6 +18,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format;
 
+use crate::announcement::announce;
 use crate::config::BUILD_NAME;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::model::SelectionSummary;
@@ -24,6 +26,7 @@ use crate::icons::{self, Icon};
 use crate::search::SearchCount;
 
 use super::folder_pane::FolderView;
+use super::landing::Capacity;
 use super::window_action::WindowAction;
 
 /// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
@@ -65,7 +68,7 @@ pub(super) enum TypeaheadMatch {
 }
 
 /// The item count (`#status-count`): "Ready" on a landing page, else how
-/// many items are shown, and "Loading…" while the folder is listed.
+/// many items are shown, and "Loading…" while a slow listing runs.
 pub(super) fn count_text(subject: StatusSubject) -> String {
     let (shown, loading) = match subject {
         StatusSubject::Page => return "Ready".to_owned(),
@@ -115,6 +118,9 @@ mod imp {
         /// The type-to-select hint.
         #[template_child]
         pub(super) typeahead_hint: TemplateChild<gtk::Label>,
+        /// The current volume's free space.
+        #[template_child]
+        pub(super) free_space: TemplateChild<gtk::Label>,
         /// The build (`#status-mode`).
         #[template_child]
         pub(super) build: TemplateChild<gtk::Label>,
@@ -225,10 +231,23 @@ impl StatusBar {
         imp.selection.set_text(&selection);
     }
 
-    /// Shows the type-to-select `hint`, drawn as its `outcome` asks.
+    /// Shows how much room `capacity` has left, or hides the free space.
+    pub(super) fn show_free_space(&self, capacity: Option<Capacity>) {
+        let label = &*self.imp().free_space;
+        label.set_visible(capacity.is_some());
+        if let Some(capacity) = capacity {
+            label.set_text(&capacity.free_text());
+            label.set_tooltip_text(Some(&capacity.free_tooltip()));
+        }
+    }
+
+    /// Shows the type-to-select `hint`, drawn as its `outcome` asks, and
+    /// reads it to screen readers without moving focus, as the polite
+    /// live region `#type-select-status` in index.html does.
     pub(super) fn show_typeahead_hint(&self, hint: &str, outcome: TypeaheadMatch) {
         let label = &*self.imp().typeahead_hint;
         label.set_text(hint);
+        announce(label, hint, gtk::AccessibleAnnouncementPriority::Medium);
         match outcome {
             TypeaheadMatch::Found => label.remove_css_class(MISS_CLASS),
             TypeaheadMatch::Missed => label.add_css_class(MISS_CLASS),

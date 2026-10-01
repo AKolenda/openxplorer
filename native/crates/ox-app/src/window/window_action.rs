@@ -7,8 +7,7 @@
 //! silently does nothing. [`WindowAction`] keeps every name in one table,
 //! which turns such a typo into a compile error. The templates in
 //! `resources/ui/` therefore name no action: their buttons get one through
-//! [`WindowAction::assign_to`]. [`super::actions`] registers the working
-//! actions and [`super::unported`] the disabled ones.
+//! [`WindowAction::assign_to`]. [`super::actions`] registers them.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -102,6 +101,8 @@ pub(crate) enum WindowAction {
     SelectNone,
     /// Selects exactly the items that were not selected.
     InvertSelection,
+    /// Asks for a wildcard pattern and selects the items it matches.
+    SelectMatching,
     /// Pins the one selected folder to Quick access.
     PinSelected,
     /// Pins the current folder to Quick access.
@@ -118,6 +119,24 @@ pub(crate) enum WindowAction {
     Hidden,
     /// Shows or hides the details pane.
     DetailsPane,
+    /// Switches the details pane option or field named by the string
+    /// target (the pane's menu).
+    DetailsPaneOption,
+    /// Shows or hides the navigation pane (F9, SIDE-024).
+    Sidebar,
+    /// The sidebar's icon size: `0` (automatic), `16`, `22`, `32` or `48`.
+    SidebarIconSize,
+    /// Lists the hidden sidebar rows, dimmed (SIDE-010).
+    SidebarShowAll,
+    /// Hides the sidebar section whose key is the string target.
+    HideSection,
+    /// Shows the hidden sidebar section whose key is the string target.
+    ShowSection,
+    /// Hides the sidebar place at the string target (SIDE-010).
+    HidePlace,
+    /// Shows the hidden place in the string target again: a standard
+    /// folder or a place hidden with Hide.
+    ShowPlace,
     /// The column the details view sorts by.
     Sort,
     /// Whether the details view sorts ascending or descending.
@@ -173,6 +192,8 @@ pub(crate) enum WindowAction {
     Restore,
     /// Deletes everything in the Recycle Bin, after asking.
     EmptyRecycleBin,
+    /// The same from the sidebar's Recycle Bin, wherever the window is.
+    EmptyTrash,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -181,6 +202,11 @@ pub(crate) enum WindowAction {
     ShowMoreOptions,
     /// Removes the Quick access pin of the location in the string target.
     Unpin,
+    /// Asks for a label and a location and pins them (SIDE-031).
+    AddPlace,
+    /// Asks for a new label and location for the pin in the string target
+    /// (SIDE-011).
+    EditPin,
     /// Shows the menu of open windows (the tab menu's "Open windows…").
     OpenWindows,
     /// Moves a tab into a window of its own.
@@ -215,6 +241,16 @@ pub(crate) enum WindowAction {
     Eject,
     /// Powers off the drive that holds the location in the string target.
     SafelyRemove,
+    /// Shows the drive mounted at the string target in GNOME Disks.
+    OpenInDisks,
+    /// Opens GNOME Disks' Format dialog for the drive mounted at the
+    /// string target.
+    FormatDrive,
+    /// Attaches the disk image whose URI is the string target, read-only.
+    MountDiskImage,
+    /// Opens a disk-usage analyser at the folder whose URI is the string
+    /// target.
+    AnalyseDiskUsage,
     /// Caches the current folder for search, or stops caching it (a
     /// check item).
     CacheFolder,
@@ -278,6 +314,9 @@ pub(crate) enum WindowAction {
     ExtractHere,
     /// Compress to ZIP file: the selection into a new ZIP beside it.
     CompressToZip,
+    /// Compress to…: asks for the new archive's name and format first
+    /// (ARC-023).
+    CompressTo,
     /// Open with…: the Open with dialog for the one selected item, or the
     /// folder.
     OpenWith,
@@ -293,9 +332,24 @@ pub(crate) enum WindowAction {
     /// Open in Terminal in the folder whose URI is the string target (a
     /// Quick access pin's menu).
     OpenInTerminalOf,
+    /// Open Terminal (Shift+F4): the terminal in the folder shown.
+    OpenTerminal,
+    /// Open Terminal Here (Shift+Alt+F4): a terminal in each folder of the
+    /// selection, or in the folder shown.
+    OpenTerminalHere,
+    /// Compare Files: the two selected files in a comparison tool.
+    CompareFiles,
+    /// Open Preferred Search Tool (Ctrl+Shift+F) at the folder shown.
+    SearchTool,
     /// Opens the selected item in the code editor whose desktop ID is the
     /// string target.
     OpenInEditor,
+    /// Opens the selected item in the application whose desktop ID is
+    /// the string target (the item menu's "Open with <app>").
+    OpenWithApp,
+    /// The applications of the file type that is the string target
+    /// (Properties' "Apps for this type…").
+    TypeApplications,
 }
 
 impl WindowAction {
@@ -346,6 +400,7 @@ impl WindowAction {
             WindowAction::SelectAll => "select-all",
             WindowAction::SelectNone => "select-none",
             WindowAction::InvertSelection => "invert-selection",
+            WindowAction::SelectMatching => "select-matching",
             WindowAction::PinSelected => "pin-selected",
             WindowAction::PinFolder => "pin-folder",
             WindowAction::CopyPath => "copy-path",
@@ -354,6 +409,14 @@ impl WindowAction {
             WindowAction::View => "view",
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
+            WindowAction::DetailsPaneOption => "details-pane-option",
+            WindowAction::Sidebar => "sidebar",
+            WindowAction::SidebarIconSize => "sidebar-icon-size",
+            WindowAction::SidebarShowAll => "sidebar-show-all",
+            WindowAction::HideSection => "hide-section",
+            WindowAction::ShowSection => "show-section",
+            WindowAction::HidePlace => "hide-place",
+            WindowAction::ShowPlace => "show-place",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
             WindowAction::Theme => "theme",
@@ -380,9 +443,12 @@ impl WindowAction {
             WindowAction::CancelOperation => "cancel-operation",
             WindowAction::Restore => "restore",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
+            WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::Unpin => "unpin",
+            WindowAction::AddPlace => "add-place",
+            WindowAction::EditPin => "edit-pin",
             WindowAction::OpenWindows => "open-windows",
             WindowAction::MoveTabToNewWindow => "move-tab-to-new-window",
             WindowAction::MoveTabToWindow => "move-tab-to-window",
@@ -397,6 +463,10 @@ impl WindowAction {
             WindowAction::Disconnect => "disconnect",
             WindowAction::Eject => "eject",
             WindowAction::SafelyRemove => "safely-remove",
+            WindowAction::OpenInDisks => "open-in-disks",
+            WindowAction::FormatDrive => "format-drive",
+            WindowAction::MountDiskImage => "mount-disk-image",
+            WindowAction::AnalyseDiskUsage => "analyse-disk-usage",
             WindowAction::CacheFolder => "cache-folder",
             WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",
@@ -422,12 +492,19 @@ impl WindowAction {
             WindowAction::ExtractAll => "extract-all",
             WindowAction::ExtractHere => "extract-here",
             WindowAction::CompressToZip => "compress-to-zip",
+            WindowAction::CompressTo => "compress-to",
             WindowAction::OpenWith => "open-with",
             WindowAction::ChangeApp => "change-app",
             WindowAction::OpenWithOf => "open-with-of",
             WindowAction::OpenInTerminal => "open-in-terminal",
             WindowAction::OpenInTerminalOf => "open-in-terminal-of",
+            WindowAction::OpenTerminal => "open-terminal",
+            WindowAction::OpenTerminalHere => "open-terminal-here",
+            WindowAction::CompareFiles => "compare-files",
+            WindowAction::SearchTool => "search-tool",
             WindowAction::OpenInEditor => "open-in-editor",
+            WindowAction::OpenWithApp => "open-with-app",
+            WindowAction::TypeApplications => "type-applications",
         }
     }
 

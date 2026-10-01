@@ -17,14 +17,31 @@ use gtk::{gio, glib};
 use ox_core::location::{file_uri, location_kind, LocationKind, VirtualPlace};
 use ox_core::settings::{Appearance, Settings};
 
+use super::clock_format::ClockSetting;
 use crate::app_context::AppContext;
 use crate::search::CacheLocation;
 use crate::snapshot::SnapshotRequest;
 use crate::text_size::TextSize;
+use crate::theme::accent::AccentSetting;
 use crate::theme::contrast::ContrastSetting;
+use crate::theme::desktop_text::DesktopTextWatch;
 use crate::theme::system::{self, SystemScheme};
 use crate::theme::Skin;
 use crate::window::BrowserWindow;
+
+/// The host's configuration folder, where the desktop reads its places
+/// list. Inside Flatpak, `GLib` names the sandbox's own folder, which the
+/// host never reads; the sandbox may write the host's `~/.config`
+/// (`--filesystem=host`), so the list goes there. A custom
+/// `XDG_CONFIG_HOME` on the host is not visible from inside the sandbox.
+#[cfg(not(test))]
+fn host_config_dir() -> std::path::PathBuf {
+    if ox_core::integration::Sandbox::detect().is_flatpak() {
+        glib::home_dir().join(".config")
+    } else {
+        glib::user_config_dir()
+    }
+}
 
 /// What lives as long as the application: the shared state and the
 /// watches on the desktop's colour scheme and contrast.
@@ -35,6 +52,12 @@ pub(super) struct AppState {
     _system_scheme: Rc<SystemScheme>,
     /// Kept alive so the skin follows the desktop's high-contrast setting.
     _contrast_setting: ContrastSetting,
+    /// Kept alive so text follows the desktop's font and text scaling.
+    _desktop_text: Option<DesktopTextWatch>,
+    /// Kept alive so the skin follows the desktop's accent colour.
+    _accent_setting: AccentSetting,
+    /// Kept alive so Properties timestamps follow the desktop's clock.
+    _clock_setting: ClockSetting,
 }
 
 impl AppState {
@@ -55,17 +78,27 @@ impl AppState {
     fn with_skin(app: &gtk::Application, skin: Skin, gtk_preference: Appearance, settings: Settings) -> Self {
         let preferences = &settings.data().preferences;
         skin.set_theme(preferences.theme);
+        skin.set_uses_desktop_font(preferences.desktop_font);
         skin.set_text_size(TextSize::from_percent(preferences.text_size));
+        let desktop_text = follow_desktop_text(&skin);
         let system_scheme = follow_system_scheme(&skin, gtk_preference);
         let contrast_setting = follow_contrast(&skin);
+        let accent_setting = follow_accent(&skin);
+        let clock_setting = ClockSetting::follow();
         crate::window::install_accelerators(app);
         let context = AppContext::new(skin, settings);
         context.start_search_cache(CacheLocation::UserCache);
+        // Tests mirror pins into temporary lists only, never the user's.
+        #[cfg(not(test))]
+        context.export_pins_to(ox_core::places::bookmarks_file(&host_config_dir()));
         attach_desktop_integration(app, &context);
         Self {
             context,
             _system_scheme: system_scheme,
             _contrast_setting: contrast_setting,
+            _desktop_text: desktop_text,
+            _accent_setting: accent_setting,
+            _clock_setting: clock_setting,
         }
     }
 
@@ -259,8 +292,34 @@ fn follow_contrast(skin: &Skin) -> ContrastSetting {
     setting
 }
 
+/// Applies the desktop's font and text scaling to `skin` now and on every
+/// change; `None` without a display.
+fn follow_desktop_text(skin: &Skin) -> Option<DesktopTextWatch> {
+    let settings = gtk::Settings::default()?;
+    Some(DesktopTextWatch::new(
+        &settings,
+        glib::clone!(
+            #[weak]
+            skin,
+            move |desktop| skin.set_desktop_text(desktop)
+        ),
+    ))
+}
+
+/// Applies the desktop's accent colour to `skin` now and on every change.
+fn follow_accent(skin: &Skin) -> AccentSetting {
+    let setting = AccentSetting::watch(glib::clone!(
+        #[weak]
+        skin,
+        move |accent| skin.set_accent(accent)
+    ));
+    skin.set_accent(setting.accent());
+    setting
+}
+
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
     use std::fs;
     use std::path::Path;
 
@@ -270,6 +329,7 @@ mod tests {
 
     use super::super::command_line::CommandRequest;
     use super::*;
+    use crate::test_support::desktop_setting::DesktopSetting;
     use crate::test_support::harness::{application, settle, skin, wait_until, Fixture, ThemeGuard};
     use crate::theme::contrast::{self, Contrast};
 
@@ -343,6 +403,7 @@ mod tests {
 
     /// The web app's `prefers-contrast: more` rules follow GNOME's
     /// accessibility setting; without its schema the contrast stays normal.
+    /// The setting changes only where `GSettings` keeps it in memory.
     #[gtk::test]
     fn the_skin_follows_the_desktop_high_contrast_setting() {
         let _app = TestApp::new();
@@ -350,13 +411,13 @@ mod tests {
             assert_eq!(skin().contrast(), Contrast::Normal);
             return;
         };
-        accessibility
-            .set_boolean(contrast::HIGH_CONTRAST_KEY, true)
-            .expect("the test settings backend is writable");
+        let Some(high_contrast) = DesktopSetting::in_memory(accessibility, contrast::HIGH_CONTRAST_KEY)
+        else {
+            return;
+        };
+        high_contrast.set_boolean(true);
         wait_until("the high-contrast rules", || skin().contrast() == Contrast::High);
-        accessibility
-            .set_boolean(contrast::HIGH_CONTRAST_KEY, false)
-            .expect("the test settings backend is writable");
+        high_contrast.set_boolean(false);
         wait_until("the normal rules", || skin().contrast() == Contrast::Normal);
     }
 
@@ -467,6 +528,37 @@ mod tests {
         }
     }
 
+    /// A start with Dark saved draws the dark palette before the first
+    /// window exists, so that window's first frame already has the dark
+    /// text colour, with no light frame before it.
+    ///
+    /// parity: LOOK-007
+    #[gtk::test]
+    fn a_saved_dark_theme_is_drawn_from_the_first_frame_of_the_first_window() {
+        let _theme = ThemeGuard::keep();
+        skin().set_theme(Theme::Light);
+        let app = TestApp::with_saved_theme("dark");
+        assert!(browser_windows().is_empty(), "no window before activation");
+        assert_eq!(skin().appearance(), Appearance::Dark, "drawn before the window");
+
+        app.state.activate(&application());
+        let window = browser_windows()
+            .pop()
+            .expect("activation opens the first window");
+        let first_frame_text = Rc::new(Cell::new(None));
+        window.add_tick_callback({
+            let first_frame_text = Rc::clone(&first_frame_text);
+            move |window, _| {
+                first_frame_text.set(Some(window.color()));
+                glib::ControlFlow::Break
+            }
+        });
+        wait_until("the first frame", || first_frame_text.get().is_some());
+        let text = first_frame_text.get().expect("the first frame was seen");
+        // ox_text in dark.css is #f1f1f1; light.css draws #1b1b1b.
+        assert!(text.red() > 0.9 && text.blue() > 0.9, "{text:?}");
+    }
+
     /// `--new-window` opens a window of its own at the first location, with
     /// the other locations as tabs.
     ///
@@ -572,6 +664,30 @@ mod tests {
         assert_eq!(window.current_uri().as_deref(), Some(SETTINGS_URI));
     }
 
+    /// A damaged settings file opens the window on safe defaults and says
+    /// so in the window.
+    ///
+    /// parity: SET-013
+    #[gtk::test]
+    fn a_damaged_settings_file_is_reported_at_startup() {
+        let settings = tempfile::tempdir().expect("the test home has room for settings");
+        fs::write(settings.path().join(Settings::FILE_NAME), "{ not json")
+            .expect("the test settings folder is writable");
+        let app = TestApp::with_settings_folder(settings);
+
+        app.state.activate(&application());
+
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+        let message = window.shown_message();
+        assert!(
+            message.starts_with("Could not fully read settings; using safe defaults."),
+            "{message}"
+        );
+        close_all_windows();
+    }
+
     /// Settings opens a window when none is open.
     ///
     /// parity: SET-002
@@ -637,6 +753,64 @@ mod tests {
         // this closes the windows as Quit would, without quitting.
         close_all_windows();
         assert!(browser_windows().is_empty());
+    }
+
+    /// With "Ask before closing a window with several tabs" on, Quit asks
+    /// one question for every window with several tabs, however often it
+    /// is asked, and Cancel keeps every window open.
+    ///
+    /// parity: SET-010
+    #[gtk::test]
+    fn quit_asks_once_about_the_tabs_of_every_window() {
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        let set_asking = |asks: bool| {
+            let update = PreferencesUpdate {
+                confirm_close_tabs: Some(asks),
+                ..PreferencesUpdate::default()
+            };
+            app.state
+                .context
+                .update_preferences(update, |result| result.expect("saved"));
+            wait_until("the saved option", || {
+                app.state.context.settings_data().preferences.confirm_close_tabs == asks
+            });
+        };
+        set_asking(true);
+        let windows: Vec<gtk::Window> = (0..2)
+            .map(|_| {
+                let window = app.state.open_window(&application(), Some(&fixture.uri()));
+                window.add_tab(&fixture.uri()).expect("valid folder");
+                window.upcast()
+            })
+            .collect();
+        let questions = || {
+            gtk::Window::list_toplevels()
+                .into_iter()
+                .filter_map(|window| window.downcast::<gtk::Window>().ok())
+                .filter(WidgetExt::is_visible)
+                .filter(|window| {
+                    window
+                        .transient_for()
+                        .is_some_and(|parent| windows.contains(&parent))
+                })
+                .collect::<Vec<_>>()
+        };
+
+        assert!(!app.state.quit_safely(&application()));
+        assert!(!app.state.quit_safely(&application()));
+        wait_until("the question", || !questions().is_empty());
+        settle();
+
+        let [question] = &questions()[..] else {
+            panic!("one question for both windows");
+        };
+        assert_eq!(question.title().as_deref(), Some("Quit OpenXplorer?"));
+        question.close();
+        wait_until("the question to close", || questions().is_empty());
+        assert_eq!(browser_windows().len(), 2, "Cancel keeps every window");
+        // The windows close at the end of the test without asking.
+        set_asking(false);
     }
 
     /// A resized window saves its size, and every new window opens at it:

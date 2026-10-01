@@ -20,6 +20,8 @@
 //!   that item.
 
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 
 use gio::prelude::*;
 
@@ -32,6 +34,13 @@ use crate::entry::{entry_from_info, ATTRIBUTES};
 use crate::gio_node::GioNode;
 use crate::location::TRASH_URI;
 use crate::transfer::{Cancellation, Node, SourceChange, TransferResult};
+
+/// How often Undo of Move to Trash lists the Recycle Bin again when an
+/// item it restores is not listed yet, and how long it waits each time:
+/// while a window watches `trash:///`, the backend may list a moment
+/// after the Move to Trash finished.
+const RELISTS: u32 = 4;
+const RELIST_WAIT: Duration = Duration::from_millis(250);
 
 /// One item in the Recycle Bin.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -330,7 +339,17 @@ pub(crate) fn restore_trashed_since(
     since: u64,
     context: &OperationContext,
 ) -> Result<TransferResult, OpsError> {
-    let items = list_recycle_bin_blocking(&context.cancel)?;
+    let mut items = list_recycle_bin_blocking(&context.cancel)?;
+    let mut relists = 0;
+    while relists < RELISTS
+        && original_paths
+            .iter()
+            .any(|path| newest_trashed_from(&items, path, since).is_none())
+    {
+        thread::sleep(RELIST_WAIT);
+        items = list_recycle_bin_blocking(&context.cancel)?;
+        relists += 1;
+    }
     let mut result = TransferResult::default();
     for original_path in original_paths {
         let restored = match newest_trashed_from(&items, original_path, since) {

@@ -39,7 +39,7 @@ impl BrowserWindow {
     /// a search, while an operation runs, or in a folder that is not
     /// writable.
     pub(crate) async fn create_folder(&self) {
-        if !self.allows(FileCommand::New) {
+        if !self.allows(FileCommand::New) || self.refuses_writes_during_update() {
             return;
         }
         let Some(folder) = self.current_uri() else {
@@ -52,9 +52,12 @@ impl BrowserWindow {
             selection: NameSelection::Whole,
             folder: &folder,
         };
-        let created = ask_for_name(self, request, |name| {
+        let created = ask_for_name(self, request, |name, cancel| {
             let folder = folder.clone();
-            let context = OperationContext::new(protection.clone());
+            let context = OperationContext {
+                cancel,
+                ..OperationContext::new(protection.clone())
+            };
             async move {
                 create_item(&folder, &name, ItemKind::Folder, &context)
                     .await

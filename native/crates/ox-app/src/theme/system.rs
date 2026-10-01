@@ -25,14 +25,16 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::integration::{Sandbox, DESKTOP_PORTAL_NAME, DESKTOP_PORTAL_PATH};
 
-use super::Appearance;
+use super::{Appearance, INTERFACE_SCHEMA};
 
-const INTERFACE_SCHEMA: &str = "org.gnome.desktop.interface";
 const COLOR_SCHEME_KEY: &str = "color-scheme";
-const GTK_THEME_KEY: &str = "gtk-theme";
+/// GNOME's GTK theme name, which GNOME-based portals serve too.
+pub(super) const GTK_THEME_KEY: &str = "gtk-theme";
 
-const PORTAL_SETTINGS: &str = "org.freedesktop.portal.Settings";
-const APPEARANCE_NAMESPACE: &str = "org.freedesktop.appearance";
+/// The interface of the XDG desktop portal that serves desktop settings.
+pub(super) const PORTAL_SETTINGS: &str = "org.freedesktop.portal.Settings";
+/// The portal's namespace for desktop-neutral appearance settings.
+pub(super) const APPEARANCE_NAMESPACE: &str = "org.freedesktop.appearance";
 
 /// How long the portal may take to answer the first read, in milliseconds.
 const PORTAL_TIMEOUT_MS: i32 = 2000;
@@ -348,7 +350,7 @@ fn subscribe_to_portal_changes(
 
 /// Reads `key` in `namespace` from `portal`, or `None` without a portal
 /// or a setting it does not serve.
-async fn read_portal(
+pub(super) async fn read_portal(
     connection: &gio::DBusConnection,
     portal: &str,
     namespace: &str,

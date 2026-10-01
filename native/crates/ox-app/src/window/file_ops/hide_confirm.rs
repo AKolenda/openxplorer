@@ -10,8 +10,9 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// The question's title.
 const TITLE: &str = "Rename and hide?";
@@ -36,7 +37,7 @@ impl BrowserWindow {
         let dialog = Dialog::new(self, TITLE, MESSAGE);
         let dont_ask = dialog.add_check_button("Don't ask again", false);
         dialog.add_cancel_button();
-        dialog.add_button("Rename and Hide", ButtonStyle::Primary);
+        dialog.add_button("Rename and Hide", ButtonStyle::Accent);
         dialog.open();
         if dialog.next_response().await.is_none() {
             return false;

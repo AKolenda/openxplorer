@@ -127,12 +127,12 @@ fn opens_as_folder(entry: &Entry) -> bool {
     }
 }
 
-/// A ZIP archive by content type or by a `.zip` name in any case.
+/// A ZIP or TAR archive by content type or name (ARC-022).
 fn is_zip(entry: &Entry) -> bool {
     let is_zip_type = entry
         .content_type
         .as_deref()
         .and_then(MimeType::from_name)
         .is_some_and(MimeType::is_zip);
-    is_zip_type || entry.name.to_lowercase().ends_with(".zip")
+    is_zip_type || crate::archive::is_supported_archive(&entry.name, entry.content_type.as_deref())
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! What happens before the application starts: `--version`, `--quit`,
-//! `--restart`, and the check for a running instance an upgrade left
-//! outdated; and the `runtime-info` action that lets a later launch run
-//! that check against this process.
+//! What happens before the application starts: `--version`, `--check`,
+//! `--diagnose`, `--quit`, `--restart`, and the check for a running
+//! instance an upgrade left outdated; and the `runtime-info` action that
+//! lets a later launch run that check against this process.
 //!
 //! Ports `main` and `confirm_restart` in `desktop/winspace.py` and the
 //! `runtime-info` action of `OpenXplorer.startup`; the guard itself is
@@ -27,13 +27,40 @@ use crate::config::APP_ID;
 const RESTART_OPTION: &str = "--restart";
 /// The option that prints the version.
 const VERSION_OPTION: &str = "--version";
+/// The option that names the libraries and the build.
+const CHECK_OPTION: &str = "--check";
+/// The option that prints the installed and running builds as JSON.
+const DIAGNOSE_OPTION: &str = "--diagnose";
 /// The option that asks the running instance to quit safely.
 const QUIT_OPTION: &str = "--quit";
 /// The option of the Show in folder service, which never asks anything.
 const SERVICE_OPTION: &str = "--filemanager-service";
 
+/// The options only the launcher handles, without their dashes, and what
+/// `--help` says about each (`argument_parser` in `winspace.py`). The
+/// application registers them too, so `--help` lists them, but they never
+/// reach it: the guard exits or removes them first.
+pub(crate) const LAUNCHER_OPTIONS: [(&str, &str); 4] = [
+    ("check", "Check native libraries without opening a window"),
+    (
+        "restart",
+        "Safely quit the current process and launch the installed build; never force active transfers",
+    ),
+    (
+        "diagnose",
+        "Print installed and running build identities without filenames or credentials",
+    ),
+    ("version", "Print the installed application version"),
+];
+
 /// The exit status of a launch the guard stopped, as in the Python app.
 const GUARD_FAILURE: u8 = 3;
+
+/// What a launch as root prints before it exits (`main` in winspace.py).
+const RUN_AS_USER: &str = "Run OpenXplorer as your regular desktop user, not with sudo.";
+
+/// The user ID of root.
+const ROOT_USER_ID: u32 = 0;
 
 /// What the launch does after the guard.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,14 +77,38 @@ impl LaunchCheck {
     /// Runs the launch checks of `main` on `arguments`, the whole command
     /// line including the program: prints the version, asks the running
     /// instance to quit for `--quit` and `--restart`, and asks the user
-    /// before replacing an outdated instance.
+    /// before replacing an outdated instance. Root is refused after
+    /// `--version` and before everything else.
     pub(crate) fn run(arguments: Vec<String>) -> Self {
+        Self::run_as(arguments, effective_user_id())
+    }
+
+    /// The root check alone, for a launch that skips the others (a
+    /// snapshot): `Some` exit when the effective user is root.
+    pub(crate) fn root_refusal() -> Option<glib::ExitCode> {
+        refuse_root(effective_user_id())
+    }
+
+    /// [`Self::run`] for the effective user `user_id`.
+    fn run_as(arguments: Vec<String>, user_id: u32) -> Self {
         let has = |option: &str| arguments.iter().skip(1).any(|argument| argument == option);
         if has(VERSION_OPTION) {
             println!("OpenXplorer {}", running_version());
             return Self::Exit(glib::ExitCode::SUCCESS);
         }
-        let outcome = if has(QUIT_OPTION) {
+        if let Some(status) = refuse_root(user_id) {
+            return Self::Exit(status);
+        }
+        if has(CHECK_OPTION) {
+            println!("{}", super::report::check_report());
+            return Self::Exit(glib::ExitCode::SUCCESS);
+        }
+        let outcome = if has(DIAGNOSE_OPTION) {
+            super::report::diagnosis().map(|report| {
+                println!("{}", report.to_json());
+                Self::Exit(glib::ExitCode::SUCCESS)
+            })
+        } else if has(QUIT_OPTION) {
             quit_running_instance().map(|()| Self::Exit(glib::ExitCode::SUCCESS))
         } else {
             let mode = if has(RESTART_OPTION) {
@@ -73,6 +124,28 @@ impl LaunchCheck {
             Self::Exit(glib::ExitCode::from(GUARD_FAILURE))
         })
     }
+}
+
+/// Safety rule "never run as root" (`os.geteuid()==0` in `main`): a file
+/// manager running under sudo would create root-owned files in the user's
+/// folders and bypass every permission. A launch whose effective user is
+/// root says so and exits with status 1; only `--version` runs before
+/// this check.
+fn refuse_root(user_id: u32) -> Option<glib::ExitCode> {
+    if user_id != ROOT_USER_ID {
+        return None;
+    }
+    eprintln!("{RUN_AS_USER}");
+    let _ = std::io::stderr().flush();
+    Some(glib::ExitCode::FAILURE)
+}
+
+/// This process's effective user ID, which `GCredentials` records on
+/// Linux; sudo makes it root's.
+fn effective_user_id() -> u32 {
+    gio::Credentials::new()
+        .unix_user()
+        .expect("GCredentials holds the effective user ID on Linux")
 }
 
 /// `arguments` without `--restart`.
@@ -112,7 +185,7 @@ fn require_current(mode: LaunchMode, is_service: bool) -> Result<(), InstanceErr
 
 /// The identity of this build, or one that matches no running instance
 /// when the executable cannot be read.
-fn this_identity() -> RuntimeIdentity {
+pub(super) fn this_identity() -> RuntimeIdentity {
     let version = running_version();
     running_identity(version).unwrap_or_else(|_| unknown_identity(version))
 }
@@ -185,6 +258,30 @@ mod tests {
     fn the_restart_option_is_not_passed_on() {
         let passed = without_restart(arguments(&["openxplorer", "--restart", "/tmp"]));
         assert_eq!(passed, arguments(&["openxplorer", "/tmp"]));
+    }
+
+    /// Root is refused with status 1; any other user goes on to the
+    /// running-instance checks.
+    ///
+    /// parity: SAFE-008
+    #[test]
+    fn a_launch_as_root_is_refused_with_status_1() {
+        assert_eq!(refuse_root(ROOT_USER_ID), Some(glib::ExitCode::FAILURE));
+        assert_eq!(refuse_root(1000), None);
+        assert_eq!(
+            LaunchCheck::run_as(arguments(&["openxplorer", "--version"]), ROOT_USER_ID),
+            LaunchCheck::Exit(glib::ExitCode::SUCCESS),
+            "--version runs before the root check"
+        );
+        assert_eq!(
+            LaunchCheck::run_as(arguments(&["openxplorer", "--quit"]), ROOT_USER_ID),
+            LaunchCheck::Exit(glib::ExitCode::FAILURE),
+            "root is refused before --quit reaches the running instance"
+        );
+        assert_eq!(
+            RUN_AS_USER,
+            "Run OpenXplorer as your regular desktop user, not with sudo."
+        );
     }
 
     /// parity: INT-022

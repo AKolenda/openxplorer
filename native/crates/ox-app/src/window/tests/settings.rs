@@ -10,10 +10,12 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::settings::{Column, ColumnWidth, PreferencesUpdate, Settings};
 
+use crate::folder_view::sorting::SortColumn;
 use crate::locations::Page;
 use crate::settings_page::{Category, SettingsView};
 use crate::test_support::harness::{application, wait_for, wait_until, Fixture, TestWindow};
 use crate::test_support::python::python_preference;
+use crate::window::tests::file_ops_support::open_dialog;
 use crate::window::window_action::WindowAction;
 
 /// How long a test lets the work a tab switch queues run, such as giving
@@ -35,7 +37,7 @@ fn active_tab_title(test: &TestWindow) -> String {
     test.window.imp().locations.borrow().title_for(&uri)
 }
 
-/// parity: SET-019
+/// parity: SET-001, SET-019
 #[gtk::test]
 fn ctrl_comma_opens_settings_as_a_tab_of_its_own() {
     let (_fixture, test) = window_with_settings_open();
@@ -135,6 +137,7 @@ fn back_to_files_gives_the_file_list_keyboard_focus_again() {
     );
 }
 
+/// parity: SET-001
 #[gtk::test]
 fn back_to_files_closes_the_settings_tab() {
     let (fixture, test) = window_with_settings_open();
@@ -213,7 +216,7 @@ fn settings_typed_in_the_address_bar_opens_a_folder_called_settings() {
 /// columns to their default widths, and saves the Python app's layout
 /// (`resetLayout`: a 210 px sidebar and no column widths).
 ///
-/// parity: SET-015
+/// parity: SET-015, VIEW-046, SET-005
 #[gtk::test]
 fn reset_returns_every_windows_sidebar_to_its_default_width() {
     let fixture = Fixture::standard();
@@ -238,6 +241,9 @@ fn reset_returns_every_windows_sidebar_to_its_default_width() {
 
     for window in [&test.window, &beside.window] {
         assert_eq!(window.imp().workspace.position(), 210);
+        let details = window.folder_pane().details();
+        let name = details.column(SortColumn::Name).expect("a Name column");
+        assert!(name.expands(), "Name fills the space again");
     }
     let directory = test.settings_directory();
     wait_until("the default layout to be saved", || {
@@ -246,4 +252,33 @@ fn reset_returns_every_windows_sidebar_to_its_default_width() {
     });
     assert_eq!(python_preference(directory, "sidebarWidth"), "210");
     assert_eq!(python_preference(directory, "columnWidths"), "{}");
+}
+
+/// "Read license & source information" shows the copyright, where the
+/// source is and the AGPL, in a dialog that fits the window and scrolls.
+///
+/// parity: SET-009
+#[gtk::test]
+fn the_license_dialog_shows_the_copyright_the_source_and_the_agpl() {
+    let (_fixture, test) = window_with_settings_open();
+
+    test.activate("license", None);
+
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.title_text(), "OpenXplorer · License & source");
+    let text = dialog.message_text();
+    assert!(
+        text.starts_with("Copyright (c) 2026 OpenXplorer contributors."),
+        "{text}"
+    );
+    assert!(text.contains("https://github.com/AKolenda/openxplorer, tag v"));
+    assert!(dialog
+        .scrolled_text()
+        .contains("GNU AFFERO GENERAL PUBLIC LICENSE"));
+    wait_until("the dialog to have its size", || dialog.height() > 0);
+    assert!(
+        dialog.height() < test.window.height(),
+        "the licence scrolls in the dialog"
+    );
+    dialog.press("OK");
 }

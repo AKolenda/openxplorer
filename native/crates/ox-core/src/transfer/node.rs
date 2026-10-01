@@ -9,9 +9,11 @@
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
+use super::limits::FilesystemInfo;
 use super::staging::clean_staging;
 
 /// What an item is, queried without following symbolic links.
@@ -36,6 +38,33 @@ pub struct NodeInfo {
     pub size: u64,
     /// Unix permission bits when the backend reports them (not on MTP).
     pub mode: Option<u32>,
+    /// The last modification time, when the backend reports it.
+    pub modified: Option<SystemTime>,
+    /// Which local object the item is, when the backend reports it.
+    pub identity: Option<ItemIdentity>,
+}
+
+impl NodeInfo {
+    /// True when `current`, queried later, still describes the item this
+    /// info describes: the same object and kind, and for anything but a
+    /// folder the same size and modification time. A value either query
+    /// lacks is not compared. A folder's own size and time change with its
+    /// entries, which are checked one by one instead (XFER-013).
+    pub(crate) fn still_describes(&self, current: &NodeInfo) -> bool {
+        if self.kind != current.kind || !agree(self.identity, current.identity) {
+            return false;
+        }
+        self.kind == NodeKind::Directory
+            || (self.size == current.size && agree(self.modified, current.modified))
+    }
+}
+
+/// True when two optional values are equal or either is unknown.
+fn agree<T: PartialEq>(earlier: Option<T>, later: Option<T>) -> bool {
+    match (earlier, later) {
+        (Some(earlier), Some(later)) => earlier == later,
+        _ => true,
+    }
 }
 
 /// Which local filesystem object an item is (`st_dev`, `st_ino`). The
@@ -68,7 +97,8 @@ pub struct ItemIdentity {
 /// - `&Cancellation` for the long operations the user starts and may stop
 ///   at any time: copying a file, moving to the Trash and deleting a tree.
 /// - No token for [`Node::delete`], which removes only the engine's own
-///   staging or backups: that cleanup must finish even after the user
+///   staging or backups, or one source item a move has already copied:
+///   that cleanup must finish even after the user
 ///   cancelled (`_clean_staging` and `_discard_stage` in
 ///   `desktop/operations.py` take no cancellation either).
 pub trait Node: Send + Sync {
@@ -180,8 +210,9 @@ pub trait Node: Send + Sync {
     /// in one step; the engine then replaces through reversible renames.
     fn replace_native(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError>;
 
-    /// Deletes one file or one empty folder. Only ever called on staging the
-    /// engine created, or a replacement backup it owns.
+    /// Deletes one file, one link or one empty folder. Only ever called on
+    /// staging the engine created, a replacement backup it owns, or a
+    /// source item a move has just copied (XFER-013).
     ///
     /// # Errors
     ///
@@ -259,6 +290,13 @@ pub trait Node: Send + Sync {
     /// The backend's error when the folder cannot be listed.
     fn refresh_listing(&self, _cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         Ok(())
+    }
+
+    /// The file system this item is on (XFER-028): its type, free space
+    /// and id, as far as the backend reports them; `None` when it reports
+    /// nothing.
+    fn filesystem(&self, _cancel: Option<&Cancellation>) -> Option<FilesystemInfo> {
+        None
     }
 }
 

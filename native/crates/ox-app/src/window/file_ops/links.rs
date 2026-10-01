@@ -19,8 +19,9 @@ use ox_core::transfer::TransferMode;
 
 use super::running::FinishedOperation;
 use super::FileCommand;
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// New ▸ Link's title.
 const NEW_LINK_TITLE: &str = "New link";
@@ -53,7 +54,7 @@ impl BrowserWindow {
         let finished = outcome.map(|outcome| FinishedOperation {
             summary: summarize_links(&outcome.result),
             undo: outcome.undo,
-            created: outcome.created,
+            select_after: outcome.created,
         });
         self.conclude_operation(finished).await;
     }
@@ -72,7 +73,7 @@ impl BrowserWindow {
         target.set_placeholder_text(Some("For example ~/Documents"));
         let name = dialog.add_text_field("Name", "");
         dialog.add_cancel_button();
-        dialog.add_button("Create", ButtonStyle::Primary);
+        dialog.add_button("Create", ButtonStyle::Accent);
         dialog.open();
         let protection = self.context().write_protection();
         loop {
@@ -84,9 +85,10 @@ impl BrowserWindow {
                 name: name.text().to_string(),
                 target: target.text().to_string(),
             };
-            dialog.set_busy(true);
-            let outcome = create_link(&request, &OperationContext::new(protection.clone())).await;
-            dialog.set_busy(false);
+            let context = OperationContext::new(protection.clone());
+            dialog.set_busy(Some(&context.cancel));
+            let outcome = create_link(&request, &context).await;
+            dialog.set_busy(None);
             match outcome {
                 Ok(link) => {
                     dialog.finish();

@@ -10,7 +10,7 @@
 //! Python app's messages. A dropped item that is not pinned yet must be a
 //! folder or a share, which GIO confirms off the main thread. The pins are
 //! saved off the main thread through the Python app's own settings file
-//! and lock; no file is moved or deleted.
+//! and lock; no file is moved or deleted. One pin request runs at a time.
 
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
@@ -28,6 +28,9 @@ use super::BrowserWindow;
 
 /// The most folders one drop pins.
 const MAX_DROPPED_PINS: usize = 200;
+
+/// The toast when a file is among the items to pin (`pinEntries`).
+const FOLDERS_ONLY: &str = "Only folders and network shares can be pinned. Select folders only.";
 
 /// The folders a drop on Quick access pins: local and SMB locations,
 /// canonical, in order and without duplicates. A share may be pinned
@@ -87,8 +90,25 @@ impl BrowserWindow {
         // (`label or entry['name']` in Python).
         match pin_target(entry, None) {
             Ok(target) => self.pin(target.uri, target.label),
+            Err(EntryError::NotPinnable) => self.show_message(FOLDERS_ONLY),
             Err(error) => self.show_message(&error.to_string()),
         }
+    }
+
+    /// Starts a pin request; false while another one runs.
+    pub(super) fn start_pinning(&self) -> bool {
+        !self.imp().pinning.replace(true)
+    }
+
+    /// Ends the pin request.
+    pub(super) fn end_pinning(&self) {
+        self.imp().pinning.set(false);
+    }
+
+    /// Ends the pin request and shows `message`.
+    fn finish_pinning(&self, message: &str) {
+        self.end_pinning();
+        self.show_message(message);
     }
 
     /// Pins the folder the tab shows (`pinCurrent`).
@@ -105,6 +125,9 @@ impl BrowserWindow {
         let quick_access = self.places().quick_access;
         if quick_access.iter().any(|place| same_location(&place.uri, &uri)) {
             self.show_message("Already pinned to Quick access.");
+            return;
+        }
+        if !self.start_pinning() {
             return;
         }
         let change: Change = Box::new(move |settings| {
@@ -127,7 +150,7 @@ impl BrowserWindow {
                         Ok(()) => "Pinned to Quick access. No files were moved.".to_owned(),
                         Err(error) => format!("Could not pin: {error}"),
                     };
-                    window.show_message(&message);
+                    window.finish_pinning(&message);
                 }
             ),
         );
@@ -142,6 +165,9 @@ impl BrowserWindow {
     /// shows in the toast.
     pub(super) fn pin_dropped(&self, uris: &[String], before: Option<String>) -> Result<(), DropRefusal> {
         let uris = pinnable_uris(uris)?;
+        if !self.start_pinning() {
+            return Ok(());
+        }
         let shown = self.places().quick_access;
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -165,11 +191,11 @@ impl BrowserWindow {
         let requests = match verifying.await {
             Ok(Ok(requests)) => requests,
             Ok(Err(error)) => {
-                self.show_message(&format!("Could not pin: {error}"));
+                self.finish_pinning(&format!("Could not pin: {error}"));
                 return;
             }
             Err(_panic) => {
-                self.show_message("Could not pin: the folders could not be checked.");
+                self.finish_pinning("Could not pin: the folders could not be checked.");
                 return;
             }
         };
@@ -189,7 +215,7 @@ impl BrowserWindow {
                         Ok(()) => pinned_message(count),
                         Err(error) => format!("Could not pin: {error}"),
                     };
-                    window.show_message(&message);
+                    window.finish_pinning(&message);
                 }
             ),
         );

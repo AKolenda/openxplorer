@@ -456,6 +456,6 @@ fn a_member_shorter_than_it_declares_stops_the_extraction() {
     assert_eq!(error, ArchiveError::TruncatedMember);
     assert_eq!(
         error.to_string(),
-        "ZIP member has a truncated size. Extraction stopped."
+        "This archive member has a truncated size. Extraction stopped."
     );
 }

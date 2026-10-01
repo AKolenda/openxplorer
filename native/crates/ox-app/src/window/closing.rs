@@ -27,9 +27,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::actions::plain_action;
-use super::dialog::{ButtonStyle, Dialog};
+use super::dialog::Dialog;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use super::ButtonStyle;
 
 /// The caption's refusal while an update installs (`askClose`).
 const WAIT_FOR_UPDATE: &str = "Wait for the update to finish before closing OpenXplorer.";
@@ -50,6 +51,19 @@ const KEEP_OPEN: &str = "Keep open";
 
 /// The answer that cancels the operation, then closes the window.
 const CANCEL_AND_CLOSE: &str = "Cancel and close";
+
+/// The question before a window with several tabs closes, when the
+/// settings ask for it (Dolphin's `ConfirmClosingMultipleTabs`, SET-010).
+const CLOSE_TABS_TITLE: &str = "Close all tabs?";
+
+/// The answer that closes the window and its tabs.
+const CLOSE_TABS: &str = "Close all tabs";
+
+/// The question before Quit closes windows with several tabs.
+const QUIT_TABS_TITLE: &str = "Quit OpenXplorer?";
+
+/// The answer that closes every window and quits.
+const QUIT_TABS: &str = "Quit";
 
 /// How often a window that should close looks whether it may.
 const CLOSE_POLL: Duration = Duration::from_millis(100);
@@ -114,6 +128,18 @@ impl BrowserWindow {
     /// Whether a close may go ahead now; otherwise asks whether to cancel
     /// the running write and close afterwards, and the close waits.
     pub(super) fn may_close_now(&self) -> bool {
+        if self.asks_before_closing_tabs() {
+            // One question at a time, however often the shell asks.
+            if self.imp().closing.get() == ClosingState::Open {
+                self.imp().closing.set(ClosingState::Asking);
+                glib::spawn_future_local(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    async move { window.ask_to_close_tabs().await }
+                ));
+            }
+            return false;
+        }
         if !self.is_writing_files() {
             return true;
         }
@@ -128,17 +154,76 @@ impl BrowserWindow {
         false
     }
 
+    /// Whether closing must first ask about the window's tabs: the
+    /// settings ask for it, it has several, and nobody agreed yet.
+    pub(crate) fn asks_before_closing_tabs(&self) -> bool {
+        let asks = self.context().settings_data().preferences.confirm_close_tabs;
+        asks && !self.imp().closing_tabs_confirmed.get() && self.tab_count() > 1
+    }
+
+    /// Asks once, for Quit, whether to close `windows`, the windows with
+    /// several tabs, as Dolphin asks on Quit; when the user agrees, none of
+    /// them asks again as it closes. False, without a second question,
+    /// while a question is already open over this window.
+    pub(crate) async fn confirm_quit_with_tabs(&self, windows: &[BrowserWindow]) -> bool {
+        if self.imp().closing.get() != ClosingState::Open {
+            return false;
+        }
+        self.imp().closing.set(ClosingState::Asking);
+        let tabs: usize = windows.iter().map(BrowserWindow::tab_count).sum();
+        let question = if windows.len() == 1 {
+            format!("This window has {tabs} tabs open. Close them all and quit?")
+        } else {
+            format!(
+                "{} windows have {tabs} tabs open. Close them all and quit?",
+                windows.len()
+            )
+        };
+        let dialog = Dialog::new(self, QUIT_TABS_TITLE, &question);
+        dialog.add_cancel_button();
+        let quit = dialog.add_button(QUIT_TABS, ButtonStyle::Accent);
+        dialog.open();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        self.imp().closing.set(ClosingState::Open);
+        let confirmed = answer == Some(quit);
+        if confirmed {
+            for window in windows {
+                window.imp().closing_tabs_confirmed.set(true);
+            }
+        }
+        confirmed
+    }
+
+    /// Asks whether to close the window with its tabs, and closes it.
+    async fn ask_to_close_tabs(&self) {
+        let count = self.tab_count();
+        let question = format!("This window has {count} tabs open. Close them all?");
+        let dialog = Dialog::new(self, CLOSE_TABS_TITLE, &question);
+        dialog.add_cancel_button();
+        let close = dialog.add_button(CLOSE_TABS, ButtonStyle::Accent);
+        dialog.open();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        self.imp().closing.set(ClosingState::Open);
+        if answer == Some(close) {
+            self.imp().closing_tabs_confirmed.set(true);
+            self.close();
+        }
+    }
+
     /// Asks whether to cancel the running write and close the window.
     async fn ask_to_cancel_and_close(&self) {
         let dialog = Dialog::new(self, RUNNING_TITLE, RUNNING_QUESTION);
         // First, so it has the focus and Enter never cancels by accident.
-        dialog.add_button(KEEP_OPEN, ButtonStyle::Standard);
+        dialog.add_button(KEEP_OPEN, ButtonStyle::Bordered);
         let close = dialog.add_button(CANCEL_AND_CLOSE, ButtonStyle::Danger);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();
         if answer != Some(close) {
             self.imp().closing.set(ClosingState::Open);
+            self.imp().closing_tabs_confirmed.set(false);
             return;
         }
         self.imp().closing.set(ClosingState::ClosingWhenIdle);
@@ -187,10 +272,10 @@ impl BrowserWindow {
         }
     }
 
-    /// Cancels the running file operation and archive operation.
+    /// Cancels the running write: a file operation, an extraction, a
+    /// compression or a restored copy.
     fn cancel_every_write(&self) {
-        self.cancel_operation();
-        self.operation_panel().cancel();
+        self.transfer_panel().cancel();
     }
 
     /// Whether a dialog shows over this window.

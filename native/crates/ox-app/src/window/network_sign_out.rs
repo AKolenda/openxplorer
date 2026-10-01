@@ -78,7 +78,7 @@ impl BrowserWindow {
                 }
             ),
         );
-        dialog.present();
+        dialog.open();
     }
 
     /// Signs out of the server of `uri` as `choice` asks.

@@ -3,9 +3,12 @@
   "scope": "Legacy bridge operations only. features.toml lists the user-visible behaviours, the Dolphin baseline and GNOME integration.",
   "methods": {
     "activateItem": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Double-click, Enter and Open read the item again and open a folder, ZIP or file for what it is now; a failure is reported in the tab that asked.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/opening.rs::an_item_is_read_again_when_opened_and_a_failure_is_a_dialog",
+        "native/crates/ox-app/src/window/tests/opening.rs::an_opened_folder_stays_with_the_tab_that_asked_for_it"
+      ]
     },
     "applications": {
       "status": "native-tested",
@@ -17,7 +20,7 @@
     },
     "archiveExtract": {
       "status": "native-tested",
-      "note": "Extract all… and Extract here run the ox-core extractor with the write guard, the operation panel and Cancel, and show or list the result in the native window.",
+      "note": "Extract all… and Extract here run the ox-core extractor with the write guard, the transfer panel and Cancel, and show or list the result in the native window.",
       "evidence": [
         "native/crates/ox-app/src/window/tests/archives.rs::extract_all_unpacks_into_a_new_folder_and_shows_it",
         "native/crates/ox-app/src/window/tests/archives.rs::extract_here_uses_the_next_free_name",

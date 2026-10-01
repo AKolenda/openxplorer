@@ -6,9 +6,7 @@
 //! New ▾ │ Cut, Copy, Paste, Rename, Copy path, Move to Trash │ Sort ▾,
 //! View ▾, More options, then at the right the appearance toggle, Settings
 //! and the Details toggle. Every control runs a window or application
-//! action; commands whose workflow is not ported are disabled actions
-//! ([`super::unported`]), so they show greyed out with a tooltip. New is
-//! disabled where nothing can be created, and Delete is named after what
+//! action. New is disabled where nothing can be created, and Delete is named after what
 //! it does in the folder: "Move to Trash" or "Delete permanently"
 //! (CMD-003).
 //!
@@ -28,8 +26,7 @@ use crate::icons::{self, Icon};
 use crate::theme::AppearanceExt;
 
 use super::breakpoints::WindowWidth;
-use super::menu_popover::{MenuEntry, MenuPopover};
-use super::unported;
+use super::menu_popover::{name_menu_button, MenuEntry, MenuPopover};
 use super::window_action::WindowAction;
 
 pub(super) use menus::new_menu;
@@ -109,8 +106,7 @@ const EDIT_COMMANDS: [IconCommand; 6] = [
     },
 ];
 
-/// The tooltip of Settings, before the milestone note of an unported
-/// command.
+/// The tooltip of Settings.
 const SETTINGS_TOOLTIP: &str = "Settings (Ctrl+,)";
 
 mod imp {
@@ -239,13 +235,11 @@ impl CommandBar {
         self.show_appearance_glyph(Appearance::Light);
     }
 
-    /// The gear, and the tooltip that names the milestone bringing the
-    /// Settings page.
+    /// The gear and its tooltip.
     fn finish_settings_button(&self) {
         let settings = &*self.imp().settings_button;
         settings.set_child(Some(&icons::image(Icon::Settings, ICON_COMMAND_GLYPH)));
-        let tooltip = unported::tooltip(WindowAction::Settings, SETTINGS_TOOLTIP);
-        settings.set_tooltip_text(Some(&tooltip));
+        settings.set_tooltip_text(Some(SETTINGS_TOOLTIP));
         WindowAction::Settings.assign_to(settings);
     }
 
@@ -320,7 +314,7 @@ fn separator() -> gtk::Separator {
 fn icon_button(command: &IconCommand) -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::image(command.glyph, ICON_COMMAND_GLYPH))
-        .tooltip_text(unported::tooltip(command.action, command.tooltip))
+        .tooltip_text(command.tooltip)
         .action_name(command.action.detailed_name())
         .valign(gtk::Align::Center)
         .css_classes(["command"])
@@ -360,6 +354,6 @@ fn more_button() -> gtk::MenuButton {
         .valign(gtk::Align::Center)
         .css_classes(["command", "more-command"])
         .build();
-    button.update_property(&[gtk::accessible::Property::Label("More options")]);
+    name_menu_button(&button, "More options");
     button
 }

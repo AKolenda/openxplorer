@@ -8,7 +8,9 @@
 //! their headers; sizes and the Size title are right-aligned.
 //! [`DetailsView`] is the widget; it keeps its titles' sort arrows in step
 //! with the sort order and reports the column widths once a resize
-//! settles.
+//! settles. [`column_fit`] fits and nudges columns from their titles.
+
+mod column_fit;
 
 use std::rc::Rc;
 use std::time::Duration;
@@ -20,7 +22,8 @@ use ox_core::format;
 use ox_core::search::display_path;
 use ox_core::settings::{ColumnWidth, ColumnWidths};
 
-use crate::folder_view::cells::{self, CellLayout, CellOwners};
+use crate::folder_view::cells::{self, CellLayout, CellOwners, CellTooltip};
+use crate::folder_view::column_keys;
 use crate::folder_view::column_titles;
 use crate::folder_view::column_widths;
 use crate::folder_view::item::FileItem;
@@ -39,31 +42,31 @@ const RESIZE_SETTLE: Duration = Duration::from_millis(500);
 const COLUMNS_RESIZED: &str = "columns-resized";
 
 /// The text `column` shows for `item`. A folder shows its measured size
-/// once measured; folders never measured and files of unknown size have
-/// an empty Size cell.
-fn cell_text(column: SortColumn, item: &FileItem) -> String {
+/// once measured, and an empty Size cell before; a file of unknown size
+/// shows `—` (`prettyBytes` in app.js).
+pub(crate) fn cell_text(column: SortColumn, item: &FileItem) -> String {
     let entry = item.entry();
     match column {
         SortColumn::Name => entry.name.clone(),
-        SortColumn::Modified => format::date_text(entry.modified),
+        SortColumn::Modified => format::date_short_time_text(entry.modified),
         SortColumn::FolderPath => item.folder_path().text.clone(),
         SortColumn::Type => entry.type_label.clone(),
         SortColumn::Size => match item.folder_size() {
             Some(measured) => measured.size_text(),
-            None => item.file_size().map(format::pretty_bytes).unwrap_or_default(),
+            None if entry.is_dir => String::new(),
+            None => format::size_text(item.file_size()),
         },
     }
 }
 
-/// The tooltip of `column`'s cell for `item` (`renderRows` in app.js): a
-/// search result's full path in Folder path (`row.title=displayUri(e.uri)`
-/// while searching), how a measured folder size was counted in Size, else
-/// none.
-fn cell_tooltip(column: SortColumn, item: &FileItem) -> Option<String> {
+/// The tooltip of `column`'s cell for `item` in place of the row's
+/// (`renderRows` in app.js): a search result's full path in Folder path,
+/// how a measured folder size was counted in Size, else none.
+fn cell_tooltip(column: SortColumn) -> CellTooltip {
     match column {
-        SortColumn::FolderPath => Some(display_path(&item.entry().uri)),
-        SortColumn::Size => item.folder_size().map(|measured| measured.cell_tooltip()),
-        SortColumn::Name | SortColumn::Modified | SortColumn::Type => None,
+        SortColumn::FolderPath => |item| Some(display_path(&item.entry().uri)),
+        SortColumn::Size => |item| item.folder_size().map(|measured| measured.cell_tooltip()),
+        SortColumn::Name | SortColumn::Modified | SortColumn::Type => |_| None,
     }
 }
 
@@ -88,6 +91,7 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
         let list_item = cells::as_list_item(object);
         list_item.set_child(Some(&label));
         setup_owners.register(&label, list_item);
+        cells::show_row_tooltip(&label, &setup_owners, cell_tooltip(column));
     });
     let bind_owners = Rc::clone(owners);
     factory.connect_bind(move |_, object| {
@@ -96,7 +100,6 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
             label.set_text(&cell_text(column, &item));
             bind_owners.style_cell(&label, &item);
-            label.set_tooltip_text(cell_tooltip(column, &item).as_deref());
         }
     });
     factory
@@ -254,8 +257,45 @@ impl DetailsView {
             model.attach_column_sorter(&sorter);
         }
         view.add_sort_carets();
+        view.install_column_fit();
+        column_keys::make_titles_keyboard_operable(&view);
+        view.describe_rows(model);
         view.sort_by(SortOrder::DEFAULT);
         view
+    }
+
+    /// Names each row after its item and tells screen readers how many
+    /// rows the folder has, drawn or not (`aria-label` and
+    /// `aria-rowcount` in `renderRows`).
+    fn describe_rows(&self, model: &FolderModel) {
+        let column_view = self.column_view();
+        cells::label_view(column_view.upcast_ref());
+        let rows = gtk::SignalListItemFactory::new();
+        rows.connect_bind(|_, object| {
+            if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
+                if let Some(item) = row.item().and_downcast::<FileItem>() {
+                    row.set_accessible_label(&item.entry().name);
+                }
+            }
+        });
+        column_view.set_row_factory(Some(&rows));
+        model.selection().connect_items_changed(glib::clone!(
+            #[weak]
+            column_view,
+            move |selection, _, _, _| {
+                let count = i32::try_from(selection.n_items()).unwrap_or(i32::MAX);
+                let columns = column_view
+                    .columns()
+                    .iter::<gtk::ColumnViewColumn>()
+                    .filter_map(Result::ok)
+                    .filter(gtk::ColumnViewColumn::is_visible)
+                    .count();
+                column_view.update_relation(&[
+                    gtk::accessible::Relation::RowCount(count),
+                    gtk::accessible::Relation::ColCount(i32::try_from(columns).unwrap_or(i32::MAX)),
+                ]);
+            }
+        ));
     }
 
     /// The column view, which holds the selection model, the sorter and
@@ -267,6 +307,17 @@ impl DetailsView {
     /// The adjustment of the vertical scroll position.
     pub(crate) fn vadjustment(&self) -> gtk::Adjustment {
         self.imp().scroller.vadjustment()
+    }
+
+    /// What `column` shows for the first `limit` items the view lists.
+    pub(crate) fn cell_texts(&self, column: SortColumn, limit: u32) -> Vec<String> {
+        let Some(items) = self.column_view().model() else {
+            return Vec::new();
+        };
+        (0..items.n_items().min(limit))
+            .filter_map(|position| items.item(position).and_downcast::<FileItem>())
+            .map(|item| cell_text(column, &item))
+            .collect()
     }
 
     /// The column view's column for `column`.
@@ -549,7 +600,7 @@ mod tests {
         let expected = [
             ColumnWidth {
                 column: Column::Modified,
-                pixels: 152.0,
+                pixels: 176.0,
             },
             ColumnWidth {
                 column: Column::ParentUri,

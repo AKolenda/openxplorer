@@ -52,16 +52,16 @@ const CAPACITY_ATTRIBUTES: &str = "filesystem::size,filesystem::free";
 
 /// How full a file system is, in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Capacity {
+pub(super) struct Capacity {
     /// The file system's size; never zero.
-    size: u64,
+    pub(super) size: u64,
     /// The space still free; at most `size`.
-    free: u64,
+    pub(super) free: u64,
 }
 
 impl Capacity {
     /// The share of the file system in use, from 0 to 1.
-    fn used_share(self) -> f64 {
+    pub(super) fn used_share(self) -> f64 {
         #[expect(clippy::cast_precision_loss, reason = "a bar needs no byte precision")]
         let share = (self.size - self.free) as f64 / self.size as f64;
         share
@@ -155,9 +155,10 @@ fn quick_access(body: &gtk::Box, places: &Places) {
     body.append(&cards);
 }
 
-/// Adds "N free of M" and a bar under a drive card's texts once GIO has
-/// measured the file system. Never blocks: the card is drawn first.
-fn show_capacity(texts: &gtk::Box, uri: &str) {
+/// Adds a bar under `texts` once GIO has measured the file system at
+/// `uri`, and "N free of M" as a line under it `with_text`, else as the
+/// bar's tooltip. Never blocks: the card or row is drawn first.
+pub(super) fn show_capacity(texts: &gtk::Box, uri: &str, with_text: bool) {
     let file = gio::File::for_uri(uri);
     // Held weakly until GIO answers, so measuring never keeps a card that
     // was replaced meanwhile.
@@ -170,14 +171,19 @@ fn show_capacity(texts: &gtk::Box, uri: &str) {
         let Some(texts) = texts.upgrade() else {
             return;
         };
-        texts.append(&capacity_bar(capacity));
-        texts.append(&label(&capacity.text(), "card-sub"));
+        let bar = capacity_bar(capacity);
+        texts.append(&bar);
+        if with_text {
+            texts.append(&label(&capacity.text(), "card-sub"));
+        } else {
+            bar.set_tooltip_text(Some(&capacity.text()));
+        }
     });
 }
 
 /// How full the file system of `file` is, or `None` when GIO cannot tell
 /// or it has no size (`if(m.total)` in app.js).
-async fn measure_capacity(file: &gio::File) -> Option<Capacity> {
+pub(super) async fn measure_capacity(file: &gio::File) -> Option<Capacity> {
     let filesystem = file
         .query_filesystem_info_future(CAPACITY_ATTRIBUTES, glib::Priority::LOW)
         .await
@@ -216,7 +222,7 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
     content.append(&texts);
     match &row.state {
         VolumeState::Mounted { uri, controls } => {
-            show_capacity(&texts, uri);
+            show_capacity(&texts, uri, true);
             let card = location_card("drive-card", uri, &content);
             let menu = PlaceMenu::DriveCard {
                 uri: uri.clone(),

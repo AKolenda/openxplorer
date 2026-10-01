@@ -13,22 +13,40 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::integration::TerminalError;
+use ox_core::location::{is_smb_server, parent_location};
 use ox_core::update::Activity;
 
 use super::actions::{plain_action, text_action};
+use super::dialog::Dialog;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
-use crate::integration::{self, OpenWithDialog, OpenWithSubject};
+use super::ButtonStyle;
+use crate::integration::{self, OpenWithDialog, OpenWithSubject, Tool};
 use crate::locations::Page;
 use crate::update::{UpdateDialog, UpdateState};
 
+/// Starts an application with a launch context: [`integration::launch`],
+/// or a recorder in tests, which must never start a real application.
+type StartApplication = fn(
+    &str,
+    &integration::PreparedLaunch,
+    integration::DefaultChoice,
+    &gtk::gio::AppLaunchContext,
+) -> Result<&'static str, integration::OpenWithError>;
+
 /// The actions that act on one item, or on the folder when nothing is
 /// selected, and are off for several items (`entryMenu`).
-const SINGLE_ITEM_ACTIONS: [WindowAction; 3] = [
+const SINGLE_ITEM_ACTIONS: [WindowAction; 4] = [
     WindowAction::OpenWith,
     WindowAction::OpenInTerminal,
     WindowAction::OpenInEditor,
+    WindowAction::OpenWithApp,
 ];
+
+/// More terminals than this at once are asked about first (Dolphin's
+/// limit for Open Terminal Here).
+const MANY_TERMINALS: usize = 5;
 
 /// The item an integration command acts on: the one selected item, or the
 /// folder shown when nothing is selected.
@@ -53,8 +71,23 @@ impl BrowserWindow {
             text_action(WindowAction::OpenInTerminalOf, |window, uri| {
                 window.open_terminal_at(uri.to_owned());
             }),
+            plain_action(WindowAction::OpenTerminal, |window| {
+                if let Some(folder) = window.folder_subject() {
+                    window.open_terminal_at(folder.uri);
+                }
+            }),
+            plain_action(WindowAction::OpenTerminalHere, BrowserWindow::open_terminals_here),
+            plain_action(WindowAction::CompareFiles, BrowserWindow::compare_files),
+            plain_action(WindowAction::SearchTool, BrowserWindow::open_search_tool),
             text_action(WindowAction::OpenWithOf, BrowserWindow::open_folder_with),
             text_action(WindowAction::OpenInEditor, BrowserWindow::open_in_editor),
+            text_action(WindowAction::OpenWithApp, BrowserWindow::open_with_app),
+            text_action(WindowAction::TypeApplications, |window, content_type| {
+                if let Some(properties) = window.dialog_layer().shown() {
+                    properties.close();
+                }
+                window.manage_type_applications(content_type);
+            }),
             plain_action(WindowAction::CheckUpdates, BrowserWindow::check_for_updates),
         ]);
         self.follow_selection_for_integration();
@@ -152,12 +185,23 @@ impl BrowserWindow {
         });
     }
 
+    /// The launch context of this window's display: an application
+    /// started with it gets startup notification and focus (INT-023).
+    pub(crate) fn launch_context(&self) -> gtk::gdk::AppLaunchContext {
+        WidgetExt::display(self).app_launch_context()
+    }
+
     /// Starts applications with this window's display, so they get
     /// startup notification and focus (INT-023).
     fn application_launcher(&self) -> integration::Launcher {
-        let launch_context = WidgetExt::display(self).app_launch_context();
+        self.launcher_with(integration::launch)
+    }
+
+    /// A launcher that runs `start` with this window's launch context.
+    pub(crate) fn launcher_with(&self, start: StartApplication) -> integration::Launcher {
+        let launch_context = self.launch_context();
         Box::new(move |app_id, prepared, default| {
-            integration::launch(app_id, prepared, default, launch_context.upcast_ref())
+            start(app_id, prepared, default, launch_context.upcast_ref())
         })
     }
 
@@ -178,9 +222,103 @@ impl BrowserWindow {
         }
     }
 
+    /// Compare Files: the two selected files in the first installed
+    /// comparison tool (OPEN-023).
+    fn compare_files(&self) {
+        let items = self.folder_pane().model().selected_items();
+        let uris: Vec<String> = items.iter().map(|item| item.entry().uri.clone()).collect();
+        if uris.len() == 2 {
+            self.run_tool(Tool::Diff, &uris);
+        }
+    }
+
+    /// Open Preferred Search Tool: the first installed search tool at the
+    /// folder shown (OPEN-024).
+    fn open_search_tool(&self) {
+        if let Some(folder) = self.folder_subject() {
+            self.run_tool(Tool::Search, &[folder.uri]);
+        }
+    }
+
+    /// Starts `tool` on `uris`, or says in the message line why not.
+    fn run_tool(&self, tool: Tool, uris: &[String]) {
+        let Some(app) = tool.installed() else {
+            self.show_message(tool.missing());
+            return;
+        };
+        if let Err(error) = self.context().launch_tool(&app, uris, self.upcast_ref()) {
+            self.show_message(&error.to_string());
+        }
+    }
+
+    /// Open Terminal Here: a terminal in each distinct folder of the
+    /// selection, the parent folder for a file, or in the folder shown;
+    /// asks first when more than five would open (`open_terminal_here` in
+    /// Dolphin).
+    fn open_terminals_here(&self) {
+        let folders = self.terminal_folders();
+        if folders.len() <= MANY_TERMINALS {
+            for folder in folders {
+                self.open_terminal_at(folder);
+            }
+            return;
+        }
+        let question = format!("Are you sure you want to open {} terminals?", folders.len());
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let dialog = Dialog::new(&window, "Open Terminal Here", &question);
+                dialog.add_cancel_button();
+                let open = dialog.add_button("Open terminals", ButtonStyle::Accent);
+                dialog.open();
+                let answer = dialog.next_response().await;
+                dialog.finish();
+                if answer == Some(open) {
+                    for folder in folders {
+                        window.open_terminal_at(folder);
+                    }
+                }
+            }
+        ));
+    }
+
+    /// The distinct folders of the selection, a file standing for its
+    /// folder, in order; the folder shown when nothing is selected.
+    pub(super) fn terminal_folders(&self) -> Vec<String> {
+        let items = self.folder_pane().model().selected_items();
+        if items.is_empty() {
+            return self
+                .folder_subject()
+                .map(|folder| folder.uri)
+                .into_iter()
+                .collect();
+        }
+        let mut folders: Vec<String> = Vec::new();
+        for item in items {
+            let entry = item.entry();
+            let folder = if entry.is_dir {
+                Some(entry.navigation_uri().to_owned())
+            } else {
+                parent_location(&entry.uri)
+            };
+            if let Some(folder) = folder.filter(|folder| !folders.contains(folder)) {
+                folders.push(folder);
+            }
+        }
+        folders
+    }
+
     /// Opens the terminal in the folder at `uri`, or in the folder of the
-    /// file there; says in the message line what opened or why not.
+    /// file there; says in the message line what opened or why not. A
+    /// server's share list is never mounted: it has no folder to open, and
+    /// the terminal check says so.
     fn open_terminal_at(&self, uri: String) {
+        // A server is refused before anything mounts it.
+        if is_smb_server(&uri) {
+            self.show_message(&TerminalError::ServerListing.to_string());
+            return;
+        }
         let place = uri.clone();
         self.after_mounting(&place, move |window| window.open_terminal_in_mounted(uri));
     }
@@ -222,6 +360,32 @@ impl BrowserWindow {
                 let prepared = integration::prepare_launch(subject.uri, editor_id.clone()).await;
                 let launched = prepared
                     .and_then(|prepared| launcher(&editor_id, &prepared, integration::DefaultChoice::Keep));
+                let message = match launched {
+                    Ok(_) => format!("Opened with {name}"),
+                    Err(error) => error.to_string(),
+                };
+                window.show_message(&message);
+            }
+        ));
+    }
+
+    /// Open with <app>: the item in the application whose desktop ID is
+    /// `app_id`, through Open with's checks (OPEN-013).
+    fn open_with_app(&self, app_id: &str) {
+        let Some(subject) = self.command_subject() else {
+            return;
+        };
+        let launcher = self.application_launcher();
+        let app_id = app_id.to_owned();
+        let name = integration::installed_application(&app_id)
+            .map_or_else(|| app_id.clone(), |app| app.display_name().to_string());
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let prepared = integration::prepare_launch(subject.uri, app_id.clone()).await;
+                let launched = prepared
+                    .and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
                 let message = match launched {
                     Ok(_) => format!("Opened with {name}"),
                     Err(error) => error.to_string(),

@@ -16,6 +16,7 @@ Terminal=false
 Categories=System;FileTools;FileManager;
 StartupNotify=true
 StartupWMClass=io.winspace.Development.Native
+X-GNOME-UsesNotifications=true
 Actions=NewWindow;
 
 [Desktop Action NewWindow]

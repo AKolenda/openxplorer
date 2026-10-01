@@ -17,7 +17,7 @@ use gtk::subclass::prelude::*;
 use crate::application::AppAction;
 use crate::icons::{self, Icon};
 
-use super::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
+use super::menu_popover::{name_menu_button, ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -37,6 +37,7 @@ impl BrowserWindow {
         WindowAction::NewTab.assign_to(new_tab);
         let open_windows = &*imp.open_windows_button;
         open_windows.set_child(Some(&icons::image(Icon::Desktop, OPEN_WINDOWS_GLYPH)));
+        name_menu_button(open_windows, "Open windows");
         list_open_windows_on_click(open_windows);
     }
 }
@@ -123,8 +124,10 @@ fn window_item(window: &BrowserWindow, this_window: &BrowserWindow) -> MenuEntry
 
 #[cfg(test)]
 mod tests {
+    use ox_core::settings::Theme;
+
     use super::*;
-    use crate::test_support::harness::{Fixture, TestWindow};
+    use crate::test_support::harness::{Fixture, TestWindow, ThemeGuard};
 
     /// The label and check mark of each item of `entries`, `None` for a
     /// divider.
@@ -196,5 +199,54 @@ mod tests {
         assert!(bar.is::<gtk::WindowHandle>());
         assert!(blank.hexpands(), "the blank area takes the rest of the bar");
         assert!(blank.ancestor(gtk::WindowHandle::static_type()).is_some());
+    }
+
+    /// What a double, middle or right click on the blank bar does is the
+    /// desktop's choice: GNOME's title-bar actions reach GTK's settings
+    /// (`gtk-titlebar-double-click` and the others), the window handle
+    /// acts on them, and neither the skin nor the window sets them or
+    /// claims those clicks on the blank area.
+    ///
+    /// parity: LOOK-027
+    #[gtk::test]
+    fn the_blank_title_bar_follows_the_desktops_title_bar_actions() {
+        const ACTIONS: [(&str, &str); 3] = [
+            ("gtk-titlebar-double-click", "minimize"),
+            ("gtk-titlebar-middle-click", "lower"),
+            ("gtk-titlebar-right-click", "none"),
+        ];
+        let settings = gtk::Settings::default().expect("GTK tests run on a private display");
+        let before: Vec<String> = ACTIONS
+            .iter()
+            .map(|(name, _)| settings.property::<String>(name))
+            .collect();
+        for (name, value) in ACTIONS {
+            settings.set_property(name, value);
+        }
+        let _theme = ThemeGuard::keep();
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        crate::test_support::harness::skin().set_theme(Theme::Dark);
+        let chosen: Vec<String> = ACTIONS
+            .iter()
+            .map(|(name, _)| settings.property::<String>(name))
+            .collect();
+        for ((name, _), value) in ACTIONS.iter().zip(&before) {
+            settings.set_property(name, value);
+        }
+
+        assert_eq!(chosen, ACTIONS.map(|(_, value)| value.to_owned()));
+        let bar = test.window.titlebar().expect("the window has its title bar");
+        let blank = crate::test_support::harness::descendants::<gtk::Box>(&bar)
+            .into_iter()
+            .find(|child| child.has_css_class("title-drag"))
+            .expect("the bar has its blank drag area");
+        let own_clicks = blank
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter(glib::object::ObjectExt::is::<gtk::GestureClick>)
+            .count();
+        assert_eq!(own_clicks, 0, "the blank area leaves its clicks to the handle");
     }
 }

@@ -94,6 +94,73 @@ fn opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy() {
     assert!(!fixture.path("readme.txt").exists(), "browsing extracts nothing");
 }
 
+/// A ZIP the browser refuses (corrupt, too large a directory, too many
+/// members) says why in the browser's status line.
+///
+/// parity: ARC-005
+#[gtk::test]
+fn a_corrupt_zip_says_why_it_cannot_be_browsed() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Broken.zip"), b"not a zip").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Broken.zip");
+
+    test.activate("open", None);
+
+    let browser = archive_browser(&test);
+    wait_until("the refusal", || !browser.status_text().is_empty());
+    assert_eq!(browser.status_text(), "File is not a zip file");
+    assert!(browser.row_names().is_empty());
+}
+
+/// Opening a folder and going back before it is listed shows the top:
+/// the Docs listing, answered after the top's, changes nothing.
+///
+/// parity: SAFE-013
+#[gtk::test]
+fn a_late_archive_listing_never_replaces_a_newer_one() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("open", None);
+    let browser = archive_browser(&test);
+    wait_until("the listing", || !browser.row_names().is_empty());
+    let docs = browser.list_now("Docs/");
+    assert_eq!(docs.entries.len(), 1, "the late answer has a row to show");
+
+    let docs_listing = browser.show_folder_numbered("Docs/");
+    browser.show_folder("");
+    wait_until("the top again", || browser.row_names().len() == 2);
+    browser.deliver_listing(docs_listing, docs);
+
+    assert_eq!(browser.row_names(), ["Docs", "readme.txt"]);
+}
+
+/// Closing the Extract dialog cancels its check of the archive, and an
+/// answer that arrives afterwards changes nothing in the closed dialog.
+///
+/// parity: SAFE-013
+#[gtk::test]
+fn closing_the_extract_dialog_drops_its_check() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.shown_dialog().expect("the Extract dialog");
+
+    press(&frame, "Cancel");
+
+    wait_for(Duration::from_millis(300));
+    assert!(test.shown_dialog().is_none());
+    assert!(
+        texts(&frame)
+            .iter()
+            .any(|text| text == "Checking archive contents…"),
+        "{:?}",
+        texts(&frame)
+    );
+}
+
 /// parity: ARC-009, ARC-011, ARC-012
 #[gtk::test]
 fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
@@ -186,6 +253,67 @@ fn nothing_is_extracted_while_a_file_operation_runs() {
     test.window.end_operation();
 }
 
+/// Writes `Site.tar.gz` holding `Docs/a.txt` into `fixture`, with
+/// Python's `tarfile`.
+fn write_tar_gz(fixture: &Fixture) {
+    let script = "import io, sys, tarfile\n\
+                  with tarfile.open(sys.argv[1], 'w:gz') as archive:\n\
+                  \x20   member = tarfile.TarInfo('Docs/a.txt'); member.size = 5\n\
+                  \x20   archive.addfile(member, io.BytesIO(b'first'))\n";
+    let status = std::process::Command::new("python3")
+        .args(["-c", script])
+        .arg(fixture.path("Site.tar.gz"))
+        .status()
+        .expect("Python 3 writes the fixture archive");
+    assert!(status.success());
+}
+
+/// A .tar.gz opens in the archive browser and extracts like a ZIP; with
+/// "Open archives as folders" off it opens in its default application,
+/// unless it was handed to the app.
+///
+/// parity: ARC-022, ARC-024
+#[gtk::test]
+fn a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere() {
+    let fixture = Fixture::standard();
+    write_tar_gz(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Site.tar.gz");
+
+    test.activate("open", None);
+    let browser = archive_browser(&test);
+    wait_until("the listing", || browser.row_names() == ["Docs"]);
+    test.shown_dialog().expect("the browser").close();
+    test.activate("extract-here", None);
+    // Its lone top-level folder is lifted out rather than nested (ARC-025).
+    let extracted = fixture.path("Docs/a.txt");
+    wait_until("the extracted file", || extracted.exists());
+    assert_eq!(fs::read(&extracted).expect("extracted"), b"first");
+
+    let turn_off = ox_core::settings::PreferencesUpdate {
+        browse_archives: Some(false),
+        ..ox_core::settings::PreferencesUpdate::default()
+    };
+    test.context
+        .update_preferences(turn_off, |result| result.expect("saved"));
+    wait_until("the preference", || {
+        !test.context.settings_data().preferences.browse_archives
+    });
+    test.select_named("Site.tar.gz");
+    test.activate("open", None);
+    wait_until("the default application", || {
+        !test.context.recorded_launches().is_empty()
+    });
+    assert!(test.context.recorded_launches()[0].contains("Site.tar.gz"));
+
+    // An archive handed to the app, which may be its default application,
+    // is browsed whatever the setting, so it never launches itself again.
+    test.window.open_locations(vec![fixture.uri_of("Site.tar.gz")]);
+    let browser = archive_browser(&test);
+    wait_until("the listing", || browser.row_names() == ["Docs"]);
+    assert_eq!(test.context.recorded_launches().len(), 1);
+}
+
 /// parity: ARC-023
 #[gtk::test]
 fn compress_to_zip_puts_the_selection_into_a_new_zip_beside_it() {
@@ -204,6 +332,36 @@ fn compress_to_zip_puts_the_selection_into_a_new_zip_beside_it() {
     wait_until("the ZIP in the listing", || {
         test.names().contains(&"Documents.zip".to_owned())
     });
+}
+
+/// Compress to… asks for the name and format, writes a .tar.xz, and
+/// keeps the dialog open with the reason when the name is taken.
+///
+/// parity: ARC-023
+#[gtk::test]
+fn compress_to_asks_for_a_name_and_a_format() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let compress = |name: &str| {
+        test.select_named("Notes 2.txt");
+        test.activate("compress-to", None);
+        let frame = test.wait_for_dialog("the Compress dialog");
+        assert_eq!(descendants::<gtk::Entry>(&frame)[0].text(), "Notes 2");
+        descendants::<gtk::Entry>(&frame)[0].set_text(name);
+        descendants::<gtk::DropDown>(&frame)[0].set_selected(1);
+        press(&frame, "Compress");
+        frame
+    };
+
+    compress("Backup");
+    let archive = fixture.path("Backup.tar.xz");
+    wait_until("the new archive", || archive.exists());
+    wait_until("the toast", || {
+        test.window.shown_message() == "Compressed 1 items into Backup.tar.xz."
+    });
+    let frame = compress("Backup");
+    wait_until("the refusal", || !frame.error_text().is_empty());
+    assert_eq!(test.shown_dialog(), Some(frame));
 }
 
 /// parity: ARC-009, ARC-023, ARC-025

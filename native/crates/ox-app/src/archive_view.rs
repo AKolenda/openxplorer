@@ -19,14 +19,12 @@
 //! | `browser` | The "Compressed folder" dialog: [`ArchiveBrowserView`] |
 //! | `extract_dialog` | The "Extract compressed folder" dialog |
 //! | `extraction` | Running an extraction and the texts that report it |
-//! | `operation_panel` | [`OperationPanel`]: progress and Cancel of a running extraction or compression |
 //! | `compress` | The name of a new ZIP and the texts that report compressing |
 
 mod browser;
 mod compress;
 mod extract_dialog;
 mod extraction;
-mod operation_panel;
 
 use ox_core::archive::{ArchiveEntry, ArchiveEntryKind};
 
@@ -42,7 +40,6 @@ pub(crate) use extract_dialog::{extract_dialog, ExtractDialogSetup, ExtractionCh
 pub(crate) use extraction::{
     extraction_failure_text, extraction_success_text, unique_folder_names, EXTRACTION_STOPPED,
 };
-pub(crate) use operation_panel::OperationPanel;
 
 /// A ZIP archive the user acted on.
 #[derive(Debug, Clone, PartialEq, Eq)]

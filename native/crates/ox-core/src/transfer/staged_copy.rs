@@ -34,8 +34,10 @@ use super::error::TransferError;
 use super::modes::{secure_local_staging, DirectoryModes};
 use super::names::{child_node, staging_name, PAYLOAD_NAME};
 use super::node::{ItemIdentity, Node, NodeKind, WriteGuard};
+use super::source_removal::CopiedItem;
 use super::staging::StagingPlace;
 use super::types::{ConflictPolicy, Progress};
+use super::unstorable::Unstorable;
 
 /// Staging the engine created for one item.
 pub(crate) enum Stage {
@@ -129,8 +131,14 @@ pub(crate) struct StagedCopy<'a> {
     pub(crate) cancel: &'a Cancellation,
     /// Asked about every destination a Replace changes.
     pub(crate) guard: Option<&'a WriteGuard>,
+    /// What the destination cannot store, and the user's answers about it
+    /// (XFER-028).
+    pub(crate) unstorable: &'a mut Unstorable,
     /// Receives byte progress.
     pub(crate) emit: &'a mut dyn FnMut(Progress),
+    /// Receives every copied source item below `source` when the copy
+    /// finishes a move (XFER-013); `None` for a plain copy.
+    pub(crate) copied: Option<&'a mut Vec<CopiedItem>>,
 }
 
 impl StagedCopy<'_> {
@@ -204,7 +212,14 @@ impl StagedCopy<'_> {
                 "Could not reserve a private staging name. Nothing was changed.",
             ));
         }
-        let mut copier = Copier::new(self.cancel, stage_name, modes, &mut *self.emit);
+        let mut copier = Copier::new(
+            self.cancel,
+            stage_name,
+            modes,
+            &mut *self.unstorable,
+            &mut *self.emit,
+        )
+        .recording(self.copied.as_deref_mut());
         if self.source_kind == NodeKind::Directory {
             // XFER-002: a failed exclusive folder creation grants no right to
             // clean up this path.
@@ -249,7 +264,14 @@ impl StagedCopy<'_> {
         // XFER-004: the folder that was made private is the only one cleanup
         // may empty.
         staging.created = secure_local_staging(stage.root())?;
-        let mut copier = Copier::new(self.cancel, stage_name, modes, &mut *self.emit);
+        let mut copier = Copier::new(
+            self.cancel,
+            stage_name,
+            modes,
+            &mut *self.unstorable,
+            &mut *self.emit,
+        )
+        .recording(self.copied.as_deref_mut());
         copier.copy(self.source, stage.item(), 0)?;
         if layout == Layout::SameDeviceCopy {
             self.rename_device_copy(stage)?;

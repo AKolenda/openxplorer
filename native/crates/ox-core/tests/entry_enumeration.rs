@@ -148,6 +148,18 @@ fn names_in_a_hidden_list_are_flagged_hidden() {
     assert!(!find(&entries, "Plan.txt").is_hidden);
 }
 
+/// Backup files (`name~`) are listed like any file, as Dolphin and the
+/// Python app show them.
+#[test]
+fn backup_files_are_not_hidden() {
+    let folder = folder_with_files(&[("Plan.txt", b"x"), ("Plan.txt~", b"x")]);
+
+    let entries = list(folder.path()).expect("listing");
+
+    assert!(!find(&entries, "Plan.txt~").is_hidden);
+    assert!(!find(&entries, "Plan.txt").is_hidden);
+}
+
 #[test]
 fn an_empty_folder_finishes_without_rows() {
     let folder = folder_with_files(&[]);

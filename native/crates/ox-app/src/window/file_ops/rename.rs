@@ -44,7 +44,7 @@ impl BrowserWindow {
     /// cell is not on screen; several selected items are renamed together
     /// (OPS-014).
     pub(crate) async fn rename_selection(&self) {
-        if !self.allows(FileCommand::Rename) {
+        if !self.allows(FileCommand::Rename) || self.refuses_writes_during_update() {
             return;
         }
         let model = self.folder_pane().model();
@@ -82,10 +82,13 @@ impl BrowserWindow {
             folder: &folder,
         };
         let protection = self.context().write_protection();
-        let renamed = ask_for_name(self, request, |name| {
+        let renamed = ask_for_name(self, request, |name, cancel| {
             let uri = entry.uri.clone();
             let old_name = entry.name.clone();
-            let context = OperationContext::new(protection.clone());
+            let context = OperationContext {
+                cancel,
+                ..OperationContext::new(protection.clone())
+            };
             let window = self.downgrade();
             async move {
                 let window = window.upgrade().ok_or_else(|| NOT_RENAMED.to_owned())?;
@@ -101,6 +104,18 @@ impl BrowserWindow {
         if let Some(renamed) = renamed {
             self.finish_rename(renamed);
         }
+    }
+
+    /// Renames the item at `uri` to `name`, as the name field of
+    /// Properties asks (PROP-005): the same checks, write protection and
+    /// Undo as Rename. The error is the message to show.
+    pub(crate) async fn rename_item_at(&self, uri: &str, name: &str) -> Result<(), String> {
+        let context = OperationContext::new(self.context().write_protection());
+        let renamed = rename_item(uri, name, &context)
+            .await
+            .map_err(|error| error.to_string())?;
+        self.finish_rename(renamed);
+        Ok(())
     }
 
     /// Remembers the rename for Undo, selects the item under its new

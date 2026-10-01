@@ -168,7 +168,8 @@ struct ArchiveCheck {
 
 impl ArchiveCheck {
     /// Checks the archive at `uri` with `inspector` and shows the summary
-    /// or the refusal in `summary`.
+    /// or the refusal in `summary`. An answer after the dialog closed is
+    /// dropped (SAFE-013).
     fn start(self: &Rc<Self>, uri: String, inspector: ZipExtractor, summary: &gtk::Label) {
         let check = Rc::clone(self);
         let inspection = inspector.inspect_in_background(uri, self.cancel.clone());
@@ -176,7 +177,11 @@ impl ArchiveCheck {
             #[weak]
             summary,
             async move {
-                match inspection.await {
+                let inspected = inspection.await;
+                if check.cancel.is_cancelled() {
+                    return;
+                }
+                match inspected {
                     Ok(counts) => {
                         check.is_ready.set(true);
                         summary.set_text(&summary_text(&counts));

@@ -26,6 +26,21 @@ fn a_network_interval_outside_the_whitelist_is_not_saved() {
     assert_eq!(store.snapshot().preferences.network_interval, 30);
 }
 
+/// The view starts as details, is saved, and ignores unknown values.
+///
+/// parity: VIEW-007
+#[test]
+fn the_view_is_details_grid_or_left_as_it_was() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    assert_eq!(store.snapshot().preferences.view, View::Details);
+    save_preferences(&mut store, &json!({"view": "grid"}));
+    save_preferences(&mut store, &json!({"view": "tiles"}));
+    assert_eq!(store.snapshot().preferences.view, View::Grid);
+    let reopened = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(reopened.view, View::Grid);
+}
+
 /// Ported from `desktop/tests/test_v06.py::PrefTests::test_layout_persists`
 /// parity: SIDE-023, VIEW-028
 #[test]
@@ -209,4 +224,21 @@ fn text_size_changes_from_two_windows_merge() {
     let merged = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(merged.text_size, 175);
     assert_eq!(merged.theme, Theme::Dark);
+}
+
+/// parity: SIDE-022
+#[test]
+fn sections_and_places_hidden_from_two_windows_merge() {
+    let root = temporary_folder();
+    let mut first = Settings::open(root.path());
+    let mut second = Settings::open(root.path());
+    first.set_section_hidden("network", true).expect("hidden");
+    second.set_section_hidden("drives", true).expect("hidden");
+    first.set_section_hidden("drives", false).expect("shown");
+    first.set_place_hidden("trash:///", true).expect("hidden");
+    second.set_place_hidden("recent:///", true).expect("hidden");
+    first.set_place_hidden("trash:///", false).expect("shown");
+    let merged = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(merged.hidden_sidebar_sections, ["network"]);
+    assert_eq!(merged.hidden_sidebar_places, ["recent:///"]);
 }

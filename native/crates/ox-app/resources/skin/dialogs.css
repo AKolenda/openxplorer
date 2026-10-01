@@ -50,6 +50,8 @@ window.ox.ox-dialog .dialog-note {
   color: @ox_muted;
 }
 window.ox.ox-dialog .dialog-hint { color: @ox_muted; margin-top: 12px; }
+/* A licence keeps its line breaks, so it reads best in a fixed width. */
+window.ox.ox-dialog .scrolled-text { font-family: monospace; font-size: 12px; }
 window.ox.ox-dialog .dialog-check { margin-top: 12px; }
 window.ox.ox-dialog .dialog-error { color: @ox_critical_fill; margin-top: 12px; }
 /* The footer of every dialog: a 1px line above the buttons on the chrome
@@ -60,6 +62,10 @@ window.ox.ox-dialog .dialog-actions {
   border-radius: 0 0 8px 8px;
   padding: 18px 24px;
 }
+/* The dialog frame in a window (src/window/dialog.rs): the body a little
+   under the message, and the buttons 8 apart. */
+window.ox.ox-dialog ox-dialog-frame .dialog-body { margin-top: 3px; }
+window.ox.ox-dialog ox-dialog-frame .dialog-actions { border-spacing: 8px; }
 window.ox.ox-dialog button.dialog-button {
   min-height: 30px;
   min-width: 90px;
@@ -74,7 +80,8 @@ window.ox button.danger {
 window.ox button.danger:hover { background-color: alpha(@ox_critical_fill, .9); }
 window.ox button.danger:active { background-color: alpha(@ox_critical_fill, .8); color: @ox_on_critical; }
 
-/* ---- Transfer panel (§4.15 "Transfer", E08; src/window/transfer_panel.rs) ---- */
+/* ---- Transfer panel of every write: file operations, extraction,
+   compression (§4.15 "Transfer", E08; src/window/transfer_panel.rs) ---- */
 .transfer {
   background-color: @ox_chrome;
   border: 1px solid @ox_border;

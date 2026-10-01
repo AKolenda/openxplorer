@@ -9,18 +9,19 @@
 //! dialogs ask for an encrypted disk's password, show the programs that
 //! keep a drive busy and say when an ejected medium's writes are flushed.
 //!
-//! Before a drive is taken away, the window stops listing and watching
-//! the tabs on it, so its own folder monitors never keep the drive busy
-//! (DEV-009); after, those tabs list again when next shown.
+//! Before a drive is taken away, every tab showing a folder on it moves
+//! to Home, as Dolphin does, so the window's own listings and folder
+//! monitors never keep the drive busy (DEV-009).
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
+use ox_core::location::file_uri;
 use ox_core::network::{mount_volume, NetworkError, WriteActivity};
 
 use crate::devices::Removal;
-use crate::dialogs::NetworkFormDialog;
 use crate::locations::Page;
+use crate::window::{ButtonStyle, Dialog};
 
 use super::session::Tab;
 use super::BrowserWindow;
@@ -59,6 +60,31 @@ impl BrowserWindow {
         });
     }
 
+    /// Mounts the volume `id` for a drop onto its sidebar row (DEV-010)
+    /// and returns its root; a failure shows "Could not mount device".
+    pub(super) async fn mount_for_drop(&self, id: &str) -> Option<String> {
+        #[cfg(test)]
+        if let Some((_, root)) = self
+            .imp()
+            .test_volume
+            .borrow()
+            .as_ref()
+            .filter(|(test_id, _)| test_id == id)
+        {
+            return Some(root.clone());
+        }
+        let volumes = self.volume_monitor().volumes();
+        let operation = gtk::MountOperation::new(Some(self));
+        match mount_volume(&volumes, id, Some(operation.upcast_ref())).await {
+            Ok(root) => Some(root),
+            Err(error) if error.is_cancelled() => None,
+            Err(error) => {
+                self.show_failure("Could not mount device", &error.to_string());
+                None
+            }
+        }
+    }
+
     /// Takes away the drive or device that holds `uri` as `removal` says.
     /// Disconnect asks first, as This PC's card does; nothing starts while
     /// this window writes.
@@ -77,7 +103,9 @@ impl BrowserWindow {
     fn confirm_disconnect(&self, uri: &str) {
         let address = self.imp().locations.borrow().display_location(uri);
         let message = format!("{address}\n\n{DISCONNECT_NOTE}");
-        let dialog = NetworkFormDialog::new(self, "Disconnect this mount?", &message, "Disconnect");
+        let dialog = Dialog::new(self, "Disconnect this mount?", &message);
+        dialog.add_cancel_button();
+        dialog.add_button("Disconnect", ButtonStyle::Accent);
         let uri = uri.to_owned();
         dialog.connect_confirmed(glib::clone!(
             #[weak(rename_to = window)]
@@ -87,13 +115,13 @@ impl BrowserWindow {
                 window.run_removal(&uri, Removal::Disconnect);
             }
         ));
-        dialog.present();
+        dialog.open();
     }
 
     /// Stops reading the tabs on the drive, then removes it.
     fn run_removal(&self, uri: &str, removal: Removal) {
         let label = self.drive_label(uri);
-        self.stop_reading_inside(uri);
+        self.move_tabs_home_from(uri);
         let mounts = self.volume_monitor().mounts();
         let operation = gtk::MountOperation::new(Some(self));
         let activity = self.write_activity();
@@ -110,8 +138,8 @@ impl BrowserWindow {
     }
 
     /// Shows what the removal did. After Disconnect the window shows
-    /// Network, as app.js does; after Eject or Safely remove a tab on the
-    /// drive shows This PC.
+    /// Network, as app.js does; after Eject or Safely remove a tab that
+    /// went back onto the drive meanwhile shows This PC.
     fn finish_removal(&self, uri: &str, label: &str, removal: Removal, removed: Result<(), NetworkError>) {
         if let Err(error) = removed {
             if !Removal::is_reported_by_desktop(&error) {
@@ -143,16 +171,37 @@ impl BrowserWindow {
         holding.map_or_else(|| uri.to_owned(), |row| row.label.clone())
     }
 
-    /// Stops the listings and folder watches of the tabs inside `root`.
-    fn stop_reading_inside(&self, root: &str) {
-        let mut session = self.imp().session.borrow_mut();
-        let inside = session
-            .tabs_mut()
-            .iter_mut()
-            .filter(|tab| is_inside(tab.uri(), root));
-        for tab in inside {
-            tab.stop_reading();
+    /// Moves every tab inside `root` to Home: the tab in front navigates
+    /// there, and a tab behind it stops reading the drive and lists Home
+    /// when it is next shown.
+    fn move_tabs_home_from(&self, root: &str) {
+        let home = file_uri(&glib::home_dir());
+        let (stale, is_active_inside): (Vec<gio::ListStore>, bool) = {
+            let mut session = self.imp().session.borrow_mut();
+            let active = session.active_id();
+            let is_active_inside = session.active().is_some_and(|tab| is_inside(tab.uri(), root));
+            let behind = session
+                .tabs_mut()
+                .iter_mut()
+                .filter(|tab| Some(tab.id) != active && is_inside(tab.uri(), root));
+            let stale = behind
+                .map(|tab| {
+                    tab.history.push(&home);
+                    tab.forget_location_state();
+                    tab.mark_stale()
+                })
+                .collect();
+            (stale, is_active_inside)
+        };
+        self.change_model(|| {
+            for items in &stale {
+                items.remove_all();
+            }
+        });
+        if is_active_inside {
+            self.navigate_or_report(&home);
         }
+        self.render_tabs();
     }
 
     /// Makes every tab inside `root` list again when it is next shown.

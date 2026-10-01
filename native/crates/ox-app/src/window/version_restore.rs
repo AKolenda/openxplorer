@@ -4,7 +4,7 @@
 //! Ports `restoreVersion` and the `runOperation('copy', …, 'keep-both')`
 //! it ends with in `desktop/ui/app.js`: the Restore dialog checks the
 //! destination, then the transfer engine copies the version there with
-//! Keep both, with progress and Cancel in the operation panel, so neither
+//! Keep both, with progress and Cancel in the transfer panel, so neither
 //! the live original nor the snapshot is replaced. The end is reported
 //! as every copy's is: a toast, or the Operation result dialog.
 
@@ -18,6 +18,8 @@ use ox_core::transfer::{ConflictPolicy, TransferMode};
 
 use crate::properties::RestoreRequest;
 
+use super::background_notice::Destination;
+use super::transfer_panel::TransferKind;
 use super::BrowserWindow;
 
 /// Shown when Restore a copy is asked for while a write runs, as the
@@ -51,6 +53,9 @@ impl BrowserWindow {
             self.show_message(OPERATION_RUNNING);
             return;
         }
+        if self.refuses_writes_during_update() {
+            return;
+        }
         let request = TransferRequest {
             mode: TransferMode::Copy,
             uris: vec![source],
@@ -58,8 +63,12 @@ impl BrowserWindow {
             policy: ConflictPolicy::KeepBoth,
         };
         let operation = OperationContext::new(self.context().write_protection());
-        let panel = self.operation_panel();
-        panel.start(starting_label(TransferMode::Copy), operation.cancel.clone());
+        let panel = self.transfer_panel();
+        panel.start(
+            TransferKind::Files,
+            starting_label(TransferMode::Copy),
+            operation.cancel.clone(),
+        );
         let progress = self.operation_progress_sender();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -70,7 +79,10 @@ impl BrowserWindow {
                 // Listing a folder hides the toast, so the report comes last.
                 window.reload_tabs_showing(&destination);
                 match outcome {
-                    Ok(outcome) => window.report_transfer(&summarize(TransferMode::Copy, &outcome.result)),
+                    Ok(outcome) => window.report_transfer(
+                        &summarize(TransferMode::Copy, &outcome.result),
+                        Destination::items(outcome.created),
+                    ),
                     Err(error) => window.show_result_dialog(STOPPED_TITLE, &error.to_string()),
                 }
             }
@@ -79,7 +91,8 @@ impl BrowserWindow {
 
     /// Shows how a copy ended: a toast for complete success, else the
     /// Operation result dialog.
-    fn report_transfer(&self, summary: &OperationSummary) {
+    fn report_transfer(&self, summary: &OperationSummary, destination: Destination) {
+        self.notify_if_in_background(summary, destination);
         match summary {
             OperationSummary::Toast(text) => self.show_message(text),
             OperationSummary::Report(text) => self.show_result_dialog(RESULT_TITLE, text),

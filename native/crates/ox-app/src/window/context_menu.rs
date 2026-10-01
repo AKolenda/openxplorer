@@ -19,35 +19,38 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 use ox_core::entry::Entry;
+use ox_core::integration::{is_disk_image, DiskTool};
 use ox_core::location::{is_smb_location, is_smb_server};
 use ox_core::ops::JournalDirection;
 use ox_core::settings::ContextMenu as MenuStyleChoice;
 
+use crate::integration::{self, ApplicationChoice, Tool};
+use crate::locations::Page;
+
 use super::actions::{plain_action, text_action};
 use super::command_bar::new_menu;
+use super::disk_tools::is_installed;
 use super::menu_popover::{MenuPopover, MenuStyle};
 use super::widget_tree::children;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 use entries::{
-    background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu, ContextMenu, ItemFacts,
-    ItemLocation, ItemShape,
+    background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu, Comparison, ContextMenu,
+    ItemFacts, ItemLocation, ItemShape,
 };
 
 /// How far into a row, and from the view's corner without one, a menu
 /// opened from the keyboard points.
 const KEYBOARD_MENU_INSET: i32 = 40;
 
-/// True for a ZIP archive, by its name or its type (`isZipEntry`).
+/// The most applications the item menu offers beside Open with… (OPEN-013).
+const MENU_APPLICATIONS: usize = 3;
+
+/// True for an archive the app extracts itself, by its name or its type
+/// (`isZipEntry`): a ZIP, or a TAR plain or compressed (ARC-024).
 fn is_zip(name: &str, content_type: Option<&str>) -> bool {
-    let named_zip = name.to_lowercase().ends_with(".zip");
-    let zip_types = [
-        "application/zip",
-        "application/x-zip",
-        "application/x-zip-compressed",
-    ];
-    named_zip || content_type.is_some_and(|content_type| zip_types.contains(&content_type))
+    ox_core::archive::is_supported_archive(name, content_type)
 }
 
 /// What `entry` is, as its menu cares.
@@ -81,6 +84,16 @@ impl BrowserWindow {
         popover.set_offset(0, 0);
         popover.set_position(gtk::PositionType::Bottom);
         popover.set_parent(view);
+        // Escape, a click outside and a choice all give the keyboard back
+        // to the file pane; a chosen command runs after this, so a
+        // rename field or a dialog still takes it.
+        popover.connect_closed(glib::clone!(
+            #[weak]
+            view,
+            move |_| {
+                view.grab_focus();
+            }
+        ));
         view.connect_destroy(glib::clone!(
             #[weak]
             popover,
@@ -146,16 +159,31 @@ impl BrowserWindow {
             (None, false) => background_menu(
                 &self.journal_label(JournalDirection::Undo),
                 &self.journal_label(JournalDirection::Redo),
+                &self.folder_applications(),
             ),
             (Some(_), true) => recycle_bin_item_menu(items.len() == 1),
             (Some(first), false) => {
-                let facts = self.item_facts(first.entry(), items.len() == 1);
+                let mut facts = self.item_facts(first.entry(), items.len() == 1);
+                let two_files = items.len() == 2 && items.iter().all(|item| !item.entry().is_dir);
+                if two_files && Tool::Diff.installed().is_some() {
+                    facts.comparison = Comparison::TwoFiles;
+                }
                 return item_menu(&facts, style);
             }
         };
         ContextMenu {
             entries,
             strip: Vec::new(),
+        }
+    }
+
+    /// The applications the folder menu offers for the folder shown.
+    fn folder_applications(&self) -> Vec<ApplicationChoice> {
+        match self.current_uri() {
+            Some(uri) if Page::from_uri(&uri).is_none() => {
+                integration::menu_applications(&uri, None, true, MENU_APPLICATIONS)
+            }
+            _ => Vec::new(),
         }
     }
 
@@ -174,9 +202,17 @@ impl BrowserWindow {
             is_read_only: self.imp().locations.borrow().is_snapshot_location(&entry.uri),
             is_single,
             is_search_result: self.is_searching(),
+            comparison: Comparison::Unavailable,
             editors: self.context().desktop_integration().known_editor_shortcuts(),
+            applications: if is_single {
+                let content_type = entry.content_type.as_deref();
+                integration::menu_applications(&entry.uri, content_type, entry.is_dir, MENU_APPLICATIONS)
+            } else {
+                Vec::new()
+            },
             caching,
             delete_label: self.delete_label(),
+            disk_tool: disk_tool_of(entry),
         }
     }
 
@@ -216,10 +252,26 @@ impl BrowserWindow {
     /// Adds the actions the context menus run themselves: "Show more
     /// options", "New…", "Unpin from Quick access" and "Open windows…".
     pub(super) fn install_context_menu_actions(&self) {
+        self.install_sidebar_hiding();
         self.add_action_entries([
             plain_action(WindowAction::ShowMoreOptions, BrowserWindow::show_more_options),
             plain_action(WindowAction::ShowNewMenu, BrowserWindow::show_new_menu_in_place),
             text_action(WindowAction::Unpin, BrowserWindow::unpin),
+            plain_action(WindowAction::AddPlace, |window| {
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    window,
+                    async move { window.add_place().await }
+                ));
+            }),
+            text_action(WindowAction::EditPin, |window, uri| {
+                let uri = uri.to_owned();
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    window,
+                    async move { window.edit_pin(uri).await }
+                ));
+            }),
             plain_action(WindowAction::OpenWindows, BrowserWindow::show_open_windows),
         ]);
     }
@@ -231,18 +283,37 @@ impl BrowserWindow {
     }
 
     /// Opens the context menu as a right-click at the item at `position`,
-    /// or on blank space without one, for tests.
+    /// or on blank space below the items without one, for tests: the
+    /// selection changes as [`Self::select_for_context_menu`] decides.
     #[cfg(test)]
     pub(super) fn right_click(&self, position: Option<u32>) {
-        let model = self.folder_pane().model();
-        match position {
-            Some(position) if !model.selection().is_selected(position) => model.select_only(position),
-            Some(_) => {}
-            None => model.select_none(),
-        }
         let view = self.folder_pane().view_widget();
+        let (x, y) = match position {
+            Some(position) => {
+                let point_on_item = || self.point_on_item(&view, position);
+                crate::test_support::harness::wait_until("the right-clicked item to be laid out", || {
+                    point_on_item().is_some()
+                });
+                point_on_item().expect("the right-clicked item is laid out")
+            }
+            None => (4.0, f64::from(view.height()) - 4.0),
+        };
+        self.select_for_context_menu(&view, x, y);
         let point = gdk::Rectangle::new(KEYBOARD_MENU_INSET, KEYBOARD_MENU_INSET, 1, 1);
         self.open_context_menu(&view, &point, self.preferred_menu_style());
+    }
+
+    /// A point in `view` on the item at `position`, once it is laid out
+    /// there, for tests.
+    #[cfg(test)]
+    fn point_on_item(&self, view: &gtk::Widget, position: u32) -> Option<(f64, f64)> {
+        let owners = self.folder_pane().owners();
+        let bounds = owners.file_cell_at(position, view)?.compute_bounds(view)?;
+        let (x, y) = (
+            f64::from(bounds.x()) + 4.0,
+            f64::from(bounds.y() + bounds.height() / 2.0),
+        );
+        (owners.position_at(view, x, y) == Some(position)).then_some((x, y))
     }
 }
 
@@ -281,6 +352,22 @@ fn context_menu_shortcut() -> gtk::ShortcutController {
     shortcuts
 }
 
+/// The installed disk tool the menu of `entry` offers: Mount disk image
+/// for a local disk image, Analyse disk usage for a local folder.
+fn disk_tool_of(entry: &Entry) -> Option<DiskTool> {
+    if !entry.navigation_uri().starts_with("file:") {
+        return None;
+    }
+    let tool = if entry.is_dir {
+        DiskTool::AnalyseUsage
+    } else if is_disk_image(&entry.name) {
+        DiskTool::MountImage
+    } else {
+        return None;
+    };
+    is_installed(tool).then_some(tool)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,5 +377,6 @@ mod tests {
         assert!(is_zip("Photos.ZIP", None));
         assert!(is_zip("download", Some("application/x-zip-compressed")));
         assert!(!is_zip("notes.txt", Some("text/plain")));
+        assert!(is_zip("backup.tar.gz", None));
     }
 }

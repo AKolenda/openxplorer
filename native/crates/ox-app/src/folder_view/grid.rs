@@ -74,16 +74,6 @@ impl IconSize {
         }
     }
 
-    /// Explorer's shortcut for the layout.
-    pub(crate) const fn accelerator(self) -> &'static str {
-        match self {
-            IconSize::ExtraLarge => "<Primary><Shift>1",
-            IconSize::Large => "<Primary><Shift>2",
-            IconSize::Medium => "<Primary><Shift>3",
-            IconSize::Small => "<Primary><Shift>4",
-        }
-    }
-
     /// The size for an action-state key.
     pub(crate) fn from_key(key: &str) -> Option<IconSize> {
         Self::ALL.into_iter().find(|size| size.as_str() == key)
@@ -214,6 +204,7 @@ mod imp {
             self.grid.add_css_class("files");
             self.grid.set_enable_rubberband(true);
             self.grid.set_tab_behavior(gtk::ListTabBehavior::Item);
+            super::cells::label_view(self.grid.upcast_ref());
             self.scroller.set_child(Some(&self.grid));
             self.scroller.set_parent(&*self.obj());
             self.obj().fit_columns_to_width();

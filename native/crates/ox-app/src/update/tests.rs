@@ -23,7 +23,7 @@ use ox_core::update::{
 use tempfile::TempDir;
 
 use super::{UpdateDialog, UpdateState, Updates};
-use crate::test_support::harness::{capture_dialog, settle, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{capture_dialog, descendants, settle, wait_until, Fixture, TestWindow};
 
 /// The running version in the simulation.
 const RUNNING: ReleaseVersion = ReleaseVersion::new(1, 0, 0);
@@ -31,6 +31,8 @@ const RUNNING: ReleaseVersion = ReleaseVersion::new(1, 0, 0);
 const NEXT: ReleaseVersion = ReleaseVersion::new(1, 0, 1);
 /// The simulated installer's bytes; never a real package.
 const PACKAGE: &[u8] = b"Fictional package bytes. Never an executable Debian package.\n";
+/// The release notes, with markup that must never be drawn as markup.
+const NOTES: &str = "<b>Fictional notes</b>";
 
 /// GitHub's answer for the release of [`NEXT`] with the simulated
 /// installer, as Python's `release()` fixture.
@@ -40,7 +42,7 @@ fn release_answer() -> String {
         glib::compute_checksum_for_data(glib::ChecksumType::Sha256, PACKAGE).expect("GLib computes SHA-256");
     let size = PACKAGE.len();
     format!(
-        r#"{{"tag_name": "v{NEXT}", "draft": false, "prerelease": false, "body": "Notes.",
+        r#"{{"tag_name": "v{NEXT}", "draft": false, "prerelease": false, "body": "{NOTES}",
             "assets": [{{"name": "{name}",
               "browser_download_url": "{REPOSITORY}/releases/download/v{NEXT}/{name}",
               "digest": "sha256:{digest}", "size": {size}}}]}}"#
@@ -270,6 +272,10 @@ fn installing_verifies_installs_and_offers_the_restart() {
         simulated.updates.new_window_refusal().as_deref(),
         Some("Finish the application update and restart before opening another window.")
     );
+    assert_eq!(
+        simulated.updates.file_refusal().as_deref(),
+        Some("Restart OpenXplorer to finish the application update before using files.")
+    );
     dialog.click("Restart now");
     let launched = simulated
         .launches
@@ -306,6 +312,46 @@ fn an_update_waits_for_the_file_operations_of_every_window() {
     assert!(simulated.packages.programs().is_empty(), "nothing was installed");
     test.window.end_operation();
     dialog.close();
+}
+
+/// Once an update installed files and waits for its restart, every
+/// writer refuses with the same message and leaves the folder as it was:
+/// Duplicate, Compress to ZIP, Rename and New folder, as the Python
+/// dispatch refused every file request in that state.
+///
+/// parity: UPD-006
+#[gtk::test]
+fn writes_wait_for_the_restart_after_an_installation() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    let dialog = open_dialog(&test, &simulated.updates);
+    dialog.click("Install update…");
+    wait_until("the installation", || !simulated.updates.state().is_installing());
+    dialog.close();
+    let listing = || {
+        let mut names: Vec<_> = std::fs::read_dir(fixture.root())
+            .expect("the fixture folder")
+            .map(|entry| entry.expect("a listed item").file_name())
+            .collect();
+        names.sort();
+        names
+    };
+    let before = listing();
+
+    for action in ["duplicate", "compress-to-zip", "rename", "new-folder"] {
+        test.select_named("Documents");
+        test.window.hide_message();
+        test.activate(action, None);
+        wait_until(action, || {
+            test.window.shown_message()
+                == "Restart OpenXplorer to finish the application update before using files."
+        });
+    }
+
+    settle();
+    assert_eq!(listing(), before);
+    assert!(!test.window.is_writing_files());
 }
 
 /// While the package manager runs, every window is locked: it cannot be
@@ -347,6 +393,31 @@ fn an_installing_update_locks_every_window() {
     dialog.close();
 }
 
+/// Install update… is refused while a file operation runs in any window,
+/// before anything is downloaded or installed.
+///
+/// parity: UPD-005
+#[gtk::test]
+fn installing_waits_for_file_operations() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    let dialog = UpdateDialog::present_for(&test.window, &simulated.updates, || {
+        ox_core::update::Activity::Busy
+    });
+    wait_until("the check", || !simulated.updates.state().is_busy());
+
+    dialog.click("Install update…");
+
+    assert_eq!(
+        dialog.status(),
+        "Finish file operations before installing the update."
+    );
+    assert!(!simulated.updates.state().is_installing());
+    assert!(simulated.packages.programs().is_empty(), "nothing was installed");
+    dialog.close();
+}
+
 /// A Flatpak never installs updates itself: the dialog says the release
 /// exists and tells how Flatpak updates it.
 ///
@@ -374,4 +445,43 @@ fn a_flatpak_is_told_to_update_through_flatpak() {
     capture_dialog(&dialog, "native-update-flatpak.png");
     dialog.close();
     assert!(simulated.packages.programs().is_empty(), "nothing was installed");
+}
+
+/// Browsing never asks GitHub anything: only "Check for updates" does.
+/// The release notes GitHub sends are never shown, and no label of the
+/// window or the dialog reads its text as markup, so a file named like
+/// markup or a server's notes cannot draw anything but text.
+///
+/// Ported from `desktop/tests/ui_regressions.cjs::Folder browsing and search do not initiate update checks`
+/// and `desktop/tests/ui_regressions.cjs::Update dialog shows versions and availability without release notes or boilerplate`
+///
+/// parity: SAFE-002, SAFE-003
+#[gtk::test]
+fn browsing_never_checks_and_untrusted_text_stays_text() {
+    // A file name cannot hold "/", so the markup stays unclosed.
+    const MARKUP_NAME: &str = "<u>Underlined & <i>co.txt";
+    let fixture = Fixture::standard();
+    fixture.write(MARKUP_NAME);
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    test.show(&fixture.uri_of("Documents"));
+    test.show(&fixture.uri());
+    settle();
+    assert_eq!(simulated.updates.state(), UpdateState::NotChecked);
+    assert!(test.names().contains(&MARKUP_NAME.to_owned()));
+
+    let dialog = open_dialog(&test, &simulated.updates);
+
+    let window_labels = descendants::<gtk::Label>(&test.window);
+    let dialog_labels = descendants::<gtk::Label>(&dialog);
+    for label in window_labels.iter().chain(&dialog_labels) {
+        assert!(!label.uses_markup(), "{:?} is drawn as markup", label.label());
+    }
+    assert!(
+        dialog_labels
+            .iter()
+            .all(|label| !label.label().contains("Fictional notes")),
+        "the release notes are not shown"
+    );
+    dialog.close();
 }

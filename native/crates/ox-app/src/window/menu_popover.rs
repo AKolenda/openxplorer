@@ -21,8 +21,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use crate::icons::{self, Icon};
-
-use super::unported;
+use crate::integration;
 
 pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
 
@@ -115,8 +114,12 @@ mod imp {
             self.strip.set(strip).expect("constructed runs once per object");
             self.list.set(list).expect("constructed runs once per object");
             popover.set_style(MenuStyle::Classic);
-            // Check marks follow the actions' state when the menu opens.
+            // Check marks follow the actions' state when the menu opens,
+            // so the rows are drawn on show. The keyboard starts on the
+            // first item that can be chosen once the popover is mapped:
+            // before that it cannot take focus.
             popover.connect_show(super::MenuPopover::redraw);
+            popover.connect_map(super::MenuPopover::focus_first_item);
         }
     }
 
@@ -166,7 +169,42 @@ fn item_list(popover: &MenuPopover) -> gtk::ListBox {
         popover,
         move |_, row| popover.choose_row(row.index())
     ));
+    // Up on the first item and Down on the last wrap around, as `openMenu`
+    // moves between enabled items.
+    list.connect_keynav_failed(|list, direction| {
+        let wrapped_to = match direction {
+            gtk::DirectionType::Down => first_enabled_row(list),
+            gtk::DirectionType::Up => last_enabled_row(list),
+            _ => None,
+        };
+        match wrapped_to {
+            Some(row) => {
+                row.grab_focus();
+                glib::Propagation::Stop
+            }
+            None => glib::Propagation::Proceed,
+        }
+    });
     list
+}
+
+/// The rows of `list` a user can choose, in order.
+fn enabled_rows(list: &gtk::ListBox) -> impl DoubleEndedIterator<Item = gtk::ListBoxRow> {
+    let rows: Vec<gtk::ListBoxRow> = super::widget_tree::children(list)
+        .filter_map(|child| child.downcast::<gtk::ListBoxRow>().ok())
+        .filter(WidgetExt::is_sensitive)
+        .collect();
+    rows.into_iter()
+}
+
+/// The first row of `list` a user can choose.
+fn first_enabled_row(list: &gtk::ListBox) -> Option<gtk::ListBoxRow> {
+    enabled_rows(list).next()
+}
+
+/// The last row of `list` a user can choose.
+fn last_enabled_row(list: &gtk::ListBox) -> Option<gtk::ListBoxRow> {
+    enabled_rows(list).next_back()
 }
 
 impl MenuPopover {
@@ -276,6 +314,13 @@ impl MenuPopover {
         self.imp().strip.get().expect("constructed builds the strip")
     }
 
+    /// Moves the keyboard to the first row that can be chosen.
+    fn focus_first_item(&self) {
+        if let Some(row) = first_enabled_row(self.list()) {
+            row.grab_focus();
+        }
+    }
+
     /// Rebuilds the strip and the rows, reading each action's state for
     /// its check mark and whether it is enabled.
     fn redraw(&self) {
@@ -288,8 +333,10 @@ impl MenuPopover {
                 after_divider = true;
                 continue;
             };
+            let can_choose = self.can_choose(item);
             let row = item_row(item, self.check_mark(item));
-            row.set_sensitive(self.can_choose(item));
+            row.set_sensitive(can_choose);
+            explain_availability(self, row.upcast_ref(), item, can_choose);
             if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
                 after_divider = false;
@@ -318,12 +365,14 @@ impl MenuPopover {
 
     /// An icon button of the strip.
     fn strip_button(&self, item: &MenuItem) -> gtk::Button {
+        let can_choose = self.can_choose(item);
         let button = gtk::Button::builder()
             .child(&icons::image(item.glyph, ROW_GLYPH))
             .tooltip_text(item_tooltip(item))
-            .sensitive(self.can_choose(item))
+            .sensitive(can_choose)
             .build();
         button.update_property(&[gtk::accessible::Property::Label(&item.label)]);
+        explain_availability(self, button.upcast_ref(), item, can_choose);
         let item = item.clone();
         button.connect_clicked(glib::clone!(
             #[weak(rename_to = popover)]
@@ -370,25 +419,53 @@ impl MenuPopover {
     }
 }
 
-/// The tooltip of `item`: its label, and for a command that another
-/// milestone brings, that milestone.
+/// The tooltip of `item`: its label, which a narrow menu may cut short.
 fn item_tooltip(item: &MenuItem) -> String {
-    match item.action {
-        MenuAction::Window(action) => unported::tooltip(action, &item.label),
-        MenuAction::Application(_) => item.label.clone(),
-    }
+    item.label.clone()
 }
 
-/// A row's glyph (the check mark while checked, as app.js draws it), its
-/// label and its shortcut.
+/// Why `item` cannot be chosen, when something says: the reason this
+/// menu gave, or its action's in the window of `menu`.
+fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
+    if item.availability == ItemAvailability::Disabled {
+        if let Some(reason) = item.disabled_reason {
+            return Some(reason.to_owned());
+        }
+    }
+    let tooltip = item_tooltip(item);
+    if tooltip != item.label {
+        return None;
+    }
+    item.action.disabled_reason(menu.upcast_ref()).map(str::to_owned)
+}
+
+/// Adds to the tooltip of `control`, which shows `item` in `menu`, why it
+/// cannot be chosen, and tells screen readers too.
+fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuItem, can_choose: bool) {
+    let reason = (!can_choose).then(|| disabled_reason(menu, item)).flatten();
+    let Some(reason) = reason else {
+        return;
+    };
+    control.set_tooltip_text(Some(&format!("{}\n{reason}", item.label)));
+    control.update_property(&[gtk::accessible::Property::Description(&reason)]);
+}
+
+/// A row's glyph (the check mark while checked, as app.js draws it; the
+/// application's own icon for an item that opens one), its label and its
+/// shortcut.
 fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
     let glyph = if check == CheckMark::Checked {
         Icon::Checkmark
     } else {
         item.glyph
     };
+    let application_icon = item
+        .application_icon
+        .as_deref()
+        .filter(|_| check != CheckMark::Checked)
+        .and_then(|icon| integration::application_image(Some(icon), ROW_GLYPH));
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&icons::image(glyph, ROW_GLYPH));
+    content.append(&application_icon.unwrap_or_else(|| icons::image(glyph, ROW_GLYPH)));
     let label = gtk::Label::builder()
         .label(&item.label)
         .xalign(0.0)
@@ -422,9 +499,8 @@ fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-    // Every item's title is its label (`b.title=it.label` in app.js); a
-    // disabled command adds the milestone that brings it.
-    row.set_tooltip_text(Some(&item_tooltip(item)));
+    // Every item's title is its label (`b.title=it.label` in app.js).
+    row.set_tooltip_text(Some(&item.label));
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }
@@ -432,4 +508,14 @@ fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
         row.add_css_class("checked");
     }
     row
+}
+
+/// Names an icon-only menu button for screen readers. GTK 4.14 gives
+/// keyboard focus to the menu button's inner toggle, which does not take
+/// the menu button's name, so both carry it.
+pub(super) fn name_menu_button(button: &gtk::MenuButton, name: &str) {
+    button.update_property(&[gtk::accessible::Property::Label(name)]);
+    if let Some(toggle) = button.first_child() {
+        toggle.update_property(&[gtk::accessible::Property::Label(name)]);
+    }
 }

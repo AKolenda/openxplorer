@@ -152,13 +152,16 @@ impl BrowserWindow {
     pub(super) fn render_places(&self) {
         let places = self.places();
         let searches = self.context().saved_searches();
-        let entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
-        self.sidebar().set_entries(entries);
+        let mut entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
+        entries.extend(sidebar::recent_and_bin_entries(self.imp().trash_items.get()));
+        let (rows, anything_hidden) = self.shown_sidebar_rows(entries);
+        self.sidebar().set_rows(rows, anything_hidden);
         if let Some(uri) = self.current_uri() {
             self.sidebar().select(&uri);
         }
         self.render_landing_with(&places);
         self.follow_full_path_preference();
+        self.render_title();
         self.render_tabs();
         self.update_details_pane();
         self.update_index_candidates(&places.quick_access);
@@ -177,5 +180,35 @@ impl BrowserWindow {
         let locations = self.imp().locations.borrow();
         let discovery = self.network().discovery().state();
         landing::render(body, page, places, &locations, &discovery);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ox_core::settings::{BookmarkRequest, Settings};
+
+    use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+
+    /// A test cannot plug in a drive, so the handler every volume monitor
+    /// signal is connected to is called as the monitor calls it: the window
+    /// reads the volumes and the settings again and redraws the sidebar.
+    ///
+    /// parity: DEV-001, DEV-002
+    #[gtk::test]
+    fn a_volume_monitor_change_redraws_the_sidebar() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let pin = BookmarkRequest::new(fixture.uri_of("Documents"), "Pinned while plugging in");
+        Settings::open(test.settings_directory())
+            .pin_many(&[pin], None, None)
+            .expect("the settings file takes a pin");
+
+        test.window.volumes_changed();
+
+        wait_until("the sidebar to be redrawn", || {
+            let labels = test.window.sidebar().labels();
+            labels.contains(&"Pinned while plugging in".to_owned())
+        });
+        assert!(test.window.sidebar().labels().contains(&"Local Disk".to_owned()));
     }
 }

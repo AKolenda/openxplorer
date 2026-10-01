@@ -11,6 +11,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::LocationContext;
 
+use super::activation::Activations;
 use super::address_bar::AddressBar;
 use super::breakpoints::WindowWidth;
 use super::caption_buttons::CaptionButtons;
@@ -23,6 +24,7 @@ use super::file_drop::{FirstOffer, PendingDrop, ProgramChecks};
 use super::file_ops::FileOperations;
 use super::folder_pane::FolderPane;
 use super::menu_popover::MenuPopover;
+use super::recycle_bin_place::RecycleBinWatch;
 use super::search_box::SearchBox;
 use super::session::Session;
 use super::session::TabId;
@@ -37,6 +39,7 @@ use super::transfer_panel::TransferPanel;
 use super::type_to_select::Typeahead;
 use crate::app_context::AppContext;
 use crate::network::WindowNetwork;
+use crate::resizer_control::ResizerControl;
 use crate::search::{FolderSearch, SearchInfoStrip};
 use crate::settings_page::SettingsPage;
 use crate::volumes::VolumeRow;
@@ -77,6 +80,19 @@ pub(crate) struct BrowserWindow {
     /// (`.sidebar-resizer`).
     #[template_child]
     pub(super) workspace: TemplateChild<gtk::Paned>,
+    /// The resizer's keyboard and screen-reader side, beside the pane
+    /// handle.
+    #[template_child]
+    pub(super) sidebar_resizer: TemplateChild<ResizerControl>,
+    /// Whether the sidebar lists its hidden rows (SIDE-010).
+    pub(super) sidebar_show_all: Cell<bool>,
+    /// How many items the Recycle Bin holds, as its sidebar row shows.
+    pub(super) trash_items: Cell<u32>,
+    /// Watches the Recycle Bin for its sidebar row.
+    pub(super) recycle_bin_watch: RecycleBinWatch,
+    /// The Places button shown in the navigation row while the navigation
+    /// pane is hidden.
+    pub(super) places_button: OnceCell<gtk::MenuButton>,
     /// The navigation pane.
     #[template_child]
     pub(super) sidebar: TemplateChild<Sidebar>,
@@ -117,14 +133,26 @@ pub(crate) struct BrowserWindow {
     pub(super) network: OnceCell<WindowNetwork>,
     /// The tabs and which one is active.
     pub(super) session: RefCell<Session>,
+    /// The lookups still running per tab, so one that answers after its
+    /// tab moved on is dropped (SAFE-013).
+    pub(super) activations: RefCell<Activations>,
     /// Display names of the home folder and the mounted devices.
     pub(super) locations: RefCell<LocationContext>,
     /// The drives and devices the volume monitor reported last.
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
     pub(super) typeahead: RefCell<Typeahead>,
+    /// The column Up and Down keep to in the icon grid, across rows of
+    /// different lengths; see [`super::grid_keys`].
+    pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
+    /// The link to GNOME's previewer (PROP-012).
+    pub(super) quick_look: super::quick_look::QuickLook,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
+    /// In tests, a volume id and the root it mounts at, standing in for a
+    /// drive the isolated session does not have.
+    #[cfg(test)]
+    pub(super) test_volume: RefCell<Option<(String, String)>>,
     /// Set while the window swaps or reloads the model, so the
     /// selection it restores is not saved over the tab's selection.
     pub(super) changing_model: Cell<bool>,
@@ -132,6 +160,9 @@ pub(crate) struct BrowserWindow {
     /// after Settings hides; see
     /// [`super::BrowserWindow::focus_new_file_list`].
     pub(super) file_list_awaits_focus: Cell<bool>,
+    /// Set while a pin request is being checked and saved; another waits
+    /// its turn by being ignored, as `state.pinBusy` in app.js.
+    pub(super) pinning: Cell<bool>,
     /// The width band the layout was last fitted to.
     pub(super) window_width: Cell<WindowWidth>,
     /// What the window must disconnect when it goes away.
@@ -141,6 +172,8 @@ pub(crate) struct BrowserWindow {
     pub(super) file_operations: RefCell<FileOperations>,
     /// Whether a close waits for a running write (TAB-049).
     pub(super) closing: Cell<ClosingState>,
+    /// The user agreed to close every tab of the window (SET-010).
+    pub(super) closing_tabs_confirmed: Cell<bool>,
     /// The file drag this window started, while it lasts.
     pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
     /// Until when clicks that open items are ignored, around a drag.
@@ -180,8 +213,6 @@ pub(crate) struct BrowserWindow {
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
     /// Measured folder sizes and the running folder-size scan.
     pub(super) size_scans: super::folder_size_scan::SizeScans,
-    /// The panel of a running extraction or compression.
-    pub(super) archive_operations: super::archive_actions::ArchiveOperations,
 }
 
 #[glib::object_subclass]
@@ -220,6 +251,7 @@ impl ObjectImpl for BrowserWindow {
         let window = self.obj();
         window.finish_title_bar();
         window.add_navigation_buttons();
+        window.watch_quick_look();
         self.volume_monitor
             .set(gio::VolumeMonitor::get())
             .expect("constructed runs once per object");

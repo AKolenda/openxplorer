@@ -247,11 +247,17 @@ impl ArchiveBrowserView {
             self,
             async move {
                 let result = browser.list_in_background(uri, prefix, cancel).await;
-                if view.imp().generation.get() == generation {
-                    view.show_listing(result);
-                }
+                view.listing_arrived(generation, result);
             }
         ));
+    }
+
+    /// Shows the answer of listing number `generation`, unless a newer
+    /// listing started since: a late answer never replaces a newer one.
+    fn listing_arrived(&self, generation: u64, result: Result<ArchiveListing, ArchiveError>) {
+        if self.imp().generation.get() == generation {
+            self.show_listing(result);
+        }
     }
 
     /// Cancels the work in progress and returns a fresh cancellation.
@@ -337,6 +343,29 @@ impl ArchiveBrowserView {
                 }
             }
         ));
+    }
+
+    /// Starts listing `prefix` and returns the number its answer carries,
+    /// for tests that deliver an answer late with [`Self::deliver_listing`].
+    #[cfg(test)]
+    pub(crate) fn show_folder_numbered(&self, prefix: &str) -> u64 {
+        self.show_folder(prefix);
+        self.imp().generation.get()
+    }
+
+    /// Delivers `listing` as the answer of listing number `generation`,
+    /// as the worker does, for tests.
+    #[cfg(test)]
+    pub(crate) fn deliver_listing(&self, generation: u64, listing: ArchiveListing) {
+        self.listing_arrived(generation, Ok(listing));
+    }
+
+    /// Lists `prefix` of the archive at once on this thread, for tests.
+    #[cfg(test)]
+    pub(crate) fn list_now(&self, prefix: &str) -> ArchiveListing {
+        self.browser()
+            .list(&self.archive().uri, prefix, &Cancellation::new())
+            .expect("the fixture archive is listed")
     }
 
     /// The names of the rows shown, for tests.

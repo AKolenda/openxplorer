@@ -22,9 +22,10 @@ use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
 use super::unfinished::mark_unfinished;
 use crate::search::changed_folders;
+use crate::window::background_notice::Destination;
 use crate::window::dialog;
 use crate::window::loading::LoadMode;
-use crate::window::transfer_panel::TransferPanel;
+use crate::window::transfer_panel::{TransferKind, TransferPanel};
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
@@ -38,8 +39,10 @@ pub(super) struct FinishedOperation {
     pub(super) summary: OperationSummary,
     /// How Undo reverses it, when it can.
     pub(super) undo: Option<UndoRecord>,
-    /// Where its new or moved items are now, to select them.
-    pub(super) created: Vec<String>,
+    /// The items to select once the folder is listed again: where its new
+    /// or moved items are now, or after a deletion the item that followed
+    /// the removed ones.
+    pub(super) select_after: Vec<String>,
 }
 
 impl FinishedOperation {
@@ -48,14 +51,14 @@ impl FinishedOperation {
         Self {
             summary: summarize(mode, &outcome.result),
             undo: outcome.undo,
-            created: outcome.created,
+            select_after: outcome.created,
         }
     }
 }
 
 impl BrowserWindow {
     /// The panel of the running operation.
-    pub(super) fn transfer_panel(&self) -> &TransferPanel {
+    pub(in crate::window) fn transfer_panel(&self) -> &TransferPanel {
         &self.imp().transfer_panel
     }
 
@@ -65,18 +68,41 @@ impl BrowserWindow {
     /// Sign out, Disconnect, moving a tab and an update's restart wait.
     pub(crate) fn is_writing_files(&self) -> bool {
         let is_operating = !self.imp().file_operations.borrow().is_idle();
-        is_operating || self.operation_panel().is_busy()
+        is_operating || self.transfer_panel().is_busy()
+    }
+
+    /// True, after saying why, once an application update installed files
+    /// and waits for its restart (UPD-006). Every writer asks before it
+    /// starts: file operations, extraction, compression, a restored
+    /// version, rename and new items, as the Python app refused every
+    /// file request in that state.
+    pub(in crate::window) fn refuses_writes_during_update(&self) -> bool {
+        let Some(refusal) = self.context().updates().file_refusal() else {
+            return false;
+        };
+        self.show_message(&refusal);
+        true
     }
 
     /// Starts an operation whose panel reads `label` until the first
     /// progress report. Returns its context, or `None` while another
     /// operation runs (OPS-024: `if(state.operation)return` in app.js),
-    /// an archive operation included.
+    /// an archive operation included, or once an application update
+    /// waits for its restart, which the message line says (UPD-006).
     pub(crate) fn begin_operation(&self, label: &str) -> Option<OperationContext> {
-        if self.operation_panel().is_busy() {
+        if self.transfer_panel().is_busy() {
             return None;
         }
-        let context = OperationContext::new(self.context().write_protection());
+        if self.refuses_writes_during_update() {
+            return None;
+        }
+        let mut context = OperationContext::new(self.context().write_protection());
+        // XFER-028: names and links the destination cannot store are asked
+        // about in a dialog.
+        context.unstorable = Some(self.unstorable_asker());
+        // XFER-011 and XFER-013: a move the location cannot do natively is
+        // finished by copying only when the user agrees.
+        context.move_by_copying = Some(self.move_by_copying_asker());
         {
             let mut operations = self.imp().file_operations.borrow_mut();
             if operations.is_running() {
@@ -84,7 +110,8 @@ impl BrowserWindow {
             }
             operations.running = Some(context.cancel.clone());
         }
-        self.transfer_panel().start(label);
+        self.transfer_panel()
+            .start(TransferKind::Files, label, context.cancel.clone());
         self.update_file_commands();
         Some(context)
     }
@@ -121,15 +148,13 @@ impl BrowserWindow {
         }
     }
 
-    /// Cancel on the transfer panel: stops the running operation between
-    /// steps; what is finished stays finished (OPS-022).
+    /// Cancel operation: stops the running file operation between steps,
+    /// as the transfer panel's Cancel does; what is finished stays
+    /// finished (OPS-022).
     pub(in crate::window) fn cancel_operation(&self) {
-        let running = self.imp().file_operations.borrow().running.clone();
-        let Some(cancel) = running else {
-            return;
-        };
-        cancel.cancel();
-        self.transfer_panel().show_cancelling();
+        if self.imp().file_operations.borrow().running.is_some() {
+            self.transfer_panel().cancel();
+        }
     }
 
     /// Runs `request` on the transfer engine as the window's one
@@ -152,13 +177,17 @@ impl BrowserWindow {
         Some(outcome)
     }
 
-    /// Runs `request` and concludes it: [`Self::run_request`], then
-    /// [`Self::conclude_operation`].
-    pub(super) async fn run_and_conclude(&self, request: &TransferRequest) {
+    /// Runs `request`, a move to the Trash or a delete, and concludes it:
+    /// [`Self::run_request`], then [`Self::conclude_operation`], which
+    /// selects `next`, the item that followed the removed ones (SEL-017).
+    pub(super) async fn run_deletion(&self, request: &TransferRequest, next: Option<&str>) {
         let Some(outcome) = self.run_request(request).await else {
             return;
         };
-        let finished = outcome.map(|outcome| FinishedOperation::of_transfer(request.mode, outcome));
+        let finished = outcome.map(|outcome| FinishedOperation {
+            select_after: next.map(str::to_owned).into_iter().collect(),
+            ..FinishedOperation::of_transfer(request.mode, outcome)
+        });
         self.conclude_operation(finished).await;
     }
 
@@ -174,10 +203,16 @@ impl BrowserWindow {
                 if let Some(record) = finished.undo {
                     self.context().record_operation(record);
                 }
-                self.reload_selecting(finished.created);
+                let destination = Destination::items(finished.select_after.clone());
+                self.reload_selecting(finished.select_after);
                 match finished.summary {
-                    OperationSummary::Toast(text) if is_undoable => self.show_message_with_undo(&text),
-                    summary => self.report(summary).await,
+                    OperationSummary::Toast(text) if is_undoable => {
+                        // The toast has Undo; the desktop hears it too while
+                        // no window has focus (INT-026).
+                        self.notify_if_in_background(&OperationSummary::Toast(text.clone()), destination);
+                        self.show_message_with_undo(&text);
+                    }
+                    summary => self.report(summary, destination).await,
                 }
             }
             Err(error) => {
@@ -204,17 +239,21 @@ impl BrowserWindow {
 
     /// Shows `summary`: a toast for complete success, otherwise the
     /// "Operation result" dialog.
-    pub(super) async fn report(&self, summary: OperationSummary) {
+    /// A desktop notification says it too while no window has focus
+    /// (INT-026), whose Show button opens `destination`.
+    pub(super) async fn report(&self, summary: OperationSummary, destination: Destination) {
+        self.notify_if_in_background(&summary, destination);
         match summary {
             OperationSummary::Toast(text) => self.show_message(&text),
             OperationSummary::Report(text) => dialog::show_message(self, RESULT_TITLE, &text).await,
         }
     }
 
-    /// Lists the active folder again, then selects `uris` in it (the
-    /// items an operation created or moved there; none clears the
-    /// selection, as app.js does after every operation). The search cache
-    /// reads the folder and the items' folders again (SRCH-033).
+    /// Lists the active folder again, then selects `uris` in it and
+    /// scrolls to the first (the items an operation created or moved
+    /// there, SEL-016; none clears the selection, as app.js does after
+    /// every operation). The search cache reads the folder and the items'
+    /// folders again (SRCH-033).
     pub(super) fn reload_selecting(&self, uris: Vec<String>) {
         let Some(id) = self.imp().session.borrow().active_id() else {
             return;
@@ -223,6 +262,7 @@ impl BrowserWindow {
         let changed = changed_folders(folder.as_deref(), uris.iter().map(String::as_str));
         self.context().search_cache().folders_written(changed);
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+            tab.reveals_selection = !uris.is_empty();
             tab.selected = uris;
         }
         self.load_tab(id, LoadMode::Reload);

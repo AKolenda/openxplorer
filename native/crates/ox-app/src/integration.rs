@@ -29,10 +29,12 @@
 //! | `applications` | The applications Open with lists |
 //! | `terminal` | Open in Terminal |
 //! | `editors` | The "Open in <editor>" shortcuts |
+//! | `tools` | Compare Files and the preferred search tool |
 
 mod applications;
 mod brave_dialog;
 mod changes;
+mod custom_command;
 mod editors;
 mod file_manager_service;
 mod mime_backend;
@@ -41,6 +43,8 @@ mod status;
 mod terminal;
 #[cfg(test)]
 mod tests;
+mod tools;
+mod type_associations;
 
 use std::path::{Path, PathBuf};
 
@@ -51,7 +55,12 @@ use ox_core::integration::{
     BraveIntegration, BravePaths, DefaultApps, RevealPaths, RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
 };
 
-pub(crate) use applications::{launch, prepare_launch, DefaultChoice};
+#[cfg(test)]
+pub(crate) use applications::LaunchTarget;
+pub(crate) use applications::{
+    application_image, launch, menu_applications, prepare_launch, ApplicationChoice, DefaultChoice,
+    OpenWithError, PreparedLaunch,
+};
 pub(crate) use brave_dialog::BraveDialog;
 pub(crate) use changes::{IntegrationError, MakeDefaultChoice};
 pub(crate) use editors::{editor_shortcuts_in_background, EditorShortcut};
@@ -59,6 +68,10 @@ pub(crate) use mime_backend::MimeBackend;
 pub(crate) use open_with_dialog::{Launcher, OpenWithDialog, OpenWithSubject};
 pub(crate) use status::{DefaultsReport, IntegrationStatus};
 pub(crate) use terminal::open_terminal;
+pub(crate) use tools::{installed_application, Tool};
+pub(crate) use type_associations::{
+    change_type, is_protected, other_applications, type_applications, TypeApplication, TypeChange,
+};
 
 /// Emitted when something the Settings status shows may have changed: the
 /// `FileManager1` name was acquired, lost or released.

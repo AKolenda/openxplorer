@@ -17,7 +17,7 @@ use super::bindings::PreferenceBinding;
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
-use super::row::{Availability, ControlName, SettingRow};
+use super::row::{ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
 use super::SettingsPage;
@@ -57,6 +57,42 @@ const EDITABLE_ADDRESS: RowText = RowText {
     keywords: "breadcrumbs location bar type text",
 };
 
+const TITLE_PATH: RowText = RowText {
+    title: "Show full path in the title bar",
+    description: "Off: the title is the folder's name, as in File Explorer.",
+    keywords: "window title taskbar caption path",
+};
+
+const CONFIRM_TRASH: RowText = RowText {
+    title: "Ask before moving items to the Recycle Bin",
+    description: "Off: Delete moves the selection to the Recycle Bin at once; Undo brings it back.",
+    keywords: "confirm confirmation trash delete recycle bin question warning",
+};
+
+const CONFIRM_DELETE: RowText = RowText {
+    title: "Ask before deleting permanently",
+    description: "Shift+Delete, and items on drives without a Recycle Bin.",
+    keywords: "confirm confirmation permanent delete shift question warning",
+};
+
+const CONFIRM_EMPTY: RowText = RowText {
+    title: "Ask before emptying the Recycle Bin",
+    description: "Everything in it is deleted permanently.",
+    keywords: "confirm confirmation empty trash recycle bin question warning",
+};
+
+const CONFIRM_CLOSE_TABS: RowText = RowText {
+    title: "Ask before closing a window with several tabs",
+    description: "Closing the window closes all of its tabs.",
+    keywords: "confirm confirmation close window tabs quit question warning",
+};
+
+const ASK_TO_RUN: RowText = RowText {
+    title: "Ask whether to run programs and scripts",
+    description: "Off: opening one shows it in its viewer or editor, and nothing runs.",
+    keywords: "confirm execute run program script executable launcher open",
+};
+
 const MOVE_TABS: RowText = RowText {
     title: "Move tabs between windows",
     description: "Drag a tab onto another OpenXplorer window's tab strip to merge it, or outside \
@@ -85,12 +121,21 @@ const DRAGGING_NOTE: &str = "Right-click a tab → Move tab to window… lets yo
                              File drops never remove the source. ZIP contents must be extracted \
                              first; some apps need a mounted network path.";
 
+const BROWSE_ARCHIVES: RowText = RowText {
+    title: "Open archives as folders",
+    description: "Browse ZIP and TAR archives (.tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst) inside \
+                  OpenXplorer. Off, they open in their default application.",
+    keywords: "zip tar gz archive compressed browse extract",
+};
+
 /// The Windows & tabs page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::WindowsAndTabs;
     let windows = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     windows.append_group(&windows_group(page));
     windows.append_group(&address_group(page));
+    windows.append_group(&archives_group(page));
+    windows.append_group(&confirmations_group(page));
     windows.append_group(&dragging_group());
     windows.append_text(&parts::note(Icon::Info, DRAGGING_NOTE));
     windows
@@ -124,6 +169,81 @@ fn windows_group(page: &SettingsPage) -> SettingsGroup {
     };
     external.add_control(&page.preference_switch(in_new_window), ControlName::RowTitle);
     group.add_row(&external);
+    let title_path = SettingRow::new(TITLE_PATH);
+    let full_path_in_title = PreferenceBinding {
+        read: |preferences| preferences.full_path_in_title,
+        write: |on| PreferencesUpdate {
+            full_path_in_title: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    title_path.add_control(&page.preference_switch(full_path_in_title), ControlName::RowTitle);
+    group.add_row(&title_path);
+    group
+}
+
+/// The questions asked before items are deleted, before a program that is
+/// opened runs (OPEN-008) and before a window with several tabs closes
+/// (Dolphin's Confirmations page, SET-010).
+fn confirmations_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new("Confirmations");
+    let bindings = [
+        (
+            CONFIRM_TRASH,
+            PreferenceBinding {
+                read: |preferences| preferences.confirm_trash,
+                write: |on| PreferencesUpdate {
+                    confirm_trash: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            CONFIRM_DELETE,
+            PreferenceBinding {
+                read: |preferences| preferences.confirm_delete,
+                write: |on| PreferencesUpdate {
+                    confirm_delete: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            CONFIRM_EMPTY,
+            PreferenceBinding {
+                read: |preferences| preferences.confirm_empty_trash,
+                write: |on| PreferencesUpdate {
+                    confirm_empty_trash: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            ASK_TO_RUN,
+            PreferenceBinding {
+                read: |preferences| preferences.ask_to_run_programs,
+                write: |on| PreferencesUpdate {
+                    ask_to_run_programs: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            CONFIRM_CLOSE_TABS,
+            PreferenceBinding {
+                read: |preferences| preferences.confirm_close_tabs,
+                write: |on| PreferencesUpdate {
+                    confirm_close_tabs: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+    ];
+    for (text, binding) in bindings {
+        let row = SettingRow::new(text);
+        row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+        group.add_row(&row);
+    }
     group
 }
 
@@ -153,13 +273,28 @@ fn address_group(page: &SettingsPage) -> SettingsGroup {
     group
 }
 
+/// Whether archives open as folders (ARC-022), as Dolphin's Navigation
+/// setting "Open archives as folder".
+fn archives_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new("Archives");
+    let row = SettingRow::new(BROWSE_ARCHIVES);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.browse_archives,
+        write: |browse| PreferencesUpdate {
+            browse_archives: Some(browse),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&row);
+    group
+}
+
 /// Dragging tabs and files.
 fn dragging_group() -> SettingsGroup {
     let group = SettingsGroup::new("Tabs and files");
     for text in [MOVE_TABS, DRAG_TO_APPS, DROP_ON_FOLDERS] {
-        let row = SettingRow::new(text);
-        row.set_availability(Availability::Ready);
-        group.add_row(&row);
+        group.add_row(&SettingRow::new(text));
     }
     group
 }

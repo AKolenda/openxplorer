@@ -153,6 +153,7 @@ class RecipeBuildTests(unittest.TestCase):
 class SourceArchiveTests(unittest.TestCase):
     """The vendored-crate archive is the same bytes on every build."""
 
+    # parity: UPD-019
     def test_the_archive_is_reproducible_and_root_owned(self) -> None:
         with tempfile.TemporaryDirectory(prefix='openxplorer-archive-test-') as temporary:
             folder = Path(temporary)

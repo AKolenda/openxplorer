@@ -10,12 +10,13 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::TRASH_URI;
 use ox_core::ops::{list_recycle_bin, JournalDirection};
+use ox_core::settings::{PreferencesUpdate, Settings};
 use ox_core::transfer::Cancellation;
 
 use super::file_ops_support::{
-    is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
+    dialog_over, is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
 };
-use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
 
 /// Moves `path` to the Trash, as another file manager would.
@@ -132,6 +133,75 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
         .block_on(list_recycle_bin(&Cancellation::new()))
         .expect("a readable Recycle Bin");
     assert!(left.is_empty(), "{left:?}");
+}
+
+/// With "Ask before emptying the Recycle Bin" off, Empty Recycle Bin
+/// empties it at once.
+///
+/// parity: SET-010
+#[gtk::test]
+fn empty_recycle_bin_asks_nothing_when_the_settings_say_so() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Old note.txt");
+    trash(&fixture.path("Old note.txt"));
+    require_only_test_items_in_the_recycle_bin();
+    let test = TestWindow::open(TRASH_URI);
+    let update = PreferencesUpdate {
+        confirm_empty_trash: Some(false),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        !test.context.settings_data().preferences.confirm_empty_trash
+    });
+    wait_until("the trashed file to be listed", || !test.names().is_empty());
+
+    test.activate("empty-recycle-bin", None);
+    wait_until("the Recycle Bin to be empty", || test.names().is_empty());
+    assert!(dialog_over(&test).is_none(), "nothing asked");
+}
+
+/// The sidebar's Recycle Bin shows whether it is full and empties it
+/// from any folder; Recent files sits beside it.
+///
+/// parity: SIDE-025, SIDE-026
+#[gtk::test]
+fn the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Old draft.txt");
+    trash(&fixture.path("Old draft.txt"));
+    require_only_test_items_in_the_recycle_bin();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    let bin_tooltip = || {
+        let index = sidebar.labels().iter().position(|label| label == "Recycle Bin");
+        let index = i32::try_from(index.expect("the sidebar shows the Recycle Bin")).unwrap_or(0);
+        let row = sidebar.list().row_at_index(index).expect("its row");
+        row.tooltip_text().map(String::from).unwrap_or_default()
+    };
+    assert!(sidebar.labels().contains(&"Recent files".to_owned()));
+    // Earlier tests in this run may have left items of their own.
+    wait_until("the full Recycle Bin", || {
+        bin_tooltip().ends_with(" item") || bin_tooltip().ends_with(" items")
+    });
+
+    wait_for_frames(&test.window, 3);
+    let menu = sidebar.right_click_row("Recycle Bin");
+    let labels = menu.row_labels();
+    let empty = menu.row("Empty Recycle Bin");
+    menu.popdown();
+    assert_eq!(labels[..3], ["Open", "Open in new tab", "Open in new window"]);
+    assert!(empty.is_sensitive(), "something to empty");
+    test.activate("empty-trash", None);
+    open_dialog(&test).press("Empty Recycle Bin");
+
+    wait_until("the empty Recycle Bin", || bin_tooltip() == "Recycle Bin · Empty");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the folder stays");
 }
 
 /// parity: OPS-045

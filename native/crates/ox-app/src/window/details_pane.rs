@@ -13,11 +13,16 @@
 //! Properties rows, one per property shown.
 
 mod content;
+mod media;
+mod options_menu;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use ox_core::settings::DetailsPaneOptions;
+
+use crate::folder_view::item::FileItem;
 use crate::icons::{self, Art, Icon};
 
 use super::window_action::WindowAction;
@@ -50,10 +55,15 @@ const NAME_COLUMN: i32 = 0;
 const VALUE_COLUMN: i32 = 1;
 
 mod imp {
+    use std::cell::{Cell, RefCell};
+
     use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
+    use ox_core::settings::DetailsPaneOptions;
+
+    use crate::folder_view::item::FileItem;
     use crate::icons::ArtImage;
 
     /// Private state of [`super::DetailsPane`]: the template's widgets
@@ -71,6 +81,10 @@ mod imp {
         /// The art or glyph at the top.
         #[template_child]
         pub(super) preview: TemplateChild<ArtImage>,
+        /// The area around the art, which a content preview takes over
+        /// (PROP-011).
+        #[template_child]
+        pub(super) preview_area: TemplateChild<gtk::CenterBox>,
         /// The item's or folder's name.
         #[template_child]
         pub(super) name: TemplateChild<gtk::Label>,
@@ -104,6 +118,19 @@ mod imp {
         /// The note at the bottom.
         #[template_child]
         pub(super) note: TemplateChild<gtk::Label>,
+        /// Counts the content shown, so a preview read for an earlier
+        /// selection is dropped.
+        pub(super) media_generation: Cell<u64>,
+        /// The content preview shown, which a redraw for the same item
+        /// keeps (PROP-011).
+        pub(super) shown_media: RefCell<Option<super::content::MediaPreview>>,
+        /// The Properties rows the preview added: Dimensions, Length.
+        pub(super) media_rows: RefCell<Vec<(&'static str, String)>>,
+        /// The pane's options, as saved (PROP-010).
+        pub(super) options: RefCell<DetailsPaneOptions>,
+        /// The item under the pointer, which the pane describes while it
+        /// follows the pointer.
+        pub(super) hovered: RefCell<Option<FileItem>>,
     }
 
     #[glib::object_subclass]
@@ -131,6 +158,23 @@ mod imp {
             pane.show_glyphs();
             pane.bind_actions();
             pane.show_placeholder();
+            pane.attach_options_menu();
+            // A pane shown again catches up with the selection, whose
+            // preview was not read while it was hidden.
+            // It waits for the main loop: the pane is shown while the
+            // window is laid out for a new width.
+            pane.connect_visible_notify(|pane| {
+                if !pane.is_visible() {
+                    return;
+                }
+                let pane = pane.downgrade();
+                glib::idle_add_local_once(move || {
+                    let window = pane.upgrade().and_then(|pane| pane.root());
+                    if let Some(window) = window.and_downcast::<super::super::BrowserWindow>() {
+                        window.update_details_pane();
+                    }
+                });
+            });
         }
 
         fn dispose(&self) {
@@ -181,6 +225,44 @@ impl DetailsPane {
         self.set_width_request(width);
     }
 
+    /// The pane's options.
+    pub(super) fn options(&self) -> DetailsPaneOptions {
+        self.imp().options.borrow().clone()
+    }
+
+    /// Takes the saved `options`.
+    pub(super) fn set_options(&self, options: DetailsPaneOptions) {
+        self.imp().options.replace(options);
+    }
+
+    /// Takes `options` from the pane's menu, and has the window save them
+    /// and redraw the pane.
+    fn change_options(&self, options: DetailsPaneOptions) {
+        self.set_options(options.clone());
+        if !options.follow_hover {
+            self.imp().hovered.replace(None);
+        }
+        if let Some(window) = self.root().and_downcast::<super::BrowserWindow>() {
+            window.details_options_changed(options);
+        }
+    }
+
+    /// Remembers the item under the pointer; true when it changed.
+    pub(super) fn set_hovered(&self, item: Option<FileItem>) -> bool {
+        let changed = *self.imp().hovered.borrow() != item;
+        if changed {
+            self.imp().hovered.replace(item);
+        }
+        changed
+    }
+
+    /// The item the pane describes instead of the selection: the one
+    /// under the pointer, while it follows the pointer.
+    pub(super) fn hovered(&self) -> Option<FileItem> {
+        let following = self.imp().options.borrow().follow_hover;
+        following.then(|| self.imp().hovered.borrow().clone()).flatten()
+    }
+
     /// Shows `content`.
     pub(super) fn set_content(&self, content: &PaneContent) {
         let imp = self.imp();
@@ -193,6 +275,7 @@ impl DetailsPane {
         self.show_buttons(content.action);
         self.show_properties(&content.properties);
         imp.note.set_text(content.note);
+        self.show_media(content.media.as_ref());
     }
 
     /// Shows the buttons `action` offers and hides the others.
@@ -211,10 +294,30 @@ impl DetailsPane {
         while let Some(child) = grid.first_child() {
             grid.remove(&child);
         }
-        for (row, property) in (0..).zip(properties) {
-            grid.attach(&property_name(property.name), NAME_COLUMN, row, 1, 1);
-            grid.attach(&property_value(&property.value), VALUE_COLUMN, row, 1, 1);
+        for property in properties {
+            self.add_property(property.name, &property.value);
         }
+    }
+
+    /// Adds the row `name` with `value` under the others, unless the
+    /// user turned the field off.
+    fn add_property(&self, name: &str, value: &str) {
+        if !self.imp().options.borrow().shows(name) {
+            return;
+        }
+        let grid = &*self.imp().properties;
+        let mut row = 0;
+        while grid.child_at(NAME_COLUMN, row).is_some() {
+            row += 1;
+        }
+        grid.attach(&property_name(name), NAME_COLUMN, row, 1, 1);
+        grid.attach(&property_value(value), VALUE_COLUMN, row, 1, 1);
+    }
+
+    /// The name shown under the preview, for tests.
+    #[cfg(test)]
+    pub(super) fn shown_name(&self) -> String {
+        self.imp().name.text().to_string()
     }
 
     /// The property rows shown, top to bottom, for tests.

@@ -43,6 +43,7 @@
 //! | `conflict_dialog` | The name-conflict dialog |
 //! | `conflict_compare` | The two items side by side in that dialog |
 //! | `conflict_rename` | The new name typed in that dialog |
+//! | `unstorable_dialog` | The question about names and links the destination cannot store |
 //! | `shortcuts` | The file commands' keys, which text fields keep |
 //! | `actions` | The window actions of these commands |
 
@@ -59,6 +60,7 @@ mod hide_confirm;
 mod inline_rename;
 mod journal;
 mod links;
+mod move_by_copying_dialog;
 mod name_dialog;
 mod names;
 mod new_items;
@@ -70,6 +72,8 @@ mod template_dialog;
 mod transfer;
 mod trash_support;
 mod unfinished;
+mod unstorable_dialog;
+mod worker_question;
 
 use ox_core::clipboard::ClipboardFiles;
 use ox_core::transfer::Cancellation;

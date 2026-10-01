@@ -19,7 +19,7 @@ use crate::history::{History, HistoryViews};
 use super::listing_state::{ListingEnd, ListingState};
 
 /// Identifies a tab for the lifetime of its window.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) struct TabId(u64);
 
 impl TabId {
@@ -78,6 +78,10 @@ impl Direction {
 
 /// One tab: its history, its items and the state of its listing.
 #[derive(Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate, independent piece of the tab's state"
+)]
 pub(super) struct Tab {
     /// The tab's identity for the window's lifetime.
     pub id: TabId,
@@ -95,6 +99,9 @@ pub(super) struct Tab {
     pub listing_state: ListingState,
     /// Why the last listing failed.
     pub error: Option<EntryError>,
+    /// The running listing lists the same location again (F5, Try again
+    /// or a change the folder watch saw), so the page on screen stays.
+    pub reloading: bool,
     /// URIs of the selected items, restored after a reload or tab switch.
     pub selected: Vec<String>,
     /// The next listing scrolls to the first selected item, as a
@@ -121,6 +128,9 @@ pub(super) struct Tab {
     /// Its network folder changed while it was in the background: it is
     /// listed again when next shown (TAB-056).
     pub changed_while_hidden: bool,
+    /// An item of this tab is being opened; a second one waits for it
+    /// (`tab.opening` in `openEntry`).
+    pub is_activating: bool,
 }
 
 impl Tab {
@@ -133,6 +143,7 @@ impl Tab {
             generation: 0,
             listing_state: ListingState::NotListed,
             error: None,
+            reloading: false,
             selected: Vec::new(),
             reveals_selection: false,
             renames_selection: false,
@@ -143,6 +154,7 @@ impl Tab {
             watch: None,
             revealed_item: None,
             changed_while_hidden: false,
+            is_activating: false,
         }
     }
 
@@ -435,7 +447,7 @@ mod tests {
         assert_eq!(session.active_id(), Some(only));
     }
 
-    /// parity: NAV-016
+    /// parity: NAV-016, SAFE-013
     #[test]
     fn old_results_cannot_repopulate_a_navigated_or_closed_tab() {
         let mut session = Session::default();

@@ -120,13 +120,22 @@ pub(super) fn press_shortcut_where_focused(
 }
 
 /// Every shortcut of the window's own shortcut controllers.
-fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
-    let controllers: Vec<gtk::ShortcutController> = test
-        .window
+pub(super) fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
+    let window = test.window.upcast_ref::<gtk::Widget>();
+    let mut shortcuts = shortcuts_of(window, gtk::PropagationPhase::Capture);
+    shortcuts.extend(shortcuts_of(window, gtk::PropagationPhase::Bubble));
+    shortcuts
+}
+
+/// Every shortcut of `widget`'s own shortcut controllers that run in
+/// `phase`.
+pub(super) fn shortcuts_of(widget: &gtk::Widget, phase: gtk::PropagationPhase) -> Vec<gtk::Shortcut> {
+    let controllers: Vec<gtk::ShortcutController> = widget
         .observe_controllers()
         .iter::<glib::Object>()
         .filter_map(Result::ok)
         .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .filter(|controller| controller.propagation_phase() == phase)
         .collect();
     // A shortcut controller lists its shortcuts as plain objects.
     controllers
@@ -139,7 +148,11 @@ fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
 
 /// Whether `trigger`, or one of its alternatives, is `keyval` with exactly
 /// `modifiers`.
-fn is_triggered_by(trigger: &gtk::ShortcutTrigger, keyval: gdk::Key, modifiers: gdk::ModifierType) -> bool {
+pub(super) fn is_triggered_by(
+    trigger: &gtk::ShortcutTrigger,
+    keyval: gdk::Key,
+    modifiers: gdk::ModifierType,
+) -> bool {
     if let Some(alternatives) = trigger.downcast_ref::<gtk::AlternativeTrigger>() {
         return is_triggered_by(&alternatives.first(), keyval, modifiers)
             || is_triggered_by(&alternatives.second(), keyval, modifiers);

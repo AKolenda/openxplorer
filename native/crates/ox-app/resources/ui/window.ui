@@ -19,6 +19,9 @@
     <!-- set_default_size(1320, 810) in desktop/winspace.py. -->
     <property name="default-width">1320</property>
     <property name="default-height">810</property>
+    <!-- set_size_request(670, 470) in desktop/winspace.py. -->
+    <property name="width-request">670</property>
+    <property name="height-request">470</property>
     <style>
       <class name="ox"/>
     </style>
@@ -154,6 +157,16 @@
                         </property>
                         <property name="end-child">
                           <object class="GtkBox">
+                            <child>
+                              <!-- The resizer as keyboard and screen readers
+                                   meet it (role=separator in index.html):
+                                   no width of its own, it sits in the Tab
+                                   order between the sidebar and the files
+                                   and lights the pane handle when focused. -->
+                              <object class="OxResizerControl" id="sidebar_resizer">
+                                <property name="focusable">true</property>
+                              </object>
+                            </child>
                             <child>
                               <!-- The search strip sits above the columns
                                    (#search-info in index.html). -->

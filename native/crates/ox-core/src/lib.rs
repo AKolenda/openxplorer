@@ -16,26 +16,32 @@
 //! | [`network`] | SMB sign-in, credentials, mounts, sign-out and discovery | `session_credentials.py`, `auth_bridge.py`, `mount_support.py`, `winspace.py` |
 //! | [`clipboard`] | File clipboard formats shared with GNOME and KDE | `file_clipboard.py` |
 //! | [`format`](mod@format) | Size and date text | `ui/app.js` |
+//! | [`folder_locations`] | Moving a standard folder safely | `folder_locations.py` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
 //! | [`search`] | The metadata-only filename search cache and its index service | `search_index.py`, `index_service.py`, `local_watch.py` |
 //! | [`archive`] | ZIP browsing, opening a member as a private copy, extraction and compression | `archives.py`, `zip_extraction.py`, `native_opening.py`, `winspace.py` |
 //! | [`versions`] | Previous versions and the read-only rule for snapshots | `previous_versions.py`, `file_services.py`, `ui/snapshot-meta.js` |
 //! | [`sizes`] | On-demand folder sizes | `folder_sizes.py`, `mount_support.py` |
+//! | [`checksums`] | File checksums for Properties | (new, after Dolphin) |
+//! | [`permissions`] | Editing POSIX permissions from Properties | (new, after Dolphin) |
 //! | [`integration`] | Default apps, Show in folder, Brave's download folder, opening files, Open in Terminal | `desktop_integration.py`, `reveal_integration.py`, `filemanager_bus.py`, `brave_integration.py`, `activation.py`, `native_opening.py`, `terminal_integration.py`, `app_catalog.py` |
 //! | [`update`] | Update checks, installation, restart and the running-instance guard | `updater.py`, `runtime_guard.py`, `winspace.py` |
 //! | [`session`] | Tab handoff state and `FileManager1` request validation | `window_state.py` |
 //! | [`ops`] | File operations as the interface starts them: New, Rename, paste conflicts, the Delete plan, copy and move, Duplicate, the Recycle Bin, Undo and tab moves | `winspace.py`, `file_services.py`, `gio_backend.py`, `tab_transfers.py`, `ui/app.js` |
 
 pub mod archive;
+pub mod checksums;
 pub mod clipboard;
 pub mod entry;
+pub mod folder_locations;
 pub mod format;
 pub mod gio_node;
 pub mod integration;
 pub mod location;
 pub mod network;
 pub mod ops;
+pub mod permissions;
 pub mod places;
 pub mod search;
 pub mod session;

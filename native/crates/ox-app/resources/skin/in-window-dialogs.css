@@ -76,6 +76,32 @@ window.ox .properties-tabs button:checked {
 .property-grid .property-name { color: @ox_muted; min-width: 110px; }
 .property-buttons { border-spacing: 7px; margin-bottom: 12px; }
 
+/* The Location tab of a standard folder (.location-*, .mount-*,
+   .network-mount-assistant and .setup-command in style.css). */
+.location-controls { border-spacing: 7px; margin-top: 12px; }
+.location-status { color: @ox_muted; margin: 12px 0; min-height: 18px; }
+.location-status.valid { color: @ox_accent; }
+.location-status.error { color: @ox_error; }
+.location-warning {
+  color: @ox_muted;
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 5px;
+  padding: 12px;
+}
+.location-warning image { color: @ox_accent; }
+.mount-picker { margin-top: 10px; }
+.network-mount-assistant { margin-top: 20px; border-top: 1px solid @ox_border; padding-top: 15px; }
+.network-mount-assistant title { color: @ox_accent; padding: 3px 0 8px 0; }
+.setup-command {
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 3px;
+  padding: 10px;
+  margin: 8px 0;
+}
+.mount-plan > button { margin-top: 8px; }
+
 /* Previous versions. */
 .versions-toolbar { border-spacing: 8px; margin-bottom: 12px; }
 .versions-list {
@@ -156,18 +182,3 @@ window.ox .version-actions button { min-height: 29px; padding: 0 7px; }
   border-spacing: 15px;
 }
 window.ox .size-scan button { min-height: 25px; min-width: 82px; }
-
-/* The panel of a running extraction or compression, floating 43 px above
-   the bottom of the folder pane (§4.15 Transfer, shadow E08). */
-.operation-panel {
-  background-color: @ox_flyout;
-  border: 1px solid @ox_flyout_stroke;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 43px;
-  min-width: 420px;
-  border-spacing: 12px;
-  box-shadow: 0 8px 16px @ox_shadow_key;
-}
-.operation-panel progressbar trough { min-height: 4px; background-color: @ox_border; }
-.operation-panel progressbar progress { min-height: 4px; background-color: @ox_accent; }

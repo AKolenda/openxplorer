@@ -6,6 +6,7 @@
 //! button below the list.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
 use super::geometry::{bounds, button_for, laid_out, Bounds};
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
@@ -37,6 +38,8 @@ fn rows_labelled(test: &TestWindow, label: &str) -> usize {
 fn with_two_pins(fixture: &Fixture) -> TestWindow {
     let test = laid_out(&fixture.uri());
     test.activate("pin-folder", None);
+    // One pin request runs at a time.
+    wait_until("the first pin", || !test.window.imp().pinning.get());
     test.window
         .navigate(&fixture.uri_of("Documents"))
         .expect("valid folder");
@@ -47,6 +50,7 @@ fn with_two_pins(fixture: &Fixture) -> TestWindow {
     test
 }
 
+/// parity: LOOK-014
 #[gtk::test]
 fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
     let fixture = Fixture::standard();
@@ -80,6 +84,7 @@ fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
     assert_eq!(this_pc.x, 7);
 }
 
+/// parity: LOOK-014
 #[gtk::test]
 fn the_selected_row_shows_the_accent_bar_at_its_edge() {
     let fixture = Fixture::standard();

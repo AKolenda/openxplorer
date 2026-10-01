@@ -16,8 +16,9 @@ use ox_core::ops::{
 };
 
 use super::running::FinishedOperation;
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// The dialog's title (Dolphin's "Rename Items").
 const TITLE: &str = "Rename items";
@@ -51,7 +52,7 @@ impl BrowserWindow {
         first_number.set_activates_default(true);
         dialog.add_labelled(FIRST_NUMBER_LABEL, &first_number);
         dialog.add_cancel_button();
-        dialog.add_button("Rename", ButtonStyle::Primary);
+        dialog.add_button("Rename", ButtonStyle::Accent);
         dialog.open();
         select_before_number(&name);
         let batch = loop {
@@ -82,7 +83,7 @@ impl BrowserWindow {
         let finished = outcome.map(|outcome| FinishedOperation {
             summary: summarize_batch_rename(&outcome.result),
             undo: outcome.undo,
-            created: outcome.created,
+            select_after: outcome.created,
         });
         self.conclude_operation(finished).await;
     }

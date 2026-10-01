@@ -11,17 +11,37 @@
 //! Only an explicit request (Enter, double-click, Open, a typed address or
 //! a command-line argument) ever launches an application.
 
+use std::collections::HashMap;
+
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{self, Entry, EntryError, EntryKind};
 use ox_core::integration;
 
 use crate::locations::{self, Page};
 
+use super::desktop_link::{link_target_of_file, may_be_link, LinkTarget};
+use super::run_on_open::RunChoice;
+use super::session::TabId;
+use super::session::TabPlacement;
 use super::BrowserWindow;
+
+mod outcome;
 
 /// Why an item cannot be opened (`activation_kind` in activation.py).
 const NOT_OPENABLE: &str = "This item is not a regular file or a readable folder.";
+
+/// What is left to do once an activated item was read again.
+#[derive(Debug)]
+enum Resolved {
+    /// Open this folder in the tab.
+    Folder(String),
+    /// Browse this ZIP archive.
+    Archive(Entry),
+    /// The file opened in its application.
+    Opened,
+}
 
 /// What activating an item does.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +63,26 @@ pub(super) enum IncomingTab {
     Active,
     /// A new tab in front: every later location.
     New,
+}
+
+/// A lookup started for one tab: a typed address or a location the tab
+/// found to be a file. Its answer counts only while it is that tab's
+/// newest lookup, the tab has not navigated and the user has not
+/// switched away from it (the activation token of `openEntry`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct PendingActivation {
+    tab: TabId,
+    generation: u64,
+}
+
+/// The newest lookup of each tab that has one running.
+#[derive(Debug, Default)]
+pub(super) struct Activations {
+    started: u64,
+    newest: HashMap<TabId, u64>,
+    /// How many lookups have answered, current or not.
+    #[cfg(test)]
+    answered: u64,
 }
 
 /// What activating `entry` does, from freshly queried metadata.
@@ -80,6 +120,16 @@ fn is_web_address(typed: &str) -> bool {
     is_web && has_host && !typed.chars().any(char::is_control)
 }
 
+/// Where the local `.desktop` link file `entry` points, if it is one.
+pub(super) fn desktop_link(entry: &Entry) -> Option<Result<LinkTarget, String>> {
+    if !may_be_link(entry.content_type.as_deref(), &entry.name) {
+        return None;
+    }
+    let path = gio::File::for_uri(&entry.uri).path()?;
+    let target = link_target_of_file(&path)?;
+    Some(target.map_err(str::to_owned))
+}
+
 /// Queries `uri` without blocking the interface.
 pub(super) async fn query_entry(uri: &str) -> Result<Entry, EntryError> {
     let file = gio::File::for_uri(uri);
@@ -112,13 +162,150 @@ struct AddressRequest<'a> {
 }
 
 impl BrowserWindow {
-    /// Opens the item at a display position (Enter, double-click, Open).
+    /// Drops the lookup tab `id` has running: it navigated.
+    pub(super) fn supersede_activations(&self, id: TabId) {
+        self.imp().activations.borrow_mut().newest.remove(&id);
+    }
+
+    /// Drops the lookups of every tab but `id`, which the user switched
+    /// to.
+    pub(super) fn keep_activations_of(&self, id: TabId) {
+        let mut activations = self.imp().activations.borrow_mut();
+        activations.newest.retain(|tab, _| *tab == id);
+    }
+
+    /// Starts a lookup for tab `id`, superseding its earlier one.
+    fn begin_activation(&self, id: TabId) -> PendingActivation {
+        let mut activations = self.imp().activations.borrow_mut();
+        activations.started += 1;
+        let generation = activations.started;
+        activations.newest.insert(id, generation);
+        PendingActivation { tab: id, generation }
+    }
+
+    /// Whether `pending` still speaks for its tab, and ends it.
+    fn finish_activation(&self, pending: PendingActivation) -> bool {
+        let imp = self.imp();
+        let mut activations = imp.activations.borrow_mut();
+        #[cfg(test)]
+        {
+            activations.answered += 1;
+        }
+        let is_current = activations.newest.get(&pending.tab) == Some(&pending.generation);
+        if is_current {
+            activations.newest.remove(&pending.tab);
+        }
+        is_current && imp.session.borrow().tab(pending.tab).is_some()
+    }
+
+    /// How many lookups have answered so far, including dropped ones.
+    #[cfg(test)]
+    pub(super) fn answered_activations(&self) -> u64 {
+        self.imp().activations.borrow().answered
+    }
+
+    /// Opens the item at a display position (Enter, double-click, Open),
+    /// as `openEntry` does: its metadata is read again rather than
+    /// trusted, one item of a tab opens at a time, and the result belongs
+    /// to the tab that asked. It is dropped when that tab moved elsewhere
+    /// or closed meanwhile; a folder opens in that tab even when another
+    /// one is in front by then (OPEN-001, OPEN-004).
     pub(super) fn activate_item(&self, position: u32) {
-        if let Some(item) = self.folder_pane().model().item(position) {
-            self.activate_entry(item.entry());
+        let Some(item) = self.folder_pane().model().item(position) else {
+            return;
+        };
+        let entry = item.entry().clone();
+        let Some(origin) = self.begin_item_activation() else {
+            return;
+        };
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let outcome = window.resolve_activation(&entry).await;
+                if window.end_item_activation(origin) {
+                    window.show_item_activation(origin, &entry, outcome);
+                }
+            }
+        ));
+    }
+
+    /// Reads `entry` again, mounting its share first when it has to, and
+    /// opens a file at once; says what else to do.
+    async fn resolve_activation(&self, entry: &Entry) -> Result<Resolved, String> {
+        let uri = entry.navigation_uri();
+        let mut queried = query_entry(uri).await;
+        // A share may have been unmounted since it was listed: it is
+        // mounted once and read again (NET-004).
+        if matches!(queried, Err(EntryError::NotMounted(_))) {
+            self.network()
+                .mount(uri)
+                .await
+                .map_err(|error| error.to_string())?;
+            queried = query_entry(uri).await;
+        }
+        let fresh = queried.map_err(|error| error.to_string())?;
+        match activation_for(&fresh) {
+            Activation::Folder(uri) => Ok(Resolved::Folder(uri)),
+            Activation::Archive => Ok(Resolved::Archive(fresh)),
+            Activation::Refused(message) => Err(message.to_owned()),
+            Activation::File => {
+                if let Some(target) = desktop_link(&fresh) {
+                    return self.follow_link(target?).await;
+                }
+                match self.run_or_open(&fresh).await {
+                    RunChoice::Open => {}
+                    RunChoice::Run(program) => {
+                        self.run_program(&program, &[]).await?;
+                        return Ok(Resolved::Opened);
+                    }
+                    RunChoice::Cancel => return Ok(Resolved::Opened),
+                }
+                let window = self.upcast_ref::<gtk::Window>();
+                self.context().open_file(&fresh, window).await?;
+                Ok(Resolved::Opened)
+            }
         }
     }
 
+    /// Goes where a `.desktop` link points: a folder in the tab, a web
+    /// page or mail address in the desktop's handler (OPEN-009).
+    async fn follow_link(&self, target: LinkTarget) -> Result<Resolved, String> {
+        match target {
+            LinkTarget::Location(uri) => Ok(Resolved::Folder(uri)),
+            LinkTarget::Web(url) => {
+                gtk::UriLauncher::new(&url)
+                    .launch_future(Some(self.upcast_ref::<gtk::Window>()))
+                    .await
+                    .map_err(|error| error.to_string())?;
+                Ok(Resolved::Opened)
+            }
+        }
+    }
+
+    /// Follows the `.desktop` link `entry`, pointing at `target`, when it
+    /// opens with other items: a folder in a background tab, a web page in
+    /// the browser; a broken link is reported.
+    pub(super) fn follow_link_in_background(&self, entry: &Entry, target: Result<LinkTarget, String>) {
+        let entry = entry.clone();
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let outcome = match target {
+                    Ok(target) => window.follow_link(target).await,
+                    Err(reason) => Err(reason),
+                };
+                match outcome {
+                    Ok(Resolved::Folder(uri)) => window.open_tab_or_report(&uri, TabPlacement::Background),
+                    Ok(Resolved::Archive(_) | Resolved::Opened) => {}
+                    Err(reason) => window.report_open_failure(&reason, &entry),
+                }
+            }
+        ));
+    }
+
+    /// Opens an entry of a typed address or another app's request.
     fn activate_entry(&self, entry: &Entry) {
         match activation_for(entry) {
             Activation::Folder(uri) => self.navigate_or_report(&uri),
@@ -128,33 +315,58 @@ impl BrowserWindow {
             }
             Activation::Archive => {
                 let archive = entry.clone();
-                self.after_mounting(&entry.uri, move |window| window.open_archive(&archive));
+                self.after_mounting(&entry.uri, move |window| window.open_archive_or_file(&archive));
             }
             Activation::Refused(message) => self.show_message(message),
         }
     }
 
-    /// Opens a file in its default application and records it among the
-    /// recent files.
-    fn open_file(&self, entry: &Entry) {
-        let on_error = glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |error: glib::Error| window.show_message(&error.to_string())
-        );
-        self.context().open_file(entry, self.upcast_ref(), on_error);
+    /// Opens an archive in the archive browser, or, with "Open archives
+    /// as folders" off (ARC-022), in its default application other than
+    /// this one.
+    fn open_archive_or_file(&self, entry: &Entry) {
+        if self.context().settings_data().preferences.browse_archives {
+            self.open_archive(entry);
+        } else {
+            // The default opener never picks this app, so the archive is
+            // not handed back here to be launched again.
+            self.open_file(entry);
+        }
     }
 
-    /// Opens the file at `uri`, which the tab tried to list as a folder.
-    pub(super) fn open_file_location(&self, uri: &str) {
-        let uri = uri.to_owned();
+    /// Opens a file in its default application and records it among the
+    /// recent files; a failure is shown in a dialog.
+    pub(super) fn open_file(&self, entry: &Entry) {
+        let entry = entry.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
-                match query_entry(&uri).await {
+                let opened = window.context().open_file(&entry, window.upcast_ref()).await;
+                if let Err(reason) = opened {
+                    window.report_open_failure(&reason, &entry);
+                }
+            }
+        ));
+    }
+
+    /// Opens the file at `uri`, which tab `id` tried to list as a folder.
+    pub(super) fn open_file_location(&self, id: TabId, uri: &str) {
+        let uri = uri.to_owned();
+        let pending = self.begin_activation(id);
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let result = query_entry(&uri).await;
+                if !window.finish_activation(pending) {
+                    return;
+                }
+                match result {
                     Ok(entry) if activation_for(&entry) == Activation::File => window.open_file(&entry),
-                    Ok(entry) if activation_for(&entry) == Activation::Archive => window.open_archive(&entry),
+                    Ok(entry) if activation_for(&entry) == Activation::Archive => {
+                        window.open_archive_or_file(&entry);
+                    }
                     Ok(_) => {}
                     Err(error) => window.show_message(&error.to_string()),
                 }
@@ -206,18 +418,24 @@ impl BrowserWindow {
             }
         };
         let typed = typed.to_owned();
+        let Some(tab) = self.imp().session.borrow().active_id() else {
+            return;
+        };
+        let pending = self.begin_activation(tab);
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
                 let result = query_entry(&folder).await;
-                let request = AddressRequest {
-                    uri: &folder,
-                    typed: &typed,
-                    place: place.as_deref(),
-                    source,
-                };
-                window.open_typed_location(&request, result);
+                if window.finish_activation(pending) {
+                    let request = AddressRequest {
+                        uri: &folder,
+                        typed: &typed,
+                        place: place.as_deref(),
+                        source,
+                    };
+                    window.open_typed_location(&request, result);
+                }
             }
         ));
     }
@@ -309,6 +527,8 @@ impl BrowserWindow {
         match activation_for(&entry) {
             Activation::Folder(folder) => self.open_incoming_folder(&folder, tab),
             Activation::File => self.open_file(&entry),
+            // The user handed the archive to this app, which may be its
+            // default application: it is browsed whatever the setting.
             Activation::Archive => self.open_archive(&entry),
             Activation::Refused(message) => self.show_message(message),
         }

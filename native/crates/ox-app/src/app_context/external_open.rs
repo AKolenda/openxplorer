@@ -15,6 +15,37 @@ use gtk::{gio, glib};
 use super::AppContext;
 
 impl AppContext {
+    /// Starts `app` on `uris`, such as a file comparison tool on two
+    /// files (OPEN-023).
+    ///
+    /// # Errors
+    ///
+    /// GIO's reason when the application did not start.
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::unused_self,
+            reason = "tests record the launch on the context instead"
+        )
+    )]
+    pub(crate) fn launch_tool(
+        &self,
+        app: &gio::AppInfo,
+        uris: &[String],
+        window: &gtk::Window,
+    ) -> Result<(), glib::Error> {
+        // Test safety: tests record the launch instead of starting a real
+        // application on the developer's desktop.
+        #[cfg(test)]
+        if let Some(launches) = self.imp().recorded_launches.borrow_mut().as_mut() {
+            launches.push(uris.join(" "));
+            return Ok(());
+        }
+        let files: Vec<gio::File> = uris.iter().map(|uri| gio::File::for_uri(uri)).collect();
+        let context = WidgetExt::display(window).app_launch_context();
+        app.launch(&files, Some(&context))
+    }
+
     /// Opens `uri` in the desktop's default application for its type.
     /// `on_error` hears GIO's reason when it could not be opened.
     #[cfg_attr(
@@ -45,5 +76,21 @@ impl AppContext {
                 on_error(error);
             }
         });
+    }
+
+    /// Records a disk tool started on `target` as `<tool> <target>`, when
+    /// the test records launches; true if it did.
+    #[cfg(test)]
+    pub(crate) fn record_tool_launch(
+        &self,
+        tool: ox_core::integration::DiskTool,
+        target: &std::path::Path,
+    ) -> bool {
+        let mut launches = self.imp().recorded_launches.borrow_mut();
+        let Some(launches) = launches.as_mut() else {
+            return false;
+        };
+        launches.push(format!("{tool:?} {}", target.display()));
+        true
     }
 }

@@ -2,7 +2,8 @@
 """Find parity markers: comments that tie a native test to its features.
 
 A marker is a comment such as ``/// parity: NAV-001, TAB-004`` placed
-in a test's doc comment in a Rust source under native/, or in any file
+in a test's doc comment in a Rust source under native/, in a packaging test
+(native/tools/test_*.py, which native/tools/check.py runs), or in any file
 under native/ui-tests/ once UI tests exist there. Only a feature named by a
 marker may be recorded as natively done.
 """
@@ -19,12 +20,14 @@ SKIPPED_DIRECTORIES = frozenset({'target', '__pycache__'})
 def marked_files(root: Path) -> list[Path]:
     """Return the files that may hold markers, in a stable order.
 
-    These are the Rust sources under native/ and every file under
-    native/ui-tests/. Build output and hidden directories are skipped:
-    they hold copies, not the tests that run.
+    These are the Rust sources under native/, the packaging tests in
+    native/tools/ and every file under native/ui-tests/. Build output and
+    hidden directories are skipped: they hold copies, not the tests that
+    run.
     """
     native = root / 'native'
     ui_tests = native / 'ui-tests'
+    tools = native / 'tools'
     files = []
     for directory, subdirectories, names in native.walk():
         subdirectories[:] = sorted(
@@ -32,9 +35,16 @@ def marked_files(root: Path) -> list[Path]:
             if name not in SKIPPED_DIRECTORIES and not name.startswith('.'))
         for name in sorted(names):
             path = directory / name
-            if path.suffix == '.rs' or path.is_relative_to(ui_tests):
+            if (path.suffix == '.rs' or path.is_relative_to(ui_tests)
+                    or is_packaging_test(path, tools)):
                 files.append(path)
     return files
+
+
+def is_packaging_test(path: Path, tools: Path) -> bool:
+    """Return whether path is a packaging test module in native/tools."""
+    return (path.parent == tools and path.name.startswith('test_')
+            and path.suffix == '.py')
 
 
 def scan(root: Path) -> tuple[dict[str, list[str]], list[str]]:

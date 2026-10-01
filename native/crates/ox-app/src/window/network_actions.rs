@@ -15,10 +15,11 @@ use ox_core::network::{connect_share, ConnectedShare};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
 use crate::devices::Removal;
-use crate::dialogs::{map_network_dialog, MapRequest, NetworkFormDialog, ShareKeeping};
+use crate::dialogs::{map_network_dialog, MapRequest, ShareKeeping};
 use crate::network::user_recent_servers;
 use crate::places::network_row;
 use crate::settings_store::Change;
+use crate::window::Dialog;
 
 use super::actions::{plain_action, text_action};
 use super::window_action::WindowAction;
@@ -93,13 +94,13 @@ impl BrowserWindow {
                 move |dialog, request| window.connect_mapped_share(dialog, request)
             ),
         );
-        dialog.present();
+        dialog.open();
     }
 
     /// Mounts the share `request` names and checks it is a folder, with
     /// "Connecting…" meanwhile; an error stays in `dialog`. Closing the
     /// dialog cancels the connection and ignores a late success.
-    fn connect_mapped_share(&self, dialog: &NetworkFormDialog, request: MapRequest) {
+    fn connect_mapped_share(&self, dialog: &Dialog, request: MapRequest) {
         let prompts = self.network().prompts().clone();
         let signing_out = self.context().network().sign_out_registry();
         let window = self.downgrade();
@@ -120,12 +121,7 @@ impl BrowserWindow {
     /// lists it under Network, saves it when the user asked, then opens it
     /// (`after_connect`). A save that fails keeps the dialog open with the
     /// reason.
-    pub(super) fn keep_mapped_share(
-        &self,
-        dialog: &NetworkFormDialog,
-        share: ConnectedShare,
-        keeping: ShareKeeping,
-    ) {
+    pub(super) fn keep_mapped_share(&self, dialog: &Dialog, share: ConnectedShare, keeping: ShareKeeping) {
         self.context().remember_network(&share.uri);
         if keeping == ShareKeeping::ThisSessionOnly {
             dialog.finish();

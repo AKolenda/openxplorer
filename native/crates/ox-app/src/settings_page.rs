@@ -16,9 +16,7 @@
 //! A window builds the page the first time Settings is shown
 //! ([`building`]). Every row reads and writes the shared settings file
 //! through ox-core, with the Python app's keys and checks, so both apps
-//! stay in step, and changes show at once in every window. A row the
-//! native preview cannot run yet keeps its place and wording, and says
-//! which milestone brings it ([`row::Availability`]).
+//! stay in step, and changes show at once in every window.
 
 mod about;
 mod appearance;

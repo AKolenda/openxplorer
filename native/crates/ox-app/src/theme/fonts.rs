@@ -186,8 +186,53 @@ const TAB: ScaledHeight = ScaledHeight {
     fixed: 7.0,
 };
 
-/// Every bar height that follows the text size.
-const SCALED_HEIGHTS: &[ScaledHeight] = &[TITLE_BAR, TAB];
+/// A height that grows with the text from the skin's own height at small
+/// sizes, as the `min-height` rules of style.css do (ACC-012).
+const fn grows(selector: &'static str, floor: i32, per_scale: f64, fixed: f64) -> ScaledHeight {
+    ScaledHeight {
+        selector,
+        floor,
+        per_scale,
+        fixed,
+    }
+}
+
+/// Every bar and control height that follows the text size: the title
+/// bar and tabs, the sidebar rows (`.side-entry`), the command bar and its
+/// commands, the column titles (`#column-head`), the status bar and the
+/// fields and buttons of every dialog, in-window and network ones too
+/// (`.modal input`, `.modal-actions button`).
+/// The floors are the skin's heights at 100%, so only larger text changes
+/// them.
+const SCALED_HEIGHTS: &[ScaledHeight] = &[
+    TITLE_BAR,
+    TAB,
+    grows(".sidebar list > row", 35, 20.0, 15.0),
+    grows(".commandbar", 54, 30.0, 12.0),
+    grows(
+        ".commandbar button.command, .commandbar menubutton.command > button",
+        34,
+        24.0,
+        6.0,
+    ),
+    grows("columnview.files > header > button", 37, 24.0, 10.0),
+    grows(".statusbar", 29, 15.0, 9.0),
+    grows("window.ox.ox-dialog entry", 33, 24.0, 8.0),
+    grows("window.ox.ox-dialog button.dialog-button", 30, 24.0, 6.0),
+    grows(
+        "window.ox.ox-dialog .dialog-actions button, window.ox.ox-dialog .sign-in-choices button",
+        20,
+        24.0,
+        -4.0,
+    ),
+    grows("ox-dialog-layer .ox-dialog entry", 33, 24.0, 8.0),
+    grows(
+        "window.ox ox-dialog-layer .ox-dialog .dialog-actions button",
+        30,
+        24.0,
+        6.0,
+    ),
+];
 
 /// The padding of the solid window frame GTK draws without a compositor
 /// (`window.ox.solid-csd` in `resources/skin/base.css`).
@@ -281,6 +326,44 @@ mod tests {
         let css = css_at(200);
         assert!(css.contains("window.ox { font-size: 26.00px; }"));
         assert!(css.contains("row { min-height: 60px; }"));
+    }
+
+    /// The skin's heights stay at 100% and grow with larger text, as the
+    /// `min-height` rules of style.css.
+    ///
+    /// parity: ACC-012
+    #[test]
+    fn controls_keep_their_heights_at_100_percent_and_grow_with_the_text() {
+        let normal = css_at(100);
+        let large = css_at(200);
+        for (selector, at_100, at_200) in [
+            (".sidebar list > row", 35, 55),
+            (".commandbar", 54, 72),
+            ("columnview.files > header > button", 37, 58),
+            (".statusbar", 29, 39),
+            ("window.ox.ox-dialog entry", 33, 56),
+            ("window.ox.ox-dialog button.dialog-button", 30, 54),
+            (
+                "window.ox.ox-dialog .dialog-actions button, window.ox.ox-dialog .sign-in-choices button",
+                20,
+                44,
+            ),
+            ("ox-dialog-layer .ox-dialog entry", 33, 56),
+            (
+                "window.ox ox-dialog-layer .ox-dialog .dialog-actions button",
+                30,
+                54,
+            ),
+        ] {
+            assert!(
+                normal.contains(&format!("{selector} {{ min-height: {at_100}px; }}")),
+                "{selector}"
+            );
+            assert!(
+                large.contains(&format!("{selector} {{ min-height: {at_200}px; }}")),
+                "{selector}"
+            );
+        }
     }
 
     /// parity: VIEW-044

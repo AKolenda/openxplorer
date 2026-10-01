@@ -18,6 +18,8 @@
 //! the application's [`Updates`] and [`DesktopIntegration`], so every
 //! window shows the same update and integration state.
 
+mod default_open;
+mod desktop_bookmarks;
 mod external_open;
 mod file_operations;
 mod known_folders;
@@ -26,14 +28,17 @@ mod previous_versions;
 mod saved_searches;
 mod search_cache;
 
+pub(crate) use default_open::add_to_desktop_history;
+
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
 use ox_core::entry::Entry;
+use ox_core::folder_locations::FolderRelocation;
 use ox_core::places::FolderLocations;
 use ox_core::settings::{PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
 use ox_core::versions::PreviousVersions;
@@ -67,6 +72,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
     use gtk::{gio, glib};
+    use ox_core::folder_locations::FolderRelocation;
     use ox_core::ops::UndoJournal;
     use ox_core::places::Place;
     use ox_core::versions::PreviousVersions;
@@ -111,13 +117,25 @@ mod imp {
         /// The number of the reading the saved searches come from; an
         /// older one that arrives later is dropped.
         pub(super) saved_searches_reading: Cell<u64>,
+        /// Moves the standard folders (the Properties Location tab); a
+        /// test replaces it with one over its own folders.
+        pub(super) folder_relocation: RefCell<Option<Arc<FolderRelocation>>>,
         /// The application's updates, made on first use.
         pub(super) updates: OnceCell<Updates>,
         /// The desktop integration, made on first use.
         pub(super) desktop_integration: OnceCell<DesktopIntegration>,
+        /// The worker mirroring the pins into the desktop's places list,
+        /// once the application turns it on (SIDE-013).
+        pub(super) bookmarks_mirror:
+            RefCell<Option<std::sync::mpsc::Sender<Vec<ox_core::settings::Bookmark>>>>,
+        /// The pins as last mirrored there.
+        pub(super) exported_pins: RefCell<Option<Vec<ox_core::settings::Bookmark>>>,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,
+        /// In tests that ask for it, the programs that would have run.
+        #[cfg(test)]
+        pub(super) recorded_runs: RefCell<Option<Vec<String>>>,
     }
 
     #[glib::object_subclass]
@@ -162,7 +180,11 @@ impl AppContext {
     /// # Panics
     ///
     /// Never: a new object has no skin or settings yet.
-    fn with_folder_locations(skin: Skin, settings: Settings, folder_locations: FolderLocations) -> Self {
+    pub(crate) fn with_folder_locations(
+        skin: Skin,
+        settings: Settings,
+        folder_locations: FolderLocations,
+    ) -> Self {
         let context: Self = glib::Object::new();
         let imp = context.imp();
         imp.skin.set(skin).expect("a new AppContext has no skin yet");
@@ -170,6 +192,8 @@ impl AppContext {
         imp.previous_versions
             .set(Arc::new(versions))
             .expect("a new AppContext has no previous-versions service yet");
+        let relocation = FolderRelocation::new(folder_locations.clone(), settings.directory().to_owned());
+        imp.folder_relocation.replace(Some(Arc::new(relocation)));
         imp.settings
             .set(SettingsStore::new(settings))
             .expect("a new AppContext has no settings yet");
@@ -201,6 +225,26 @@ impl AppContext {
     /// The settings folder (`~/.config/winspace`).
     pub(crate) fn settings_directory(&self) -> PathBuf {
         self.settings().directory()
+    }
+
+    /// Moves the standard folders, for the Properties Location tab.
+    ///
+    /// # Panics
+    ///
+    /// Never: the constructor sets it.
+    pub(crate) fn folder_relocation(&self) -> Arc<FolderRelocation> {
+        let relocation = self.imp().folder_relocation.borrow();
+        Arc::clone(
+            relocation
+                .as_ref()
+                .expect("the constructor sets the folder relocation"),
+        )
+    }
+
+    /// Moves the standard folders with `relocation` from now on.
+    #[cfg(test)]
+    pub(crate) fn use_folder_relocation(&self, relocation: FolderRelocation) {
+        self.imp().folder_relocation.replace(Some(Arc::new(relocation)));
     }
 
     /// The application's updates, shared by every window.
@@ -312,6 +356,7 @@ impl AppContext {
 
     /// Tells every window to redraw its sidebar and landing page.
     fn notify_places_changed(&self) {
+        self.export_pins();
         self.emit_by_name::<()>(PLACES_CHANGED, &[]);
     }
 
@@ -323,38 +368,8 @@ impl AppContext {
         })
     }
 
-    /// Opens `entry` in its default application and records it among the
-    /// recently opened files, as `launch_default` in winspace.py does.
-    /// `on_error` hears GIO's reason when it could not be opened.
-    pub(crate) fn open_file(
-        &self,
-        entry: &Entry,
-        window: &gtk::Window,
-        on_error: impl FnOnce(glib::Error) + 'static,
-    ) {
-        let recent = recent_entry(entry);
-        let uri = entry.navigation_uri().to_owned();
-        // Test safety: tests record the file instead of starting a real
-        // application on the developer's desktop.
-        #[cfg(test)]
-        if let Some(launches) = self.imp().recorded_launches.borrow_mut().as_mut() {
-            launches.push(uri);
-            return;
-        }
-        let launch_context = WidgetExt::display(window).app_launch_context();
-        let context = self.downgrade();
-        glib::spawn_future_local(async move {
-            let launched = gio::AppInfo::launch_default_for_uri_future(&uri, Some(&launch_context)).await;
-            match (launched, context.upgrade()) {
-                (Err(error), _) => on_error(error),
-                (Ok(()), Some(context)) => context.remember_open(recent),
-                (Ok(()), None) => {}
-            }
-        });
-    }
-
     /// Records `recent` at the top of the recently opened files.
-    fn remember_open(&self, recent: RecentEntry) {
+    pub(super) fn remember_open(&self, recent: RecentEntry) {
         let change: Change = Box::new(move |settings| settings.remember_open(recent));
         // Recording a recent file is best effort, as in the Python app: the
         // file already opened, and a busy settings lock must not say otherwise.
@@ -368,6 +383,27 @@ impl AppContext {
         self.imp().recorded_launches.replace(Some(Vec::new()));
     }
 
+    /// Records the programs that would run instead of running them; the
+    /// drop-to-run tests run theirs, so this is opt-in.
+    #[cfg(test)]
+    pub(crate) fn record_runs(&self) {
+        self.imp().recorded_runs.replace(Some(Vec::new()));
+    }
+
+    /// Records that the program at `uri` would run; false when runs are
+    /// not being recorded.
+    #[cfg(test)]
+    pub(crate) fn record_run(&self, uri: &str) -> bool {
+        let mut recorded = self.imp().recorded_runs.borrow_mut();
+        recorded.as_mut().map(|runs| runs.push(uri.to_owned())).is_some()
+    }
+
+    /// The programs recorded since [`Self::record_runs`].
+    #[cfg(test)]
+    pub(crate) fn recorded_runs(&self) -> Vec<String> {
+        self.imp().recorded_runs.borrow().clone().unwrap_or_default()
+    }
+
     /// The files recorded since [`Self::record_launches`].
     #[cfg(test)]
     pub(crate) fn recorded_launches(&self) -> Vec<String> {
@@ -377,7 +413,7 @@ impl AppContext {
 
 /// The recent-files record of an opened entry (`remember_open` in
 /// `desktop/core.py` keeps these fields).
-fn recent_entry(entry: &Entry) -> RecentEntry {
+pub(super) fn recent_entry(entry: &Entry) -> RecentEntry {
     RecentEntry {
         uri: entry.uri.clone(),
         name: entry.name.clone(),

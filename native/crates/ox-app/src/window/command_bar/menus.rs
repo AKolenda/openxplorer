@@ -80,9 +80,12 @@ pub(super) fn sort_menu() -> Vec<MenuEntry> {
     entries
 }
 
-/// The View menu's item for `view`.
+/// The View menu's item for `view`, showing its Explorer shortcut.
 fn view_item(label: &str, glyph: Icon, view: FolderView) -> MenuEntry {
-    MenuItem::choice(label, glyph, WindowAction::View, view.as_str()).into()
+    let (_, shortcut) = view.shortcut();
+    MenuItem::choice(label, glyph, WindowAction::View, view.as_str())
+        .with_shortcut(shortcut)
+        .into()
 }
 
 /// The View menu's item for a text-size `step`, showing its `shortcut`.
@@ -93,17 +96,26 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 }
 
 /// The View menu: the views (every icon size the native app has), the
-/// hidden-files and details-pane toggles, then the text size.
+/// hidden-files, details-pane and navigation-pane toggles, then the text
+/// size.
 pub(super) fn view_menu() -> Vec<MenuEntry> {
-    let mut entries = vec![view_item("Details", Icon::TextBulletList, FolderView::Details)];
+    let details = view_item("Details", Icon::TextBulletList, FolderView::Details);
+    let mut entries = vec![details];
     let icon_sizes = IconSize::ALL
         .into_iter()
         .map(|size| view_item(size.label(), Icon::Grid, FolderView::Icons(size)));
     entries.extend(icon_sizes);
     entries.extend([
         MenuEntry::Divider,
-        MenuItem::toggle("Show hidden files", Icon::Eye, WindowAction::Hidden).into(),
-        MenuItem::toggle("Details pane", Icon::PanelRight, WindowAction::DetailsPane).into(),
+        MenuItem::toggle("Show hidden files", Icon::Eye, WindowAction::Hidden)
+            .with_shortcut("Ctrl+H")
+            .into(),
+        MenuItem::toggle("Details pane", Icon::PanelRight, WindowAction::DetailsPane)
+            .with_shortcut("Alt+Shift+P")
+            .into(),
+        MenuItem::toggle("Navigation pane", Icon::Folder, WindowAction::Sidebar)
+            .with_shortcut("F9")
+            .into(),
         MenuEntry::Divider,
         text_size_item("Larger text", Icon::Add, Step::Increase, "Ctrl++"),
         text_size_item("Smaller text", Icon::Subtract, Step::Decrease, "Ctrl+−"),
@@ -162,8 +174,15 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
             .into(),
         item("Select none", Icon::SelectAllOff, WindowAction::SelectNone),
         item("Invert selection", Icon::ArrowSwap, WindowAction::InvertSelection),
+        item(
+            "Select items matching…",
+            Icon::Search,
+            WindowAction::SelectMatching,
+        ),
         MenuEntry::Divider,
-        item("License & source", Icon::Document, WindowAction::License),
+        // app.js asked for a `code` glyph it did not have and drew a
+        // document; the native app has the code glyph.
+        item("License & source", Icon::Code, WindowAction::License),
         item("About this build", Icon::Info, WindowAction::About),
     ]);
     entries

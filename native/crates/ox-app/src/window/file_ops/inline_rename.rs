@@ -239,6 +239,11 @@ impl BrowserWindow {
         target: &RenameTarget,
         name: &str,
     ) {
+        // An update may have finished installing while the field was open.
+        if self.refuses_writes_during_update() {
+            self.close_name_editor(cell);
+            return;
+        }
         if !self.confirm_hiding_rename(&target.name, name).await {
             self.take_rename_next();
             editor.set_sensitive(true);

@@ -201,6 +201,46 @@ mod tests {
         errors.take()
     }
 
+    /// Focused controls draw a 2px ring inside them; the file list draws
+    /// none around itself, only a 1px ring on the focused row or tile,
+    /// apart from the selection's fill.
+    ///
+    /// parity: ACC-009
+    #[test]
+    fn focus_rings_sit_on_controls_and_items_not_around_the_file_list() {
+        let code = without_comments(RULES);
+        for rule in [
+            "window.ox button:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
+            ".tab:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
+            "columnview.files > listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
+            "gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
+            ".sidebar list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
+            "paned.workspace > separator.keyboard-focus",
+        ] {
+            assert!(code.contains(rule), "{rule}");
+        }
+        assert!(
+            !code.contains("columnview.files:focus"),
+            "no ring around the list"
+        );
+        assert!(!code.contains("gridview.files:focus"), "no ring around the tiles");
+    }
+
+    /// parity: ACC-011, SIDE-003
+    #[test]
+    fn higher_contrast_thickens_drop_outlines_and_outlines_the_open_place() {
+        let code = without_comments(HIGH_CONTRAST_RULES);
+        for rule in [
+            ".sidebar list > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }",
+            ".sidebar list > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }",
+            ".sidebar list > row.drop-before { box-shadow: inset 0 3px @ox_accent; }",
+            ".tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }",
+            "box-shadow: inset 0 0 0 2px @ox_focus_outer;",
+        ] {
+            assert!(code.contains(rule), "{rule}");
+        }
+    }
+
     #[gtk::test]
     fn every_stylesheet_parses_without_errors() {
         let text_sizes = TextSize::all().map(css_for_text_size);

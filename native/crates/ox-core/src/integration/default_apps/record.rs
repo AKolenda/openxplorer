@@ -226,4 +226,35 @@ mod tests {
 
         assert_eq!(PreviousDefaults::read(&path), PreviousDefaults::default());
     }
+
+    /// The record is state like the settings: a symlinked record is not
+    /// read, saving replaces the link rather than writing through it, and
+    /// the saved file and its folder are private.
+    ///
+    /// parity: SAFE-009
+    #[test]
+    fn a_symlinked_record_is_never_followed_and_the_saved_one_is_private() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let folder = tempfile::tempdir().expect("temporary folder");
+        let directory = folder.path().join("winspace");
+        std::fs::create_dir(&directory).expect("fixture folder");
+        let target = folder.path().join("target.json");
+        std::fs::write(&target, r#"{"inode/directory":"org.kde.dolphin.desktop"}"#).expect("fixture");
+        let path = directory.join("previous-defaults.json");
+        symlink(&target, &path).expect("fixture link");
+
+        assert_eq!(PreviousDefaults::read(&path), PreviousDefaults::default());
+        let mut record = PreviousDefaults::default();
+        record.record(MimeType::Zip, None);
+        record.save(&path).expect("save");
+
+        let target_text = std::fs::read_to_string(&target).expect("read the target");
+        assert_eq!(target_text, r#"{"inode/directory":"org.kde.dolphin.desktop"}"#);
+        let saved = std::fs::symlink_metadata(&path).expect("stat");
+        assert!(saved.is_file(), "the link was replaced by a file");
+        assert_eq!(saved.permissions().mode() & 0o777, 0o600);
+        let folder_mode = std::fs::metadata(&directory).expect("stat").permissions().mode();
+        assert_eq!(folder_mode & 0o777, 0o700);
+    }
 }

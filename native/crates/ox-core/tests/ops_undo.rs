@@ -144,6 +144,52 @@ fn undoing_a_move_puts_items_back_but_never_over_a_new_item() {
     assert_eq!(fs::read(destination.join("b.txt")).unwrap(), b"b");
 }
 
+/// A move answered with Keep both lands under a new name; Undo brings
+/// the item back under its old one, and Redo moves it on again under
+/// the new one.
+#[test]
+fn undoing_a_keep_both_move_restores_the_original_name() {
+    let temp = tempfile::tempdir().unwrap();
+    let (source, destination) = (temp.path().join("src"), temp.path().join("dst"));
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&destination).unwrap();
+    fs::write(source.join("Report.txt"), b"moved").unwrap();
+    fs::write(destination.join("Report.txt"), b"already there").unwrap();
+    let mut keep_both = request(
+        TransferMode::Move,
+        &[&source.join("Report.txt")],
+        Some(&destination),
+    );
+    keep_both.policy = ConflictPolicy::KeepBoth;
+    let record = undo_record_of(&keep_both);
+    let context = OperationContext::default();
+
+    let reversal = block_on(reverse(&record, &context, |_| {})).expect("an undo");
+    let restored = fs::read(source.join("Report.txt")).unwrap();
+    let left_in_destination: Vec<_> = fs::read_dir(&destination)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    let redo = reversal.inverse.expect("the undo can be redone");
+    let redone = block_on(undo(&redo, &context, |_| {})).expect("a redo");
+
+    assert!(reversal.result.errors.is_empty(), "{:?}", reversal.result.errors);
+    assert!(
+        reversal.result.skipped.is_empty(),
+        "{:?}",
+        reversal.result.skipped
+    );
+    assert_eq!(restored, b"moved");
+    assert_eq!(left_in_destination, ["Report.txt"]);
+    assert!(redone.errors.is_empty(), "{:?}", redone.errors);
+    assert!(!source.join("Report.txt").exists());
+    assert_eq!(
+        fs::read(destination.join("Report.txt")).unwrap(),
+        b"already there"
+    );
+    assert_eq!(fs::read_dir(&destination).unwrap().count(), 2);
+}
+
 #[test]
 fn undoing_move_to_trash_restores_the_items_where_they_were() {
     require_private_trash();

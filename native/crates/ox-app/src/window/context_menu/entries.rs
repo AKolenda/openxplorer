@@ -10,14 +10,12 @@
 //! Delete, Undo and Redo in the folder's menu (as Windows offers "Undo
 //! Rename" there), and the Recycle Bin's own menus (Restore, Delete,
 //! Empty).
-//! Commands whose workflow another milestone brings (Open with, Open in
-//! Terminal, Properties, ...) are listed and disabled with a tooltip that
-//! names it ([`crate::window::unported`]).
 
+use ox_core::integration::DiskTool;
 use ox_core::search::Caching;
 
 use crate::icons::Icon;
-use crate::integration::EditorShortcut;
+use crate::integration::{ApplicationChoice, EditorShortcut};
 use crate::window::cache_folder::cache_item;
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
 use crate::window::window_action::WindowAction;
@@ -44,6 +42,15 @@ pub(crate) enum ItemLocation {
     SmbServer,
 }
 
+/// Whether Compare files is offered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Comparison {
+    /// Not two files, or no comparison tool is installed.
+    Unavailable,
+    /// Exactly two files are selected and a comparison tool is installed.
+    TwoFiles,
+}
+
 /// What a file or folder's menu depends on: the right-clicked item and
 /// the selection it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,13 +68,22 @@ pub(crate) struct ItemFacts {
     /// It is a search result, listed away from its folder
     /// (`state.query`).
     pub(crate) is_search_result: bool,
+    /// Whether the selection can be compared (Dolphin's Compare Files).
+    pub(crate) comparison: Comparison,
     /// The installed code editors, each offered as "Open in <editor>".
     pub(crate) editors: Vec<EditorShortcut>,
+    /// The other applications for the item, each offered as "Open with
+    /// <app>" (OPEN-013).
+    pub(crate) applications: Vec<ApplicationChoice>,
     /// Whether a folder is cached for search; `None` for a file or a
     /// folder the search cache cannot take.
     pub(crate) caching: Option<Caching>,
     /// Delete's label: "Move to Trash" or "Delete permanently".
     pub(crate) delete_label: &'static str,
+    /// The installed disk tool the item offers: Mount disk image for a
+    /// local `.iso` or `.img` file (DEV-011), Analyse disk usage for a
+    /// local folder (PROP-015).
+    pub(crate) disk_tool: Option<DiskTool>,
 }
 
 /// A context menu: its rows, and the icon strip of the compact style.
@@ -80,9 +96,25 @@ pub(crate) struct ContextMenu {
     pub(crate) strip: Vec<MenuItem>,
 }
 
+/// Why a command for one item is disabled while several are selected.
+const ONE_ITEM_AT_A_TIME: &str = "Select only one item for this command.";
+
+/// Why a command that runs or changes an item is disabled in a previous
+/// version.
+const READ_ONLY_VERSION: &str = "Items in a previous version are read-only.";
+
 /// An item that runs `action`.
 fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
     MenuItem::new(label, glyph, action)
+}
+
+/// `item`, which acts on one item: disabled, saying why, while several
+/// are selected, and where `needs_writable` holds, in a previous version.
+fn for_one_item(item: MenuItem, facts: &ItemFacts, needs_writable: bool) -> MenuItem {
+    if !facts.is_single {
+        return item.disabled_because(true, ONE_ITEM_AT_A_TIME);
+    }
+    item.disabled_because(needs_writable && facts.is_read_only, READ_ONLY_VERSION)
 }
 
 /// The Open group: Open, the extraction commands, the applications, for
@@ -91,26 +123,34 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
 /// result Open file location (SRCH-015), also in a new tab or window
 /// (SRCH-016).
 fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
-    let several = !facts.is_single;
     let is_folder = facts.shape == ItemShape::Folder;
     let open = item("Open", Icon::Folder, WindowAction::Open)
         .with_shortcut("Enter")
-        .disabled_when(several || (!is_folder && facts.is_read_only));
+        .disabled_because(!is_folder && facts.is_read_only, READ_ONLY_VERSION);
     let mut entries: Vec<MenuEntry> = vec![open.into()];
     if facts.shape == ItemShape::ZipArchive {
-        entries.extend(extraction_items(several));
+        entries.extend(extraction_items(facts));
     }
     entries.extend(application_items(facts));
+    if facts.disk_tool == Some(DiskTool::MountImage) {
+        let mount = MenuItem::with_text_target(
+            "Mount disk image",
+            Icon::HardDrive,
+            WindowAction::MountDiskImage,
+            &facts.navigation_uri,
+        );
+        entries.push(for_one_item(mount, facts, false).into());
+    }
     if is_folder {
-        let new_tab = if several {
-            item("Open in new tabs", Icon::Add, WindowAction::OpenSelectionInTabs)
-        } else {
+        let new_tab = if facts.is_single {
             MenuItem::with_text_target(
                 "Open in new tab",
                 Icon::Add,
                 WindowAction::OpenTab,
                 &facts.navigation_uri,
             )
+        } else {
+            item("Open in new tabs", Icon::Add, WindowAction::OpenSelectionInTabs)
         };
         let new_window = MenuItem::with_text_target(
             "Open in new window",
@@ -120,8 +160,11 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         );
         let pin = item("Pin to Quick access", Icon::Pin, WindowAction::PinSelected);
         entries.push(new_tab.into());
-        entries.push(new_window.disabled_when(several).into());
-        entries.push(pin.disabled_when(several).into());
+        entries.push(for_one_item(new_window, facts, false).into());
+        entries.push(for_one_item(pin, facts, false).into());
+    }
+    if facts.comparison == Comparison::TwoFiles {
+        entries.push(item("Compare files", Icon::DocumentCopy, WindowAction::CompareFiles).into());
     }
     if facts.is_search_result {
         let locations = [
@@ -138,27 +181,26 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
             ),
         ];
         for (label, glyph, action) in locations {
-            entries.push(item(label, glyph, action).disabled_when(several).into());
+            entries.push(for_one_item(item(label, glyph, action), facts, false).into());
         }
     }
     entries
 }
 
 /// Extract all… and, beyond the Python app, Dolphin's Extract here.
-fn extraction_items(several: bool) -> [MenuEntry; 2] {
+fn extraction_items(facts: &ItemFacts) -> [MenuEntry; 2] {
     let extract_all = item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll);
     let extract_here = item("Extract here", Icon::FolderZip, WindowAction::ExtractHere);
     [
-        extract_all.disabled_when(several).into(),
-        extract_here.disabled_when(several).into(),
+        for_one_item(extract_all, facts, false).into(),
+        for_one_item(extract_here, facts, false).into(),
     ]
 }
 
 /// The Terminal entry (`terminalMenuItem`), Open with and one "Open in
-/// <editor>" per installed code editor (`uniqueEditors`), all for one
-/// item outside a previous version.
+/// <editor>" per installed code editor (`uniqueEditors`, with the
+/// editor's own icon), all for one item outside a previous version.
 fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
-    let is_unavailable = !facts.is_single || facts.is_read_only;
     let is_folder = facts.shape == ItemShape::Folder;
     let terminal_label = if is_folder {
         "Open in Terminal"
@@ -172,15 +214,17 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     };
     let terminal = item(terminal_label, Icon::WindowConsole, WindowAction::OpenInTerminal);
     let open_with = item(open_with_label, Icon::Apps, WindowAction::OpenWith);
-    let mut entries = vec![
-        terminal.disabled_when(is_unavailable).into(),
-        open_with.disabled_when(is_unavailable).into(),
-    ];
+    let mut entries: Vec<MenuEntry> = vec![for_one_item(terminal, facts, true).into()];
+    for application in &facts.applications {
+        entries.push(for_one_item(open_with_application(application), facts, true).into());
+    }
+    entries.push(for_one_item(open_with, facts, true).into());
     for editor in &facts.editors {
         let label = format!("Open in {}", editor.name);
         let open_in_editor =
-            MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id);
-        entries.push(open_in_editor.disabled_when(is_unavailable).into());
+            MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
+                .with_application_icon(editor.icon.as_deref());
+        entries.push(for_one_item(open_in_editor, facts, true).into());
     }
     entries
 }
@@ -206,7 +250,7 @@ fn duplicate_item() -> MenuEntry {
 /// (CLIP-013).
 fn copy_path_item(facts: &ItemFacts) -> MenuEntry {
     let copy_path = item("Copy path", Icon::Link, WindowAction::CopyPath).with_shortcut("Ctrl+Shift+C");
-    copy_path.disabled_when(!facts.is_single).into()
+    for_one_item(copy_path, facts, false).into()
 }
 
 /// Compress to ZIP file, which the Python app did not have (Windows 11's
@@ -223,7 +267,6 @@ fn compress_item() -> MenuEntry {
 /// The end of both styles: Calculate folder size for folders, Previous
 /// versions and Properties.
 fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
-    let several = !facts.is_single;
     let mut entries = Vec::new();
     let is_measurable = facts.location != ItemLocation::SmbServer;
     if facts.shape == ItemShape::Folder && is_measurable {
@@ -234,10 +277,20 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         );
         entries.push(size.into());
     }
+    if facts.disk_tool == Some(DiskTool::AnalyseUsage) {
+        let analyse = MenuItem::with_text_target(
+            "Analyse disk usage",
+            Icon::HardDrive,
+            WindowAction::AnalyseDiskUsage,
+            &facts.navigation_uri,
+        );
+        entries.push(for_one_item(analyse, facts, false).into());
+    }
     let versions = item("Previous versions", Icon::History, WindowAction::PreviousVersions);
     let properties = item("Properties", Icon::Info, WindowAction::Properties).with_shortcut("Alt+Enter");
-    entries.push(versions.disabled_when(several).into());
-    entries.push(properties.disabled_when(several).into());
+    entries.push(for_one_item(versions, facts, false).into());
+    // Properties describe several items together (PROP-002).
+    entries.push(properties.into());
     entries
 }
 
@@ -284,6 +337,7 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
         duplicate_item(),
         copy_path_item(facts),
         compress_item(),
+        item("Compress to…", Icon::FolderZip, WindowAction::CompressTo).into(),
     ]);
     if let Some(caching) = facts.caching {
         entries.push(cache_item(&facts.navigation_uri, caching).into());
@@ -308,8 +362,12 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
 /// The menu of blank space in a folder, acting on the folder
 /// (`backgroundMenu`, CMD-011). `undo_label` and `redo_label` name what
 /// Undo and Redo would do, such as "Undo: Rename".
-pub(crate) fn background_menu(undo_label: &str, redo_label: &str) -> Vec<MenuEntry> {
-    vec![
+pub(crate) fn background_menu(
+    undo_label: &str,
+    redo_label: &str,
+    applications: &[ApplicationChoice],
+) -> Vec<MenuEntry> {
+    let mut entries: Vec<MenuEntry> = vec![
         item("New…", Icon::Add, WindowAction::ShowNewMenu).into(),
         item("Paste", Icon::ClipboardPaste, WindowAction::Paste)
             .with_shortcut("Ctrl+V")
@@ -329,6 +387,15 @@ pub(crate) fn background_menu(undo_label: &str, redo_label: &str) -> Vec<MenuEnt
             WindowAction::OpenInTerminal,
         )
         .into(),
+    ];
+    // The folder's applications and Open folder with… (OPEN-013).
+    entries.extend(
+        applications
+            .iter()
+            .map(|application| open_with_application(application).into()),
+    );
+    entries.push(item("Open folder with…", Icon::Apps, WindowAction::OpenWith).into());
+    entries.extend([
         MenuEntry::Divider,
         item("Pin this folder", Icon::Pin, WindowAction::PinFolder).into(),
         MenuItem::toggle(
@@ -348,7 +415,16 @@ pub(crate) fn background_menu(undo_label: &str, redo_label: &str) -> Vec<MenuEnt
         item("Properties", Icon::Info, WindowAction::Properties)
             .with_shortcut("Alt+Enter")
             .into(),
-    ]
+    ]);
+    entries
+}
+
+/// "Open with <app>", opening the item, or the folder when nothing is
+/// selected, in `application` (OPEN-013).
+fn open_with_application(application: &ApplicationChoice) -> MenuItem {
+    let label = format!("Open with {}", application.name);
+    MenuItem::with_text_target(&label, Icon::Apps, WindowAction::OpenWithApp, &application.id)
+        .with_application_icon(application.icon.as_deref())
 }
 
 /// The menu of items in the Recycle Bin: Restore, Delete permanently and
@@ -361,7 +437,7 @@ pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
             .with_shortcut("Delete")
             .into(),
         MenuEntry::Divider,
-        properties.disabled_when(!is_single).into(),
+        properties.disabled_because(!is_single, ONE_ITEM_AT_A_TIME).into(),
     ]
 }
 
@@ -397,9 +473,12 @@ mod tests {
             is_read_only: false,
             is_single: true,
             is_search_result: false,
+            comparison: Comparison::Unavailable,
             editors: Vec::new(),
+            applications: Vec::new(),
             caching: None,
             delete_label: "Move to Trash",
+            disk_tool: None,
         }
     }
 
@@ -461,6 +540,7 @@ mod tests {
                 "Duplicate",
                 "Copy path",
                 "Compress to ZIP file",
+                "Compress to…",
                 "Cache this folder for search",
                 "-",
                 "Calculate folder size",
@@ -516,6 +596,39 @@ mod tests {
         assert!(!entries.contains(&"Calculate folder size".to_owned()));
     }
 
+    /// A disk image offers Mount disk image after Open with, and a folder
+    /// Analyse disk usage after Calculate folder size, where their tools
+    /// are installed.
+    ///
+    /// parity: DEV-011, PROP-015
+    #[test]
+    fn disk_images_mount_and_folders_analyse_their_usage_where_the_tools_exist() {
+        let image = ItemFacts {
+            navigation_uri: "file:///home/user/distro.iso".to_owned(),
+            disk_tool: Some(DiskTool::MountImage),
+            ..file()
+        };
+        let folder = ItemFacts {
+            disk_tool: Some(DiskTool::AnalyseUsage),
+            ..folder()
+        };
+
+        let image_menu = labels(&item_menu(&image, MenuStyle::Classic).entries);
+        let folder_menu = labels(&item_menu(&folder, MenuStyle::Classic).entries);
+
+        assert_eq!(image_menu[3], "Mount disk image");
+        let size = folder_menu
+            .iter()
+            .position(|label| label == "Calculate folder size");
+        let analyse = folder_menu.iter().position(|label| label == "Analyse disk usage");
+        assert_eq!(analyse, size.map(|size| size + 1));
+        assert!(
+            !labels(&item_menu(&file(), MenuStyle::Classic).entries).contains(&"Mount disk image".to_owned())
+        );
+    }
+
+    /// Open stays: it opens each item (OPEN-003).
+    ///
     /// parity: CMD-009, TAB-027
     #[test]
     fn several_selected_items_disable_what_acts_on_one() {
@@ -529,24 +642,23 @@ mod tests {
         assert_eq!(
             disabled(&menu.entries),
             [
-                "Open",
                 "Open in Terminal",
                 "Open folder with…",
                 "Open in new window",
                 "Pin to Quick access",
                 "Copy path",
                 "Previous versions",
-                "Properties",
             ]
         );
     }
 
-    /// parity: OPEN-017
+    /// parity: OPEN-015, OPEN-017
     #[test]
     fn each_code_editor_is_offered_after_open_with_for_one_item() {
         let code = EditorShortcut {
             id: "code.desktop".to_owned(),
             name: "Visual Studio Code".to_owned(),
+            icon: Some("com.visualstudio.code".to_owned()),
         };
         let facts = ItemFacts {
             editors: vec![code],
@@ -567,6 +679,92 @@ mod tests {
         assert_eq!(editor.target, Some("code.desktop".to_variant()));
         let disabled_for_several = disabled(&item_menu(&several, MenuStyle::Classic).entries);
         assert!(disabled_for_several.contains(&"Open in Visual Studio Code".to_owned()));
+    }
+
+    /// An editor's item carries the editor's desktop ID for its icon, and
+    /// every item a menu disables says why.
+    ///
+    /// parity: CMD-031
+    #[test]
+    fn editors_show_their_icon_and_disabled_items_say_why() {
+        let code = EditorShortcut {
+            id: "code.desktop".to_owned(),
+            name: "Visual Studio Code".to_owned(),
+            icon: Some("com.visualstudio.code".to_owned()),
+        };
+        let in_version = ItemFacts {
+            editors: vec![code],
+            is_read_only: true,
+            ..file()
+        };
+        let several = ItemFacts {
+            is_single: false,
+            ..folder()
+        };
+
+        let reasons = |facts: &ItemFacts| -> Vec<(String, Option<&'static str>)> {
+            let menu = item_menu(facts, MenuStyle::Classic);
+            let items = menu.entries.into_iter().filter_map(|entry| match entry {
+                MenuEntry::Item(item) if item.availability == ItemAvailability::Disabled => Some(item),
+                _ => None,
+            });
+            items.map(|item| (item.label, item.disabled_reason)).collect()
+        };
+
+        let editor = item_menu(&in_version, MenuStyle::Classic).entries[3].clone();
+        let MenuEntry::Item(editor) = editor else {
+            panic!("an editor is an item");
+        };
+        assert_eq!(editor.application_icon.as_deref(), Some("com.visualstudio.code"));
+        for (label, reason) in reasons(&in_version) {
+            assert_eq!(reason, Some(READ_ONLY_VERSION), "{label}");
+        }
+        for (label, reason) in reasons(&several) {
+            assert_eq!(reason, Some(ONE_ITEM_AT_A_TIME), "{label}");
+        }
+    }
+
+    /// The item's other applications come before Open with…, each
+    /// opening the item in that application.
+    ///
+    /// parity: OPEN-013
+    #[test]
+    fn the_items_other_applications_are_offered_before_open_with() {
+        let viewer = ApplicationChoice {
+            id: "org.gnome.Papers.desktop".to_owned(),
+            name: "Papers".to_owned(),
+            is_default: false,
+            is_recommended: true,
+            is_available: true,
+            icon: None,
+        };
+        let facts = ItemFacts {
+            applications: vec![viewer],
+            ..file()
+        };
+
+        let entries = item_menu(&facts, MenuStyle::Classic).entries;
+
+        assert_eq!(labels(&entries)[2..4], ["Open with Papers", "Open with…"]);
+        let MenuEntry::Item(open) = &entries[2] else {
+            panic!("an application is an item");
+        };
+        assert_eq!(open.action, WindowAction::OpenWithApp.into());
+        assert_eq!(open.target, Some("org.gnome.Papers.desktop".to_variant()));
+    }
+
+    /// parity: OPEN-023
+    #[test]
+    fn two_files_with_a_comparison_tool_offer_compare_files() {
+        let two = ItemFacts {
+            is_single: false,
+            comparison: Comparison::TwoFiles,
+            ..file()
+        };
+        assert!(labels(&item_menu(&two, MenuStyle::Classic).entries).contains(&"Compare files".to_owned()));
+        assert!(
+            !labels(&item_menu(&file(), MenuStyle::Classic).entries).contains(&"Compare files".to_owned())
+        );
     }
 
     /// parity: SRCH-015
@@ -623,11 +821,22 @@ mod tests {
         );
     }
 
-    /// parity: CMD-011, OPS-029
+    /// The folder's applications and Open folder with… follow Open in
+    /// Terminal (OPEN-013).
+    ///
+    /// parity: CMD-011, OPS-029, OPEN-013
     #[test]
     fn the_background_menu_acts_on_the_folder() {
+        let files = ApplicationChoice {
+            id: "org.gnome.Nautilus.desktop".to_owned(),
+            name: "Files".to_owned(),
+            is_default: true,
+            is_recommended: true,
+            is_available: true,
+            icon: None,
+        };
         assert_eq!(
-            labels(&background_menu("Undo: Rename", "Redo")),
+            labels(&background_menu("Undo: Rename", "Redo", &[files])),
             [
                 "New…",
                 "Paste",
@@ -635,6 +844,8 @@ mod tests {
                 "Redo",
                 "Refresh",
                 "Open in Terminal",
+                "Open with Files",
+                "Open folder with…",
                 "-",
                 "Pin this folder",
                 "Cache this folder for search",

@@ -49,8 +49,10 @@
 //! | `identity` | [`RuntimeIdentity`] of a build | `runtime_guard.py` |
 //! | `instance` | [`InstanceGuard`]: an outdated running instance | `runtime_guard.py` |
 //! | `session_bus` | [`SessionBus`], the guard's D-Bus calls | `runtime_guard.py` |
+//! | `diagnosis` | [`Diagnosis`], the `--diagnose` report | `winspace.py` |
 //! | `error` | [`UpdateError`] and [`InstanceError`] | all of them |
 
+mod diagnosis;
 mod download;
 mod error;
 mod github;
@@ -68,6 +70,7 @@ mod trust;
 mod updater;
 mod version;
 
+pub use diagnosis::{AssociationStatus, Associations, Diagnosis, ShowInFolder};
 pub use error::{InstanceError, UpdateError};
 pub use github::GitHubReleases;
 pub use identity::{InstalledBuild, RuntimeIdentity, RUNTIME_PROTOCOL};

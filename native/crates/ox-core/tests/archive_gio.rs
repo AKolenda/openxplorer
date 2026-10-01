@@ -383,6 +383,30 @@ fn the_production_opener_reads_local_archives() {
     assert_eq!(listing.archive_uri, file_uri(&archive));
 }
 
+/// ARC-007: an archive on a share with a local path (here the `GVfs` FUSE
+/// export in the private runtime directory) is read from that path, as
+/// `archive_stream` in `desktop/native_opening.py` reads it.
+///
+/// parity: ARC-007
+#[test]
+fn a_share_archive_with_a_local_path_is_read_from_it() {
+    let export = glib::user_runtime_dir().join("gvfs/smb-share:server=archive-nas,share=projects");
+    fs::create_dir_all(&export).expect("create the export");
+    fs::write(
+        export.join("Bundle.zip"),
+        zip_bytes(&[TestMember::file("a.txt", b"data")]),
+    )
+    .expect("write the archive");
+
+    let listed = opener().open("smb://archive-nas/projects/Bundle.zip", &Cancellation::new());
+    fs::remove_dir_all(&export).expect("remove the export");
+
+    let mut stream = listed.expect("the archive opens from the export");
+    let mut signature = [0; 4];
+    stream.read_exact(&mut signature).expect("reads");
+    assert_eq!(&signature, b"PK\x03\x04");
+}
+
 /// ARC-007: the production opener opens local files without blocking, so
 /// a FIFO named like an archive fails at once instead of holding the
 /// worker thread until some program writes to it.

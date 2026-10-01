@@ -46,6 +46,9 @@
                 <child>
                   <object class="GtkButton" id="close_button">
                     <property name="tooltip-text">Close details pane</property>
+                    <accessibility>
+                      <property name="label">Close details pane</property>
+                    </accessibility>
                     <style>
                       <class name="detail-close"/>
                     </style>
@@ -54,7 +57,7 @@
               </object>
             </child>
             <child>
-              <object class="GtkCenterBox">
+              <object class="GtkCenterBox" id="preview_area">
                 <style>
                   <class name="detail-preview"/>
                 </style>

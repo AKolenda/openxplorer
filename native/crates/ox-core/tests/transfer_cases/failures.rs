@@ -6,9 +6,9 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeInfo, TransferError};
+use ox_core::transfer::{Cancellation, ConflictPolicy, MoveByCopyingItem, Node, NodeInfo, TransferError};
 
 use crate::transfer_support::{
     faults::{Fault, Faults},
@@ -55,22 +55,61 @@ fn failed_or_backend_cancelled_copies_keep_the_original_and_remove_private_stagi
     }
 }
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_failure_does_not_copy_delete`.
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_failure_does_not_copy_delete`:
+/// a move the backend cannot do is refused and the source kept, both
+/// without a question installed and when the user declines to finish it
+/// by copying, who is asked once for the whole operation.
 ///
 /// parity: XFER-011
 #[test]
 fn native_move_failure_never_degrades_to_copy_then_delete() {
     let fixture = Fixture::new();
     let source = fixture.source_folder.join("document");
+    let second = fixture.source_folder.join("second");
     write(&source, "original");
-    let mut engine = fixture.engine(Faults::new(Fault::MoveUnsupported, &fixture.cancel));
+    write(&second, "second");
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&asked);
+    let declining = fixture
+        .engine(Faults::new(Fault::MoveUnsupported, &fixture.cancel))
+        .with_move_by_copying_question(move |item: &MoveByCopyingItem| {
+            log.lock().expect("question log").push(item.clone());
+            false
+        });
 
-    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
+    for mut engine in [
+        fixture.engine(Faults::new(Fault::MoveUnsupported, &fixture.cancel)),
+        declining,
+    ] {
+        let result = fixture.run(
+            &mut engine,
+            &[&source, &second],
+            Request::Move(ConflictPolicy::Skip),
+        );
 
-    assert_eq!(result.errors.len(), 1);
-    assert!(result.done.is_empty());
-    assert_eq!(read(&source), "original");
-    assert!(list(&fixture.destination_folder).is_empty());
+        assert_eq!(
+            result.errors,
+            [
+                "document: Native move unsupported.",
+                "second: Native move unsupported."
+            ]
+        );
+        assert!(result.done.is_empty());
+        assert_eq!(read(&source), "original");
+        assert!(list(&fixture.destination_folder).is_empty());
+        fixture.assert_no_staging();
+    }
+    let destination = fixture
+        .destination_folder
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let expected = MoveByCopyingItem {
+        name: "document".into(),
+        destination,
+    };
+    assert_eq!(*asked.lock().unwrap(), [expected]);
 }
 
 /// Ported from `desktop/tests/test_operations.py::TransferTests::test_preflight_race_never_overwrites`: a name another program

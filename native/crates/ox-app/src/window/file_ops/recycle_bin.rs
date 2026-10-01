@@ -7,11 +7,12 @@
 //! folder, with each item's original location and deletion date; these
 //! commands act on it through ox-core's Recycle Bin service, which never
 //! overwrites when it restores. Each runs as the window's one operation,
-//! with the transfer panel and Cancel, and deleting asks first.
+//! with the transfer panel and Cancel, and deleting asks first unless the
+//! settings say not to (SET-010).
 
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, permanent_delete_confirmation,
-    restore_from_recycle_bin, summarize, summarize_restore, DeleteConfirmation,
+    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, restore_from_recycle_bin,
+    starting_label, summarize, summarize_restore, DeleteConfirmation,
 };
 use ox_core::transfer::TransferMode;
 
@@ -21,9 +22,6 @@ use crate::window::BrowserWindow;
 
 /// The panel's label while items are restored.
 const RESTORING: &str = "Restoring items…";
-
-/// The panel's label while items are deleted for good.
-const DELETING: &str = "Deleting items…";
 
 /// The question Empty Recycle Bin asks.
 fn empty_confirmation() -> DeleteConfirmation {
@@ -51,7 +49,7 @@ impl BrowserWindow {
         let finished = outcome.map(|outcome| FinishedOperation {
             summary: summarize_restore(&outcome.result),
             undo: outcome.undo,
-            created: outcome.created,
+            select_after: outcome.created,
         });
         self.conclude_operation(finished).await;
     }
@@ -67,7 +65,7 @@ impl BrowserWindow {
         let finished = outcome.map(|outcome| FinishedOperation {
             summary: summarize_restore(&outcome.result),
             undo: outcome.undo,
-            created: outcome.created,
+            select_after: outcome.created,
         });
         self.conclude_operation(finished).await;
     }
@@ -76,14 +74,11 @@ impl BrowserWindow {
     /// good (OPS-043).
     pub(super) async fn delete_from_recycle_bin(&self) {
         let items = self.items_to_delete();
-        if !self
-            .confirm_deletion(&permanent_delete_confirmation(&items))
-            .await
-        {
+        if !self.confirms_permanent_delete(&items).await {
             return;
         }
         let uris: Vec<String> = items.into_iter().map(|item| item.uri).collect();
-        let Some(context) = self.begin_operation(DELETING) else {
+        let Some(context) = self.begin_operation(starting_label(TransferMode::Delete)) else {
             return;
         };
         let outcome = delete_from_recycle_bin(&uris, &context.cancel).await;
@@ -91,7 +86,7 @@ impl BrowserWindow {
         let finished = outcome.map(|result| FinishedOperation {
             summary: summarize(TransferMode::Delete, &result),
             undo: None,
-            created: Vec::new(),
+            select_after: Vec::new(),
         });
         self.conclude_operation(finished).await;
     }
@@ -102,10 +97,17 @@ impl BrowserWindow {
         if !self.allows(FileCommand::EmptyRecycleBin) {
             return;
         }
-        if !self.confirm_deletion(&empty_confirmation()).await {
+        self.empty_trash().await;
+    }
+
+    /// Empty Recycle Bin from the sidebar's Recycle Bin (SIDE-025), from
+    /// any folder: asks, then deletes everything in it for good.
+    pub(crate) async fn empty_trash(&self) {
+        let asks = self.context().settings_data().preferences.confirm_empty_trash;
+        if asks && !self.confirm_deletion(&empty_confirmation()).await {
             return;
         }
-        let Some(context) = self.begin_operation(DELETING) else {
+        let Some(context) = self.begin_operation(starting_label(TransferMode::Delete)) else {
             return;
         };
         let outcome = empty_recycle_bin(&context.cancel).await;
@@ -113,7 +115,7 @@ impl BrowserWindow {
         let finished = outcome.map(|result| FinishedOperation {
             summary: summarize(TransferMode::Delete, &result),
             undo: None,
-            created: Vec::new(),
+            select_after: Vec::new(),
         });
         self.conclude_operation(finished).await;
     }

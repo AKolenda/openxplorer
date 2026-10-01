@@ -104,7 +104,9 @@ window.ox button.page-chevron image { color: @ox_muted; }
   border-radius: 10px;
   background-color: @ox_status_tint;
 }
-.status-badge { min-width: 44px; min-height: 44px; border-radius: 22px; background-color: @ox_selected; }
+/* An odd size: the 20 px glyph lands on whole pixels with its 15 px
+   drawing (search, apps) exactly in the middle of the disc. */
+.status-badge { min-width: 45px; min-height: 45px; border-radius: 23px; background-color: @ox_selected; }
 .status-badge image { color: @ox_accent; }
 .settings .status-title { font-weight: 600; }
 .settings .status-text { color: @ox_muted; }

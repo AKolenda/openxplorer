@@ -16,12 +16,18 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::integration::{FileManagerMethod, FileManagerRequest, Sandbox, BUS_NAME, OBJECT_PATH};
+use ox_core::integration::{
+    BraveIntegration, BravePaths, FileManagerMethod, FileManagerRequest, ProcessTable, Sandbox, BUS_NAME,
+    OBJECT_PATH,
+};
 
 use super::{
-    BraveDialog, DesktopIntegration, IntegrationFolders, MimeBackend, OpenWithDialog, OpenWithSubject,
+    BraveDialog, DefaultChoice, DesktopIntegration, IntegrationFolders, LaunchTarget, MimeBackend,
+    OpenWithDialog, OpenWithError, OpenWithSubject, PreparedLaunch,
 };
-use crate::test_support::harness::{application, capture_dialog, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    application, capture_dialog, descendants, settle, wait_until, Fixture, TestWindow,
+};
 
 /// Requests the service handed to the application.
 type Received = Rc<RefCell<Vec<FileManagerRequest>>>;
@@ -277,6 +283,158 @@ fn open_with_lists_filters_and_launches_the_chosen_application() {
     }
 }
 
+/// Menus and Open with draw an application with its own icon, from its
+/// desktop entry, and keep their glyph for one without.
+///
+/// parity: CMD-031
+#[gtk::test]
+fn an_application_is_drawn_with_its_own_icon() {
+    const FIXTURE_ID: &str = "io.winspace.FixtureEditor.desktop";
+    let applications = glib::user_data_dir().join("applications");
+    assert!(
+        applications.starts_with(std::env::temp_dir()),
+        "tests run with a private XDG_DATA_HOME"
+    );
+    std::fs::create_dir_all(&applications).expect("the private data folder");
+    let entry = applications.join(FIXTURE_ID);
+    let desktop_entry = "[Desktop Entry]\nType=Application\nName=Fixture Editor\nExec=true %F\n\
+                         Icon=accessories-text-editor\n";
+    std::fs::write(&entry, desktop_entry).expect("the fixture entry");
+    let fixture_icon = || {
+        gio::AppInfo::all()
+            .into_iter()
+            .find(|info| info.id().as_deref() == Some(FIXTURE_ID))
+            .and_then(|info| ox_core::integration::ApplicationInfo::icon(&info))
+    };
+    wait_until("GIO to read the entry", || fixture_icon().is_some());
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let subject = OpenWithSubject {
+        uri: fixture.uri_of("Documents"),
+        name: "Documents".to_owned(),
+        is_folder: true,
+    };
+
+    let dialog = OpenWithDialog::present_for(
+        &test.window,
+        subject,
+        recording_launcher(&Launches::default()),
+        |_| {},
+    );
+    wait_until("the list", || {
+        dialog.shown_names().iter().any(|name| name == "Fixture Editor")
+    });
+
+    let row = descendants::<gtk::ListBoxRow>(&dialog)
+        .into_iter()
+        .find(|row| {
+            descendants::<gtk::Label>(row)
+                .iter()
+                .any(|label| label.text() == "Fixture Editor")
+        })
+        .expect("the fixture application has a row");
+    let image = descendants::<gtk::Image>(&row)
+        .into_iter()
+        .next()
+        .expect("the row starts with a picture");
+    dialog.close();
+    std::fs::remove_file(&entry).expect("the fixture entry");
+    let icon = image
+        .gicon()
+        .and_downcast::<gio::ThemedIcon>()
+        .expect("the row draws the application's named icon");
+    assert!(icon.names().iter().any(|name| name == "accessories-text-editor"));
+    assert!(
+        super::application_image(None, 16).is_none(),
+        "no icon keeps the glyph"
+    );
+}
+
+/// The window's Open with launcher starts applications with a launch
+/// context of the window's own display, which gives them startup
+/// notification and focus.
+///
+/// parity: INT-023
+#[gtk::test]
+fn applications_start_with_the_windows_display() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let prepared = PreparedLaunch {
+        target: LaunchTarget::Path(fixture.path("Notes 2.txt")),
+        content_type: "text/plain".to_owned(),
+        is_folder: false,
+    };
+
+    let launcher = test.window.launcher_with(record_start);
+    let toast = launcher("demo-editor.desktop", &prepared, DefaultChoice::Keep);
+
+    assert_eq!(toast.ok(), Some("Opened with the selected application."));
+    let started = STARTED.with(RefCell::take);
+    assert_eq!(started.len(), 1);
+    assert_eq!(started[0].0, "demo-editor.desktop");
+    let context = started[0]
+        .1
+        .downcast_ref::<gtk::gdk::AppLaunchContext>()
+        .expect("a display's launch context");
+    assert_eq!(
+        gtk::gdk::prelude::GdkAppLaunchContextExt::display(context),
+        WidgetExt::display(&test.window)
+    );
+}
+
+/// A command typed into Open with runs with the item's path as one
+/// argument, instead of an application.
+///
+/// parity: OPEN-014
+#[gtk::test]
+fn open_with_runs_a_typed_command_with_the_item() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let launches: Launches = Rc::default();
+    let subject = OpenWithSubject {
+        uri: fixture.uri_of("Résumé.txt"),
+        name: "Résumé.txt".to_owned(),
+        is_folder: false,
+    };
+    let reports: Rc<RefCell<Vec<String>>> = Rc::default();
+    let report = Rc::clone(&reports);
+    let dialog = OpenWithDialog::present_for(
+        &test.window,
+        subject,
+        recording_launcher(&launches),
+        move |message| report.borrow_mut().push(message.to_owned()),
+    );
+    let copy = fixture.path("copy of the résumé.txt");
+
+    dialog.type_command(&format!("cp %f '{}'", copy.display()));
+    dialog.click_open();
+
+    wait_until("the command to copy the file", || copy.is_file());
+    assert_eq!(*reports.borrow(), ["Ran the command."]);
+    assert!(launches.borrow().is_empty(), "no application started");
+}
+
+thread_local! {
+    /// What [`record_start`] was asked to start, with the launch context.
+    static STARTED: RefCell<Vec<(String, gio::AppLaunchContext)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Records a launch instead of starting an application.
+#[allow(clippy::unnecessary_wraps, reason = "it stands in for integration::launch")]
+fn record_start(
+    app_id: &str,
+    _prepared: &PreparedLaunch,
+    _default: DefaultChoice,
+    launch_context: &gio::AppLaunchContext,
+) -> Result<&'static str, OpenWithError> {
+    STARTED.with(|started| {
+        started
+            .borrow_mut()
+            .push((app_id.to_owned(), launch_context.clone()));
+    });
+    Ok("Opened with the selected application.")
+}
+
 /// For a folder every installed application is listed, and the
 /// file-manager default is never offered for change.
 ///
@@ -322,12 +480,64 @@ fn the_brave_dialog_lists_profiles_and_needs_consent() {
     let integration = DesktopIntegration::with_mime_backend(&folders, Sandbox::Host, backend);
 
     let dialog = BraveDialog::present_for(&test.window, integration.brave(), &fixture.uri(), |_| {});
-    wait_until("the profiles", || !dialog.profile_labels().is_empty());
+    wait_until("the dialog to show", || dialog.is_visible());
+    // It shows once the profiles are listed, so it never grows after its
+    // first frame, which cut its title off while it grew.
+    assert!(
+        !dialog.profile_labels().is_empty(),
+        "the profiles are listed before it shows"
+    );
+    wait_until("the dialog to have its size", || dialog.height() > 0);
+    let first_height = dialog.height();
+    settle();
+    assert_eq!(dialog.height(), first_height, "the dialog keeps its first size");
 
     assert_eq!(dialog.profile_labels(), ["Personal · Brave-Browser\n/tmp/old"]);
     capture_dialog(&dialog, "native-brave-dialog.png");
     dialog.click_apply();
     assert_eq!(dialog.status(), "Confirm the change using the checkbox.");
+    let unchanged = std::fs::read_to_string(profile.join("Preferences")).expect("the profile is readable");
+    assert_eq!(unchanged, preferences);
+    dialog.close();
+}
+
+/// Restore previous needs the consent and one profile, and says why it
+/// changed nothing when no earlier setting was recorded.
+///
+/// parity: INT-021
+#[gtk::test]
+fn the_brave_dialogs_restore_needs_consent_and_a_record() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let root = tempfile::tempdir().expect("a temporary folder");
+    let folders = IntegrationFolders::inside(root.path());
+    let profile = folders.config_home.join("BraveSoftware/Brave-Browser/Default");
+    std::fs::create_dir_all(&profile).expect("the temporary folder is writable");
+    let preferences = r#"{"download": {"default_directory": "/tmp/old"}}"#;
+    std::fs::write(profile.join("Preferences"), preferences).expect("the profile is writable");
+    // An empty process table: Brave does not run, whatever the machine runs.
+    let processes = root.path().join("proc");
+    std::fs::create_dir(&processes).expect("the temporary folder is writable");
+    let paths = BravePaths {
+        settings: folders.settings.clone(),
+        home: folders.home.clone(),
+        config_home: folders.config_home.clone(),
+    };
+    let brave = BraveIntegration::with_activity(&paths, Sandbox::Host, ProcessTable::at(&processes));
+    let dialog = BraveDialog::present_for(&test.window, brave, &fixture.uri(), |_| {});
+    wait_until("the profiles", || !dialog.profile_labels().is_empty());
+
+    dialog.click_restore();
+    assert_eq!(
+        dialog.status(),
+        "Select one profile and confirm to restore its previous download setting."
+    );
+
+    dialog.set_consent(true);
+    dialog.click_restore();
+    wait_until("the answer", || {
+        dialog.status() == "No previous download setting was recorded for this profile."
+    });
     let unchanged = std::fs::read_to_string(profile.join("Preferences")).expect("the profile is readable");
     assert_eq!(unchanged, preferences);
     dialog.close();

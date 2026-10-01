@@ -13,6 +13,7 @@
 //! the real one.
 #![warn(unreachable_pub)]
 
+mod announcement;
 mod app_context;
 pub mod application;
 mod archive_view;
@@ -24,11 +25,14 @@ mod folder_view;
 mod history;
 mod icons;
 mod integration;
+mod launcher_progress;
 mod locations;
 mod modal;
 mod network;
+mod operation_session;
 mod places;
 mod properties;
+mod resizer_control;
 mod search;
 mod settings_page;
 mod settings_store;
@@ -39,6 +43,7 @@ mod typeahead;
 mod update;
 mod volumes;
 mod window;
+mod write_inhibitor;
 
 #[cfg(test)]
 mod test_support;

@@ -22,8 +22,9 @@ use ox_core::transfer::ConflictPolicy;
 
 use super::conflict_compare::{compare, compare_dates, Comparison};
 use super::conflict_rename::{checked_new_name, suggested_name};
-use crate::window::dialog::{ButtonStyle, Dialog, DialogButton};
+use crate::window::dialog::{Dialog, DialogButton};
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// The dialog's title.
 const TITLE: &str = "Items already exist";
@@ -87,20 +88,20 @@ impl PolicyButtons {
     /// `offers.replace`, the primary button. Without it, "Keep both" is.
     fn add_to(dialog: &Dialog, offers: Offers) -> Self {
         dialog.add_cancel_button();
-        let skip = dialog.add_button("Skip duplicates", ButtonStyle::Standard);
+        let skip = dialog.add_button("Skip duplicates", ButtonStyle::Bordered);
         let keep_both_style = if offers.replace {
-            ButtonStyle::Standard
+            ButtonStyle::Bordered
         } else {
-            ButtonStyle::Primary
+            ButtonStyle::Accent
         };
         let keep_both = dialog.add_button("Keep both", keep_both_style);
-        let rename = dialog.add_button("Rename", ButtonStyle::Standard);
+        let rename = dialog.add_button("Rename", ButtonStyle::Bordered);
         let replace_older = offers
             .replace_older
-            .then(|| dialog.add_button("Replace older", ButtonStyle::Standard));
+            .then(|| dialog.add_button("Replace older", ButtonStyle::Bordered));
         let replace = offers
             .replace
-            .then(|| dialog.add_button("Replace existing", ButtonStyle::Primary));
+            .then(|| dialog.add_button("Replace existing", ButtonStyle::Accent));
         Self {
             skip,
             keep_both,

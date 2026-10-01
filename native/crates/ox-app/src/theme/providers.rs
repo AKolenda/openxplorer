@@ -8,7 +8,9 @@
 
 use gtk::gdk;
 
+use super::accent::{self, Accent};
 use super::contrast::Contrast;
+use super::desktop_text::font_family_rule;
 use super::fonts::css_for_text_size;
 use super::stylesheets;
 use super::Appearance;
@@ -27,6 +29,8 @@ enum Layer {
     TextSize,
     /// The colour tokens the rules use.
     Palette,
+    /// The desktop's accent over the palette's.
+    Accent,
     /// The high-contrast rules.
     HighContrast,
 }
@@ -38,7 +42,8 @@ impl Layer {
             Layer::Rules => 0,
             Layer::TextSize => 1,
             Layer::Palette => 2,
-            Layer::HighContrast => 3,
+            Layer::Accent => 3,
+            Layer::HighContrast => 4,
         };
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + steps_above_application
     }
@@ -56,6 +61,8 @@ pub(super) struct Providers {
     palette: gtk::CssProvider,
     /// Font sizes and heights for the text size.
     text_size: gtk::CssProvider,
+    /// The accent's tokens, empty for the Windows blue.
+    accent: gtk::CssProvider,
     /// The high-contrast rules, empty at normal contrast.
     high_contrast: gtk::CssProvider,
 }
@@ -71,6 +78,7 @@ impl Providers {
         add_to_display(display, &provider_with(&icons::tint_stylesheet()), Layer::Rules);
         add_to_display(display, &providers.text_size, Layer::TextSize);
         add_to_display(display, &providers.palette, Layer::Palette);
+        add_to_display(display, &providers.accent, Layer::Accent);
         add_to_display(display, &providers.high_contrast, Layer::HighContrast);
         providers
     }
@@ -91,6 +99,7 @@ impl Providers {
             settings,
             palette: provider_with(stylesheets::palette(Appearance::Light)),
             text_size: provider_with(&css_for_text_size(TextSize::DEFAULT)),
+            accent: provider_with(""),
             high_contrast: provider_with(""),
         }
     }
@@ -106,9 +115,20 @@ impl Providers {
         }
     }
 
-    /// Loads the font sizes and heights of `size`.
-    pub(super) fn draw_text_size(&self, size: TextSize) {
-        self.text_size.load_from_string(&css_for_text_size(size));
+    /// Loads the tokens of `accent` in `appearance`.
+    pub(super) fn draw_accent(&self, accent: Accent, appearance: Appearance) {
+        self.accent
+            .load_from_string(&accent::stylesheet(accent, appearance));
+    }
+
+    /// Loads the font sizes and heights of `size`, and the font `family`
+    /// over the Windows stack when one is given.
+    pub(super) fn draw_text_size(&self, size: TextSize, family: Option<&str>) {
+        let mut css = css_for_text_size(size);
+        if let Some(family) = family {
+            css.push_str(&font_family_rule(family));
+        }
+        self.text_size.load_from_string(&css);
     }
 
     /// Loads the high-contrast rules for [`Contrast::High`] and empties

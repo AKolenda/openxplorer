@@ -2,7 +2,8 @@
 //! Which terminal emulator opens, and how it is told the folder.
 //!
 //! Ports `TERMINALS`, `SYSTEM_PATH`, `Terminal` and `find_terminal` in
-//! `desktop/terminal_integration.py` (OPEN-018, OPEN-020).
+//! `desktop/terminal_integration.py` (OPEN-018, OPEN-020), with the
+//! desktop's configured terminal first (OPEN-019).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -91,6 +92,16 @@ impl TerminalKind {
         }
     }
 
+    /// The option after which the terminal runs the rest of its arguments
+    /// as a command.
+    pub fn command_option(self) -> &'static str {
+        match self {
+            Self::GnomeTerminal | Self::Console => "--",
+            Self::XfceTerminal => "-x",
+            Self::Konsole | Self::XTerm | Self::UXTerm => "-e",
+        }
+    }
+
     /// The terminal whose program is named `name`, if it is a known one.
     pub fn from_program_name(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|kind| kind.program_name() == name)
@@ -141,6 +152,8 @@ impl Terminal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutableSearch {
     root: PathBuf,
+    /// The terminal the desktop is configured to use, tried first.
+    preferred: Option<TerminalKind>,
 }
 
 impl ExecutableSearch {
@@ -153,12 +166,22 @@ impl ExecutableSearch {
     pub fn under(root: &Path) -> Self {
         Self {
             root: root.to_owned(),
+            preferred: None,
         }
+    }
+
+    /// Tries `preferred`, the desktop's configured terminal, before the
+    /// Debian alternative and the preference order.
+    #[must_use]
+    pub fn preferring(mut self, preferred: Option<TerminalKind>) -> Self {
+        self.preferred = preferred;
+        self
     }
 
     /// The host path of the first executable named `name` in
     /// [`SYSTEM_PATH`], like `shutil.which(name, path=SYSTEM_PATH)`.
-    fn find(&self, name: &str) -> Option<PathBuf> {
+    #[must_use]
+    pub fn find(&self, name: &str) -> Option<PathBuf> {
         SYSTEM_PATH
             .iter()
             .map(|folder| Path::new(folder).join(name))
@@ -197,7 +220,8 @@ impl ExecutableSearch {
     }
 }
 
-/// The terminal to open (OPEN-018): Debian's `x-terminal-emulator`
+/// The terminal to open (OPEN-018, OPEN-019): the desktop's configured
+/// terminal when it is installed, then Debian's `x-terminal-emulator`
 /// alternative when it points to a known terminal, otherwise the first
 /// installed of [`TerminalKind::ALL`]. `$PATH` and `$TERMINAL` are never
 /// read.
@@ -206,6 +230,13 @@ impl ExecutableSearch {
 ///
 /// [`TerminalError::NoTerminal`] when no known terminal is installed.
 pub fn find_terminal(search: &ExecutableSearch) -> Result<Terminal, TerminalError> {
+    let preferred = search.preferred.and_then(|kind| {
+        let executable = search.find(kind.program_name())?;
+        Some(Terminal { executable, kind })
+    });
+    if let Some(terminal) = preferred {
+        return Ok(terminal);
+    }
     if let Some(terminal) = debian_alternative(search) {
         return Ok(terminal);
     }

@@ -65,6 +65,20 @@ impl TextSize {
         LEVELS[self.level]
     }
 
+    /// The size `levels` levels larger (smaller when negative), kept
+    /// between the smallest and the largest level.
+    pub(crate) fn moved_by(self, levels: isize) -> TextSize {
+        let largest = LEVELS.len() - 1;
+        let level = self.level.saturating_add_signed(levels).min(largest);
+        TextSize { level }
+    }
+
+    /// How many levels `self` is above `other` (negative when below).
+    pub(crate) fn levels_above(self, other: TextSize) -> isize {
+        let level = |size: TextSize| isize::try_from(size.level).unwrap_or_default();
+        level(self) - level(other)
+    }
+
     /// Every supported size, smallest first, as Settings offers them.
     pub(crate) fn all() -> impl Iterator<Item = TextSize> {
         (0..LEVELS.len()).map(|level| TextSize { level })

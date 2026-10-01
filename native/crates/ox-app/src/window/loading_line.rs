@@ -7,7 +7,8 @@
 //! never moves the items, with a bar sliding across it
 //! (`resources/skin/folder-views.css`). It appears only when a listing
 //! takes longer than [`APPEARANCE_DELAY`], so folders that list at once
-//! never flash it (ui-spec.md M06).
+//! never flash it (ui-spec.md M06). The status bar says "Loading…" only
+//! while the line shows ([`LoadingLine::is_shown`]).
 
 use std::time::Duration;
 
@@ -15,8 +16,10 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-/// How long a listing runs before the line shows: Fluent's `durationFast`.
-const APPEARANCE_DELAY: Duration = Duration::from_millis(150);
+/// How long a listing runs before the line shows. Shorter listings, which
+/// are most of them, show nothing at all: Dolphin waits as long before it
+/// says a folder is loading.
+pub(crate) const APPEARANCE_DELAY: Duration = Duration::from_millis(300);
 
 mod imp {
     use std::cell::RefCell;
@@ -98,6 +101,11 @@ impl LoadingLine {
             ),
         );
         self.imp().pending.replace(Some(timer));
+    }
+
+    /// Whether the line shows now: the listing has run for the delay.
+    pub(crate) fn is_shown(&self) -> bool {
+        self.is_visible()
     }
 
     fn cancel_pending(&self) {

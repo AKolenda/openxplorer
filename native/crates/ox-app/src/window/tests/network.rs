@@ -19,7 +19,6 @@ use ox_core::network::{
     WriteActivity, KEYRING_SAVE_NOTICE,
 };
 
-use crate::dialogs::NetworkFormDialog;
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::network::Discoverer;
@@ -29,6 +28,7 @@ use crate::test_support::harness::{
 };
 use crate::window::session::TabPlacement;
 use crate::window::BrowserWindow;
+use crate::window::Dialog;
 
 /// The labels `widget` shows, in order.
 pub(super) fn texts_in(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
@@ -43,10 +43,10 @@ pub(super) fn shows(widget: &impl IsA<gtk::Widget>, text: &str) -> bool {
 }
 
 /// The open network dialog, once it is shown.
-pub(super) fn open_form_dialog() -> NetworkFormDialog {
+pub(super) fn open_form_dialog() -> Dialog {
     let find = || {
         let toplevels = gtk::Window::list_toplevels().into_iter();
-        let dialogs = toplevels.filter_map(|toplevel| toplevel.downcast::<NetworkFormDialog>().ok());
+        let dialogs = toplevels.filter_map(|toplevel| toplevel.downcast::<Dialog>().ok());
         dialogs.filter(WidgetExt::is_visible).last()
     };
     wait_until("the dialog", || find().is_some());
@@ -212,13 +212,13 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
     let dialog = open_form_dialog();
     let entries = descendants::<gtk::Entry>(&dialog);
     entries[0].set_text("/home/demo");
-    dialog.press_confirm();
+    dialog.press_primary();
     wait_until("the error", || dialog.error_text().is_some());
 
     assert!(dialog.is_visible());
-    assert_eq!(dialog.confirm_state(), ("Connect".to_owned(), true));
-    dialog.press_cancel();
-    assert!(!dialog.is_visible());
+    assert!(dialog.can_press("Connect"), "Connect can be pressed again");
+    dialog.press("Cancel");
+    wait_until("Cancel to close the dialog", || !dialog.is_visible());
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
 }
 
@@ -259,6 +259,40 @@ fn an_unmounted_share_is_mounted_once_then_listed_again() {
     });
 }
 
+/// Measuring a share that is not mounted mounts it once and measures it
+/// again; a failed mount is what the folder's size reports.
+///
+/// parity: PROP-029, PROP-030
+#[gtk::test]
+fn an_unmounted_share_is_mounted_once_before_its_size_is_measured() {
+    use crate::properties::FolderSizeState;
+
+    let test = TestWindow::open(Page::Network.uri());
+    let mounts = Rc::new(Cell::new(0));
+    let counted = Rc::clone(&mounts);
+    test.window.network().answer_mounts_with(move || {
+        counted.set(counted.get() + 1);
+        Err(NetworkError::NotAFolder)
+    });
+    let share = "smb://example.invalid/share";
+
+    test.activate("calculate-folder-size-of", Some(share));
+
+    wait_until("the measured share", || {
+        matches!(
+            test.window.measured_folder_size(share),
+            Some(FolderSizeState::Unavailable(_))
+        )
+    });
+    assert_eq!(mounts.get(), 1, "mounted once");
+    assert_eq!(
+        test.window.measured_folder_size(share),
+        Some(FolderSizeState::Unavailable(
+            "This location is not a folder.".to_owned()
+        ))
+    );
+}
+
 /// While a server is signed out, it is neither listed nor connected.
 ///
 /// parity: NET-023
@@ -285,13 +319,13 @@ fn a_server_being_signed_out_is_neither_listed_nor_mapped() {
     test.activate("map-network-location", None);
     let dialog = open_form_dialog();
     descendants::<gtk::Entry>(&dialog)[0].set_text("\\\\nas\\Projects");
-    dialog.press_confirm();
+    dialog.press_primary();
     wait_until("the error", || dialog.error_text().is_some());
     assert_eq!(
         dialog.error_text().as_deref(),
         Some("Sign-out is in progress. Reconnect after it finishes.")
     );
-    dialog.press_cancel();
+    dialog.press("Cancel");
     drop(signing_out);
 }
 
@@ -315,7 +349,7 @@ fn signing_out_forgets_the_server_and_its_tabs() {
     let dialog = open_form_dialog();
     assert!(shows(&dialog, "Sign out of nas?"));
     descendants::<gtk::CheckButton>(&dialog)[0].set_active(false);
-    dialog.press_confirm();
+    dialog.press_primary();
     wait_until("the Network page", || {
         test.window.current_uri().as_deref() == Some(Page::Network.uri())
     });
@@ -356,7 +390,7 @@ fn signing_out_of_the_server_on_screen_drops_its_rows() {
     test.activate("sign-out", Some("smb://example.invalid/share"));
     let dialog = open_form_dialog();
     descendants::<gtk::CheckButton>(&dialog)[0].set_active(false);
-    dialog.press_confirm();
+    dialog.press_primary();
     wait_until("the Network page", || {
         test.window.current_uri().as_deref() == Some(Page::Network.uri())
     });
@@ -377,7 +411,7 @@ fn signing_out_without_a_keyring_says_the_credentials_remain() {
     let test = TestWindow::open(Page::Network.uri());
 
     test.activate("sign-out", Some("smb://nas/share"));
-    open_form_dialog().press_confirm();
+    open_form_dialog().press_primary();
 
     let texts = message_box_texts("Sign-out did not fully finish");
     let detail =
@@ -391,11 +425,14 @@ fn signing_out_without_a_keyring_says_the_credentials_remain() {
 ///
 /// Ported from `desktop/tests/ui_v07.py::Keep in Network explicitly persists location`
 ///
-/// parity: NET-016, NET-017, SIDE-020
+/// parity: NET-016, NET-017, SIDE-009, SIDE-019, SIDE-020
 #[gtk::test]
 fn keep_in_network_saves_a_browsed_share_and_remove_deletes_it() {
     let test = TestWindow::open(Page::Network.uri());
     test.window.context().remember_network("smb://nas/media");
+    wait_until("the visited share under Network", || {
+        test.window.sidebar().labels().contains(&"media".to_owned())
+    });
     assert!(
         test.context.settings_data().shares.is_empty(),
         "browsing alone saves nothing"
@@ -513,7 +550,7 @@ fn disconnect_asks_first_and_reports_a_location_without_a_mount() {
                     applications too.";
     assert!(shows(&dialog, "Disconnect this mount?"));
     assert!(shows(&dialog, question), "{:?}", dialog.texts());
-    dialog.press_confirm();
+    dialog.press_primary();
 
     let texts = message_box_texts("Could not disconnect");
     assert!(
@@ -542,6 +579,34 @@ fn eject_and_safely_remove_report_a_location_without_a_mount() {
             "{texts:?}"
         );
     }
+}
+
+/// Before a drive is taken away, the tab in front and the tabs behind it
+/// that show a folder on it move to Home; other tabs stay.
+///
+/// parity: DEV-009
+#[gtk::test]
+fn the_tabs_on_a_drive_move_home_before_it_is_ejected() {
+    let fixture = Fixture::standard();
+    let home = ox_core::location::file_uri(&gtk::glib::home_dir());
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.window
+        .open_tab(&fixture.uri(), TabPlacement::Background)
+        .expect("a tab on the drive");
+    test.window
+        .open_tab(Page::ThisPc.uri(), TabPlacement::Background)
+        .expect("a tab elsewhere");
+
+    test.activate("eject", Some(&fixture.uri()));
+
+    message_box_texts("Could not eject");
+    let tab_uris: Vec<String> = {
+        use gtk::subclass::prelude::*;
+        let session = test.window.imp().session.borrow();
+        session.tabs().iter().map(|tab| tab.uri().to_owned()).collect()
+    };
+    assert_eq!(test.window.current_uri(), Some(home.clone()));
+    assert_eq!(tab_uris, [home.clone(), home, Page::ThisPc.uri().to_owned()]);
 }
 
 /// With `OX_NATIVE_CAPTURE_DIR` set, saves the network surfaces for visual
@@ -583,7 +648,7 @@ fn the_network_surfaces_are_captured() {
                 dialog.upcast_ref::<gtk::Window>(),
                 &format!("native-{name}-{theme}.png"),
             );
-            dialog.press_cancel();
+            dialog.press("Cancel");
         }
     }
 }

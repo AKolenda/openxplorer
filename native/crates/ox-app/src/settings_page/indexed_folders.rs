@@ -105,9 +105,7 @@ impl IndexedFolders {
     fn show_indexed(&self, indexed: &[IndexedRow], page: &SettingsPage) {
         self.indexed.remove_rows();
         if indexed.is_empty() {
-            let empty = parts::wrapped_label(NOTHING_INDEXED, "setting-description");
-            empty.add_css_class("empty-group");
-            self.indexed.add_plain_row(&empty);
+            show_nothing_indexed(&self.indexed);
         }
         for (root, candidate) in indexed {
             let row = root_row::root_row(root, &candidate.path, candidate.is_network, page);
@@ -148,6 +146,8 @@ fn candidate_of(root: &IndexRoot, candidates: &[IndexCandidate]) -> IndexCandida
 pub(super) fn build(page: &SettingsPage) -> (SettingsSection, IndexedFolders) {
     let section = SettingsSection::new("Indexed folders", LEAD, PageKind::Subpage);
     let indexed = SettingsGroup::new("Indexed folders");
+    // The list starts empty, so it says so until the index reports.
+    show_nothing_indexed(&indexed);
     section.append_group(&indexed);
     let add_group = SettingsGroup::new("Add folders to the index");
     let add_field = add_folder_field();
@@ -162,6 +162,13 @@ pub(super) fn build(page: &SettingsPage) -> (SettingsSection, IndexedFolders) {
         shown: RefCell::default(),
     };
     (section, folders)
+}
+
+/// Says in `group` that the index keeps no folder.
+fn show_nothing_indexed(group: &SettingsGroup) {
+    let empty = parts::wrapped_label(NOTHING_INDEXED, "setting-description");
+    empty.add_css_class("empty-group");
+    group.add_plain_row(&empty);
 }
 
 /// The path field of "Add a folder" (SET-007): wide, and never cutting
