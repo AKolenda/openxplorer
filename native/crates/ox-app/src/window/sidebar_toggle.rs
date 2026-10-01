@@ -50,6 +50,7 @@ impl BrowserWindow {
             .expect("the Places button is added once");
         let preferences = self.context().settings_data().preferences;
         self.show_sidebar(!preferences.hide_sidebar);
+        self.sidebar().set_icon_size(preferences.sidebar_icon_size);
     }
 
     /// Shows or hides the navigation pane, its resizer with it, and the

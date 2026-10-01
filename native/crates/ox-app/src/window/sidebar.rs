@@ -44,7 +44,7 @@ use entries::{RowTarget, Section, SidebarEntry};
 const MAP_NETWORK_GLYPH: i32 = 17;
 
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
@@ -61,6 +61,8 @@ mod imp {
         pub(super) entries: RefCell<Vec<SidebarEntry>>,
         /// The rows' context menu, built by `constructed`.
         pub(super) menu: OnceCell<MenuPopover>,
+        /// The rows' icon size in pixels, 0 for automatic (SIDE-012).
+        pub(super) icon_size: Cell<u32>,
     }
 
     #[glib::object_subclass]
@@ -244,12 +246,7 @@ impl Sidebar {
     pub(super) fn menu_entries_at(&self, y: f64) -> Option<Vec<MenuEntry>> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let Some(row) = self.list().row_at_y(y as i32) else {
-            return Some(vec![MenuItem::new(
-                "Add entry…",
-                Icon::Add,
-                WindowAction::AddPlace,
-            )
-            .into()]);
+            return Some(empty_space_menu());
         };
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
@@ -320,7 +317,7 @@ impl Sidebar {
             .enumerate()
             .map(|(index, entry)| {
                 let edges = entries::section_edges(&entries, index);
-                row::sidebar_row(entry, edges)
+                row::sidebar_row(entry, edges, self.imp().icon_size.get())
             })
             .collect();
         // The header function reads the entries as the rows are added.
@@ -328,6 +325,19 @@ impl Sidebar {
         for row in &rows {
             list.append(row);
         }
+    }
+
+    /// Draws the rows' icons `size` pixels big, or at the automatic size
+    /// for 0 (Dolphin's Places panel Icon Size, SIDE-012).
+    pub(super) fn set_icon_size(&self, size: u32) {
+        if self.imp().icon_size.replace(size) == size {
+            return;
+        }
+        let entries = self.imp().entries.borrow().clone();
+        let selected = self.list().selected_row().map(|row| row.index());
+        self.set_entries(entries);
+        let row = selected.and_then(|index| self.list().row_at_index(index));
+        self.list().select_row(row.as_ref());
     }
 
     /// Highlights the row for `uri`, else the closest place that holds it
@@ -369,6 +379,23 @@ impl Sidebar {
         let entries = self.imp().entries.borrow();
         entries.iter().map(|entry| entry.label.clone()).collect()
     }
+}
+
+/// The menu of the sidebar's empty space: "Add entry…" (SIDE-031) and
+/// the icon sizes (SIDE-012).
+fn empty_space_menu() -> Vec<MenuEntry> {
+    let size = |label: &str, pixels: &str| {
+        MenuItem::choice(label, Icon::Grid, WindowAction::SidebarIconSize, pixels).into()
+    };
+    vec![
+        MenuItem::new("Add entry…", Icon::Add, WindowAction::AddPlace).into(),
+        MenuEntry::Divider,
+        size("Automatic icon size", "0"),
+        size("Small icons", "16"),
+        size("Medium icons", "22"),
+        size("Large icons", "32"),
+        size("Huge icons", "48"),
+    ]
 }
 
 /// The tab a primary click with `modifiers` opens a place in: with Ctrl,

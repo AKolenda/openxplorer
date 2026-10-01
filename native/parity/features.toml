@@ -5362,7 +5362,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "PlacesPanelSettings::IconSize"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (the_icon_size_chosen_on_empty_space_redraws_the_rows_and_is_saved). The sidebar's empty-space menu offers Automatic icon size, Small icons (16), Medium (22), Large (32) and Huge (48) as a choice of win.sidebar-icon-size; the rows are redrawn at once, keeping the highlighted row, and the choice is saved as sidebarIconSize (only when not automatic) and applied to new windows. GTK's menus have no submenus here, so the sizes are a group of choices after 'Add entry…' rather than Dolphin's Icon Size submenu."
 
 [[feature]]
 id = "SIDE-013"
@@ -5732,8 +5733,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "lock_panels"
-native = "todo"
-native_note = "Porting notes: This does not fit the Explorer layout; offering it is optional."
+native = "n-a"
+native_note = "Explorer's navigation pane is part of a fixed window layout at the left edge; titled, floating or right-docked panels would leave the Windows 11 Explorer layout the native app keeps (the porting note marks this optional). The parts that fit the layout are done: the pane can be closed and reopened with View > Navigation pane or F9 (SIDE-024) and resized from the pointer or the keyboard (SIDE-023), and both choices persist."
 
 [[feature]]
 id = "SIDE-030"

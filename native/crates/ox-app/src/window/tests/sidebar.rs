@@ -18,6 +18,7 @@ use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::{MenuEntry, MenuPopover};
 use crate::window::sidebar::entries::{RowLevel, RowTarget, Section, SidebarEntry};
+use crate::window::WindowAction;
 
 /// The sidebar row labelled `label`.
 fn row_named(test: &TestWindow, label: &str) -> gtk::ListBoxRow {
@@ -382,4 +383,54 @@ fn add_entry_pins_a_typed_location_and_edit_changes_it_in_place() {
     let pins = test.context.settings_data().pins;
     assert_eq!(pins.len(), 1, "{pins:?}");
     assert!(same_location(&pins[0].uri, &fixture.uri()));
+}
+
+/// parity: SIDE-012
+#[gtk::test]
+fn the_icon_size_chosen_on_empty_space_redraws_the_rows_and_is_saved() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let menu = test
+        .window
+        .sidebar()
+        .menu_entries_at(100_000.0)
+        .expect("a menu on empty space");
+    let sizes: Vec<String> = menu
+        .iter()
+        .filter_map(|entry| match entry {
+            MenuEntry::Item(item) if item.action == WindowAction::SidebarIconSize.into() => {
+                Some(item.label.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        sizes,
+        [
+            "Automatic icon size",
+            "Small icons",
+            "Medium icons",
+            "Large icons",
+            "Huge icons"
+        ]
+    );
+    let home_icon_width = || {
+        let image = descendants::<ArtImage>(&row_named(&test, "Home"))
+            .into_iter()
+            .next()
+            .expect("Home has an icon");
+        image.measure(gtk::Orientation::Horizontal, -1).0
+    };
+    let automatic = home_icon_width();
+
+    test.activate("sidebar-icon-size", Some("48"));
+
+    assert!(
+        home_icon_width() >= 48,
+        "{automatic} grew to {}",
+        home_icon_width()
+    );
+    wait_until("the size to be saved", || {
+        test.context.settings_data().preferences.sidebar_icon_size == 48
+    });
 }

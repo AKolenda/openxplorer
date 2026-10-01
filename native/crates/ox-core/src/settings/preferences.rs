@@ -238,6 +238,23 @@ pub struct Preferences {
     /// Explorer's View > Show > Navigation pane off).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hide_sidebar: bool,
+    /// The sidebar's icon size in pixels (16, 22, 32 or 48), or 0 for the
+    /// automatic size (Dolphin's Places panel Icon Size). Stored only when
+    /// chosen.
+    #[serde(skip_serializing_if = "is_automatic_icon_size")]
+    pub sidebar_icon_size: u32,
+}
+
+/// The sidebar icon sizes the user may choose, in pixels; 0 is automatic.
+pub const SIDEBAR_ICON_SIZES: [u32; 5] = [0, 16, 22, 32, 48];
+
+/// True for the automatic sidebar icon size, which is not stored.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passes the field by reference"
+)]
+fn is_automatic_icon_size(size: &u32) -> bool {
+    *size == 0
 }
 
 impl Default for Preferences {
@@ -258,6 +275,7 @@ impl Default for Preferences {
             editable_location: false,
             external_folders_in_new_window: false,
             hide_sidebar: false,
+            sidebar_icon_size: 0,
         }
     }
 }
@@ -291,6 +309,10 @@ impl Preferences {
             update.external_folders_in_new_window,
         );
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
+        let icon_size = update
+            .sidebar_icon_size
+            .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
+        replace_if_some(&mut self.sidebar_icon_size, icon_size);
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
@@ -337,6 +359,8 @@ pub struct PreferencesUpdate {
     pub external_folders_in_new_window: Option<bool>,
     /// Hide or show the navigation pane.
     pub hide_sidebar: Option<bool>,
+    /// New sidebar icon size; one of [`SIDEBAR_ICON_SIZES`] or ignored.
+    pub sidebar_icon_size: Option<u32>,
 }
 
 impl PreferencesUpdate {
@@ -370,6 +394,10 @@ impl PreferencesUpdate {
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
             hide_sidebar: flag("hideSidebar"),
+            sidebar_icon_size: values
+                .get("sidebarIconSize")
+                .and_then(Value::as_u64)
+                .and_then(|size| u32::try_from(size).ok()),
         })
     }
 }

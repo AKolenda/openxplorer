@@ -56,6 +56,8 @@ pub(super) enum Preference {
     ShowFullPath(bool),
     /// Show the navigation pane (SIDE-024).
     Sidebar(bool),
+    /// The sidebar's icon size in pixels, 0 for automatic (SIDE-012).
+    SidebarIconSize(u32),
 }
 
 impl Preference {
@@ -73,6 +75,7 @@ impl Preference {
             Preference::WindowSize(size) => update.window_size = Some(size),
             Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
             Preference::Sidebar(shown) => update.hide_sidebar = Some(!shown),
+            Preference::SidebarIconSize(size) => update.sidebar_icon_size = Some(size),
             Preference::DefaultLayout => {
                 update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
                 // An empty list clears every saved column width.

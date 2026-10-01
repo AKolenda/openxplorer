@@ -120,6 +120,8 @@ pub(crate) enum WindowAction {
     DetailsPane,
     /// Shows or hides the navigation pane (F9, SIDE-024).
     Sidebar,
+    /// The sidebar's icon size: `0` (automatic), `16`, `22`, `32` or `48`.
+    SidebarIconSize,
     /// The column the details view sorts by.
     Sort,
     /// Whether the details view sorts ascending or descending.
@@ -364,6 +366,7 @@ impl WindowAction {
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
             WindowAction::Sidebar => "sidebar",
+            WindowAction::SidebarIconSize => "sidebar-icon-size",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
             WindowAction::Theme => "theme",
