@@ -14554,8 +14554,8 @@ python_tests = []
 bridge = ["chrome", "window"]
 dolphin = "KWin title-bar actions (server-side decorations)"
 gnome = "GSettings org.gnome.desktop.wm.preferences action-*-titlebar; gdk_toplevel_titlebar_gesture / gdk_toplevel_show_window_menu (GTK 4.14)"
-native = "todo"
-native_note = "Porting notes: button-layout (left/right) is deliberately not followed, to keep the Windows look. Existing OpenXplorer part is protected by TAB-048."
+native = "done"
+native_note = "native/crates/ox-app/src/window/title_bar.rs: the whole title bar is a GtkWindowHandle with a blank drag area that claims no clicks of its own, so GTK applies the desktop's title-bar actions: GDK reads GNOME's org.gnome.desktop.wm.preferences action-double-click-titlebar, action-middle-click-titlebar and action-right-click-titlebar into gtk-titlebar-double-click/-middle-click/-right-click, and a right click (\"menu\") opens the compositor's window menu. Neither the skin nor the window overrides them; caption buttons stay on the right (button-layout is deliberately not followed). Tests: the_blank_title_bar_is_the_window_handle (TAB-048) and the_blank_title_bar_follows_the_desktops_title_bar_actions, which sets non-default actions and checks they survive a window opening and a theme switch. The click itself is GTK's gesture and is not synthesised."
 
 [[feature]]
 id = "LOOK-028"
