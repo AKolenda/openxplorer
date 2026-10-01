@@ -179,6 +179,42 @@ fn properties_belong_to_the_tab_that_opened_them() {
     assert!(!tab_tooltips(&test)[0].contains("Properties open"));
 }
 
+/// Ctrl+Tab and Ctrl+Shift+Tab are window accelerators, so they switch
+/// tabs while a tab's Properties is open, whatever has focus in it.
+///
+/// parity: CMD-017
+#[gtk::test]
+fn ctrl_tab_switches_tabs_from_inside_a_tabs_properties() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let owner = test.active_tab().expect("a tab");
+    test.activate("new-tab", None);
+    test.activate_tab(owner);
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let in_dialog = descendants::<gtk::Button>(&frame)
+        .iter()
+        .any(WidgetExt::grab_focus);
+    assert!(in_dialog, "a control of the dialog takes focus");
+    let app = test.window.application().expect("the window has an application");
+
+    test.activate("next-tab", None);
+    let after_next = (test.active_tab(), test.shown_dialog());
+    test.activate("previous-tab", None);
+
+    let next = app.accels_for_action("win.next-tab");
+    assert!(next.iter().any(|key| key == "<Control>Tab"), "{next:?}");
+    let previous = app.accels_for_action("win.previous-tab");
+    assert!(
+        previous.iter().any(|key| key == "<Shift><Control>Tab"),
+        "{previous:?}"
+    );
+    assert_ne!(after_next.0, Some(owner));
+    assert!(after_next.1.is_none(), "the other tab hides the dialog");
+    assert_eq!(test.active_tab(), Some(owner));
+    assert_eq!(test.shown_dialog(), Some(frame));
+}
+
 /// parity: PROP-008
 #[gtk::test]
 fn closing_a_tab_discards_its_properties() {

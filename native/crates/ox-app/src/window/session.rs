@@ -416,7 +416,7 @@ mod tests {
         assert_eq!(session.active_id(), Some(only));
     }
 
-    /// parity: NAV-016
+    /// parity: NAV-016, SAFE-013
     #[test]
     fn old_results_cannot_repopulate_a_navigated_or_closed_tab() {
         let mut session = Session::default();

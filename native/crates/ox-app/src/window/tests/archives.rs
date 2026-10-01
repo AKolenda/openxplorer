@@ -7,6 +7,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use gtk::prelude::*;
 use ox_core::archive::{CompressionRequest, ZipCompressor};
@@ -15,7 +16,7 @@ use ox_core::transfer::Cancellation;
 
 use super::item_dialogs::{press, texts};
 use crate::archive_view::ArchiveBrowserView;
-use crate::test_support::harness::{capture, descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{capture, descendants, wait_for, wait_until, Fixture, TestWindow};
 
 /// A standard fixture with `Bundle.zip`, which holds `Docs/a.txt` and
 /// `readme.txt`.
@@ -91,6 +92,53 @@ fn opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy() {
         "Opened a temporary copy. Changes are not saved back to the ZIP."
     );
     assert!(!fixture.path("readme.txt").exists(), "browsing extracts nothing");
+}
+
+/// Opening a folder and going back before it is listed shows the top:
+/// the older listing never replaces the newer one.
+///
+/// parity: SAFE-013
+#[gtk::test]
+fn a_late_archive_listing_never_replaces_a_newer_one() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("open", None);
+    let browser = archive_browser(&test);
+    wait_until("the listing", || !browser.row_names().is_empty());
+
+    browser.show_folder("Docs/");
+    browser.show_folder("");
+
+    wait_until("the top again", || browser.row_names().len() == 2);
+    wait_for(Duration::from_millis(300));
+    assert_eq!(browser.row_names(), ["Docs", "readme.txt"]);
+    assert!(!browser.path_text().contains(" › "), "{}", browser.path_text());
+}
+
+/// Closing the Extract dialog cancels its check of the archive, and an
+/// answer that arrives afterwards changes nothing in the closed dialog.
+///
+/// parity: SAFE-013
+#[gtk::test]
+fn closing_the_extract_dialog_drops_its_check() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.shown_dialog().expect("the Extract dialog");
+
+    press(&frame, "Cancel");
+
+    wait_for(Duration::from_millis(300));
+    assert!(test.shown_dialog().is_none());
+    assert!(
+        texts(&frame)
+            .iter()
+            .any(|text| text == "Checking archive contents…"),
+        "{:?}",
+        texts(&frame)
+    );
 }
 
 /// parity: ARC-009, ARC-011, ARC-012

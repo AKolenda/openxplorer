@@ -69,11 +69,14 @@ pub(crate) fn map_network_dialog(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::rc::Rc;
+    use std::time::Duration;
+
+    use gtk::glib;
 
     use super::*;
-    use crate::test_support::harness::{descendants, settle};
+    use crate::test_support::harness::{descendants, settle, wait_for};
 
     /// parity: NET-001
     #[gtk::test]
@@ -139,6 +142,32 @@ mod tests {
         let keeping: Vec<ShareKeeping> = requests.borrow().iter().map(|request| request.keeping).collect();
         assert_eq!(keeping, [ShareKeeping::ThisSessionOnly]);
         dialog.close();
+        parent.close();
+    }
+
+    /// Cancel while "Connecting…" drops the connection: a success that
+    /// arrives afterwards is never acted on.
+    ///
+    /// parity: SAFE-013
+    #[gtk::test]
+    fn a_connection_that_answers_after_cancel_is_ignored() {
+        let parent = gtk::Window::new();
+        let answered = Rc::new(Cell::new(false));
+        let heard = Rc::clone(&answered);
+        let dialog = map_network_dialog(&parent, move |dialog, _| {
+            let heard = Rc::clone(&heard);
+            dialog.run("Connecting…", async move {
+                glib::timeout_future(Duration::from_millis(100)).await;
+                heard.set(true);
+            });
+        });
+        dialog.present();
+
+        dialog.press_confirm();
+        dialog.press_cancel();
+        wait_for(Duration::from_millis(300));
+
+        assert!(!answered.get(), "the late connection was dropped");
         parent.close();
     }
 }
