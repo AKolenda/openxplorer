@@ -22,6 +22,7 @@ use gtk::subclass::prelude::*;
 
 use super::art::Art;
 use super::composition::{compose, Badge, Corner, NetworkBar, Picture};
+use super::emblem::{EmblemPieces, Emblems};
 
 /// The CSS name of the widget, for the skin's rules about icons.
 const CSS_NAME: &str = "art";
@@ -131,7 +132,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{BadgePieces, NetworkBarPieces, ShownArt};
+    use super::{BadgePieces, EmblemPieces, NetworkBarPieces, ShownArt};
 
     /// Private state of [`super::ArtImage`]: the picture in a column that
     /// holds the stem and the bar under it once they are needed, in an
@@ -148,6 +149,8 @@ mod imp {
         pub(super) network_bar: OnceCell<NetworkBarPieces>,
         /// Made the first time a badge is shown.
         pub(super) badge: OnceCell<BadgePieces>,
+        /// Made the first time an item with an emblem is shown.
+        pub(super) emblems: OnceCell<EmblemPieces>,
         /// What is shown now, if anything.
         pub(super) shown: Cell<Option<ShownArt>>,
     }
@@ -165,6 +168,7 @@ mod imp {
                 picture: crate::icons::decorative_image(),
                 network_bar: OnceCell::new(),
                 badge: OnceCell::new(),
+                emblems: OnceCell::new(),
                 shown: Cell::new(None),
             }
         }
@@ -227,6 +231,17 @@ mod imp {
                 pieces
             })
         }
+
+        /// The emblems, laid over everything else the first time they are
+        /// needed.
+        pub(super) fn emblem_pieces(&self) -> &EmblemPieces {
+            self.emblems.get_or_init(|| {
+                let pieces = EmblemPieces::new();
+                self.overlay.add_overlay(&pieces.link);
+                self.overlay.add_overlay(&pieces.lock);
+                pieces
+            })
+        }
     }
 }
 
@@ -265,6 +280,23 @@ impl ArtImage {
         self.show_picture(&composition.picture);
         self.show_network_bar(composition.network_bar, size);
         self.show_badge(composition.badge);
+    }
+
+    /// Shows `emblems` over the art, `size` logical pixels square, or
+    /// hides them.
+    pub(crate) fn set_emblems(&self, emblems: Emblems, size: i32) {
+        let imp = self.imp();
+        if emblems.is_empty() && imp.emblems.get().is_none() {
+            // Nothing to hide if no emblem was ever shown.
+            return;
+        }
+        imp.emblem_pieces().show(emblems, size);
+    }
+
+    /// The emblem images, once an emblem was shown, for tests.
+    #[cfg(test)]
+    pub(super) fn emblem_pieces(&self) -> Option<&EmblemPieces> {
+        self.imp().emblems.get()
     }
 
     /// What the image shows, for tests.

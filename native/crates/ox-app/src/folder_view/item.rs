@@ -19,7 +19,7 @@ use ox_core::search::display_path;
 
 use crate::folder_view::filter::Visibility;
 use crate::folder_view::sorting::{SortKey, SortName};
-use crate::icons::Art;
+use crate::icons::{Art, Emblems};
 use crate::properties::FolderSizeState;
 
 /// A listed entry with what the views compute from it once, when its
@@ -30,6 +30,7 @@ struct PreparedEntry {
     type_sort_key: SortKey,
     lowercase_name: String,
     art: Art,
+    emblems: Emblems,
     entry: Entry,
     /// Worked out the first time a search shows the item's folder.
     folder_path: OnceCell<FolderPath>,
@@ -62,6 +63,7 @@ impl PreparedEntry {
             type_sort_key: SortKey::new(&entry.type_label),
             lowercase_name: entry.name.to_lowercase(),
             art: Art::for_entry(&entry),
+            emblems: Emblems::for_entry(&entry),
             entry,
             folder_path: OnceCell::new(),
         }
@@ -166,6 +168,11 @@ impl FileItem {
     /// The icon art for the item.
     pub(crate) fn art(&self) -> Art {
         self.prepared().art
+    }
+
+    /// The emblems over the item's icon: a link, a lock.
+    pub(crate) fn emblems(&self) -> Emblems {
+        self.prepared().emblems
     }
 
     /// The size of a file; `None` for folders and for files of unknown

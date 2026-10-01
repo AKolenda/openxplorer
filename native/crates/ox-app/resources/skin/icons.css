@@ -18,3 +18,10 @@ art .badge-plate { background-color: @ox_on_critical; border-radius: 9999px; }
    Windows draws one, and a server in the current app's share blue. */
 art .mapped-drive { color: @ox_mapped_drive; }
 art .server { color: @ox_share_glyph; }
+/* The link and lock emblems of a listed item (src/icons/emblem.rs), on a
+   small plate in the background colour so they read on any artwork. */
+art .emblem {
+  color: @ox_text;
+  background-color: @ox_bg;
+  border-radius: 2px;
+}
