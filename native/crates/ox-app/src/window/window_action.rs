@@ -122,6 +122,11 @@ pub(crate) enum WindowAction {
     /// Switches the details pane option or field named by the string
     /// target (the pane's menu).
     DetailsPaneOption,
+    /// Shows or hides the details column whose key is the string target
+    /// (the column titles' menu, VIEW-033).
+    DetailsColumn,
+    /// Stops the listing of the folder shown (VIEW-049).
+    Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
     Sidebar,
     /// The sidebar's icon size: `0` (automatic), `16`, `22`, `32` or `48`.
@@ -410,6 +415,8 @@ impl WindowAction {
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
             WindowAction::DetailsPaneOption => "details-pane-option",
+            WindowAction::DetailsColumn => "details-column",
+            WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
             WindowAction::SidebarIconSize => "sidebar-icon-size",
             WindowAction::SidebarShowAll => "sidebar-show-all",

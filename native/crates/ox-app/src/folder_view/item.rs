@@ -71,7 +71,7 @@ impl PreparedEntry {
 }
 
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::subclass::prelude::*;
@@ -88,6 +88,8 @@ mod imp {
         pub(super) prepared: OnceCell<PreparedEntry>,
         /// What a folder-size scan found, for a folder that was measured.
         pub(super) folder_size: RefCell<Option<FolderSizeState>>,
+        /// How many items a folder holds, once counted (VIEW-037).
+        pub(super) item_count: Cell<Option<u32>>,
     }
 
     #[glib::object_subclass]
@@ -194,6 +196,16 @@ impl FileItem {
     /// Records what a folder-size scan found for this folder.
     pub(crate) fn set_folder_size(&self, state: FolderSizeState) {
         self.imp().folder_size.replace(Some(state));
+    }
+
+    /// How many items the folder holds, once counted.
+    pub(crate) fn item_count(&self) -> Option<u32> {
+        self.imp().item_count.get()
+    }
+
+    /// Records how many items the folder holds.
+    pub(crate) fn set_item_count(&self, count: u32) {
+        self.imp().item_count.set(Some(count));
     }
 
     /// The size the Size column sorts by: a file's size, a folder's

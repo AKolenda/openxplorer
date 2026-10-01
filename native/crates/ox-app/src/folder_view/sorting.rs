@@ -26,17 +26,42 @@ pub(crate) enum SortColumn {
     Type,
     /// File size in bytes.
     Size,
+    /// Creation timestamp; this and the next three are offered by the
+    /// header's menu (VIEW-033).
+    Created,
+    /// The file extension.
+    Extension,
+    /// The owner's name.
+    Owner,
+    /// The permission bits.
+    Permissions,
 }
 
 impl SortColumn {
     /// Every column, in display order. A folder shows Date modified and a
     /// search Folder path, in the same place (`columnFields` in app.js).
-    pub(crate) const ALL: [SortColumn; 5] = [
+    pub(crate) const ALL: [SortColumn; 9] = [
         SortColumn::Name,
         SortColumn::Modified,
         SortColumn::FolderPath,
         SortColumn::Type,
         SortColumn::Size,
+        SortColumn::Created,
+        SortColumn::Extension,
+        SortColumn::Owner,
+        SortColumn::Permissions,
+    ];
+
+    /// The columns the header's menu shows and hides; Name and Folder
+    /// path always show where they apply.
+    pub(crate) const CHOOSABLE: [SortColumn; 7] = [
+        SortColumn::Modified,
+        SortColumn::Created,
+        SortColumn::Type,
+        SortColumn::Size,
+        SortColumn::Extension,
+        SortColumn::Owner,
+        SortColumn::Permissions,
     ];
 
     /// The columns the Sort menu offers, as app.js's Sort menu does; a
@@ -56,6 +81,10 @@ impl SortColumn {
             SortColumn::FolderPath => "parentUri",
             SortColumn::Type => "type",
             SortColumn::Size => "size",
+            SortColumn::Created => "created",
+            SortColumn::Extension => "extension",
+            SortColumn::Owner => "owner",
+            SortColumn::Permissions => "permissions",
         }
     }
 
@@ -72,6 +101,10 @@ impl SortColumn {
             SortColumn::FolderPath => "Folder path",
             SortColumn::Type => "Type",
             SortColumn::Size => "Size",
+            SortColumn::Created => "Date created",
+            SortColumn::Extension => "File extension",
+            SortColumn::Owner => "Owner",
+            SortColumn::Permissions => "Permissions",
         }
     }
 }

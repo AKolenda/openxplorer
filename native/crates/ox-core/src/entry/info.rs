@@ -60,6 +60,11 @@ pub(super) fn build_entry(
         can_delete: optional_boolean(info, "access::can-delete"),
         can_write: optional_boolean(info, "access::can-write"),
         serialized_icon: serialized_icon(info),
+        created: time_attribute(info, "time::created"),
+        owner: string_attribute(info, "owner::user"),
+        unix_mode: info
+            .has_attribute("unix::mode")
+            .then(|| info.attribute_uint32("unix::mode")),
     }
 }
 

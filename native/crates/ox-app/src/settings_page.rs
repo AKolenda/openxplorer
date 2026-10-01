@@ -26,6 +26,7 @@ mod building;
 mod category_row;
 mod choice_list;
 mod default_apps;
+mod folder_views;
 mod group;
 mod indexed_folders;
 mod indexing;

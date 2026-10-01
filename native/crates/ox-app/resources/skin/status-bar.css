@@ -21,5 +21,10 @@ window.ox .statusbar button {
   color: @ox_muted;
 }
 window.ox .statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
+/* How full the volume is: a 3px bar beside its free space (VIEW-053). */
+.statusbar .capacity { min-width: 64px; min-height: 3px; margin-top: 1px; }
+.statusbar .capacity > trough { min-height: 3px; background-color: @ox_hover; border-radius: 2px; border: none; }
+.statusbar .capacity > trough > progress { min-height: 3px; min-width: 0; margin: 0; background-color: @ox_accent; border-radius: 2px; border: none; }
+.statusbar .capacity.full > trough > progress { background-color: @ox_critical_fill; }
 /* A newer release, or a restart into an installed one, waits for the user. */
 window.ox .statusbar button.update-available { color: @ox_accent; }

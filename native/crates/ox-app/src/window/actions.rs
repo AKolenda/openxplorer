@@ -143,6 +143,8 @@ impl BrowserWindow {
         self.install_search_actions();
         self.install_saved_search_actions();
         self.install_details_pane_actions();
+        self.install_view_option_actions();
+        self.install_stop_action();
         self.install_integration_actions();
         self.install_context_menu_actions();
         let [journal, clipboard] = self.install_file_actions();

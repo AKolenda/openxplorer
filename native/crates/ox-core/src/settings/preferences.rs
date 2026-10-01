@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use super::choices::{ContextMenu, Theme, View};
 use super::pane_options::DetailsPaneOptions;
+use super::view_options::ViewOptions;
 use super::SettingsError;
 
 /// Text sizes offered in Settings, in percent.
@@ -83,16 +84,29 @@ pub enum Column {
     Type,
     /// The size.
     Size,
+    /// Date created; this and the next three are the native app's own.
+    Created,
+    /// The file extension.
+    Extension,
+    /// The owner's name.
+    Owner,
+    /// The permission bits.
+    Permissions,
 }
 
 impl Column {
-    /// Every column, in the order the Python app stores them.
-    pub const ALL: [Column; 5] = [
+    /// Every column: the Python app's, in the order it stores them, then
+    /// the native app's own.
+    pub const ALL: [Column; 9] = [
         Column::Name,
         Column::Modified,
         Column::ParentUri,
         Column::Type,
         Column::Size,
+        Column::Created,
+        Column::Extension,
+        Column::Owner,
+        Column::Permissions,
     ];
 
     /// The key used in `columnWidths` and by the UI (`parentUri`, ...).
@@ -103,6 +117,10 @@ impl Column {
             Column::ParentUri => "parentUri",
             Column::Type => "type",
             Column::Size => "size",
+            Column::Created => "created",
+            Column::Extension => "extension",
+            Column::Owner => "owner",
+            Column::Permissions => "permissions",
         }
     }
 
@@ -110,9 +128,9 @@ impl Column {
     pub fn width_range(self) -> RangeInclusive<u32> {
         match self {
             Column::Name | Column::ParentUri => 140..=1600,
-            Column::Modified => 100..=1000,
-            Column::Type => 80..=1000,
-            Column::Size => 70..=600,
+            Column::Modified | Column::Created => 100..=1000,
+            Column::Type | Column::Owner | Column::Permissions => 80..=1000,
+            Column::Size | Column::Extension => 70..=600,
         }
     }
 }
@@ -146,6 +164,18 @@ pub struct ColumnWidths {
     /// Width of [`Column::Size`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u32>,
+    /// Width of [`Column::Created`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<u32>,
+    /// Width of [`Column::Extension`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extension: Option<u32>,
+    /// Width of [`Column::Owner`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner: Option<u32>,
+    /// Width of [`Column::Permissions`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<u32>,
 }
 
 impl ColumnWidths {
@@ -157,6 +187,10 @@ impl ColumnWidths {
             Column::ParentUri => self.parent_uri,
             Column::Type => self.file_type,
             Column::Size => self.size,
+            Column::Created => self.created,
+            Column::Extension => self.extension,
+            Column::Owner => self.owner,
+            Column::Permissions => self.permissions,
         }
     }
 
@@ -184,6 +218,10 @@ impl ColumnWidths {
             Column::ParentUri => &mut self.parent_uri,
             Column::Type => &mut self.file_type,
             Column::Size => &mut self.size,
+            Column::Created => &mut self.created,
+            Column::Extension => &mut self.extension,
+            Column::Owner => &mut self.owner,
+            Column::Permissions => &mut self.permissions,
         }
     }
 }
@@ -245,6 +283,10 @@ pub struct Preferences {
     /// settings of a new installation stay as the Python app writes them.
     #[serde(skip_serializing_if = "DetailsPaneOptions::is_default")]
     pub details_pane_options: DetailsPaneOptions,
+    /// The folder views' options: previews, item counts and the details
+    /// columns; saved only once changed.
+    #[serde(skip_serializing_if = "ViewOptions::is_default")]
+    pub view_options: ViewOptions,
     /// The window's title is the folder's full path instead of its name
     /// (Dolphin's `ShowFullPathInTitlebar`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -332,6 +374,7 @@ impl Default for Preferences {
             external_folders_in_new_window: false,
             browse_archives: true,
             details_pane_options: DetailsPaneOptions::default(),
+            view_options: ViewOptions::default(),
             full_path_in_title: false,
             confirm_trash: true,
             confirm_delete: true,
@@ -420,6 +463,9 @@ impl Preferences {
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
+        if let Some(options) = &update.view_options {
+            self.view_options = options.clone();
+        }
     }
 }
 
@@ -459,6 +505,8 @@ pub struct PreferencesUpdate {
     pub browse_archives: Option<bool>,
     /// Replaces the details pane's options.
     pub details_pane_options: Option<DetailsPaneOptions>,
+    /// Replaces the folder views' options.
+    pub view_options: Option<ViewOptions>,
     /// Show the folder's full path in the window title.
     pub full_path_in_title: Option<bool>,
     /// Ask before moving items to the Trash.
@@ -519,6 +567,7 @@ impl PreferencesUpdate {
             details_pane_options: values
                 .get("detailsPaneOptions")
                 .and_then(DetailsPaneOptions::from_json),
+            view_options: values.get("viewOptions").and_then(ViewOptions::from_json),
             full_path_in_title: flag("fullPathInTitle"),
             confirm_trash: flag("confirmTrash"),
             confirm_delete: flag("confirmDelete"),

@@ -38,7 +38,7 @@ enum Resolved {
     /// Open this folder in the tab.
     Folder(String),
     /// Browse this ZIP archive.
-    Archive(Entry),
+    Archive(Box<Entry>),
     /// The file opened in its application.
     Opened,
 }
@@ -247,7 +247,7 @@ impl BrowserWindow {
         let fresh = queried.map_err(|error| error.to_string())?;
         match activation_for(&fresh) {
             Activation::Folder(uri) => Ok(Resolved::Folder(uri)),
-            Activation::Archive => Ok(Resolved::Archive(fresh)),
+            Activation::Archive => Ok(Resolved::Archive(Box::new(fresh))),
             Activation::Refused(message) => Err(message.to_owned()),
             Activation::File => {
                 if let Some(target) = desktop_link(&fresh) {

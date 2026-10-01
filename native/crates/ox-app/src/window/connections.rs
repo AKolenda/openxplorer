@@ -57,7 +57,10 @@ impl BrowserWindow {
         self.folder_pane().connect_loading_line_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || window.update_status()
+            move || {
+                window.update_status();
+                window.show_stop_or_refresh();
+            }
         ));
         gestures::connect_history_buttons(
             self,
