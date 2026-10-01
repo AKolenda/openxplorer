@@ -22,7 +22,7 @@ use gtk::{gdk, glib};
 
 use crate::icons::{self, Icon};
 
-pub(super) use items::{ItemAvailability, ItemCheck, MenuEntry, MenuItem, MenuStyle};
+pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
 
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
