@@ -10,7 +10,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

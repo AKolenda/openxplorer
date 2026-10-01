@@ -12,7 +12,7 @@ use ox_core::ops::MoveByCopyingAsker;
 use ox_core::transfer::MoveByCopyingItem;
 
 use super::worker_question::worker_question;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

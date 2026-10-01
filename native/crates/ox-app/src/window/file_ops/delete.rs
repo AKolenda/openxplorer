@@ -24,7 +24,7 @@ use ox_core::ops::{
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
 use super::FileCommand;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

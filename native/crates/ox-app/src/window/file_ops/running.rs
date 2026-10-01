@@ -21,9 +21,9 @@ use ox_core::ops::{
 use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
 use super::unfinished::mark_unfinished;
+use crate::dialog;
 use crate::search::changed_folders;
 use crate::window::background_notice::Destination;
-use crate::window::dialog;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::{TransferKind, TransferPanel};
 use crate::window::window_action::WindowAction;

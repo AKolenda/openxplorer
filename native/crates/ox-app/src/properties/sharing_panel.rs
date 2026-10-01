@@ -19,7 +19,7 @@ use gtk::{gio, glib};
 use ox_core::integration::Sandbox;
 use ox_core::network::{Usershare, UsershareError, Usershares};
 
-use crate::dialog_layer::{check_row, labelled_entry, note, quiet_text};
+use crate::dialog::{check_row, labelled_entry, note, quiet_text};
 use crate::window::ButtonStyle;
 
 /// The note under the controls.

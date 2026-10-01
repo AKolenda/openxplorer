@@ -9,7 +9,7 @@
 //! `v2.0.0:desktop/folder_sizes.py`.
 //!
 //! The dialog belongs to the tab that opened it (PROP-008): the window
-//! shows it on an in-window [`DialogLayer`](crate::dialog_layer::DialogLayer),
+//! shows it on an in-window [`DialogLayer`](crate::dialog::DialogLayer),
 //! withdraws it when another tab comes to the front and shows it again,
 //! as it was, when its tab returns. What the dialog asks of the window
 //! (open a snapshot in a tab, restore a copy, measure a folder) it asks

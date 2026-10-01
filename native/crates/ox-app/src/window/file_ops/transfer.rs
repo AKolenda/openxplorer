@@ -25,8 +25,8 @@ use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 use super::conflict_dialog::ConflictAnswer;
 use super::running::FinishedOperation;
 use super::unfinished::mark_unfinished;
+use crate::dialog;
 use crate::search::changed_folders;
-use crate::window::dialog;
 use crate::window::BrowserWindow;
 
 /// The title of the dialog shown when the destination cannot be checked.

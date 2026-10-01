@@ -154,7 +154,7 @@ impl BrowserWindow {
 
     /// Ends the type-to-select prefix and closes every open menu of the
     /// window, as opening a dialog does in app.js.
-    pub(super) fn quiet_for_dialog(&self) {
+    pub(crate) fn quiet_for_dialog(&self) {
         self.reset_typeahead();
         let popovers = descendants::<gtk::Popover>(self);
         for popover in popovers.iter().filter(|popover| popover.is_visible()) {

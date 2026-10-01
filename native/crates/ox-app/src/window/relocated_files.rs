@@ -22,10 +22,10 @@ use ox_core::location::file_uri;
 use ox_core::ops::TransferOutcome;
 use ox_core::transfer::TransferMode;
 
-use super::dialog::Dialog;
 use super::file_ops::IncomingItems;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 
 /// The question's title.
 const TITLE: &str = "Move files";

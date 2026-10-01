@@ -39,7 +39,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::transfer::Cancellation;
 
-use super::ButtonStyle;
+use super::fields::{check_box, field_caption, wrapped_label};
+use crate::window::{BrowserWindow, ButtonStyle};
 
 /// A button of one dialog, as [`Dialog::next_response`] reports it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,7 +58,7 @@ mod imp {
     use ox_core::transfer::Cancellation;
 
     use super::Answer;
-    use crate::dialog_layer::DialogFrame;
+    use crate::dialog::DialogFrame;
 
     /// Private state of [`super::Dialog`].
     #[derive(Debug, gtk::CompositeTemplate)]
@@ -172,7 +173,7 @@ impl Dialog {
             .property("transient-for", parent)
             .property("title", title)
             .build();
-        super::actions::follow_text_size_keys(&dialog);
+        crate::window::follow_text_size_keys(&dialog);
         let frame = &dialog.imp().frame;
         frame.set_title(title);
         frame.set_message(message);
@@ -207,15 +208,7 @@ impl Dialog {
     /// Adds `control` under a field label, which names it for screen
     /// readers too (`label.field-label`).
     pub(crate) fn add_labelled(&self, label: &str, control: &impl IsA<gtk::Widget>) {
-        let caption = gtk::Label::builder()
-            .label(label)
-            .xalign(0.0)
-            .css_classes(["field-label"])
-            .mnemonic_widget(control)
-            .build();
-        let control = control.upcast_ref::<gtk::Widget>();
-        control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
-        self.append_field(&caption);
+        self.append_field(&field_caption(label, control));
         self.append_field(control);
     }
 
@@ -232,15 +225,9 @@ impl Dialog {
     }
 
     fn add_text_line(&self, text: &str, css_class: &str) -> gtk::Label {
-        let line = gtk::Label::builder()
-            .label(text)
-            .xalign(0.0)
-            .wrap(true)
-            .wrap_mode(gtk::pango::WrapMode::WordChar)
-            .max_width_chars(60)
-            .selectable(true)
-            .css_classes([css_class])
-            .build();
+        let line = wrapped_label(text, css_class);
+        line.set_max_width_chars(60);
+        line.set_selectable(true);
         // Selectable with the pointer, but no stop for the keyboard.
         line.set_focusable(false);
         self.append_field(&line);
@@ -268,7 +255,7 @@ impl Dialog {
     /// The text of the scrolled box, for tests.
     #[cfg(test)]
     pub(crate) fn scrolled_text(&self) -> String {
-        let scrolled = super::widget_tree::children(&self.fields())
+        let scrolled = crate::window::children(&self.fields())
             .find_map(|child| child.downcast::<gtk::ScrolledWindow>().ok());
         let label = scrolled
             .and_then(|scrolled| scrolled.child())
@@ -291,8 +278,7 @@ impl Dialog {
 
     /// Adds a check box (`.checkbox-row`).
     pub(crate) fn add_check_button(&self, label: &str, active: bool) -> gtk::CheckButton {
-        let check = gtk::CheckButton::builder().label(label).active(active).build();
-        check.add_css_class("dialog-check");
+        let check = check_box(label, active, "dialog-check");
         self.append_field(&check);
         check
     }
@@ -343,8 +329,8 @@ impl Dialog {
     /// Shows the dialog, focusing its first text field with the text
     /// selected, or else its first button.
     pub(crate) fn open(&self) {
-        let first_field = super::widget_tree::children(&self.fields())
-            .find_map(|child| child.downcast::<gtk::Entry>().ok());
+        let first_field =
+            crate::window::children(&self.fields()).find_map(|child| child.downcast::<gtk::Entry>().ok());
         let first_button = self.imp().buttons.borrow().first().cloned();
         // Set before the window shows, so GTK's initial focus lands there.
         let initial_focus: Option<gtk::Widget> = match (&first_field, first_button) {
@@ -352,7 +338,7 @@ impl Dialog {
             (None, button) => button.map(Cast::upcast),
         };
         GtkWindowExt::set_focus(self, initial_focus.as_ref());
-        if let Some(parent) = self.transient_for().and_downcast::<super::BrowserWindow>() {
+        if let Some(parent) = self.transient_for().and_downcast::<BrowserWindow>() {
             parent.quiet_for_dialog();
         }
         self.present();
@@ -376,9 +362,9 @@ impl Dialog {
 
     /// Shows the dialog with `widget` focused, for a dialog whose first
     /// button must not be the one a reflexive Enter presses.
-    pub(super) fn open_focusing(&self, widget: &impl IsA<gtk::Widget>) {
+    pub(crate) fn open_focusing(&self, widget: &impl IsA<gtk::Widget>) {
         GtkWindowExt::set_focus(self, Some(widget));
-        if let Some(parent) = self.transient_for().and_downcast::<super::BrowserWindow>() {
+        if let Some(parent) = self.transient_for().and_downcast::<BrowserWindow>() {
             parent.quiet_for_dialog();
         }
         self.present();
@@ -455,7 +441,7 @@ impl Dialog {
     }
 
     /// Hides the line that said why the last try failed.
-    pub(super) fn hide_error(&self) {
+    pub(crate) fn hide_error(&self) {
         self.imp().frame.show_error("");
     }
 
@@ -554,7 +540,7 @@ impl Dialog {
 
 /// Shows `text` under `title` with one OK button, as `showMessage` does,
 /// and returns once it is dismissed.
-pub(super) async fn show_message(parent: &impl IsA<gtk::Window>, title: &str, text: &str) {
+pub(crate) async fn show_message(parent: &impl IsA<gtk::Window>, title: &str, text: &str) {
     let dialog = Dialog::new(parent, title, text);
     dialog.add_button("OK", ButtonStyle::Accent);
     dialog.open();

@@ -37,7 +37,7 @@ use ox_core::integration::{
 use ox_core::network::local_path;
 
 use super::launcher;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

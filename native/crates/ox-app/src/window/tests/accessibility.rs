@@ -15,6 +15,7 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::support::app_menu;
+use crate::dialog::Dialog;
 use crate::folder_view::column_widths;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::resizer_control::ResizerControl;
@@ -23,7 +24,6 @@ use crate::test_support::harness::{
 };
 use crate::text_size::TextSize;
 use crate::theme::desktop_text::{DesktopText, DesktopTextWatch};
-use crate::window::dialog::Dialog;
 use crate::window::focus_regions::Region;
 use crate::window::ButtonStyle;
 

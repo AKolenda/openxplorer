@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! In-window dialogs: a dimmed layer over everything under the title bar,
-//! with one dialog centred on it.
+//! The in-window host of a dialog: a dimmed layer over everything under
+//! the title bar, with one dialog centred on it.
 //!
 //! Ports `#modal-layer`, `showModal` and `closeModal` of
 //! `v2.0.0:desktop/ui/app.js`, drawn as `native/docs/ui-spec.md` §4.11 says:
@@ -13,21 +13,12 @@
 //! The title bar stays usable, so a tab's Properties can be left for
 //! another tab and found again (PROP-008); the window decides which
 //! dialog belongs to which tab, and asks the layer to show or withdraw it.
-//!
-//! | Module | Responsibility |
-//! |---|---|
-//! | `frame` | [`DialogFrame`]: one dialog's title, body, error and buttons |
-//! | `fields` | The fields, notes and rows dialogs are built from |
-
-mod fields;
-mod frame;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-pub(crate) use fields::{check_row, labelled_entry, note, quiet_text, PropertyGrid};
-pub(crate) use frame::{DialogFrame, DialogWidth};
+use super::DialogFrame;
 
 /// The space the layer keeps around a dialog on each side
 /// (`.modal-layer{padding:25px}`, and `calc(100vw - 30px)` for the width).
@@ -167,8 +158,7 @@ impl DialogLayer {
 
 /// Escape dismisses the dialog shown (`Escape` in `showModal`'s keydown).
 fn escape_dismisses() -> gtk::ShortcutController {
-    let trigger = gtk::ShortcutTrigger::parse_string("Escape");
-    let action = gtk::CallbackAction::new(|widget, _| {
+    crate::modal::on_escape(|widget| {
         let layer = widget
             .downcast_ref::<DialogLayer>()
             .expect("the Escape shortcut belongs to a dialog layer");
@@ -177,8 +167,5 @@ fn escape_dismisses() -> gtk::ShortcutController {
         };
         frame.close();
         glib::Propagation::Stop
-    });
-    let shortcuts = gtk::ShortcutController::new();
-    shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
-    shortcuts
+    })
 }

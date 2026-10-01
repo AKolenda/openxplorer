@@ -19,9 +19,9 @@ use super::file_ops_support::{
     dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
     select_names, text_field, wait_for_no_dialog,
 };
+use crate::dialog::Dialog;
 use crate::locations::Page;
 use crate::test_support::harness::{application, descendants, wait_until, Fixture, TestWindow};
-use crate::window::dialog::Dialog;
 use crate::window::file_drop::DropAction;
 use crate::window::transfer_panel::TransferKind;
 

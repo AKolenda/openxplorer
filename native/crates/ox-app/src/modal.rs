@@ -12,7 +12,7 @@
 //! then grows. A dialog is never taller than the window it belongs to,
 //! less a margin: its body scrolls instead, as
 //! `.modal{max-height:calc(100vh - 50px)}` did, also when rows arrive after
-//! it is shown. The in-window dialogs of [`crate::dialog_layer`] follow the
+//! it is shown. The in-window dialogs of [`crate::dialog`] follow the
 //! same rule.
 
 use gtk::prelude::*;
@@ -77,15 +77,23 @@ fn dialog_width(dialog: &gtk::Window) -> i32 {
 /// request, which a dialog refuses while it must stay open, such as
 /// Software updates during an installation.
 pub(crate) fn escape_closes() -> gtk::ShortcutController {
-    let close = gtk::CallbackAction::new(|widget, _| {
+    on_escape(|widget| {
         if let Some(window) = widget.downcast_ref::<gtk::Window>() {
             window.close();
         }
         glib::Propagation::Stop
-    });
+    })
+}
+
+/// A controller that runs `dismiss` on the widget it belongs to when
+/// Escape is pressed; `dismiss` says whether the key was used.
+pub(crate) fn on_escape(
+    dismiss: impl Fn(&gtk::Widget) -> glib::Propagation + 'static,
+) -> gtk::ShortcutController {
+    let action = gtk::CallbackAction::new(move |widget, _| dismiss(widget));
     let trigger = gtk::KeyvalTrigger::new(gdk::Key::Escape, gdk::ModifierType::empty());
     let shortcuts = gtk::ShortcutController::new();
-    shortcuts.add_shortcut(gtk::Shortcut::new(Some(trigger), Some(close)));
+    shortcuts.add_shortcut(gtk::Shortcut::new(Some(trigger), Some(action)));
     shortcuts
 }
 

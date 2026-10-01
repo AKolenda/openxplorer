@@ -562,7 +562,7 @@ fn text_size_keys_work_inside_dialogs() {
     let test = TestWindow::open(&fixture.uri());
     let _theme = ThemeGuard::keep();
     let before = test.window.skin().text_size();
-    let rename = crate::window::dialog::Dialog::new(&test.window, "Rename", "");
+    let rename = crate::dialog::Dialog::new(&test.window, "Rename", "");
     let map = crate::dialogs::map_network_dialog(&test.window, |_, _| {});
     let dialogs: [&gtk::Window; 2] = [rename.upcast_ref(), map.upcast_ref()];
     let plus = gtk::ShortcutTrigger::parse_string("<Control>plus").expect("a trigger");

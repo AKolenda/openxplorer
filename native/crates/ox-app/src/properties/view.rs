@@ -31,7 +31,7 @@ use super::permissions_editor::{permissions_editor, EditedItems};
 use super::sharing_panel::sharing_panel;
 use super::versions_panel::VersionsPanel;
 use super::{PropertiesTab, PropertiesTarget, READING};
-use crate::dialog_layer::{quiet_text, DialogFrame, DialogWidth};
+use crate::dialog::{quiet_text, DialogFrame, DialogWidth};
 use ox_core::integration::BraveIntegration;
 
 /// What a Properties dialog needs from the window that opens it.

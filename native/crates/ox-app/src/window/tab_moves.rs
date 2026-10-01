@@ -338,10 +338,10 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dialog::Dialog;
     use crate::test_support::harness::{
         capture_popover, settle, wait_until, Fixture, OpenedWindows, TestWindow,
     };
-    use crate::window::dialog::Dialog;
     use crate::window::menu_popover::ItemAvailability;
 
     fn labels(entries: &[MenuEntry]) -> Vec<String> {

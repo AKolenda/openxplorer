@@ -16,17 +16,24 @@ pub(crate) const NOT_PROVIDED: &str = "Not provided";
 /// Adds a text field labelled `label` holding `text` to `body`, and
 /// returns the field. The label names the field for screen readers too.
 pub(crate) fn labelled_entry(body: &gtk::Box, label: &str, text: &str) -> gtk::Entry {
+    let entry = gtk::Entry::builder().text(text).hexpand(true).build();
+    body.append(&field_caption(label, &entry));
+    body.append(&entry);
+    entry
+}
+
+/// The label over `control` (`label.field-label`), which names it for
+/// screen readers too and moves focus to it with its mnemonic.
+pub(super) fn field_caption(label: &str, control: &impl IsA<gtk::Widget>) -> gtk::Label {
     let caption = gtk::Label::builder()
         .label(label)
         .xalign(0.0)
         .css_classes(["field-label"])
+        .mnemonic_widget(control)
         .build();
-    let entry = gtk::Entry::builder().text(text).hexpand(true).build();
-    entry.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
-    caption.set_mnemonic_widget(Some(&entry));
-    body.append(&caption);
-    body.append(&entry);
-    entry
+    let control = control.upcast_ref::<gtk::Widget>();
+    control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
+    caption
 }
 
 /// A boxed note in the muted colour (`.modal-note`).
@@ -40,7 +47,7 @@ pub(crate) fn quiet_text(text: &str) -> gtk::Label {
 }
 
 /// A left-aligned label that wraps, with the class `class`.
-fn wrapped_label(text: &str, class: &str) -> gtk::Label {
+pub(super) fn wrapped_label(text: &str, class: &str) -> gtk::Label {
     gtk::Label::builder()
         .label(text)
         .xalign(0.0)
@@ -52,10 +59,16 @@ fn wrapped_label(text: &str, class: &str) -> gtk::Label {
 
 /// A check box labelled `label` (`.checkbox-row`).
 pub(crate) fn check_row(label: &str, is_active: bool) -> gtk::CheckButton {
-    let check = gtk::CheckButton::with_label(label);
-    check.set_active(is_active);
-    check.add_css_class("checkbox-row");
-    check
+    check_box(label, is_active, "checkbox-row")
+}
+
+/// A check box labelled `label` with the class `class`.
+pub(super) fn check_box(label: &str, is_active: bool, class: &str) -> gtk::CheckButton {
+    gtk::CheckButton::builder()
+        .label(label)
+        .active(is_active)
+        .css_classes([class])
+        .build()
 }
 
 /// A grid of names and values (`dl.property-grid`): names in the muted

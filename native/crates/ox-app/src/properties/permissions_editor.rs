@@ -24,7 +24,7 @@ use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
 
 use super::general_panel::glyph_button;
-use crate::dialog_layer::{check_row, DialogFrame, PropertyGrid};
+use crate::dialog::{check_row, DialogFrame, PropertyGrid};
 use crate::icons::Icon;
 use advanced::AdvancedBits;
 use choices::{AccessChoice, AccountChoice, StateCheck};

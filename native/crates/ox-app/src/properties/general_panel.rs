@@ -18,7 +18,7 @@ use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::{ItemProperties, MountFacts};
-use crate::dialog_layer::{note, quiet_text, DialogFrame, PropertyGrid};
+use crate::dialog::{note, quiet_text, DialogFrame, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::integration;
 use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};

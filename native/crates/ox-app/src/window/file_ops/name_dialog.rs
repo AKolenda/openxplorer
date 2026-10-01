@@ -19,7 +19,7 @@ use gtk::{gio, glib};
 use ox_core::transfer::Cancellation;
 
 use super::names::{check_typed_name, name_warning};
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
