@@ -154,7 +154,10 @@ fn the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere() {
         row.tooltip_text().map(String::from).unwrap_or_default()
     };
     assert!(sidebar.labels().contains(&"Recent files".to_owned()));
-    wait_until("the full Recycle Bin", || bin_tooltip() == "Recycle Bin · 1 item");
+    // Earlier tests in this run may have left items of their own.
+    wait_until("the full Recycle Bin", || {
+        bin_tooltip().ends_with(" item") || bin_tooltip().ends_with(" items")
+    });
 
     let menu = sidebar.right_click_row("Recycle Bin");
     let labels = menu.row_labels();

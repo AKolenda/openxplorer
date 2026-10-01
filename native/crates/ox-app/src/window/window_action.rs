@@ -185,6 +185,11 @@ pub(crate) enum WindowAction {
     ShowMoreOptions,
     /// Removes the Quick access pin of the location in the string target.
     Unpin,
+    /// Asks for a label and a location and pins them (SIDE-031).
+    AddPlace,
+    /// Asks for a new label and location for the pin in the string target
+    /// (SIDE-011).
+    EditPin,
     /// Shows the menu of open windows (the tab menu's "Open windows…").
     OpenWindows,
     /// Moves a tab into a window of its own.
@@ -389,6 +394,8 @@ impl WindowAction {
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::Unpin => "unpin",
+            WindowAction::AddPlace => "add-place",
+            WindowAction::EditPin => "edit-pin",
             WindowAction::OpenWindows => "open-windows",
             WindowAction::MoveTabToNewWindow => "move-tab-to-new-window",
             WindowAction::MoveTabToWindow => "move-tab-to-window",

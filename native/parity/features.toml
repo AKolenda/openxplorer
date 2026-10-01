@@ -5342,7 +5342,8 @@ sources = [
 python_tests = []
 bridge = ["bookmark", "pin"]
 dolphin = "Places context menu '&Edit…'"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (add_entry_pins_a_typed_location_and_edit_changes_it_in_place); native/crates/ox-app/src/window/sidebar/menu.rs (every_pin_menu_item_acts_on_the_pin). A pin of the user's own offers 'Edit…' (win.edit-pin): the add dialog filled with its label and location. A new label is saved in place; a new location is checked as a pin, saved where the old pin was, and only then is the old pin removed, so a failed save loses neither. Standard folders are not editable. Not offered: an icon of its own (places show their folder's art, as in Explorer) and Dolphin's 'only show in this application', since pins are kept for OpenXplorer only."
 
 [[feature]]
 id = "SIDE-012"
@@ -5766,8 +5767,8 @@ python_tests = []
 bridge = ["pin"]
 dolphin = "KFilePlacesView context menu 'Add Entry…' (empty area)"
 gnome = "GTK bookmarks file entries (SIDE-013)"
-native = "todo"
-native_note = "Porting notes: SIDE-011 covers editing an existing place only."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (add_entry_pins_a_typed_location_and_edit_changes_it_in_place). A right-click on the sidebar's empty space offers 'Add entry…' (win.add-place): a dialog with Label and Location, which takes any address the address bar takes (a path, ~/…, smb://server/share/folder, sftp://…) and has a Browse… folder picker. The location is checked off the main thread with the pin check of SIDE-007 (GIO must find a folder or share; a share browse entry is saved as its real share), then pinned at the end of Quick access without the window going there; errors show in the dialog. No icon field: Quick access draws every place with its folder's own art, as Explorer's navigation pane does."
 
 [[feature]]
 id = "CMD-001"

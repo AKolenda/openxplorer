@@ -16,8 +16,9 @@ use crate::window::menu_popover::{MenuEntry, MenuItem};
 use crate::window::window_action::WindowAction;
 
 /// The menu of the pin that opens `uri`; `caching` says whether it is
-/// cached for search, `None` where it cannot be.
-pub(super) fn pin_menu(uri: &str, caching: Option<Caching>) -> Vec<MenuEntry> {
+/// cached for search, `None` where it cannot be. A pin of the user's own
+/// is `editable` (SIDE-011); a standard folder is not.
+pub(super) fn pin_menu(uri: &str, caching: Option<Caching>, editable: bool) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = vec![
         MenuItem::with_text_target("Open", Icon::Folder, WindowAction::GoTo, uri).into(),
         MenuItem::with_text_target("Open in new tab", Icon::Add, WindowAction::OpenTab, uri).into(),
@@ -49,8 +50,11 @@ pub(super) fn pin_menu(uri: &str, caching: Option<Caching>) -> Vec<MenuEntry> {
         );
         entries.push(sign_out.into());
     }
+    entries.push(MenuEntry::Divider);
+    if editable {
+        entries.push(MenuItem::with_text_target("Edit…", Icon::Rename, WindowAction::EditPin, uri).into());
+    }
     entries.extend([
-        MenuEntry::Divider,
         MenuItem::with_text_target("Unpin from Quick access", Icon::Pin, WindowAction::Unpin, uri).into(),
         MenuEntry::Divider,
         MenuItem::with_text_target(
@@ -85,8 +89,12 @@ mod tests {
     /// parity: SIDE-014, SIDE-015
     #[test]
     fn a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb() {
-        let local = labels(&pin_menu("file:///home/user/Projects", Some(Caching::Disabled)));
-        let share = labels(&pin_menu("smb://nas/share", Some(Caching::Disabled)));
+        let local = labels(&pin_menu(
+            "file:///home/user/Projects",
+            Some(Caching::Disabled),
+            false,
+        ));
+        let share = labels(&pin_menu("smb://nas/share", Some(Caching::Disabled), false));
 
         assert_eq!(
             local,
@@ -113,7 +121,7 @@ mod tests {
     fn every_pin_menu_item_acts_on_the_pin() {
         let uri = "smb://nas/share";
 
-        let entries = pin_menu(uri, Some(Caching::Enabled));
+        let entries = pin_menu(uri, Some(Caching::Enabled), true);
 
         let items: Vec<&MenuItem> = entries
             .iter()
@@ -134,7 +142,7 @@ mod tests {
 
     #[test]
     fn a_pin_that_cannot_be_indexed_has_no_cache_entry() {
-        let entries = labels(&pin_menu("mtp://phone/", None));
+        let entries = labels(&pin_menu("mtp://phone/", None, false));
 
         assert!(!entries.contains(&"Cache this folder for search".to_owned()));
     }

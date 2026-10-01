@@ -95,6 +95,7 @@ mod network_actions;
 mod network_page;
 mod network_session;
 mod network_sign_out;
+mod place_editor;
 mod place_menus;
 mod preferences;
 mod quick_access;

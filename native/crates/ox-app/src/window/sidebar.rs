@@ -239,10 +239,18 @@ impl Sidebar {
     }
 
     /// The menu of the row at `y` in the list: a pin's, or a drive's or a
-    /// network location's; `None` for a row without one.
-    fn menu_entries_at(&self, y: f64) -> Option<Vec<MenuEntry>> {
+    /// network location's; on empty space, "Add entry…" (SIDE-031);
+    /// `None` for a row without one.
+    pub(super) fn menu_entries_at(&self, y: f64) -> Option<Vec<MenuEntry>> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
-        let row = self.list().row_at_y(y as i32)?;
+        let Some(row) = self.list().row_at_y(y as i32) else {
+            return Some(vec![MenuItem::new(
+                "Add entry…",
+                Icon::Add,
+                WindowAction::AddPlace,
+            )
+            .into()]);
+        };
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
         let entry = entries.get(index)?;
@@ -254,8 +262,14 @@ impl Sidebar {
             let RowTarget::Location(uri) = &entry.target else {
                 return None;
             };
-            let caching = window.and_then(|window| window.caching_of(uri));
-            return Some(menu::pin_menu(uri, caching));
+            let caching = window.as_ref().and_then(|window| window.caching_of(uri));
+            let editable = window.is_some_and(|window| {
+                let quick_access = window.places().quick_access;
+                quick_access
+                    .iter()
+                    .any(|place| place.known_folder.is_none() && same_location(&place.uri, uri))
+            });
+            return Some(menu::pin_menu(uri, caching, editable));
         }
         let place_menu = entry.menu.as_ref()?.entries_in(window.as_ref());
         // A drive the system keeps mounted may have nothing to offer.

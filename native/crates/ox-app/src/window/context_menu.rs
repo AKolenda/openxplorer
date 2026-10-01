@@ -220,6 +220,21 @@ impl BrowserWindow {
             plain_action(WindowAction::ShowMoreOptions, BrowserWindow::show_more_options),
             plain_action(WindowAction::ShowNewMenu, BrowserWindow::show_new_menu_in_place),
             text_action(WindowAction::Unpin, BrowserWindow::unpin),
+            plain_action(WindowAction::AddPlace, |window| {
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    window,
+                    async move { window.add_place().await }
+                ));
+            }),
+            text_action(WindowAction::EditPin, |window, uri| {
+                let uri = uri.to_owned();
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    window,
+                    async move { window.edit_pin(uri).await }
+                ));
+            }),
             plain_action(WindowAction::OpenWindows, BrowserWindow::show_open_windows),
         ]);
     }

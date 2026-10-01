@@ -8,14 +8,15 @@ use std::fs;
 use gtk::gdk;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::location::same_location;
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
 
-use super::file_ops_support::is_enabled;
+use super::file_ops_support::{is_enabled, open_dialog, wait_for_no_dialog};
 use super::support::middle_click_at;
 use crate::icons::{Art, ArtImage, Icon};
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
-use crate::window::menu_popover::MenuPopover;
+use crate::window::menu_popover::{MenuEntry, MenuPopover};
 use crate::window::sidebar::entries::{RowLevel, RowTarget, Section, SidebarEntry};
 
 /// The sidebar row labelled `label`.
@@ -330,4 +331,55 @@ fn the_navigation_pane_hides_and_a_places_button_lists_its_places() {
     test.activate("sidebar", None);
     assert!(test.window.sidebar().is_visible());
     assert!(!places.is_visible());
+}
+
+/// Fills the add or edit dialog's Label and Location and saves.
+fn answer_place_dialog(test: &TestWindow, label: &str, location: &str) {
+    let dialog = open_dialog(test);
+    let fields = descendants::<gtk::Entry>(&dialog);
+    let [label_field, location_field] = fields.as_slice() else {
+        panic!("the dialog asks for a label and a location: {}", fields.len());
+    };
+    label_field.set_text(label);
+    location_field.set_text(location);
+    let answer = if dialog.title_text() == "Add entry" {
+        "Add"
+    } else {
+        "Save"
+    };
+    dialog.press(answer);
+    wait_for_no_dialog(test);
+}
+
+/// "Add entry…" on empty space pins any location without going there;
+/// "Edit…" on a pin renames and moves it in place.
+///
+/// parity: SIDE-031, SIDE-011
+#[gtk::test]
+fn add_entry_pins_a_typed_location_and_edit_changes_it_in_place() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let menu = test
+        .window
+        .sidebar()
+        .menu_entries_at(100_000.0)
+        .expect("a menu on empty space");
+    let MenuEntry::Item(add) = &menu[0] else {
+        panic!("Add entry… comes first");
+    };
+    assert_eq!(add.label, "Add entry…");
+
+    test.activate("add-place", None);
+    answer_place_dialog(&test, "Docs", &fixture.path("Documents").to_string_lossy());
+    wait_for_row(&test, "Docs");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the window stays");
+
+    test.activate("edit-pin", Some(&fixture.uri_of("Documents")));
+    answer_place_dialog(&test, "Projects", &fixture.uri());
+    wait_for_row(&test, "Projects");
+    let labels = test.window.sidebar().labels();
+    assert!(!labels.contains(&"Docs".to_owned()), "{labels:?}");
+    let pins = test.context.settings_data().pins;
+    assert_eq!(pins.len(), 1, "{pins:?}");
+    assert!(same_location(&pins[0].uri, &fixture.uri()));
 }
