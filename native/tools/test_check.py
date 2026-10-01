@@ -322,6 +322,7 @@ class FailureReportTests(unittest.TestCase):
         failure = subprocess.CalledProcessError(101, ('cargo', 'clippy', '--workspace'))
         stderr = io.StringIO()
         with (patch.object(check, 'missing_tools', return_value=[]),
+              patch.object(check, 'leftover_desktop_note', return_value=None),
               patch.object(check, 'run_all_checks', side_effect=failure),
               contextlib.redirect_stderr(stderr)):
             status = check.main([])
@@ -334,6 +335,7 @@ class FailureReportTests(unittest.TestCase):
         failure = check.CheckTimeoutError(['/target/debug/deps/browsing-1'], 180.0)
         stderr = io.StringIO()
         with (patch.object(check, 'missing_tools', return_value=[]),
+              patch.object(check, 'leftover_desktop_note', return_value=None),
               patch.object(check, 'run_all_checks', side_effect=failure),
               contextlib.redirect_stderr(stderr)):
             status = check.main([])

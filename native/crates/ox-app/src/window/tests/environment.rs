@@ -246,24 +246,23 @@ fn the_details_pane_follows_the_pointer_and_shows_the_chosen_fields() {
 
     let view = test.window.folder_pane().view_widget();
     let position = 1;
-    let row = test
-        .window
-        .folder_pane()
-        .owners()
-        .widget_at(position)
-        .expect("a shown row");
-    let point = row
-        .compute_point(&view, &gtk::graphene::Point::new(2.0, 2.0))
-        .expect("the row is in the view");
-    test.window
-        .pointer_over_items(&view, Some((f64::from(point.x()), f64::from(point.y()))));
-    let hovered = test.window.folder_model().name_at(position).expect("a name");
+    // The rows can still be moving while the list settles, so point at
+    // the row again until the pane names the item drawn there.
+    wait_until("the pane to describe the item under the pointer", || {
+        let point = test
+            .window
+            .folder_pane()
+            .owners()
+            .widget_at(position)
+            .and_then(|row| row.compute_point(&view, &gtk::graphene::Point::new(2.0, 2.0)));
+        let Some(point) = point else {
+            return false;
+        };
+        test.window
+            .pointer_over_items(&view, Some((f64::from(point.x()), f64::from(point.y()))));
+        test.window.folder_model().name_at(position).as_deref() == Some(pane.shown_name().as_str())
+    });
     let shown = pane.shown_properties();
-    assert_eq!(
-        pane.shown_name(),
-        hovered,
-        "the pane describes the item under the pointer"
-    );
     assert!(property(&shown, "Type").is_some());
     assert!(property(&shown, "Size").is_none(), "Size is turned off");
     test.window.pointer_over_items(&view, None);
