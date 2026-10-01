@@ -123,6 +123,11 @@ fn the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
         warning().is_some_and(|text| text.contains("dot"))
     });
     let hidden = warning();
+    field.set_text("Plans/2026");
+    wait_until("the nested-folders preview", || {
+        warning().is_some_and(|text| text.contains("inside"))
+    });
+    let nested = warning();
     field.set_text("Plans");
     wait_until("no warning for a plain free name", || warning().is_none());
     dialog.press("Cancel");
@@ -135,5 +140,9 @@ fn the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
     assert_eq!(
         hidden.as_deref(),
         Some("A name starting with a dot hides the item.")
+    );
+    assert_eq!(
+        nested.as_deref(),
+        Some("Creates “Plans” › “2026”, each inside the one before.")
     );
 }

@@ -327,7 +327,9 @@ fn column_titles_sort_and_resize_from_the_keyboard() {
     let test = TestWindow::open(&fixture.uri());
     let details = test.window.folder_pane().details();
     let titles = crate::folder_view::column_titles::title_buttons(details.column_view());
-    let type_index = SortColumn::ALL.iter().position(|column| *column == SortColumn::Type);
+    let type_index = SortColumn::ALL
+        .iter()
+        .position(|column| *column == SortColumn::Type);
     let type_title = &titles[type_index.expect("a Type title")];
     assert!(titles.iter().all(WidgetExt::is_focusable));
     assert!(

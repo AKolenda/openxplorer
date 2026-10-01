@@ -6636,7 +6636,7 @@ python_tests = [
 ]
 bridge = ["create", "rename", "createTemplate", "archiveExtract"]
 native = "done"
-native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open) does the same for the Extract dialog's folder name."
+native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open) does the same for the Extract dialog's folder name. Differs: New folder takes slashes for folders inside folders (OPS-007, Dolphin), so it refuses only backslashes, control characters and empty parts, with 'Use names without backslashes or control characters, one slash between folders.'"
 
 [[feature]]
 id = "OPS-007"
@@ -6654,8 +6654,8 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/test_core.py::CoreTests::test_names"]
 bridge = ["create"]
 dolphin = "KNewFileMenu name validation"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/renaming.rs (the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing); native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-app/src/window/file_ops/name_dialog.rs checks each typed name against the folder. While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. Missing: a slash is still refused (\"Names must not contain slashes.\", the current app's rule) instead of creating nested folders with a preview."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing); native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-core/src/ops/create.rs (a_folder_path_creates_each_folder_inside_the_one_before). While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. New folder takes slashes, as Dolphin's does: its description reads 'A slash makes a folder inside the one before it.', the line previews 'Creates “Plans” › “2026”, each inside the one before.', and Save makes each folder inside the one before (an existing folder on the way is entered, the last name must be free), selects the first one in the current folder, and Undo moves the outermost new folder to the Trash. Rename and Extract still refuse slashes (OPS-006)."
 
 [[feature]]
 id = "OPS-008"
