@@ -3,14 +3,16 @@
 //! in `desktop/ui/app.js`, styled by `.side-entry` in `style.css`.
 //!
 //! A row is an expander chevron (This PC, Network), a 20-pixel icon box, the
-//! name and, on Quick access rows, the pin. The accent bar of the selected
+//! name (with a capacity bar under a drive's) and, on Quick access rows, the
+//! pin. The accent bar of the selected
 //! row (`.side-entry.selected:before`) is an overlay at the row's left
 //! edge, outside the padding, as the web page positions it.
 
 use gtk::prelude::*;
 
 use crate::icons::{self, Art, ArtImage, Icon};
-use crate::window::place_menus::removal_action;
+use crate::window::landing;
+use crate::window::place_menus::{removal_action, PlaceMenu};
 use crate::window::window_action::WindowAction;
 
 use super::super::saved_search::saved_search_target;
@@ -32,12 +34,18 @@ const EJECT_SIZE: i32 = 14;
 /// The class of the dashed drop tail of an empty Quick access.
 const PIN_DROP_TAIL_CLASS: &str = "quick-drop-tail";
 
-/// A row's icon at its size, with the class the skin spaces it by.
-fn row_icon(icon: Art) -> ArtImage {
+/// A row's icon at its size, with the class the skin spaces it by: the
+/// automatic size for `chosen_size` 0, else the size chosen in pixels
+/// (SIDE-012).
+fn row_icon(icon: Art, chosen_size: u32) -> ArtImage {
     let (size, class) = match icon {
         Art::Glyph(_) | Art::TintedGlyph(..) => (GLYPH_SIZE, "side-glyph"),
         Art::Folder | Art::ZipFolder | Art::File(_) | Art::Network(_) => (ART_SIZE, "side-art"),
     };
+    let size = i32::try_from(chosen_size)
+        .ok()
+        .filter(|chosen| *chosen > 0)
+        .unwrap_or(size);
     let image = ArtImage::new(icon, size);
     image.add_css_class(class);
     image
@@ -53,8 +61,27 @@ fn name_label(text: &str) -> gtk::Label {
         .build()
 }
 
-/// The chevron, icon, name and pin of `entry`.
-fn row_content(entry: &SidebarEntry) -> gtk::Box {
+/// The name of `entry`, with a thin capacity bar under it for a mounted
+/// drive, as Dolphin's Places panel shows (SIDE-018); the bar turns red
+/// when the drive is nearly full and its tooltip says how much is free.
+fn name_and_capacity(entry: &SidebarEntry) -> gtk::Widget {
+    let name = name_label(&entry.label);
+    let Some(PlaceMenu::Drive { uri, .. }) = &entry.menu else {
+        return name.upcast();
+    };
+    let texts = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .valign(gtk::Align::Center)
+        .hexpand(true)
+        .build();
+    texts.append(&name);
+    landing::show_capacity(&texts, uri, false);
+    texts.upcast()
+}
+
+/// The chevron, icon, name and pin of `entry`, its icon `icon_size`
+/// pixels or automatic for 0.
+fn row_content(entry: &SidebarEntry, icon_size: u32) -> gtk::Box {
     // The gaps are CSS margins on the parts (see `.side-entry` in
     // resources/skin/sidebar.css), so no box spacing.
     let content = gtk::Box::builder().css_classes(["side-entry"]).build();
@@ -63,13 +90,13 @@ fn row_content(entry: &SidebarEntry) -> gtk::Box {
         expander.add_css_class("expand");
         content.append(&expander);
     }
-    let icon = row_icon(entry.icon);
+    let icon = row_icon(entry.icon, icon_size);
     if matches!(entry.icon, Art::Network(_)) {
         // The network pipe says what it means (`.side-icon.shared`).
         icon.set_tooltip_text(Some("Network share"));
     }
     content.append(&icon);
-    content.append(&name_label(&entry.label));
+    content.append(&name_and_capacity(entry));
     if entry.pinned {
         let pin = icons::image(Icon::Pin, PIN_SIZE);
         pin.add_css_class("pin");
@@ -127,8 +154,10 @@ fn placement_classes(entry: &SidebarEntry, edges: SectionEdges) -> Vec<&'static 
 }
 
 /// The row for `entry`, which runs `win.go-to` or `win.mount-volume`.
-pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges) -> gtk::ListBoxRow {
-    let overlay = gtk::Overlay::builder().child(&row_content(entry)).build();
+pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges, icon_size: u32) -> gtk::ListBoxRow {
+    let overlay = gtk::Overlay::builder()
+        .child(&row_content(entry, icon_size))
+        .build();
     overlay.add_overlay(&selection_bar());
     let row = gtk::ListBoxRow::builder()
         .child(&overlay)

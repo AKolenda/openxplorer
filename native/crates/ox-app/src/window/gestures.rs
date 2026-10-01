@@ -38,6 +38,29 @@ pub(super) fn history_direction(button: u32) -> Option<Direction> {
     }
 }
 
+/// The modifiers held during `controller`'s current event. GTK has no
+/// public way to synthesise pointer events, so tests hold modifiers with
+/// [`hold_modifiers_for_tests`] instead.
+pub(super) fn held_modifiers(controller: &impl IsA<gtk::EventController>) -> gdk::ModifierType {
+    #[cfg(test)]
+    if let Some(held) = TEST_MODIFIERS.with(Cell::get) {
+        return held;
+    }
+    controller.current_event_state()
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The modifiers a test holds for the gestures, if any.
+    static TEST_MODIFIERS: Cell<Option<gdk::ModifierType>> = const { Cell::new(None) };
+}
+
+/// Has the gestures see `held` as the modifiers held, until `None`.
+#[cfg(test)]
+pub(super) fn hold_modifiers_for_tests(held: Option<gdk::ModifierType>) {
+    TEST_MODIFIERS.with(|modifiers| modifiers.set(held));
+}
+
 /// The action that opens a folder from a middle-click, and whether the tab
 /// comes to the front: only with Shift.
 pub(super) fn open_action(modifiers: gdk::ModifierType) -> WindowAction {

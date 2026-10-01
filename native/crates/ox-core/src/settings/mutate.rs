@@ -95,6 +95,14 @@ pub(super) fn apply_bookmark(
     Ok(())
 }
 
+/// Shows the standard folder `uri` in Quick access again after it was
+/// hidden, without pinning it (SIDE-010).
+pub(super) fn show_in_quick_access(settings: &mut SettingsData, uri: &str) -> Result<(), SettingsError> {
+    let uri = normalise(uri)?;
+    settings.hidden_quick.retain(|hidden| *hidden != uri);
+    Ok(())
+}
+
 /// Adding a pin shows it in Quick access again; removing one hides it,
 /// which also unpins a standard folder, and forgets its place in the order.
 fn show_or_hide_in_quick_access(settings: &mut SettingsData, action: BookmarkAction, uri: &str) {

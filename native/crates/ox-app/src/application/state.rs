@@ -29,6 +29,20 @@ use crate::theme::system::{self, SystemScheme};
 use crate::theme::Skin;
 use crate::window::BrowserWindow;
 
+/// The host's configuration folder, where the desktop reads its places
+/// list. Inside Flatpak, `GLib` names the sandbox's own folder, which the
+/// host never reads; the sandbox may write the host's `~/.config`
+/// (`--filesystem=host`), so the list goes there. A custom
+/// `XDG_CONFIG_HOME` on the host is not visible from inside the sandbox.
+#[cfg(not(test))]
+fn host_config_dir() -> std::path::PathBuf {
+    if ox_core::integration::Sandbox::detect().is_flatpak() {
+        glib::home_dir().join(".config")
+    } else {
+        glib::user_config_dir()
+    }
+}
+
 /// What lives as long as the application: the shared state and the
 /// watches on the desktop's colour scheme and contrast.
 #[derive(Debug)]
@@ -74,6 +88,9 @@ impl AppState {
         crate::window::install_accelerators(app);
         let context = AppContext::new(skin, settings);
         context.start_search_cache(CacheLocation::UserCache);
+        // Tests mirror pins into temporary lists only, never the user's.
+        #[cfg(not(test))]
+        context.export_pins_to(ox_core::places::bookmarks_file(&host_config_dir()));
         attach_desktop_integration(app, &context);
         Self {
             context,

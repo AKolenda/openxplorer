@@ -122,6 +122,21 @@ pub(crate) enum WindowAction {
     /// Switches the details pane option or field named by the string
     /// target (the pane's menu).
     DetailsPaneOption,
+    /// Shows or hides the navigation pane (F9, SIDE-024).
+    Sidebar,
+    /// The sidebar's icon size: `0` (automatic), `16`, `22`, `32` or `48`.
+    SidebarIconSize,
+    /// Lists the hidden sidebar rows, dimmed (SIDE-010).
+    SidebarShowAll,
+    /// Hides the sidebar section whose key is the string target.
+    HideSection,
+    /// Shows the hidden sidebar section whose key is the string target.
+    ShowSection,
+    /// Hides the sidebar place at the string target (SIDE-010).
+    HidePlace,
+    /// Shows the hidden place in the string target again: a standard
+    /// folder or a place hidden with Hide.
+    ShowPlace,
     /// The column the details view sorts by.
     Sort,
     /// Whether the details view sorts ascending or descending.
@@ -177,6 +192,8 @@ pub(crate) enum WindowAction {
     Restore,
     /// Deletes everything in the Recycle Bin, after asking.
     EmptyRecycleBin,
+    /// The same from the sidebar's Recycle Bin, wherever the window is.
+    EmptyTrash,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -185,6 +202,11 @@ pub(crate) enum WindowAction {
     ShowMoreOptions,
     /// Removes the Quick access pin of the location in the string target.
     Unpin,
+    /// Asks for a label and a location and pins them (SIDE-031).
+    AddPlace,
+    /// Asks for a new label and location for the pin in the string target
+    /// (SIDE-011).
+    EditPin,
     /// Shows the menu of open windows (the tab menu's "Open windows…").
     OpenWindows,
     /// Moves a tab into a window of its own.
@@ -388,6 +410,13 @@ impl WindowAction {
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
             WindowAction::DetailsPaneOption => "details-pane-option",
+            WindowAction::Sidebar => "sidebar",
+            WindowAction::SidebarIconSize => "sidebar-icon-size",
+            WindowAction::SidebarShowAll => "sidebar-show-all",
+            WindowAction::HideSection => "hide-section",
+            WindowAction::ShowSection => "show-section",
+            WindowAction::HidePlace => "hide-place",
+            WindowAction::ShowPlace => "show-place",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
             WindowAction::Theme => "theme",
@@ -414,9 +443,12 @@ impl WindowAction {
             WindowAction::CancelOperation => "cancel-operation",
             WindowAction::Restore => "restore",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
+            WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::Unpin => "unpin",
+            WindowAction::AddPlace => "add-place",
+            WindowAction::EditPin => "edit-pin",
             WindowAction::OpenWindows => "open-windows",
             WindowAction::MoveTabToNewWindow => "move-tab-to-new-window",
             WindowAction::MoveTabToWindow => "move-tab-to-window",

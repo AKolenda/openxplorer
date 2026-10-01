@@ -19,7 +19,7 @@
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{is_device_location, is_remote_location, is_smb_location, is_smb_server};
+use ox_core::location::{is_device_location, is_remote_location, is_smb_location, is_smb_server, TRASH_URI};
 use ox_core::places::{NetworkKind, NetworkLocation};
 use ox_core::search::Caching;
 
@@ -66,6 +66,11 @@ pub(super) enum PlaceMenu {
     SavedShare {
         /// The saved share.
         uri: String,
+    },
+    /// The sidebar's Recycle Bin (Dolphin's Trash place, SIDE-025).
+    RecycleBin {
+        /// Whether anything is in it; Empty Recycle Bin is disabled if not.
+        has_items: bool,
     },
 }
 
@@ -219,6 +224,24 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     entries
 }
 
+/// The Recycle Bin's menu: the Open items, then Empty Recycle Bin,
+/// disabled while it is empty (Dolphin's "Empty Trash").
+fn recycle_bin_entries(has_items: bool) -> Vec<MenuEntry> {
+    let empty = MenuItem::new("Empty Recycle Bin", Icon::Delete, WindowAction::EmptyTrash);
+    vec![
+        item("Open", Icon::Delete, WindowAction::GoTo, TRASH_URI),
+        item("Open in new tab", Icon::Add, WindowAction::OpenTab, TRASH_URI),
+        item(
+            "Open in new window",
+            Icon::WindowNew,
+            WindowAction::OpenWindow,
+            TRASH_URI,
+        ),
+        MenuEntry::Divider,
+        empty.disabled_when(!has_items).into(),
+    ]
+}
+
 impl PlaceMenu {
     /// The location the menu is about, which may be cached for search.
     fn location(&self) -> Option<&str> {
@@ -227,7 +250,7 @@ impl PlaceMenu {
             | PlaceMenu::DriveCard { uri, .. }
             | PlaceMenu::SavedShare { uri } => Some(uri),
             PlaceMenu::Network(location) => Some(&location.uri),
-            PlaceMenu::Volume { .. } => None,
+            PlaceMenu::Volume { .. } | PlaceMenu::RecycleBin { .. } => None,
         }
     }
 
@@ -244,6 +267,7 @@ impl PlaceMenu {
             )],
             PlaceMenu::DriveCard { uri, kind, controls } => removal_items(uri, *kind, *controls),
             PlaceMenu::Network(location) => network_entries(location, caching),
+            PlaceMenu::RecycleBin { has_items } => recycle_bin_entries(*has_items),
             PlaceMenu::SavedShare { uri } => {
                 let mut entries = vec![
                     item("Open", Icon::Folder, WindowAction::GoTo, uri),

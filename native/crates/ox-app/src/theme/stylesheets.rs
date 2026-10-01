@@ -215,7 +215,7 @@ mod tests {
             "columnview.files > listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
             "gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
             ".sidebar list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }",
-            "paned.workspace > separator:focus-visible",
+            "paned.workspace > separator.keyboard-focus",
         ] {
             assert!(code.contains(rule), "{rule}");
         }

@@ -15,13 +15,17 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::support::app_menu;
+use crate::folder_view::column_widths;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
+use crate::resizer_control::ResizerControl;
 use crate::test_support::harness::{
     application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow,
 };
 use crate::text_size::TextSize;
+use crate::theme::desktop_text::{DesktopText, DesktopTextWatch};
 use crate::window::dialog::Dialog;
 use crate::window::ButtonStyle;
+use crate::window::focus_regions::Region;
 
 /// Emits `key` with `modifiers` on the key controller of `widget`;
 /// returns true when the widget handled it.
@@ -42,7 +46,7 @@ fn shows_no_text(widget: &gtk::Widget) -> bool {
     labels.iter().all(|label| label.text().is_empty())
 }
 
-/// parity: ACC-001
+/// parity: ACC-001, ACC-002
 #[gtk::test]
 fn the_file_list_its_items_and_every_icon_button_are_named() {
     let fixture = Fixture::standard();
@@ -59,10 +63,12 @@ fn the_file_list_its_items_and_every_icon_button_are_named() {
             gtk::AccessibleProperty::Description
         ));
     }
-    assert!(gtk::test_accessible_has_relation(
-        &details,
-        gtk::AccessibleRelation::RowCount
-    ));
+    for count in [
+        gtk::AccessibleRelation::RowCount,
+        gtk::AccessibleRelation::ColCount,
+    ] {
+        assert!(gtk::test_accessible_has_relation(&details, count), "{count:?}");
+    }
     let rows: Vec<gtk::Widget> = descendants::<gtk::Widget>(&details)
         .into_iter()
         .filter(|widget| widget.accessible_role() == gtk::AccessibleRole::Row)
@@ -90,6 +96,15 @@ fn the_file_list_its_items_and_every_icon_button_are_named() {
             .all(|role| *role == gtk::AccessibleRole::ColumnHeader),
         "{roles:?}"
     );
+    let resizers = descendants::<ResizerControl>(&details);
+    assert_eq!(resizers.len(), titles.len(), "every column has its resizer");
+    let size = resizers.last().expect("the Size column's resizer");
+    assert_eq!(size.accessible_role(), gtk::AccessibleRole::Separator);
+    assert!(!size.is_focusable(), "the title takes the keys");
+    assert!(size.request_value(130.0), "a screen reader can set the width");
+    let size_column = test.window.folder_pane().details().column(SortColumn::Size);
+    let fixed = size_column.expect("a Size column").fixed_width();
+    assert_eq!(column_widths::saved_width(SortColumn::Size, fixed), Some(130.0));
 
     let unnamed: Vec<String> = descendants::<gtk::Widget>(&test.window)
         .into_iter()
@@ -127,6 +142,45 @@ fn the_file_list_is_one_tab_stop_that_focuses_the_item_itself() {
         &focus,
         gtk::AccessibleProperty::Label
     ));
+}
+
+/// parity: ACC-015
+#[gtk::test]
+fn f6_moves_focus_round_the_regions_and_back_to_the_same_item() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_pane().focus_view();
+    let item = test.window.folder_pane().focused_position();
+    let selected = test.window.folder_pane().model().selected_items().len();
+
+    let mut visited = Vec::new();
+    for _ in 0..7 {
+        visited.push(
+            test.window
+                .focus_next_region(false)
+                .expect("a region takes focus"),
+        );
+        assert_eq!(test.window.focused_region(), visited.last().copied());
+    }
+    assert_eq!(
+        visited,
+        [
+            Region::Details,
+            Region::Tabs,
+            Region::Address,
+            Region::Search,
+            Region::Commands,
+            Region::Sidebar,
+            Region::Files
+        ]
+    );
+    assert_eq!(
+        test.window.folder_pane().focused_position(),
+        item,
+        "the same item"
+    );
+    assert_eq!(test.window.focus_next_region(true), Some(Region::Sidebar));
+    assert_eq!(test.window.folder_pane().model().selected_items().len(), selected);
 }
 
 /// parity: ACC-004
@@ -275,6 +329,10 @@ fn column_titles_sort_and_resize_from_the_keyboard() {
     let titles = crate::folder_view::column_titles::title_buttons(details.column_view());
     let type_title = &titles[3];
     assert!(titles.iter().all(WidgetExt::is_focusable));
+    assert!(
+        gtk::test_accessible_has_property(type_title, gtk::AccessibleProperty::Label),
+        "named after its column, not its resizer"
+    );
     let type_column = details.column(SortColumn::Type).expect("a Type column");
     let before = type_column.fixed_width();
 
@@ -391,6 +449,40 @@ fn large_text_grows_rows_and_dialogs_still_fit_800_by_600() {
     assert!(large_row > normal_row, "{large_row} > {normal_row}");
     assert!(dialog_width <= 800, "{dialog_width} pixels wide");
     assert!(dialog_height <= 600, "{dialog_height} pixels high");
+}
+
+/// The desktop's text scaling (GTK's font resolution) grows the rows on
+/// top of the app's own text size. The test follows the display's
+/// settings as the application does at startup.
+///
+/// parity: ACC-013
+#[gtk::test]
+fn the_desktop_text_scaling_grows_rows_on_top_of_the_app_size() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let settings = gtk::Settings::default().expect("the test display has settings");
+    let before = settings.gtk_xft_dpi();
+    let watch = DesktopTextWatch::new(&settings, |desktop| skin().set_desktop_text(desktop));
+    let row = test
+        .window
+        .sidebar()
+        .list()
+        .row_at_index(0)
+        .expect("the Home row");
+    let height_at = |xft_dpi: i32| {
+        settings.set_gtk_xft_dpi(xft_dpi);
+        wait_for_frames(&test.window, 3);
+        row.measure(gtk::Orientation::Vertical, -1).0
+    };
+    let unscaled = height_at(96 * 1024);
+    let large_text = height_at(144 * 1024);
+    let (chosen, drawn) = (skin().text_size(), skin().drawn_text_size());
+    settings.set_gtk_xft_dpi(before);
+    drop(watch);
+    skin().set_desktop_text(DesktopText::default());
+
+    assert!(drawn.percent() > chosen.percent(), "{drawn:?} is drawn for {chosen:?}");
+    assert!(large_text > unscaled, "{large_text} > {unscaled}");
 }
 
 /// A command bar menu is a list of rows Enter activates.

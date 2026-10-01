@@ -24,6 +24,7 @@ use super::file_drop::{FirstOffer, PendingDrop, ProgramChecks};
 use super::file_ops::FileOperations;
 use super::folder_pane::FolderPane;
 use super::menu_popover::MenuPopover;
+use super::recycle_bin_place::RecycleBinWatch;
 use super::search_box::SearchBox;
 use super::session::Session;
 use super::session::TabId;
@@ -38,6 +39,7 @@ use super::transfer_panel::TransferPanel;
 use super::type_to_select::Typeahead;
 use crate::app_context::AppContext;
 use crate::network::WindowNetwork;
+use crate::resizer_control::ResizerControl;
 use crate::search::{FolderSearch, SearchInfoStrip};
 use crate::settings_page::SettingsPage;
 use crate::volumes::VolumeRow;
@@ -78,6 +80,19 @@ pub(crate) struct BrowserWindow {
     /// (`.sidebar-resizer`).
     #[template_child]
     pub(super) workspace: TemplateChild<gtk::Paned>,
+    /// The resizer's keyboard and screen-reader side, beside the pane
+    /// handle.
+    #[template_child]
+    pub(super) sidebar_resizer: TemplateChild<ResizerControl>,
+    /// Whether the sidebar lists its hidden rows (SIDE-010).
+    pub(super) sidebar_show_all: Cell<bool>,
+    /// How many items the Recycle Bin holds, as its sidebar row shows.
+    pub(super) trash_items: Cell<u32>,
+    /// Watches the Recycle Bin for its sidebar row.
+    pub(super) recycle_bin_watch: RecycleBinWatch,
+    /// The Places button shown in the navigation row while the navigation
+    /// pane is hidden.
+    pub(super) places_button: OnceCell<gtk::MenuButton>,
     /// The navigation pane.
     #[template_child]
     pub(super) sidebar: TemplateChild<Sidebar>,

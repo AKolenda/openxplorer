@@ -271,8 +271,10 @@ fn right_clicking_a_pin_opens_its_menu() {
     });
 
     // The new row is laid out a frame after it is added.
+    // Until then the click lands on empty space, whose menu differs.
     wait_until("the pin's menu", || {
-        test.window.sidebar().right_click_row("Pinned menu").is_visible()
+        let menu = test.window.sidebar().right_click_row("Pinned menu");
+        menu.is_visible() && menu.row_labels().first().is_some_and(|label| label == "Open")
     });
     let menu = test.window.sidebar().right_click_row("Pinned menu");
 

@@ -10,7 +10,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::settings::Theme;
+use ox_core::settings::{Theme, SIDEBAR_ICON_SIZES};
 
 use crate::application::AppAction;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
@@ -268,6 +268,27 @@ impl BrowserWindow {
                 |window, shown| {
                     window.fit_details_pane();
                     window.save_preference(Preference::DetailsPane(shown));
+                },
+            ),
+            toggle_action(
+                WindowAction::Sidebar,
+                !preferences.hide_sidebar,
+                |window, shown| {
+                    window.show_sidebar(shown);
+                    window.save_preference(Preference::Sidebar(shown));
+                },
+            ),
+            choice_action(
+                WindowAction::SidebarIconSize,
+                &preferences.sidebar_icon_size.to_string(),
+                |window, key| {
+                    let size = key.parse::<u32>().ok();
+                    let Some(size) = size.filter(|size| SIDEBAR_ICON_SIZES.contains(size)) else {
+                        return false;
+                    };
+                    window.sidebar().set_icon_size(size);
+                    window.save_preference(Preference::SidebarIconSize(size));
+                    true
                 },
             ),
         ]);

@@ -195,6 +195,9 @@ fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
         .filter(|name| name.contains("(copy"))
         .collect();
     assert_eq!(copies.len(), 1, "Notes 2.txt was skipped: {copies:?}");
+    let report = open_dialog(&test);
+    assert_eq!(report.title_text(), "Operation result", "the skipped item is reported");
+    report.press("OK");
 }
 
 /// parity: OPS-028
@@ -269,6 +272,8 @@ fn replace_older_replaces_only_the_older_existing_files() {
             report != dialog && report.message_text().starts_with("1 completed.\n1 skipped")
         })
     });
+    let report = super::file_ops_support::dialog_over(&test).expect("the report");
+    report.press("OK");
 
     assert_eq!(
         fs::read(fixture.path("Documents/Notes 2.txt")).expect("the older copy was replaced"),

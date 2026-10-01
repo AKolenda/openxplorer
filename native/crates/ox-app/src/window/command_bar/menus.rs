@@ -96,7 +96,8 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 }
 
 /// The View menu: the views (every icon size the native app has), the
-/// hidden-files and details-pane toggles, then the text size.
+/// hidden-files, details-pane and navigation-pane toggles, then the text
+/// size.
 pub(super) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item("Details", Icon::TextBulletList, FolderView::Details);
     let mut entries = vec![details];
@@ -111,6 +112,9 @@ pub(super) fn view_menu() -> Vec<MenuEntry> {
             .into(),
         MenuItem::toggle("Details pane", Icon::PanelRight, WindowAction::DetailsPane)
             .with_shortcut("Alt+Shift+P")
+            .into(),
+        MenuItem::toggle("Navigation pane", Icon::Folder, WindowAction::Sidebar)
+            .with_shortcut("F9")
             .into(),
         MenuEntry::Divider,
         text_size_item("Larger text", Icon::Add, Step::Increase, "Ctrl++"),

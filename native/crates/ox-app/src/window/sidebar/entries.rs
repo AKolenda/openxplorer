@@ -3,7 +3,8 @@
 //! `desktop/ui/app.js`: Home (the home folder), the Quick access folders
 //! and pins, the searches saved to the sidebar (SRCH-038), This PC with
 //! Local Disk and the drives and devices, and
-//! Network with the merged network locations. Mounted SMB shares appear
+//! Network with the merged network locations, then Recent files and the
+//! Recycle Bin ([`recent_and_bin_entries`]). Mounted SMB shares appear
 //! once, under Network.
 //!
 //! [`sidebar_entries`] turns composed [`Places`] into rows without GTK, so
@@ -11,7 +12,7 @@
 //! their context menu ([`PlaceMenu`]), and a drive that can be removed its
 //! eject button (DEV-007).
 
-use ox_core::location::{is_server_location, LocationContext, NETWORK_URI, PC_URI};
+use ox_core::location::{is_server_location, LocationContext, NETWORK_URI, PC_URI, RECENT_URI, TRASH_URI};
 use ox_core::places::{NetworkLocation, Place};
 use ox_core::search::SavedSearch;
 
@@ -36,6 +37,24 @@ pub(in crate::window) enum Section {
     ThisPc,
     /// Network and the network locations.
     Network,
+    /// Recent files and the Recycle Bin, as Dolphin's Places panel lists
+    /// Recent Files and Trash (SIDE-025, SIDE-026).
+    RecentAndBin,
+}
+
+impl Section {
+    /// The key a hidden section is saved under, and its name in "Hide
+    /// section"; `None` for Home, which cannot be hidden (SIDE-010).
+    pub(in crate::window) fn hiding(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Section::Home => None,
+            Section::QuickAccess => Some(("quickAccess", "Quick access")),
+            Section::SavedSearches => Some(("savedSearches", "Saved searches")),
+            Section::ThisPc => Some(("thisPc", "This PC")),
+            Section::Network => Some(("network", "Network")),
+            Section::RecentAndBin => Some(("recent", "Recent files and Recycle Bin")),
+        }
+    }
 }
 
 /// How a row sits in the tree.
@@ -112,7 +131,8 @@ impl EjectButton {
     }
 }
 
-fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
+/// The Quick access row of `place`.
+pub(in crate::window) fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
     let storage = if place.is_shared || is_server_location(&place.uri) {
         Storage::Network
     } else {
@@ -218,7 +238,7 @@ fn network_entry(location: &NetworkLocation, locations: &LocationContext) -> Sid
 /// A top-level row with a coloured glyph: Home, This PC or Network, in
 /// the colours of the `add(...)` calls in `renderSidebar`.
 fn fixed_entry(section: Section, label: &str, icon: Art, uri: &str) -> SidebarEntry {
-    let level = if section == Section::Home {
+    let level = if matches!(section, Section::Home | Section::RecentAndBin) {
         RowLevel::Place
     } else {
         RowLevel::Group
@@ -308,6 +328,37 @@ pub(in crate::window) fn sidebar_entries(
     entries.push(network);
     entries.extend(network_rows);
     entries
+}
+
+/// "Recent files" (GIO's `recent:///`, the desktop's recently used files)
+/// and the Recycle Bin, whose glyph takes the accent colour and whose
+/// tooltip counts the items while `trash_items` are in it.
+pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEntry; 2] {
+    let recent = SidebarEntry {
+        tooltip: "Recently used files".to_owned(),
+        ..fixed_entry(
+            Section::RecentAndBin,
+            "Recent files",
+            Art::Glyph(Icon::History),
+            RECENT_URI,
+        )
+    };
+    let (icon, state) = match trash_items {
+        0 => (Art::Glyph(Icon::Delete), "Empty".to_owned()),
+        1 => (Art::TintedGlyph(Icon::Delete, Tint::Home), "1 item".to_owned()),
+        count => (
+            Art::TintedGlyph(Icon::Delete, Tint::Home),
+            format!("{count} items"),
+        ),
+    };
+    let bin = SidebarEntry {
+        tooltip: format!("Recycle Bin · {state}"),
+        menu: Some(PlaceMenu::RecycleBin {
+            has_items: trash_items > 0,
+        }),
+        ..fixed_entry(Section::RecentAndBin, "Recycle Bin", icon, TRASH_URI)
+    };
+    [recent, bin]
 }
 
 /// Where a row sits in its section, which decides its spacing: the
@@ -416,6 +467,18 @@ mod tests {
         let entries = entries_for(&SettingsData::default(), &[]);
         assert_eq!(entries[0].target, RowTarget::Location("file:///home/demo".into()));
         assert_eq!(entries[0].tooltip, "/home/demo");
+    }
+
+    /// parity: SIDE-025
+    #[test]
+    fn the_recycle_bin_row_is_drawn_full_or_empty() {
+        let [recent, empty] = recent_and_bin_entries(0);
+        let [_, full] = recent_and_bin_entries(3);
+        assert_eq!(recent.target, RowTarget::Location(RECENT_URI.into()));
+        assert_eq!(empty.icon, Art::Glyph(Icon::Delete));
+        assert_eq!(full.icon, Art::TintedGlyph(Icon::Delete, Tint::Home));
+        assert_eq!(full.tooltip, "Recycle Bin · 3 items");
+        assert_eq!(empty.menu, Some(PlaceMenu::RecycleBin { has_items: false }));
     }
 
     #[test]

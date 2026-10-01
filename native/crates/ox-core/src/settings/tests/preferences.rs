@@ -225,3 +225,20 @@ fn text_size_changes_from_two_windows_merge() {
     assert_eq!(merged.text_size, 175);
     assert_eq!(merged.theme, Theme::Dark);
 }
+
+/// parity: SIDE-022
+#[test]
+fn sections_and_places_hidden_from_two_windows_merge() {
+    let root = temporary_folder();
+    let mut first = Settings::open(root.path());
+    let mut second = Settings::open(root.path());
+    first.set_section_hidden("network", true).expect("hidden");
+    second.set_section_hidden("drives", true).expect("hidden");
+    first.set_section_hidden("drives", false).expect("shown");
+    first.set_place_hidden("trash:///", true).expect("hidden");
+    second.set_place_hidden("recent:///", true).expect("hidden");
+    first.set_place_hidden("trash:///", false).expect("shown");
+    let merged = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(merged.hidden_sidebar_sections, ["network"]);
+    assert_eq!(merged.hidden_sidebar_places, ["recent:///"]);
+}

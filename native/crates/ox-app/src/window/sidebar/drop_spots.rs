@@ -12,6 +12,7 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::location::RECENT_URI;
 
 use super::entries::{RowTarget, Section};
 use super::Sidebar;
@@ -90,6 +91,10 @@ impl Sidebar {
             }
             RowTarget::MountVolume(_) | RowTarget::SavedSearch(_) => return None,
         };
+        // Recent files lists what the desktop recorded; nothing goes in.
+        if uri == RECENT_URI {
+            return None;
+        }
         if entry.section != Section::QuickAccess {
             return Some(SidebarDropSpot::Folder {
                 index,

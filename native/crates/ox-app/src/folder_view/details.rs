@@ -284,7 +284,16 @@ impl DetailsView {
             column_view,
             move |selection, _, _, _| {
                 let count = i32::try_from(selection.n_items()).unwrap_or(i32::MAX);
-                column_view.update_relation(&[gtk::accessible::Relation::RowCount(count)]);
+                let columns = column_view
+                    .columns()
+                    .iter::<gtk::ColumnViewColumn>()
+                    .filter_map(Result::ok)
+                    .filter(gtk::ColumnViewColumn::is_visible)
+                    .count();
+                column_view.update_relation(&[
+                    gtk::accessible::Relation::RowCount(count),
+                    gtk::accessible::Relation::ColCount(i32::try_from(columns).unwrap_or(i32::MAX)),
+                ]);
             }
         ));
     }

@@ -31,6 +31,7 @@ mod network;
 mod operation_session;
 mod places;
 mod properties;
+mod resizer_control;
 mod search;
 mod settings_page;
 mod settings_store;

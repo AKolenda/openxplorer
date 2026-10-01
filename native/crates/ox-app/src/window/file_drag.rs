@@ -9,7 +9,8 @@
 //! selects only it first; a sidebar row carries its folder. What the drag
 //! offers is built in [`payload`]. While the drag lasts its items are
 //! dimmed, and clicks on items are ignored from its start until shortly
-//! after its end, so the gesture never opens or reselects an item.
+//! after its end, so the gesture never opens or reselects an item. Screen
+//! readers hear the drag start, with what it carries, and end (ACC-002).
 //!
 //! Safety rule "a drag out never deletes" (DND-008): a drag started
 //! without a modifier offers Copy (and Ask, the drop menu) only, so no app
@@ -28,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
+use gtk::{gdk, gio, glib};
 use ox_core::entry::Entry;
 use ox_core::network::local_path;
 
@@ -53,6 +54,23 @@ const DRAG_ICON_SIZE: i32 = 48;
 /// Shown when some dragged items have no local path.
 const REMOTE_ONLY_MESSAGE: &str = "This network item needs an app that supports SMB addresses. For a \
                                    local-only editor, open it through an existing local mount.";
+
+/// Said to screen readers when a drag ends, dropped or cancelled.
+const DRAG_ENDED: &str = "Drag ended";
+
+/// What screen readers hear as a drag of `uris` starts: the item's name,
+/// or how many items move.
+fn drag_announcement(uris: &[String]) -> String {
+    match uris {
+        [uri] => {
+            let name = gio::File::for_uri(uri)
+                .basename()
+                .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
+            format!("Dragging {name}")
+        }
+        _ => format!("Dragging {} items", uris.len()),
+    }
+}
 
 /// The drag this window started: what it offers and how its icon looks.
 #[derive(Debug, Clone)]
@@ -263,6 +281,8 @@ impl BrowserWindow {
         if outgoing.payload.remote_only > 0 {
             self.show_message(REMOTE_ONLY_MESSAGE);
         }
+        let announcement = drag_announcement(&outgoing.payload.uris);
+        self.announce(&announcement, gtk::AccessibleAnnouncementPriority::Medium);
         Some(outgoing)
     }
 
@@ -271,7 +291,9 @@ impl BrowserWindow {
     /// source to delete its data after a move; this window never does
     /// (DND-008), whatever the receiver answered.
     pub(super) fn end_file_drag(&self) {
-        self.imp().outgoing_drag.replace(None);
+        if self.imp().outgoing_drag.replace(None).is_some() {
+            self.announce(DRAG_ENDED, gtk::AccessibleAnnouncementPriority::Medium);
+        }
         self.folder_pane().owners().show_dragged_items(HashSet::new());
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_END);
     }
@@ -374,5 +396,14 @@ mod tests {
         test.window.end_file_drag();
 
         assert_eq!(message, REMOTE_ONLY_MESSAGE);
+    }
+
+    /// parity: ACC-002
+    #[test]
+    fn a_drag_is_announced_by_its_item_or_its_count() {
+        let one = ["file:///home/demo/Report%202026.odt".to_owned()];
+        let two = ["file:///home/demo/a".to_owned(), "file:///home/demo/b".to_owned()];
+        assert_eq!(drag_announcement(&one), "Dragging Report 2026.odt");
+        assert_eq!(drag_announcement(&two), "Dragging 2 items");
     }
 }
