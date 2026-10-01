@@ -216,6 +216,7 @@ impl BrowserWindow {
     /// Adds the actions the context menus run themselves: "Show more
     /// options", "New…", "Unpin from Quick access" and "Open windows…".
     pub(super) fn install_context_menu_actions(&self) {
+        self.install_sidebar_hiding();
         self.add_action_entries([
             plain_action(WindowAction::ShowMoreOptions, BrowserWindow::show_more_options),
             plain_action(WindowAction::ShowNewMenu, BrowserWindow::show_new_menu_in_place),

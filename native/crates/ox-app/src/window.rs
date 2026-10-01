@@ -107,6 +107,7 @@ mod selection;
 mod session;
 mod settings_tab;
 mod sidebar;
+mod sidebar_hiding;
 mod sidebar_resizer;
 mod sidebar_toggle;
 mod snapshot_tabs;

@@ -42,6 +42,21 @@ pub(in crate::window) enum Section {
     RecentAndBin,
 }
 
+impl Section {
+    /// The key a hidden section is saved under, and its name in "Hide
+    /// section"; `None` for Home, which cannot be hidden (SIDE-010).
+    pub(in crate::window) fn hiding(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Section::Home => None,
+            Section::QuickAccess => Some(("quickAccess", "Quick access")),
+            Section::SavedSearches => Some(("savedSearches", "Saved searches")),
+            Section::ThisPc => Some(("thisPc", "This PC")),
+            Section::Network => Some(("network", "Network")),
+            Section::RecentAndBin => Some(("recent", "Recent files and Recycle Bin")),
+        }
+    }
+}
+
 /// How a row sits in the tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::window) enum RowLevel {
@@ -116,7 +131,8 @@ impl EjectButton {
     }
 }
 
-fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
+/// The Quick access row of `place`.
+pub(in crate::window) fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
     let storage = if place.is_shared || is_server_location(&place.uri) {
         Storage::Network
     } else {

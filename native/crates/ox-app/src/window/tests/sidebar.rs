@@ -434,3 +434,59 @@ fn the_icon_size_chosen_on_empty_space_redraws_the_rows_and_is_saved() {
         test.context.settings_data().preferences.sidebar_icon_size == 48
     });
 }
+
+/// "Hide section" hides a group for good; "Show all entries" lists it
+/// dimmed with "Show section", and a hidden standard folder with "Show".
+///
+/// parity: SIDE-010
+#[gtk::test]
+fn hidden_sections_and_folders_are_listed_dimmed_and_shown_again() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    let menu_labels = |label: &str| {
+        // Rows redrawn a moment ago are found by position once laid out.
+        wait_for_frames(&test.window, 3);
+        let menu = sidebar.right_click_row(label);
+        let labels = menu.row_labels();
+        menu.popdown();
+        labels
+    };
+    assert!(menu_labels("This PC").contains(&"Hide section \u{201c}This PC\u{201d}".to_owned()));
+    let known = test.context.known_folders();
+    let standard = known.iter().find(|place| sidebar.labels().contains(&place.label));
+
+    test.activate("hide-section", Some("thisPc"));
+    wait_until("This PC to go", || {
+        !sidebar.labels().contains(&"This PC".to_owned())
+    });
+    assert!(!sidebar.labels().contains(&"Local Disk".to_owned()));
+    if let Some(folder) = standard {
+        test.activate("unpin", Some(&folder.uri));
+        wait_until("the folder to go", || !sidebar.labels().contains(&folder.label));
+    }
+
+    test.activate("sidebar-show-all", None);
+    let this_pc = row_named(&test, "This PC");
+    assert!(this_pc.has_css_class("hidden-place"), "dimmed");
+    assert_eq!(menu_labels("This PC"), ["Show section \u{201c}This PC\u{201d}"]);
+    if let Some(folder) = standard {
+        assert_eq!(menu_labels(&folder.label), ["Show"]);
+        test.activate("show-place", Some(&folder.uri));
+        wait_until("the folder to be shown", || {
+            !row_named(&test, &folder.label).has_css_class("hidden-place")
+        });
+    }
+    test.activate("show-section", Some("thisPc"));
+    wait_until("This PC to be shown", || {
+        !row_named(&test, "This PC").has_css_class("hidden-place")
+    });
+    test.activate("sidebar-show-all", None);
+    assert!(sidebar.labels().contains(&"Local Disk".to_owned()));
+    assert!(test
+        .context
+        .settings_data()
+        .preferences
+        .hidden_sidebar_sections
+        .is_empty());
+}

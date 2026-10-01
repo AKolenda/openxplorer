@@ -82,6 +82,8 @@ pub(crate) struct BrowserWindow {
     /// handle.
     #[template_child]
     pub(super) sidebar_resizer: TemplateChild<ResizerControl>,
+    /// Whether the sidebar lists its hidden rows (SIDE-010).
+    pub(super) sidebar_show_all: Cell<bool>,
     /// How many items the Recycle Bin holds, as its sidebar row shows.
     pub(super) trash_items: Cell<u32>,
     /// Watches the Recycle Bin for its sidebar row.

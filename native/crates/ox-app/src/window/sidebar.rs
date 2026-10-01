@@ -40,6 +40,22 @@ pub(super) use drop_spots::SidebarDropSpot;
 pub(super) use entries::{recent_and_bin_entries, sidebar_entries};
 use entries::{RowTarget, Section, SidebarEntry};
 
+/// Whether a row shows something hidden, listed while "Show all
+/// entries" is on (SIDE-010).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum HiddenRow {
+    /// A row shown as usual.
+    #[default]
+    Shown,
+    /// A standard folder hidden from Quick access.
+    Place,
+    /// A row of a hidden section.
+    Section,
+}
+
+/// The class that dims a hidden row.
+const HIDDEN_ROW_CLASS: &str = "hidden-place";
+
 /// The "+" of Map network location.
 const MAP_NETWORK_GLYPH: i32 = 17;
 
@@ -50,7 +66,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{MenuPopover, SidebarEntry};
+    use super::{HiddenRow, MenuPopover, SidebarEntry};
 
     /// Private state of [`super::Sidebar`].
     #[derive(Debug, Default)]
@@ -63,6 +79,10 @@ mod imp {
         pub(super) menu: OnceCell<MenuPopover>,
         /// The rows' icon size in pixels, 0 for automatic (SIDE-012).
         pub(super) icon_size: Cell<u32>,
+        /// Which rows show something hidden, in row order (SIDE-010).
+        pub(super) hidden_rows: RefCell<Vec<HiddenRow>>,
+        /// Whether anything is hidden, which "Show all entries" lists.
+        pub(super) anything_hidden: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -246,11 +266,35 @@ impl Sidebar {
     pub(super) fn menu_entries_at(&self, y: f64) -> Option<Vec<MenuEntry>> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let Some(row) = self.list().row_at_y(y as i32) else {
-            return Some(empty_space_menu());
+            return Some(empty_space_menu(self.imp().anything_hidden.get()));
         };
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
         let entry = entries.get(index)?;
+        let hidden = self
+            .imp()
+            .hidden_rows
+            .borrow()
+            .get(index)
+            .copied()
+            .unwrap_or_default();
+        let mut menu = match hidden {
+            HiddenRow::Place => return Some(show_place_menu(entry)),
+            HiddenRow::Section => Vec::new(),
+            HiddenRow::Shown => self.row_menu(entry).unwrap_or_default(),
+        };
+        if let Some((key, name)) = entry.section.hiding() {
+            if !menu.is_empty() {
+                menu.push(MenuEntry::Divider);
+            }
+            menu.push(section_item(key, name, hidden == HiddenRow::Section));
+        }
+        (!menu.is_empty()).then_some(menu)
+    }
+
+    /// The menu of `entry` itself: a saved search's, a pin's, or a drive's
+    /// or a network location's; `None` for a row without one.
+    fn row_menu(&self, entry: &SidebarEntry) -> Option<Vec<MenuEntry>> {
         let window = self.root().and_downcast::<BrowserWindow>();
         if let RowTarget::SavedSearch(search) = &entry.target {
             return Some(saved_search_menu(search));
@@ -322,9 +366,32 @@ impl Sidebar {
             .collect();
         // The header function reads the entries as the rows are added.
         self.imp().entries.replace(entries);
+        self.imp().hidden_rows.replace(Vec::new());
         for row in &rows {
             list.append(row);
         }
+    }
+
+    /// Replaces the rows with `rows`, dimming the hidden ones shown, and
+    /// records whether `anything_hidden` (SIDE-010).
+    pub(super) fn set_rows(&self, rows: Vec<(SidebarEntry, HiddenRow)>, anything_hidden: bool) {
+        let (entries, hidden): (Vec<SidebarEntry>, Vec<HiddenRow>) = rows.into_iter().unzip();
+        self.set_entries(entries);
+        self.mark_hidden(hidden);
+        self.imp().anything_hidden.set(anything_hidden);
+    }
+
+    /// Dims the rows `hidden` marks and remembers them for the menus.
+    fn mark_hidden(&self, hidden: Vec<HiddenRow>) {
+        for (index, state) in hidden.iter().enumerate() {
+            let row = i32::try_from(index)
+                .ok()
+                .and_then(|index| self.list().row_at_index(index));
+            if let (Some(row), true) = (row, *state != HiddenRow::Shown) {
+                row.add_css_class(HIDDEN_ROW_CLASS);
+            }
+        }
+        self.imp().hidden_rows.replace(hidden);
     }
 
     /// Draws the rows' icons `size` pixels big, or at the automatic size
@@ -334,8 +401,10 @@ impl Sidebar {
             return;
         }
         let entries = self.imp().entries.borrow().clone();
+        let hidden = self.imp().hidden_rows.borrow().clone();
         let selected = self.list().selected_row().map(|row| row.index());
         self.set_entries(entries);
+        self.mark_hidden(hidden);
         let row = selected.and_then(|index| self.list().row_at_index(index));
         self.list().select_row(row.as_ref());
     }
@@ -381,14 +450,17 @@ impl Sidebar {
     }
 }
 
-/// The menu of the sidebar's empty space: "Add entry…" (SIDE-031) and
-/// the icon sizes (SIDE-012).
-fn empty_space_menu() -> Vec<MenuEntry> {
+/// The menu of the sidebar's empty space: "Add entry…" (SIDE-031), "Show
+/// all entries" while `anything_hidden` (SIDE-010) and the icon sizes
+/// (SIDE-012).
+fn empty_space_menu(anything_hidden: bool) -> Vec<MenuEntry> {
     let size = |label: &str, pixels: &str| {
         MenuItem::choice(label, Icon::Grid, WindowAction::SidebarIconSize, pixels).into()
     };
+    let show_all = MenuItem::toggle("Show all entries", Icon::Eye, WindowAction::SidebarShowAll);
     vec![
         MenuItem::new("Add entry…", Icon::Add, WindowAction::AddPlace).into(),
+        show_all.disabled_when(!anything_hidden).into(),
         MenuEntry::Divider,
         size("Automatic icon size", "0"),
         size("Small icons", "16"),
@@ -396,6 +468,26 @@ fn empty_space_menu() -> Vec<MenuEntry> {
         size("Large icons", "32"),
         size("Huge icons", "48"),
     ]
+}
+
+/// The menu of a hidden standard folder listed by "Show all entries".
+fn show_place_menu(entry: &SidebarEntry) -> Vec<MenuEntry> {
+    let RowTarget::Location(uri) = &entry.target else {
+        return Vec::new();
+    };
+    vec![MenuItem::with_text_target("Show", Icon::Eye, WindowAction::ShowPlace, uri).into()]
+}
+
+/// "Hide section" for a shown section, or "Show section" for a hidden
+/// one, named `name` and saved as `key`.
+fn section_item(key: &str, name: &str, hidden: bool) -> MenuEntry {
+    let (verb, action) = if hidden {
+        ("Show", WindowAction::ShowSection)
+    } else {
+        ("Hide", WindowAction::HideSection)
+    };
+    let label = format!("{verb} section \u{201c}{name}\u{201d}");
+    MenuItem::with_text_target(&label, Icon::Eye, action, key).into()
 }
 
 /// The tab a primary click with `modifiers` opens a place in: with Ctrl,

@@ -243,7 +243,15 @@ pub struct Preferences {
     /// chosen.
     #[serde(skip_serializing_if = "is_automatic_icon_size")]
     pub sidebar_icon_size: u32,
+    /// The sidebar sections the user hid (Dolphin's "Hide Section"), by
+    /// the keys the app gives them. Stored only when one is hidden.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub hidden_sidebar_sections: Vec<String>,
 }
+
+/// The most sidebar sections that may be hidden, and the longest key.
+const MAX_HIDDEN_SECTIONS: usize = 16;
+const MAX_SECTION_KEY: usize = 32;
 
 /// The sidebar icon sizes the user may choose, in pixels; 0 is automatic.
 pub const SIDEBAR_ICON_SIZES: [u32; 5] = [0, 16, 22, 32, 48];
@@ -276,6 +284,7 @@ impl Default for Preferences {
             external_folders_in_new_window: false,
             hide_sidebar: false,
             sidebar_icon_size: 0,
+            hidden_sidebar_sections: Vec::new(),
         }
     }
 }
@@ -313,6 +322,17 @@ impl Preferences {
             .sidebar_icon_size
             .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
         replace_if_some(&mut self.sidebar_icon_size, icon_size);
+        let sections = update.hidden_sidebar_sections.as_ref().filter(|sections| {
+            sections.len() <= MAX_HIDDEN_SECTIONS
+                && sections.iter().all(|key| {
+                    !key.is_empty()
+                        && key.len() <= MAX_SECTION_KEY
+                        && key.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+        });
+        if let Some(sections) = sections {
+            self.hidden_sidebar_sections.clone_from(sections);
+        }
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
@@ -361,6 +381,9 @@ pub struct PreferencesUpdate {
     pub hide_sidebar: Option<bool>,
     /// New sidebar icon size; one of [`SIDEBAR_ICON_SIZES`] or ignored.
     pub sidebar_icon_size: Option<u32>,
+    /// Replaces the hidden sidebar sections; up to 16 short ASCII keys,
+    /// else ignored.
+    pub hidden_sidebar_sections: Option<Vec<String>>,
 }
 
 impl PreferencesUpdate {
@@ -398,8 +421,18 @@ impl PreferencesUpdate {
                 .get("sidebarIconSize")
                 .and_then(Value::as_u64)
                 .and_then(|size| u32::try_from(size).ok()),
+            hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
         })
     }
+}
+
+/// A list of strings, or `None` when `value` is not one.
+fn read_keys(value: &Value) -> Option<Vec<String>> {
+    value
+        .as_array()?
+        .iter()
+        .map(|key| key.as_str().map(str::to_owned))
+        .collect()
 }
 
 /// A text size given as a true integer. Python checks `type(size) is int`,

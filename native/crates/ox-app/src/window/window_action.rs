@@ -122,6 +122,14 @@ pub(crate) enum WindowAction {
     Sidebar,
     /// The sidebar's icon size: `0` (automatic), `16`, `22`, `32` or `48`.
     SidebarIconSize,
+    /// Lists the hidden sidebar rows, dimmed (SIDE-010).
+    SidebarShowAll,
+    /// Hides the sidebar section whose key is the string target.
+    HideSection,
+    /// Shows the hidden sidebar section whose key is the string target.
+    ShowSection,
+    /// Shows the hidden standard folder in the string target again.
+    ShowPlace,
     /// The column the details view sorts by.
     Sort,
     /// Whether the details view sorts ascending or descending.
@@ -367,6 +375,10 @@ impl WindowAction {
             WindowAction::DetailsPane => "details-pane",
             WindowAction::Sidebar => "sidebar",
             WindowAction::SidebarIconSize => "sidebar-icon-size",
+            WindowAction::SidebarShowAll => "sidebar-show-all",
+            WindowAction::HideSection => "hide-section",
+            WindowAction::ShowSection => "show-section",
+            WindowAction::ShowPlace => "show-place",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
             WindowAction::Theme => "theme",

@@ -15,7 +15,7 @@ use ox_core::transfer::Cancellation;
 use super::file_ops_support::{
     is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
 };
-use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
 
 /// Moves `path` to the Trash, as another file manager would.
@@ -159,6 +159,7 @@ fn the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere() {
         bin_tooltip().ends_with(" item") || bin_tooltip().ends_with(" items")
     });
 
+    wait_for_frames(&test.window, 3);
     let menu = sidebar.right_click_row("Recycle Bin");
     let labels = menu.row_labels();
     let empty = menu.row("Empty Recycle Bin");

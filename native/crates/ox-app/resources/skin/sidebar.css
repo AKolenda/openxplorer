@@ -77,6 +77,10 @@ window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
 /* The 17px glyph is centred on a half pixel as above. */
 .sidebar-bottom image { color: @ox_accent; margin-top: 1px; }
 
+/* A hidden place or section listed by "Show all entries" (SIDE-010), half
+   see-through as in Dolphin's Places panel. */
+.sidebar list > row.hidden-place .side-entry { opacity: 0.5; }
+
 /* A drive's 3px capacity bar under its name (SIDE-018), red when nearly
    full as on This PC's cards. */
 .sidebar .capacity { min-height: 3px; margin: 2px 0 0 0; }

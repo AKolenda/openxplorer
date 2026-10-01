@@ -211,6 +211,17 @@ impl Settings {
         self.mutate(|data| mutate::apply_bookmark(data, action, kind, request))
     }
 
+    /// Shows the hidden standard folder `uri` in Quick access again,
+    /// without making it a pin.
+    ///
+    /// # Errors
+    ///
+    /// [`SettingsError::Location`] for an invalid location, and every
+    /// error of [`update_preferences`](Self::update_preferences).
+    pub fn show_in_quick_access(&mut self, uri: &str) -> Result<(), SettingsError> {
+        self.mutate(|data| mutate::show_in_quick_access(data, uri))
+    }
+
     /// Adds or reorders up to 200 Quick access pins in one change and
     /// returns the cleaned pins. The batch is validated as a whole, so an
     /// invalid entry changes nothing. See [`BookmarkRequest`].

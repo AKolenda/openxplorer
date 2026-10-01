@@ -5324,8 +5324,8 @@ sources = [
 python_tests = ["desktop/tests/test_core.py::CoreTests::test_hidden_builtin_pin"]
 bridge = ["bookmark"]
 dolphin = "Places 'Hide' / 'Hide Section' / 'Show Hidden Places'"
-native = "todo"
-native_note = "Porting notes: OpenXplorer can hide (unpin) the built-in Quick access folders, but nothing restores them and sections cannot be hidden. Existing OpenXplorer part is protected by SIDE-006 and SIDE-009."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (hidden_sections_and_folders_are_listed_dimmed_and_shown_again). A standard folder is hidden with 'Unpin from Quick access' (SIDE-009); every row's menu ends with 'Hide section “<name>”' for its group (Quick access, Saved searches, This PC, Network, Recent files and Recycle Bin; Home stays), saved for every window as hiddenSidebarSections. The empty-space menu's 'Show all entries' (per window, disabled while nothing is hidden) lists hidden sections and hidden standard folders half see-through; their menus offer 'Show section “<name>”' and 'Show', which shows a standard folder again without making it a pin (Settings::show_in_quick_access)."
 
 [[feature]]
 id = "SIDE-011"
