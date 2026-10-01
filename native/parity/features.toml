@@ -15267,7 +15267,7 @@ bridge = ["operate"]
 dolphin = "Plasma task-manager job progress"
 gnome = "com.canonical.Unity.LauncherEntry Update signal (progress, progress-visible), supported by Dash-to-Dock/Dash-to-Panel-style taskbars; GNOME Shell core has no equivalent"
 native = "done"
-native_note = "native/crates/ox-app/src/launcher_progress.rs: while the transfer panel or the archive operation panel runs, the app emits com.canonical.Unity.LauncherEntry.Update for application://<app id>.desktop with progress and progress-visible, on whole-percent changes only, and hides the bar when the operation ends. Docks and taskbars that implement the API (Dash to Dock, Dash to Panel, Zorin's taskbar, Plank, KDE) draw it; GNOME Shell's own dash has no equivalent and shows nothing. Test: launcher_progress.rs (the_update_names_the_app_and_its_progress). Not verified against a real dock."
+native_note = "native/crates/ox-app/src/launcher_progress.rs: while the transfer panel or the archive operation panel runs, the app emits com.canonical.Unity.LauncherEntry.Update for application://<app id>.desktop with progress and progress-visible, on whole-percent changes only, and hides the bar when the operation ends. Docks and taskbars that implement the API (Dash to Dock, Dash to Panel, Zorin's taskbar, Plank, KDE) draw it; GNOME Shell's own dash has no equivalent and shows nothing. Tests: launcher_progress.rs (the_update_names_the_app_and_its_progress), native/crates/ox-app/src/window/tests/file_operations.rs (running_operations_show_their_progress_on_the_dock_icon: on the private test bus the transfer panel and the archive operation panel each send an Update with the bar shown at the start and hidden at the end). Not verified against a real dock."
 
 [[feature]]
 id = "INT-028"
