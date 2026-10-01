@@ -7,6 +7,7 @@
 //! order. Each item runs a window or application action; the choices and
 //! toggles show a check mark while their action's state matches.
 
+use ox_core::i18n::gettext;
 use ox_core::settings::Theme;
 
 use crate::application::AppAction;
@@ -27,28 +28,40 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuEntry {
 /// opens too, and Dolphin's link item (OPS-004).
 pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
     vec![
-        MenuItem::new("Folder", Icon::FolderAdd, WindowAction::NewFolder)
+        MenuItem::new(&gettext("Folder"), Icon::FolderAdd, WindowAction::NewFolder)
             .with_shortcut("Ctrl+Shift+N")
             .into(),
-        item("Text document", Icon::DocumentText, WindowAction::NewTextDocument),
-        item("File…", Icon::DocumentAdd, WindowAction::NewFile),
+        item(
+            &gettext("Text document"),
+            Icon::DocumentText,
+            WindowAction::NewTextDocument,
+        ),
+        item(&gettext("File…"), Icon::DocumentAdd, WindowAction::NewFile),
         MenuEntry::Divider,
         item(
-            "Markdown document",
+            &gettext("Markdown document"),
             Icon::Markdown,
             WindowAction::NewMarkdownDocument,
         ),
-        item("CSV file", Icon::Table, WindowAction::NewCsvFile),
-        item("JSON file", Icon::Braces, WindowAction::NewJsonFile),
-        item("HTML document", Icon::Code, WindowAction::NewHtmlDocument),
+        item(&gettext("CSV file"), Icon::Table, WindowAction::NewCsvFile),
+        item(&gettext("JSON file"), Icon::Braces, WindowAction::NewJsonFile),
+        item(
+            &gettext("HTML document"),
+            Icon::Code,
+            WindowAction::NewHtmlDocument,
+        ),
         MenuEntry::Divider,
         item(
-            "From template…",
+            &gettext("From template…"),
             Icon::DocumentCopy,
             WindowAction::NewFromTemplate,
         ),
         MenuEntry::Divider,
-        item("Link to file or folder…", Icon::Link, WindowAction::NewLink),
+        item(
+            &gettext("Link to file or folder…"),
+            Icon::Link,
+            WindowAction::NewLink,
+        ),
     ]
 }
 
@@ -74,8 +87,8 @@ pub(super) fn sort_menu() -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = SortColumn::IN_SORT_MENU.into_iter().map(column_item).collect();
     entries.extend([
         MenuEntry::Divider,
-        direction_item("Ascending", Icon::ArrowUp, SortDirection::Ascending),
-        direction_item("Descending", Icon::ArrowDown, SortDirection::Descending),
+        direction_item(&gettext("Ascending"), Icon::ArrowUp, SortDirection::Ascending),
+        direction_item(&gettext("Descending"), Icon::ArrowDown, SortDirection::Descending),
     ]);
     entries
 }
@@ -99,7 +112,7 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 /// hidden-files, details-pane, navigation-pane and folder-tree toggles
 /// and the terminal, then the text size.
 pub(super) fn view_menu() -> Vec<MenuEntry> {
-    let details = view_item("Details", Icon::TextBulletList, FolderView::Details);
+    let details = view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details);
     let mut entries = vec![details];
     let icon_sizes = IconSize::ALL
         .into_iter()
@@ -107,28 +120,45 @@ pub(super) fn view_menu() -> Vec<MenuEntry> {
     entries.extend(icon_sizes);
     entries.extend([
         MenuEntry::Divider,
-        MenuItem::toggle("Show hidden files", Icon::Eye, WindowAction::Hidden)
+        MenuItem::toggle(&gettext("Show hidden files"), Icon::Eye, WindowAction::Hidden)
             .with_shortcut("Ctrl+H")
             .into(),
-        MenuItem::toggle("Details pane", Icon::PanelRight, WindowAction::DetailsPane)
-            .with_shortcut("Alt+Shift+P")
-            .into(),
-        MenuItem::toggle("Navigation pane", Icon::Folder, WindowAction::Sidebar)
+        MenuItem::toggle(
+            &gettext("Details pane"),
+            Icon::PanelRight,
+            WindowAction::DetailsPane,
+        )
+        .with_shortcut("Alt+Shift+P")
+        .into(),
+        MenuItem::toggle(&gettext("Navigation pane"), Icon::Folder, WindowAction::Sidebar)
             .with_shortcut("F9")
             .into(),
-        MenuItem::toggle("Folder tree", Icon::Organization, WindowAction::FolderTree)
-            .with_shortcut("F7")
-            .into(),
+        MenuItem::toggle(
+            &gettext("Folder tree"),
+            Icon::Organization,
+            WindowAction::FolderTree,
+        )
+        .with_shortcut("F7")
+        .into(),
         // Dolphin's Terminal panel embeds Konsole; VTE for GTK 4 is not
         // available everywhere the app ships, so this opens the desktop's
         // terminal in the folder shown instead (OPEN-022).
-        MenuItem::new("Terminal", Icon::WindowConsole, WindowAction::OpenTerminal)
-            .with_shortcut("Ctrl+Shift+F4")
-            .into(),
+        MenuItem::new(
+            &gettext("Terminal"),
+            Icon::WindowConsole,
+            WindowAction::OpenTerminal,
+        )
+        .with_shortcut("Ctrl+Shift+F4")
+        .into(),
         MenuEntry::Divider,
-        text_size_item("Larger text", Icon::Add, Step::Increase, "Ctrl++"),
-        text_size_item("Smaller text", Icon::Subtract, Step::Decrease, "Ctrl+−"),
-        text_size_item("Reset text size", Icon::ArrowReset, Step::Reset, "Ctrl+0"),
+        text_size_item(&gettext("Larger text"), Icon::Add, Step::Increase, "Ctrl++"),
+        text_size_item(&gettext("Smaller text"), Icon::Subtract, Step::Decrease, "Ctrl+−"),
+        text_size_item(
+            &gettext("Reset text size"),
+            Icon::ArrowReset,
+            Step::Reset,
+            "Ctrl+0",
+        ),
     ]);
     entries
 }
@@ -141,9 +171,9 @@ fn theme_item(label: &str, glyph: Icon, theme: Theme) -> MenuEntry {
 /// The three appearance choices (`appearanceMenu`).
 pub(super) fn appearance_items() -> [MenuEntry; 3] {
     [
-        theme_item("Light appearance", Icon::WeatherSunny, Theme::Light),
-        theme_item("Dark appearance", Icon::WeatherMoon, Theme::Dark),
-        theme_item("Use system appearance", Icon::Desktop, Theme::System),
+        theme_item(&gettext("Light appearance"), Icon::WeatherSunny, Theme::Light),
+        theme_item(&gettext("Dark appearance"), Icon::WeatherMoon, Theme::Dark),
+        theme_item(&gettext("Use system appearance"), Icon::Desktop, Theme::System),
     ]
 }
 
@@ -151,48 +181,56 @@ pub(super) fn appearance_items() -> [MenuEntry; 3] {
 /// menu used to hold.
 pub(super) fn more_menu() -> Vec<MenuEntry> {
     let mut entries = vec![
-        MenuItem::new("New window", Icon::WindowNew, AppAction::NewWindow)
+        MenuItem::new(&gettext("New window"), Icon::WindowNew, AppAction::NewWindow)
             .with_shortcut("Ctrl+N")
             .into(),
-        item("Settings", Icon::Settings, WindowAction::Settings),
+        item(&gettext("Settings"), Icon::Settings, WindowAction::Settings),
         item(
-            "Default file explorer…",
+            &gettext("Default file explorer…"),
             Icon::Folder,
             WindowAction::DefaultFileExplorer,
         ),
         MenuItem::toggle(
-            "Cache this folder for search",
+            &gettext("Cache this folder for search"),
             Icon::Search,
             WindowAction::CacheFolder,
         )
         .into(),
         item(
-            "Map network location",
+            &gettext("Map network location"),
             Icon::Organization,
             WindowAction::MapNetworkLocation,
         ),
-        item("Pin current folder", Icon::Pin, WindowAction::PinFolder),
+        item(&gettext("Pin current folder"), Icon::Pin, WindowAction::PinFolder),
         MenuEntry::Divider,
     ];
     entries.extend(appearance_items());
-    entries.push(MenuItem::toggle("Show hidden files", Icon::Eye, WindowAction::Hidden).into());
+    entries.push(MenuItem::toggle(&gettext("Show hidden files"), Icon::Eye, WindowAction::Hidden).into());
     entries.extend([
         MenuEntry::Divider,
-        MenuItem::new("Select all", Icon::SelectAllOn, WindowAction::SelectAll)
+        MenuItem::new(&gettext("Select all"), Icon::SelectAllOn, WindowAction::SelectAll)
             .with_shortcut("Ctrl+A")
             .into(),
-        item("Select none", Icon::SelectAllOff, WindowAction::SelectNone),
-        item("Invert selection", Icon::ArrowSwap, WindowAction::InvertSelection),
         item(
-            "Select items matching…",
+            &gettext("Select none"),
+            Icon::SelectAllOff,
+            WindowAction::SelectNone,
+        ),
+        item(
+            &gettext("Invert selection"),
+            Icon::ArrowSwap,
+            WindowAction::InvertSelection,
+        ),
+        item(
+            &gettext("Select items matching…"),
             Icon::Search,
             WindowAction::SelectMatching,
         ),
         MenuEntry::Divider,
         // app.js asked for a `code` glyph it did not have and drew a
         // document; the native app has the code glyph.
-        item("License & source", Icon::Code, WindowAction::License),
-        item("About this build", Icon::Info, WindowAction::About),
+        item(&gettext("License & source"), Icon::Code, WindowAction::License),
+        item(&gettext("About this build"), Icon::Info, WindowAction::About),
     ]);
     entries
 }

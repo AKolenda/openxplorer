@@ -17,6 +17,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format;
+use ox_core::i18n::{gettext, ngettext};
 
 use crate::announcement::announce;
 use crate::config::BUILD_NAME;
@@ -71,17 +72,14 @@ pub(super) enum TypeaheadMatch {
 /// many items are shown, and "Loading…" while a slow listing runs.
 pub(super) fn count_text(subject: StatusSubject) -> String {
     let (shown, loading) = match subject {
-        StatusSubject::Page => return "Ready".to_owned(),
+        StatusSubject::Page => return gettext("Ready"),
         StatusSubject::Search(count) => return count.text(),
         StatusSubject::Folder { shown, loading } => (shown, loading),
     };
-    let items = if shown == 1 {
-        "1 item".to_owned()
-    } else {
-        format!("{shown} items")
-    };
+    let items =
+        ngettext("{count} item", "{count} items", u64::from(shown)).replace("{count}", &shown.to_string());
     if loading {
-        format!("{items} · Loading…")
+        format!("{items} · {}", gettext("Loading…"))
     } else {
         items
     }
@@ -93,7 +91,8 @@ pub(super) fn selection_text(selected: SelectionSummary) -> String {
     if selected.count == 0 {
         return String::new();
     }
-    let count = format!("{} selected", selected.count);
+    let count = ngettext("{count} selected", "{count} selected", u64::from(selected.count))
+        .replace("{count}", &selected.count.to_string());
     if selected.has_files {
         format!("{count}  {}", format::pretty_bytes(selected.bytes))
     } else {

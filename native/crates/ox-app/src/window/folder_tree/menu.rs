@@ -7,6 +7,7 @@
 //! Limit to home folder and Scroll to the folder shown.
 
 use gtk::prelude::*;
+use ox_core::i18n::gettext;
 use ox_core::location::{is_smb_share_root, is_virtual_location};
 use ox_core::settings::FolderTreeOptions;
 
@@ -65,40 +66,52 @@ fn option_item(label: &str, glyph: Icon, name: &str, is_on: bool) -> MenuEntry {
 /// The menu of the folder `uri` with `facts`, then the tree's options.
 fn entries(uri: &str, facts: FolderFacts, options: FolderTreeOptions) -> Vec<MenuEntry> {
     vec![
-        MenuItem::with_text_target("Open in new tab", Icon::Add, WindowAction::OpenTab, uri).into(),
+        MenuItem::with_text_target(&gettext("Open in new tab"), Icon::Add, WindowAction::OpenTab, uri).into(),
         MenuItem::with_text_target(
-            "Open in new window",
+            &gettext("Open in new window"),
             Icon::WindowNew,
             WindowAction::OpenWindow,
             uri,
         )
         .into(),
         MenuEntry::Divider,
-        folder_item("Cut", Icon::Cut, WindowAction::CutFolder, uri, facts.changeable),
-        folder_item("Copy", Icon::Copy, WindowAction::CopyFolder, uri, facts.copyable),
         folder_item(
-            "Paste",
+            &gettext("Cut"),
+            Icon::Cut,
+            WindowAction::CutFolder,
+            uri,
+            facts.changeable,
+        ),
+        folder_item(
+            &gettext("Copy"),
+            Icon::Copy,
+            WindowAction::CopyFolder,
+            uri,
+            facts.copyable,
+        ),
+        folder_item(
+            &gettext("Paste"),
             Icon::ClipboardPaste,
             WindowAction::PasteInto,
             uri,
             facts.can_paste,
         ),
         folder_item(
-            "Rename…",
+            &gettext("Rename…"),
             Icon::Rename,
             WindowAction::RenameFolder,
             uri,
             facts.changeable,
         ),
         folder_item(
-            "Move to Trash",
+            &gettext("Move to Trash"),
             Icon::Delete,
             WindowAction::TrashFolder,
             uri,
             facts.changeable,
         ),
         folder_item(
-            "Delete permanently",
+            &gettext("Delete permanently"),
             Icon::DeleteDismiss,
             WindowAction::DeleteFolder,
             uri,
@@ -106,23 +119,34 @@ fn entries(uri: &str, facts: FolderFacts, options: FolderTreeOptions) -> Vec<Men
         ),
         MenuEntry::Divider,
         MenuItem::with_text_target(
-            "Open in Terminal",
+            &gettext("Open in Terminal"),
             Icon::WindowConsole,
             WindowAction::OpenInTerminalOf,
             uri,
         )
         .into(),
-        MenuItem::with_text_target("Properties", Icon::Info, WindowAction::PropertiesOf, uri).into(),
+        MenuItem::with_text_target(
+            &gettext("Properties"),
+            Icon::Info,
+            WindowAction::PropertiesOf,
+            uri,
+        )
+        .into(),
         MenuEntry::Divider,
-        option_item("Show hidden folders", Icon::Eye, SHOW_HIDDEN, options.show_hidden),
         option_item(
-            "Limit to home folder",
+            &gettext("Show hidden folders"),
+            Icon::Eye,
+            SHOW_HIDDEN,
+            options.show_hidden,
+        ),
+        option_item(
+            &gettext("Limit to home folder"),
             Icon::Home,
             LIMIT_TO_HOME,
             options.limit_to_home,
         ),
         option_item(
-            "Scroll to the folder shown",
+            &gettext("Scroll to the folder shown"),
             Icon::ArrowDown,
             AUTO_SCROLL,
             options.auto_scroll,
