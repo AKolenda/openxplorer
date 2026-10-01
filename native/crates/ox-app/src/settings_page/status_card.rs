@@ -23,6 +23,16 @@ use crate::window::children;
 /// Fluent glyphs are drawn for, so its strokes stay sharp.
 const STATUS_GLYPH: i32 = 20;
 
+/// How many pixels `glyph` is moved down so its drawing, not its box,
+/// sits in the middle of the badge: the Fluent Apps glyph is drawn a pixel
+/// above the middle of its 20 px box.
+fn drawing_drop(glyph: Icon) -> i32 {
+    match glyph {
+        Icon::Apps => 1,
+        _ => 0,
+    }
+}
+
 /// What a status card says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct StatusText<'a> {
@@ -95,6 +105,8 @@ impl StatusCard {
         let card: Self = glib::Object::new();
         let imp = card.imp();
         icons::set_icon(&imp.glyph, status.glyph, STATUS_GLYPH);
+        // Twice the drop, as the badge centres the glyph in what is left.
+        imp.glyph.set_margin_top(2 * drawing_drop(status.glyph));
         imp.title_label.set_text(status.title);
         imp.text_label.set_text(status.text);
         if let Some(notice) = status.notice {
