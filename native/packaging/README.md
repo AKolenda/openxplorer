@@ -58,6 +58,7 @@ never takes over the Python app's name. Every package build sets it.
 | D-Bus service file | `/usr/share/dbus-1/services/<id>.service` | same | under `/app/share` |
 | Licences | `/usr/share/doc/<command>/` | `/usr/share/licenses/<command>/` | `/app/share/licenses/<id>/` |
 | Mount helper (stable) | `/opt/openxplorer/bin/openxplorer-mount-share`, linked from `/usr/bin` | `/usr/bin/openxplorer-mount-share` | none |
+| Translations | `/usr/share/locale/<lang>/LC_MESSAGES/openxplorer.mo` | same | under `/app/share` |
 
 - **Program folder.** The Debian program lives in `/opt/openxplorer/bin`
   because the in-app updater allows installing updates only for that folder
@@ -80,6 +81,11 @@ never takes over the Python app's name. Every package build sets it.
   commands. The mount assistant in a folder's Location tab prints
   `sudo /usr/bin/openxplorer-mount-share …` for the administrator to run; the
   app never runs it. No package ships Python.
+- **Translations.** One compiled catalogue for each `native/po/<lang>.po`,
+  written by `tools/i18n.py` without GNU gettext; the app looks for it in the
+  `locale` folder of every XDG data directory (`crates/ox-core/src/i18n.rs`).
+  `native/po/openxplorer.pot` is the English template, which
+  `python3 native/tools/i18n.py extract` updates. No translation ships yet.
 
 ## Desktop integration data
 
