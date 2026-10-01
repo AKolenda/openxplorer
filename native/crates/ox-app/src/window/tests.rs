@@ -52,3 +52,4 @@ mod support;
 mod tab_commands;
 mod tabs;
 mod views;
+mod worker_questions;

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ox_core::transfer::{
-    Cancellation, ConflictPolicy, FilesystemInfo, Node, TransferError, UnstorableAnswer,
+    Cancellation, ConflictPolicy, FilesystemInfo, Node, TransferEngine, TransferError, UnstorableAnswer,
 };
 
 use crate::transfer_support::{
@@ -28,6 +28,10 @@ enum Event {
     Cancel,
     /// Removing a source item fails.
     RemovalFails,
+    /// An editor saves `album/one.jpg` over its old version, by writing a
+    /// new file and renaming it over the name, after the copy was built and
+    /// before the source is removed.
+    SavedOver,
 }
 
 /// A destination on another file system: the user's items cannot be moved
@@ -84,6 +88,11 @@ impl Provider for OtherFilesystem {
         if !is_staged(node) {
             return Err(TransferError::NotSupported("Native move unsupported.".into()));
         }
+        if self.event == Event::SavedOver {
+            let saved = self.source_folder.join("one.jpg.save");
+            write(&saved, "one, edited");
+            fs::rename(&saved, self.source_folder.join("album").join("one.jpg")).unwrap();
+        }
         node.local_move_native(target, cancel)
     }
 
@@ -101,6 +110,11 @@ impl Provider for OtherFilesystem {
             id: None,
         })
     }
+}
+
+/// An engine over `provider` whose user agrees to finish moves by copying.
+fn consenting(fixture: &Fixture, provider: Arc<dyn Provider>) -> TransferEngine {
+    fixture.engine(provider).with_move_by_copying_question(|_| true)
 }
 
 /// A folder `album` holding two photos.
@@ -121,7 +135,10 @@ fn album(fixture: &Fixture) -> PathBuf {
 fn a_file_saved_into_the_source_during_the_move_is_kept() {
     let fixture = Fixture::new();
     let source = album(&fixture);
-    let mut engine = fixture.engine(Arc::new(OtherFilesystem::new(&fixture, Event::FileAppears)));
+    let mut engine = consenting(
+        &fixture,
+        Arc::new(OtherFilesystem::new(&fixture, Event::FileAppears)),
+    );
 
     let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
 
@@ -147,7 +164,7 @@ fn a_file_saved_into_the_source_during_the_move_is_kept() {
 fn a_cancelled_copy_or_a_failed_removal_keeps_the_source() {
     let fixture = Fixture::new();
     let source = album(&fixture);
-    let mut engine = fixture.engine(Arc::new(OtherFilesystem::new(&fixture, Event::Cancel)));
+    let mut engine = consenting(&fixture, Arc::new(OtherFilesystem::new(&fixture, Event::Cancel)));
 
     let cancelled = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
 
@@ -157,7 +174,10 @@ fn a_cancelled_copy_or_a_failed_removal_keeps_the_source() {
 
     let fixture = Fixture::new();
     let source = album(&fixture);
-    let mut engine = fixture.engine(Arc::new(OtherFilesystem::new(&fixture, Event::RemovalFails)));
+    let mut engine = consenting(
+        &fixture,
+        Arc::new(OtherFilesystem::new(&fixture, Event::RemovalFails)),
+    );
 
     let failed = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
 
@@ -182,9 +202,8 @@ fn a_copy_that_left_items_out_keeps_the_source() {
         fat: true,
         ..OtherFilesystem::new(&fixture, Event::None)
     };
-    let mut engine = fixture
-        .engine(Arc::new(provider))
-        .with_unstorable_question(|_| UnstorableAnswer::Skip);
+    let mut engine =
+        consenting(&fixture, Arc::new(provider)).with_unstorable_question(|_| UnstorableAnswer::Skip);
 
     let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
 
@@ -193,5 +212,34 @@ fn a_copy_that_left_items_out_keeps_the_source() {
     assert_eq!(list(&source), ["cover", "one.jpg", "two.jpg"]);
     assert!(result.errors[0].contains("the original was kept"), "{result:?}");
     assert!(result.errors[0].contains(&file_uri(&copy)), "{result:?}");
+    fixture.assert_no_staging();
+}
+
+/// A copied file that an editor saves over before the source is removed is
+/// a different file now: it is kept with its new content, and the user is
+/// told; the unchanged photo is removed.
+///
+/// parity: XFER-013
+#[test]
+fn a_file_saved_over_after_its_copy_is_kept_with_its_new_content() {
+    let fixture = Fixture::new();
+    let source = album(&fixture);
+    let mut engine = consenting(
+        &fixture,
+        Arc::new(OtherFilesystem::new(&fixture, Event::SavedOver)),
+    );
+
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
+
+    let copy = fixture.destination_folder.join("album");
+    assert_eq!(list(&copy), ["one.jpg", "two.jpg"]);
+    assert_eq!(read(&copy.join("one.jpg")), "one");
+    assert_eq!(list(&source), ["one.jpg"]);
+    assert_eq!(read(&source.join("one.jpg")), "one, edited");
+    let notice = format!(
+        "album: 1 item changed during the move and was kept at {}.",
+        file_uri(&source)
+    );
+    assert_eq!(result.errors, [notice]);
     fixture.assert_no_staging();
 }

@@ -109,6 +109,37 @@ fn names_and_links_fat_cannot_store_are_renamed_or_left_out_as_answered() {
     fixture.assert_no_staging();
 }
 
+/// "Do this for all such items" covers the whole operation: a paste whose
+/// conflict answers split it into one run per policy is asked once.
+///
+/// parity: XFER-028
+#[test]
+fn an_answer_for_all_items_covers_every_run_of_the_operation() {
+    let fixture = Fixture::new();
+    let skipped = fixture.source_folder.join("a:b.txt");
+    let kept_both = fixture.source_folder.join("c:d.txt");
+    write(&skipped, "a");
+    write(&kept_both, "c");
+    let asked = Arc::new(Mutex::new(0));
+    let questions = Arc::clone(&asked);
+    let mut engine = fixture
+        .engine(Arc::new(FatStick { free: None }))
+        .with_unstorable_question(move |_| {
+            *questions.lock().unwrap() += 1;
+            UnstorableAnswer::ReplaceAll
+        });
+
+    fixture.run(&mut engine, &[&skipped], Request::Copy(ConflictPolicy::Skip));
+    fixture.run(
+        &mut engine,
+        &[&kept_both],
+        Request::Copy(ConflictPolicy::KeepBoth),
+    );
+
+    assert_eq!(*asked.lock().unwrap(), 1);
+    assert_eq!(list(&fixture.destination_folder), ["a_b.txt", "c_d.txt"]);
+}
+
 /// A renamed top-level item is reported where it landed, so Undo and the
 /// selection after a paste find `a_b.txt`, not `a:b.txt`.
 ///
@@ -136,33 +167,34 @@ fn a_renamed_item_is_reported_under_its_new_name() {
 /// folder's and the source's.
 struct TwoFilesystems {
     destination_folder: PathBuf,
-    /// The source's id; the destination's makes a move a rename.
-    source_id: &'static str,
+    /// The source's id; the destination's makes a move a rename, and
+    /// `None` reports no ids at all.
+    source_id: Option<&'static str>,
 }
 
 impl Provider for TwoFilesystems {
     fn filesystem(&self, node: &LocalNode) -> Option<FilesystemInfo> {
         let is_destination = node.local_path().starts_with(&self.destination_folder);
-        let id = if is_destination {
-            "destination"
-        } else {
-            self.source_id
+        let id = match self.source_id {
+            Some(_) if is_destination => Some("destination".into()),
+            id => id.map(Into::into),
         };
         Some(FilesystemInfo {
             kind: Some("ext4".into()),
             free: Some(1024),
-            id: Some(id.into()),
+            id,
         })
     }
 }
 
 /// A move needs free space only when it crosses file systems; within one
-/// it is a rename.
+/// it is a rename. When neither side reports a file system id, the move
+/// is not counted, because it is most likely a rename.
 ///
 /// parity: XFER-028
 #[test]
 fn a_move_needs_free_space_only_across_file_systems() {
-    for (source_id, fits) in [("destination", true), ("other", false)] {
+    for (source_id, fits) in [(Some("destination"), true), (Some("other"), false), (None, true)] {
         let fixture = Fixture::new();
         let source = fixture.source_folder.join("video.mp4");
         fs::write(&source, random_bytes(2048)).unwrap();
@@ -174,6 +206,6 @@ fn a_move_needs_free_space_only_across_file_systems() {
 
         let run = fixture.try_run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
 
-        assert_eq!(run.is_ok(), fits, "{source_id}: {run:?}");
+        assert_eq!(run.is_ok(), fits, "{source_id:?}: {run:?}");
     }
 }

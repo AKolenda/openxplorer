@@ -9,6 +9,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
@@ -37,6 +38,33 @@ pub struct NodeInfo {
     pub size: u64,
     /// Unix permission bits when the backend reports them (not on MTP).
     pub mode: Option<u32>,
+    /// The last modification time, when the backend reports it.
+    pub modified: Option<SystemTime>,
+    /// Which local object the item is, when the backend reports it.
+    pub identity: Option<ItemIdentity>,
+}
+
+impl NodeInfo {
+    /// True when `current`, queried later, still describes the item this
+    /// info describes: the same object and kind, and for anything but a
+    /// folder the same size and modification time. A value either query
+    /// lacks is not compared. A folder's own size and time change with its
+    /// entries, which are checked one by one instead (XFER-013).
+    pub(crate) fn still_describes(&self, current: &NodeInfo) -> bool {
+        if self.kind != current.kind || !agree(self.identity, current.identity) {
+            return false;
+        }
+        self.kind == NodeKind::Directory
+            || (self.size == current.size && agree(self.modified, current.modified))
+    }
+}
+
+/// True when two optional values are equal or either is unknown.
+fn agree<T: PartialEq>(earlier: Option<T>, later: Option<T>) -> bool {
+    match (earlier, later) {
+        (Some(earlier), Some(later)) => earlier == later,
+        _ => true,
+    }
 }
 
 /// Which local filesystem object an item is (`st_dev`, `st_ino`). The

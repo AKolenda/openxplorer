@@ -208,7 +208,9 @@ fn name_taken(target: &dyn Node) -> TransferError {
 /// Maps a failed native move. With Replace, "cannot overwrite here" asks the
 /// engine for its reversible replacement (XFER-010); without it, an
 /// unsupported move (for example across filesystems) is refused with an
-/// explanation (XFER-011).
+/// explanation and the source untouched (XFER-011). The engine then
+/// finishes the move by copying if the user agrees, and reports this
+/// refusal otherwise (XFER-013).
 fn move_error(error: glib::Error, overwrite: Overwrite) -> TransferError {
     let code = error.kind::<gio::IOErrorEnum>();
     let unsupported = matches!(
@@ -226,7 +228,8 @@ fn move_error(error: glib::Error, overwrite: Overwrite) -> TransferError {
 }
 
 /// The refusal of a move the backend can only do by copying, word for word
-/// as `desktop/gio_backend.py` reports it.
+/// as `desktop/gio_backend.py` reports it. The user sees it when they
+/// declined to finish the move by copying, or nobody could be asked.
 fn native_move_unsupported() -> TransferError {
     TransferError::NotSupported(
         "A native move is not supported here. Cross-filesystem/cross-share moves are \
