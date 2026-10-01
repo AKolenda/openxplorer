@@ -234,6 +234,24 @@ pub struct Preferences {
     /// new tab (Dolphin's `OpenExternallyCalledFolderInNewTab`, inverted).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub external_folders_in_new_window: bool,
+    /// The window's title is the folder's full path instead of its name
+    /// (Dolphin's `ShowFullPathInTitlebar`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub full_path_in_title: bool,
+    /// Ask before moving items to the Trash. On by default, as the Python
+    /// app always asked; this and the next two are stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub confirm_trash: bool,
+    /// Ask before deleting items permanently.
+    #[serde(skip_serializing_if = "is_true")]
+    pub confirm_delete: bool,
+    /// Ask before emptying the Recycle Bin.
+    #[serde(skip_serializing_if = "is_true")]
+    pub confirm_empty_trash: bool,
+    /// Ask before closing a window with several tabs (Dolphin's
+    /// `ConfirmClosingMultipleTabs`); off, as Explorer never asks.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub confirm_close_tabs: bool,
 }
 
 impl Default for Preferences {
@@ -253,6 +271,11 @@ impl Default for Preferences {
             show_full_path: false,
             editable_location: false,
             external_folders_in_new_window: false,
+            full_path_in_title: false,
+            confirm_trash: true,
+            confirm_delete: true,
+            confirm_empty_trash: true,
+            confirm_close_tabs: false,
         }
     }
 }
@@ -285,6 +308,11 @@ impl Preferences {
             &mut self.external_folders_in_new_window,
             update.external_folders_in_new_window,
         );
+        replace_if_some(&mut self.full_path_in_title, update.full_path_in_title);
+        replace_if_some(&mut self.confirm_trash, update.confirm_trash);
+        replace_if_some(&mut self.confirm_delete, update.confirm_delete);
+        replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
+        replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
@@ -329,6 +357,16 @@ pub struct PreferencesUpdate {
     pub editable_location: Option<bool>,
     /// Open folders from other apps in a new window, or in a new tab.
     pub external_folders_in_new_window: Option<bool>,
+    /// Show the folder's full path in the window title.
+    pub full_path_in_title: Option<bool>,
+    /// Ask before moving items to the Trash.
+    pub confirm_trash: Option<bool>,
+    /// Ask before deleting items permanently.
+    pub confirm_delete: Option<bool>,
+    /// Ask before emptying the Recycle Bin.
+    pub confirm_empty_trash: Option<bool>,
+    /// Ask before closing a window with several tabs.
+    pub confirm_close_tabs: Option<bool>,
 }
 
 impl PreferencesUpdate {
@@ -361,6 +399,11 @@ impl PreferencesUpdate {
             show_full_path: flag("showFullPath"),
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
+            full_path_in_title: flag("fullPathInTitle"),
+            confirm_trash: flag("confirmTrash"),
+            confirm_delete: flag("confirmDelete"),
+            confirm_empty_trash: flag("confirmEmptyTrash"),
+            confirm_close_tabs: flag("confirmCloseTabs"),
         })
     }
 }
@@ -409,6 +452,13 @@ fn bounded_width(value: f64, range: RangeInclusive<u32>) -> Option<u32> {
     let high = f64::from(*range.end());
     let in_range = value >= low && value <= high;
     in_range.then(|| value.round_ties_even() as u32)
+}
+
+/// Whether a flag is on; flags that are on by default are stored only
+/// when off.
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde passes a reference")]
+const fn is_true(flag: &bool) -> bool {
+    *flag
 }
 
 /// Stores `value` in `slot` if there is one.
@@ -574,6 +624,24 @@ mod tests {
         let stored = serde_json::to_value(&preferences).unwrap();
         assert_eq!(stored["showFullPath"], json!(true));
         assert!(stored.get("editableLocation").is_none());
+    }
+
+    /// parity: SET-010
+    #[test]
+    fn the_confirmations_ask_by_default_and_are_stored_only_when_changed() {
+        let mut preferences = Preferences::default();
+        assert!(preferences.confirm_trash && preferences.confirm_delete && preferences.confirm_empty_trash);
+        assert!(!preferences.confirm_close_tabs);
+        let values = json!({"confirmTrash": false, "confirmCloseTabs": true, "confirmDelete": 0});
+
+        preferences.apply(&PreferencesUpdate::from_json(&values).unwrap());
+
+        assert!(!preferences.confirm_trash && preferences.confirm_close_tabs);
+        assert!(preferences.confirm_delete, "only a JSON boolean counts");
+        let stored = serde_json::to_value(&preferences).unwrap();
+        assert_eq!(stored["confirmTrash"], json!(false));
+        assert_eq!(stored["confirmCloseTabs"], json!(true));
+        assert!(stored.get("confirmDelete").is_none() && stored.get("fullPathInTitle").is_none());
     }
 
     /// parity: SET-016

@@ -13850,8 +13850,8 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "Settings › General › Confirmations; ConfirmTrash (kiorc, default false); Settings → Confirmations (kiorc ConfirmTrash/ConfirmDelete)"
 gnome = "App preference (Nautilus never confirms Trash and offers Undo instead)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer always confirms Trash and permanent deletion, and never confirms closing a window. OpenXplorer always asks. Explorer does not ask by default."
+native = "done"
+native_note = "Settings > Windows & tabs > Confirmations has four switches (native/crates/ox-app/src/settings_page/windows_tabs.rs), saved in the preferences (confirmTrash, confirmDelete, confirmEmptyTrash, confirmCloseTabs in native/crates/ox-core/src/settings/preferences.rs): 'Ask before moving items to the Recycle Bin' (on), 'Ask before deleting permanently' (on; Shift+Delete, Delete where a drive has no Trash, Delete in the Recycle Bin), 'Ask before emptying the Recycle Bin' (on) and 'Ask before closing a window with several tabs' (off; 'Close all tabs?' with Cancel / Close all tabs, window/closing.rs). The defaults keep OpenXplorer's behaviour: it always asked before deleting and never before closing. The choices are OpenXplorer's own, not KDE's desktop-wide kiorc, and there is no terminal panel to ask about (OPEN-022). Tests: native/crates/ox-core/src/settings/preferences.rs (the_confirmations_ask_by_default_and_are_stored_only_when_changed), native/crates/ox-app/src/window/tests/file_operations.rs (the_confirmation_settings_decide_what_asks)."
 
 [[feature]]
 id = "SET-011"
@@ -13868,7 +13868,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "Settings › Startup"
-native = "todo"
+native = "done"
+native_note = "Settings > Windows & tabs has Dolphin's startup options that apply here: 'Make the address bar editable in new windows' (NAV-029), 'Show full path in the address bar' (NAV-024), 'Open folders from other apps in a new window' (off: in a new tab, Dolphin's 'Open new folders in tabs') and 'Show full path in the title bar', which titles the window with the folder's path (window/location_view.rs render_title). 'Begin in split view mode' and 'Show filter bar' have nothing to start: there is no split view (VIEW-059, Explorer has none) and the search box in the navigation row is always shown and filters the folder. Tests: native/crates/ox-app/src/window/tests/address_bar.rs (the_title_shows_the_full_path_when_the_settings_ask); the other options are tested under NAV-024 and NAV-029."
 
 [[feature]]
 id = "SET-012"

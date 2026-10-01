@@ -159,6 +159,7 @@ impl BrowserWindow {
         }
         self.render_landing_with(&places);
         self.follow_full_path_preference();
+        self.render_title();
         self.render_tabs();
         self.update_details_pane();
         self.update_index_candidates(&places.quick_access);

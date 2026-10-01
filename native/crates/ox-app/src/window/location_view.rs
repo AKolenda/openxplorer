@@ -144,7 +144,7 @@ impl BrowserWindow {
         let uri = location.uri.as_str();
         let on_page = Page::from_uri(uri).is_some();
         let title = self.imp().locations.borrow().title_for(uri);
-        self.set_title(Some(&format!("{title} — OpenXplorer")));
+        self.render_title();
         self.set_action_enabled(WindowAction::Back, location.can_go_back);
         self.set_action_enabled(WindowAction::Forward, location.can_go_forward);
         self.set_action_enabled(WindowAction::Up, parent_location(uri).is_some());
@@ -160,6 +160,23 @@ impl BrowserWindow {
         self.sidebar().select(uri);
         self.render_landing();
         self.show_surface_for(uri);
+    }
+
+    /// Titles the window after the active tab's location: its name, or
+    /// its full path when the settings ask for it (Dolphin's "Show full
+    /// path in title bar", SET-011); a page keeps its title.
+    pub(super) fn render_title(&self) {
+        let Some(uri) = self.current_uri() else {
+            return;
+        };
+        let full_path = self.context().settings_data().preferences.full_path_in_title;
+        let locations = self.imp().locations.borrow();
+        let place = if full_path && Page::from_uri(&uri).is_none() {
+            locations.display_location(&uri)
+        } else {
+            locations.title_for(&uri)
+        };
+        self.set_title(Some(&format!("{place} — OpenXplorer")));
     }
 
     fn active_location(&self) -> Option<ActiveLocation> {

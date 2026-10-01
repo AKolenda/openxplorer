@@ -7,11 +7,11 @@
 //! folder, with each item's original location and deletion date; these
 //! commands act on it through ox-core's Recycle Bin service, which never
 //! overwrites when it restores. Each runs as the window's one operation,
-//! with the transfer panel and Cancel, and deleting asks first.
+//! with the transfer panel and Cancel, and deleting asks first unless the
+//! settings say not to (SET-010).
 
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, permanent_delete_confirmation,
-    restore_from_recycle_bin, summarize, summarize_restore, DeleteConfirmation,
+    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, restore_from_recycle_bin, summarize, summarize_restore, DeleteConfirmation,
 };
 use ox_core::transfer::TransferMode;
 
@@ -76,10 +76,7 @@ impl BrowserWindow {
     /// good (OPS-043).
     pub(super) async fn delete_from_recycle_bin(&self) {
         let items = self.items_to_delete();
-        if !self
-            .confirm_deletion(&permanent_delete_confirmation(&items))
-            .await
-        {
+        if !self.confirms_permanent_delete(&items).await {
             return;
         }
         let uris: Vec<String> = items.into_iter().map(|item| item.uri).collect();
@@ -102,7 +99,8 @@ impl BrowserWindow {
         if !self.allows(FileCommand::EmptyRecycleBin) {
             return;
         }
-        if !self.confirm_deletion(&empty_confirmation()).await {
+        let asks = self.context().settings_data().preferences.confirm_empty_trash;
+        if asks && !self.confirm_deletion(&empty_confirmation()).await {
             return;
         }
         let Some(context) = self.begin_operation(DELETING) else {

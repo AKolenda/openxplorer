@@ -9,6 +9,7 @@ use std::fs;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::settings::{PreferencesUpdate, Settings};
 use ox_core::transfer::{Progress, ProgressScope};
 
 use super::file_ops_support::{
@@ -318,6 +319,44 @@ fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
     toast.press_action();
     wait_until("the file to come back", || fixture.path("Résumé.txt").is_file());
     assert_eq!(toast.action_label(), None, "the step is undone");
+}
+
+/// With "Ask before moving items to the Recycle Bin" off, Delete trashes
+/// at once; with "Ask before closing a window with several tabs" on,
+/// closing a window with two tabs asks first.
+///
+/// parity: SET-010
+#[gtk::test]
+fn the_confirmation_settings_decide_what_asks() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let update = PreferencesUpdate {
+        confirm_trash: Some(false),
+        confirm_close_tabs: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choices");
+    test.context.reload_settings();
+    wait_until("the window to read the choices", || {
+        !test.context.settings_data().preferences.confirm_trash
+    });
+    select_names(&test, &["Résumé.txt"]);
+
+    test.activate("trash", None);
+    wait_until("the file to go to the Trash unasked", || {
+        !fixture.path("Résumé.txt").exists()
+    });
+
+    test.activate("new-tab", None);
+    test.window.close();
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.title_text(), "Close all tabs?");
+    dialog.press("Cancel");
+    wait_for_no_dialog(&test);
+    assert!(test.window.is_visible(), "the window stays open");
 }
 
 /// parity: OPS-015

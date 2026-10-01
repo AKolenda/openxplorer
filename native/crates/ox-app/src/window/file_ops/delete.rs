@@ -83,7 +83,10 @@ impl BrowserWindow {
         let Ok(plan) = plan_delete(items, &Cancellation::new()).await else {
             return;
         };
-        if !self.confirm_deletion(&plan.confirmation()).await {
+        let preferences = self.context().settings_data().preferences;
+        let asks = (!plan.to_trash.is_empty() && preferences.confirm_trash)
+            || (!plan.to_delete.is_empty() && preferences.confirm_delete);
+        if asks && !self.confirm_deletion(&plan.confirmation()).await {
             return;
         }
         if !plan.to_trash.is_empty() {
@@ -107,14 +110,18 @@ impl BrowserWindow {
             return;
         }
         let items = self.items_to_delete();
-        if !self
-            .confirm_deletion(&permanent_delete_confirmation(&items))
-            .await
-        {
+        if !self.confirms_permanent_delete(&items).await {
             return;
         }
         let uris = items.into_iter().map(|item| item.uri).collect();
         self.run_and_conclude(&removal(TransferMode::Delete, uris)).await;
+    }
+
+    /// Asks before `items` are deleted permanently, unless the settings
+    /// say not to ask (SET-010); true when they may be deleted.
+    pub(super) async fn confirms_permanent_delete(&self, items: &[DeleteItem]) -> bool {
+        !self.context().settings_data().preferences.confirm_delete
+            || self.confirm_deletion(&permanent_delete_confirmation(items)).await
     }
 
     /// Asks `confirmation`'s question with Cancel and its red button;
