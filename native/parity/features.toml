@@ -14502,8 +14502,8 @@ python_tests = []
 bridge = ["environment"]
 dolphin = "KDE accent colour (kdeglobals AccentColor)"
 gnome = "Zorin 18 / GNOME 46 has no accent-color key: derive it from the Zorin theme variant in gtk-theme (ZorinBlue/Green/Orange/Red/Purple/Grey) or the theme's @accent_bg_color; on GNOME 47+ use org.gnome.desktop.interface accent-color, the Settings portal accent-color, or AdwStyleManager:accent-color"
-native = "todo"
-native_note = "Porting notes: Consistent with product rule 3, since Windows 11 itself follows the system accent."
+native = "done"
+native_note = "native/crates/ox-app/src/theme/accent.rs: the skin follows GNOME's org.gnome.desktop.interface accent-color (GNOME 47+) live, through a fourth CSS layer over the palette (theme/providers.rs) that redefines ox_accent and the selection fill and edges tinted with it, so selection, focus rings, primary buttons, progress bars and the sidebar bar change together. Blue, GNOME's default, keeps the Windows #0067c0 / #74beff; every other accent has a light-mode and a dark-mode shade checked for at least 4.5:1 under the white and black text the palettes put on the accent. Tests: theme/accent.rs (gnome_accents_have_a_readable_shade_in_each_appearance) and theme.rs (the_desktop_accent_replaces_the_windows_blue). Inside Flatpak (the schema holds only defaults) and on desktops without the key the Windows blue stays; the Settings portal's RGB accent-color is not read."
 
 [[feature]]
 id = "LOOK-025"

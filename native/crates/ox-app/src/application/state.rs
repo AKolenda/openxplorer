@@ -22,6 +22,7 @@ use crate::app_context::AppContext;
 use crate::search::CacheLocation;
 use crate::snapshot::SnapshotRequest;
 use crate::text_size::TextSize;
+use crate::theme::accent::AccentSetting;
 use crate::theme::contrast::ContrastSetting;
 use crate::theme::system::{self, SystemScheme};
 use crate::theme::Skin;
@@ -36,6 +37,8 @@ pub(super) struct AppState {
     _system_scheme: Rc<SystemScheme>,
     /// Kept alive so the skin follows the desktop's high-contrast setting.
     _contrast_setting: ContrastSetting,
+    /// Kept alive so the skin follows the desktop's accent colour.
+    _accent_setting: AccentSetting,
     /// Kept alive so Properties timestamps follow the desktop's clock.
     _clock_setting: ClockSetting,
 }
@@ -61,6 +64,7 @@ impl AppState {
         skin.set_text_size(TextSize::from_percent(preferences.text_size));
         let system_scheme = follow_system_scheme(&skin, gtk_preference);
         let contrast_setting = follow_contrast(&skin);
+        let accent_setting = follow_accent(&skin);
         let clock_setting = ClockSetting::follow();
         crate::window::install_accelerators(app);
         let context = AppContext::new(skin, settings);
@@ -70,6 +74,7 @@ impl AppState {
             context,
             _system_scheme: system_scheme,
             _contrast_setting: contrast_setting,
+            _accent_setting: accent_setting,
             _clock_setting: clock_setting,
         }
     }
@@ -261,6 +266,17 @@ fn follow_contrast(skin: &Skin) -> ContrastSetting {
         move |contrast| skin.set_contrast(contrast)
     ));
     skin.set_contrast(setting.contrast());
+    setting
+}
+
+/// Applies the desktop's accent colour to `skin` now and on every change.
+fn follow_accent(skin: &Skin) -> AccentSetting {
+    let setting = AccentSetting::watch(glib::clone!(
+        #[weak]
+        skin,
+        move |accent| skin.set_accent(accent)
+    ));
+    skin.set_accent(setting.accent());
     setting
 }
 

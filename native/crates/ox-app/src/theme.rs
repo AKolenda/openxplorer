@@ -8,6 +8,7 @@
 //! connect to `places-changed` on the shared
 //! [`AppContext`](crate::app_context::AppContext).
 
+pub(crate) mod accent;
 mod appearance_button;
 pub(crate) mod contrast;
 mod fonts;
@@ -24,6 +25,7 @@ use ox_core::settings::{Appearance, Theme};
 
 use crate::icons;
 use crate::text_size::TextSize;
+use accent::Accent;
 use contrast::Contrast;
 use providers::Providers;
 
@@ -41,7 +43,7 @@ mod imp {
     use gtk::glib::subclass::Signal;
     use gtk::subclass::prelude::*;
 
-    use super::{Appearance, Contrast, Providers, TextSize, Theme};
+    use super::{Accent, Appearance, Contrast, Providers, TextSize, Theme};
     use super::{APPEARANCE_CHANGED, TEXT_SIZE_CHANGED};
 
     /// Private state of [`super::Skin`].
@@ -51,6 +53,8 @@ mod imp {
         pub(super) providers: OnceCell<Providers>,
         /// The appearance the palette draws.
         pub(super) appearance: Cell<Appearance>,
+        /// The desktop's accent drawn over the palette.
+        pub(super) accent: Cell<Accent>,
         /// Whether the high-contrast rules are loaded.
         pub(super) contrast: Cell<Contrast>,
         /// The size text is drawn at.
@@ -165,6 +169,7 @@ impl Skin {
             return;
         }
         self.providers().draw_palette(appearance);
+        self.providers().draw_accent(self.accent(), appearance);
         self.emit_by_name::<()>(APPEARANCE_CHANGED, &[]);
     }
 
@@ -180,6 +185,19 @@ impl Skin {
         }
         self.providers().draw_text_size(size);
         self.emit_by_name::<()>(TEXT_SIZE_CHANGED, &[]);
+    }
+
+    /// The desktop's accent drawn now.
+    pub(crate) fn accent(&self) -> Accent {
+        self.imp().accent.get()
+    }
+
+    /// Draws `accent` over the palette.
+    pub(crate) fn set_accent(&self, accent: Accent) {
+        if self.imp().accent.replace(accent) == accent {
+            return;
+        }
+        self.providers().draw_accent(accent, self.appearance());
     }
 
     /// The contrast drawn now, for tests that follow the desktop setting.
@@ -295,6 +313,32 @@ mod tests {
         skin.set_theme(Theme::Dark);
         skin.set_desktop_appearance(Appearance::Light);
         assert_eq!(skin.appearance(), Appearance::Dark);
+    }
+
+    /// The accent the desktop asks for replaces the Windows blue in what
+    /// the skin draws, in each appearance, and blue brings it back.
+    ///
+    /// parity: LOOK-024
+    #[gtk::test]
+    fn the_desktop_accent_replaces_the_windows_blue() {
+        #[expect(deprecated, reason = "GTK 4.14 offers no other lookup of a named colour")]
+        fn accent_of(widget: &gtk::Label) -> Option<gdk::RGBA> {
+            widget.style_context().lookup_color("ox_accent")
+        }
+        let _theme = ThemeGuard::keep();
+        let skin = harness::skin();
+        let label = gtk::Label::new(None);
+        skin.set_theme(Theme::Light);
+        let windows_blue = accent_of(&label);
+        assert_eq!(windows_blue, gdk::RGBA::parse("#0067c0").ok());
+
+        skin.set_accent(Accent::Green);
+        assert_eq!(accent_of(&label), gdk::RGBA::parse("#2e763b").ok());
+        skin.set_theme(Theme::Dark);
+        assert_eq!(accent_of(&label), gdk::RGBA::parse("#8dc196").ok());
+
+        skin.set_accent(Accent::Windows);
+        assert_eq!(accent_of(&label), gdk::RGBA::parse("#74beff").ok());
     }
 
     /// GTK's own widgets under the skin, such as its dialogs, follow the

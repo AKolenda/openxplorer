@@ -244,7 +244,7 @@ mod tests {
             .observe_controllers()
             .iter::<glib::Object>()
             .filter_map(Result::ok)
-            .filter(|controller| controller.is::<gtk::GestureClick>())
+            .filter(glib::object::ObjectExt::is::<gtk::GestureClick>)
             .count();
         assert_eq!(own_clicks, 0, "the blank area leaves its clicks to the handle");
     }
