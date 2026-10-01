@@ -10,10 +10,14 @@
 //! - Created items and copies go to the Trash through the transfer engine,
 //!   which never falls back to a permanent delete (XFER-014).
 //! - Moved items go back through a transfer-engine move with the Skip
-//!   policy, so an item whose old name is taken again stays where it is
-//!   and is reported as skipped.
+//!   policy, under the name they had before the move (a Keep both or a
+//!   name made valid for the destination is taken back too), so an item
+//!   whose old name is taken again stays where it is and is reported as
+//!   skipped.
 //! - Trashed items come back through the Recycle Bin's restore, which
 //!   never overwrites either.
+
+use std::ffi::OsString;
 
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
@@ -24,7 +28,9 @@ use super::results::{merge_results, record_failure};
 use super::run_transfer::{gio_transfer_engine, unix_seconds_now};
 use super::undo::{MovedItem, RenamedPair, UndoRecord};
 use crate::gio_node::GioNode;
-use crate::transfer::{ConflictPolicy, Node, Operation, Progress, TransferEngine, TransferResult};
+use crate::transfer::{
+    ConflictPolicy, Node, Operation, Progress, TransferEngine, TransferMode, TransferResult,
+};
 
 /// What reversing a journal step did, and how to take that back.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -140,11 +146,14 @@ fn move_to_trash(engine: &mut TransferEngine, uris: &[String], context: &Operati
         .unwrap_or_else(|error| failed_request(&error.into()))
 }
 
-/// Moves each item of `items` back into the folder it came from, one
-/// engine run per folder, never overwriting.
+/// Moves each item of `items` back into the folder it came from, never
+/// overwriting: one engine run per folder for the items that kept their
+/// name, and one renamed run per item that landed under another name.
 fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &OperationContext) -> TransferResult {
     let mut total = TransferResult::default();
-    for group in group_by_original_folder(items) {
+    let (kept_name, renamed): (Vec<&MovedItem>, Vec<&MovedItem>) =
+        items.iter().partition(|item| moved_name(item).is_none());
+    for group in group_by_original_folder(&kept_name) {
         let operation = Operation::Move {
             destination_folder: &group.folder_uri,
             policy: ConflictPolicy::Skip,
@@ -154,14 +163,39 @@ fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &Operati
             .unwrap_or_else(|error| failed_request(&error.into()));
         merge_results(&mut total, part);
         if total.cancelled {
+            return total;
+        }
+    }
+    for item in renamed {
+        let original = GioNode::new(&item.original_uri);
+        let Some(folder) = original.parent() else {
+            continue;
+        };
+        let part = engine
+            .run_renamed(
+                TransferMode::Move,
+                &folder.uri(),
+                &item.moved_uri,
+                &original.name(),
+                &context.cancel,
+            )
+            .unwrap_or_else(|error| failed_request(&error.into()));
+        merge_results(&mut total, part);
+        if total.cancelled {
             break;
         }
     }
     total
 }
 
+/// The name `item` had before the move, when it landed under another one.
+fn moved_name(item: &MovedItem) -> Option<OsString> {
+    let original = GioNode::new(&item.original_uri).name();
+    (GioNode::new(&item.moved_uri).name() != original).then_some(original)
+}
+
 /// The moved URIs of `items`, grouped by the folder each came from.
-fn group_by_original_folder(items: &[MovedItem]) -> Vec<FolderGroup> {
+fn group_by_original_folder(items: &[&MovedItem]) -> Vec<FolderGroup> {
     let mut groups = FolderGroups::default();
     for item in items {
         if let Some(folder) = GioNode::new(&item.original_uri).parent() {
