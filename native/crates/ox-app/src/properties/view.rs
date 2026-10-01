@@ -30,15 +30,9 @@ use super::metadata::{read_properties, ItemProperties};
 use super::permissions_editor::{permissions_editor, EditedItems};
 use super::sharing_panel::sharing_panel;
 use super::versions_panel::VersionsPanel;
-use super::{PropertiesTab, PropertiesTarget};
+use super::{PropertiesTab, PropertiesTarget, READING};
 use crate::dialog_layer::{quiet_text, DialogFrame, DialogWidth};
 use ox_core::integration::BraveIntegration;
-
-/// Shown on the General tab while the properties are read.
-const READING: &str = "Reading file properties…";
-
-/// The shortest height of a tab's panel (`.properties-panel`).
-const PANEL_MIN_HEIGHT: i32 = 290;
 
 /// What a Properties dialog needs from the window that opens it.
 #[derive(Debug, Clone)]
@@ -67,6 +61,7 @@ mod imp {
 
     use super::super::checksums_panel::ChecksumsPanel;
     use super::super::general_panel::FolderRows;
+    use super::super::tabs::PropertiesTabs;
     use super::super::versions_panel::VersionsPanel;
     use super::super::PropertiesTarget;
     use super::PropertiesContext;
@@ -76,12 +71,8 @@ mod imp {
     pub(crate) struct PropertiesView {
         /// The item described; set by `new`.
         pub(super) target: OnceCell<PropertiesTarget>,
-        /// The row under the tab buttons, with its bottom rule.
-        pub(super) tab_row: gtk::Box,
-        /// The tab buttons above the panels.
-        pub(super) switcher: gtk::StackSwitcher,
-        /// One page per tab.
-        pub(super) pages: gtk::Stack,
+        /// The tab buttons and their panels.
+        pub(super) tabs: PropertiesTabs,
         /// The General tab.
         pub(super) general: gtk::Box,
         /// The Permissions tab.
@@ -119,18 +110,13 @@ mod imp {
                 .expect("class_init sets a box layout")
                 .set_orientation(gtk::Orientation::Vertical);
             view.add_css_class("properties-view");
-            self.switcher.set_stack(Some(&self.pages));
-            // The tabs keep their own width, from the left, as `.properties-tabs`.
-            self.switcher.set_halign(gtk::Align::Start);
-            self.tab_row.add_css_class("properties-tabs");
-            self.tab_row.append(&self.switcher);
-            self.tab_row.set_parent(&*view);
-            self.pages.set_parent(&*view);
+            self.tabs.tab_row().set_parent(&*view);
+            self.tabs.pages().set_parent(&*view);
         }
 
         fn dispose(&self) {
-            self.tab_row.unparent();
-            self.pages.unparent();
+            self.tabs.tab_row().unparent();
+            self.tabs.pages().unparent();
         }
     }
 
@@ -176,8 +162,6 @@ impl PropertiesView {
     /// Adds one page per tab the item has.
     fn add_pages(&self, context: &PropertiesContext) {
         let imp = self.imp();
-        let pages = &imp.pages;
-        pages.set_vhomogeneous(false);
         imp.general.set_orientation(gtk::Orientation::Vertical);
         imp.general.append(&quiet_text(READING));
         imp.permissions.set_orientation(gtk::Orientation::Vertical);
@@ -214,40 +198,30 @@ impl PropertiesView {
     }
 
     fn add_page(&self, tab: PropertiesTab, panel: &gtk::Widget) {
-        panel.add_css_class("properties-panel");
-        panel.set_size_request(-1, PANEL_MIN_HEIGHT);
-        self.imp()
-            .pages
-            .add_titled(panel, Some(tab.page_name()), tab.label());
+        self.imp().tabs.add_page(tab, panel);
     }
 
     /// Shows `tab`, or General when the item has no such tab.
     pub(crate) fn select_tab(&self, tab: PropertiesTab) {
-        let pages = &self.imp().pages;
-        let name = if pages.child_by_name(tab.page_name()).is_some() {
-            tab.page_name()
-        } else {
-            PropertiesTab::General.page_name()
-        };
-        pages.set_visible_child_name(name);
+        self.imp().tabs.select_tab(tab);
     }
 
     /// The tab shown.
     pub(crate) fn selected_tab(&self) -> PropertiesTab {
-        let name = self.imp().pages.visible_child_name();
-        name.as_deref()
-            .and_then(PropertiesTab::from_page_name)
-            .unwrap_or(PropertiesTab::General)
+        self.imp().tabs.selected_tab()
     }
 
     /// Looks the versions up the first time their tab is shown, and tells
     /// the dialog to widen for the versions list.
     fn follow_selected_tab(&self) {
-        self.imp().pages.connect_visible_child_name_notify(glib::clone!(
-            #[weak(rename_to = view)]
-            self,
-            move |_| view.tab_shown()
-        ));
+        self.imp()
+            .tabs
+            .pages()
+            .connect_visible_child_name_notify(glib::clone!(
+                #[weak(rename_to = view)]
+                self,
+                move |_| view.tab_shown()
+            ));
         self.tab_shown();
     }
 
@@ -405,7 +379,7 @@ impl PropertiesView {
     /// The tab labels, for tests.
     #[cfg(test)]
     pub(crate) fn tab_labels(&self) -> Vec<String> {
-        let pages = self.imp().pages.pages();
+        let pages = self.imp().tabs.pages().pages();
         (0..pages.n_items())
             .filter_map(|position| pages.item(position).and_downcast::<gtk::StackPage>())
             .filter_map(|page| page.title())

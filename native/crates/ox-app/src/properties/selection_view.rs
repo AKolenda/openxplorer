@@ -19,15 +19,12 @@ use ox_core::transfer::Cancellation;
 use super::folder_sizes::counts_text;
 use super::metadata::{read_properties, ItemProperties};
 use super::permissions_editor::{permissions_editor, EditedItems};
+use super::tabs::PropertiesTabs;
 use super::view::{can_edit_permissions, PropertiesContext};
-use super::PropertiesTab;
+use super::{PropertiesTab, CALCULATING, READING};
 use crate::dialog_layer::{note, quiet_text, PropertyGrid};
 use crate::icons::{Art, ArtImage};
 
-/// Shown for the size and content while folders are measured.
-const CALCULATING: &str = "Calculating…";
-/// The Permissions tab while the items are read.
-const READING: &str = "Reading file properties…";
 /// The Permissions tab when some item cannot be changed here.
 const NOT_EDITABLE: &str = "Permissions can be changed together only for items you own, outside previous \
                             versions and shares.";
@@ -46,30 +43,14 @@ impl SelectionProperties {
     pub(crate) fn new(entries: Vec<Entry>, context: &PropertiesContext, initial: PropertiesTab) -> Self {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.add_css_class("properties-view");
-        let pages = gtk::Stack::builder().vhomogeneous(false).build();
-        let switcher = gtk::StackSwitcher::builder()
-            .stack(&pages)
-            .halign(gtk::Align::Start)
-            .build();
-        let tab_row = gtk::Box::builder().css_classes(["properties-tabs"]).build();
-        tab_row.append(&switcher);
-        root.append(&tab_row);
-        root.append(&pages);
-        let general = panel();
-        let permissions = panel();
-        pages.add_titled(
-            &general,
-            Some(PropertiesTab::General.page_name()),
-            PropertiesTab::General.label(),
-        );
-        pages.add_titled(
-            &permissions,
-            Some(PropertiesTab::Permissions.page_name()),
-            PropertiesTab::Permissions.label(),
-        );
-        if initial == PropertiesTab::Permissions {
-            pages.set_visible_child(&permissions);
-        }
+        let tabs = PropertiesTabs::new();
+        root.append(tabs.tab_row());
+        root.append(tabs.pages());
+        let general = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let permissions = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        tabs.add_page(PropertiesTab::General, &general);
+        tabs.add_page(PropertiesTab::Permissions, &permissions);
+        tabs.select_tab(initial);
         let cancel = Cancellation::new();
         let size = fill_general(&general, &entries, context);
         measure(&entries, &size, &cancel);
@@ -92,13 +73,6 @@ impl SelectionProperties {
     pub(crate) fn cancel_work(&self) {
         self.cancel.cancel();
     }
-}
-
-/// A tab's panel.
-fn panel() -> gtk::Box {
-    let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    panel.add_css_class("properties-panel");
-    panel
 }
 
 /// The Size and Contains values, which measuring the folders updates.

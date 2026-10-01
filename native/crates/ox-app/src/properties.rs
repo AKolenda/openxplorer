@@ -18,6 +18,7 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `view` | [`PropertiesView`]: the tabs and their panels |
+//! | `tabs` | The tab row and panels every Properties dialog shares |
 //! | `selection_view` | [`SelectionProperties`]: Properties of several items |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_panel` | The General and Permissions tabs |
@@ -49,12 +50,19 @@ mod sharing_panel;
 mod size_scan_strip;
 mod snapshot_banner;
 mod snapshot_source;
+mod tabs;
 mod version_row;
 mod versions_panel;
 mod view;
 
 use ox_core::location::ItemKind;
 use ox_core::places::KnownFolder;
+
+/// Shown while the properties are read.
+const READING: &str = "Reading file properties…";
+/// Shown for a value being calculated: a size, a content count or a
+/// checksum.
+const CALCULATING: &str = "Calculating…";
 
 #[cfg(test)]
 pub(crate) use custom_icon::set_custom_icon;

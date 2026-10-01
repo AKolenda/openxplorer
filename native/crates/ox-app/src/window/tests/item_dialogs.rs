@@ -320,6 +320,16 @@ fn properties_of_several_items_total_them_and_change_them_together() {
     let frame = test.wait_for_dialog("the Properties dialog");
 
     assert_eq!(frame.title(), "3 items Properties");
+    let panel_heights: Vec<i32> = descendants::<gtk::Widget>(&frame)
+        .into_iter()
+        .filter(|widget| widget.has_css_class("properties-panel"))
+        .map(|panel| panel.size_request().1)
+        .collect();
+    assert_eq!(
+        panel_heights,
+        [290, 290],
+        "General and Permissions keep the dialog's height, as one item's tabs do"
+    );
     wait_until("the folders measured", || {
         value_after(&frame, "Contains").as_deref() == Some("3 files, 1 folder")
     });

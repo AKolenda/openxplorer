@@ -15,13 +15,12 @@ use ox_core::entry::EntryError;
 use ox_core::transfer::Cancellation;
 
 use super::general_panel::glyph_button;
+use super::CALCULATING;
 use crate::dialog_layer::{quiet_text, PropertyGrid};
 use crate::icons::Icon;
 
 /// A checksum not asked for yet.
 const NOT_CALCULATED: &str = "Not calculated";
-/// A checksum being computed.
-const CALCULATING: &str = "Calculating…";
 /// The verdict when the pasted checksum is the file's.
 pub(super) const MATCH: &str = "Checksums match.";
 /// The verdict when it is not.
