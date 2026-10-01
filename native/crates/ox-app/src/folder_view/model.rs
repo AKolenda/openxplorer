@@ -35,6 +35,11 @@ fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> Ordering {
         SortColumn::Name => a.sort_name().key.natural_cmp(b.sort_name().key),
         SortColumn::Modified => a.entry().modified.cmp(&b.entry().modified),
         SortColumn::FolderPath => a.folder_path().key.natural_cmp(&b.folder_path().key),
+        SortColumn::OriginalLocation => {
+            let (a, b) = (a.original_location(), b.original_location());
+            a.key.natural_cmp(&b.key)
+        }
+        SortColumn::Deleted => a.entry().trash_deletion_date.cmp(&b.entry().trash_deletion_date),
         SortColumn::Type => a.type_sort_key().natural_cmp(b.type_sort_key()),
         SortColumn::Size => a.sort_size().cmp(&b.sort_size()),
     }

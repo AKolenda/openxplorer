@@ -441,6 +441,7 @@ impl BrowserWindow {
             (tab.uri().to_owned(), page, loading, tab.reloading, error)
         };
         let pane = self.folder_pane();
+        pane.details().show_listing(self.details_listing(&uri));
         pane.set_loading(loading && page.is_none());
         if page.is_some() {
             pane.show_page(PanePage::Landing);

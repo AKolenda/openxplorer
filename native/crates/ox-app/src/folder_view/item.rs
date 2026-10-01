@@ -10,6 +10,7 @@
 //! app.js), which the Size column shows and sorts by.
 
 use std::cell::OnceCell;
+use std::path::Path;
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
@@ -34,6 +35,9 @@ struct PreparedEntry {
     entry: Entry,
     /// Worked out the first time a search shows the item's folder.
     folder_path: OnceCell<FolderPath>,
+    /// Worked out the first time the Recycle Bin shows where the item
+    /// was deleted from.
+    original_location: OnceCell<FolderPath>,
 }
 
 /// Where an item is, as the Folder path column of a search shows it.
@@ -50,7 +54,21 @@ impl FolderPath {
     /// The folder `entry` is in.
     fn of(entry: &Entry) -> Self {
         let folder = parent_location(&entry.uri).unwrap_or_else(|| entry.uri.clone());
-        let text = display_path(&folder);
+        Self::shown_as(display_path(&folder))
+    }
+
+    /// The folder a Recycle Bin item was deleted from, or nothing for an
+    /// item that is not in it.
+    fn original_of(entry: &Entry) -> Self {
+        let folder = entry.trash_orig_path.as_deref().and_then(Path::parent);
+        Self::shown_as(
+            folder
+                .map(|folder| folder.display().to_string())
+                .unwrap_or_default(),
+        )
+    }
+
+    fn shown_as(text: String) -> Self {
         let key = SortKey::new(&text);
         Self { text, key }
     }
@@ -66,6 +84,7 @@ impl PreparedEntry {
             emblems: Emblems::for_entry(&entry),
             entry,
             folder_path: OnceCell::new(),
+            original_location: OnceCell::new(),
         }
     }
 }
@@ -163,6 +182,15 @@ impl FileItem {
         prepared
             .folder_path
             .get_or_init(|| FolderPath::of(&prepared.entry))
+    }
+
+    /// The folder a Recycle Bin item was deleted from, for its Original
+    /// location column (VIEW-062).
+    pub(crate) fn original_location(&self) -> &FolderPath {
+        let prepared = self.prepared();
+        prepared
+            .original_location
+            .get_or_init(|| FolderPath::original_of(&prepared.entry))
     }
 
     /// The icon art for the item.

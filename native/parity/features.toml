@@ -4116,8 +4116,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Trash view default columns: Name, “Path” (original location) and “Deletion Time”"
 gnome = "trash::orig-path, trash::deletion-date"
-native = "todo"
-native_note = "native/crates/ox-core/src/entry/info.rs reads trash::orig-path and deletion dates (trash_items_keep_their_origin_and_deletion_date); no Trash view exists."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted). In trash:/// the details view shows Original location (the folder of trash::orig-path; its tooltip is the full original path) and Date deleted (trash::deletion-date) where a folder shows Date modified, as Windows File Explorer and Dolphin do; both titles sort, by natural path order and by time (folder_view/details.rs, DetailsListing::RecycleBin). The two columns share their saved width with Folder path and Date modified, so the settings file keeps the Python app's columnWidths keys. Date deleted hides in a compact window, as Date modified does. native/crates/ox-core/src/entry/info.rs reads the attributes (trash_items_keep_their_origin_and_deletion_date)."
 
 [[feature]]
 id = "VIEW-063"
@@ -7386,8 +7386,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "trash:/ context menus; Trash place, Restore"
 gnome = "GVfs trash:/// with the 'trash::orig-path' and 'trash::deletion-date' attributes; trash:/// GVfs backend"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs: the Recycle Bin opens as a folder (address \"trash:///\" or \"Recycle Bin\") with its own item and background menus (Restore, Delete permanently, Properties; Empty Recycle Bin), and an empty Recycle Bin says \"Recycle Bin is empty\" (empty_recycle_bin_asks_then_deletes_everything_in_it). Missing: the Original location and Date deleted columns of the details view, and a sidebar entry."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs: the Recycle Bin opens as a folder (address \"trash:///\" or \"Recycle Bin\") with its own item and background menus (Restore, Delete permanently, Properties; Empty Recycle Bin), and an empty Recycle Bin says \"Recycle Bin is empty\" (empty_recycle_bin_asks_then_deletes_everything_in_it); its details view shows each item's Original location and Date deleted in place of Date modified, both sortable (the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted); the sidebar has a Recycle Bin entry (the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere)."
 
 [[feature]]
 id = "OPS-041"
@@ -7428,8 +7428,8 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "Trash::empty; Places “Empty Trash” (KIO::emptyTrash)"
 gnome = "Delete the children of trash:/// (as Nautilus 'Empty Trash'); Delete each top-level child of trash:/// (Nautilus EmptyTrash)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_then_deletes_everything_in_it); native/crates/ox-app/src/window/file_ops/availability.rs disables it while the Recycle Bin is empty. Missing: the sidebar entry."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_then_deletes_everything_in_it: from the Recycle Bin's background menu; the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere: from the sidebar entry's menu, from any folder); native/crates/ox-app/src/window/file_ops/availability.rs disables it while the Recycle Bin is empty. Both ask \"Empty Recycle Bin?\" first unless the setting says not to (SET-010)."
 
 [[feature]]
 id = "OPS-043"
