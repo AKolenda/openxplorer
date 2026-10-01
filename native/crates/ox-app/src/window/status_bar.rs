@@ -18,6 +18,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format;
 
+use crate::announcement::announce;
 use crate::config::BUILD_NAME;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::model::SelectionSummary;
@@ -246,7 +247,7 @@ impl StatusBar {
     pub(super) fn show_typeahead_hint(&self, hint: &str, outcome: TypeaheadMatch) {
         let label = &*self.imp().typeahead_hint;
         label.set_text(hint);
-        label.announce(hint, gtk::AccessibleAnnouncementPriority::Medium);
+        announce(label, hint, gtk::AccessibleAnnouncementPriority::Medium);
         match outcome {
             TypeaheadMatch::Found => label.remove_css_class(MISS_CLASS),
             TypeaheadMatch::Missed => label.add_css_class(MISS_CLASS),

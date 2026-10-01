@@ -33,6 +33,7 @@ use gtk::{gdk, gio, glib};
 use ox_core::entry::Entry;
 use ox_core::network::local_path;
 
+use crate::announcement::announce;
 use crate::folder_view::item::FileItem;
 use crate::icons::{Art, ArtImage};
 
@@ -282,7 +283,7 @@ impl BrowserWindow {
             self.show_message(REMOTE_ONLY_MESSAGE);
         }
         let announcement = drag_announcement(&outgoing.payload.uris);
-        self.announce(&announcement, gtk::AccessibleAnnouncementPriority::Medium);
+        announce(self, &announcement, gtk::AccessibleAnnouncementPriority::Medium);
         Some(outgoing)
     }
 
@@ -292,7 +293,7 @@ impl BrowserWindow {
     /// (DND-008), whatever the receiver answered.
     pub(super) fn end_file_drag(&self) {
         if self.imp().outgoing_drag.replace(None).is_some() {
-            self.announce(DRAG_ENDED, gtk::AccessibleAnnouncementPriority::Medium);
+            announce(self, DRAG_ENDED, gtk::AccessibleAnnouncementPriority::Medium);
         }
         self.folder_pane().owners().show_dragged_items(HashSet::new());
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_END);

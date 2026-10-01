@@ -13,6 +13,7 @@
 //! the real one.
 #![warn(unreachable_pub)]
 
+mod announcement;
 mod app_context;
 pub mod application;
 mod archive_view;
