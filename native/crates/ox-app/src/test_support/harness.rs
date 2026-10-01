@@ -57,6 +57,7 @@ impl TestProcess {
             .expect("the private session bus accepts the test application");
         crate::window::install_accelerators(&app);
         add_inert_app_actions(&app);
+        super::test_opener::install();
         let display = gdk::Display::default()
             .expect("window tests run on a private display: use native/tools/check.py");
         let skin = Skin::install(&display);

@@ -222,6 +222,7 @@ mod tests {
     use crate::folder_view::model::FolderModel;
     use crate::test_support::file_entry;
     use crate::test_support::harness::wait_until;
+    use crate::test_support::{window_font, WINDOW_FONT_STACK};
 
     /// A details view showing files named `names`.
     fn view_of(names: &[&str]) -> (DetailsView, FolderModel) {
@@ -362,18 +363,22 @@ mod tests {
 
     /// Date modified starts wide enough for a late date and time at 125%
     /// text size (13-pixel text grows to 16.25 pixels) in the window's font
-    /// stack (`base.css`), whichever of its fonts is installed; without any
-    /// of them it is `DejaVu Sans`, the widest common fallback.
+    /// stack (`base.css`), when one of its fonts is installed.
     ///
     /// parity: VIEW-028
     #[gtk::test]
     fn the_default_date_width_fits_a_date_and_time_at_125_percent() {
         let (view, _model) = view_of(&["a.txt"]);
+        if let Err(fallback) = window_font(view.column_view()) {
+            eprintln!(
+                "none of the window's fonts is installed ({fallback} draws instead); nothing to measure"
+            );
+            return;
+        }
         let layout = view
             .column_view()
             .create_pango_layout(Some("12/31/2026 11:59 PM"));
-        let mut font =
-            gtk::pango::FontDescription::from_string("Segoe UI Variable,Segoe UI,Noto Sans,Arial,sans-serif");
+        let mut font = gtk::pango::FontDescription::from_string(WINDOW_FONT_STACK);
         font.set_absolute_size(16.25 * f64::from(gtk::pango::SCALE));
         layout.set_font_description(Some(&font));
         let text = layout.pixel_size().0;

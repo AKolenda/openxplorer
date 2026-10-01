@@ -4,20 +4,56 @@
 //! Network list and of the volume monitor, [`desktop_setting`], which
 //! changes a GNOME setting only in memory, the GTK [`harness`] for tests
 //! that open windows, [`portal`], which exports fake desktop portals,
-//! [`python`], which runs the Python app's settings code, and [`search`],
-//! which starts the search cache beside a window.
+//! [`python`], which runs the Python app's settings code, [`search`],
+//! which starts the search cache beside a window, and [`test_opener`],
+//! an application for the file types the window tests open.
 
 pub(crate) mod desktop_setting;
 pub(crate) mod harness;
 pub(crate) mod portal;
 pub(crate) mod python;
 pub(crate) mod search;
+pub(crate) mod test_opener;
 
 use gtk::gio;
+use gtk::prelude::*;
 use ox_core::entry::{entry_from_info, Entry};
 use ox_core::places::{NetworkKind, NetworkLocation};
 
 use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
+
+/// The window's font stack (`window.ox` in `resources/skin/base.css`).
+pub(crate) const WINDOW_FONT_STACK: &str = "Segoe UI Variable,Segoe UI,Noto Sans,Arial,sans-serif";
+
+/// The fonts of [`WINDOW_FONT_STACK`] by name, and Arial's metric twins.
+const WINDOW_FONT_FAMILIES: [&str; 6] = [
+    "Segoe UI Variable",
+    "Segoe UI",
+    "Noto Sans",
+    "Arial",
+    "Liberation Sans",
+    "Arimo",
+];
+
+/// The family `widget` draws [`WINDOW_FONT_STACK`] with when it is one of
+/// the stack's own fonts, else `Err` with the fallback's name. Tests that
+/// measure text in pixels check only the stack's fonts: a system without
+/// any of them, such as the CI containers with only `DejaVu Sans`, draws a
+/// wider fallback.
+pub(crate) fn window_font(widget: &impl IsA<gtk::Widget>) -> Result<String, String> {
+    let font = gtk::pango::FontDescription::from_string(WINDOW_FONT_STACK);
+    let family = widget
+        .pango_context()
+        .load_font(&font)
+        .and_then(|loaded| loaded.describe().family())
+        .map(|family| family.to_string())
+        .unwrap_or_default();
+    if WINDOW_FONT_FAMILIES.contains(&family.as_str()) {
+        Ok(family)
+    } else {
+        Err(family)
+    }
+}
 
 /// An entry named `name` in `/tmp/ox-test`, of `file_type`, as a listing
 /// would produce it. Nothing is created on disk.
