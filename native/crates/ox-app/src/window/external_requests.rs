@@ -12,6 +12,7 @@
 //! `ShowItemProperties` opens the item's folder in a new tab with the
 //! item selected, and the item's Properties over it.
 
+use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 use ox_core::location::{parent_location, same_location};
@@ -59,6 +60,25 @@ impl BrowserWindow {
                     self.select_in_new_tab(&folder, items);
                 }
                 self.open_properties_of(&first[0], PropertiesTab::General);
+            }
+        }
+    }
+
+    /// The Show button of a background operation's notification
+    /// (INT-026): `items` revealed in their folders, as `ShowItems`
+    /// does, or, with none, `folder` in the tab that shows it or a new
+    /// one. With neither the window only comes to the front.
+    pub(crate) fn show_destination(&self, folder: Option<&str>, items: &[String]) {
+        self.present();
+        if !items.is_empty() {
+            let home = self.imp().locations.borrow().home_uri();
+            for (folder, items) in items_by_folder(items, &home) {
+                self.reveal_items(&folder, items);
+            }
+        } else if let Some(folder) = folder {
+            match self.tab_showing(folder) {
+                Some(id) => self.switch_tab(id),
+                None => self.open_folder_tab(folder),
             }
         }
     }

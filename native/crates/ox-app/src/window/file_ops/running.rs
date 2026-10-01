@@ -22,6 +22,7 @@ use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
 use super::unfinished::mark_unfinished;
 use crate::search::changed_folders;
+use crate::window::background_notice::Destination;
 use crate::window::dialog;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::{TransferKind, TransferPanel};
@@ -202,15 +203,16 @@ impl BrowserWindow {
                 if let Some(record) = finished.undo {
                     self.context().record_operation(record);
                 }
+                let destination = Destination::items(finished.select_after.clone());
                 self.reload_selecting(finished.select_after);
                 match finished.summary {
                     OperationSummary::Toast(text) if is_undoable => {
                         // The toast has Undo; the desktop hears it too while
                         // no window has focus (INT-026).
-                        self.notify_if_in_background(&OperationSummary::Toast(text.clone()));
+                        self.notify_if_in_background(&OperationSummary::Toast(text.clone()), destination);
                         self.show_message_with_undo(&text);
                     }
-                    summary => self.report(summary).await,
+                    summary => self.report(summary, destination).await,
                 }
             }
             Err(error) => {
@@ -238,9 +240,9 @@ impl BrowserWindow {
     /// Shows `summary`: a toast for complete success, otherwise the
     /// "Operation result" dialog.
     /// A desktop notification says it too while no window has focus
-    /// (INT-026).
-    pub(super) async fn report(&self, summary: OperationSummary) {
-        self.notify_if_in_background(&summary);
+    /// (INT-026), whose Show button opens `destination`.
+    pub(super) async fn report(&self, summary: OperationSummary, destination: Destination) {
+        self.notify_if_in_background(&summary, destination);
         match summary {
             OperationSummary::Toast(text) => self.show_message(&text),
             OperationSummary::Report(text) => dialog::show_message(self, RESULT_TITLE, &text).await,

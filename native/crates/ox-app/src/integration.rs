@@ -56,8 +56,11 @@ use ox_core::integration::{
     BraveIntegration, BravePaths, DefaultApps, RevealPaths, RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
 };
 
+#[cfg(test)]
+pub(crate) use applications::LaunchTarget;
 pub(crate) use applications::{
     application_image, launch, menu_applications, prepare_launch, ApplicationChoice, DefaultChoice,
+    OpenWithError, PreparedLaunch,
 };
 pub(crate) use brave_dialog::BraveDialog;
 pub(crate) use changes::{IntegrationError, MakeDefaultChoice};

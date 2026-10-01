@@ -499,8 +499,7 @@ fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-    // Every item's title is its label (`b.title=it.label` in app.js); a
-    // disabled command adds the milestone that brings it.
+    // Every item's title is its label (`b.title=it.label` in app.js).
     row.set_tooltip_text(Some(&item.label));
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);

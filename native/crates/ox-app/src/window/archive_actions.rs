@@ -37,6 +37,7 @@ use crate::archive_view::{
 use crate::locations::Page;
 
 use super::actions::plain_action;
+use super::background_notice::Destination;
 use super::session::TabId;
 use super::transfer_panel::TransferKind;
 use super::window_action::WindowAction;
@@ -269,12 +270,16 @@ impl BrowserWindow {
                         // Listing a folder hides the toast, so it comes last.
                         window.show_extracted(&folder.uri, &choice, origin);
                         let text = extraction_success_text(&folder);
-                        window.notify_if_in_background(&OperationSummary::Toast(text.clone()));
+                        let destination = Destination::items(vec![folder.uri.clone()]);
+                        window.notify_if_in_background(&OperationSummary::Toast(text.clone()), destination);
                         window.show_message(&text);
                     }
                     Err(error) => {
                         let text = extraction_failure_text(&error);
-                        window.notify_if_in_background(&OperationSummary::Report(text.clone()));
+                        window.notify_if_in_background(
+                            &OperationSummary::Report(text.clone()),
+                            Destination::default(),
+                        );
                         window.show_result_dialog(EXTRACTION_STOPPED, &text);
                     }
                 }
@@ -445,7 +450,7 @@ impl BrowserWindow {
             Ok(message) => OperationSummary::Toast(message.clone()),
             Err(failure) => OperationSummary::Report(failure.clone()),
         };
-        self.notify_if_in_background(&summary);
+        self.notify_if_in_background(&summary, Destination::folder(folder));
         match outcome {
             Ok(message) => self.show_message(&message),
             Err(failure) => self.show_result_dialog(stopped_title, &failure),

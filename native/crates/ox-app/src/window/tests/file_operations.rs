@@ -5,20 +5,25 @@
 //! buttons, and the folder listed again afterwards. The tests that move
 //! items to the Trash use the test run's private Recycle Bin.
 
+use std::cell::RefCell;
 use std::fs;
+use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::settings::{PreferencesUpdate, Settings};
-use ox_core::transfer::{Progress, ProgressScope};
+use ox_core::transfer::{Cancellation, Progress, ProgressScope};
 
 use super::file_ops_support::{
     dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
     select_names, text_field, wait_for_no_dialog,
 };
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{application, descendants, wait_until, Fixture, TestWindow};
 use crate::window::dialog::Dialog;
+use crate::window::file_drop::DropAction;
+use crate::window::transfer_panel::TransferKind;
 
 /// parity: OPS-001, CMD-004
 #[gtk::test]
@@ -586,13 +591,60 @@ fn a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast() 
     assert!(crate::window::background_notice::take_sent().is_empty());
 }
 
-/// A duplicate that ends while a window outside the application has
-/// focus, as another app's would, sends one notification with the toast's words, which brings
-/// back the window that ran it.
+/// While a file operation or an archive operation runs, the transfer
+/// panel tells the dock: an `Update` with the bar shown when it starts and with the bar
+/// hidden when it ends.
+///
+/// parity: INT-027
+#[gtk::test]
+fn running_operations_show_their_progress_on_the_dock_icon() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let connection = application().dbus_connection().expect("the test bus");
+    let updates: Rc<RefCell<Vec<bool>>> = Rc::default();
+    let recorded = Rc::clone(&updates);
+    let _subscription = connection.subscribe_to_signal(
+        None,
+        Some("com.canonical.Unity.LauncherEntry"),
+        Some("Update"),
+        None,
+        None,
+        gio::DBusSignalFlags::NONE,
+        move |signal| {
+            let properties = signal.parameters.child_value(1);
+            let visible = glib::VariantDict::new(Some(&properties))
+                .lookup::<bool>("progress-visible")
+                .ok()
+                .flatten();
+            recorded.borrow_mut().push(visible.unwrap_or_default());
+        },
+    );
+
+    let context = test.window.begin_operation("Preparing copy…");
+    assert!(context.is_some());
+    wait_until("the bar on the icon", || *updates.borrow() == [true]);
+    test.window.end_operation();
+    wait_until("the bar hidden", || *updates.borrow() == [true, false]);
+
+    test.window
+        .transfer_panel()
+        .start(TransferKind::Archive, "Preparing extraction…", Cancellation::new());
+    wait_until("the archive operation's bar", || updates.borrow().len() == 3);
+    test.window.finish_archive_operation();
+    wait_until("the bar hidden again", || {
+        *updates.borrow() == [true, false, true, false]
+    });
+}
+
+/// A drop into a subfolder that ends while a window outside the
+/// application has focus, as another app's would, sends one notification
+/// with the toast's words. Clicking it brings back the window that ran
+/// it; its Show button opens the subfolder there with the copy selected.
 ///
 /// parity: INT-026
 #[gtk::test]
 fn an_operation_ending_in_the_background_notifies_the_desktop() {
+    let source = Fixture::standard();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     crate::window::background_notice::take_sent();
@@ -603,16 +655,35 @@ fn an_operation_ending_in_the_background_notifies_the_desktop() {
         other.is_active() && !test.window.is_active()
     });
 
-    select_names(&test, &["Notes 2.txt"]);
-    test.activate("duplicate", None);
-    wait_until("the toast", || {
-        test.window.shown_message() == "1 item(s) duplicated."
+    let taken = test.window.drop_files(
+        &[source.uri_of("Notes 2.txt")],
+        Some(test.position_of("Documents")),
+        DropAction::Copy,
+    );
+    assert!(taken);
+    wait_until("the notice", || {
+        crate::window::background_notice::SENT.with(|sent| !sent.borrow().is_empty())
     });
 
     let sent = crate::window::background_notice::take_sent();
     other.destroy();
     assert_eq!(sent.len(), 1);
-    assert_eq!(sent[0].title, "1 item(s) duplicated.");
     assert_eq!(sent[0].body, None);
     assert_eq!(sent[0].window, test.window.id());
+    let copy = fixture.uri_of("Documents/Notes 2.txt");
+    assert_eq!(sent[0].destination.items, std::slice::from_ref(&copy));
+    let (action, target) = sent[0].show_action();
+    assert_eq!(action, "app.show-destination");
+    let (id, folder, items) = target
+        .get::<(u32, String, Vec<String>)>()
+        .expect("the Show target");
+    assert_eq!(id, test.window.id());
+    assert_eq!(folder, "");
+    assert_eq!(items, [copy]);
+
+    test.window.show_destination(None, &items);
+    wait_until("the subfolder with the copy selected", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents"))
+            && test.selected_names() == ["Notes 2.txt"]
+    });
 }

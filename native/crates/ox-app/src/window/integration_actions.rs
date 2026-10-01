@@ -26,6 +26,15 @@ use crate::integration::{self, OpenWithDialog, OpenWithSubject, Tool};
 use crate::locations::Page;
 use crate::update::{UpdateDialog, UpdateState};
 
+/// Starts an application with a launch context: [`integration::launch`],
+/// or a recorder in tests, which must never start a real application.
+type StartApplication = fn(
+    &str,
+    &integration::PreparedLaunch,
+    integration::DefaultChoice,
+    &gtk::gio::AppLaunchContext,
+) -> Result<&'static str, integration::OpenWithError>;
+
 /// The actions that act on one item, or on the folder when nothing is
 /// selected, and are off for several items (`entryMenu`).
 const SINGLE_ITEM_ACTIONS: [WindowAction; 4] = [
@@ -185,9 +194,14 @@ impl BrowserWindow {
     /// Starts applications with this window's display, so they get
     /// startup notification and focus (INT-023).
     fn application_launcher(&self) -> integration::Launcher {
+        self.launcher_with(integration::launch)
+    }
+
+    /// A launcher that runs `start` with this window's launch context.
+    pub(crate) fn launcher_with(&self, start: StartApplication) -> integration::Launcher {
         let launch_context = self.launch_context();
         Box::new(move |app_id, prepared, default| {
-            integration::launch(app_id, prepared, default, launch_context.upcast_ref())
+            start(app_id, prepared, default, launch_context.upcast_ref())
         })
     }
 

@@ -16,11 +16,7 @@ use ox_core::update::REPOSITORY;
 use super::dialog::Dialog;
 use super::BrowserWindow;
 use super::ButtonStyle;
-use crate::config::{APP_ID, BUILD_NAME};
-
-/// The heading of About this build in a stable build: the product and its
-/// version.
-const STABLE_TITLE: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"));
+use crate::config::{BUILD_NAME, IS_PREVIEW};
 
 /// What About this build says above the channel: the description and the
 /// platform line, as the Python box had them.
@@ -33,26 +29,10 @@ Recycle Bin offer a confirmed permanent delete. Cached filename/path search is o
 are not implemented. ZIP files can be browsed read-only and extracted. Open folders update \
 through GIO file monitors.";
 
-/// Whether this is the native preview, built with its own application ID
-/// so it runs beside the stable app (`openxplorer-native`).
-fn is_preview() -> bool {
-    APP_ID.ends_with(".Native")
-}
-
-/// The heading of About this build: the stable product and version, or
-/// the preview's build name.
-fn about_title() -> &'static str {
-    if is_preview() {
-        BUILD_NAME
-    } else {
-        STABLE_TITLE
-    }
-}
-
 /// The text of About this build, whose channel sentence says which build
 /// this is.
 fn about_text() -> String {
-    let channel = if is_preview() {
+    let channel = if IS_PREVIEW {
         "Native preview build: it runs beside the stable release."
     } else {
         "Stable release."
@@ -100,7 +80,7 @@ impl BrowserWindow {
     }
 
     fn about_dialog(&self) -> Dialog {
-        let dialog = Dialog::new(self, about_title(), &about_text());
+        let dialog = Dialog::new(self, BUILD_NAME, &about_text());
         dialog.add_button("OK", ButtonStyle::Accent);
         dialog
     }
@@ -140,9 +120,9 @@ mod tests {
         let fixture = Fixture::standard();
         let test = TestWindow::open(&fixture.uri());
         let dialog = test.window.about_dialog();
-        assert_eq!(dialog.title_text(), about_title());
+        assert_eq!(dialog.title_text(), BUILD_NAME);
         let text = dialog.message_text();
-        let channel = if APP_ID == "io.winspace.Development.Native" {
+        let channel = if IS_PREVIEW {
             "Native preview build"
         } else {
             "Stable release."
@@ -166,6 +146,7 @@ mod tests {
         let dialog = test.window.license_dialog();
         assert_eq!(dialog.title_text(), LICENSE_TITLE);
         assert!(dialog.message_text().contains("AGPL-3.0-only. No warranty."));
+        assert!(dialog.message_text().contains(&format!("{REPOSITORY}/releases")));
         let notices = dialog.scrolled_text();
         for part in [
             "GNU AFFERO GENERAL PUBLIC LICENSE",
