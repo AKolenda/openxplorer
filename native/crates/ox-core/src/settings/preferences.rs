@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use super::choices::{ContextMenu, Theme, View};
 use super::pane_options::DetailsPaneOptions;
+use super::view_properties::{read_folder_views, FolderView, ViewProperties};
 use super::SettingsError;
 
 /// Text sizes offered in Settings, in percent.
@@ -290,6 +291,29 @@ pub struct Preferences {
     /// one is hidden.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hidden_sidebar_places: Vec<String>,
+    /// Date columns show absolute dates instead of "Today at 3:00 PM"
+    /// (Dolphin's `UseShortRelativeDates`, inverted). Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub absolute_dates: bool,
+    /// Each folder remembers its own display style (Dolphin's
+    /// `GlobalViewProps`, inverted). Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub per_folder_views: bool,
+    /// Hovering an item shows the marker that adds it to the selection or
+    /// takes it out (Dolphin's `ShowSelectionToggle`). Stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub selection_marker: bool,
+    /// Folders in the details view expand in place (Dolphin's
+    /// `ExpandableFolders`). Stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub expandable_folders: bool,
+    /// The display style of every folder without its own, once the user
+    /// changed it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_defaults: Option<ViewProperties>,
+    /// The folders that keep their own display style, oldest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub folder_views: Vec<FolderView>,
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
@@ -343,6 +367,12 @@ impl Default for Preferences {
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
+            absolute_dates: false,
+            per_folder_views: false,
+            selection_marker: true,
+            expandable_folders: true,
+            view_defaults: None,
+            folder_views: Vec::new(),
         }
     }
 }
@@ -420,6 +450,35 @@ impl Preferences {
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
+        replace_if_some(&mut self.absolute_dates, update.absolute_dates);
+        replace_if_some(&mut self.per_folder_views, update.per_folder_views);
+        replace_if_some(&mut self.selection_marker, update.selection_marker);
+        replace_if_some(&mut self.expandable_folders, update.expandable_folders);
+        if let Some(defaults) = &update.view_defaults {
+            self.view_defaults = Some(defaults.clone());
+        }
+        if let Some(folder_views) = &update.folder_views {
+            self.folder_views.clone_from(folder_views);
+        }
+    }
+
+    /// The display style `uri` is shown in: its own when each folder
+    /// keeps one, else the shared style (VIEW-020).
+    pub fn view_for(&self, uri: &str) -> ViewProperties {
+        // Before a style was saved, the Python app's view and hidden files.
+        let defaults = self.view_defaults.clone().unwrap_or_else(|| ViewProperties {
+            mode: match self.view {
+                View::Details => "details",
+                View::Grid => "icons",
+            }
+            .to_owned(),
+            show_hidden: self.show_hidden,
+            ..ViewProperties::default()
+        });
+        if !self.per_folder_views {
+            return defaults;
+        }
+        super::view_properties::style_for(&self.folder_views, &defaults, uri)
     }
 }
 
@@ -483,6 +542,20 @@ pub struct PreferencesUpdate {
     /// Replaces the sidebar places hidden one by one; up to 64 locations,
     /// else ignored.
     pub hidden_sidebar_places: Option<Vec<String>>,
+    /// Show absolute dates instead of relative ones.
+    pub absolute_dates: Option<bool>,
+    /// Remember a display style for each folder.
+    pub per_folder_views: Option<bool>,
+    /// Show the hover selection marker.
+    pub selection_marker: Option<bool>,
+    /// Let folders expand in place in the details view.
+    pub expandable_folders: Option<bool>,
+    /// Replaces the shared display style.
+    pub view_defaults: Option<ViewProperties>,
+    /// Replaces the folders' own styles; read from the file only, as
+    /// windows change one folder at a time with
+    /// [`Settings::remember_view`](super::Settings::remember_view).
+    pub folder_views: Option<Vec<FolderView>>,
 }
 
 impl PreferencesUpdate {
@@ -533,6 +606,12 @@ impl PreferencesUpdate {
                 .and_then(|size| u32::try_from(size).ok()),
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
+            absolute_dates: flag("absoluteDates"),
+            per_folder_views: flag("perFolderViews"),
+            selection_marker: flag("selectionMarker"),
+            expandable_folders: flag("expandableFolders"),
+            view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
+            folder_views: values.get("folderViews").and_then(read_folder_views),
         })
     }
 }

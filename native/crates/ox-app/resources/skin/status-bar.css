@@ -21,5 +21,23 @@ window.ox .statusbar button {
   color: @ox_muted;
 }
 window.ox .statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
+/* The icon-size slider (VIEW-010): a thin Windows 11 track with the accent
+   filling up to its round thumb. */
+window.ox .statusbar scale.zoom-slider { min-width: 96px; margin: 1px 18px 0 0; padding: 0; }
+window.ox .statusbar scale.zoom-slider trough {
+  min-height: 4px;
+  border-radius: 2px;
+  background-color: @ox_border;
+}
+window.ox .statusbar scale.zoom-slider highlight { border-radius: 2px; background-color: @ox_accent; }
+window.ox .statusbar scale.zoom-slider slider {
+  min-width: 12px;
+  min-height: 12px;
+  margin: -5px;
+  border-radius: 50%;
+  border: 3px solid @ox_bg;
+  background-color: @ox_accent;
+  box-shadow: 0 0 0 1px @ox_border;
+}
 /* A newer release, or a restart into an installed one, waits for the user. */
 window.ox .statusbar button.update-available { color: @ox_accent; }

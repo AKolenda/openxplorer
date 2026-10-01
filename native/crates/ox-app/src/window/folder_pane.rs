@@ -20,7 +20,7 @@ use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
-use crate::folder_view::grid::IconView;
+use crate::folder_view::grid::{GridLayout, IconView};
 use crate::folder_view::model::FolderModel;
 use crate::text_size::TextSize;
 
@@ -221,12 +221,13 @@ impl FolderPane {
 
     /// The view that lists items now.
     pub(super) fn view(&self) -> FolderView {
-        let icons = FolderView::Icons(self.icon_view().icon_size());
         let shown = self.parts().views.visible_child_name();
-        if shown.as_deref() == Some(icons.stack_name()) {
-            icons
-        } else {
-            FolderView::Details
+        if shown.as_deref() == Some(FolderView::Details.stack_name()) {
+            return FolderView::Details;
+        }
+        match self.icon_view().layout() {
+            GridLayout::Compact => FolderView::Compact,
+            GridLayout::Icons(size) => FolderView::Icons(size),
         }
     }
 
@@ -236,26 +237,27 @@ impl FolderPane {
         let selection = parts.model.selection();
         let column_view = parts.details.column_view();
         let grid = parts.icon_view.grid();
-        match view {
-            FolderView::Details => {
+        match view.grid_layout() {
+            None => {
                 grid.set_model(None::<&gtk::MultiSelection>);
                 column_view.set_model(Some(selection));
             }
-            FolderView::Icons(size) => {
-                parts.icon_view.set_icon_size(size);
+            Some(layout) => {
+                parts.icon_view.set_layout(layout);
                 column_view.set_model(None::<&gtk::MultiSelection>);
                 grid.set_model(Some(selection));
-                parts.icon_view.fit_columns();
+                parts.icon_view.fit_lines();
             }
         }
         parts.views.set_visible_child_name(view.stack_name());
     }
 
-    /// The visible view's vertical scroll adjustment.
+    /// The visible view's scroll adjustment: the compact list scrolls
+    /// sideways, the others down.
     fn visible_vadjustment(&self) -> gtk::Adjustment {
         match self.view() {
             FolderView::Details => self.details().vadjustment(),
-            FolderView::Icons(_) => self.icon_view().vadjustment(),
+            FolderView::Compact | FolderView::Icons(_) => self.icon_view().scroll_adjustment(),
         }
     }
 
@@ -277,7 +279,7 @@ impl FolderPane {
     pub(super) fn view_widget(&self) -> gtk::Widget {
         match self.view() {
             FolderView::Details => self.details().column_view().clone().upcast(),
-            FolderView::Icons(_) => self.icon_view().grid().clone().upcast(),
+            FolderView::Compact | FolderView::Icons(_) => self.icon_view().grid().clone().upcast(),
         }
     }
 
@@ -346,7 +348,9 @@ impl FolderPane {
                 .details()
                 .column_view()
                 .scroll_to(position, None, flags, scroll),
-            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, flags, scroll),
+            FolderView::Compact | FolderView::Icons(_) => {
+                self.icon_view().grid().scroll_to(position, flags, scroll);
+            }
         }
     }
 

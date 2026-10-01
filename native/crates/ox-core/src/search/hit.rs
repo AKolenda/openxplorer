@@ -40,6 +40,7 @@ impl SearchHit {
             can_delete: None,
             can_write: None,
             serialized_icon: None,
+            meta: crate::entry::EntryMeta::default(),
         }
     }
 }

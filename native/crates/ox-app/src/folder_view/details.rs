@@ -11,14 +11,18 @@
 //! settles. [`column_fit`] fits and nudges columns from their titles.
 
 mod column_fit;
+mod group_headers;
 
+pub(crate) use group_headers::GroupTitle;
+
+use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::format;
+use ox_core::format::{self, DateStyle};
 use ox_core::search::display_path;
 use ox_core::settings::{ColumnWidth, ColumnWidths};
 
@@ -41,14 +45,14 @@ const RESIZE_SETTLE: Duration = Duration::from_millis(500);
 /// unchanged for [`RESIZE_SETTLE`].
 const COLUMNS_RESIZED: &str = "columns-resized";
 
-/// The text `column` shows for `item`. A folder shows its measured size
-/// once measured, and an empty Size cell before; a file of unknown size
-/// shows `—` (`prettyBytes` in app.js).
-pub(crate) fn cell_text(column: SortColumn, item: &FileItem) -> String {
+/// The text `column` shows for `item`, with dates in `dates`. A folder
+/// shows its measured size once measured, and an empty Size cell before; a
+/// file of unknown size shows `—` (`prettyBytes` in app.js).
+pub(crate) fn cell_text(column: SortColumn, item: &FileItem, dates: DateStyle) -> String {
     let entry = item.entry();
     match column {
         SortColumn::Name => entry.name.clone(),
-        SortColumn::Modified => format::date_short_time_text(entry.modified),
+        SortColumn::Modified => format::column_date_text(entry.modified, dates),
         SortColumn::FolderPath => item.folder_path().text.clone(),
         SortColumn::Type => entry.type_label.clone(),
         SortColumn::Size => match item.folder_size() {
@@ -79,7 +83,12 @@ fn name_factory(owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
 
 /// The cells of the Date modified, Folder path, Type or Size column: one
 /// dim label, registered in `owners`, which dims the cells of cut items.
-fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
+/// Dates are written in the style `dates` holds when a cell is bound.
+fn text_factory(
+    column: SortColumn,
+    owners: &Rc<CellOwners>,
+    dates: &Rc<Cell<DateStyle>>,
+) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let setup_owners = Rc::clone(owners);
     factory.connect_setup(move |_, object| {
@@ -94,25 +103,39 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
         cells::show_row_tooltip(&label, &setup_owners, cell_tooltip(column));
     });
     let bind_owners = Rc::clone(owners);
+    let dates = Rc::clone(dates);
     factory.connect_bind(move |_, object| {
         let list_item = cells::as_list_item(object);
         let label = list_item.child().and_downcast::<gtk::Label>();
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
-            label.set_text(&cell_text(column, &item));
+            label.set_text(&cell_text(column, &item, dates.get()));
             bind_owners.style_cell(&label, &item);
         }
     });
     factory
 }
 
-/// A resizable column showing `column`, sorted by its header.
-fn new_view_column(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::ColumnViewColumn {
-    let factory = match column {
+/// The factory of `column`'s cells.
+fn column_factory(
+    column: SortColumn,
+    owners: &Rc<CellOwners>,
+    dates: &Rc<Cell<DateStyle>>,
+) -> gtk::SignalListItemFactory {
+    match column {
         SortColumn::Name => name_factory(owners),
         SortColumn::Modified | SortColumn::FolderPath | SortColumn::Type | SortColumn::Size => {
-            text_factory(column, owners)
+            text_factory(column, owners, dates)
         }
-    };
+    }
+}
+
+/// A resizable column showing `column`, sorted by its header.
+fn new_view_column(
+    column: SortColumn,
+    owners: &Rc<CellOwners>,
+    dates: &Rc<Cell<DateStyle>>,
+) -> gtk::ColumnViewColumn {
+    let factory = column_factory(column, owners, dates);
     let view_column = gtk::ColumnViewColumn::new(Some(column.label()), Some(factory));
     view_column.set_id(Some(column.as_str()));
     view_column.set_resizable(true);
@@ -159,6 +182,7 @@ const fn is_column_shown(column: SortColumn, columns: DetailsColumns, listing: D
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
+    use std::rc::Rc;
     use std::sync::OnceLock;
 
     use gtk::glib;
@@ -166,7 +190,9 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{DetailsColumns, DetailsListing, COLUMNS_RESIZED};
+    use ox_core::format::DateStyle;
+
+    use super::{CellOwners, DetailsColumns, DetailsListing, COLUMNS_RESIZED};
 
     /// Private state of [`super::DetailsView`].
     #[derive(Debug, Default)]
@@ -188,6 +214,10 @@ mod imp {
         pub(super) columns: Cell<DetailsColumns>,
         /// Whether the view lists a folder or search results.
         pub(super) listing: Cell<DetailsListing>,
+        /// How dates are written, which the date cells read when bound.
+        pub(super) dates: Rc<Cell<DateStyle>>,
+        /// The cells' registry, set by [`super::DetailsView::new`].
+        pub(super) owners: OnceCell<Rc<CellOwners>>,
     }
 
     #[glib::object_subclass]
@@ -247,9 +277,14 @@ impl DetailsView {
     pub(crate) fn new(model: &FolderModel, owners: &Rc<CellOwners>) -> Self {
         let view: Self = glib::Object::new();
         let column_view = view.column_view();
+        let dates = &view.imp().dates;
         for column in SortColumn::ALL {
-            column_view.append_column(&new_view_column(column, owners));
+            column_view.append_column(&new_view_column(column, owners, dates));
         }
+        view.imp()
+            .owners
+            .set(Rc::clone(owners))
+            .expect("DetailsView::new sets the owners once");
         view.apply_column_widths(None);
         view.show_fitting_columns();
         view.watch_column_widths();
@@ -316,8 +351,27 @@ impl DetailsView {
         };
         (0..items.n_items().min(limit))
             .filter_map(|position| items.item(position).and_downcast::<FileItem>())
-            .map(|item| cell_text(column, &item))
+            .map(|item| cell_text(column, &item, self.date_style()))
             .collect()
+    }
+
+    /// How dates are written.
+    pub(crate) fn date_style(&self) -> DateStyle {
+        self.imp().dates.get()
+    }
+
+    /// Writes dates in `style` (VIEW-004), redrawing the date cells
+    /// shown.
+    pub(crate) fn set_date_style(&self, style: DateStyle) {
+        let imp = self.imp();
+        if imp.dates.replace(style) == style {
+            return;
+        }
+        let (Some(owners), Some(modified)) = (imp.owners.get(), self.column(SortColumn::Modified)) else {
+            return;
+        };
+        // A new factory binds every shown cell again.
+        modified.set_factory(Some(&column_factory(SortColumn::Modified, owners, &imp.dates)));
     }
 
     /// The column view's column for `column`.
@@ -461,7 +515,7 @@ impl DetailsView {
 
     /// The column and direction the view sorts by, or `None` while
     /// unsorted.
-    fn primary_sort(&self) -> Option<SortOrder> {
+    pub(crate) fn primary_sort(&self) -> Option<SortOrder> {
         let sorter = self.column_view().sorter();
         let sorter = sorter.and_downcast::<gtk::ColumnViewSorter>()?;
         let id = sorter.primary_sort_column()?.id()?;

@@ -137,10 +137,16 @@ pub(crate) enum WindowAction {
     /// Shows the hidden place in the string target again: a standard
     /// folder or a place hidden with Hide.
     ShowPlace,
-    /// The column the details view sorts by.
+    /// The key the listing sorts by: a details column or a further key.
     Sort,
     /// Whether the details view sorts ascending or descending.
     Direction,
+    /// Shows the items in groups by the sort key (VIEW-022).
+    Groups,
+    /// Lists folders before files.
+    FoldersFirst,
+    /// Opens the Adjust View Display Style dialog (VIEW-021).
+    ViewProperties,
     /// The light, dark or system appearance.
     Theme,
     /// Makes text larger, smaller or its default size (Ctrl+plus, minus
@@ -419,6 +425,9 @@ impl WindowAction {
             WindowAction::ShowPlace => "show-place",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
+            WindowAction::Groups => "groups",
+            WindowAction::FoldersFirst => "folders-first",
+            WindowAction::ViewProperties => "view-properties",
             WindowAction::Theme => "theme",
             WindowAction::TextSize(step) => step.action_name(),
             WindowAction::ResetLayout => "reset-layout",

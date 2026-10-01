@@ -40,7 +40,9 @@ use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::folder_locations::FolderRelocation;
 use ox_core::places::FolderLocations;
-use ox_core::settings::{PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
+use ox_core::settings::{
+    PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError, ViewProperties, ViewScope,
+};
 use ox_core::versions::PreviousVersions;
 
 use crate::integration::DesktopIntegration;
@@ -337,6 +339,21 @@ impl AppContext {
     ) {
         let change: Change =
             Box::new(move |settings: &mut Settings| settings.update_preferences(&update).map(|_| ()));
+        self.change_settings(change, reply);
+    }
+
+    /// Saves `properties` as the display style of `uri` with `scope` off
+    /// the main thread (VIEW-020); `reply` hears the outcome.
+    pub(crate) fn remember_view(
+        &self,
+        uri: String,
+        properties: ViewProperties,
+        scope: ViewScope,
+        reply: impl FnOnce(Result<(), SettingsError>) + 'static,
+    ) {
+        let change: Change = Box::new(move |settings: &mut Settings| {
+            settings.remember_view(&uri, properties, scope).map(|_| ())
+        });
         self.change_settings(change, reply);
     }
 

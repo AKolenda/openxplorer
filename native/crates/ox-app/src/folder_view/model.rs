@@ -16,9 +16,12 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::search::SearchFacets;
 
+use crate::folder_view::details::GroupTitle;
 use crate::folder_view::filter::FilterState;
+use crate::folder_view::groups::{self, GroupClock};
 use crate::folder_view::item::FileItem;
-use crate::folder_view::sorting::{self, SortColumn};
+use crate::folder_view::sort_roles::{SortRole, SortState};
+use crate::folder_view::sorting::{self, SortColumn, SortDirection};
 
 /// The item a folder model hands to its filter or sorters.
 fn as_item(object: &glib::Object) -> &FileItem {
@@ -49,14 +52,76 @@ pub(crate) fn column_sorter(column: SortColumn) -> gtk::CustomSorter {
     })
 }
 
-/// Sorts folders before files, whichever way the column sorts.
-fn folders_first() -> gtk::CustomSorter {
-    gtk::CustomSorter::new(|a, b| {
+/// How the model sorts beyond the details view's column: folders first or
+/// not, a further sort key (VIEW-019) and groups (VIEW-022).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SortOptions {
+    folders_first: bool,
+    role: Option<(SortRole, SortDirection)>,
+    grouping: Option<(SortState, GroupClock)>,
+}
+
+impl Default for SortOptions {
+    fn default() -> Self {
+        Self {
+            folders_first: true,
+            role: None,
+            grouping: None,
+        }
+    }
+}
+
+/// Shared with the sorters' callbacks, which GTK calls with no access to
+/// the model.
+type SharedOptions = Rc<std::cell::Cell<SortOptions>>;
+
+/// Sorts folders before files, whichever way the column sorts, while
+/// folders come first.
+fn folders_first(options: &SharedOptions) -> gtk::CustomSorter {
+    let options = Rc::clone(options);
+    gtk::CustomSorter::new(move |a, b| {
+        if !options.get().folders_first {
+            return gtk::Ordering::Equal;
+        }
         let a_is_folder = as_item(a).entry().is_dir;
         let b_is_folder = as_item(b).entry().is_dir;
         // Reversed, so `true` sorts first.
         b_is_folder.cmp(&a_is_folder).into()
     })
+}
+
+/// Sorts by the further key while one is chosen; the column view is then
+/// unsorted.
+fn role_sorter(options: &SharedOptions) -> gtk::CustomSorter {
+    let options = Rc::clone(options);
+    gtk::CustomSorter::new(move |a, b| {
+        let Some((role, direction)) = options.get().role else {
+            return gtk::Ordering::Equal;
+        };
+        let order = role.compare(as_item(a), as_item(b));
+        directed(order, direction).into()
+    })
+}
+
+/// Sorts the items into their groups, in the order the key sorts.
+fn group_sorter(options: &SharedOptions) -> gtk::CustomSorter {
+    let options = Rc::clone(options);
+    gtk::CustomSorter::new(move |a, b| {
+        let Some((state, clock)) = options.get().grouping else {
+            return gtk::Ordering::Equal;
+        };
+        let a = groups::group_of(state.by, as_item(a), &clock);
+        let b = groups::group_of(state.by, as_item(b), &clock);
+        directed(a.compare(&b), state.direction).into()
+    })
+}
+
+/// `order` for an ascending sort, reversed for a descending one.
+fn directed(order: Ordering, direction: SortDirection) -> Ordering {
+    match direction {
+        SortDirection::Ascending => order,
+        SortDirection::Descending => order.reverse(),
+    }
 }
 
 /// Breaks ties by name, always ascending.
@@ -88,6 +153,10 @@ pub(crate) struct FolderModel {
     filter_model: gtk::FilterListModel,
     sort_model: gtk::SortListModel,
     selection: gtk::MultiSelection,
+    sort_options: SharedOptions,
+    folders_first: gtk::CustomSorter,
+    role_sorter: gtk::CustomSorter,
+    group_sorter: gtk::CustomSorter,
 }
 
 impl FolderModel {
@@ -103,24 +172,90 @@ impl FolderModel {
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
         let selection = gtk::MultiSelection::new(Some(sort_model.clone()));
+        let sort_options = SharedOptions::default();
         Self {
             filter_state,
             filter,
             filter_model,
             sort_model,
             selection,
+            folders_first: folders_first(&sort_options),
+            role_sorter: role_sorter(&sort_options),
+            group_sorter: group_sorter(&sort_options),
+            sort_options,
         }
     }
 
     /// Completes the sorter once the details view exists: folders first,
-    /// then `column_sorter` (the column view's sorter, which applies the
-    /// chosen direction), then names ascending.
+    /// then a further sort key while one is chosen, then `column_sorter`
+    /// (the column view's sorter, which applies the chosen direction), then
+    /// names ascending.
     pub(crate) fn attach_column_sorter(&self, column_sorter: &gtk::Sorter) {
         let sorter = gtk::MultiSorter::new();
-        sorter.append(folders_first());
+        sorter.append(self.folders_first.clone());
+        sorter.append(self.role_sorter.clone());
         sorter.append(column_sorter.clone());
         sorter.append(names_ascending());
         self.sort_model.set_sorter(Some(&sorter));
+    }
+
+    /// Lists folders before files when `first`, else among them.
+    pub(crate) fn set_folders_first(&self, first: bool) {
+        self.change_sort_options(&self.folders_first, |options| options.folders_first = first);
+    }
+
+    /// Whether folders are listed before files.
+    pub(crate) fn folders_first(&self) -> bool {
+        self.sort_options.get().folders_first
+    }
+
+    /// Sorts by a further key and direction, or by the details view's
+    /// column again with `None`.
+    pub(crate) fn set_sort_role(&self, role: Option<(SortRole, SortDirection)>) {
+        self.change_sort_options(&self.role_sorter, |options| options.role = role);
+    }
+
+    /// The further key the model sorts by, if one is chosen.
+    pub(crate) fn sort_role(&self) -> Option<(SortRole, SortDirection)> {
+        self.sort_options.get().role
+    }
+
+    /// Groups the items by the key `state` sorts by, or stops grouping
+    /// them with `None`. Dates are grouped by the periods as of now.
+    pub(crate) fn set_grouping(&self, state: Option<SortState>) {
+        let grouping = state.and_then(|state| Some((state, GroupClock::now()?)));
+        let was_grouped = self.sort_options.get().grouping.is_some();
+        self.change_sort_options(&self.group_sorter, |options| options.grouping = grouping);
+        if grouping.is_some() != was_grouped {
+            let sections = grouping.map(|_| self.group_sorter.clone());
+            self.sort_model.set_section_sorter(sections.as_ref());
+        }
+    }
+
+    /// The key the items are grouped by, if they are grouped.
+    pub(crate) fn grouping(&self) -> Option<SortState> {
+        self.sort_options.get().grouping.map(|(state, _)| state)
+    }
+
+    /// Names the group an item is in, while the items are grouped.
+    pub(crate) fn group_titles(&self) -> GroupTitle {
+        let options = Rc::clone(&self.sort_options);
+        Rc::new(move |item| {
+            let (state, clock) = options.get().grouping?;
+            Some(groups::group_of(state.by, item, &clock).title)
+        })
+    }
+
+    /// Applies `change` to the sort options and sorts again with `sorter`
+    /// when they changed.
+    fn change_sort_options(&self, sorter: &gtk::CustomSorter, change: impl FnOnce(&mut SortOptions)) {
+        let mut options = self.sort_options.get();
+        change(&mut options);
+        if options == self.sort_options.get() {
+            return;
+        }
+        self.sort_options.set(options);
+        sorter.changed(gtk::SorterChange::Different);
     }
 
     /// The selection model both views display.
@@ -180,6 +315,11 @@ impl FolderModel {
     /// Sets the search options (SRCH-037); returns true when they changed.
     pub(crate) fn set_facets(&self, facets: SearchFacets) -> bool {
         self.update_filter(|state| state.set_facets(facets))
+    }
+
+    /// Whether hidden items are shown.
+    pub(crate) fn shows_hidden(&self) -> bool {
+        self.filter_state.borrow().shows_hidden()
     }
 
     /// Shows or hides hidden items; returns true when that changed.

@@ -87,7 +87,7 @@ fn drag_hint() -> gtk::Label {
 fn view_stack(details: &DetailsView, icon_view: &IconView) -> gtk::Stack {
     let views = gtk::Stack::new();
     views.add_named(details, Some(FolderView::Details.stack_name()));
-    let icons = FolderView::Icons(IconSize::Large);
+    let icons = FolderView::Icons(IconSize::LARGE);
     views.add_named(icon_view, Some(icons.stack_name()));
     views
 }

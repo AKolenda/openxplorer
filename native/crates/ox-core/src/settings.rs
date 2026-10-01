@@ -41,6 +41,7 @@ mod read;
 mod save;
 #[cfg(test)]
 mod test_support;
+mod view_properties;
 
 use std::path::{Path, PathBuf};
 
@@ -50,6 +51,7 @@ pub use error::SettingsError;
 pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use pane_options::DetailsPaneOptions;
+pub use view_properties::{may_remember, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS};
 pub use preferences::{
     Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, WindowSize, DEFAULT_TEXT_SIZE,
     NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS, WINDOW_WIDTHS,
@@ -304,6 +306,33 @@ impl Settings {
     /// error of [`update_preferences`](Self::update_preferences).
     pub fn remember_open(&mut self, entry: RecentEntry) -> Result<(), SettingsError> {
         self.mutate(move |data| mutate::remember_open(data, entry))
+    }
+
+    /// Saves `properties` as the display style of `uri` with `scope`
+    /// (VIEW-020, VIEW-021), changing only that folder's style, or only
+    /// the shared one, as the file now holds them. Returns the resulting
+    /// preferences.
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn remember_view(
+        &mut self,
+        uri: &str,
+        properties: ViewProperties,
+        scope: ViewScope,
+    ) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let preferences = &mut data.preferences;
+            view_properties::remember(
+                &mut preferences.folder_views,
+                &mut preferences.view_defaults,
+                uri,
+                properties,
+                scope,
+            );
+            Ok(preferences.clone())
+        })
     }
 
     /// Locks, re-reads, changes a copy of the data, saves it, and only then

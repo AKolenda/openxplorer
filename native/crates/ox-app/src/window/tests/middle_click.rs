@@ -68,7 +68,7 @@ fn middle_clicking_a_folder_row_opens_it_in_a_background_tab() {
 fn middle_clicking_a_folder_tile_opens_it_in_a_background_tab() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    test.window.show_view(FolderView::Icons(IconSize::Large));
+    test.window.show_view(FolderView::Icons(IconSize::LARGE));
 
     middle_click_item(&test, "Documents");
 

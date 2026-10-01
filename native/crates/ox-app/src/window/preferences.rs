@@ -20,7 +20,6 @@ use ox_core::settings::{
     ColumnWidth, DetailsPaneOptions, PreferencesUpdate, SettingsError, Theme, WindowSize, SIDEBAR_WIDTHS,
 };
 
-use super::folder_pane::FolderView;
 use super::BrowserWindow;
 use crate::text_size::TextSize;
 
@@ -36,10 +35,6 @@ const HANDLE_REACH: f64 = 6.0;
 /// One preference the user changed in this window.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Preference {
-    /// Details or an icon size (saved as the Python app's `grid`).
-    View(FolderView),
-    /// Show hidden files.
-    ShowHidden(bool),
     /// Show the details pane.
     DetailsPane(bool),
     /// System, Light or Dark.
@@ -69,8 +64,6 @@ impl Preference {
     fn into_update(self) -> PreferencesUpdate {
         let mut update = PreferencesUpdate::default();
         match self {
-            Preference::View(view) => update.view = Some(view.setting()),
-            Preference::ShowHidden(show) => update.show_hidden = Some(show),
             Preference::DetailsPane(show) => update.show_details_pane = Some(show),
             Preference::Theme(theme) => update.theme = Some(theme),
             Preference::TextSize(size) => update.text_size = Some(size.percent()),
@@ -98,9 +91,14 @@ impl Preference {
             Preference::TextSize(_) => {
                 format!("Text size changed for this window, but could not be saved: {error}")
             }
-            _ => format!("Changed for this window, but could not be saved: {error}"),
+            _ => not_saved_message(error),
         }
     }
+}
+
+/// What the window says when a change it keeps could not be saved.
+fn not_saved_message(error: &SettingsError) -> String {
+    format!("Changed for this window, but could not be saved: {error}")
 }
 
 /// The toast a text-size change shows (`changeTextSize`).
@@ -147,14 +145,14 @@ impl BrowserWindow {
     /// the ones the user changes.
     pub(super) fn apply_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
-        self.folder_pane()
-            .model()
-            .set_show_hidden(preferences.show_hidden);
         // `win.details-pane` starts from the same preferences.
         self.details_pane()
             .set_options(preferences.details_pane_options.clone());
         self.fit_details_pane();
-        self.show_view(FolderView::from_setting(preferences.view));
+        // The shared style; a folder with its own is shown in it once it
+        // is opened (VIEW-020).
+        self.apply_style(&preferences.view_for(""));
+        self.follow_date_style();
         let workspace = self.workspace();
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
         let details_view = self.folder_pane().details();
@@ -288,6 +286,20 @@ impl BrowserWindow {
         self.context().update_preferences(update, reply);
     }
 
+    /// The reply to a settings change that says when it could not be
+    /// saved; the change stays in this window.
+    pub(super) fn preference_failure_reply(&self) -> impl FnOnce(Result<(), SettingsError>) + 'static {
+        glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |result: Result<(), SettingsError>| {
+                if let Err(error) = result {
+                    window.show_message(&not_saved_message(&error));
+                }
+            }
+        )
+    }
+
     /// Draws text at `size` in every window, says so and saves it for all
     /// windows (`changeTextSize` in app.js). Saves run one after another,
     /// so the size asked for last is the one kept.
@@ -301,10 +313,6 @@ impl BrowserWindow {
 
 #[cfg(test)]
 mod tests {
-    use ox_core::settings::View;
-
-    use crate::folder_view::grid::IconSize;
-
     use super::*;
 
     /// parity: SIDE-023
@@ -341,15 +349,7 @@ mod tests {
         let failure = Preference::TextSize(TextSize::DEFAULT).failure_message(&error);
         let expected = "Text size changed for this window, but could not be saved: the disk is full";
         assert_eq!(failure, expected);
-        let other = Preference::ShowHidden(true).failure_message(&error);
+        let other = Preference::Theme(Theme::Dark).failure_message(&error);
         assert!(other.starts_with("Changed for this window, but could not be saved: "));
-    }
-
-    #[test]
-    fn every_icon_size_is_saved_as_the_python_grid_view() {
-        let update = Preference::View(FolderView::Icons(IconSize::Small)).into_update();
-        assert_eq!(update.view, Some(View::Grid));
-        let update = Preference::View(FolderView::Details).into_update();
-        assert_eq!(update.view, Some(View::Details));
     }
 }

@@ -113,6 +113,9 @@ impl BrowserWindow {
         }
         if mode == LoadMode::Navigate {
             self.clear_rows(id);
+            if is_active {
+                self.follow_folder_style(&start.uri);
+            }
         }
         let signing_out = self.context().network().sign_out_registry();
         if let Err(refusal) = signing_out.check_listing(&start.uri) {

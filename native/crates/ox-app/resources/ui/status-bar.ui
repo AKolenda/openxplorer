@@ -67,6 +67,21 @@
       </object>
     </child>
     <child>
+      <!-- Dolphin's zoom slider: the icon size, shown in the icon view. -->
+      <object class="GtkScale" id="zoom_slider">
+        <property name="visible">false</property>
+        <property name="valign">center</property>
+        <property name="draw-value">false</property>
+        <property name="tooltip-text">Icon size</property>
+        <style>
+          <class name="zoom-slider"/>
+        </style>
+        <accessibility>
+          <property name="label">Icon size</property>
+        </accessibility>
+      </object>
+    </child>
+    <child>
       <object class="GtkButton" id="details_view_button">
         <property name="tooltip-text">Details view</property>
         <property name="valign">center</property>

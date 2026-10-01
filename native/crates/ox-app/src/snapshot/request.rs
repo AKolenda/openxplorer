@@ -197,7 +197,7 @@ mod tests {
             png: PathBuf::from("/tmp/window.png"),
             start: Some("pc:".to_owned()),
             theme: Some(Theme::Dark),
-            view: Some(FolderView::Icons(IconSize::Large)),
+            view: Some(FolderView::Icons(IconSize::LARGE)),
             size: Some(WindowSize {
                 width: 1440,
                 height: 900,

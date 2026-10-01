@@ -139,6 +139,14 @@ gridview.files > child:selected {
 gridview.files > child:selected:hover { background-color: @ox_selected_hover; }
 gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
 
+/* ---- Compact view (Explorer's List layout, VIEW-008) ---- */
+/* Small icons with one-line names in columns: rows as tight as Explorer's
+   list, 4px of padding beside the name. Their height follows the text
+   size (src/theme/fonts.rs). */
+gridview.files.compact { padding: 4px 8px 8px 12px; }
+gridview.files.compact > child { padding: 0 8px 0 6px; margin: 0 2px 0 0; border-radius: 4px; }
+gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
+
 /* ---- Loading line (§4.15, M06, M08) ---- */
 /* A 2px line over the top of the pane with a quarter-width bar sliding
    across it once a second (`@keyframes loading`). The bar is a background

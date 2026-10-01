@@ -93,6 +93,8 @@ impl BrowserWindow {
     fn places_changed(&self) {
         self.imp().locations.borrow_mut().network_mounts = self.network_mount_points();
         self.render_places();
+        // Settings may have switched the date style (VIEW-004).
+        self.follow_date_style();
     }
 
     /// The mount points of the kernel's CIFS and SMB3 mounts, as last read:

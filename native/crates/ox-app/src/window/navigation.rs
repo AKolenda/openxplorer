@@ -253,6 +253,9 @@ impl BrowserWindow {
             return;
         };
         let had_focus = self.folder_pane().view_has_focus();
+        if let Some(uri) = self.current_uri() {
+            self.follow_folder_style(&uri);
+        }
         self.change_model(|| {
             let model = self.folder_pane().model();
             self.search_box().clear();
