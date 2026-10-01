@@ -263,6 +263,15 @@ pub(super) fn remember_open(settings: &mut SettingsData, entry: RecentEntry) -> 
     Ok(())
 }
 
+/// Forgets the recent files opened before `opened_before`, and those
+/// with no time of opening; `None` forgets them all (SAFE-022). True when
+/// any were forgotten.
+pub(super) fn forget_recent(settings: &mut SettingsData, opened_before: Option<u64>) -> bool {
+    let before = settings.recent.len();
+    settings.recent.retain(|recent| recent.is_kept_by(opened_before));
+    settings.recent.len() != before
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -458,6 +467,7 @@ mod tests {
                 is_dir: true,
                 size: i,
                 modified: 1,
+                opened: None,
             };
             remember_open(&mut settings, entry).unwrap();
         }

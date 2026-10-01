@@ -12,7 +12,8 @@
 //!
 //! Opened files and visited folders also go to the desktop's recently used
 //! list, as Dolphin records them (OPEN-025), so the file chooser's Recent
-//! and other applications show them.
+//! and other applications show them, while the desktop's privacy settings
+//! allow it ([`super::recent_privacy`]).
 
 use gtk::gio;
 use gtk::prelude::*;
@@ -56,8 +57,10 @@ impl AppContext {
         }
         launch(&prepared, window).await?;
         let content_type = prepared.entry.content_type.as_deref();
-        add_to_desktop_history(&prepared.entry.uri, content_type.unwrap_or(UNKNOWN_CONTENT_TYPE));
-        self.remember_open(recent_entry(&prepared.entry));
+        self.record_opened(
+            recent_entry(&prepared.entry),
+            content_type.unwrap_or(UNKNOWN_CONTENT_TYPE),
+        );
         Ok(())
     }
 }

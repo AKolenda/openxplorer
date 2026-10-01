@@ -17033,4 +17033,5 @@ python_tests = []
 bridge = ["environment", "open", "openWith"]
 dolphin = "KDE Activities privacy “Remember opened documents”"
 gnome = "GSettings org.gnome.desktop.privacy remember-recent-files and recent-files-max-age (GtkRecentManager honours them automatically)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (recent_files_follow_the_desktop_history_setting); native/crates/ox-app/src/app_context/recent_privacy.rs. The app follows GNOME's org.gnome.desktop.privacy, as Nautilus does: while remember-recent-files is off (or recent-files-max-age is 0) an opened file or visited folder is added neither to the desktop's recently used list nor to settings.json, the recent files settings.json holds are forgotten, and the sidebar hides Recent files; with a recent-files-max-age of N days, files opened longer ago are forgotten (settings.json now keeps an \"opened\" time per entry; entries the Python app wrote have none and count as old). The sidebar's Recent files has a menu with \"Clear recent files\", which empties the app's list and the desktop's (GtkRecentManager::purge_items). Without the GNOME schema everything is remembered, as before. GtkRecentManager prunes the desktop's own list by the same settings."

@@ -190,6 +190,7 @@ fn read_recent(item: &Value) -> Option<RecentEntry> {
         is_dir: false,
         size: python_count(fields.get("size"))?,
         modified: python_count(fields.get("modified"))?,
+        opened: fields.get("opened").and_then(Value::as_u64),
     };
     Some(entry.into_stored())
 }
