@@ -357,6 +357,8 @@ fn the_confirmation_settings_decide_what_asks() {
     dialog.press("Cancel");
     wait_for_no_dialog(&test);
     assert!(test.window.is_visible(), "the window stays open");
+    // The test window closes without asking again.
+    test.window.imp().closing_tabs_confirmed.set(true);
 }
 
 /// parity: OPS-015
