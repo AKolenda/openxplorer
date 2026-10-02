@@ -5707,8 +5707,8 @@ python_tests = []
 bridge = ["environment", "open", "openWith", "activateItem"]
 dolphin = "recentlyused:/files, recentlyused:/locations; Places “Recent Files” (recentlyused:/files) and “Recent Locations”"
 gnome = "GtkRecentManager (~/.local/share/recently-used.xbel); GVfs recent:/// backend / GtkRecentManager (~/.local/share/recently-used.xbel)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere). A 'Recent files' row opens GIO's recent:/// (the desktop's recently-used.xbel), which lists like a folder, opens in tabs and windows and takes no drops; the Home page's own recent list (HOME-011) is unchanged. Left open: 'Recent Locations' (recently visited folders) has no GIO backend and would need a listing of the app's own."
+native = "done"
+native_note = "Recent files: a 'Recent files' row opens GIO's recent:/// (the desktop's recently-used.xbel), which lists like a folder, opens in tabs and windows and takes no drops (native/crates/ox-app/src/window/tests/recycle_bin.rs, the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere). Recent locations: a 'Recent locations' row under it (ox-core VirtualPlace::RecentLocations, ox:recent-locations, also typed by URI or title) lists the folders of the desktop's recently used list, where every folder the app navigates to is recorded (OPEN-025), newest visit first, at most 50, leaving out folders that no longer exist (native/crates/ox-app/src/folder_view/recent_locations.rs, through GtkRecentManager). It honours the desktop's privacy settings: with gtk-recent-files-enabled off (GNOME's 'remember recent files') the list is empty, and entries older than gtk-recent-files-max-age are left out. The row's menu has Open, Open in new tab, Open in new window and 'Clear recent locations', which removes the folders from the recently used list and keeps its files. The Home page's own recent list (HOME-011) is unchanged. Test: native/crates/ox-app/src/window/tests/sidebar.rs (recent_locations_lists_visited_folders_and_clear_forgets_them)."
 
 [[feature]]
 id = "SIDE-027"
@@ -6074,8 +6074,8 @@ sources = ["dolphin:src/dolphincontextmenu.cpp:276-323", "v2.0.0:desktop/ui/app.
 python_tests = ["v2.0.0:desktop/tests/ui_terminal.py::Background context includes current-folder Terminal"]
 bridge = ["openTerminal", "properties"]
 dolphin = "DolphinContextMenu::addViewportContextMenu"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's background menu lacks Sort By, View mode and Open with for the folder. Explorer's background menu has View, Sort by, Group by, Refresh, Paste, Undo, New and Properties."
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (background_menu): the folder background menu starts with View and Sort by, as Explorer's does, then New…, Paste, Undo, Redo, Refresh, Open in Terminal, the folder's applications and Open folder with… (OPEN-013), pin, cache, folder sizes, Previous versions and Properties. View and Sort by open the command bar's View and Sort menus in place, as New… does (context_menu.rs show_menu_in_place), so their choices and check marks are the same. Test: native/crates/ox-app/src/window/tests/context_menus.rs (the_folder_menu_sorts_and_changes_the_view_in_place)."
 
 [[feature]]
 id = "CMD-013"
@@ -6211,8 +6211,8 @@ sources = [
 python_tests = []
 bridge = ["operate", "transferConflicts", "clipboardGet"]
 dolphin = "pasteIntoFolder"
-native = "todo"
-native_note = "Porting notes: In OpenXplorer, Paste in a folder's menu pastes into the current folder. Explorer's Paste on a folder pastes into it."
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (edit_items): on one selected folder the classic menu's Paste row and the compact strip's Paste are 'Paste into folder' (win.paste-into with the folder's location), which pastes the clipboard into that folder with the usual conflict dialog (file_ops/transfer.rs paste), also from search results; a read-only target says so. Ctrl+V still pastes into the folder shown. Availability: file_ops/availability.rs (FileCommand::PasteInto). Test: native/crates/ox-app/src/window/tests/clipboard.rs (paste_into_folder_pastes_into_the_selected_folder)."
 
 [[feature]]
 id = "CMD-020"
@@ -6408,8 +6408,8 @@ sources = [
 python_tests = []
 bridge = ["properties", "list"]
 dolphin = "show_target"
-native = "todo"
-native_note = "Porting notes: This is close to Explorer's 'Open file location' for shortcuts."
+native = "done"
+native_note = "native/crates/ox-app/src/window/link_target.rs: 'Show target' in the menu of one selected symbolic link reads the link without following it, resolves a relative target against the link's folder, checks that the destination exists, then opens its folder in this tab with the destination selected and scrolled into view (result_location.rs open_item_location, shared with Open file location). A dangling link says 'The target of “<name>” does not exist: <target>'. Test: native/crates/ox-app/src/window/tests/opening.rs (show_target_selects_a_links_target_and_explains_a_missing_one)."
 
 [[feature]]
 id = "CMD-031"
@@ -6446,8 +6446,8 @@ python_tests = []
 bridge = []
 dolphin = "Settings › Configure Keyboard Shortcuts… (KShortcutsDialog) lists every action with its keys; rebinding is CMD-029"
 gnome = "GtkShortcutsWindow as win.show-help-overlay with <Primary>question, as Nautilus 46 offers under 'Keyboard Shortcuts'"
-native = "todo"
-native_note = "Porting notes: Shortcuts are discoverable today only through menu hints and tooltips (CMD-016)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/shortcuts_window.rs: Ctrl+? and More options > Keyboard shortcuts open a dialog (the app's Dialog) with a 'Search shortcuts' field and one list per group (Navigation, Tabs and windows, Selection, Files, View, Search, Text size). The keys are read from the live bindings: the application's accelerators as GTK holds them (gtk_application_list_action_descriptions/accels_for_action) and the key tables the window installs its shortcut controllers from (window_keys, file_ops/shortcuts, selection_keys, navigation_buttons, focus_regions, the context menu key), labelled by gtk_accelerator_get_label; only names and groups are written in the module. The accelerator works from any tab, Settings included, and nothing goes online. Test: shortcuts_window.rs (the_shortcuts_window_lists_every_live_binding_and_searches_them), which also fails when a binding has no name."
 
 [[feature]]
 id = "CMD-033"
@@ -6466,8 +6466,8 @@ python_tests = []
 bridge = []
 dolphin = "Help menu (KHelpMenu): Dolphin Handbook (F1), What's This? (Shift+F1), Report Bug…, Donate, About Dolphin"
 gnome = "app.help opening help: URIs in Yelp (Nautilus 46), or a bundled HTML manual opened with gtk_uri_launcher; AdwAboutDialog issue-url and website"
-native = "todo"
-native_note = "Porting notes: v2.0.0:desktop/MANUAL.md ships with the package, but nothing in the app opens it. UPD-015 and UPD-016 cover About and License only. Windows Explorer's F1 opens online help; this manual must stay offline."
+native = "done"
+native_note = "native/crates/ox-app/src/window/help.rs: F1 and More options > Help open the user manual, native/crates/ox-app/resources/manual.md, compiled into the program so every package installs it and it works offline, in the app's Dialog with a Topic list, at the topic of what the window shows (Settings, Search, Recycle Bin, Network locations, Drives and phones, else Getting started). F1 is an application accelerator, so it works from every tab including Settings. 'Report an issue' in Help and in About this build, and About's 'Website', open the project's issue tracker or https://openxplorer.app in the default browser only when pressed (SAFE-002). Test: help.rs (f1_opens_the_offline_manual_and_report_an_issue_opens_the_tracker); about.rs (about_names_the_native_stack_and_its_limits)."
 
 [[feature]]
 id = "CMD-034"
@@ -6500,8 +6500,8 @@ sources = ["v2.0.0:desktop/ui/app.js:1015-1030"]
 python_tests = []
 bridge = []
 gnome = "GtkShortcutController and gtk_application_set_accels_for_action match keyvals across keyboard layout groups"
-native = "todo"
-native_note = "Porting notes: Unverified in WebKitGTK. onKey compares e.key.toLowerCase() with Latin letters, so these shortcuts are expected to fail on a Cyrillic layout. If they work today, this is a current-app behaviour: add openxplorer to origin and make it must."
+native = "done"
+native_note = "Every letter shortcut (Ctrl+A, C, X, V, F, H, L, N, R, T, W, Z, Ctrl+Shift+N, Alt+D) is a GtkShortcutTrigger or an application accelerator; no key handler compares typed letters. GTK matches those triggers with gdk_key_event_matches, which also accepts the same physical key in another layout group, so they fire with a Cyrillic, Greek, Hebrew or Arabic layout active; type-ahead reads the input method's committed text, so it still uses the typed character. Test: native/crates/ox-app/src/window/tests/input.rs (letter_shortcuts_are_layout_independent_gtk_triggers)."
 
 [[feature]]
 id = "OPS-001"
@@ -6586,8 +6586,8 @@ python_tests = []
 bridge = ["templates", "createTemplate"]
 dolphin = "KNewFileMenu “Create New” (~/Templates and ~/.local/share/templates/*.desktop)"
 gnome = "XDG TEMPLATES directory (Nautilus “New Document” submenu, subfolders shown as submenus)"
-native = "todo"
-native_note = "Porting notes: No automated test for list_templates or create_from_template. KNewFileMenu at KF 5.115 lists .desktop template entries directly in Create New, including those in XDG_TEMPLATES_DIR; plain files in Templates and subfolder submenus are the Nautilus behaviour. OPS-048 defines the template safety rules that must stay."
+native = "done"
+native_note = "native/crates/ox-core/src/ops/templates.rs lists the user templates of the XDG Templates folder and of its subfolders (not hidden, not links, three levels deep, each folder in name order, 100 templates at most), a nested one by its path such as Office/Letter.odt; new_from_template.rs opens it one component at a time with openat(O_NOFOLLOW) from the Templates folder, so a folder swapped for a link is refused, and publishes without overwriting (OPS-048 unchanged). native/crates/ox-app/src/window/file_ops/template_menu.rs puts every template directly in the New menu (command bar and the folder menu's New…), named by its file name without the extension, with each subfolder as a submenu that opens in place (menu_popover MenuItem::submenu, with a chevron); choosing one opens the New from template dialog with it chosen. The list is read when the window opens and whenever a New menu opens. The built-in starters and From template… stay. Tests: native/crates/ox-core/tests/ops_create.rs (templates_in_subfolders_are_listed_by_path_and_copied_without_overwriting); template_menu.rs (templates_are_listed_directly_with_subfolders_as_submenus)."
 
 [[feature]]
 id = "OPS-004"
@@ -8605,7 +8605,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["clipboardText"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/copy_path.rs: Copy path (command bar, item menus, Ctrl+Shift+C, Ctrl+Alt+C) copies the display path of every selected item, one per line, and the folder's without a selection; it is no longer disabled for several items. Tests: copy_path.rs (several_selected_items_copy_one_path_per_line); native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_asks_for_a_folder_on_a_page_and_copies_every_selected_item)."
 
 [[feature]]
 id = "CLIP-015"

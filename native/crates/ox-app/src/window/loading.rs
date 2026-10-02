@@ -34,7 +34,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::{Entry, EntryError};
 use ox_core::integration::FOLDER_CONTENT_TYPE;
-use ox_core::location::{is_smb_location, parent_location};
+use ox_core::location::{is_smb_location, parent_location, RECENT_LOCATIONS_URI};
 
 use crate::app_context::add_to_desktop_history;
 use crate::folder_view::item::FileItem;
@@ -188,6 +188,10 @@ impl BrowserWindow {
     /// already watches it. Watching starts before the listing, so changes
     /// made during a first listing are seen too.
     fn keep_watching(&self, id: TabId, uri: &str) {
+        // Recent locations is no folder to watch; F5 lists it again.
+        if uri == RECENT_LOCATIONS_URI {
+            return;
+        }
         let watched = self
             .imp()
             .session

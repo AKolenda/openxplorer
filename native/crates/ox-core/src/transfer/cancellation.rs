@@ -6,14 +6,24 @@
 //! so cancelling it both stops the engine between steps and aborts a copy
 //! between blocks (OPS-022).
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+
 use gio::prelude::*;
 
 use super::error::TransferError;
 
-/// Cooperative cancellation shared with in-flight GIO calls.
+/// How often a paused operation looks whether it may go on.
+const PAUSE_POLL: Duration = Duration::from_millis(50);
+
+/// Cooperative cancellation shared with in-flight GIO calls, and the
+/// pause of the operation it belongs to (OPS-021).
 #[derive(Debug, Clone, Default)]
 pub struct Cancellation {
     cancellable: gio::Cancellable,
+    paused: Arc<AtomicBool>,
 }
 
 impl Cancellation {
@@ -42,6 +52,30 @@ impl Cancellation {
             Err(TransferError::Cancelled)
         } else {
             Ok(())
+        }
+    }
+
+    /// Pauses the operation: its worker waits at the next block or item
+    /// until [`Cancellation::resume`] or [`Cancellation::cancel`].
+    pub fn pause(&self) {
+        self.paused.store(true, Ordering::SeqCst);
+    }
+
+    /// Lets a paused operation go on.
+    pub fn resume(&self) {
+        self.paused.store(false, Ordering::SeqCst);
+    }
+
+    /// True while the operation is paused.
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst)
+    }
+
+    /// Blocks the calling worker thread while the operation is paused and
+    /// not cancelled. Never call it on the main thread.
+    pub fn wait_while_paused(&self) {
+        while self.is_paused() && !self.is_cancelled() {
+            thread::sleep(PAUSE_POLL);
         }
     }
 

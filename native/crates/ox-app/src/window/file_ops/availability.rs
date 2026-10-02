@@ -42,6 +42,8 @@ pub(crate) enum FileCommand {
     Copy,
     /// Paste (Ctrl+V).
     Paste,
+    /// Paste into the one selected folder (CMD-019).
+    PasteInto,
     /// Rename (F2).
     Rename,
     /// Delete: Move to Trash, or Delete permanently without a Trash.
@@ -64,11 +66,12 @@ pub(crate) enum FileCommand {
 
 impl FileCommand {
     /// Every command, for enabling them all at once.
-    pub(crate) const ALL: [FileCommand; 13] = [
+    pub(crate) const ALL: [FileCommand; 14] = [
         FileCommand::New,
         FileCommand::Cut,
         FileCommand::Copy,
         FileCommand::Paste,
+        FileCommand::PasteInto,
         FileCommand::Rename,
         FileCommand::Delete,
         FileCommand::DeletePermanently,
@@ -92,12 +95,14 @@ impl FileCommand {
                 WindowAction::NewJsonFile,
                 WindowAction::NewHtmlDocument,
                 WindowAction::NewFromTemplate,
+                WindowAction::NewFromUserTemplate,
                 WindowAction::NewLink,
                 WindowAction::ShowNewMenu,
             ],
             FileCommand::Cut => &[WindowAction::Cut],
             FileCommand::Copy => &[WindowAction::Copy],
             FileCommand::Paste => &[WindowAction::Paste],
+            FileCommand::PasteInto => &[WindowAction::PasteInto],
             FileCommand::Rename => &[WindowAction::Rename],
             FileCommand::Delete => &[WindowAction::Trash],
             FileCommand::DeletePermanently => &[WindowAction::DeletePermanently],
@@ -182,6 +187,12 @@ impl CommandFacts {
             FileCommand::Paste => {
                 self.has_file_clipboard && !folder.is_searching && !busy && folder.is_writable
             }
+            // The selected folder is the destination, so a search does not
+            // matter; whether it takes items is checked when pasting.
+            FileCommand::PasteInto => {
+                let is_one_item = selection.count == 1 && !selection.has_read_only;
+                self.has_file_clipboard && !busy && !folder.is_recycle_bin && is_one_item
+            }
             FileCommand::Undo => self.can_undo && !self.is_busy,
             FileCommand::Redo => self.can_redo && !self.is_busy,
             FileCommand::Restore => folder.is_recycle_bin && can_change,
@@ -202,7 +213,9 @@ impl CommandFacts {
             FileCommand::CancelOperation => "No file operation is running.",
             FileCommand::Undo if !self.can_undo => "Nothing to undo.",
             FileCommand::Redo if !self.can_redo => "Nothing to redo.",
-            FileCommand::Paste if !self.has_file_clipboard => "Nothing to paste here.",
+            FileCommand::Paste | FileCommand::PasteInto if !self.has_file_clipboard => {
+                "Nothing to paste here."
+            }
             FileCommand::Restore if !folder.is_recycle_bin => {
                 "Only items in the Recycle Bin can be restored."
             }
@@ -214,6 +227,7 @@ impl CommandFacts {
             }
             FileCommand::New => "This folder is read-only.",
             FileCommand::Paste if !selection.has_inoperable => "This folder is read-only.",
+            FileCommand::PasteInto if selection.count != 1 => "Select one folder to paste into.",
             _ if selection.count == 0 => "Select an item first.",
             _ if selection.has_inoperable => "Drives, shares and virtual items cannot be changed here.",
             FileCommand::Copy | FileCommand::Cut | FileCommand::Rename | FileCommand::Duplicate
@@ -331,6 +345,7 @@ mod tests {
                 FileCommand::Cut,
                 FileCommand::Copy,
                 FileCommand::Paste,
+                FileCommand::PasteInto,
                 FileCommand::Rename,
                 FileCommand::Delete,
                 FileCommand::DeletePermanently,

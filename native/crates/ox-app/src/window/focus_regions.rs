@@ -58,12 +58,28 @@ fn next_region(current: Option<Region>, reachable: &[Region], backward: bool) ->
     Some(reachable[next])
 }
 
+/// F6 moves to the next region, Shift+F6 to the previous one.
+const REGION_KEYS: [(&str, bool); 2] = [("F6", false), ("<Shift>F6", true)];
+
+/// F6 and Shift+F6 under the names the keyboard shortcuts window knows
+/// them by (CMD-032): `region-next` and `region-previous`.
+pub(super) fn region_key_bindings() -> impl Iterator<Item = (String, &'static str)> {
+    REGION_KEYS.into_iter().map(|(keys, backward)| {
+        let name = if backward {
+            "region-previous"
+        } else {
+            "region-next"
+        };
+        (name.to_owned(), keys)
+    })
+}
+
 impl BrowserWindow {
     /// Adds F6 and Shift+F6, before any focused widget sees them.
     pub(super) fn install_focus_regions(&self) {
         let shortcuts = gtk::ShortcutController::new();
         shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
-        for (keys, backward) in [("F6", false), ("<Shift>F6", true)] {
+        for (keys, backward) in REGION_KEYS {
             let action = gtk::CallbackAction::new(move |widget, _| {
                 let Some(window) = widget.downcast_ref::<BrowserWindow>() else {
                     return glib::Propagation::Proceed;

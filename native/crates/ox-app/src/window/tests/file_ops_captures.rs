@@ -109,6 +109,7 @@ fn the_transfer_panel_and_the_compact_menu_are_captured_light_and_dark() {
             label: "Copy: Notes 2.txt (1/3)".to_owned(),
             fraction: 0.4,
             scope: ProgressScope::Batch,
+            bytes: None,
         });
         capture(&test.window, &format!("native-transfer-{theme}.png"));
         test.window.end_operation();

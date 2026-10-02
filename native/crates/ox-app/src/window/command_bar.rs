@@ -29,8 +29,8 @@ use super::breakpoints::WindowWidth;
 use super::menu_popover::{name_menu_button, MenuEntry, MenuPopover};
 use super::window_action::WindowAction;
 
-pub(super) use menus::new_menu;
-use menus::{appearance_items, more_menu, sort_menu, view_menu};
+use menus::{appearance_items, more_menu};
+pub(super) use menus::{new_menu, sort_menu, view_menu};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -190,7 +190,7 @@ impl CommandBar {
     fn add_file_commands(&self) {
         let imp = self.imp();
         let group = &*imp.file_commands;
-        let new_button = text_menu_button("New", Icon::Add, "new-command", new_menu());
+        let new_button = text_menu_button("New", Icon::Add, "new-command", new_menu(Vec::new()));
         group.append(&new_button);
         imp.new_button
             .set(new_button)
@@ -269,6 +269,12 @@ impl CommandBar {
     }
 
     /// Enables or disables New ▾ (`$('new').disabled` in app.js).
+    /// The New button's menu.
+    pub(super) fn new_menu_popover(&self) -> Option<MenuPopover> {
+        let button = self.imp().new_button.get()?;
+        button.popover().and_downcast::<MenuPopover>()
+    }
+
     pub(super) fn set_new_enabled(&self, enabled: bool) {
         if let Some(button) = self.imp().new_button.get() {
             button.set_sensitive(enabled);

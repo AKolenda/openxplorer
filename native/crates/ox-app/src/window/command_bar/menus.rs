@@ -26,9 +26,10 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuEntry {
 }
 
 /// The New menu (`openNewMenu`), which the folder background's "New…"
-/// opens too, and Dolphin's link item (OPS-004).
-pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
-    vec![
+/// opens too, with the user's `templates` before "From template…"
+/// (OPS-003) and Dolphin's link item (OPS-004).
+pub(in crate::window) fn new_menu(templates: Vec<MenuEntry>) -> Vec<MenuEntry> {
+    let mut entries = vec![
         MenuItem::new(&gettext("Folder"), Icon::FolderAdd, WindowAction::NewFolder)
             .with_shortcut("Ctrl+Shift+N")
             .into(),
@@ -52,6 +53,12 @@ pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
             WindowAction::NewHtmlDocument,
         ),
         MenuEntry::Divider,
+    ];
+    if !templates.is_empty() {
+        entries.extend(templates);
+        entries.push(MenuEntry::Divider);
+    }
+    entries.extend([
         item(
             &gettext("From template…"),
             Icon::DocumentCopy,
@@ -63,7 +70,8 @@ pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
             Icon::Link,
             WindowAction::NewLink,
         ),
-    ]
+    ]);
+    entries
 }
 
 /// The Sort menu's item for `column`.
@@ -90,7 +98,7 @@ fn role_item(role: SortRole) -> MenuEntry {
 /// The Sort menu: the columns and Dolphin's further keys, then the
 /// direction, then grouping and folders first. The direction has an item
 /// each, where app.js had one item that flips it.
-pub(super) fn sort_menu() -> Vec<MenuEntry> {
+pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = SortColumn::IN_SORT_MENU.into_iter().map(column_item).collect();
     entries.push(MenuEntry::Divider);
     entries.extend(SortRole::ALL.into_iter().map(role_item));
@@ -124,7 +132,7 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 /// The View menu: the views (Details, List and Explorer's four icon
 /// sizes), the hidden-files, details-pane and navigation-pane toggles,
 /// Dolphin's display style dialog, then the text size.
-pub(super) fn view_menu() -> Vec<MenuEntry> {
+pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details);
     let compact = view_item(&gettext("List"), Icon::Table, FolderView::Compact);
     let mut entries = vec![details, compact];
@@ -253,6 +261,12 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
         MenuEntry::Divider,
         // app.js asked for a `code` glyph it did not have and drew a
         // document; the native app has the code glyph.
+        MenuItem::new("Keyboard shortcuts", Icon::Table, WindowAction::KeyboardShortcuts)
+            .with_shortcut("Ctrl+?")
+            .into(),
+        MenuItem::new("Help", Icon::DocumentText, WindowAction::Help)
+            .with_shortcut("F1")
+            .into(),
         item(&gettext("License & source"), Icon::Code, WindowAction::License),
         item(&gettext("About this build"), Icon::Info, WindowAction::About),
     ]);

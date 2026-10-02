@@ -18,6 +18,9 @@ use std::future::Future;
 
 use gtk::glib;
 use ox_core::entry::{self, Entry, EntryError};
+use ox_core::location::RECENT_LOCATIONS_URI;
+
+use super::recent_locations::list_recent_locations;
 
 /// A running listing. Dropping it cancels the listing.
 #[derive(Debug)]
@@ -45,7 +48,8 @@ impl Listing {
 }
 
 /// Lists `uri`, calling `on_batch` with rows as they arrive and `on_done`
-/// once at the end. Neither is called after the [`Listing`] is dropped.
+/// once at the end. Recent locations are listed from the desktop's
+/// recently used list (SIDE-026). Neither is called after the [`Listing`] is dropped.
 pub(crate) fn list_folder(
     uri: &str,
     on_batch: impl Fn(Vec<Entry>) + 'static,
@@ -53,7 +57,11 @@ pub(crate) fn list_folder(
 ) -> Listing {
     let uri = uri.to_owned();
     Listing::spawn(async move {
-        let result = entry::enumerate_folder(&uri, on_batch).await;
+        let result = if uri == RECENT_LOCATIONS_URI {
+            list_recent_locations(on_batch).await
+        } else {
+            entry::enumerate_folder(&uri, on_batch).await
+        };
         on_done(result);
     })
 }

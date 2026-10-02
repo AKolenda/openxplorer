@@ -457,9 +457,9 @@ fn copy_path_copies_the_selected_items_address_or_the_folders() {
     );
 }
 
-/// parity: CLIP-012
+/// parity: CLIP-012, CLIP-014
 #[gtk::test]
-fn copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most() {
+fn copy_path_asks_for_a_folder_on_a_page_and_copies_every_selected_item() {
     let fixture = Fixture::standard();
     let test = laid_out(Page::ThisPc.uri());
     test.activate("copy-path", None);
@@ -468,7 +468,9 @@ fn copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most() {
     test.window.navigate(&fixture.uri()).expect("the fixture folder");
     test.wait_for_listing("the fixture folder");
     test.window.folder_model().select_all();
-    assert!(!test.window.is_action_enabled("copy-path"), "one path at a time");
+    test.activate("copy-path", None);
+    let lines = clipboard_text(&test).unwrap_or_default().lines().count();
+    assert_eq!(lines, test.names().len(), "one path per selected item");
 }
 
 /// Explorer's Ctrl+Shift+C ("Copy as path") and Dolphin's Ctrl+Alt+C

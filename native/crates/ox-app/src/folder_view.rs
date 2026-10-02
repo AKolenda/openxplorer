@@ -26,6 +26,7 @@ pub(crate) mod icon_size;
 pub(crate) mod item;
 pub(crate) mod loader;
 pub(crate) mod model;
+pub(crate) mod recent_locations;
 pub(crate) mod reconcile;
 pub(crate) mod sort_roles;
 pub(crate) mod sorting;

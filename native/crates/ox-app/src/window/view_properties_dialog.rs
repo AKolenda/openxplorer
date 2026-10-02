@@ -14,8 +14,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use ox_core::settings::{may_remember, PreferencesUpdate, ViewProperties, ViewScope};
 
-use super::dialog::Dialog;
 use super::{BrowserWindow, ButtonStyle};
+use crate::dialog::Dialog;
 use crate::folder_view::sort_roles::{SortBy, SortRole};
 use crate::folder_view::sorting::SortColumn;
 

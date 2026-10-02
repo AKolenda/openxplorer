@@ -29,6 +29,7 @@
 //! | `name_dialog` | The dialog that asks for a name (`nameDialog`) |
 //! | `new_items` | New folder, and New file from a template |
 //! | `template_dialog` | The New file and New from template dialog |
+//! | `template_menu` | The user's templates in the New menu, subfolders as submenus |
 //! | `rename` | Rename: in place, or with the dialog |
 //! | `inline_rename` | Renaming in the item's row or tile |
 //! | `batch_rename` | Renaming several items to one numbered name |
@@ -70,6 +71,7 @@ mod rename;
 mod running;
 mod shortcuts;
 mod template_dialog;
+mod template_menu;
 mod transfer;
 mod trash_support;
 mod unfinished;
@@ -77,9 +79,11 @@ mod unstorable_dialog;
 mod worker_question;
 
 use ox_core::clipboard::ClipboardFiles;
+use ox_core::ops::TemplateList;
 use ox_core::transfer::Cancellation;
 
 pub(super) use availability::FileCommand;
+pub(super) use shortcuts::file_key_bindings;
 pub(super) use transfer::IncomingItems;
 pub(super) use trash_support::TrashSupport;
 
@@ -106,6 +110,8 @@ pub(crate) struct FileOperations {
     /// The item to rename in place next, once the rename Tab committed
     /// has finished (OPS-012).
     rename_next: Option<String>,
+    /// The templates the New menu lists, as last read (OPS-003).
+    templates: Option<TemplateList>,
 }
 
 impl FileOperations {

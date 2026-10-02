@@ -142,6 +142,7 @@ impl TransferPanel {
             label: label.to_owned(),
             fraction: 0.0,
             scope: ProgressScope::Batch,
+            bytes: None,
         });
         self.set_visible(true);
     }
@@ -245,6 +246,7 @@ mod tests {
             label: label.to_owned(),
             fraction,
             scope: ProgressScope::Batch,
+            bytes: None,
         }
     }
 

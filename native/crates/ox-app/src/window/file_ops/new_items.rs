@@ -13,7 +13,7 @@
 //! Every file of the New menu opens the template dialog
 //! ([`super::template_dialog`]) with its template chosen.
 
-use ox_core::ops::{create_folder_path, BuiltinTemplate, CreatedItem, OperationContext};
+use ox_core::ops::{create_folder_path, BuiltinTemplate, CreatedItem, OperationContext, TemplateId};
 
 use super::name_dialog::{ask_for_name, NameRequest, NameSelection};
 use super::FileCommand;
@@ -23,7 +23,7 @@ use crate::window::BrowserWindow;
 const NEW_FOLDER_NAME: &str = "New folder";
 
 /// The template a New menu item starts its dialog with.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum NewFileKind {
     /// "File…": an empty file with any name (`newTemplateDialog('empty')`).
     Empty,
@@ -32,6 +32,8 @@ pub(crate) enum NewFileKind {
     /// "From template…": the first template, to choose another
     /// (`newTemplateDialog(null)`).
     AnyTemplate,
+    /// A user template the New menu lists (OPS-003).
+    Template(TemplateId),
 }
 
 impl BrowserWindow {

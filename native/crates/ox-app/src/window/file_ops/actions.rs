@@ -13,7 +13,7 @@ use std::future::Future;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::clipboard::ClipboardMode;
-use ox_core::ops::{BuiltinTemplate, JournalDirection};
+use ox_core::ops::{BuiltinTemplate, JournalDirection, TemplateId};
 
 use super::new_items::NewFileKind;
 use crate::window::actions::{plain_action, text_action};
@@ -49,8 +49,11 @@ where
 
 /// A New menu item that opens the template dialog for `kind`.
 fn new_file_action(window_action: WindowAction, kind: NewFileKind) -> gio::ActionEntry<BrowserWindow> {
-    task_action(window_action, move |window| async move {
-        window.create_file(kind).await;
+    task_action(window_action, move |window| {
+        let kind = kind.clone();
+        async move {
+            window.create_file(kind).await;
+        }
     })
 }
 
@@ -77,8 +80,17 @@ impl BrowserWindow {
         [journal, clipboard]
     }
 
-    /// New ▸ Folder, the New menu's files and New ▸ Link.
+    /// New ▸ Folder, the New menu's files and templates, and New ▸ Link.
+    /// The templates are read now and whenever the New menu opens.
     fn install_new_actions(&self) {
+        self.refresh_template_menu();
+        if let Some(menu) = self.command_bar().new_menu_popover() {
+            menu.connect_show(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_| window.refresh_template_menu()
+            ));
+        }
         let starter = NewFileKind::Starter;
         self.add_action_entries([
             task_action(WindowAction::NewFolder, |window| async move {
@@ -94,13 +106,24 @@ impl BrowserWindow {
             new_file_action(WindowAction::NewJsonFile, starter(BuiltinTemplate::Json)),
             new_file_action(WindowAction::NewHtmlDocument, starter(BuiltinTemplate::Html)),
             new_file_action(WindowAction::NewFromTemplate, NewFileKind::AnyTemplate),
+            text_action(WindowAction::NewFromUserTemplate, |window, id| {
+                let Ok(id) = id.parse::<TemplateId>() else {
+                    return;
+                };
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    window,
+                    async move { window.create_file(NewFileKind::Template(id)).await }
+                ));
+            }),
             task_action(WindowAction::NewLink, |window| async move {
                 window.create_link().await;
             }),
         ]);
     }
 
-    /// Cut, Copy, Paste, Rename, Delete, Shift+Delete and Duplicate.
+    /// Cut, Copy, Paste, Paste into folder, Rename, Delete, Shift+Delete
+    /// and Duplicate.
     fn install_edit_actions(&self) {
         self.add_action_entries([
             plain_action(WindowAction::Cut, |window| {
@@ -110,7 +133,15 @@ impl BrowserWindow {
                 window.copy_selection(ClipboardMode::Copy);
             }),
             task_action(WindowAction::Paste, |window| async move {
-                window.paste().await;
+                window.paste(None).await;
+            }),
+            text_action(WindowAction::PasteInto, |window, folder| {
+                let folder = folder.to_owned();
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    window,
+                    async move { window.paste(Some(folder)).await }
+                ));
             }),
             task_action(WindowAction::Rename, |window| async move {
                 window.rename_selection().await;

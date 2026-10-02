@@ -37,10 +37,9 @@ impl BrowserWindow {
             | WindowAction::PinSelected
             | WindowAction::Properties
             | WindowAction::PreviousVersions => Some("Select exactly one item."),
-            WindowAction::CopyPath
-            | WindowAction::OpenWith
-            | WindowAction::OpenInTerminal
-            | WindowAction::OpenInEditor => Some("Select one item at a time."),
+            WindowAction::OpenWith | WindowAction::OpenInTerminal | WindowAction::OpenInEditor => {
+                Some("Select one item at a time.")
+            }
             WindowAction::OpenFileLocation => Some("Only a search result has a file location to open."),
             _ => None,
         }

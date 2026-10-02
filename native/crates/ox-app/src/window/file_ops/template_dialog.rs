@@ -37,13 +37,13 @@ const TEMPLATE_NOTE: &str = "An empty .docx, .xlsx, .pdf, or .odt file is not a 
 const USER_TEMPLATE_SUFFIX: &str = " · Your template";
 
 /// The title and the line under it, for `kind`.
-fn dialog_text(kind: NewFileKind) -> (&'static str, &'static str) {
+fn dialog_text(kind: &NewFileKind) -> (&'static str, &'static str) {
     match kind {
         NewFileKind::Empty => (
             "New file",
             "Create an empty file with any filename and extension.",
         ),
-        NewFileKind::Starter(_) | NewFileKind::AnyTemplate => (
+        NewFileKind::Starter(_) | NewFileKind::AnyTemplate | NewFileKind::Template(_) => (
             "New from template",
             "Create a new copy without changing the template.",
         ),
@@ -51,10 +51,11 @@ fn dialog_text(kind: NewFileKind) -> (&'static str, &'static str) {
 }
 
 /// The template `kind` starts with: its own, or the first of the list.
-fn initial_position(kind: NewFileKind, list: &TemplateList) -> usize {
+fn initial_position(kind: &NewFileKind, list: &TemplateList) -> usize {
     let wanted = match kind {
         NewFileKind::Empty => Some(TemplateId::Builtin(BuiltinTemplate::Empty)),
-        NewFileKind::Starter(template) => Some(TemplateId::Builtin(template)),
+        NewFileKind::Starter(template) => Some(TemplateId::Builtin(*template)),
+        NewFileKind::Template(id) => Some(id.clone()),
         NewFileKind::AnyTemplate => None,
     };
     wanted
@@ -73,7 +74,7 @@ fn list_label(template: &Template) -> String {
 
 /// The user's Templates folder, read from `user-dirs.dirs` as the Python
 /// bridge reads it for every request.
-async fn templates_folder() -> Option<PathBuf> {
+pub(super) async fn templates_folder() -> Option<PathBuf> {
     let reading = gio::spawn_blocking(|| {
         let paths = FolderLocations::from_environment().read_paths();
         paths.path(KnownFolder::Templates).to_path_buf()
@@ -108,7 +109,7 @@ impl BrowserWindow {
                 return;
             }
         };
-        let created = self.ask_for_template_file(kind, &list, &folder_uri).await;
+        let created = self.ask_for_template_file(&kind, &list, &folder_uri).await;
         if let Some(created) = created {
             self.finish_creation(created);
         }
@@ -117,7 +118,7 @@ impl BrowserWindow {
     /// Shows the dialog until a file is created or the user cancels.
     async fn ask_for_template_file(
         &self,
-        kind: NewFileKind,
+        kind: &NewFileKind,
         list: &TemplateList,
         folder_uri: &str,
     ) -> Option<CreatedItem> {
@@ -232,13 +233,13 @@ mod tests {
         let list = starters();
         let markdown = NewFileKind::Starter(BuiltinTemplate::Markdown);
 
-        assert_eq!(initial_position(NewFileKind::Empty, &list), 5);
-        assert_eq!(initial_position(markdown, &list), 1);
-        assert_eq!(initial_position(NewFileKind::AnyTemplate, &list), 0);
-        assert_eq!(dialog_text(NewFileKind::Empty).0, "New file");
-        assert_eq!(dialog_text(markdown).0, "New from template");
+        assert_eq!(initial_position(&NewFileKind::Empty, &list), 5);
+        assert_eq!(initial_position(&markdown, &list), 1);
+        assert_eq!(initial_position(&NewFileKind::AnyTemplate, &list), 0);
+        assert_eq!(dialog_text(&NewFileKind::Empty).0, "New file");
+        assert_eq!(dialog_text(&markdown).0, "New from template");
         assert_eq!(
-            dialog_text(NewFileKind::AnyTemplate).1,
+            dialog_text(&NewFileKind::AnyTemplate).1,
             "Create a new copy without changing the template."
         );
     }
