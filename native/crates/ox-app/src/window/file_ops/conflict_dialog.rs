@@ -27,7 +27,7 @@ use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
 /// The dialog's title.
-const TITLE: &str = "Items already exist";
+const TITLE: &str = crate::i18n::message_id("Items already exist");
 
 /// One conflicting item and the user's answer for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,15 +43,12 @@ pub(super) struct ConflictAnswer {
 /// The dialog's message for `count` conflicts in `destination`, word for
 /// word as app.js writes it.
 fn conflict_message(count: usize, destination: &str) -> String {
-    format!(
-        "{count} matching name(s) in {destination}\n\nReplace existing files or skip conflicts. Same-name \
-         folders are merged; destination-only files stay in place."
-    )
+    ox_core::i18n::format_message("{count} matching name(s) in {destination}\n\nReplace existing files or skip conflicts. Same-name folders are merged; destination-only files stay in place.", &[("count", &(count).to_string()), ("destination", &(destination).to_string())])
 }
 
 /// The label of "Apply to all" for `count` conflicts.
 fn apply_to_all_label(count: usize) -> String {
-    format!("Apply to all {count} items")
+    ox_core::i18n::format_message("Apply to all {count} items", &[("count", &(count).to_string())])
 }
 
 /// The name an item's URI ends in, as the dialog shows it.
@@ -222,7 +219,11 @@ impl BrowserWindow {
     ) -> Option<(Choice, bool)> {
         let first_uri = &remaining[0];
         let suggestion = suggested_name(first_uri, destination_folder).await;
-        let dialog = Dialog::new(self, TITLE, &conflict_message(remaining.len(), destination));
+        let dialog = Dialog::new(
+            self,
+            ox_core::i18n::gettext_static(TITLE),
+            &conflict_message(remaining.len(), destination),
+        );
         if let Some(comparison) = first {
             dialog.add_note(&format!(
                 "“{}”\n{}",
@@ -234,8 +235,9 @@ impl BrowserWindow {
         let apply_to_all = (remaining.len() > 1).then(|| {
             let check = dialog.add_check_button(&apply_to_all_label(remaining.len()), true);
             let first = item_name(first_uri);
-            dialog.add_hint(&format!(
-                "Otherwise the choice is for “{first}” only. A new name is always for “{first}” only."
+            dialog.add_hint(&ox_core::i18n::format_message(
+                "Otherwise the choice is for “{first}” only. A new name is always for “{first}” only.",
+                &[("first", &(first).to_string())],
             ));
             check
         });

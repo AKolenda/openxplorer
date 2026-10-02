@@ -28,7 +28,7 @@ use crate::window::BrowserWindow;
 
 /// The Rename dialog's line when the user keeps a name that would hide
 /// the item.
-const NOT_RENAMED: &str = "The name was not changed.";
+const NOT_RENAMED: &str = crate::i18n::message_id("The name was not changed.");
 
 /// How much of `entry`'s name a rename selects: a file's name before its
 /// extension, a folder's whole name.
@@ -151,9 +151,11 @@ impl BrowserWindow {
             };
             let window = self.downgrade();
             async move {
-                let window = window.upgrade().ok_or_else(|| NOT_RENAMED.to_owned())?;
+                let window = window
+                    .upgrade()
+                    .ok_or_else(|| ox_core::i18n::gettext_static(NOT_RENAMED).to_owned())?;
                 if !window.confirm_hiding_rename(&old_name, &name).await {
-                    return Err(NOT_RENAMED.to_owned());
+                    return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
                 }
                 rename_item(&uri, &name, &context)
                     .await
@@ -196,7 +198,10 @@ impl BrowserWindow {
     fn remember_rename(&self, renamed: &RenamedItem) {
         if let Some(record) = renamed.undo_record() {
             self.context().record_operation(record);
-            self.show_message_with_undo(&format!("Renamed to “{}”.", renamed.name));
+            self.show_message_with_undo(&ox_core::i18n::format_message(
+                "Renamed to “{name}”.",
+                &[("name", &(renamed.name).to_string())],
+            ));
         }
     }
 }

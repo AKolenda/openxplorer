@@ -88,7 +88,8 @@ impl BrowserWindow {
         } else {
             view.remove_css_class(VIEW_DROP_CLASS);
         }
-        let hint = program.map(|name| format!("Open with {name}"));
+        let hint = program
+            .map(|name| ox_core::i18n::format_message("Open with {name}", &[("name", &(name).to_string())]));
         pane.show_drag_hint(hint.as_deref());
     }
 

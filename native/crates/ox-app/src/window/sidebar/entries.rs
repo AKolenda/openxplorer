@@ -362,11 +362,11 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
         1 => (Art::TintedGlyph(Icon::Delete, Tint::Home), "1 item".to_owned()),
         count => (
             Art::TintedGlyph(Icon::Delete, Tint::Home),
-            format!("{count} items"),
+            ox_core::i18n::format_message("{count} items", &[("count", &(count).to_string())]),
         ),
     };
     let bin = SidebarEntry {
-        tooltip: format!("Recycle Bin · {state}"),
+        tooltip: ox_core::i18n::format_message("Recycle Bin · {state}", &[("state", &(state).to_string())]),
         menu: Some(PlaceMenu::RecycleBin {
             has_items: trash_items > 0,
         }),

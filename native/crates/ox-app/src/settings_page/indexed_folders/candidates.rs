@@ -209,7 +209,10 @@ fn location_text(uri: &str, is_network: bool) -> String {
     let parts = split_location(uri).ok();
     let share = parts.filter(|parts| parts.kind() == LocationKind::Smb);
     match share {
-        Some(parts) => format!("SMB · {}", parts.authority),
+        Some(parts) => ox_core::i18n::format_message(
+            "SMB · {authority}",
+            &[("authority", &(parts.authority).to_string())],
+        ),
         None if is_network => "Network drive".to_owned(),
         None => "Local disk".to_owned(),
     }

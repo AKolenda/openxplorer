@@ -17,19 +17,14 @@ use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
 /// The dialog's title.
-const TITLE: &str = "Move by copying?";
+const TITLE: &str = crate::i18n::message_id("Move by copying?");
 
 /// The label of the button that agrees.
-const COPY_AND_REMOVE: &str = "Copy, then remove originals";
+const COPY_AND_REMOVE: &str = crate::i18n::message_id("Copy, then remove originals");
 
 /// The dialog's message for `item`.
 fn question_text(item: &MoveByCopyingItem) -> String {
-    format!(
-        "“{}” cannot be moved directly to “{}”, which is on another drive, share or device. \
-         The items can be copied there and the originals removed once their copies are complete. \
-         An original that changes during the move is kept.",
-        item.name, item.destination
-    )
+    ox_core::i18n::format_message("“{name}” cannot be moved directly to “{destination}”, which is on another drive, share or device. The items can be copied there and the originals removed once their copies are complete. An original that changes during the move is kept.", &[("name", &(item.name).to_string()), ("destination", &(item.destination).to_string())])
 }
 
 impl BrowserWindow {
@@ -46,9 +41,12 @@ impl BrowserWindow {
 
     /// Asks about `item`; only the agreeing button agrees.
     async fn ask_about_move_by_copying(&self, item: &MoveByCopyingItem) -> bool {
-        let dialog = Dialog::new(self, TITLE, &question_text(item));
+        let dialog = Dialog::new(self, ox_core::i18n::gettext_static(TITLE), &question_text(item));
         dialog.add_cancel_button();
-        let copy = dialog.add_button(COPY_AND_REMOVE, ButtonStyle::Accent);
+        let copy = dialog.add_button(
+            ox_core::i18n::gettext_static(COPY_AND_REMOVE),
+            ButtonStyle::Accent,
+        );
         dialog.open();
         let pressed = dialog.next_response().await;
         dialog.finish();

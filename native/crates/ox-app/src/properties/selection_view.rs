@@ -26,8 +26,10 @@ use crate::dialog::{note, quiet_text, PropertyGrid};
 use crate::icons::{Art, ArtImage};
 
 /// The Permissions tab when some item cannot be changed here.
-const NOT_EDITABLE: &str = "Permissions can be changed together only for items you own, outside previous \
-                            versions and shares.";
+const NOT_EDITABLE: &str = crate::i18n::message_id(
+    "Permissions can be changed together only for items you own, outside previous \
+                            versions and shares.",
+);
 
 /// The General and Permissions tabs of a multiple selection.
 #[derive(Debug, Clone)]
@@ -61,7 +63,7 @@ impl SelectionProperties {
 
     /// The dialog's title: `<count> items Properties`.
     pub(crate) fn dialog_title(count: usize) -> String {
-        format!("{count} items Properties")
+        ox_core::i18n::format_message("{count} items Properties", &[("count", &(count).to_string())])
     }
 
     /// The widget, for the dialog's body.
@@ -139,7 +141,7 @@ fn common_type(entries: &[Entry]) -> String {
         .map(|entry| entry.type_label.as_str())
         .unwrap_or_default();
     if entries.iter().all(|entry| entry.type_label == first) {
-        format!("All of type {first}")
+        ox_core::i18n::format_message("All of type {first}", &[("first", &(first).to_string())])
     } else {
         "Multiple types".to_owned()
     }
@@ -151,7 +153,13 @@ fn common_location(entries: &[Entry], context: &PropertiesContext) -> String {
     let first = entries.first().and_then(|entry| parent_location(&entry.uri));
     let shared = entries.iter().all(|entry| parent_location(&entry.uri) == first);
     match first.filter(|_| shared) {
-        Some(folder) => format!("All in {}", context.locations.display_location(&folder)),
+        Some(folder) => ox_core::i18n::format_message(
+            "All in {display_location}",
+            &[(
+                "display_location",
+                &(context.locations.display_location(&folder)).to_string(),
+            )],
+        ),
         None => "Multiple locations".to_owned(),
     }
 }
@@ -221,7 +229,7 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
             panel.remove(&child);
         }
         let Some(first) = items.first() else {
-            panel.append(&note(NOT_EDITABLE));
+            panel.append(&note(ox_core::i18n::gettext_static(NOT_EDITABLE)));
             return;
         };
         let grid = PropertyGrid::new();
@@ -243,7 +251,7 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
         );
         panel.append(grid.widget());
         if !items.iter().all(|item| can_edit_permissions(item, &context)) {
-            panel.append(&note(NOT_EDITABLE));
+            panel.append(&note(ox_core::i18n::gettext_static(NOT_EDITABLE)));
             return;
         }
         let shared = |account: fn(&ItemProperties) -> Option<Account>| {

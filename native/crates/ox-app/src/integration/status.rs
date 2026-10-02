@@ -56,7 +56,10 @@ impl DefaultsReport {
         } else {
             self.handler_label(MimeType::Zip)
         };
-        format!("ZIP opening uses {handler}. Opening a download is not Show in folder.")
+        ox_core::i18n::format_message(
+            "ZIP opening uses {handler}. Opening a download is not Show in folder.",
+            &[("handler", &(handler).to_string())],
+        )
     }
 }
 
@@ -89,9 +92,9 @@ impl ShowInFolderStatus {
         } else {
             &self.owner_label
         };
-        format!(
-            "Show in folder: enabled, waiting for {owner}. Close other file managers or log out and \
-             back in."
+        ox_core::i18n::format_message(
+            "Show in folder: enabled, waiting for {owner}. Close other file managers or log out and back in.",
+            &[("owner", &(owner).to_string())],
         )
     }
 }

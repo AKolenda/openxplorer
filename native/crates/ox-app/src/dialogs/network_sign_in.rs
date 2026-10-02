@@ -46,14 +46,16 @@ const REVEAL_GLYPH: i32 = 17;
 const NOTE_GLYPH: i32 = 13;
 
 /// What the description says on a first sign-in.
-const FIRST_SIGN_IN: &str = "Enter the credentials for this computer or network storage.";
+const FIRST_SIGN_IN: &str =
+    crate::i18n::message_id("Enter the credentials for this computer or network storage.");
 /// What it says after the server refused the previous account.
-const RETRY_SIGN_IN: &str = "The previous sign-in was not accepted. Check your username and password.";
+const RETRY_SIGN_IN: &str =
+    crate::i18n::message_id("The previous sign-in was not accepted. Check your username and password.");
 /// The note while "Remember my credentials" is checked.
-const SAVED_PERMANENTLY: &str = "Saved in your system keyring for future sign-ins.";
+const SAVED_PERMANENTLY: &str = crate::i18n::message_id("Saved in your system keyring for future sign-ins.");
 /// The note while it is unchecked, or cannot be checked.
 const SAVED_FOR_SESSION: &str =
-    "Reused for this server during your Linux login session. Not saved permanently.";
+    crate::i18n::message_id("Reused for this server during your Linux login session. Not saved permanently.");
 /// Connect's label while the answer is checked.
 const CONNECTING: &str = "Connecting…";
 
@@ -190,13 +192,16 @@ impl SignInDialog {
         let imp = self.imp();
         self.set_title(Some("Enter network credentials"));
         imp.pages.set_visible_child_name("password");
-        imp.host_label.set_text(&format!("Connect to {host}"));
+        imp.host_label.set_text(&ox_core::i18n::format_message(
+            "Connect to {host}",
+            &[("host", &(host).to_string())],
+        ));
         imp.target_label.set_text(host);
         let description = if fields.is_retry {
             imp.description_label.add_css_class("sign-in-retry");
-            RETRY_SIGN_IN
+            ox_core::i18n::gettext_static(RETRY_SIGN_IN)
         } else {
-            FIRST_SIGN_IN
+            ox_core::i18n::gettext_static(FIRST_SIGN_IN)
         };
         imp.description_label.set_text(description);
         imp.username_entry.set_text(&fields.username);
@@ -230,7 +235,7 @@ impl SignInDialog {
             self.append_choice(&choice);
         }
         let cancel = gtk::Button::builder()
-            .label(&ox_core::i18n::gettext("Cancel"))
+            .label(ox_core::i18n::gettext("Cancel"))
             .css_classes(["bordered"])
             .build();
         cancel.connect_clicked(glib::clone!(
@@ -258,9 +263,9 @@ impl SignInDialog {
     fn describe_saving(&self) {
         let imp = self.imp();
         let note = if imp.remember_check.is_active() {
-            SAVED_PERMANENTLY
+            ox_core::i18n::gettext_static(SAVED_PERMANENTLY)
         } else {
-            SAVED_FOR_SESSION
+            ox_core::i18n::gettext_static(SAVED_FOR_SESSION)
         };
         imp.note_label.set_text(note);
     }

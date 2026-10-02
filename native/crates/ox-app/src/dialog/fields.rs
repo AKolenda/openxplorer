@@ -11,7 +11,7 @@ use std::cell::Cell;
 use gtk::prelude::*;
 
 /// Shown for a value the backend did not report (`propertyRow`).
-pub(crate) const NOT_PROVIDED: &str = "Not provided";
+pub(crate) const NOT_PROVIDED: &str = crate::i18n::message_id("Not provided");
 
 /// Adds a text field labelled `label` holding `text` to `body`, and
 /// returns the field. The label names the field for screen readers too.
@@ -125,7 +125,7 @@ impl PropertyGrid {
 /// a missing value.
 fn value_or_not_provided(value: &str) -> &str {
     if value.is_empty() {
-        NOT_PROVIDED
+        ox_core::i18n::gettext_static(NOT_PROVIDED)
     } else {
         value
     }

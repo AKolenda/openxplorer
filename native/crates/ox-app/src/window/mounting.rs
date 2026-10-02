@@ -26,8 +26,9 @@ use crate::window::{ButtonStyle, Dialog};
 use super::BrowserWindow;
 
 /// The note of "Disconnect this mount?", under the location.
-const DISCONNECT_NOTE: &str =
-    "Close files using this mount first. This disconnects the session mount for other applications too.";
+const DISCONNECT_NOTE: &str = crate::i18n::message_id(
+    "Close files using this mount first. This disconnects the session mount for other applications too.",
+);
 
 /// True when `uri` is the mount root `root` or a location inside it, as
 /// GIO compares files.

@@ -37,7 +37,7 @@ use crate::locations::Page;
 use super::BrowserWindow;
 
 /// The heading of the message when signing out failed.
-const SIGN_OUT_FAILED: &str = "Sign-out did not fully finish";
+const SIGN_OUT_FAILED: &str = crate::i18n::message_id("Sign-out did not fully finish");
 
 /// The lower-case host of an SMB location, as Sign out compares servers
 /// (`new URL(uri).hostname`); `None` for any other location.
@@ -165,7 +165,7 @@ impl BrowserWindow {
             Ok(report) => report,
             Err(error) => {
                 self.render_places();
-                self.show_failure(SIGN_OUT_FAILED, &error.to_string());
+                self.show_failure(ox_core::i18n::gettext_static(SIGN_OUT_FAILED), &error.to_string());
                 return;
             }
         };

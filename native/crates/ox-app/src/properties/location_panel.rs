@@ -38,15 +38,19 @@ use crate::window::ButtonStyle;
 
 /// The warning under the status line (`.location-warning`). The Python
 /// app never moved files; the native app offers to after a change.
-const FILES_STAY: &str = "Apply changes only the setting: existing files are NOT moved unless you choose to \
+const FILES_STAY: &str = crate::i18n::message_id(
+    "Apply changes only the setting: existing files are NOT moved unless you choose to \
                           move them afterwards. Your browser may have its own download setting—set it to the \
-                          same Linux path. A network folder is unavailable while its server is offline.";
+                          same Linux path. A network folder is unavailable while its server is offline.",
+);
 /// The consent box.
-const CONSENT: &str = "Change the system folder location; leave existing files in place.";
+const CONSENT: &str =
+    crate::i18n::message_id("Change the system folder location; leave existing files in place.");
 /// Brave's follow-up box, for Downloads only.
-const SYNC_BRAVE: &str = "Also update Brave’s download directory (choose profiles after Apply).";
+const SYNC_BRAVE: &str =
+    crate::i18n::message_id("Also update Brave’s download directory (choose profiles after Apply).");
 /// The first line of the mounted network drive picker.
-const CHOOSE_MOUNT: &str = "Choose a mounted network drive…";
+const CHOOSE_MOUNT: &str = crate::i18n::message_id("Choose a mounted network drive…");
 
 /// What the status line says and how it looks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,10 +176,7 @@ impl LocationPanel {
     fn build(&self) {
         let imp = self.imp();
         let label = self.folder().label();
-        let intro = format!(
-            "Choose where {label} is stored. Applications that honor Linux’s standard-folder settings will \
-             use this location."
-        );
+        let intro = ox_core::i18n::format_message("Choose where {label} is stored. Applications that honor Linux’s standard-folder settings will use this location.", &[("label", &(label).to_string())]);
         self.append(&quiet_text(&intro));
         let field = labelled_entry(self.upcast_ref(), &ox_core::i18n::gettext("Folder location"), "");
         field.connect_changed(glib::clone!(
@@ -227,10 +228,10 @@ impl LocationPanel {
     /// Brave's follow-up for Downloads, the consent box and Apply location.
     fn build_consent(&self) {
         let imp = self.imp();
-        let sync_brave = check_row(SYNC_BRAVE, false);
+        let sync_brave = check_row(ox_core::i18n::gettext_static(SYNC_BRAVE), false);
         sync_brave.set_visible(self.folder() == KnownFolder::Downloads);
         self.append(&sync_brave);
-        let consent = check_row(CONSENT, false);
+        let consent = check_row(ox_core::i18n::gettext_static(CONSENT), false);
         consent.connect_toggled(glib::clone!(
             #[weak(rename_to = panel)]
             self,
@@ -302,7 +303,7 @@ impl LocationPanel {
         if smb_mounts.is_empty() {
             return;
         }
-        let mut lines = vec![CHOOSE_MOUNT.to_owned()];
+        let mut lines = vec![ox_core::i18n::gettext_static(CHOOSE_MOUNT).to_owned()];
         lines.extend(
             smb_mounts
                 .iter()
@@ -311,7 +312,9 @@ impl LocationPanel {
         let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
         let picker = gtk::DropDown::from_strings(&line_refs);
         picker.add_css_class("mount-picker");
-        picker.update_property(&[gtk::accessible::Property::Label("Mounted network drives")]);
+        picker.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Mounted network drives",
+        ))]);
         let paths: Vec<String> = smb_mounts.iter().map(|mount| mount.path.clone()).collect();
         picker.connect_selected_notify(glib::clone!(
             #[weak(rename_to = panel)]
@@ -371,7 +374,10 @@ impl LocationPanel {
             return;
         }
         self.forget_check();
-        self.set_status("Check the changed destination before applying.", Tone::Plain);
+        self.set_status(
+            &ox_core::i18n::gettext("Check the changed destination before applying."),
+            Tone::Plain,
+        );
     }
 
     fn forget_check(&self) {
@@ -450,7 +456,7 @@ fn warning() -> gtk::Box {
     let glyph = icons::image(Icon::Info, 18);
     glyph.set_valign(gtk::Align::Start);
     warning.append(&glyph);
-    let text = quiet_text(FILES_STAY);
+    let text = quiet_text(ox_core::i18n::gettext_static(FILES_STAY));
     text.set_hexpand(true);
     // A vertical box reports no baseline, so the row does not align the
     // text's baseline with the glyph's, which GTK 4.14 does only when it

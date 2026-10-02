@@ -12,7 +12,7 @@ use super::section::{PageKind, SettingsSection};
 use crate::icons::Icon;
 
 /// The title of the Zorin + Brave guide, as the Python app named it.
-pub(super) const GUIDE_TITLE: &str = "Zorin + Brave setup and troubleshooting";
+pub(super) const GUIDE_TITLE: &str = crate::i18n::message_id("Zorin + Brave setup and troubleshooting");
 
 /// The steps of the Python app's "Zorin + Brave setup and
 /// troubleshooting", numbered again (the Python list had two fourth
@@ -40,7 +40,7 @@ const GUIDE: [&str; 7] = [
 /// The Zorin + Brave setup and troubleshooting page.
 pub(super) fn build() -> SettingsSection {
     let guide = SettingsSection::new(
-        GUIDE_TITLE,
+        ox_core::i18n::gettext_static(GUIDE_TITLE),
         "Make OpenXplorer Zorin's file explorer and Brave's Show in folder, and undo it.",
         PageKind::Subpage,
     );

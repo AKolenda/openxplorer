@@ -72,8 +72,9 @@ impl BrowserWindow {
         if self.imp().session.borrow().is_active(id) {
             self.navigate_or_report(folder);
             let path = self.imp().locations.borrow().display_location(removed);
-            self.show_message(&format!(
-                "Current location changed, {path} is no longer accessible."
+            self.show_message(&ox_core::i18n::format_message(
+                "Current location changed, {path} is no longer accessible.",
+                &[("path", &(path).to_string())],
             ));
             return;
         }

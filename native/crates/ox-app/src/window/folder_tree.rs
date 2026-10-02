@@ -122,7 +122,9 @@ impl FolderTree {
             .model(&selection)
             .factory(&self.row_factory())
             .build();
-        view.update_property(&[gtk::accessible::Property::Label("Folder tree")]);
+        view.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Folder tree",
+        ))]);
         view.connect_activate(glib::clone!(
             #[weak(rename_to = tree)]
             self,

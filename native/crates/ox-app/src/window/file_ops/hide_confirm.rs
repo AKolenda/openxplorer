@@ -15,10 +15,11 @@ use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
 /// The question's title.
-const TITLE: &str = "Rename and hide?";
+const TITLE: &str = crate::i18n::message_id("Rename and hide?");
 
 /// The question, in Dolphin's words.
-const MESSAGE: &str = "Adding a dot to the beginning of this file's name will hide it from view.";
+const MESSAGE: &str =
+    crate::i18n::message_id("Adding a dot to the beginning of this file's name will hide it from view.");
 
 /// True when renaming `old_name` to `new_name` hides a visible item while
 /// hidden files are not shown (`hidden_shown` false).
@@ -34,7 +35,11 @@ impl BrowserWindow {
         if !asks || !would_hide(old_name, new_name, self.hidden_files_shown()) {
             return true;
         }
-        let dialog = Dialog::new(self, TITLE, MESSAGE);
+        let dialog = Dialog::new(
+            self,
+            ox_core::i18n::gettext_static(TITLE),
+            ox_core::i18n::gettext_static(MESSAGE),
+        );
         let dont_ask = dialog.add_check_button("Don't ask again", false);
         dialog.add_cancel_button();
         dialog.add_button("Rename and Hide", ButtonStyle::Accent);

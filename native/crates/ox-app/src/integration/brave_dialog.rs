@@ -21,11 +21,12 @@ use ox_core::integration::{
 };
 
 /// Why Apply to Brave did nothing.
-const CONSENT_NEEDED: &str = "Confirm the change using the checkbox.";
+const CONSENT_NEEDED: &str = crate::i18n::message_id("Confirm the change using the checkbox.");
 /// Why Apply to Brave did nothing.
-const PROFILE_NEEDED: &str = "Select at least one profile.";
+const PROFILE_NEEDED: &str = crate::i18n::message_id("Select at least one profile.");
 /// Why Restore previous did nothing.
-const ONE_PROFILE_NEEDED: &str = "Select one profile and confirm to restore its previous download setting.";
+const ONE_PROFILE_NEEDED: &str =
+    crate::i18n::message_id("Select one profile and confirm to restore its previous download setting.");
 
 /// How long the dialog waits for the profiles before it shows without
 /// them.
@@ -53,7 +54,10 @@ pub(crate) fn status_text(status: &BraveStatus) -> String {
             .map(|install| install.label())
             .collect();
         let manual = installs.join(" / ");
-        return format!("{state} {manual} installations need manual browser settings.");
+        return ox_core::i18n::format_message(
+            "{state} {manual} installations need manual browser settings.",
+            &[("state", &(state).to_string()), ("manual", &(manual).to_string())],
+        );
     }
     state.to_owned()
 }
@@ -62,9 +66,9 @@ pub(crate) fn status_text(status: &BraveStatus) -> String {
 /// profile was updated, else the line that stays in the dialog.
 pub(crate) fn sync_report(outcome: &SyncOutcome) -> Result<String, String> {
     if outcome.failures.is_empty() {
-        return Ok(format!(
-            "Brave Downloads updated for {} profile(s).",
-            outcome.updated.len()
+        return Ok(ox_core::i18n::format_message(
+            "Brave Downloads updated for {len} profile(s).",
+            &[("len", &(outcome.updated.len()).to_string())],
         ));
     }
     let reasons: Vec<String> = outcome
@@ -72,10 +76,12 @@ pub(crate) fn sync_report(outcome: &SyncOutcome) -> Result<String, String> {
         .iter()
         .map(|failure| failure.error.to_string())
         .collect();
-    Err(format!(
-        "{} updated. {}",
-        outcome.updated.len(),
-        reasons.join(" ")
+    Err(ox_core::i18n::format_message(
+        "{len} updated. {join}",
+        &[
+            ("len", &(outcome.updated.len()).to_string()),
+            ("join", &(reasons.join(" ")).to_string()),
+        ],
     ))
 }
 
@@ -254,7 +260,7 @@ impl BraveDialog {
     fn load(&self) {
         self.imp()
             .status_label
-            .set_text("Checking native Brave profiles…");
+            .set_text(&ox_core::i18n::gettext("Checking native Brave profiles…"));
         let reading = self.brave().run_in_background(BraveIntegration::status);
         // Only a weak reference waits for the reading: a dialog closed in
         // the meantime is finalized at once, while its parent still exists.
@@ -307,12 +313,14 @@ impl BraveDialog {
     fn apply(&self) {
         let imp = self.imp();
         if self.confirmation() != Confirmation::Confirmed {
-            imp.status_label.set_text(CONSENT_NEEDED);
+            imp.status_label
+                .set_text(ox_core::i18n::gettext_static(CONSENT_NEEDED));
             return;
         }
         let profiles = self.selected_profiles();
         if profiles.is_empty() {
-            imp.status_label.set_text(PROFILE_NEEDED);
+            imp.status_label
+                .set_text(ox_core::i18n::gettext_static(PROFILE_NEEDED));
             return;
         }
         imp.apply_button.set_sensitive(false);
@@ -338,11 +346,15 @@ impl BraveDialog {
     fn restore(&self) {
         let profiles = self.selected_profiles();
         let [profile] = profiles.as_slice() else {
-            self.imp().status_label.set_text(ONE_PROFILE_NEEDED);
+            self.imp()
+                .status_label
+                .set_text(ox_core::i18n::gettext_static(ONE_PROFILE_NEEDED));
             return;
         };
         if self.confirmation() != Confirmation::Confirmed {
-            self.imp().status_label.set_text(ONE_PROFILE_NEEDED);
+            self.imp()
+                .status_label
+                .set_text(ox_core::i18n::gettext_static(ONE_PROFILE_NEEDED));
             return;
         }
         let profile = profile.clone();

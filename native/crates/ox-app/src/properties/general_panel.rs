@@ -31,22 +31,26 @@ const HEADER_ART_SIZE: i32 = 48;
 const BUTTON_GLYPH: i32 = 16;
 
 /// Under Calculate folder size: what the measured size is, and is not.
-const SIZE_EXPLANATION: &str = "Logical file bytes, measured on demand. Skips links, nested mounts and \
+const SIZE_EXPLANATION: &str = crate::i18n::message_id(
+    "Logical file bytes, measured on demand. Skips links, nested mounts and \
                                 snapshot collections. The result may be partial; it is not ZFS compressed \
-                                or snapshot usage.";
+                                or snapshot usage.",
+);
 
 /// Under the permissions: what the tab does not do.
-const PERMISSIONS_NOTE: &str = "These are the permissions reported by Linux/GIO. This page does not edit \
-                                Windows ACLs, take ownership, or change server permissions.";
+const PERMISSIONS_NOTE: &str = crate::i18n::message_id(
+    "These are the permissions reported by Linux/GIO. This page does not edit \
+                                Windows ACLs, take ownership, or change server permissions.",
+);
 
 /// The Permissions tab when the item could not be read.
-const METADATA_UNREADABLE: &str = "Metadata could not be read.";
+const METADATA_UNREADABLE: &str = crate::i18n::message_id("Metadata could not be read.");
 
 /// A file's Opens with row without a default application.
-const NO_DEFAULT_APP: &str = "No default application";
+const NO_DEFAULT_APP: &str = crate::i18n::message_id("No default application");
 
 /// The toast after Copy full path.
-const PATH_COPIED: &str = "Full path copied.";
+const PATH_COPIED: &str = crate::i18n::message_id("Full path copied.");
 
 /// What the General tab shows besides the item's own properties.
 #[derive(Debug, Clone, Copy)]
@@ -116,11 +120,17 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     if let Some((width, height)) = properties.dimensions {
         grid.add_row(
             &ox_core::i18n::gettext("Dimensions"),
-            &format!("{width} × {height} pixels"),
+            &ox_core::i18n::format_message(
+                "{width} × {height} pixels",
+                &[("width", &(width).to_string()), ("height", &(height).to_string())],
+            ),
         );
     }
     if !entry.is_dir {
-        let app = properties.default_app.as_deref().unwrap_or(NO_DEFAULT_APP);
+        let app = properties
+            .default_app
+            .as_deref()
+            .unwrap_or(ox_core::i18n::gettext_static(NO_DEFAULT_APP));
         grid.add_row(&ox_core::i18n::gettext("Opens with"), app);
     }
     grid.add_row(
@@ -141,7 +151,7 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     panel.append(grid.widget());
     panel.append(&buttons(facts));
     if entry.is_dir && !is_smb_server(&entry.uri) {
-        panel.append(&quiet_text(SIZE_EXPLANATION));
+        panel.append(&quiet_text(ox_core::i18n::gettext_static(SIZE_EXPLANATION)));
     }
     contains.map(|contains| FolderRows {
         size: size_value,
@@ -159,10 +169,12 @@ fn add_mount_rows(grid: &PropertyGrid, mount: &MountFacts) {
     let Some((free, total)) = mount.space.filter(|(_, total)| *total > 0) else {
         return;
     };
-    let text = format!(
-        "{} free of {}",
-        format::pretty_bytes(free),
-        format::pretty_bytes(total)
+    let text = ox_core::i18n::format_message(
+        "{value1} free of {value2}",
+        &[
+            ("value1", &(format::pretty_bytes(free)).to_string()),
+            ("value2", &(format::pretty_bytes(total)).to_string()),
+        ],
     );
     let value = grid.add_row(&ox_core::i18n::gettext("Free space"), &text);
     let bar = gtk::LevelBar::builder()
@@ -212,7 +224,7 @@ fn name_field(uri: &str, name: &str) -> gtk::Entry {
         .hexpand(true)
         .valign(gtk::Align::Center)
         .build();
-    field.update_property(&[gtk::accessible::Property::Label("Name")]);
+    field.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext("Name"))]);
     let uri = uri.to_owned();
     let original = name.to_owned();
     field.connect_activate(move |field| {
@@ -321,7 +333,7 @@ fn copy_path_button(path: String) -> gtk::Button {
     button.connect_clicked(move |button| {
         button.clipboard().set_text(&path);
         if let Some(window) = button.root().and_downcast::<crate::window::BrowserWindow>() {
-            window.show_message(PATH_COPIED);
+            window.show_message(ox_core::i18n::gettext_static(PATH_COPIED));
         }
     });
     button
@@ -362,7 +374,7 @@ pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties, ed
     if let Some(editor) = editor {
         panel.append(&editor);
     }
-    panel.append(&note(PERMISSIONS_NOTE));
+    panel.append(&note(ox_core::i18n::gettext_static(PERMISSIONS_NOTE)));
 }
 
 /// `Yes`, `No` or `Not reported by this backend`.
@@ -380,7 +392,7 @@ pub(super) fn show_read_failure(general: &gtk::Box, permissions: &gtk::Box, mess
     clear(general);
     general.append(&note(message));
     clear(permissions);
-    permissions.append(&quiet_text(METADATA_UNREADABLE));
+    permissions.append(&quiet_text(ox_core::i18n::gettext_static(METADATA_UNREADABLE)));
 }
 
 /// Removes every child of `panel`.

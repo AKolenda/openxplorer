@@ -387,9 +387,9 @@ fn default_after_launch(
     prepared: &PreparedLaunch,
     default: DefaultChoice,
 ) -> &'static str {
-    const OPENED: &str = "Opened with the selected application.";
+    const OPENED: &str = crate::i18n::message_id("Opened with the selected application.");
     if default == DefaultChoice::Keep {
-        return OPENED;
+        return ox_core::i18n::gettext_static(OPENED);
     }
     // Safety rule "Open with never changes the file-manager default": a
     // folder's handler is changed only in Settings > Default apps.
@@ -397,7 +397,7 @@ fn default_after_launch(
         return "Opened the folder. Its default file-manager association was not changed.";
     }
     match app.set_as_default_for_type(&prepared.content_type) {
-        Ok(()) => OPENED,
+        Ok(()) => ox_core::i18n::gettext_static(OPENED),
         Err(_) => "Opened the file, but the default application could not be changed.",
     }
 }

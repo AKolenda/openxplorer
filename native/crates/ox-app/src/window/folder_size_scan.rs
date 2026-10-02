@@ -32,9 +32,9 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// Shown when a request names no folder that can be measured.
-const NO_FOLDER: &str = "Select a folder or share to calculate its size.";
+const NO_FOLDER: &str = crate::i18n::message_id("Select a folder or share to calculate its size.");
 /// Shown when a scan is asked for while one runs.
-const SCAN_RUNNING: &str = "Cancel or finish the current folder-size scan first.";
+const SCAN_RUNNING: &str = crate::i18n::message_id("Cancel or finish the current folder-size scan first.");
 
 /// The run in progress.
 #[derive(Debug)]
@@ -171,12 +171,12 @@ impl BrowserWindow {
     /// once, never a whole server (`scanFolderSizes`).
     fn start_size_run(&self, uris: Vec<String>) {
         if self.size_scans().run.borrow().is_some() {
-            self.show_message(SCAN_RUNNING);
+            self.show_message(ox_core::i18n::gettext_static(SCAN_RUNNING));
             return;
         }
         let folders = measurable_folders(uris);
         if folders.is_empty() {
-            self.show_message(NO_FOLDER);
+            self.show_message(ox_core::i18n::gettext_static(NO_FOLDER));
             return;
         }
         let number = self.size_scans().runs.get().wrapping_add(1);

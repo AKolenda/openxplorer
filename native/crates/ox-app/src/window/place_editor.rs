@@ -26,11 +26,12 @@ use super::ButtonStyle;
 use crate::dialog::Dialog;
 
 /// The add dialog's heading and note.
-const ADD_TITLE: &str = "Add entry";
-const ADD_MESSAGE: &str = "Add a folder or network location to Quick access.";
+const ADD_TITLE: &str = crate::i18n::message_id("Add entry");
+const ADD_MESSAGE: &str = crate::i18n::message_id("Add a folder or network location to Quick access.");
 /// The edit dialog's heading and note.
-const EDIT_TITLE: &str = "Edit entry";
-const EDIT_MESSAGE: &str = "Change the name or the location of this Quick access entry.";
+const EDIT_TITLE: &str = crate::i18n::message_id("Edit entry");
+const EDIT_MESSAGE: &str =
+    crate::i18n::message_id("Change the name or the location of this Quick access entry.");
 
 /// The pin being edited: where it is now and the place after it.
 #[derive(Debug, Clone)]
@@ -65,8 +66,16 @@ impl BrowserWindow {
     /// `location`, and saves them as a new pin or as `edited`.
     async fn edit_place(&self, label: String, location: String, edited: Option<EditedPin>) {
         let (title, message, answer) = match edited {
-            Some(_) => (EDIT_TITLE, EDIT_MESSAGE, "Save"),
-            None => (ADD_TITLE, ADD_MESSAGE, "Add"),
+            Some(_) => (
+                ox_core::i18n::gettext_static(EDIT_TITLE),
+                ox_core::i18n::gettext_static(EDIT_MESSAGE),
+                "Save",
+            ),
+            None => (
+                ox_core::i18n::gettext_static(ADD_TITLE),
+                ox_core::i18n::gettext_static(ADD_MESSAGE),
+                "Add",
+            ),
         };
         let dialog = Dialog::new(self, title, message);
         let label_field = dialog.add_text_field(&ox_core::i18n::gettext("Label"), &label);
@@ -116,7 +125,7 @@ impl BrowserWindow {
     fn add_location_field(&self, dialog: &Dialog, location: &str) -> gtk::Entry {
         let entry = gtk::Entry::builder()
             .text(location)
-            .placeholder_text(&ox_core::i18n::gettext(
+            .placeholder_text(ox_core::i18n::gettext(
                 "For example ~/Projects or smb://server/share",
             ))
             .activates_default(true)
@@ -134,14 +143,16 @@ impl BrowserWindow {
         row.append(&entry);
         row.append(&browse);
         dialog.add_labelled("Location", &row);
-        entry.update_property(&[gtk::accessible::Property::Label("Location")]);
+        entry.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Location",
+        ))]);
         entry
     }
 
     /// Lets the user choose a folder and writes its path into `entry`.
     fn pick_folder_into(&self, entry: &gtk::Entry) {
         let picker = gtk::FileDialog::builder()
-            .title(&ox_core::i18n::gettext("Choose a folder"))
+            .title(ox_core::i18n::gettext("Choose a folder"))
             .modal(true)
             .build();
         picker.select_folder(
@@ -198,7 +209,12 @@ impl BrowserWindow {
         }
         let target = match verified {
             Ok(Ok(target)) => target,
-            Ok(Err(error)) => return Err(format!("Could not add: {error}")),
+            Ok(Err(error)) => {
+                return Err(ox_core::i18n::format_message(
+                    "Could not add: {error}",
+                    &[("error", &(error).to_string())],
+                ))
+            }
             Err(_panic) => return Err("Could not add: the location could not be checked.".to_owned()),
         };
         let shown: Vec<String> = self
@@ -234,7 +250,10 @@ impl BrowserWindow {
             });
         match receiver.recv().await {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(error)) => Err(format!("Could not save: {error}")),
+            Ok(Err(error)) => Err(ox_core::i18n::format_message(
+                "Could not save: {error}",
+                &[("error", &(error).to_string())],
+            )),
             Err(_) => Err("Could not save the entry.".to_owned()),
         }
     }

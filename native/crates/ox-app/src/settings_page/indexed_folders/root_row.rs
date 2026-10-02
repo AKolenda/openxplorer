@@ -65,7 +65,13 @@ impl ChipTone {
 /// (`${count} names · ${update_mode}` in `renderSettingsCache`).
 pub(crate) fn names_and_updates(root: &IndexRoot) -> String {
     let names = grouped_number(root.entry_count);
-    format!("{names} names · {}", root.update_mode.as_str())
+    ox_core::i18n::format_message(
+        "{names} names · {as_str}",
+        &[
+            ("names", &(names).to_string()),
+            ("as_str", &(root.update_mode.as_str()).to_string()),
+        ],
+    )
 }
 
 /// The status's tooltip: why checks or the scan failed, or when the last
@@ -75,7 +81,10 @@ pub(crate) fn status_tooltip(root: &IndexRoot) -> String {
         return problem.clone();
     }
     match root.updated {
-        Some(updated) => format!("Last full refresh: {}", format::date_time_text(Some(updated))),
+        Some(updated) => ox_core::i18n::format_message(
+            "Last full refresh: {value1}",
+            &[("value1", &(format::date_time_text(Some(updated))).to_string())],
+        ),
         None => "Not yet scanned".to_owned(),
     }
 }

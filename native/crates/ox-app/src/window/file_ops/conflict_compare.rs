@@ -42,7 +42,13 @@ impl Side {
         } else {
             self.size.map_or_else(|| "File".to_owned(), pretty_bytes)
         };
-        format!("{kind} · Modified {}", date_time_text(self.modified))
+        ox_core::i18n::format_message(
+            "{kind} · Modified {date_time_text}",
+            &[
+                ("kind", &(kind).to_string()),
+                ("date_time_text", &(date_time_text(self.modified)).to_string()),
+            ],
+        )
     }
 }
 
@@ -62,8 +68,14 @@ impl Comparison {
     /// The dialog's lines: each side, then how they differ.
     pub(super) fn lines(&self) -> Vec<String> {
         let mut lines = vec![
-            format!("Incoming: {}", self.incoming.text()),
-            format!("Existing: {}", self.existing.text()),
+            ox_core::i18n::format_message(
+                "Incoming: {text}",
+                &[("text", &(self.incoming.text()).to_string())],
+            ),
+            ox_core::i18n::format_message(
+                "Existing: {text}",
+                &[("text", &(self.existing.text()).to_string())],
+            ),
         ];
         let verdict = if self.same_item {
             Some("This is the item itself, so it cannot replace itself.")

@@ -26,10 +26,10 @@ use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
 /// The line under the title (`nameDialog`).
-const NAME_HINT: &str = "Names must not contain slashes.";
+const NAME_HINT: &str = crate::i18n::message_id("Names must not contain slashes.");
 
 /// The line under New folder's title, which takes slashes (OPS-007).
-const FOLDER_PATH_HINT: &str = "A slash makes a folder inside the one before it.";
+const FOLDER_PATH_HINT: &str = crate::i18n::message_id("A slash makes a folder inside the one before it.");
 
 /// How much of the name the field selects when the dialog opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,8 +57,9 @@ pub(super) struct NameRequest<'a> {
 }
 
 /// Why a dialog that takes slashes refuses a name.
-const INVALID_FOLDER_PATH: &str =
-    "Use names without backslashes or control characters, one slash between folders.";
+const INVALID_FOLDER_PATH: &str = crate::i18n::message_id(
+    "Use names without backslashes or control characters, one slash between folders.",
+);
 
 /// Whether a name dialog takes `typed`, or why not: with
 /// `takes_folder_path`, slashes make folders inside folders.
@@ -66,7 +67,7 @@ fn check_name(typed: &str, takes_folder_path: bool) -> Result<(), String> {
     if takes_folder_path {
         check_folder_path(typed)
             .map(drop)
-            .map_err(|_| INVALID_FOLDER_PATH.to_owned())
+            .map_err(|_| ox_core::i18n::gettext_static(INVALID_FOLDER_PATH).to_owned())
     } else {
         check_typed_name(typed)
             .map(drop)
@@ -144,9 +145,9 @@ where
     Outcome: Future<Output = Result<T, String>>,
 {
     let hint = if request.takes_folder_path {
-        FOLDER_PATH_HINT
+        ox_core::i18n::gettext_static(FOLDER_PATH_HINT)
     } else {
-        NAME_HINT
+        ox_core::i18n::gettext_static(NAME_HINT)
     };
     let dialog = Dialog::new(window, request.title, hint);
     let field = dialog.add_text_field("Name", request.initial_name);

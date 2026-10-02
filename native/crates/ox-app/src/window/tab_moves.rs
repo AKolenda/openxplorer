@@ -41,7 +41,7 @@ use super::BrowserWindow;
 pub(super) use drag::OutgoingTabDrag;
 
 /// The title of a window without one, in the list of windows.
-const UNTITLED_WINDOW: &str = "OpenXplorer window";
+const UNTITLED_WINDOW: &str = crate::i18n::message_id("OpenXplorer window");
 
 /// Why a tab did not move; the original stays where it was.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -304,9 +304,10 @@ impl BrowserWindow {
             .filter(|window| window != self)
             .map(|window| OtherWindow {
                 id: window.id(),
-                title: window
-                    .title()
-                    .map_or_else(|| UNTITLED_WINDOW.to_owned(), |title| title.to_string()),
+                title: window.title().map_or_else(
+                    || ox_core::i18n::gettext_static(UNTITLED_WINDOW).to_owned(),
+                    |title| title.to_string(),
+                ),
                 is_ready: !window.is_busy_for_tab_moves(),
             })
             .collect()

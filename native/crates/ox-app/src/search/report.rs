@@ -13,8 +13,10 @@ use super::source::SearchSource;
 pub(crate) const RESULT_LIMIT: usize = 500;
 
 /// The tooltip of the strip's note on cached results.
-pub(crate) const FRESHNESS_TOOLTIP: &str = "Names and paths are stored locally. Refresh the cache to \
-                                            pick up changes on a disconnected or unmonitored share.";
+pub(crate) const FRESHNESS_TOOLTIP: &str = crate::i18n::message_id(
+    "Names and paths are stored locally. Refresh the cache to \
+                                            pick up changes on a disconnected or unmonitored share.",
+);
 
 /// How far a search has got.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -150,7 +152,7 @@ impl SearchCount {
         let mut text = if self.shown == 1 {
             "1 result".to_owned()
         } else {
-            format!("{} results", self.shown)
+            ox_core::i18n::format_message("{shown} results", &[("shown", &(self.shown).to_string())])
         };
         if is_truncated {
             text.push_str(" (first 500)");

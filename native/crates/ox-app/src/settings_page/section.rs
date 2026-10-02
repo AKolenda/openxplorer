@@ -145,7 +145,7 @@ impl SettingsSection {
                 .expect("a new page has no back arrow yet");
         }
         let title_label = gtk::Label::builder()
-            .label(title)
+            .label(ox_core::i18n::gettext(title))
             .xalign(0.0)
             .wrap(true)
             .accessible_role(gtk::AccessibleRole::Heading)
@@ -153,7 +153,7 @@ impl SettingsSection {
             .build();
         title_row.append(&title_label);
         let lead_label = gtk::Label::builder()
-            .label(lead)
+            .label(ox_core::i18n::gettext(lead))
             .xalign(0.0)
             .wrap(true)
             .css_classes(["page-lead"])
@@ -314,10 +314,10 @@ impl SearchTarget {
 fn back_button() -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::image(Icon::ArrowLeft, BACK_GLYPH))
-        .tooltip_text(&ox_core::i18n::gettext("Back"))
+        .tooltip_text(ox_core::i18n::gettext("Back"))
         .valign(gtk::Align::Center)
         .css_classes(["page-back"])
         .build();
-    button.update_property(&[gtk::accessible::Property::Label("Back")]);
+    button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext("Back"))]);
     button
 }

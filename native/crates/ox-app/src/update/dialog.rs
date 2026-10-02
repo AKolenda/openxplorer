@@ -22,7 +22,7 @@ use ox_core::update::Activity;
 use super::{UpdateState, Updates};
 
 /// Why "Install update…" was refused before asking anything.
-const WORK_RUNNING: &str = "Finish file operations before installing the update.";
+const WORK_RUNNING: &str = crate::i18n::message_id("Finish file operations before installing the update.");
 
 /// Says whether any window has work running that an installation must
 /// not interrupt.
@@ -229,7 +229,8 @@ impl UpdateDialog {
     fn install(&self) {
         let imp = self.imp();
         if self.work() == Activity::Busy {
-            imp.refusal.replace(Some(WORK_RUNNING));
+            imp.refusal
+                .replace(Some(ox_core::i18n::gettext_static(WORK_RUNNING)));
             self.show_state();
             return;
         }

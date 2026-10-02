@@ -153,7 +153,9 @@ fn strip_box() -> gtk::Box {
         .css_classes(["context-strip"])
         .accessible_role(gtk::AccessibleRole::Group)
         .build();
-    strip.update_property(&[gtk::accessible::Property::Label("File actions")]);
+    strip.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "File actions",
+    ))]);
     strip
 }
 

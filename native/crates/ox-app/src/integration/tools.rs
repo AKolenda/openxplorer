@@ -25,10 +25,11 @@ const SEARCH_TOOLS: [&str; 3] = [
 ];
 
 /// Why Compare Files did nothing.
-pub(crate) const NO_DIFF_TOOL: &str = "No file comparison tool is installed. Install Meld to compare files.";
+pub(crate) const NO_DIFF_TOOL: &str =
+    crate::i18n::message_id("No file comparison tool is installed. Install Meld to compare files.");
 
 /// Why Open Preferred Search Tool did nothing.
-pub(crate) const NO_SEARCH_TOOL: &str = "No search tool is installed.";
+pub(crate) const NO_SEARCH_TOOL: &str = crate::i18n::message_id("No search tool is installed.");
 
 /// A tool Dolphin offers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,10 +50,10 @@ impl Tool {
     }
 
     /// Why the tool did nothing when none is installed.
-    pub(crate) const fn missing(self) -> &'static str {
+    pub(crate) fn missing(self) -> &'static str {
         match self {
-            Tool::Diff => NO_DIFF_TOOL,
-            Tool::Search => NO_SEARCH_TOOL,
+            Tool::Diff => ox_core::i18n::gettext_static(NO_DIFF_TOOL),
+            Tool::Search => ox_core::i18n::gettext_static(NO_SEARCH_TOOL),
         }
     }
 

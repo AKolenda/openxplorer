@@ -33,34 +33,36 @@ use super::ButtonStyle;
 use crate::dialog::Dialog;
 
 /// The caption's refusal while an update installs (`askClose`).
-const WAIT_FOR_UPDATE: &str = "Wait for the update to finish before closing OpenXplorer.";
+const WAIT_FOR_UPDATE: &str =
+    crate::i18n::message_id("Wait for the update to finish before closing OpenXplorer.");
 
 /// The refusal of Quit while any window writes (`quit_safely`).
 pub(crate) const QUIT_WHILE_WRITING: &str =
-    "Finish or cancel active file operations before quitting OpenXplorer.";
+    crate::i18n::message_id("Finish or cancel active file operations before quitting OpenXplorer.");
 
 /// The question's title (`A file operation is running` in app.js).
-const RUNNING_TITLE: &str = "A file operation is running";
+const RUNNING_TITLE: &str = crate::i18n::message_id("A file operation is running");
 
 /// The question.
-const RUNNING_QUESTION: &str =
-    "Cancel it and close this window once it has stopped? Items already finished stay where they are.";
+const RUNNING_QUESTION: &str = crate::i18n::message_id(
+    "Cancel it and close this window once it has stopped? Items already finished stay where they are.",
+);
 
 /// The answer that keeps the window and the operation.
-const KEEP_OPEN: &str = "Keep open";
+const KEEP_OPEN: &str = crate::i18n::message_id("Keep open");
 
 /// The answer that cancels the operation, then closes the window.
-const CANCEL_AND_CLOSE: &str = "Cancel and close";
+const CANCEL_AND_CLOSE: &str = crate::i18n::message_id("Cancel and close");
 
 /// The question before a window with several tabs closes, when the
 /// settings ask for it (Dolphin's `ConfirmClosingMultipleTabs`, SET-010).
-const CLOSE_TABS_TITLE: &str = "Close all tabs?";
+const CLOSE_TABS_TITLE: &str = crate::i18n::message_id("Close all tabs?");
 
 /// The answer that closes the window and its tabs.
-const CLOSE_TABS: &str = "Close all tabs";
+const CLOSE_TABS: &str = crate::i18n::message_id("Close all tabs");
 
 /// The question before Quit closes windows with several tabs.
-const QUIT_TABS_TITLE: &str = "Quit OpenXplorer?";
+const QUIT_TABS_TITLE: &str = crate::i18n::message_id("Quit OpenXplorer?");
 
 /// The answer that closes every window and quits.
 const QUIT_TABS: &str = "Quit";
@@ -94,7 +96,7 @@ impl BrowserWindow {
     /// which asks first while it writes files ([`Self::may_close_now`]).
     pub(super) fn request_close(&self) {
         if self.context().updates().close_refusal().is_some() {
-            self.show_message(WAIT_FOR_UPDATE);
+            self.show_message(ox_core::i18n::gettext_static(WAIT_FOR_UPDATE));
             return;
         }
         self.close();
@@ -172,14 +174,20 @@ impl BrowserWindow {
         self.imp().closing.set(ClosingState::Asking);
         let tabs: usize = windows.iter().map(BrowserWindow::tab_count).sum();
         let question = if windows.len() == 1 {
-            format!("This window has {tabs} tabs open. Close them all and quit?")
+            ox_core::i18n::format_message(
+                "This window has {tabs} tabs open. Close them all and quit?",
+                &[("tabs", &(tabs).to_string())],
+            )
         } else {
-            format!(
-                "{} windows have {tabs} tabs open. Close them all and quit?",
-                windows.len()
+            ox_core::i18n::format_message(
+                "{len} windows have {tabs} tabs open. Close them all and quit?",
+                &[
+                    ("len", &(windows.len()).to_string()),
+                    ("tabs", &(tabs).to_string()),
+                ],
             )
         };
-        let dialog = Dialog::new(self, QUIT_TABS_TITLE, &question);
+        let dialog = Dialog::new(self, ox_core::i18n::gettext_static(QUIT_TABS_TITLE), &question);
         dialog.add_cancel_button();
         let quit = dialog.add_button(QUIT_TABS, ButtonStyle::Accent);
         dialog.open();
@@ -198,10 +206,13 @@ impl BrowserWindow {
     /// Asks whether to close the window with its tabs, and closes it.
     async fn ask_to_close_tabs(&self) {
         let count = self.tab_count();
-        let question = format!("This window has {count} tabs open. Close them all?");
-        let dialog = Dialog::new(self, CLOSE_TABS_TITLE, &question);
+        let question = ox_core::i18n::format_message(
+            "This window has {count} tabs open. Close them all?",
+            &[("count", &(count).to_string())],
+        );
+        let dialog = Dialog::new(self, ox_core::i18n::gettext_static(CLOSE_TABS_TITLE), &question);
         dialog.add_cancel_button();
-        let close = dialog.add_button(CLOSE_TABS, ButtonStyle::Accent);
+        let close = dialog.add_button(ox_core::i18n::gettext_static(CLOSE_TABS), ButtonStyle::Accent);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();
@@ -214,10 +225,17 @@ impl BrowserWindow {
 
     /// Asks whether to cancel the running write and close the window.
     async fn ask_to_cancel_and_close(&self) {
-        let dialog = Dialog::new(self, RUNNING_TITLE, RUNNING_QUESTION);
+        let dialog = Dialog::new(
+            self,
+            ox_core::i18n::gettext_static(RUNNING_TITLE),
+            ox_core::i18n::gettext_static(RUNNING_QUESTION),
+        );
         // First, so it has the focus and Enter never cancels by accident.
-        dialog.add_button(KEEP_OPEN, ButtonStyle::Bordered);
-        let close = dialog.add_button(CANCEL_AND_CLOSE, ButtonStyle::Danger);
+        dialog.add_button(ox_core::i18n::gettext_static(KEEP_OPEN), ButtonStyle::Bordered);
+        let close = dialog.add_button(
+            ox_core::i18n::gettext_static(CANCEL_AND_CLOSE),
+            ButtonStyle::Danger,
+        );
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();

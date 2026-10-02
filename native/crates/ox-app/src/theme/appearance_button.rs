@@ -41,11 +41,14 @@ pub(crate) fn tooltip(theme: Theme, appearance: Appearance) -> String {
     let shown = match theme {
         Theme::System => {
             let current = appearance.label().to_lowercase();
-            format!("System ({current})")
+            ox_core::i18n::format_message("System ({current})", &[("current", &(current).to_string())])
         }
         chosen => chosen.as_str().to_owned(),
     };
-    format!("Appearance: {shown}. Click to change.")
+    ox_core::i18n::format_message(
+        "Appearance: {shown}. Click to change.",
+        &[("shown", &(shown).to_string())],
+    )
 }
 
 #[cfg(test)]

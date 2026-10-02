@@ -30,7 +30,10 @@ pub(super) async fn link_destination(uri: &str) -> Result<String, String> {
         .map_err(|error| error.message().to_owned())?;
     let name = info.display_name();
     let Some(target) = info.symlink_target() else {
-        return Err(format!("“{name}” is not a link."));
+        return Err(ox_core::i18n::format_message(
+            "“{name}” is not a link.",
+            &[("name", &(name).to_string())],
+        ));
     };
     // A relative target is relative to the folder that holds the link.
     let destination = match link.parent() {
@@ -46,9 +49,12 @@ pub(super) async fn link_destination(uri: &str) -> Result<String, String> {
         .await
         .is_ok();
     if !exists {
-        return Err(format!(
-            "The target of “{name}” does not exist: {}",
-            target.display()
+        return Err(ox_core::i18n::format_message(
+            "The target of “{name}” does not exist: {display}",
+            &[
+                ("name", &(name).to_string()),
+                ("display", &(target.display()).to_string()),
+            ],
         ));
     }
     Ok(destination.uri().into())

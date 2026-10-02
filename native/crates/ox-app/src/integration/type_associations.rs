@@ -23,7 +23,7 @@ const ADDED_GROUP: &str = "Added Associations";
 
 /// Why a type cannot be changed here.
 pub(crate) const PROTECTED_TYPE: &str =
-    "Folder, SMB and ZIP associations are changed in Settings > Default apps.";
+    crate::i18n::message_id("Folder, SMB and ZIP associations are changed in Settings > Default apps.");
 
 /// One application associated with a file type.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,7 +107,7 @@ pub(crate) enum TypeChange {
 /// installed, or GIO could not write the change.
 pub(crate) fn change_type(content_type: &str, change: &TypeChange) -> Result<(), String> {
     if is_protected(content_type) {
-        return Err(PROTECTED_TYPE.to_owned());
+        return Err(ox_core::i18n::gettext_static(PROTECTED_TYPE).to_owned());
     }
     let changed = match change {
         TypeChange::SetDefault(id) => application(id)?.set_as_default_for_type(content_type),

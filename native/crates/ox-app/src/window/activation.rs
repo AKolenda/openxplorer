@@ -30,7 +30,7 @@ use super::BrowserWindow;
 mod outcome;
 
 /// Why an item cannot be opened (`activation_kind` in activation.py).
-const NOT_OPENABLE: &str = "This item is not a regular file or a readable folder.";
+const NOT_OPENABLE: &str = crate::i18n::message_id("This item is not a regular file or a readable folder.");
 
 /// What is left to do once an activated item was read again.
 #[derive(Debug)]
@@ -98,7 +98,7 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
         entry.kind,
         EntryKind::Special | EntryKind::Unknown | EntryKind::Symlink
     ) {
-        return Activation::Refused(NOT_OPENABLE);
+        return Activation::Refused(ox_core::i18n::gettext_static(NOT_OPENABLE));
     }
     if integration::Activation::for_entry(entry) == Ok(integration::Activation::BrowseArchive) {
         return Activation::Archive;
@@ -460,7 +460,10 @@ impl BrowserWindow {
             move |error: glib::Error| window.show_message(&error.to_string())
         );
         self.context().open_uri(address, self.upcast_ref(), on_error);
-        self.show_message(&format!("Opening {address} in your web browser."));
+        self.show_message(&ox_core::i18n::format_message(
+            "Opening {address} in your web browser.",
+            &[("address", &(address).to_string())],
+        ));
     }
 
     /// Opens the location an address resolved to, whose metadata query

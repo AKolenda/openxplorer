@@ -117,7 +117,7 @@ impl IndexSuggestions {
         imp.selection_label.set_hexpand(true);
         footer.append(&imp.selection_label);
         let clear = gtk::Button::builder()
-            .label(&ox_core::i18n::gettext("Clear"))
+            .label(ox_core::i18n::gettext("Clear"))
             .valign(gtk::Align::Center)
             .css_classes(["link-button"])
             .build();
@@ -199,7 +199,8 @@ impl IndexSuggestions {
             .active(is_selected)
             .valign(gtk::Align::Center)
             .build();
-        let name = format!("Cache {}", candidate.label);
+        let name =
+            ox_core::i18n::format_message("Cache {label}", &[("label", &(candidate.label).to_string())]);
         check.update_property(&[gtk::accessible::Property::Label(&name)]);
         let uri = candidate.uri.clone();
         check.connect_toggled(glib::clone!(
@@ -212,8 +213,9 @@ impl IndexSuggestions {
 
     /// The Index button of `candidate`'s line.
     fn index_button(&self, candidate: &IndexCandidate) -> gtk::Button {
-        let button = parts::button("Index", ButtonStyle::Bordered);
-        let name = format!("Index {}", candidate.label);
+        let button = parts::button(&ox_core::i18n::gettext("Index"), ButtonStyle::Bordered);
+        let name =
+            ox_core::i18n::format_message("Index {label}", &[("label", &(candidate.label).to_string())]);
         button.update_property(&[gtk::accessible::Property::Label(&name)]);
         let command = candidate.index_command();
         button.connect_clicked(glib::clone!(
@@ -260,7 +262,10 @@ impl IndexSuggestions {
     fn show_selection_count(&self) {
         let imp = self.imp();
         let count = imp.selected.borrow().len();
-        imp.selection_label.set_text(&format!("{count} selected"));
+        imp.selection_label.set_text(&ox_core::i18n::format_message(
+            "{count} selected",
+            &[("count", &(count).to_string())],
+        ));
         imp.index_selected.set_sensitive(count > 0);
     }
 

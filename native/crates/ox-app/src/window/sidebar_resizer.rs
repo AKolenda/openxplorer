@@ -24,7 +24,7 @@ use super::BrowserWindow;
 use crate::resizer_control::ResizerControl;
 
 /// The resizer's hover text (`handle.title` in app.js).
-const TOOLTIP: &str = "Drag to resize sidebar · double-click to reset";
+const TOOLTIP: &str = crate::i18n::message_id("Drag to resize sidebar · double-click to reset");
 
 /// How far an arrow key moves the resizer, and with Shift held.
 const KEY_STEP: i32 = 10;
@@ -58,13 +58,13 @@ impl BrowserWindow {
         let Some(handle) = paned_handle(workspace) else {
             return;
         };
-        handle.set_tooltip_text(Some(TOOLTIP));
+        handle.set_tooltip_text(Some(ox_core::i18n::gettext_static(TOOLTIP)));
         handle.add_css_class("sidebar-resizer");
         // The separator speaks for the handle, so screen readers meet the
         // resizer once.
         handle.update_state(&[gtk::accessible::State::Hidden(true)]);
         let resizer = self.sidebar_resizer();
-        resizer.set_tooltip_text(Some(TOOLTIP));
+        resizer.set_tooltip_text(Some(ox_core::i18n::gettext_static(TOOLTIP)));
         resizer.set_label(&ox_core::i18n::gettext("Resize sidebar"));
         resizer.connect_value_requested(glib::clone!(
             #[weak(rename_to = window)]

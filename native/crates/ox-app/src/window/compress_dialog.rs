@@ -37,7 +37,9 @@ impl BrowserWindow {
         let formats: Vec<&str> = FORMATS.iter().map(|(label, _)| *label).collect();
         let format = gtk::DropDown::from_strings(&formats);
         format.set_halign(gtk::Align::Start);
-        format.update_property(&[gtk::accessible::Property::Label("Format")]);
+        format.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Format",
+        ))]);
         frame.body().append(&format);
         let compress = frame.add_button(&ox_core::i18n::gettext("Compress"), ButtonStyle::Accent);
         frame.add_closing_button(&ox_core::i18n::gettext("Cancel"), ButtonStyle::Bordered, || {});

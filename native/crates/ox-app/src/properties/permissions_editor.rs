@@ -30,7 +30,7 @@ use advanced::AdvancedBits;
 use choices::{AccessChoice, AccountChoice, StateCheck};
 
 /// The toast after the permissions were changed.
-const CHANGED: &str = "Permissions changed.";
+const CHANGED: &str = crate::i18n::message_id("Permissions changed.");
 
 /// An item the editor changes.
 #[derive(Debug, Clone)]
@@ -190,7 +190,7 @@ pub(super) fn permissions_editor(items: EditedItems, versions: Arc<PreviousVersi
     let has_folders = items.items.iter().any(|item| item.is_folder);
     let grid = PropertyGrid::new();
     let access = |name: &str, class: PermissionClass| {
-        let label = format!("{name} access");
+        let label = ox_core::i18n::format_message("{name} access", &[("name", &(name).to_string())]);
         let choice = AccessChoice::new(&label, items.common(|item| Some(Access::of(item.mode, class))));
         add_control_row(&grid, &label, &choice.choice);
         choice
@@ -310,7 +310,7 @@ fn start_change(
             button.set_sensitive(true);
         }
         match (result, frame, window) {
-            (Ok(()), _, Some(window)) => window.show_message(CHANGED),
+            (Ok(()), _, Some(window)) => window.show_message(ox_core::i18n::gettext_static(CHANGED)),
             (Err(error), Some(frame), _) => frame.show_error(&error.to_string()),
             _ => {}
         }

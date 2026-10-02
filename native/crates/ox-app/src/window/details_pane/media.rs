@@ -100,10 +100,18 @@ impl DetailsPane {
             picture.set_content_fit(gtk::ContentFit::Contain);
             picture.set_size_request(PREVIEW_WIDTH, PREVIEW_HEIGHT);
             picture.add_css_class("detail-picture");
-            picture.update_property(&[gtk::accessible::Property::Label("Preview")]);
+            picture.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+                "Preview",
+            ))]);
             pane.set_preview_widget(Some(picture.upcast_ref()));
             if let Some((width, height)) = size.filter(|_| is_image) {
-                pane.add_media_property("Dimensions", format!("{width} × {height} pixels"));
+                pane.add_media_property(
+                    "Dimensions",
+                    ox_core::i18n::format_message(
+                        "{width} × {height} pixels",
+                        &[("width", &(width).to_string()), ("height", &(height).to_string())],
+                    ),
+                );
             }
         });
     }

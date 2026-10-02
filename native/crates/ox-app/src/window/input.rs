@@ -25,7 +25,7 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// What screen readers call a folder view (`#main`'s `aria-label`).
-const FOLDER_VIEW_LABEL: &str = "Folder contents — type a filename prefix to select";
+const FOLDER_VIEW_LABEL: &str = crate::i18n::message_id("Folder contents — type a filename prefix to select");
 
 /// Whether a press on blank space with `modifiers` held keeps the
 /// selection: Ctrl and Shift do, for the rubber band that may follow, which
@@ -194,7 +194,9 @@ impl BrowserWindow {
     /// middle-click to open a folder, the context menu, and file drag and
     /// drop.
     fn folder_input(&self, view: &gtk::Widget) {
-        view.update_property(&[gtk::accessible::Property::Label(FOLDER_VIEW_LABEL)]);
+        view.update_property(&[gtk::accessible::Property::Label(ox_core::i18n::gettext_static(
+            FOLDER_VIEW_LABEL,
+        ))]);
         let input = self.typing_input(view);
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);

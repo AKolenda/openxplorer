@@ -140,7 +140,10 @@ impl BrowserWindow {
                 self,
                 move |result: Result<(), SettingsError>| {
                     if let Err(error) = result {
-                        window.show_message(&format!("Could not save the sidebar: {error}"));
+                        window.show_message(&ox_core::i18n::format_message(
+                            "Could not save the sidebar: {error}",
+                            &[("error", &(error).to_string())],
+                        ));
                     }
                 }
             ),

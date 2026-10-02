@@ -27,7 +27,13 @@ fn title(item: &FailedItem) -> String {
         TransferMode::Trash => "moving to the Recycle Bin",
         TransferMode::Delete => "deleting",
     };
-    format!("Error while {doing} “{}”", item.name)
+    ox_core::i18n::format_message(
+        "Error while {doing} “{name}”",
+        &[
+            ("doing", &(doing).to_string()),
+            ("name", &(item.name).to_string()),
+        ],
+    )
 }
 
 impl BrowserWindow {

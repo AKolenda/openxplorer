@@ -48,8 +48,17 @@ impl Typeahead {
 fn typeahead_hint(result: &PrefixMatch, matched_name: Option<&str>) -> String {
     match (result.prefix.is_empty(), matched_name) {
         (true, _) => String::new(),
-        (false, Some(name)) => format!("Jump to: {} — {name}", result.prefix),
-        (false, None) => format!("No name starts with “{}”", result.prefix),
+        (false, Some(name)) => ox_core::i18n::format_message(
+            "Jump to: {prefix} — {name}",
+            &[
+                ("prefix", &(result.prefix).to_string()),
+                ("name", &(name).to_string()),
+            ],
+        ),
+        (false, None) => ox_core::i18n::format_message(
+            "No name starts with “{prefix}”",
+            &[("prefix", &(result.prefix).to_string())],
+        ),
     }
 }
 

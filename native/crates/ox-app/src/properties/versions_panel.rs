@@ -26,24 +26,31 @@ use crate::icons::{self, Icon};
 use crate::window::ButtonStyle;
 
 /// What the tab browses, and what it does not.
-const VERSIONS_INTRO: &str = "Browse real snapshot or backup folders exposed by your server. This build \
+const VERSIONS_INTRO: &str = crate::i18n::message_id(
+    "Browse real snapshot or backup folders exposed by your server. This build \
                               does not enumerate Windows SMB shadow-copy protocol responses or create \
-                              snapshots.";
+                              snapshots.",
+);
 /// Shown while the lookup runs.
-const CHECKING: &str = "Checking readable snapshot folders…";
+const CHECKING: &str = crate::i18n::message_id("Checking readable snapshot folders…");
 /// Above the list: where dates come from.
-const DATE_NOTE: &str = "Dates are read from snapshot names. Times stay as written; UTC is marked when \
-                         supplied.";
+const DATE_NOTE: &str = crate::i18n::message_id(
+    "Dates are read from snapshot names. Times stay as written; UTC is marked when \
+                         supplied.",
+);
 /// The heading of an empty result.
-const NO_VERSIONS: &str = "No accessible previous versions";
+const NO_VERSIONS: &str = crate::i18n::message_id("No accessible previous versions");
 /// Under a truncated list.
-const TRUNCATED_NOTE: &str =
-    "Showing at most 100 versions. Configure a narrower snapshot folder to see more.";
+const TRUNCATED_NOTE: &str = crate::i18n::message_id(
+    "Showing at most 100 versions. Configure a narrower snapshot folder to see more.",
+);
 /// At the end of the tab: what counts as a previous version.
-const LAYOUTS_NOTE: &str = "Snapshots must already exist and be readable through your NAS. Built-in \
+const LAYOUTS_NOTE: &str = crate::i18n::message_id(
+    "Snapshots must already exist and be readable through your NAS. Built-in \
                             layouts include .snapshot, #snapshot, .zfs/snapshot, and Snapper \
                             .snapshots/<id>/snapshot. Restore a copy never overwrites the live item. A \
-                            cached search result is not a previous version.";
+                            cached search result is not a previous version.",
+);
 /// The empty result's clock glyph (`icon('clock', 30)`).
 const EMPTY_GLYPH: i32 = 30;
 /// The width of a row's date cell (`.version-date`), which its title
@@ -149,13 +156,13 @@ impl VersionsPanel {
     pub(crate) fn load(&self) {
         self.cancel();
         self.clear();
-        self.append(&quiet_text(VERSIONS_INTRO));
+        self.append(&quiet_text(ox_core::i18n::gettext_static(VERSIONS_INTRO)));
         self.append(&self.toolbar());
         let list = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .css_classes(["versions-list"])
             .build();
-        list.append(&quiet_text(CHECKING));
+        list.append(&quiet_text(ox_core::i18n::gettext_static(CHECKING)));
         self.append(&list);
         self.imp().list.replace(Some(list));
         self.start_lookup();
@@ -241,11 +248,13 @@ impl VersionsPanel {
     /// The date note above the list, the column titles and one row per
     /// version.
     fn show_versions(&self, list: &gtk::Box, found: &VersionList) {
-        let date_note = quiet_text(DATE_NOTE);
+        let date_note = quiet_text(ox_core::i18n::gettext_static(DATE_NOTE));
         date_note.add_css_class("version-date-note");
         self.insert_child_after(&date_note, list.prev_sibling().as_ref());
         list.set_accessible_role(gtk::AccessibleRole::List);
-        list.update_property(&[gtk::accessible::Property::Label("Previous versions")]);
+        list.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Previous versions",
+        ))]);
         list.append(&column_titles());
         let locations = self.imp().locations.borrow();
         for version in &found.versions {
@@ -256,17 +265,17 @@ impl VersionsPanel {
     /// The truncation note, the warnings and the layouts note.
     fn append_notes(&self, found: &VersionList) {
         if found.is_truncated {
-            self.append(&quiet_text(TRUNCATED_NOTE));
+            self.append(&quiet_text(ox_core::i18n::gettext_static(TRUNCATED_NOTE)));
         }
         if !found.warnings.is_empty() {
             let details = gtk::Expander::builder()
-                .label(&ox_core::i18n::gettext("Availability details"))
+                .label(ox_core::i18n::gettext("Availability details"))
                 .css_classes(["snapshot-warnings"])
                 .child(&quiet_text(&found.warnings.join("\n")))
                 .build();
             self.append(&details);
         }
-        self.append(&note(LAYOUTS_NOTE));
+        self.append(&note(ox_core::i18n::gettext_static(LAYOUTS_NOTE)));
     }
 
     /// Replaces the list with the Snapshot source form.
@@ -369,7 +378,7 @@ fn show_empty(list: &gtk::Box, message: &str) {
     glyph.set_halign(gtk::Align::Start);
     list.append(&glyph);
     let heading = gtk::Label::builder()
-        .label(NO_VERSIONS)
+        .label(ox_core::i18n::gettext_static(NO_VERSIONS))
         .xalign(0.0)
         .css_classes(["versions-empty-heading"])
         .build();

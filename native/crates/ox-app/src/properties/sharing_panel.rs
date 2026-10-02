@@ -23,8 +23,10 @@ use crate::dialog::{check_row, labelled_entry, note, quiet_text};
 use crate::window::ButtonStyle;
 
 /// The note under the controls.
-const SHARING_NOTE: &str = "Sharing uses Samba user shares on this computer. OpenXplorer never changes \
-                            permissions on other servers.";
+const SHARING_NOTE: &str = crate::i18n::message_id(
+    "Sharing uses Samba user shares on this computer. OpenXplorer never changes \
+                            permissions on other servers.",
+);
 
 /// Samba's `net`, which the Sharing tab runs; `None` in the Flatpak,
 /// which cannot run the host's. The app's own tests never read the
@@ -74,12 +76,12 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> gtk::Box
     panel.append(&guests);
     panel.append(&read_only);
     let apply = gtk::Button::builder()
-        .label(&ox_core::i18n::gettext("Apply"))
+        .label(ox_core::i18n::gettext("Apply"))
         .halign(gtk::Align::Start)
         .css_classes([ButtonStyle::Bordered.css_class()])
         .build();
     panel.append(&apply);
-    panel.append(&note(SHARING_NOTE));
+    panel.append(&note(ox_core::i18n::gettext_static(SHARING_NOTE)));
     let controls = Rc::new(SharingControls {
         folder,
         usershares,
@@ -122,8 +124,13 @@ impl SharingControls {
     fn show(&self, read: Result<Option<Usershare>, UsershareError>) {
         match read {
             Ok(Some(share)) => {
-                self.state
-                    .set_text(&format!("Shared as \\\\{}\\{}", glib::host_name(), share.name));
+                self.state.set_text(&ox_core::i18n::format_message(
+                    "Shared as \\\\{value1}\\{name}",
+                    &[
+                        ("value1", &(glib::host_name()).to_string()),
+                        ("name", &(share.name).to_string()),
+                    ],
+                ));
                 self.share.set_active(true);
                 self.name.set_text(&share.name);
                 self.comment.set_text(&share.comment);
@@ -133,7 +140,8 @@ impl SharingControls {
                 self.set_sensitive(true);
             }
             Ok(None) => {
-                self.state.set_text("This folder is not shared.");
+                self.state
+                    .set_text(&ox_core::i18n::gettext("This folder is not shared."));
                 self.share.set_active(false);
                 self.shared_as.replace(None);
                 self.set_sensitive(true);

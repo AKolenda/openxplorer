@@ -39,7 +39,7 @@ const SEARCH_IN: [(SearchIn, &str); 2] = [
 ];
 
 /// Why the contents cannot be searched in every cached folder.
-const NAMES_ONLY_TOOLTIP: &str = "The search cache holds names only";
+const NAMES_ONLY_TOOLTIP: &str = crate::i18n::message_id("The search cache holds names only");
 
 /// The strip's search glyph (`icon('search',15)`).
 const SEARCH_GLYPH: i32 = 15;
@@ -284,7 +284,7 @@ impl SearchInfoStrip {
         let search_in_button = &Self::option_list(&imp.search_in).button;
         search_in_button.set_sensitive(!names_only);
         search_in_button.set_tooltip_text(Some(if names_only {
-            NAMES_ONLY_TOOLTIP
+            ox_core::i18n::gettext_static(NAMES_ONLY_TOOLTIP)
         } else {
             "Search in"
         }));
@@ -299,7 +299,9 @@ impl SearchInfoStrip {
         let scope = ChoiceButton::new(&labels);
         scope
             .button
-            .update_property(&[gtk::accessible::Property::Label("Search scope")]);
+            .update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+                "Search scope",
+            ))]);
         scope.choices.connect_selected_notify(glib::clone!(
             #[weak(rename_to = strip)]
             self,

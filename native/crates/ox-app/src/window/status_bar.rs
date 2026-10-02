@@ -50,7 +50,7 @@ const MISS_CLASS: &str = "miss";
 const UPDATE_CLASS: &str = "update-available";
 
 /// The label and tooltip of the updates button (`#check-updates`).
-const CHECK_FOR_UPDATES: &str = "Check for updates";
+const CHECK_FOR_UPDATES: &str = crate::i18n::message_id("Check for updates");
 
 /// What the status bar reports about the active tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -267,7 +267,7 @@ impl StatusBar {
     fn finish_check_updates_button(&self) {
         let check_updates = &*self.imp().check_updates_button;
         check_updates.set_child(Some(&icons::image(Icon::ArrowClockwise, BUTTON_GLYPH)));
-        check_updates.set_tooltip_text(Some(CHECK_FOR_UPDATES));
+        check_updates.set_tooltip_text(Some(ox_core::i18n::gettext_static(CHECK_FOR_UPDATES)));
         WindowAction::CheckUpdates.assign_to(check_updates);
     }
 
@@ -278,7 +278,7 @@ impl StatusBar {
         let check_updates = &*self.imp().check_updates_button;
         let Some(notice) = notice else {
             check_updates.remove_css_class(UPDATE_CLASS);
-            check_updates.set_tooltip_text(Some(CHECK_FOR_UPDATES));
+            check_updates.set_tooltip_text(Some(ox_core::i18n::gettext_static(CHECK_FOR_UPDATES)));
             return;
         };
         check_updates.add_css_class(UPDATE_CLASS);
@@ -368,10 +368,7 @@ impl StatusBar {
         let label = &*self.imp().watch_state;
         label.set_visible(interval.is_some());
         if let Some(interval) = interval {
-            label.set_tooltip_text(Some(&format!(
-                "Changes made elsewhere are not shown as they happen. OpenXplorer lists this \
-                 folder again every {interval}; press F5 to list it now."
-            )));
+            label.set_tooltip_text(Some(&ox_core::i18n::format_message("Changes made elsewhere are not shown as they happen. OpenXplorer lists this folder again every {interval}; press F5 to list it now.", &[("interval", &(interval).to_string())])));
         }
     }
 

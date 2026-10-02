@@ -46,7 +46,9 @@ _GAP = r'\s*,\s*'
 _FUNCTION = r'(?<![.\w])'
 # The calls whose literal arguments are messages: (context, id, plural).
 CALLS = (
-    (re.compile(_FUNCTION + r'gettext\(\s*' + _STRING), None, 1, None),
+    (re.compile(_FUNCTION + r'message_id\(\s*' + _STRING), None, 1, None),
+    (re.compile(_FUNCTION + r'format_message\(\s*' + _STRING), None, 1, None),
+    (re.compile(_FUNCTION + r'gettext(?:_static)?\(\s*' + _STRING), None, 1, None),
     (re.compile(_FUNCTION + r'pgettext\(\s*' + _STRING + _GAP + _STRING), 1, 2, None),
     (re.compile(_FUNCTION + r'ngettext\(\s*' + _STRING + _GAP + _STRING), None, 1, 2),
 )

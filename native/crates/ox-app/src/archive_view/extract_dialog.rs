@@ -27,18 +27,23 @@ use crate::icons::{Art, ArtImage};
 use crate::window::ButtonStyle;
 
 /// What the dialog promises.
-const EXTRACT_MESSAGE: &str =
-    "The ZIP is kept unchanged. Files are unpacked into a new folder; existing files are never replaced.";
+const EXTRACT_MESSAGE: &str = crate::i18n::message_id(
+    "The ZIP is kept unchanged. Files are unpacked into a new folder; existing files are never replaced.",
+);
 /// Shown while the members are checked.
-const CHECKING: &str = "Checking archive contents…";
+const CHECKING: &str = crate::i18n::message_id("Checking archive contents…");
 /// For shares and encrypted archives.
-const EXTRACT_HINT: &str = "For SMB, open and sign in to the source and destination shares first. \
-                            Password-protected ZIPs need an external archive manager.";
+const EXTRACT_HINT: &str = crate::i18n::message_id(
+    "For SMB, open and sign in to the source and destination shares first. \
+                            Password-protected ZIPs need an external archive manager.",
+);
 /// Extract before the check finished.
-const WAIT_FOR_CHECK: &str =
-    "Wait for the ZIP check to finish. Unsupported archives need an external archive manager.";
+const WAIT_FOR_CHECK: &str = crate::i18n::message_id(
+    "Wait for the ZIP check to finish. Unsupported archives need an external archive manager.",
+);
 /// A destination that is not a writable folder.
-const NOT_WRITABLE: &str = "Choose a writable folder outside Previous versions, not a server listing.";
+const NOT_WRITABLE: &str =
+    crate::i18n::message_id("Choose a writable folder outside Previous versions, not a server listing.");
 /// The size of the archive's picture (`zipFolderIcon(40)`).
 const SOURCE_ART_SIZE: i32 = 40;
 
@@ -78,7 +83,7 @@ pub(crate) fn extract_dialog(
         &ox_core::i18n::gettext("Extract compressed folder"),
         DialogWidth::Standard,
     );
-    frame.set_message(EXTRACT_MESSAGE);
+    frame.set_message(ox_core::i18n::gettext_static(EXTRACT_MESSAGE));
     let body = frame.body();
     body.append(&source_heading(&archive.name));
     let destination = labelled_entry(
@@ -89,7 +94,7 @@ pub(crate) fn extract_dialog(
     let suggested = suggested_folder_name(&archive.name).unwrap_or_default();
     let name = labelled_entry(&body, &ox_core::i18n::gettext("New folder name"), &suggested);
     body.append(&target_line(&destination, &name));
-    let summary = quiet_text(CHECKING);
+    let summary = quiet_text(ox_core::i18n::gettext_static(CHECKING));
     summary.add_css_class("extract-summary");
     summary.set_accessible_role(gtk::AccessibleRole::Status);
     body.append(&summary);
@@ -98,7 +103,7 @@ pub(crate) fn extract_dialog(
         true,
     );
     body.append(&show);
-    body.append(&quiet_text(EXTRACT_HINT));
+    body.append(&quiet_text(ox_core::i18n::gettext_static(EXTRACT_HINT)));
     let check = Rc::new(ArchiveCheck::default());
     check.start(archive.uri.clone(), setup.inspector, &summary);
     frame.connect_closed({
@@ -164,7 +169,14 @@ fn target_line(destination: &gtk::Entry, name: &gtk::Entry) -> gtk::Label {
 fn target_text(destination: &str, name: &str) -> String {
     let trimmed = destination.trim_end_matches(['/', '\\']);
     let separator = if destination.starts_with('\\') { '\\' } else { '/' };
-    format!("Extract into: {trimmed}{separator}{name}")
+    ox_core::i18n::format_message(
+        "Extract into: {trimmed}{separator}{name}",
+        &[
+            ("trimmed", &(trimmed).to_string()),
+            ("separator", &(separator).to_string()),
+            ("name", &(name).to_string()),
+        ],
+    )
 }
 
 /// The check of every member, which Extract waits for.
@@ -213,7 +225,16 @@ pub(super) fn summary_text(summary: &ExtractionSummary) -> String {
     let file_word = if files == 1 { "file" } else { "files" };
     let folder_word = if folders == 1 { "folder" } else { "folders" };
     let bytes = format::pretty_bytes(summary.unpacked_bytes);
-    format!("{files} {file_word} · {folders} {folder_word} · {bytes} unpacked")
+    ox_core::i18n::format_message(
+        "{files} {file_word} · {folders} {folder_word} · {bytes} unpacked",
+        &[
+            ("files", &(files).to_string()),
+            ("file_word", &(file_word).to_string()),
+            ("folders", &(folders).to_string()),
+            ("folder_word", &(folder_word).to_string()),
+            ("bytes", &(bytes).to_string()),
+        ],
+    )
 }
 
 /// The fields Extract reads.
@@ -230,7 +251,7 @@ impl ExtractForm {
     /// The user's choice, or why Extract refuses it.
     fn choice(&self) -> Result<ExtractionChoice, String> {
         if !self.check.is_ready.get() {
-            return Err(WAIT_FOR_CHECK.to_owned());
+            return Err(ox_core::i18n::gettext_static(WAIT_FOR_CHECK).to_owned());
         }
         let name = self.name.text();
         let folder_name = validate_name(&name).map_err(|error| error.to_string())?;
@@ -239,7 +260,7 @@ impl ExtractForm {
         let destination = normalise_location(&typed, Some(&self.default_destination), Path::new(&home))
             .map_err(|error| error.to_string())?;
         if !(self.is_writable)(&destination) {
-            return Err(NOT_WRITABLE.to_owned());
+            return Err(ox_core::i18n::gettext_static(NOT_WRITABLE).to_owned());
         }
         Ok(ExtractionChoice {
             destination_uri: destination,

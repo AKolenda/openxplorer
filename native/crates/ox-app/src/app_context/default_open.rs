@@ -91,12 +91,12 @@ async fn launch(prepared: &PreparedOpen, window: &gtk::Window) -> Result<(), Str
     };
     match &prepared.launcher {
         Launcher::Application { id, .. } => {
-            let application =
-                crate::integration::installed_application(id).ok_or_else(|| NOT_INSTALLED.to_owned())?;
+            let application = crate::integration::installed_application(id)
+                .ok_or_else(|| ox_core::i18n::gettext_static(NOT_INSTALLED).to_owned())?;
             let context = WidgetExt::display(window).app_launch_context();
             application
                 .launch(&[file], Some(&context))
-                .map_err(|_| NOT_ACCEPTED.to_owned())
+                .map_err(|_| ox_core::i18n::gettext_static(NOT_ACCEPTED).to_owned())
         }
         Launcher::DesktopPortal => gtk::FileLauncher::new(Some(&file))
             .launch_future(Some(window))
@@ -106,10 +106,10 @@ async fn launch(prepared: &PreparedOpen, window: &gtk::Window) -> Result<(), Str
 }
 
 /// Why the chosen application could not be found again to launch it.
-const NOT_INSTALLED: &str = "That application is no longer installed.";
+const NOT_INSTALLED: &str = crate::i18n::message_id("That application is no longer installed.");
 
 /// Why the chosen application did not open the file (`launch_default`).
-const NOT_ACCEPTED: &str = "The application did not accept this file.";
+const NOT_ACCEPTED: &str = crate::i18n::message_id("The application did not accept this file.");
 
 #[cfg(test)]
 mod tests {

@@ -44,11 +44,12 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// Shown when an archive operation is asked for while one runs.
-const OPERATION_RUNNING: &str = "Finish the current file operation before extracting.";
+const OPERATION_RUNNING: &str =
+    crate::i18n::message_id("Finish the current file operation before extracting.");
 /// The panel's first label of an extraction.
-const PREPARING: &str = "Preparing extraction…";
+const PREPARING: &str = crate::i18n::message_id("Preparing extraction…");
 /// The panel's first label of a compression.
-const PREPARING_COMPRESSION: &str = "Preparing compression…";
+const PREPARING_COMPRESSION: &str = crate::i18n::message_id("Preparing compression…");
 
 impl BrowserWindow {
     /// Adds the archive actions.
@@ -171,7 +172,7 @@ impl BrowserWindow {
     /// (OPS-024) and writes wait for the restart (UPD-006).
     pub(super) fn may_start_archive_operation(&self) -> bool {
         if self.is_writing_files() {
-            self.show_message(OPERATION_RUNNING);
+            self.show_message(ox_core::i18n::gettext_static(OPERATION_RUNNING));
             return false;
         }
         !self.refuses_writes_during_update()
@@ -248,8 +249,11 @@ impl BrowserWindow {
             return;
         }
         let cancel = Cancellation::new();
-        self.transfer_panel()
-            .start(TransferKind::Archive, PREPARING, cancel.clone());
+        self.transfer_panel().start(
+            TransferKind::Archive,
+            ox_core::i18n::gettext_static(PREPARING),
+            cancel.clone(),
+        );
         self.update_archive_actions();
         let request = ExtractionRequest {
             archive_uri: archive.uri.clone(),
@@ -315,8 +319,11 @@ impl BrowserWindow {
             return;
         }
         let cancel = Cancellation::new();
-        self.transfer_panel()
-            .start(TransferKind::Archive, PREPARING, cancel.clone());
+        self.transfer_panel().start(
+            TransferKind::Archive,
+            ox_core::i18n::gettext_static(PREPARING),
+            cancel.clone(),
+        );
         self.update_archive_actions();
         let base_name = ox_core::archive::suggested_folder_name(&archive.name).unwrap_or_default();
         glib::spawn_future_local(glib::clone!(
@@ -378,8 +385,11 @@ impl BrowserWindow {
         let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
         let first_name = first.entry().name.clone();
         let cancel = Cancellation::new();
-        self.transfer_panel()
-            .start(TransferKind::Archive, PREPARING_COMPRESSION, cancel.clone());
+        self.transfer_panel().start(
+            TransferKind::Archive,
+            ox_core::i18n::gettext_static(PREPARING_COMPRESSION),
+            cancel.clone(),
+        );
         self.update_archive_actions();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

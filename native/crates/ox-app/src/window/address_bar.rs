@@ -276,8 +276,9 @@ impl AddressBar {
     pub(super) fn show_location(&self, crumbs: &[CrumbButton], address: &str, icon: Icon) {
         let imp = self.imp();
         icons::set_icon(&imp.icon, icon, ICON_SIZE);
-        self.set_tooltip_text(Some(&format!(
-            "{address} · Click blank space or press Ctrl+L to edit"
+        self.set_tooltip_text(Some(&ox_core::i18n::format_message(
+            "{address} · Click blank space or press Ctrl+L to edit",
+            &[("address", &(address).to_string())],
         )));
         let typing = self.mode() == AddressMode::Entry && imp.entry.focus_child().is_some();
         if !typing {
@@ -304,7 +305,9 @@ impl AddressBar {
             let button = crumb_button(crumb);
             self.add_crumb_menu_and_wheel(&button, &crumb.crumb.uri, next);
             if index == last {
-                button.update_property(&[gtk::accessible::Property::Description("Current location")]);
+                button.update_property(&[gtk::accessible::Property::Description(&ox_core::i18n::gettext(
+                    "Current location",
+                ))]);
             }
             crumb_box.append(&button);
         }
@@ -465,9 +468,9 @@ fn crumb_button(crumb: &CrumbButton) -> gtk::Button {
         .action_target(&uri.to_variant())
         .css_classes([CRUMB_CLASS])
         .build();
-    button.update_property(&[gtk::accessible::Property::Label(&format!(
-        "Go to {}",
-        crumb.crumb.label
+    button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::format_message(
+        "Go to {label}",
+        &[("label", &(crumb.crumb.label).to_string())],
     ))]);
     gestures::open_folder_on_middle_click(&button, uri);
     crumb_input::open_elsewhere_on_modified_click(&button, uri);

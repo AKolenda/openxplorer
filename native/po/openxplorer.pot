@@ -26,10 +26,6 @@ msgid "Back up and update the selected Brave profiles."
 msgstr ""
 
 #: crates/ox-app/resources/ui/brave-dialog.ui
-msgid "Checking native Brave profiles…"
-msgstr ""
-
-#: crates/ox-app/resources/ui/brave-dialog.ui
 msgid "One-time sync. Quit Brave before applying. Your browser’s other settings are left alone."
 msgstr ""
 
@@ -43,10 +39,6 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/brave-dialog.ui
 msgid "Use this Downloads folder in Brave"
-msgstr ""
-
-#: crates/ox-app/resources/ui/command-bar.ui
-msgid "Appearance"
 msgstr ""
 
 #: crates/ox-app/resources/ui/command-bar.ui
@@ -253,8 +245,24 @@ msgstr ""
 msgid "OpenXplorer"
 msgstr ""
 
+#: crates/ox-app/src/app_context/default_open.rs
+msgid "That application is no longer installed."
+msgstr ""
+
+#: crates/ox-app/src/app_context/default_open.rs
+msgid "The application did not accept this file."
+msgstr ""
+
 #: crates/ox-app/src/application.rs
 msgid "That window is no longer open."
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "Archive contents"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "Browse without extracting the entire archive."
 msgstr ""
 
 #: crates/ox-app/resources/ui/update-dialog.ui crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/help.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/type_applications.rs
@@ -270,11 +278,68 @@ msgid "Open in archive manager"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
+msgid "Opened a temporary copy. Changes are not saved back to the ZIP."
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "Opening a read-only temporary copy…"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "Reading ZIP directory…"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "This archive folder is empty."
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/navigation_buttons.rs
 msgid "Up"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "Use an archive manager for encrypted, large or unsupported members."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "{hidden_unsafe_count} unsafe names or links are hidden."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "{name} — Compressed folder"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "Compressed {item_count} items into {name}."
+msgstr ""
+
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "Compression stopped"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "{compressed} {skipped_count} links or special files were left out."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "{error}\n\nNo existing file was replaced."
 msgstr ""
 
 #: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/window/compress_dialog.rs
 msgid "Cancel"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Checking archive contents…"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Choose a writable folder outside Previous versions, not a server listing."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/properties/restore.rs
@@ -289,6 +354,11 @@ msgstr ""
 msgid "Extract compressed folder"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Extract into: {trimmed}{separator}{name}"
+msgstr ""
+
 #: crates/ox-app/src/archive_view/extract_dialog.rs
 msgid "New folder name"
 msgstr ""
@@ -297,8 +367,48 @@ msgstr ""
 msgid "Show extracted files when finished"
 msgstr ""
 
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "The ZIP is kept unchanged. Files are unpacked into a new folder; existing files are never replaced."
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Wait for the ZIP check to finish. Unsupported archives need an external archive manager."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "{files} {file_word} · {folders} {folder_word} · {bytes} unpacked"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/extraction.rs
+msgid "Extracted {file_count} files into {name}."
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extraction.rs
+msgid "Extraction stopped"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/extraction.rs
+msgid "{error}\n\nThe ZIP is unchanged. Existing files were not overwritten."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/devices.rs
+msgid "“{label}” can now be safely unplugged."
+msgstr ""
+
+#: crates/ox-app/src/dialog/fields.rs
+msgid "Not provided"
+msgstr ""
+
 #: crates/ox-app/src/dialog/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/item_dialogs.rs
 msgid "OK"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Add a network folder to your sidebar: a Windows share, or a folder on an SSH, FTP, WebDAV or NFS server."
 msgstr ""
 
 #: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/dialogs/network_sign_in.rs
@@ -313,8 +423,29 @@ msgstr ""
 msgid "Save in the sidebar · reconnect when opened"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/dialogs/network_sign_in.rs
+msgid "Connect to {host}"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_sign_in.rs
+msgid "Enter the credentials for this computer or network storage."
+msgstr ""
+
 #: crates/ox-app/src/dialogs/network_sign_in.rs
 msgid "Enter your username."
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_sign_in.rs
+msgid "Reused for this server during your Linux login session. Not saved permanently."
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_sign_in.rs
+msgid "Saved in your system keyring for future sign-ins."
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_sign_in.rs
+msgid "The previous sign-in was not accepted. Check your username and password."
 msgstr ""
 
 #: crates/ox-app/src/dialogs/network_sign_out.rs
@@ -329,16 +460,241 @@ msgstr ""
 msgid "Sign out"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/dialogs/network_sign_out.rs
+msgid "Sign out of {host}?"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/cells.rs
+msgid "Files"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/cells.rs crates/ox-app/src/window/input.rs
+msgid "Folder contents — type a filename prefix to select"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/column_keys.rs
+msgid "Enter sorts by this column; Left and Right resize it; Home fits it to the listed items"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/column_keys.rs
+msgid "Resize {name} column"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/details/column_fit.rs
+msgid "Resize {label} column: Left and Right change its width, Home fits it"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/details/column_text.rs crates/ox-app/src/window/sidebar/entries.rs
+msgid "{count} items"
+msgstr ""
+
+#: crates/ox-app/src/integration/applications.rs
+msgid "Opened with the selected application."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/brave_dialog.rs
+msgid "Brave Downloads updated for {len} profile(s)."
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/src/integration/brave_dialog.rs
+msgid "Checking native Brave profiles…"
+msgstr ""
+
+#: crates/ox-app/src/integration/brave_dialog.rs
+msgid "Confirm the change using the checkbox."
+msgstr ""
+
+#: crates/ox-app/src/integration/brave_dialog.rs
+msgid "Select at least one profile."
+msgstr ""
+
+#: crates/ox-app/src/integration/brave_dialog.rs
+msgid "Select one profile and confirm to restore its previous download setting."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/brave_dialog.rs
+msgid "{len} updated. {join}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/brave_dialog.rs
+msgid "{state} {manual} installations need manual browser settings."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
+msgid "Answer Show in folder requests from browsers and other apps after you log in."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/changes.rs
+msgid "File handlers updated, but Show in folder setup failed: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/changes.rs
+msgid "File handlers updated. {note}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/changes.rs
+msgid "Show in folder answers while OpenXplorer runs. {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/custom_command.rs
+msgid "The command could not be started: {error}"
+msgstr ""
+
+#: crates/ox-app/src/integration/custom_command.rs
+msgid "This item has no local path for %f. Use %u, or mount its share first."
+msgstr ""
+
+#: crates/ox-app/src/integration/open_with_dialog.rs
+msgid "Choose an installed application."
+msgstr ""
+
+#: crates/ox-app/src/integration/open_with_dialog.rs
+msgid "Finding installed applications…"
+msgstr ""
+
 #: crates/ox-app/src/integration/open_with_dialog.rs
 msgid "No matching installed applications."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/status.rs
+msgid "Show in folder: enabled, waiting for {owner}. Close other file managers or log out and back in."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/status.rs
+msgid "ZIP opening uses {handler}. Opening a download is not Show in folder."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/terminal.rs
+msgid "Opened {terminal} in {display}"
+msgstr ""
+
+#: crates/ox-app/src/integration/tools.rs
+msgid "No file comparison tool is installed. Install Meld to compare files."
+msgstr ""
+
+#: crates/ox-app/src/integration/tools.rs
+msgid "No search tool is installed."
+msgstr ""
+
+#: crates/ox-app/src/integration/type_associations.rs
+msgid "Folder, SMB and ZIP associations are changed in Settings > Default apps."
+msgstr ""
+
+#: crates/ox-app/src/network/discovery.rs
+msgid "Discover devices without scanning their files."
+msgstr ""
+
+#: crates/ox-app/src/network/discovery.rs
+msgid "Discovery can take a few seconds."
+msgstr ""
+
+#: crates/ox-app/src/network/discovery.rs
+msgid "Listening for advertised SMB servers…"
+msgstr ""
+
+#: crates/ox-app/src/network/discovery.rs
+msgid "No advertised SMB servers found yet. Discover again or enter an address above."
+msgstr ""
+
+#: crates/ox-app/src/properties.rs
+msgid "Reading file properties…"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties.rs
+msgid "{title} Properties"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/checksums_panel.rs
+msgid "Calculate {label}"
+msgstr ""
+
+#: crates/ox-app/src/properties/checksums_panel.rs
+msgid "Checksum copied."
+msgstr ""
+
+#: crates/ox-app/src/properties/checksums_panel.rs
+msgid "Checksums do not match."
+msgstr ""
+
+#: crates/ox-app/src/properties/checksums_panel.rs
+msgid "Checksums match."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/checksums_panel.rs
+msgid "Copy {label}"
+msgstr ""
+
+#: crates/ox-app/src/properties/checksums_panel.rs
+msgid "Enter an MD5, SHA1, SHA256 or SHA512 checksum."
 msgstr ""
 
 #: crates/ox-app/src/properties/checksums_panel.rs
 msgid "Expected checksum"
 msgstr ""
 
+#: crates/ox-app/src/properties/checksums_panel.rs
+msgid "Not calculated"
+msgstr ""
+
+#: crates/ox-app/src/properties/checksums_panel.rs
+msgid "Paste the checksum the file should have to check it."
+msgstr ""
+
 #: crates/ox-app/src/properties/custom_icon.rs
 msgid "Choose an icon"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon.rs
+msgid "Default icon restored."
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon.rs
+msgid "Icon changed."
+msgstr ""
+
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "Logical file bytes"
+msgstr ""
+
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "Not scanned"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "{ERROR_STATUS} · 0 files · 0 skipped · 0 unreadable. {reason} "
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "{files} files"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "{folders} folders"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "{status} · {files} files · {skipped} skipped · {errors} unreadable. {reason} {finished}"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
@@ -373,12 +729,20 @@ msgstr ""
 msgid "Full path"
 msgstr ""
 
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Full path copied."
+msgstr ""
+
 #: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs
 msgid "Group"
 msgstr ""
 
-#: crates/ox-app/resources/ui/address-bar.ui crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs
+#: crates/ox-app/resources/ui/address-bar.ui crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/place_editor.rs
 msgid "Location"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Metadata could not be read."
 msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
@@ -391,6 +755,14 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
 msgid "Mounted on"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Name"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "No default application"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
@@ -425,8 +797,81 @@ msgstr ""
 msgid "Writable"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "{value1} free of {value2}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/window/details_pane/media.rs
+msgid "{width} × {height} pixels"
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel.rs
+msgid "Also update Brave’s download directory (choose profiles after Apply)."
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel.rs
+msgid "Change the system folder location; leave existing files in place."
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel.rs
+msgid "Check the changed destination before applying."
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel.rs
+msgid "Choose a mounted network drive…"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/location_panel.rs
+msgid "Choose where {label} is stored. Applications that honor Linux’s standard-folder settings will use this location."
+msgstr ""
+
 #: crates/ox-app/src/properties/location_panel.rs
 msgid "Folder location"
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel.rs
+msgid "Mounted network drives"
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel/applying.rs
+msgid "Check the destination first."
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel/applying.rs
+msgid "Checking the folder and write access…"
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel/applying.rs
+msgid "Confirm the change using the checkbox first."
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel/applying.rs
+msgid "Location updated. Configuration backed up. Files moved to the new location."
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel/applying.rs
+msgid "Location updated. Configuration backed up. No files moved."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/location_panel/applying.rs
+msgid "Location updated. Configuration backed up. Some items stayed in {previous}."
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel/applying.rs
+msgid "The destination changed. Check it again."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/mount_assistant.rs
+msgid "Linux folder: {target}"
+msgstr ""
+
+#: crates/ox-app/src/properties/mount_assistant.rs
+msgid "Mount setup command"
 msgstr ""
 
 #: crates/ox-app/src/properties/mount_assistant.rs
@@ -442,6 +887,10 @@ msgid "Set up network mount (SMB)"
 msgstr ""
 
 #: crates/ox-app/src/properties/mount_assistant.rs
+msgid "Setup command copied. Review it before running."
+msgstr ""
+
+#: crates/ox-app/src/properties/mount_assistant.rs
 msgid "\\\\archive-nas\\Shared"
 msgstr ""
 
@@ -449,8 +898,21 @@ msgstr ""
 msgid "Apply changes to all subfolders and their contents"
 msgstr ""
 
+#: crates/ox-app/src/properties/permissions_editor.rs
+msgid "Permissions changed."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/permissions_editor.rs
+msgid "{name} access"
+msgstr ""
+
 #: crates/ox-app/src/properties/permissions_editor/advanced.rs
 msgid "Advanced Permissions"
+msgstr ""
+
+#: crates/ox-app/src/properties/permissions_editor/choices.rs
+msgid "Varying (No Change)"
 msgstr ""
 
 #: crates/ox-app/src/properties/restore.rs
@@ -459,6 +921,21 @@ msgstr ""
 
 #: crates/ox-app/src/properties/restore.rs
 msgid "Restore a copy"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/selection_view.rs
+msgid "All in {display_location}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/selection_view.rs
+msgid "All of type {first}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/selection_view.rs
+msgid "{count} items Properties"
 msgstr ""
 
 #: crates/ox-app/src/properties/sharing_panel.rs
@@ -489,15 +966,56 @@ msgstr ""
 msgid "Share this folder"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/sharing_panel.rs
+msgid "Shared as \\\\{value1}\\{name}"
+msgstr ""
+
+#: crates/ox-app/src/properties/sharing_panel.rs
+msgid "This folder is not shared."
+msgstr ""
+
 #: crates/ox-app/src/properties/size_scan_strip.rs
 msgid "Cancel scan"
+msgstr ""
+
+#: crates/ox-app/src/properties/size_scan_strip.rs
+msgid "Cancelling size scan…"
 msgstr ""
 
 #: crates/ox-app/src/properties/size_scan_strip.rs
 msgid "Dismiss"
 msgstr ""
 
-#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/size_scan_strip.rs
+msgid "Size scan finished · {complete} complete"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/size_scan_strip.rs
+msgid "Size scan finished · {complete} complete · {partial} partial/unavailable"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/size_scan_strip.rs
+msgid "{hint} · Logical bytes; recalculate after changes"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/size_scan_strip.rs
+msgid "{value1}/{total} · {name} · {value3} · {group_thousands} files"
+msgstr ""
+
+#: crates/ox-app/src/properties/snapshot_banner.rs crates/ox-app/src/window/tab_strip.rs
+msgid "Previous version"
+msgstr ""
+
+#: crates/ox-app/src/properties/snapshot_banner.rs
+msgid "Read-only in OpenXplorer · Restore a copy to edit"
+msgstr ""
+
+#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs crates/ox-app/src/window/navigation_buttons.rs
 msgid "Back"
 msgstr ""
 
@@ -509,11 +1027,48 @@ msgstr ""
 msgid "Snapshot collection folder"
 msgstr ""
 
+#: crates/ox-app/src/properties/snapshot_source.rs
+msgid "Snapshot layout"
+msgstr ""
+
 #: crates/ox-app/src/properties/versions_panel.rs
 msgid "Availability details"
 msgstr ""
 
-#: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/settings_page/about.rs
+#: crates/ox-app/src/properties/versions_panel.rs
+msgid "Checking readable snapshot folders…"
+msgstr ""
+
+#: crates/ox-app/src/properties/versions_panel.rs
+msgid "No accessible previous versions"
+msgstr ""
+
+#: crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Previous versions"
+msgstr ""
+
+#: crates/ox-app/src/properties/versions_panel.rs
+msgid "Showing at most 100 versions. Configure a narrower snapshot folder to see more."
+msgstr ""
+
+#: crates/ox-app/src/search/info_strip.rs
+msgid "Search scope"
+msgstr ""
+
+#: crates/ox-app/src/search/info_strip.rs
+msgid "The search cache holds names only"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/search/report.rs
+msgid "{shown} results"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/command_bar/menus.rs
+msgid "About this build"
+msgstr ""
+
+#: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/status_bar.rs
 msgid "Check for updates"
 msgstr ""
 
@@ -538,7 +1093,19 @@ msgid "Ctrl + and Ctrl − change it anywhere; Ctrl 0 resets. Desktop scaling is
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Dark"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Layout"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Light"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs
+msgid "Reset"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -551,6 +1118,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Sidebar and column widths"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "System"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -582,6 +1153,14 @@ msgid "Windows 10 is compact and shows familiar text commands."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Windows 10 · Classic (default)"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Windows 11 · Compact actions"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "appearance dark light system colour color mode"
 msgstr ""
 
@@ -597,6 +1176,16 @@ msgstr ""
 msgid "reset layout widths sidebar resize columns"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "{percent}% (default)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/bindings.rs crates/ox-app/src/window/preferences.rs
+msgid "Changed for this window, but could not be saved: {error}"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/brave.rs
 msgid "Download folder"
 msgstr ""
@@ -607,6 +1196,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/brave.rs
 msgid "Use Linux Downloads in Brave"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/brave.rs
+msgid "Use Linux Downloads in Brave…"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -630,11 +1223,23 @@ msgid "Brave's and other apps' Show in folder opens OpenXplorer. Per-user, start
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Checking the current default…"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Checking the default file explorer…"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Disable Show in folder"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Double-clicking a folder in other apps."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Enable"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -650,6 +1255,10 @@ msgid "Include Show in folder"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Make OpenXplorer default"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Make default also opens ZIP archives in OpenXplorer (changes the archive association)."
 msgstr ""
 
@@ -659,6 +1268,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
 msgid "OpenXplorer stops answering Show in folder requests."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Refresh status"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -678,7 +1291,15 @@ msgid "Show in folder from browsers"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Test"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Troubleshooting"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Use OpenXplorer for ZIPs"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -877,24 +1498,82 @@ msgstr ""
 msgid "Add folders to the index"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/indexed_folders.rs
+msgid "Folder to cache"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/indexed_folders.rs crates/ox-app/src/settings_page/indexing.rs
 msgid "Indexed folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders.rs
+msgid "No folders are indexed yet. Add one below, or pin a folder to Quick access."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexed_folders.rs
 msgid "custom directory path local disk smb nas"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/indexed_folders/candidates.rs
+msgid "SMB · {authority}"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders/commands.rs crates/ox-app/src/window/cache_folder.rs
+msgid "Caching filenames and paths in the background. No file contents are downloaded."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
+msgid "Last full refresh: {value1}"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
 msgid "Pinned"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
+msgid "{names} names · {as_str}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
+msgid "Cache {label}"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
 msgid "Clear"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/indexed_folders.rs crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
+msgid "Index"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
 msgid "Index selected"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
+msgid "Index {label}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs crates/ox-app/src/window/status_bar.rs
+msgid "{count} selected"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "1 minute"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "30 seconds"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "5 minutes"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -917,8 +1596,17 @@ msgstr ""
 msgid "Index pinned folders automatically"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Instant search is on for {folders} folders"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/indexing.rs
 msgid "Logical file bytes, what a scan skips, and its limits."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Manage…"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -930,11 +1618,19 @@ msgid "Options"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
+msgid "Refresh all"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
 msgid "Right-click a folder → Calculate folder size. Results last for this session."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
 msgid "SMB and unwatched folders are checked for changes this often."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Search file names in the folders you choose, even while a share is offline."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -953,8 +1649,66 @@ msgstr ""
 msgid "quick access pin search cache"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "{grouped_number} names indexed"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "{names} · last updated {when}"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/navigation.rs
 msgid "No settings match your search."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "About"
+msgstr ""
+
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/src/settings_page/pages.rs
+msgid "Appearance"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "Brave & downloads"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "Choose what opens when you open a folder, a network link or a ZIP file."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "Default apps"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "How OpenXplorer looks in every window."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "Keep a private list of file names so searches in these folders are instant."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "Open more windows and move tabs and files between them."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "Save Brave's downloads in your Linux Downloads folder."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "Search & indexing"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "What this build is, how it is updated and its licence."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/pages.rs
+msgid "Windows & tabs"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/search.rs
@@ -989,6 +1743,14 @@ msgid "The folder a new window shows first. Leave it empty for Home."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
+msgid "Use Home"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "Use current location"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
 msgid "session remember reopen restore tabs last time startup logon"
 msgstr ""
 
@@ -996,8 +1758,21 @@ msgstr ""
 msgid "startup start home folder location default show on startup open explorer to"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "“{typed}” is not a folder that exists."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/troubleshooting.rs
+msgid "Zorin + Brave setup and troubleshooting"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/windows_tabs.rs
 msgid "Address bar"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "After the current tab"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/windows_tabs.rs
@@ -1022,6 +1797,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/windows_tabs.rs
 msgid "Ask whether to run programs and scripts"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "At the end of the tab bar"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/windows_tabs.rs
@@ -1104,7 +1883,7 @@ msgstr ""
 msgid "Open new windows in split view"
 msgstr ""
 
-#: crates/ox-app/resources/ui/window.ui crates/ox-app/src/settings_page/windows_tabs.rs
+#: crates/ox-app/resources/ui/window.ui crates/ox-app/src/settings_page/windows_tabs.rs crates/ox-app/src/window/title_bar.rs
 msgid "Open windows"
 msgstr ""
 
@@ -1216,8 +1995,128 @@ msgstr ""
 msgid "zip tar gz archive compressed browse extract"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/theme/appearance_button.rs
+msgid "Appearance: {shown}. Click to change."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/theme/appearance_button.rs
+msgid "System ({current})"
+msgstr ""
+
+#: crates/ox-app/src/update/dialog.rs
+msgid "Finish file operations before installing the update."
+msgstr ""
+
+#: crates/ox-app/src/update/launch_guard.rs
+msgid "Run OpenXplorer as your regular desktop user, not with sudo."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/launch_guard.rs
+msgid "The installed version is {running_version}; the existing background process is {running}. A restart closes existing windows. File operations must finish first; they will not be force-stopped."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/report.rs
+msgid "OpenXplorer {running_version}\nGTK {value2}.{value3}.{value4}\nGIO/GVfs: {name}\nBuild: {build}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Could not check for updates. {reason}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Could not restart. {reason}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Installed: {current}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Installed: {current} · Available: {latest}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Installed: {running}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Installed: {running}. Look for a newer OpenXplorer release."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "OpenXplorer {latest} is available."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "OpenXplorer {latest} is available. Installed: {current}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "OpenXplorer {version} is installed. Restart to use the update."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Update installation did not complete. {reason}{recovery}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/about.rs
+msgid "Copyright (c) 2026 OpenXplorer contributors.\nAGPL-3.0-only. No warranty. You may redistribute and modify under the included terms.\n\nComplete corresponding source and build tools: {REPOSITORY}, tag v{version}, and the source archive published with each release at {REPOSITORY}/releases."
+msgstr ""
+
 #: crates/ox-app/src/window/about.rs
 msgid "Website"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/about.rs
+msgid "{AGPL}\n\nOriginal notice:\n\n{WINSPACE_NOTICE}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/activation.rs
+msgid "Opening {address} in your web browser."
+msgstr ""
+
+#: crates/ox-app/src/window/activation.rs
+msgid "This item is not a regular file or a readable folder."
+msgstr ""
+
+#: crates/ox-app/src/window/activation/outcome.rs
+msgid "Could not open the item"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/activation/outcome.rs
+msgid "Could not open {name}: {reason}"
+msgstr ""
+
+#: crates/ox-app/src/window/address_bar.rs
+msgid "Current location"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/address_bar.rs
+msgid "Go to {label}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/address_bar.rs
+msgid "{address} · Click blank space or press Ctrl+L to edit"
 msgstr ""
 
 #: crates/ox-app/src/window/address_menu.rs
@@ -1236,6 +2135,16 @@ msgstr ""
 msgid "Keep address editable"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/address_menu.rs
+msgid "Open “{label}” in new tab"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/address_menu.rs
+msgid "Open “{label}” in new window"
+msgstr ""
+
 #: crates/ox-app/src/window/address_menu.rs
 msgid "Paste and go"
 msgstr ""
@@ -1249,19 +2158,155 @@ msgid "The clipboard holds no address."
 msgstr ""
 
 #: crates/ox-app/src/window/address_protocols.rs
+msgid "Protocols and recent servers"
+msgstr ""
+
+#: crates/ox-app/src/window/address_protocols.rs
 msgid "Recent servers"
+msgstr ""
+
+#: crates/ox-app/src/window/archive_actions.rs
+msgid "Finish the current file operation before extracting."
+msgstr ""
+
+#: crates/ox-app/src/window/archive_actions.rs
+msgid "Preparing compression…"
+msgstr ""
+
+#: crates/ox-app/src/window/archive_actions.rs
+msgid "Preparing extraction…"
+msgstr ""
+
+#: crates/ox-app/src/window/cache_folder.rs
+msgid "Cache disabled; this root’s indexed names were removed."
 msgstr ""
 
 #: crates/ox-app/resources/ui/search-info-strip.ui crates/ox-app/src/window/cache_folder.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Cache this folder for search"
 msgstr ""
 
+#: crates/ox-app/src/window/closing.rs
+msgid "A file operation is running"
+msgstr ""
+
+#: crates/ox-app/src/window/closing.rs
+msgid "Cancel and close"
+msgstr ""
+
+#: crates/ox-app/src/window/closing.rs
+msgid "Cancel it and close this window once it has stopped? Items already finished stay where they are."
+msgstr ""
+
+#: crates/ox-app/src/window/closing.rs
+msgid "Close all tabs"
+msgstr ""
+
+#: crates/ox-app/src/window/closing.rs
+msgid "Close all tabs?"
+msgstr ""
+
+#: crates/ox-app/src/window/closing.rs
+msgid "Finish or cancel active file operations before quitting OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/window/closing.rs
+msgid "Keep open"
+msgstr ""
+
+#: crates/ox-app/src/window/closing.rs
+msgid "Quit OpenXplorer?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/closing.rs
+msgid "This window has {count} tabs open. Close them all?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/closing.rs
+msgid "This window has {tabs} tabs open. Close them all and quit?"
+msgstr ""
+
+#: crates/ox-app/src/window/closing.rs
+msgid "Wait for the update to finish before closing OpenXplorer."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/closing.rs
+msgid "{len} windows have {tabs} tabs open. Close them all and quit?"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Copy"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Copy (Ctrl+C)"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Copy path"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Copy path (does not change sharing permissions)"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Cut"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Cut (Ctrl+X)"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs
 msgid "More options"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "About this build"
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Move to Trash"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Move to Trash (Delete)"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "New"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Paste"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Paste files (Ctrl+V)"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Rename"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Rename (F2)"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Settings (Ctrl+,)"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Sort"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "View"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/command_bar.rs
+msgid "{label} (Delete)"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -1300,7 +2345,7 @@ msgstr ""
 msgid "Folder"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/folder_tree.rs
 msgid "Folder tree"
 msgstr ""
 
@@ -1356,7 +2401,7 @@ msgstr ""
 msgid "Markdown document"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar.rs
 msgid "Navigation pane"
 msgstr ""
 
@@ -1416,12 +2461,20 @@ msgstr ""
 msgid "Compress"
 msgstr ""
 
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Format"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu.rs
 msgid "Recent locations cleared."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/disk_tools.rs
 msgid "Analyse disk usage"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Items in a previous version are read-only."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
@@ -1436,8 +2489,22 @@ msgstr ""
 msgid "Open in new window"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Open in {name}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs
+msgid "Open with {name}"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Paste into folder"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Select only one item for this command."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs
@@ -1460,8 +2527,61 @@ msgstr ""
 msgid "Show subfolders"
 msgstr ""
 
+#: crates/ox-app/src/window/desktop_link.rs
+msgid "This link points to an address OpenXplorer cannot open."
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter."
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Select an item to see its properties. Double-click to open it."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "{selected} items selected"
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/media.rs
+msgid "Preview"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "Could not start {display}: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "Disks cannot open this drive."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "This tool needs a location on this computer."
+msgstr ""
+
 #: crates/ox-app/src/window/empty_page.rs
 msgid "Try again"
+msgstr ""
+
+#: crates/ox-app/src/window/file_drag.rs
+msgid "Drag ended"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_drag.rs
+msgid "Dragging {len} items"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_drag.rs
+msgid "Dragging {name}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_drop/program.rs
+msgid "Opened {len} item(s) with {name}."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop/program.rs crates/ox-app/src/window/run_on_open.rs
@@ -1472,32 +2592,209 @@ msgstr ""
 msgid "Run this program?"
 msgstr ""
 
-#: crates/ox-app/src/window/folder_tree/menu.rs
-msgid "Copy"
+#: crates/ox-app/src/window/file_drop/program.rs
+msgid "This program has no local path. Mount its share before dropping files on it."
 msgstr ""
 
-#: crates/ox-app/src/window/folder_tree/menu.rs
-msgid "Cut"
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_drop/program.rs
+msgid "“{name}” is not a program you can run."
 msgstr ""
 
-#: crates/ox-app/src/window/folder_tree/menu.rs
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_drop/program.rs
+msgid "“{name}” is on a network share or a removable drive. Run it only if you trust where it came from."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/batch_rename.rs
+msgid "# becomes ascending numbers starting at"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/batch_rename.rs
+msgid "Rename items"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/batch_rename.rs
+msgid "Rename the {len} selected items to:"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/batch_rename.rs
+msgid "Renaming items…"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/clipboard.rs
+msgid "{count} item(s) {verb} — ready to paste in another window."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/conflict_compare.rs
+msgid "Existing: {text}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/conflict_compare.rs
+msgid "Incoming: {text}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/conflict_compare.rs
+msgid "{kind} · Modified {date_time_text}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
+msgid "Apply to all {count} items"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
+msgid "Items already exist"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
+msgid "Otherwise the choice is for “{first}” only. A new name is always for “{first}” only."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/conflict_dialog.rs
+msgid "{count} matching name(s) in {destination}\n\nReplace existing files or skip conflicts. Same-name folders are merged; destination-only files stay in place."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/conflict_rename.rs
+msgid "“{name}” already exists here too. Enter another name."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Error while {doing} “{name}”"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/hide_confirm.rs
+msgid "Adding a dot to the beginning of this file's name will hide it from view."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/hide_confirm.rs
+msgid "Rename and hide?"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/inline_rename.rs
+msgid "New name"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/journal.rs
+msgid "Undo copy?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/journal.rs
+msgid "{len} copies, such as “{first}”, were changed after they were copied. Undo moves them to the Recycle Bin anyway?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/journal.rs
+msgid "“{first}” was changed after it was copied. Undo moves it to the Recycle Bin anyway?"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/links.rs
+msgid "A link opens the file or folder it points to. Leave the name empty to use the name of that item."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/links.rs
+msgid "New link"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/move_by_copying_dialog.rs
+msgid "Copy, then remove originals"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/move_by_copying_dialog.rs
+msgid "Move by copying?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/move_by_copying_dialog.rs
+msgid "“{name}” cannot be moved directly to “{destination}”, which is on another drive, share or device. The items can be copied there and the originals removed once their copies are complete. An original that changes during the move is kept."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/name_dialog.rs
+msgid "A slash makes a folder inside the one before it."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/name_dialog.rs
+msgid "Names must not contain slashes."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/name_dialog.rs
+msgid "Use names without backslashes or control characters, one slash between folders."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/names.rs
+msgid "An item named “{name}” already exists here."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/names.rs
+msgid "Creates {join}, each inside the one before."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/recycle_bin.rs
+msgid "Restoring items…"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/rename.rs
+msgid "Renamed to “{name}”."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename.rs
+msgid "The name was not changed."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/template_dialog.rs
+msgid " · Your template"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/template_dialog.rs
+msgid "Templates folder: {display}"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/transfer.rs
+msgid "Could not check destination"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/trash_support.rs crates/ox-app/src/window/folder_tree/menu.rs
 msgid "Delete permanently"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
+msgid "“{name}” has characters the destination file system does not allow (\" * : < > ? \\ | and control characters)."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
+msgid "“{name}” is a symbolic link, which the destination file system cannot store."
+msgstr ""
+
+#: crates/ox-app/src/window/folder_size_scan.rs
+msgid "Cancel or finish the current folder-size scan first."
+msgstr ""
+
+#: crates/ox-app/src/window/folder_size_scan.rs
+msgid "Select a folder or share to calculate its size."
 msgstr ""
 
 #: crates/ox-app/src/window/folder_tree/menu.rs
 msgid "Limit to home folder"
 msgstr ""
 
-#: crates/ox-app/src/window/folder_tree/menu.rs
-msgid "Move to Trash"
-msgstr ""
-
 #: crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Open in Terminal"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_tree/menu.rs
-msgid "Paste"
 msgstr ""
 
 #: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/sidebar/menu.rs
@@ -1516,12 +2813,35 @@ msgstr ""
 msgid "Show hidden folders"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/free_space.rs
+msgid "{free} free out of {size} ({used}% used)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/free_space.rs
+msgid "{value1} free"
+msgstr ""
+
 #: crates/ox-app/src/window/help.rs
 msgid ""
 msgstr ""
 
 #: crates/ox-app/src/window/help.rs
+msgid "Getting started"
+msgstr ""
+
+#: crates/ox-app/src/window/help.rs
 msgid "OpenXplorer Help"
+msgstr ""
+
+#: crates/ox-app/src/window/help.rs
+msgid "Report an issue"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/integration_actions.rs
+msgid "Are you sure you want to open {len} terminals?"
 msgstr ""
 
 #: crates/ox-app/src/window/integration_actions.rs
@@ -1530,6 +2850,48 @@ msgstr ""
 
 #: crates/ox-app/src/window/integration_actions.rs
 msgid "Open terminals"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/integration_actions.rs
+msgid "Opened with {name}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/landing.rs
+msgid "{free} free of {size}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/link_target.rs
+msgid "The target of “{name}” does not exist: {display}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/link_target.rs
+msgid "“{name}” is not a link."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/loading/removed_folder.rs
+msgid "Current location changed, {path} is no longer accessible."
+msgstr ""
+
+#: crates/ox-app/src/window/loading_line.rs
+msgid "Loading"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/location_view.rs
+msgid "{place} — OpenXplorer"
+msgstr ""
+
+#: crates/ox-app/src/window/menu_popover.rs
+msgid "File actions"
+msgstr ""
+
+#: crates/ox-app/src/window/mounting.rs
+msgid "Close files using this mount first. This disconnects the session mount for other applications too."
 msgstr ""
 
 #: crates/ox-app/src/window/mounting.rs
@@ -1542,6 +2904,30 @@ msgstr ""
 
 #: crates/ox-app/src/window/mounting.rs
 msgid "Finish the current operation before disconnecting."
+msgstr ""
+
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Back (Alt+Left)"
+msgstr ""
+
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Forward"
+msgstr ""
+
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Forward (Alt+Right)"
+msgstr ""
+
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Refresh"
+msgstr ""
+
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Refresh (F5)"
+msgstr ""
+
+#: crates/ox-app/src/window/navigation_buttons.rs
+msgid "Up (Alt+Up)"
 msgstr ""
 
 #: crates/ox-app/src/window/network_page.rs
@@ -1561,11 +2947,29 @@ msgid "Open address"
 msgstr ""
 
 #: crates/ox-app/src/window/network_page.rs
+msgid "SMB server address"
+msgstr ""
+
+#: crates/ox-app/src/window/network_page.rs
 msgid "\\\\server or \\\\archive-nas"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/network_page.rs
+msgid "{protocol_name} · Discovered"
 msgstr ""
 
 #: crates/ox-app/src/window/network_sign_out.rs
 msgid "Finish the current file operation before signing out."
+msgstr ""
+
+#: crates/ox-app/src/window/network_sign_out.rs
+msgid "Sign-out did not fully finish"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/open_several.rs
+msgid "Are you sure you want to open {len} items?"
 msgstr ""
 
 #: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
@@ -1577,6 +2981,14 @@ msgid "Open all"
 msgstr ""
 
 #: crates/ox-app/src/window/place_editor.rs
+msgid "Add a folder or network location to Quick access."
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
+msgid "Add entry"
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
 msgid "Another folder is being pinned. Try again in a moment."
 msgstr ""
 
@@ -1585,7 +2997,25 @@ msgid "Browse…"
 msgstr ""
 
 #: crates/ox-app/src/window/place_editor.rs
+msgid "Change the name or the location of this Quick access entry."
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
 msgid "Choose a folder"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/place_editor.rs
+msgid "Could not add: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/place_editor.rs
+msgid "Could not save: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
+msgid "Edit entry"
 msgstr ""
 
 #: crates/ox-app/src/window/place_editor.rs
@@ -1612,8 +3042,36 @@ msgstr ""
 msgid "Empty Recycle Bin"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/preferences.rs
+msgid "Text size changed for this window, but could not be saved: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/preferences.rs
+msgid "Text size: {percent}%"
+msgstr ""
+
 #: crates/ox-app/src/window/quick_access.rs
 msgid "Already pinned to Quick access."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/quick_access.rs
+msgid "Could not pin: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/quick_access.rs
+msgid "Only folders and network shares can be pinned. Select folders only."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/quick_access.rs
+msgid "{count} folders pinned. No files were moved."
+msgstr ""
+
+#: crates/ox-app/src/window/relocated_files.rs
+msgid "Do you want to move all of the files from the old location to the new location?"
 msgstr ""
 
 #: crates/ox-app/src/window/relocated_files.rs
@@ -1621,11 +3079,39 @@ msgid "Don't move"
 msgstr ""
 
 #: crates/ox-app/src/window/relocated_files.rs
+msgid "Finish the current file operation, then move the files from the old location."
+msgstr ""
+
+#: crates/ox-app/src/window/relocated_files.rs
 msgid "Move files"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/relocated_files.rs
+msgid "New location: {display}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/relocated_files.rs
+msgid "Old location: {display}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/run_on_open.rs
+msgid "“{name}” is a program or script. Run it, or open it in its application?"
 msgstr ""
 
 #: crates/ox-app/src/window/saved_search.rs
 msgid "Remove from navigation pane"
+msgstr ""
+
+#: crates/ox-app/src/window/saved_search.rs
+msgid "Search saved to the navigation pane"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/search_box.rs
+msgid "Search {title}"
 msgstr ""
 
 #: crates/ox-app/src/window/select_matching.rs
@@ -1642,6 +3128,20 @@ msgstr ""
 
 #: crates/ox-app/src/window/select_matching.rs
 msgid "Use * for any characters and ? for one character, such as *.pdf."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Go to tab {number}"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar.rs
+msgid "Folders and network locations"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/sidebar/entries.rs
+msgid "Recycle Bin · {state}"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs
@@ -1661,10 +3161,6 @@ msgid "Open folder with…"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs
-msgid "Previous versions"
-msgstr ""
-
-#: crates/ox-app/src/window/sidebar/menu.rs
 msgid "Show"
 msgstr ""
 
@@ -1676,8 +3172,22 @@ msgstr ""
 msgid "Unpin from Quick access"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "{verb} section “{name}”"
+msgstr ""
+
 #: crates/ox-app/src/window/sidebar/row.rs
 msgid "Network share"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/sidebar_hiding.rs
+msgid "Could not save the sidebar: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar_resizer.rs
+msgid "Drag to resize sidebar · double-click to reset"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar_resizer.rs
@@ -1685,7 +3195,24 @@ msgid "Resize sidebar"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar_toggle.rs
+msgid "Places"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar_toggle.rs
 msgid "Places (F9 shows the navigation pane)"
+msgstr ""
+
+#: crates/ox-app/src/window/snapshot_tabs.rs
+msgid " · Properties open"
+msgstr ""
+
+#: crates/ox-app/src/window/software_search.rs
+msgid "Find an app in Software"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/status_bar.rs
+msgid "Changes made elsewhere are not shown as they happen. OpenXplorer lists this folder again every {interval}; press F5 to list it now."
 msgstr ""
 
 #: crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/src/window/status_bar.rs
@@ -1703,12 +3230,9 @@ msgid_plural "{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/status_bar.rs
-msgid "{count} selected"
-msgid_plural "{count} selected"
-msgstr[0] ""
-msgstr[1] ""
+#: crates/ox-app/src/window/stop_listing.rs
+msgid "Stopped. Some items may be missing; press F5 to list the folder again."
+msgstr ""
 
 #: crates/ox-app/src/window/tab_menu.rs
 msgid "Close other tabs"
@@ -1738,12 +3262,40 @@ msgstr ""
 msgid "No other OpenXplorer windows"
 msgstr ""
 
+#: crates/ox-app/src/window/tab_moves.rs
+msgid "OpenXplorer window"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_moves/drag.rs
+msgid "Release to open this tab in a new window"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_moves/drag.rs
+msgid "Wait for this tab to finish moving."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/tab_strip.rs
-msgid "Previous version"
+msgid "Close {title}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/tab_strip.rs
+msgid "Previous version · {snapshot}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/tab_strip.rs
+msgid "{title} — Previous version — {snapshot}"
 msgstr ""
 
 #: crates/ox-app/src/window/title_bar.rs
 msgid "Quit OpenXplorer"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/title_bar.rs
+msgid "Reopen {value1}"
 msgstr ""
 
 #: crates/ox-app/src/window/type_applications.rs
@@ -1755,19 +3307,67 @@ msgid "Apps for this type"
 msgstr ""
 
 #: crates/ox-app/src/window/type_applications.rs
-msgid "Remove"
+msgid "Only applications you added to this type can be removed."
 msgstr ""
 
 #: crates/ox-app/src/window/type_applications.rs
-msgid "Reset"
+msgid "Remove"
 msgstr ""
 
 #: crates/ox-app/src/window/type_applications.rs
 msgid "Reset apps"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/type_applications.rs
+msgid "Reset the apps for {description} files to the system defaults? Your default app and the apps you added are forgotten."
+msgstr ""
+
 #: crates/ox-app/src/window/type_applications.rs
 msgid "Set as default"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/type_applications.rs
+msgid "What opens {description} files ({content_type}). Changes apply to your account only."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/type_applications.rs
+msgid "{name} (added by you)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/type_applications.rs
+msgid "{name} (default)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/type_to_select.rs
+msgid "Jump to: {prefix} — {name}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/type_to_select.rs
+msgid "No name starts with “{prefix}”"
+msgstr ""
+
+#: crates/ox-app/src/window/version_restore.rs
+msgid "Another file operation is still running."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/watch_state.rs
+msgid "{seconds} seconds"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/watch_state.rs
+msgid "{value1} minutes"
+msgstr ""
+
+#: crates/ox-app/src/write_inhibitor.rs
+msgid "Copying files"
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.desktop packaging/data/io.winspace.Development.metainfo.xml

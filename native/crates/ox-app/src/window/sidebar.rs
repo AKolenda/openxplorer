@@ -139,12 +139,16 @@ impl Sidebar {
     fn build_pane(&self) {
         self.set_orientation(gtk::Orientation::Vertical);
         self.add_css_class("sidebar");
-        self.update_property(&[gtk::accessible::Property::Label("Folders and network locations")]);
+        self.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Folders and network locations",
+        ))]);
         let list = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::Single)
             .activate_on_single_click(true)
             .build();
-        list.update_property(&[gtk::accessible::Property::Label("Navigation pane")]);
+        list.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Navigation pane",
+        ))]);
         self.separate_sections(&list);
         self.open_places_on_middle_click(&list);
         self.open_places_in_tabs_on_ctrl_click(&list);
@@ -515,7 +519,7 @@ fn map_network_button() -> gtk::Box {
     let button = gtk::Button::builder()
         .child(&content)
         .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text(&ox_core::i18n::gettext("Map network location"))
+        .tooltip_text(ox_core::i18n::gettext("Map network location"))
         .build();
     let footer = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)

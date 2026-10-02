@@ -14,8 +14,8 @@ use crate::folder_view::CUSTOM_ICON;
 use crate::icons::Icon;
 
 /// The toasts after a change.
-const ICON_CHANGED: &str = "Icon changed.";
-const ICON_RESTORED: &str = "Default icon restored.";
+const ICON_CHANGED: &str = crate::i18n::message_id("Icon changed.");
+const ICON_RESTORED: &str = crate::i18n::message_id("Default icon restored.");
 
 /// Change icon…, and Restore default icon when `has_custom_icon`, for the
 /// local item at `uri`.
@@ -32,7 +32,12 @@ pub(super) fn icon_buttons(row: &gtk::Box, uri: &str, has_custom_icon: bool) {
             let target = target.clone();
             glib::spawn_future_local(async move {
                 let result = set_custom_icon(&target, None).await;
-                report(&button, &target, result, ICON_RESTORED);
+                report(
+                    &button,
+                    &target,
+                    result,
+                    ox_core::i18n::gettext_static(ICON_RESTORED),
+                );
             });
         });
         row.append(&restore);
@@ -47,7 +52,7 @@ fn choose_icon(button: &gtk::Button, uri: &str) {
     let filters = gio::ListStore::new::<gtk::FileFilter>();
     filters.append(&images);
     let dialog = gtk::FileDialog::builder()
-        .title(&ox_core::i18n::gettext("Choose an icon"))
+        .title(ox_core::i18n::gettext("Choose an icon"))
         .modal(true)
         .filters(&filters)
         .build();
@@ -59,7 +64,7 @@ fn choose_icon(button: &gtk::Button, uri: &str) {
             return;
         };
         let result = set_custom_icon(&uri, Some(chosen.uri().to_string())).await;
-        report(&button, &uri, result, ICON_CHANGED);
+        report(&button, &uri, result, ox_core::i18n::gettext_static(ICON_CHANGED));
     });
 }
 

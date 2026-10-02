@@ -63,7 +63,9 @@ impl BrowserWindow {
             .hexpand(true)
             .css_classes([NAME_EDITOR_CLASS])
             .build();
-        editor.update_property(&[gtk::accessible::Property::Label("New name")]);
+        editor.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "New name",
+        ))]);
         let target = RenameTarget {
             uri: entry.uri.clone(),
             name: entry.name.clone(),

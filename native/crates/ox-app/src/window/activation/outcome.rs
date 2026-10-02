@@ -15,7 +15,7 @@ use crate::window::software_search::{self, FIND_IN_SOFTWARE};
 use crate::window::{BrowserWindow, ButtonStyle};
 
 /// The title of the dialog that says why an item did not open.
-const OPEN_FAILED: &str = "Could not open the item";
+const OPEN_FAILED: &str = crate::i18n::message_id("Could not open the item");
 
 /// Where an activation started: its tab, and how often that tab had moved
 /// to another location by then.
@@ -66,7 +66,13 @@ impl BrowserWindow {
             Ok(Resolved::Archive(archive)) if is_active => self.open_archive_or_file(&archive),
             Ok(Resolved::Archive(_) | Resolved::Opened) => {}
             Err(reason) if is_active => self.report_open_failure(&reason, entry),
-            Err(reason) => self.show_message(&format!("Could not open {}: {reason}", entry.name)),
+            Err(reason) => self.show_message(&ox_core::i18n::format_message(
+                "Could not open {name}: {reason}",
+                &[
+                    ("name", &(entry.name).to_string()),
+                    ("reason", &(reason).to_string()),
+                ],
+            )),
         }
     }
 
@@ -101,7 +107,7 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                let dialog = Dialog::new(&window, OPEN_FAILED, &reason);
+                let dialog = Dialog::new(&window, ox_core::i18n::gettext_static(OPEN_FAILED), &reason);
                 let find = unhandled
                     .as_ref()
                     .map(|_| dialog.add_button(FIND_IN_SOFTWARE, ButtonStyle::Bordered));

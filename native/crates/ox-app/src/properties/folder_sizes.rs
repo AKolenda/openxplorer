@@ -19,11 +19,11 @@ const SCANNING: &str = "Scanning…";
 const UNAVAILABLE: &str = "Unavailable";
 /// The Size text of a folder never measured, in the details pane and
 /// Properties.
-pub(crate) const NOT_SCANNED: &str = "Not scanned";
+pub(crate) const NOT_SCANNED: &str = crate::i18n::message_id("Not scanned");
 /// The status word of a failed scan in tooltips (`status:'error'`).
 const ERROR_STATUS: &str = "error";
 /// What a measured size counts, when the scan gave no other reason.
-const LOGICAL_BYTES: &str = "Logical file bytes";
+const LOGICAL_BYTES: &str = crate::i18n::message_id("Logical file bytes");
 
 /// What is known about one folder's size.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,16 +70,27 @@ impl FolderSizeState {
     /// (`updateSizeLabels`).
     pub(crate) fn summary_tooltip(&self) -> String {
         match self {
-            FolderSizeState::Unavailable(reason) => {
-                format!("{ERROR_STATUS} · 0 files · 0 skipped · 0 unreadable. {reason} ")
-            }
+            FolderSizeState::Unavailable(reason) => ox_core::i18n::format_message(
+                "{ERROR_STATUS} · 0 files · 0 skipped · 0 unreadable. {reason} ",
+                &[
+                    ("ERROR_STATUS", &(ERROR_STATUS).to_string()),
+                    ("reason", &(reason).to_string()),
+                ],
+            ),
             FolderSizeState::Measured(size) => {
                 let status = size.status.as_str();
                 let reason = size.status.reason();
                 let finished = finished_text(size);
-                format!(
-                    "{status} · {} files · {} skipped · {} unreadable. {reason} {finished}",
-                    size.files, size.skipped, size.errors
+                ox_core::i18n::format_message(
+                    "{status} · {files} files · {skipped} skipped · {errors} unreadable. {reason} {finished}",
+                    &[
+                        ("status", &(status).to_string()),
+                        ("files", &(size.files).to_string()),
+                        ("skipped", &(size.skipped).to_string()),
+                        ("errors", &(size.errors).to_string()),
+                        ("reason", &(reason).to_string()),
+                        ("finished", &(finished).to_string()),
+                    ],
                 )
             }
         }
@@ -92,7 +103,7 @@ impl FolderSizeState {
             FolderSizeState::Unavailable(reason) => format!("{ERROR_STATUS} · {reason} · "),
             FolderSizeState::Measured(size) => {
                 let reason = match size.status.reason() {
-                    "" => LOGICAL_BYTES,
+                    "" => ox_core::i18n::gettext_static(LOGICAL_BYTES),
                     reason => reason,
                 };
                 format!("{} · {reason} · {}", size.status.as_str(), finished_text(size))
@@ -161,12 +172,12 @@ pub(super) fn counts_text(files: u64, folders: u64) -> String {
     let files = if files == 1 {
         "1 file".to_owned()
     } else {
-        format!("{files} files")
+        ox_core::i18n::format_message("{files} files", &[("files", &(files).to_string())])
     };
     let folders = if folders == 1 {
         "1 folder".to_owned()
     } else {
-        format!("{folders} folders")
+        ox_core::i18n::format_message("{folders} folders", &[("folders", &(folders).to_string())])
     };
     format!("{files}, {folders}")
 }

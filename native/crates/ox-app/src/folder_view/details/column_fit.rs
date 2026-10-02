@@ -198,9 +198,9 @@ impl DetailsView {
 /// [`DetailsView::install_column_fit`] keeps its current width.
 fn describe_resizing(title: &gtk::Widget, column: SortColumn) {
     let limits = column_widths::width_limits(column);
-    let description = format!(
-        "Resize {} column: Left and Right change its width, Home fits it",
-        column.label()
+    let description = ox_core::i18n::format_message(
+        "Resize {label} column: Left and Right change its width, Home fits it",
+        &[("label", &(column.label()).to_string())],
     );
     title.update_property(&[
         gtk::accessible::Property::Description(&description),

@@ -92,7 +92,7 @@ pub(crate) fn item_count_text(count: u32) -> String {
     if count == 1 {
         "1 item".to_owned()
     } else {
-        format!("{count} items")
+        ox_core::i18n::format_message("{count} items", &[("count", &(count).to_string())])
     }
 }
 

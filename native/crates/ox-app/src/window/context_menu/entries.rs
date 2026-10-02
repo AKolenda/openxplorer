@@ -103,11 +103,11 @@ pub(crate) struct ContextMenu {
 }
 
 /// Why a command for one item is disabled while several are selected.
-const ONE_ITEM_AT_A_TIME: &str = "Select only one item for this command.";
+const ONE_ITEM_AT_A_TIME: &str = crate::i18n::message_id("Select only one item for this command.");
 
 /// Why a command that runs or changes an item is disabled in a previous
 /// version.
-const READ_ONLY_VERSION: &str = "Items in a previous version are read-only.";
+const READ_ONLY_VERSION: &str = crate::i18n::message_id("Items in a previous version are read-only.");
 
 /// An item that runs `action`.
 fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
@@ -118,9 +118,12 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
 /// are selected, and where `needs_writable` holds, in a previous version.
 fn for_one_item(item: MenuItem, facts: &ItemFacts, needs_writable: bool) -> MenuItem {
     if !facts.is_single {
-        return item.disabled_because(true, ONE_ITEM_AT_A_TIME);
+        return item.disabled_because(true, ox_core::i18n::gettext_static(ONE_ITEM_AT_A_TIME));
     }
-    item.disabled_because(needs_writable && facts.is_read_only, READ_ONLY_VERSION)
+    item.disabled_because(
+        needs_writable && facts.is_read_only,
+        ox_core::i18n::gettext_static(READ_ONLY_VERSION),
+    )
 }
 
 /// The Open group: Open, the extraction commands, the applications, for
@@ -132,7 +135,10 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let is_folder = facts.shape == ItemShape::Folder;
     let open = item("Open", Icon::Folder, WindowAction::Open)
         .with_shortcut("Enter")
-        .disabled_because(!is_folder && facts.is_read_only, READ_ONLY_VERSION);
+        .disabled_because(
+            !is_folder && facts.is_read_only,
+            ox_core::i18n::gettext_static(READ_ONLY_VERSION),
+        );
     let mut entries: Vec<MenuEntry> = vec![open.into()];
     if facts.shape == ItemShape::ZipArchive {
         entries.extend(extraction_items(facts));
@@ -230,7 +236,7 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     }
     entries.push(for_one_item(open_with, facts, true).into());
     for editor in &facts.editors {
-        let label = format!("Open in {}", editor.name);
+        let label = ox_core::i18n::format_message("Open in {name}", &[("name", &(editor.name).to_string())]);
         let open_in_editor =
             MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
                 .with_application_icon(editor.icon.as_deref());
@@ -449,7 +455,8 @@ pub(crate) fn background_menu(
 /// "Open with <app>", opening the item, or the folder when nothing is
 /// selected, in `application` (OPEN-013).
 fn open_with_application(application: &ApplicationChoice) -> MenuItem {
-    let label = format!("Open with {}", application.name);
+    let label =
+        ox_core::i18n::format_message("Open with {name}", &[("name", &(application.name).to_string())]);
     MenuItem::with_text_target(&label, Icon::Apps, WindowAction::OpenWithApp, &application.id)
         .with_application_icon(application.icon.as_deref())
 }
@@ -464,7 +471,9 @@ pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
             .with_shortcut("Delete")
             .into(),
         MenuEntry::Divider,
-        properties.disabled_because(!is_single, ONE_ITEM_AT_A_TIME).into(),
+        properties
+            .disabled_because(!is_single, ox_core::i18n::gettext_static(ONE_ITEM_AT_A_TIME))
+            .into(),
     ]
 }
 

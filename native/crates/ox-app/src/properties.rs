@@ -59,7 +59,7 @@ use ox_core::location::ItemKind;
 use ox_core::places::KnownFolder;
 
 /// Shown while the properties are read.
-const READING: &str = "Reading file properties…";
+const READING: &str = crate::i18n::message_id("Reading file properties…");
 /// Shown for a value being calculated: a size, a content count or a
 /// checksum.
 const CALCULATING: &str = "Calculating…";
@@ -96,7 +96,7 @@ pub(crate) struct PropertiesTarget {
 impl PropertiesTarget {
     /// The dialog's title: `<name> Properties`.
     pub(crate) fn dialog_title(&self) -> String {
-        format!("{} Properties", self.title)
+        ox_core::i18n::format_message("{title} Properties", &[("title", &(self.title).to_string())])
     }
 }
 

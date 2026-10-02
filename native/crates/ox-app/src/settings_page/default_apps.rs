@@ -41,10 +41,10 @@ use crate::window::ButtonStyle;
 use view::DefaultAppsView;
 
 /// What a route shows before the desktop has answered (`default-status`).
-const CHECKING: &str = "Checking the current default…";
+const CHECKING: &str = crate::i18n::message_id("Checking the current default…");
 
 /// What the status card says before the desktop has answered.
-const CHECKING_TITLE: &str = "Checking the default file explorer…";
+const CHECKING_TITLE: &str = crate::i18n::message_id("Checking the default file explorer…");
 
 const INCLUDE_SHOW_IN_FOLDER: RowText = RowText {
     title: "Include Show in folder",
@@ -135,17 +135,20 @@ struct Controls {
 
 impl Controls {
     fn new() -> Self {
-        let make_default = parts::button("Make OpenXplorer default", ButtonStyle::Accent);
+        let make_default = parts::button(
+            &ox_core::i18n::gettext("Make OpenXplorer default"),
+            ButtonStyle::Accent,
+        );
         let status = StatusText {
             glyph: Icon::Apps,
-            title: CHECKING_TITLE,
+            title: ox_core::i18n::gettext_static(CHECKING_TITLE),
             text: "Open local folders and SMB links in OpenXplorer. System file-picker dialogs are \
                    unchanged.",
             notice: None,
         };
         let card = StatusCard::new(status, &[make_default.clone().upcast()]);
         let zip_row = SettingRow::new(ZIP_FILES);
-        zip_row.set_description(CHECKING);
+        zip_row.set_description(ox_core::i18n::gettext_static(CHECKING));
         Self {
             card,
             make_default,
@@ -153,14 +156,17 @@ impl Controls {
             // boxes started (INT-009).
             include_show_in_folder: switch_starting(true),
             include_zip: switch_starting(false),
-            folders: parts::value_label(CHECKING),
-            smb_links: parts::value_label(CHECKING),
-            zip_files: parts::value_label(CHECKING),
+            folders: parts::value_label(ox_core::i18n::gettext_static(CHECKING)),
+            smb_links: parts::value_label(ox_core::i18n::gettext_static(CHECKING)),
+            zip_files: parts::value_label(ox_core::i18n::gettext_static(CHECKING)),
             zip_row,
-            use_for_zips: parts::button("Use OpenXplorer for ZIPs", ButtonStyle::Bordered),
+            use_for_zips: parts::button(
+                &ox_core::i18n::gettext("Use OpenXplorer for ZIPs"),
+                ButtonStyle::Bordered,
+            ),
             show_in_folder_row: SettingRow::new(BRAVE_AND_OTHER_APPS),
-            test_show_in_folder: parts::button("Test", ButtonStyle::Bordered),
-            enable_show_in_folder: parts::button("Enable", ButtonStyle::Accent),
+            test_show_in_folder: parts::button(&ox_core::i18n::gettext("Test"), ButtonStyle::Bordered),
+            enable_show_in_folder: parts::button(&ox_core::i18n::gettext("Enable"), ButtonStyle::Accent),
             restore_previous: parts::button(RESTORE_PREVIOUS.title, ButtonStyle::Bordered),
             restore_zip: parts::button(RESTORE_ZIP_HANDLER.title, ButtonStyle::Bordered),
             disable_show_in_folder: parts::button(DISABLE_SHOW_IN_FOLDER.title, ButtonStyle::Bordered),
@@ -238,7 +244,7 @@ fn routes_group(controls: &Controls) -> SettingsGroup {
 
 /// "Refresh status", which reads the status again.
 fn refresh_button(view: &DefaultAppsView) -> gtk::Button {
-    let refresh = parts::button_with_glyph("Refresh status", Icon::ArrowClockwise);
+    let refresh = parts::button_with_glyph(&ox_core::i18n::gettext("Refresh status"), Icon::ArrowClockwise);
     let view = view.clone();
     refresh.connect_clicked(move |_| view.read_status());
     refresh

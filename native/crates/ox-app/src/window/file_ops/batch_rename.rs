@@ -21,13 +21,13 @@ use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
 /// The dialog's title (Dolphin's "Rename Items").
-const TITLE: &str = "Rename items";
+const TITLE: &str = crate::i18n::message_id("Rename items");
 
 /// The label of the first number's field.
-const FIRST_NUMBER_LABEL: &str = "# becomes ascending numbers starting at";
+const FIRST_NUMBER_LABEL: &str = crate::i18n::message_id("# becomes ascending numbers starting at");
 
 /// The panel's label while the items are renamed.
-const RENAMING: &str = "Renaming items…";
+const RENAMING: &str = crate::i18n::message_id("Renaming items…");
 
 /// The highest first number the field takes.
 const MAX_FIRST_NUMBER: f64 = 999_999.0;
@@ -44,13 +44,16 @@ impl BrowserWindow {
                 is_dir: entry.is_dir,
             })
             .collect();
-        let message = format!("Rename the {} selected items to:", items.len());
-        let dialog = Dialog::new(self, TITLE, &message);
+        let message = ox_core::i18n::format_message(
+            "Rename the {len} selected items to:",
+            &[("len", &(items.len()).to_string())],
+        );
+        let dialog = Dialog::new(self, ox_core::i18n::gettext_static(TITLE), &message);
         let name = dialog.add_text_field("Name", DEFAULT_BATCH_NAME);
         let first_number = gtk::SpinButton::with_range(0.0, MAX_FIRST_NUMBER, 1.0);
         first_number.set_value(1.0);
         first_number.set_activates_default(true);
-        dialog.add_labelled(FIRST_NUMBER_LABEL, &first_number);
+        dialog.add_labelled(ox_core::i18n::gettext_static(FIRST_NUMBER_LABEL), &first_number);
         dialog.add_cancel_button();
         dialog.add_button("Rename", ButtonStyle::Accent);
         dialog.open();
@@ -75,7 +78,7 @@ impl BrowserWindow {
 
     /// Renames `batch` as the window's one operation and reports it.
     async fn run_batch_rename(&self, batch: &BatchRename) {
-        let Some(context) = self.begin_operation(RENAMING) else {
+        let Some(context) = self.begin_operation(ox_core::i18n::gettext_static(RENAMING)) else {
             return;
         };
         let outcome = rename_batch(batch, &context).await;

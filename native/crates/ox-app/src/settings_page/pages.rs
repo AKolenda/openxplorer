@@ -63,28 +63,34 @@ impl Category {
     /// The name in the list and the page title.
     pub(crate) const fn title(self) -> &'static str {
         match self {
-            Category::Appearance => "Appearance",
-            Category::SearchAndIndexing => "Search & indexing",
-            Category::DefaultApps => "Default apps",
-            Category::WindowsAndTabs => "Windows & tabs",
-            Category::BraveAndDownloads => "Brave & downloads",
-            Category::About => "About",
+            Category::Appearance => crate::i18n::message_id("Appearance"),
+            Category::SearchAndIndexing => crate::i18n::message_id("Search & indexing"),
+            Category::DefaultApps => crate::i18n::message_id("Default apps"),
+            Category::WindowsAndTabs => crate::i18n::message_id("Windows & tabs"),
+            Category::BraveAndDownloads => crate::i18n::message_id("Brave & downloads"),
+            Category::About => crate::i18n::message_id("About"),
         }
     }
 
     /// The line under the page title.
     pub(crate) const fn lead(self) -> &'static str {
         match self {
-            Category::Appearance => "How OpenXplorer looks in every window.",
-            Category::SearchAndIndexing => {
-                "Keep a private list of file names so searches in these folders are instant."
+            Category::Appearance => crate::i18n::message_id("How OpenXplorer looks in every window."),
+            Category::SearchAndIndexing => crate::i18n::message_id(
+                "Keep a private list of file names so searches in these folders are instant.",
+            ),
+            Category::DefaultApps => crate::i18n::message_id(
+                "Choose what opens when you open a folder, a network link or a ZIP file.",
+            ),
+            Category::WindowsAndTabs => {
+                crate::i18n::message_id("Open more windows and move tabs and files between them.")
             }
-            Category::DefaultApps => {
-                "Choose what opens when you open a folder, a network link or a ZIP file."
+            Category::BraveAndDownloads => {
+                crate::i18n::message_id("Save Brave's downloads in your Linux Downloads folder.")
             }
-            Category::WindowsAndTabs => "Open more windows and move tabs and files between them.",
-            Category::BraveAndDownloads => "Save Brave's downloads in your Linux Downloads folder.",
-            Category::About => "What this build is, how it is updated and its licence.",
+            Category::About => {
+                crate::i18n::message_id("What this build is, how it is updated and its licence.")
+            }
         }
     }
 

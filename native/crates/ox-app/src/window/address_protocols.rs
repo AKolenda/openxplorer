@@ -26,7 +26,9 @@ pub(super) fn protocol_chooser(entry: &gtk::Entry) -> gtk::Popover {
         .orientation(gtk::Orientation::Vertical)
         .accessible_role(gtk::AccessibleRole::List)
         .build();
-    list.update_property(&[gtk::accessible::Property::Label("Protocols and recent servers")]);
+    list.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "Protocols and recent servers",
+    ))]);
     let popover = gtk::Popover::builder()
         .autohide(false)
         .has_arrow(false)
@@ -151,7 +153,7 @@ fn fill_recent_servers(recent: &gtk::Box, entry: &gtk::Entry, popover: &gtk::Pop
             return;
         }
         let heading = gtk::Label::builder()
-            .label(&ox_core::i18n::gettext("Recent servers"))
+            .label(ox_core::i18n::gettext("Recent servers"))
             .xalign(0.0)
             .css_classes(["dim-label", "caption"])
             .build();

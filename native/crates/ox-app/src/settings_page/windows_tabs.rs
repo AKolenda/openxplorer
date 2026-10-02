@@ -36,11 +36,11 @@ const NEW_TAB_POSITION: RowText = RowText {
 const NEW_TAB_POSITIONS: [Choice<bool>; 2] = [
     Choice {
         value: false,
-        label: "After the current tab",
+        label: crate::i18n::message_id("After the current tab"),
     },
     Choice {
         value: true,
-        label: "At the end of the tab bar",
+        label: crate::i18n::message_id("At the end of the tab bar"),
     },
 ];
 
@@ -146,11 +146,13 @@ const DROP_ON_FOLDERS: RowText = RowText {
 };
 
 /// The rest of the Python section's paragraph.
-const DRAGGING_NOTE: &str = "Right-click a tab → Move tab to window… lets you pick an existing \
+const DRAGGING_NOTE: &str = crate::i18n::message_id(
+    "Right-click a tab → Move tab to window… lets you pick an existing \
                              window without dragging. The original is kept until the destination \
                              accepts it. Close this tab's dialogs and finish file operations first. \
                              File drops never remove the source. ZIP contents must be extracted \
-                             first; some apps need a mounted network path.";
+                             first; some apps need a mounted network path.",
+);
 
 const BROWSE_ARCHIVES: RowText = RowText {
     title: "Open archives as folders",
@@ -170,7 +172,10 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     windows.append_group(&archives_group(page));
     windows.append_group(&confirmations_group(page));
     windows.append_group(&dragging_group());
-    windows.append_text(&parts::note(Icon::Info, DRAGGING_NOTE));
+    windows.append_text(&parts::note(
+        Icon::Info,
+        ox_core::i18n::gettext_static(DRAGGING_NOTE),
+    ));
     windows
 }
 
@@ -188,7 +193,7 @@ fn windows_group(page: &SettingsPage) -> SettingsGroup {
     listing.add_control(&open_windows_button(), ControlName::OwnLabel);
     group.add_row(&listing);
     let new_window = SettingRow::new(NEW_WINDOW);
-    let button = parts::button_with_glyph("New window", Icon::WindowNew);
+    let button = parts::button_with_glyph(&ox_core::i18n::gettext("New window"), Icon::WindowNew);
     button.set_action_name(Some(&AppAction::NewWindow.detailed_name()));
     new_window.add_control(&button, ControlName::OwnLabel);
     group.add_row(&new_window);

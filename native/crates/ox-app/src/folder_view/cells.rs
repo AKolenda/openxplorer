@@ -280,8 +280,10 @@ impl FileCell {
 /// file list (`#file-canvas` and `#main` in index.html).
 pub(crate) fn label_view(view: &gtk::Widget) {
     view.update_property(&[
-        gtk::accessible::Property::Label("Files"),
-        gtk::accessible::Property::Description("Folder contents — type a filename prefix to select"),
+        gtk::accessible::Property::Label(&ox_core::i18n::gettext("Files")),
+        gtk::accessible::Property::Description(&ox_core::i18n::gettext(
+            "Folder contents — type a filename prefix to select",
+        )),
     ]);
 }
 

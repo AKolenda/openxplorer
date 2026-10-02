@@ -52,7 +52,9 @@ mod imp {
             line.set_can_target(false);
             line.set_visible(false);
             line.add_css_class("loading-line");
-            line.update_property(&[gtk::accessible::Property::Label("Loading")]);
+            line.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+                "Loading",
+            ))]);
         }
 
         fn dispose(&self) {

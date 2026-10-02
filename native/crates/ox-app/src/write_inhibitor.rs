@@ -12,7 +12,7 @@
 use gtk::prelude::*;
 
 /// What the logout and suspend dialogs show.
-pub(crate) const REASON: &str = "Copying files";
+pub(crate) const REASON: &str = crate::i18n::message_id("Copying files");
 
 /// An inhibitor held for as long as this value lives.
 #[derive(Debug)]
@@ -31,7 +31,7 @@ impl WriteInhibitor {
         let window = widget.root()?.downcast::<gtk::Window>().ok()?;
         let app = window.application()?;
         let flags = gtk::ApplicationInhibitFlags::LOGOUT | gtk::ApplicationInhibitFlags::SUSPEND;
-        let cookie = app.inhibit(Some(&window), flags, Some(REASON));
+        let cookie = app.inhibit(Some(&window), flags, Some(ox_core::i18n::gettext_static(REASON)));
         Some(Self { app, cookie })
     }
 }

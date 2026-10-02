@@ -37,7 +37,7 @@ impl BrowserWindow {
         WindowAction::NewTab.assign_to(new_tab);
         let open_windows = &*imp.open_windows_button;
         open_windows.set_child(Some(&icons::image(Icon::Desktop, OPEN_WINDOWS_GLYPH)));
-        name_menu_button(open_windows, "Open windows");
+        name_menu_button(open_windows, &ox_core::i18n::gettext("Open windows"));
         list_open_windows_on_click(open_windows);
     }
 }
@@ -100,7 +100,10 @@ fn closed_tab_items(window: &BrowserWindow) -> Vec<MenuEntry> {
     }
     let locations = window.imp().locations.borrow();
     let items = closed.iter().zip(0_u32..).map(|(tab, index)| {
-        let label = format!("Reopen {}", locations.title_for(tab.uri()));
+        let label = ox_core::i18n::format_message(
+            "Reopen {value1}",
+            &[("value1", &(locations.title_for(tab.uri())).to_string())],
+        );
         let item = MenuItem::with_target(
             &label,
             Icon::History,

@@ -25,14 +25,11 @@ fn question_text(item: &UnstorableItem) -> (&'static str, String) {
     match item.reason {
         UnstorableReason::InvalidCharacters => (
             "Name not supported",
-            format!(
-                "“{name}” has characters the destination file system does not allow \
-                 (\" * : < > ? \\ | and control characters)."
-            ),
+            ox_core::i18n::format_message("“{name}” has characters the destination file system does not allow (\" * : < > ? \\ | and control characters).", &[("name", &(name).to_string())]),
         ),
         UnstorableReason::SymbolicLink => (
             "Link not supported",
-            format!("“{name}” is a symbolic link, which the destination file system cannot store."),
+            ox_core::i18n::format_message("“{name}” is a symbolic link, which the destination file system cannot store.", &[("name", &(name).to_string())]),
         ),
     }
 }

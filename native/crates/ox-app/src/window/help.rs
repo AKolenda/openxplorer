@@ -23,10 +23,10 @@ use crate::locations::Page;
 const MANUAL: &str = include_str!("../../resources/manual.md");
 
 /// The label of the button that opens the issue tracker.
-pub(super) const REPORT_ISSUE: &str = "Report an issue";
+pub(super) const REPORT_ISSUE: &str = crate::i18n::message_id("Report an issue");
 
 /// The topic the manual opens at when nothing more specific applies.
-const FIRST_TOPIC: &str = "Getting started";
+const FIRST_TOPIC: &str = crate::i18n::message_id("Getting started");
 
 /// The project's issue tracker.
 pub(super) fn issue_tracker() -> String {
@@ -60,7 +60,7 @@ impl BrowserWindow {
         } else if Page::from_uri(&uri) == Some(Page::ThisPc) {
             "Drives and phones"
         } else {
-            FIRST_TOPIC
+            ox_core::i18n::gettext_static(FIRST_TOPIC)
         }
     }
 
@@ -107,7 +107,8 @@ impl BrowserWindow {
             .unwrap_or_default();
         chooser.set_selected(u32::try_from(position).unwrap_or_default());
         show(&chooser);
-        let report_button = dialog.add_button(REPORT_ISSUE, ButtonStyle::Bordered);
+        let report_button =
+            dialog.add_button(ox_core::i18n::gettext_static(REPORT_ISSUE), ButtonStyle::Bordered);
         dialog.add_button(&ox_core::i18n::gettext("Close"), ButtonStyle::Accent);
         (dialog, report_button)
     }

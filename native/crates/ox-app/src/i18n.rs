@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Translates explicitly marked static GtkBuilder properties after their
+//! Translates explicitly marked static `GtkBuilder` properties after their
 //! template is bound, before controls are filled with runtime file data.
 
 mod template_messages;
 
 use gtk::prelude::*;
 use ox_core::i18n::gettext;
+
+/// Marks English held in a static UI table; its display constructor translates it.
+pub(crate) const fn message_id(message: &'static str) -> &'static str {
+    message
+}
 
 pub(crate) fn translate_template(root: &impl IsA<gtk::Widget>, template: &str) {
     translate_properties(root.as_ref(), template, &gettext);

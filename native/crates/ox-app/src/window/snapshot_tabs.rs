@@ -19,7 +19,7 @@ use super::tab_strip::TabView;
 use super::BrowserWindow;
 
 /// Added to the tooltip of a tab whose Properties dialog is open.
-const PROPERTIES_OPEN: &str = " · Properties open";
+const PROPERTIES_OPEN: &str = crate::i18n::message_id(" · Properties open");
 
 impl BrowserWindow {
     /// Opens a snapshot folder in a new tab, tagged with its snapshot
@@ -73,7 +73,8 @@ impl BrowserWindow {
         };
         for view in views.iter_mut() {
             if self.has_properties(view.id) {
-                view.tooltip.push_str(PROPERTIES_OPEN);
+                view.tooltip
+                    .push_str(ox_core::i18n::gettext_static(PROPERTIES_OPEN));
             }
             let uri = uris
                 .iter()

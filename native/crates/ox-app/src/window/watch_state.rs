@@ -19,8 +19,10 @@ use crate::folder_view::watch::Watch;
 fn interval_text(seconds: u32) -> String {
     match seconds {
         60 => "1 minute".to_owned(),
-        seconds if seconds % 60 == 0 => format!("{} minutes", seconds / 60),
-        seconds => format!("{seconds} seconds"),
+        seconds if seconds % 60 == 0 => {
+            ox_core::i18n::format_message("{value1} minutes", &[("value1", &(seconds / 60).to_string())])
+        }
+        seconds => ox_core::i18n::format_message("{seconds} seconds", &[("seconds", &(seconds).to_string())]),
     }
 }
 

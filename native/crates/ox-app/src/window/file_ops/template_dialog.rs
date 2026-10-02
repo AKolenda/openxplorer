@@ -29,12 +29,14 @@ use crate::window::ButtonStyle;
 
 /// Why an empty office document is useless, and that templates are safe
 /// (`.modal-note` in `newTemplateDialog`).
-const TEMPLATE_NOTE: &str = "An empty .docx, .xlsx, .pdf, or .odt file is not a valid document. For those \
+const TEMPLATE_NOTE: &str = crate::i18n::message_id(
+    "An empty .docx, .xlsx, .pdf, or .odt file is not a valid document. For those \
                              formats, place a real starter document in your Templates folder and choose it \
-                             here. Templates are copied, never executed.";
+                             here. Templates are copied, never executed.",
+);
 
 /// The suffix of a template from the Templates folder in the list.
-const USER_TEMPLATE_SUFFIX: &str = " · Your template";
+const USER_TEMPLATE_SUFFIX: &str = crate::i18n::message_id(" · Your template");
 
 /// The title and the line under it, for `kind`.
 fn dialog_text(kind: &NewFileKind) -> (&'static str, &'static str) {
@@ -177,8 +179,11 @@ fn add_template_fields(dialog: &Dialog, list: &TemplateList, initial: usize) -> 
             }
         }
     ));
-    dialog.add_note(TEMPLATE_NOTE);
-    dialog.add_hint(&format!("Templates folder: {}", list.folder.display()));
+    dialog.add_note(ox_core::i18n::gettext_static(TEMPLATE_NOTE));
+    dialog.add_hint(&ox_core::i18n::format_message(
+        "Templates folder: {display}",
+        &[("display", &(list.folder.display()).to_string())],
+    ));
     TemplateFields { name, choice }
 }
 

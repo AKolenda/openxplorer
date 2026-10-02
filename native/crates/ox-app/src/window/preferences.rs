@@ -90,9 +90,10 @@ impl Preference {
     /// `fire('preferences', …)` calls in app.js).
     fn failure_message(&self, error: &SettingsError) -> String {
         match self {
-            Preference::TextSize(_) => {
-                format!("Text size changed for this window, but could not be saved: {error}")
-            }
+            Preference::TextSize(_) => ox_core::i18n::format_message(
+                "Text size changed for this window, but could not be saved: {error}",
+                &[("error", &(error).to_string())],
+            ),
             _ => not_saved_message(error),
         }
     }
@@ -100,12 +101,18 @@ impl Preference {
 
 /// What the window says when a change it keeps could not be saved.
 fn not_saved_message(error: &SettingsError) -> String {
-    format!("Changed for this window, but could not be saved: {error}")
+    ox_core::i18n::format_message(
+        "Changed for this window, but could not be saved: {error}",
+        &[("error", &(error).to_string())],
+    )
 }
 
 /// The toast a text-size change shows (`changeTextSize`).
 fn text_size_toast(size: TextSize) -> String {
-    format!("Text size: {}%", size.percent())
+    ox_core::i18n::format_message(
+        "Text size: {percent}%",
+        &[("percent", &(size.percent()).to_string())],
+    )
 }
 
 /// The sidebar widths the settings save (ox-core's [`SIDEBAR_WIDTHS`]),

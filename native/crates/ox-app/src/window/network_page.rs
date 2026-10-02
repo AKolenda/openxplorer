@@ -50,8 +50,10 @@ const LOCATION_CARD_ICON: i32 = 34;
 const SERVER_CARD_ICON: i32 = 40;
 
 /// The note under the discovered servers (`.discovery-note`).
-const DISCOVERY_NOTE: &str = "Discovery depends on devices advertising themselves and on local \
-firewall/network settings. It does not guarantee a list of every host.";
+const DISCOVERY_NOTE: &str = crate::i18n::message_id(
+    "Discovery depends on devices advertising themselves and on local \
+firewall/network settings. It does not guarantee a list of every host.",
+);
 
 /// A bordered or accent button that runs `action`.
 fn command_button(label: &str, action: WindowAction, style: ButtonStyle) -> gtk::Button {
@@ -70,7 +72,7 @@ fn banner(discovery: &DiscoveryState) -> gtk::Box {
     words.set_hexpand(true);
     words.append(
         &gtk::Label::builder()
-            .label(&ox_core::i18n::gettext("Computers & network storage"))
+            .label(ox_core::i18n::gettext("Computers & network storage"))
             .xalign(0.0)
             .build(),
     );
@@ -106,13 +108,15 @@ fn banner(discovery: &DiscoveryState) -> gtk::Box {
 /// (`.network-manual`).
 fn server_address_field() -> gtk::Box {
     let address = gtk::Entry::builder()
-        .placeholder_text(&ox_core::i18n::gettext("\\\\server or \\\\archive-nas"))
+        .placeholder_text(ox_core::i18n::gettext("\\\\server or \\\\archive-nas"))
         .hexpand(true)
         .build();
-    address.update_property(&[gtk::accessible::Property::Label("SMB server address")]);
+    address.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "SMB server address",
+    ))]);
     address.connect_activate(open_typed_address);
     let open = gtk::Button::builder()
-        .label(&ox_core::i18n::gettext("Open address"))
+        .label(ox_core::i18n::gettext("Open address"))
         .valign(gtk::Align::Center)
         .css_classes([ButtonStyle::Bordered.css_class()])
         .build();
@@ -154,7 +158,10 @@ fn server_card(server: &DiscoveredServer, locations: &LocationContext) -> gtk::B
     let art = Art::for_network_location(NetworkKind::Server, &server.label, Connection::Connected);
     let texts = card_texts(&server.label, &locations.display_location(&server.uri));
     let protocol = gtk::Label::builder()
-        .label(format!("{} · Discovered", protocol_name(&server.uri)))
+        .label(ox_core::i18n::format_message(
+            "{protocol_name} · Discovered",
+            &[("protocol_name", &(protocol_name(&server.uri)).to_string())],
+        ))
         .xalign(0.0)
         .css_classes(["network-protocol"])
         .build();
@@ -200,7 +207,7 @@ fn discovered_servers(body: &gtk::Box, discovery: &DiscoveryState, locations: &L
         body.append(&notice);
     }
     let note = gtk::Label::builder()
-        .label(DISCOVERY_NOTE)
+        .label(ox_core::i18n::gettext_static(DISCOVERY_NOTE))
         .xalign(0.0)
         .wrap(true)
         .css_classes(["discovery-note"])

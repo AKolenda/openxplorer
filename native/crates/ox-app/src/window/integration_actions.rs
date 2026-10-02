@@ -263,7 +263,10 @@ impl BrowserWindow {
             }
             return;
         }
-        let question = format!("Are you sure you want to open {} terminals?", folders.len());
+        let question = ox_core::i18n::format_message(
+            "Are you sure you want to open {len} terminals?",
+            &[("len", &(folders.len()).to_string())],
+        );
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -361,7 +364,9 @@ impl BrowserWindow {
                 let launched = prepared
                     .and_then(|prepared| launcher(&editor_id, &prepared, integration::DefaultChoice::Keep));
                 let message = match launched {
-                    Ok(_) => format!("Opened with {name}"),
+                    Ok(_) => {
+                        ox_core::i18n::format_message("Opened with {name}", &[("name", &(name).to_string())])
+                    }
                     Err(error) => error.to_string(),
                 };
                 window.show_message(&message);
@@ -387,7 +392,9 @@ impl BrowserWindow {
                 let launched = prepared
                     .and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
                 let message = match launched {
-                    Ok(_) => format!("Opened with {name}"),
+                    Ok(_) => {
+                        ox_core::i18n::format_message("Opened with {name}", &[("name", &(name).to_string())])
+                    }
                     Err(error) => error.to_string(),
                 };
                 window.show_message(&message);

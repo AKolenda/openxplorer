@@ -23,10 +23,12 @@ use crate::locations::Page;
 use crate::properties::NOT_SCANNED;
 
 /// The note for SMB folders.
-const NETWORK_NOTE: &str =
-    "Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter.";
+const NETWORK_NOTE: &str = crate::i18n::message_id(
+    "Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter.",
+);
 /// The note everywhere else.
-const LOCAL_NOTE: &str = "Select an item to see its properties. Double-click to open it.";
+const LOCAL_NOTE: &str =
+    crate::i18n::message_id("Select an item to see its properties. Double-click to open it.");
 
 /// The picture at the top of the pane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,7 +221,10 @@ fn folder_heading(facts: &PaneFacts<'_>) -> FolderHeading {
     if selected > 1 {
         return FolderHeading {
             preview: Preview::Several,
-            name: format!("{selected} items selected"),
+            name: ox_core::i18n::format_message(
+                "{selected} items selected",
+                &[("selected", &(selected).to_string())],
+            ),
             kind: "Multiple items",
         };
     }
@@ -263,9 +268,9 @@ fn modified_text(modified: Option<u64>, condensed: bool) -> String {
 
 fn note_for(uri: &str) -> &'static str {
     if is_smb_location(uri) {
-        NETWORK_NOTE
+        ox_core::i18n::gettext_static(NETWORK_NOTE)
     } else {
-        LOCAL_NOTE
+        ox_core::i18n::gettext_static(LOCAL_NOTE)
     }
 }
 

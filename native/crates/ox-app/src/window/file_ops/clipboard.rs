@@ -50,7 +50,10 @@ fn published_message(mode: ClipboardMode, count: usize) -> String {
         ClipboardMode::Copy => "copied",
         ClipboardMode::Cut => "cut",
     };
-    format!("{count} item(s) {verb} — ready to paste in another window.")
+    ox_core::i18n::format_message(
+        "{count} item(s) {verb} — ready to paste in another window.",
+        &[("count", &(count).to_string()), ("verb", &(verb).to_string())],
+    )
 }
 
 /// Reads the whole payload of `mime_type` from `clipboard`; `None` when

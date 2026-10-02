@@ -30,7 +30,7 @@ use crate::search::changed_folders;
 use crate::window::BrowserWindow;
 
 /// The title of the dialog shown when the destination cannot be checked.
-const CHECK_FAILED_TITLE: &str = "Could not check destination";
+const CHECK_FAILED_TITLE: &str = crate::i18n::message_id("Could not check destination");
 
 /// A copy or move of some items into one folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -199,7 +199,12 @@ impl BrowserWindow {
         let conflicts = match checked {
             Ok(conflicts) => conflicts,
             Err(error) => {
-                dialog::show_message(self, CHECK_FAILED_TITLE, &error.to_string()).await;
+                dialog::show_message(
+                    self,
+                    ox_core::i18n::gettext_static(CHECK_FAILED_TITLE),
+                    &error.to_string(),
+                )
+                .await;
                 return None;
             }
         };

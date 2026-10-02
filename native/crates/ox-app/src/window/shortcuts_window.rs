@@ -69,7 +69,9 @@ fn describe(name: &str) -> Option<(Group, String)> {
     if let Some(number) = name.strip_prefix("win.show-tab-number::") {
         let label = match number {
             "0" => "Go to the last tab".to_owned(),
-            number => format!("Go to tab {number}"),
+            number => {
+                ox_core::i18n::format_message("Go to tab {number}", &[("number", &(number).to_string())])
+            }
         };
         return Some((Group::TabsAndWindows, label));
     }

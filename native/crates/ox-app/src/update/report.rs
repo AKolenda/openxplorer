@@ -33,13 +33,16 @@ pub(super) fn check_report() -> String {
     } else {
         build
     };
-    format!(
-        "OpenXplorer {}\nGTK {}.{}.{}\nGIO/GVfs: {}\nBuild: {build}",
-        running_version(),
-        gtk::major_version(),
-        gtk::minor_version(),
-        gtk::micro_version(),
-        vfs.type_().name(),
+    ox_core::i18n::format_message(
+        "OpenXplorer {running_version}\nGTK {value2}.{value3}.{value4}\nGIO/GVfs: {name}\nBuild: {build}",
+        &[
+            ("running_version", &(running_version()).to_string()),
+            ("value2", &(gtk::major_version()).to_string()),
+            ("value3", &(gtk::minor_version()).to_string()),
+            ("value4", &(gtk::micro_version()).to_string()),
+            ("name", &(vfs.type_().name()).to_string()),
+            ("build", &(build).to_string()),
+        ],
     )
 }
 

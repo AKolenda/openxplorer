@@ -52,9 +52,11 @@ pub(super) fn location_menu(crumb: Option<&PointedCrumb>) -> Vec<MenuEntry> {
         let label = &crumb.label;
         let uri = crumb.uri.as_str();
         entries.push(MenuEntry::Divider);
-        let tab = format!("Open “{label}” in new tab");
+        let tab =
+            ox_core::i18n::format_message("Open “{label}” in new tab", &[("label", &(label).to_string())]);
         entries.push(MenuItem::with_text_target(&tab, Icon::Add, WindowAction::OpenTab, uri).into());
-        let window = format!("Open “{label}” in new window");
+        let window =
+            ox_core::i18n::format_message("Open “{label}” in new window", &[("label", &(label).to_string())]);
         entries
             .push(MenuItem::with_text_target(&window, Icon::WindowNew, WindowAction::OpenWindow, uri).into());
     }

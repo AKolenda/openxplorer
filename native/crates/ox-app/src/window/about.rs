@@ -23,14 +23,18 @@ use crate::dialog::{Dialog, DialogButton};
 
 /// What About this build says above the channel: the description and the
 /// platform line, as the Python box had them.
-const ABOUT_INTRODUCTION: &str = "An independent Windows 11–inspired file manager for Zorin.\n\n\
-Desktop: Rust + GTK 4 + GIO/GVfs.";
+const ABOUT_INTRODUCTION: &str = crate::i18n::message_id(
+    "An independent Windows 11–inspired file manager for Zorin.\n\n\
+Desktop: Rust + GTK 4 + GIO/GVfs.",
+);
 
 /// What About this build says after the channel: the limitations.
-const ABOUT_LIMITS: &str = "Replacing existing files requires confirmation; locations without a \
+const ABOUT_LIMITS: &str = crate::i18n::message_id(
+    "Replacing existing files requires confirmation; locations without a \
 Recycle Bin offer a confirmed permanent delete. Cached filename/path search is opt-in. Thumbnails \
 are not implemented. ZIP files can be browsed read-only and extracted. Open folders update \
-through GIO file monitors.";
+through GIO file monitors.",
+);
 
 /// The text of About this build, whose channel sentence says which build
 /// this is.
@@ -54,12 +58,7 @@ const LICENSE_TITLE: &str = "OpenXplorer · License & source";
 /// and the source archive published with each release.
 fn license_text() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    format!(
-        "Copyright (c) 2026 OpenXplorer contributors.\nAGPL-3.0-only. No warranty. You may \
-         redistribute and modify under the included terms.\n\nComplete corresponding source and \
-         build tools: {REPOSITORY}, tag v{version}, and the source archive published with each \
-         release at {REPOSITORY}/releases."
-    )
+    ox_core::i18n::format_message("Copyright (c) 2026 OpenXplorer contributors.\nAGPL-3.0-only. No warranty. You may redistribute and modify under the included terms.\n\nComplete corresponding source and build tools: {REPOSITORY}, tag v{version}, and the source archive published with each release at {REPOSITORY}/releases.", &[("REPOSITORY", &(REPOSITORY).to_string()), ("version", &(version).to_string())])
 }
 
 /// The GNU Affero General Public License, version 3, word for word.
@@ -112,7 +111,13 @@ impl BrowserWindow {
 
     fn license_dialog(&self) -> Dialog {
         let dialog = Dialog::new(self, LICENSE_TITLE, &license_text());
-        let notices = format!("{AGPL}\n\nOriginal notice:\n\n{WINSPACE_NOTICE}");
+        let notices = ox_core::i18n::format_message(
+            "{AGPL}\n\nOriginal notice:\n\n{WINSPACE_NOTICE}",
+            &[
+                ("AGPL", &(AGPL).to_string()),
+                ("WINSPACE_NOTICE", &(WINSPACE_NOTICE).to_string()),
+            ],
+        );
         dialog.add_scrolled_text(&notices, LICENSE_TEXT_HEIGHT);
         dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
         dialog

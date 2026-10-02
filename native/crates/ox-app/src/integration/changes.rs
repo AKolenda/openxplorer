@@ -32,7 +32,7 @@ const SERVICE_OPTION: &str = "--filemanager-service";
 
 /// Why the Flatpak asks to start at login, which the portal may show.
 const AUTOSTART_REASON: &str =
-    "Answer Show in folder requests from browsers and other apps after you log in.";
+    crate::i18n::message_id("Answer Show in folder requests from browsers and other apps after you log in.");
 
 /// Why a change to the defaults or Show in folder failed. `Display` is
 /// the message the window shows.
@@ -77,9 +77,10 @@ impl ShowInFolderReach {
     pub(crate) fn message(&self) -> Option<String> {
         match self {
             Self::Always => None,
-            Self::WhileRunning(error) => {
-                Some(format!("Show in folder answers while OpenXplorer runs. {error}"))
-            }
+            Self::WhileRunning(error) => Some(ox_core::i18n::format_message(
+                "Show in folder answers while OpenXplorer runs. {error}",
+                &[("error", &(error).to_string())],
+            )),
         }
     }
 }
@@ -110,10 +111,14 @@ impl ChangeOutcome {
     pub(crate) fn message(&self) -> String {
         match self {
             Self::Done(message) => (*message).to_owned(),
-            Self::ShowInFolderFailed(error) => {
-                format!("File handlers updated, but Show in folder setup failed: {error}")
-            }
-            Self::ShowInFolderWhileRunning(note) => format!("File handlers updated. {note}"),
+            Self::ShowInFolderFailed(error) => ox_core::i18n::format_message(
+                "File handlers updated, but Show in folder setup failed: {error}",
+                &[("error", &(error).to_string())],
+            ),
+            Self::ShowInFolderWhileRunning(note) => ox_core::i18n::format_message(
+                "File handlers updated. {note}",
+                &[("note", &(note).to_string())],
+            ),
         }
     }
 }
@@ -244,7 +249,7 @@ impl DesktopIntegration {
         let request = AutostartRequest {
             autostart,
             commandline: service_commandline(),
-            reason: AUTOSTART_REASON.to_owned(),
+            reason: ox_core::i18n::gettext_static(AUTOSTART_REASON).to_owned(),
         };
         let result = request_autostart(&connection, &self.services().background_portal, &request).await;
         if let Err(BackgroundError::Unavailable(error)) = &result {

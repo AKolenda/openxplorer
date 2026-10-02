@@ -36,10 +36,12 @@ const LOCATION_ACTIONS: [WindowAction; 3] = [
 ];
 
 /// What the window says after caching was switched on (`setCache`).
-const CACHING_STARTED: &str =
-    "Caching filenames and paths in the background. No file contents are downloaded.";
+const CACHING_STARTED: &str = crate::i18n::message_id(
+    "Caching filenames and paths in the background. No file contents are downloaded.",
+);
 /// What the window says after caching was switched off.
-const CACHING_STOPPED: &str = "Cache disabled; this root’s indexed names were removed.";
+const CACHING_STOPPED: &str =
+    crate::i18n::message_id("Cache disabled; this root’s indexed names were removed.");
 
 impl BrowserWindow {
     /// Adds "Cache this folder for search", for the folder shown and for
@@ -127,8 +129,8 @@ impl BrowserWindow {
                 return;
             };
             let message = match (outcome, caching) {
-                (Ok(()), Caching::Enabled) => CACHING_STARTED.to_owned(),
-                (Ok(()), Caching::Disabled) => CACHING_STOPPED.to_owned(),
+                (Ok(()), Caching::Enabled) => ox_core::i18n::gettext_static(CACHING_STARTED).to_owned(),
+                (Ok(()), Caching::Disabled) => ox_core::i18n::gettext_static(CACHING_STOPPED).to_owned(),
                 (Err(error), _) => error.to_string(),
             };
             window.show_message(&message);

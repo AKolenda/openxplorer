@@ -40,9 +40,9 @@ impl BrowserWindow {
         let Some(program) = query_program(entry).await else {
             return RunChoice::Open;
         };
-        let message = format!(
-            "“{}” is a program or script. Run it, or open it in its application?",
-            program.name
+        let message = ox_core::i18n::format_message(
+            "“{name}” is a program or script. Run it, or open it in its application?",
+            &[("name", &(program.name).to_string())],
         );
         let dialog = Dialog::new(self, &ox_core::i18n::gettext("Run this program?"), &message);
         dialog.add_cancel_button();

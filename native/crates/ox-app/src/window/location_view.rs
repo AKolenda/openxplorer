@@ -178,7 +178,10 @@ impl BrowserWindow {
         } else {
             locations.title_for(&uri)
         };
-        self.set_title(Some(&format!("{place} — OpenXplorer")));
+        self.set_title(Some(&ox_core::i18n::format_message(
+            "{place} — OpenXplorer",
+            &[("place", &(place).to_string())],
+        )));
     }
 
     fn active_location(&self) -> Option<ActiveLocation> {

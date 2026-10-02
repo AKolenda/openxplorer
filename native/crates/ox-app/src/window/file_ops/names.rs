@@ -47,9 +47,9 @@ pub(super) fn folder_path_preview(names: &[&str]) -> Option<String> {
         return None;
     }
     let quoted: Vec<String> = names.iter().map(|name| format!("“{name}”")).collect();
-    Some(format!(
-        "Creates {}, each inside the one before.",
-        quoted.join(" › ")
+    Some(ox_core::i18n::format_message(
+        "Creates {join}, each inside the one before.",
+        &[("join", &(quoted.join(" › ")).to_string())],
     ))
 }
 
@@ -59,7 +59,10 @@ pub(super) fn folder_path_preview(names: &[&str]) -> Option<String> {
 /// (OPS-007, Dolphin's New folder dialog).
 pub(super) fn name_warning(name: &str, taken: bool) -> Option<String> {
     if taken {
-        return Some(format!("An item named “{name}” already exists here."));
+        return Some(ox_core::i18n::format_message(
+            "An item named “{name}” already exists here.",
+            &[("name", &(name).to_string())],
+        ));
     }
     let warning = if name.starts_with('.') {
         "A name starting with a dot hides the item."

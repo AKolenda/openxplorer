@@ -10,7 +10,7 @@ use ox_core::permissions::{Access, Account};
 use crate::dialog::check_row;
 
 /// Shown by a choice whose items differ.
-const VARYING: &str = "Varying (No Change)";
+const VARYING: &str = crate::i18n::message_id("Varying (No Change)");
 
 /// A choice of the three accesses.
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ impl AccessChoice {
     pub(super) fn new(label: &str, initial: Option<Access>) -> Self {
         let mut labels: Vec<&str> = Access::ALL.iter().map(|access| access.label()).collect();
         if initial.is_none() {
-            labels.push(VARYING);
+            labels.push(ox_core::i18n::gettext_static(VARYING));
         }
         let choice = gtk::DropDown::from_strings(&labels);
         let index = initial
@@ -100,7 +100,7 @@ impl AccountChoice {
                 .position(|account| account.id == current.id)
                 .unwrap_or_default()
         } else {
-            names.push(VARYING);
+            names.push(ox_core::i18n::gettext_static(VARYING));
             accounts.len()
         };
         let choice = gtk::DropDown::from_strings(&names);

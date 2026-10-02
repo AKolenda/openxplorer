@@ -71,7 +71,10 @@ impl Removal {
     /// when an ejected medium's writes are flushed.
     pub(crate) fn done_message(self, label: &str) -> Option<String> {
         match self {
-            Removal::SafelyRemove => Some(format!("“{label}” can now be safely unplugged.")),
+            Removal::SafelyRemove => Some(ox_core::i18n::format_message(
+                "“{label}” can now be safely unplugged.",
+                &[("label", &(label).to_string())],
+            )),
             Removal::Disconnect | Removal::Eject => None,
         }
     }

@@ -22,7 +22,7 @@ use crate::icons::Icon;
 use crate::search::SearchScope;
 
 /// What the window says once a search was saved.
-const SEARCH_SAVED: &str = "Search saved to the navigation pane";
+const SEARCH_SAVED: &str = crate::i18n::message_id("Search saved to the navigation pane");
 
 /// The `(folder, text)` target of the actions on `search`.
 pub(super) fn saved_search_target(search: &SavedSearch) -> glib::Variant {
@@ -109,7 +109,10 @@ impl BrowserWindow {
         let window = self.downgrade();
         self.context().save_search(search, move |result| {
             if let Some(window) = window.upgrade() {
-                let message = result.map_or_else(|error| error.to_string(), |()| SEARCH_SAVED.to_owned());
+                let message = result.map_or_else(
+                    |error| error.to_string(),
+                    |()| ox_core::i18n::gettext_static(SEARCH_SAVED).to_owned(),
+                );
                 window.show_message(&message);
             }
         });

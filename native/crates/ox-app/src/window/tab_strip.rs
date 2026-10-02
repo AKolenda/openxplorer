@@ -341,7 +341,10 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
     let badge = gtk::Box::builder()
         .spacing(4)
         .valign(gtk::Align::Center)
-        .tooltip_text(format!("Previous version · {snapshot}"))
+        .tooltip_text(ox_core::i18n::format_message(
+            "Previous version · {snapshot}",
+            &[("snapshot", &(snapshot).to_string())],
+        ))
         .css_classes(["snapshot-tab-badge"])
         .build();
     badge.append(&icons::image(Icon::Clock, SNAPSHOT_BADGE_GLYPH));
@@ -349,7 +352,13 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
         "Previous version",
     ))));
     widget.append(&badge);
-    let name = format!("{title} — Previous version — {snapshot}");
+    let name = ox_core::i18n::format_message(
+        "{title} — Previous version — {snapshot}",
+        &[
+            ("title", &(title).to_string()),
+            ("snapshot", &(snapshot).to_string()),
+        ],
+    );
     widget.update_property(&[gtk::accessible::Property::Label(&name)]);
 }
 
@@ -504,14 +513,14 @@ fn title(text: &str) -> gtk::Label {
 fn close_button(tab: &TabView) -> gtk::Button {
     let close = gtk::Button::builder()
         .child(&icons::image(Icon::Dismiss16, CLOSE_GLYPH))
-        .tooltip_text(&ox_core::i18n::gettext("Close tab"))
+        .tooltip_text(ox_core::i18n::gettext("Close tab"))
         .action_name(WindowAction::CloseTabById.detailed_name())
         .action_target(&tab.id.to_variant())
         .focus_on_click(false)
         .valign(gtk::Align::Center)
         .css_classes(["tab-close"])
         .build();
-    let name = format!("Close {}", tab.title);
+    let name = ox_core::i18n::format_message("Close {title}", &[("title", &(tab.title).to_string())]);
     close.update_property(&[gtk::accessible::Property::Label(&name)]);
     close
 }

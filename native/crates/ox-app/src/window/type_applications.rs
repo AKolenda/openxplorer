@@ -14,13 +14,18 @@ use crate::dialog::Dialog;
 use crate::integration::{change_type, other_applications, type_applications, TypeApplication, TypeChange};
 
 /// Why Remove did nothing.
-const NOT_ADDED: &str = "Only applications you added to this type can be removed.";
+const NOT_ADDED: &str = crate::i18n::message_id("Only applications you added to this type can be removed.");
 
 /// How an associated application is listed.
 fn application_label(application: &TypeApplication) -> String {
     match (application.is_default, application.is_added) {
-        (true, _) => format!("{} (default)", application.name),
-        (false, true) => format!("{} (added by you)", application.name),
+        (true, _) => {
+            ox_core::i18n::format_message("{name} (default)", &[("name", &(application.name).to_string())])
+        }
+        (false, true) => ox_core::i18n::format_message(
+            "{name} (added by you)",
+            &[("name", &(application.name).to_string())],
+        ),
         (false, false) => application.name.clone(),
     }
 }
@@ -35,10 +40,7 @@ fn chosen(dropdown: &gtk::DropDown) -> Option<usize> {
 /// Asks over `parent` before the applications of a type described as
 /// `description` go back to the system's; true when the user agreed.
 async fn confirm_reset(parent: &Dialog, description: &str) -> bool {
-    let message = format!(
-        "Reset the apps for {description} files to the system defaults? Your default app and the apps \
-         you added are forgotten."
-    );
+    let message = ox_core::i18n::format_message("Reset the apps for {description} files to the system defaults? Your default app and the apps you added are forgotten.", &[("description", &(description).to_string())]);
     let question = Dialog::new(parent, &ox_core::i18n::gettext("Reset apps"), &message);
     question.add_cancel_button();
     let reset = question.add_button(&ox_core::i18n::gettext("Reset"), ButtonStyle::Accent);
@@ -62,8 +64,13 @@ impl BrowserWindow {
 
     async fn run_type_applications(&self, content_type: &str) {
         let description = gio::content_type_get_description(content_type);
-        let message =
-            format!("What opens {description} files ({content_type}). Changes apply to your account only.");
+        let message = ox_core::i18n::format_message(
+            "What opens {description} files ({content_type}). Changes apply to your account only.",
+            &[
+                ("description", &(description).to_string()),
+                ("content_type", &(content_type).to_string()),
+            ],
+        );
         let dialog = Dialog::new(self, &ox_core::i18n::gettext("Apps for this type"), &message);
         let associated = gtk::DropDown::from_strings(&[]);
         dialog.add_labelled("Associated apps", &associated);
@@ -109,7 +116,7 @@ impl BrowserWindow {
                     Some(application) if application.is_added => {
                         Ok(TypeChange::Remove(application.id.clone()))
                     }
-                    _ => Err(NOT_ADDED.to_owned()),
+                    _ => Err(ox_core::i18n::gettext_static(NOT_ADDED).to_owned()),
                 }
             } else if answer == add {
                 let other = chosen(&others).and_then(|index| addable.get(index));

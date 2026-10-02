@@ -76,7 +76,10 @@ impl Capacity {
     fn text(self) -> String {
         let free = format::pretty_bytes(self.free);
         let size = format::pretty_bytes(self.size);
-        format!("{free} free of {size}")
+        ox_core::i18n::format_message(
+            "{free} free of {size}",
+            &[("free", &(free).to_string()), ("size", &(size).to_string())],
+        )
     }
 }
 
@@ -314,7 +317,7 @@ fn share_state(share: &SavedShare) -> gtk::Box {
 /// "Map network location" at the right of the Network locations heading.
 fn map_network_button() -> gtk::Button {
     gtk::Button::builder()
-        .label(&ox_core::i18n::gettext("Map network location"))
+        .label(ox_core::i18n::gettext("Map network location"))
         .action_name(WindowAction::MapNetworkLocation.detailed_name())
         .hexpand(true)
         .halign(gtk::Align::End)
@@ -333,7 +336,7 @@ fn saved_shares(body: &gtk::Box, places: &Places, locations: &LocationContext) {
     body.append(&cards);
     if places.saved_shares.is_empty() {
         let empty = gtk::Label::builder()
-            .label(&ox_core::i18n::gettext(
+            .label(ox_core::i18n::gettext(
                 "No network locations saved. Use “Map network location” to connect to a share and add it to \
                  the sidebar.",
             ))

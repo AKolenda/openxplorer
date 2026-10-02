@@ -90,7 +90,10 @@ impl SettingsPage {
             let Some(page) = page.upgrade() else {
                 return;
             };
-            let message = format!("Changed for this window, but could not be saved: {error}");
+            let message = ox_core::i18n::format_message(
+                "Changed for this window, but could not be saved: {error}",
+                &[("error", &(error).to_string())],
+            );
             page.emit_by_name::<()>(MESSAGE, &[&message]);
         });
     }
@@ -155,7 +158,10 @@ impl SettingsPage {
         choices: &'static [Choice<T>],
         binding: PreferenceBinding<T>,
     ) -> gtk::MenuButton {
-        let labels: Vec<String> = choices.iter().map(|choice| choice.label.to_owned()).collect();
+        let labels: Vec<String> = choices
+            .iter()
+            .map(|choice| ox_core::i18n::gettext(choice.label))
+            .collect();
         let drop_down = ChoiceButton::new(&labels);
         let list = drop_down.choices.clone();
         self.follow_preferences(glib::clone!(

@@ -96,9 +96,9 @@ pub(crate) fn make_titles_keyboard_operable(view: &DetailsView) {
         title.set_focusable(true);
         // A click sorts and leaves focus in the list, as before.
         title.set_focus_on_click(false);
-        title.update_property(&[gtk::accessible::Property::Description(
+        title.update_property(&[gtk::accessible::Property::Description(&ox_core::i18n::gettext(
             "Enter sorts by this column; Left and Right resize it; Home fits it to the listed items",
-        )]);
+        ))]);
         let keys = gtk::EventControllerKey::new();
         keys.connect_key_pressed(glib::clone!(
             #[weak]
@@ -136,7 +136,10 @@ fn add_column_resizer(view: &DetailsView, column: SortColumn, title: &gtk::Widge
     // Named outright, so the header is not named after the resizer
     // inside it too.
     title.update_property(&[gtk::accessible::Property::Label(&name)]);
-    let resizer = ResizerControl::new(&format!("Resize {name} column"));
+    let resizer = ResizerControl::new(&ox_core::i18n::format_message(
+        "Resize {name} column",
+        &[("name", &(name).to_string())],
+    ));
     title_box.prepend(&resizer);
     let announce = glib::clone!(
         #[weak]

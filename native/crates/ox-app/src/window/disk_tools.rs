@@ -26,10 +26,10 @@ use super::BrowserWindow;
 use crate::icons::Icon;
 
 /// Shown when a drive has no block device for Disks.
-const NO_BLOCK_DEVICE: &str = "Disks cannot open this drive.";
+const NO_BLOCK_DEVICE: &str = crate::i18n::message_id("Disks cannot open this drive.");
 
 /// Shown for a location without a local path.
-const NO_LOCAL_PATH: &str = "This tool needs a location on this computer.";
+const NO_LOCAL_PATH: &str = crate::i18n::message_id("This tool needs a location on this computer.");
 
 /// Whether the program for `tool` is installed, on the host inside
 /// Flatpak.
@@ -125,7 +125,7 @@ impl BrowserWindow {
     fn open_drive_in_disks(&self, uri: &str, tool: DiskTool) {
         match block_device_of(&self.volume_monitor().mounts(), uri) {
             Some(device) => self.run_disk_tool(tool, PathBuf::from(device)),
-            None => self.show_message(NO_BLOCK_DEVICE),
+            None => self.show_message(ox_core::i18n::gettext_static(NO_BLOCK_DEVICE)),
         }
     }
 
@@ -133,7 +133,7 @@ impl BrowserWindow {
     fn run_disk_tool_at(&self, tool: DiskTool, uri: &str) {
         match gio::File::for_uri(uri).path() {
             Some(path) => self.run_disk_tool(tool, path),
-            None => self.show_message(NO_LOCAL_PATH),
+            None => self.show_message(ox_core::i18n::gettext_static(NO_LOCAL_PATH)),
         }
     }
 
@@ -181,8 +181,15 @@ fn status_bar_entries(folder: &str, has_analyser: bool) -> Vec<MenuEntry> {
 fn start(tool: DiskTool, target: &Path) -> Result<(), String> {
     let sandbox = Sandbox::detect();
     let program = installed_program(tool).ok_or_else(|| "The tool is not installed.".to_owned())?;
-    tool.launch(&program, target, sandbox)
-        .map_err(|error| format!("Could not start {}: {error}", program.display()))
+    tool.launch(&program, target, sandbox).map_err(|error| {
+        ox_core::i18n::format_message(
+            "Could not start {display}: {error}",
+            &[
+                ("display", &(program.display()).to_string()),
+                ("error", &(error).to_string()),
+            ],
+        )
+    })
 }
 
 #[cfg(test)]

@@ -170,7 +170,7 @@ impl SearchBox {
 
     /// Names the folder the box searches: "Search Documents".
     pub(super) fn set_folder_title(&self, title: &str) {
-        let placeholder = format!("Search {title}");
+        let placeholder = ox_core::i18n::format_message("Search {title}", &[("title", &(title).to_string())]);
         self.imp().entry.set_placeholder_text(Some(&placeholder));
     }
 

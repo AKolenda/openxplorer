@@ -18,7 +18,8 @@ use crate::icons::{self, Icon};
 const BUTTON_GLYPH: i32 = 16;
 
 /// What the message line says after a stop.
-const STOPPED: &str = "Stopped. Some items may be missing; press F5 to list the folder again.";
+const STOPPED: &str =
+    crate::i18n::message_id("Stopped. Some items may be missing; press F5 to list the folder again.");
 
 impl BrowserWindow {
     /// Adds `win.stop`.
@@ -80,7 +81,7 @@ impl BrowserWindow {
         };
         if stopped {
             self.update_content();
-            self.show_message(STOPPED);
+            self.show_message(ox_core::i18n::gettext_static(STOPPED));
         }
     }
 }

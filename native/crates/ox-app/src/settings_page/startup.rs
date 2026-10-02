@@ -57,7 +57,10 @@ pub(super) fn startup_folder_for(typed: &str, base: Option<&str>) -> Result<Stri
     // A share is checked when it is listed, which may ask for a sign-in.
     let is_missing = gio::File::for_uri(&uri).path().is_some_and(|path| !path.is_dir());
     if is_missing {
-        return Err(format!("“{typed}” is not a folder that exists."));
+        return Err(ox_core::i18n::format_message(
+            "“{typed}” is not a folder that exists.",
+            &[("typed", &(typed).to_string())],
+        ));
     }
     Ok(uri)
 }
@@ -96,7 +99,7 @@ pub(super) fn startup_group(page: &SettingsPage) -> SettingsGroup {
 fn startup_folder_row(page: &SettingsPage) -> SettingRow {
     let row = SettingRow::new(STARTUP_FOLDER);
     let field = gtk::Entry::builder()
-        .placeholder_text(&ox_core::i18n::gettext("Home"))
+        .placeholder_text(ox_core::i18n::gettext("Home"))
         .hexpand(true)
         .width_chars(36)
         .build();
@@ -112,7 +115,10 @@ fn startup_folder_row(page: &SettingsPage) -> SettingRow {
         move |field| page.choose_startup_folder(&field.text())
     ));
     row.add_control(&field, ControlName::RowTitle);
-    let current = parts::button("Use current location", ButtonStyle::Bordered);
+    let current = parts::button(
+        &ox_core::i18n::gettext("Use current location"),
+        ButtonStyle::Bordered,
+    );
     current.connect_clicked(glib::clone!(
         #[weak]
         page,
@@ -123,7 +129,7 @@ fn startup_folder_row(page: &SettingsPage) -> SettingRow {
         }
     ));
     row.add_control(&current, ControlName::OwnLabel);
-    let home = parts::button("Use Home", ButtonStyle::Bordered);
+    let home = parts::button(&ox_core::i18n::gettext("Use Home"), ButtonStyle::Bordered);
     home.connect_clicked(glib::clone!(
         #[weak]
         page,

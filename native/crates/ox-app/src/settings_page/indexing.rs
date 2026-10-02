@@ -83,23 +83,25 @@ const HOW_SIZES_ARE_COUNTED: RowText = RowText {
 const NETWORK_INTERVALS: [Choice<u32>; 3] = [
     Choice {
         value: 30,
-        label: "30 seconds",
+        label: crate::i18n::message_id("30 seconds"),
     },
     Choice {
         value: 60,
-        label: "1 minute",
+        label: crate::i18n::message_id("1 minute"),
     },
     Choice {
         value: 300,
-        label: "5 minutes",
+        label: crate::i18n::message_id("5 minutes"),
     },
 ];
 
 /// The privacy note of the Python section.
-const PRIVACY_NOTE: &str = "Cached paths are stored locally and can be searched while a share is \
+const PRIVACY_NOTE: &str = crate::i18n::message_id(
+    "Cached paths are stored locally and can be searched while a share is \
                             offline. Uncheck a root to stop caching and remove that root's names. \
                             Other overlapping roots may still contain them. Hidden folders and \
-                            symbolic links are skipped.";
+                            symbolic links are skipped.",
+);
 
 /// The two paragraphs of the Python "Folder sizes" section.
 const FOLDER_SIZES_HELP: [&str; 2] = [
@@ -113,7 +115,8 @@ const FOLDER_SIZES_HELP: [&str; 2] = [
 ];
 
 /// The status card's line while nothing is indexed.
-const NOTHING_INDEXED: &str = "Search file names in the folders you choose, even while a share is offline.";
+const NOTHING_INDEXED: &str =
+    crate::i18n::message_id("Search file names in the folders you choose, even while a share is offline.");
 
 /// The Search & indexing page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
@@ -124,14 +127,17 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     follow_cache_status(page, &card);
     indexing.append_group(&folders_group(page));
     indexing.append_group(&options_group(page));
-    indexing.append_text(&parts::note(Icon::Info, PRIVACY_NOTE));
+    indexing.append_text(&parts::note(
+        Icon::Info,
+        ox_core::i18n::gettext_static(PRIVACY_NOTE),
+    ));
     indexing.append_group(&folder_sizes_group(page));
     indexing
 }
 
 /// Where instant search stands, with "Refresh all" (SRCH-023).
 fn status_card(page: &SettingsPage) -> StatusCard {
-    let refresh = parts::button_with_glyph("Refresh all", Icon::ArrowClockwise);
+    let refresh = parts::button_with_glyph(&ox_core::i18n::gettext("Refresh all"), Icon::ArrowClockwise);
     refresh.connect_clicked(glib::clone!(
         #[weak]
         page,
@@ -140,7 +146,7 @@ fn status_card(page: &SettingsPage) -> StatusCard {
     let status = StatusText {
         glyph: Icon::Search,
         title: "Instant search",
-        text: NOTHING_INDEXED,
+        text: ox_core::i18n::gettext_static(NOTHING_INDEXED),
         notice: None,
     };
     StatusCard::new(status, &[refresh.upcast()])
@@ -199,21 +205,30 @@ impl CacheSummary {
         match self.folders {
             0 => "Instant search is off".to_owned(),
             1 => "Instant search is on for 1 folder".to_owned(),
-            folders => format!("Instant search is on for {folders} folders"),
+            folders => ox_core::i18n::format_message(
+                "Instant search is on for {folders} folders",
+                &[("folders", &(folders).to_string())],
+            ),
         }
     }
 
     /// "14,263 names indexed · last updated …".
     fn text(self) -> String {
         if self.folders == 0 {
-            return NOTHING_INDEXED.to_owned();
+            return ox_core::i18n::gettext_static(NOTHING_INDEXED).to_owned();
         }
-        let names = format!("{} names indexed", grouped_number(self.names));
+        let names = ox_core::i18n::format_message(
+            "{grouped_number} names indexed",
+            &[("grouped_number", &(grouped_number(self.names)).to_string())],
+        );
         let Some(updated) = self.last_updated else {
             return names;
         };
         let when = format::date_time_text(Some(updated));
-        format!("{names} · last updated {when}")
+        ox_core::i18n::format_message(
+            "{names} · last updated {when}",
+            &[("names", &(names).to_string()), ("when", &(when).to_string())],
+        )
     }
 }
 
@@ -221,7 +236,7 @@ impl CacheSummary {
 fn folders_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Indexed folders"));
     let row = SettingRow::new(FOLDERS_TO_INDEX);
-    let manage = parts::page_button("Manage…");
+    let manage = parts::page_button(&ox_core::i18n::gettext("Manage…"));
     manage.connect_clicked(glib::clone!(
         #[weak]
         page,
@@ -344,7 +359,7 @@ fn folder_sizes_group(page: &SettingsPage) -> SettingsGroup {
 /// The page of how folder sizes are counted: the Python section's help.
 pub(super) fn build_folder_sizes() -> SettingsSection {
     let sizes = SettingsSection::new(
-        "Folder sizes",
+        &ox_core::i18n::gettext("Folder sizes"),
         "How Calculate folder size counts a folder, and what it leaves out.",
         PageKind::Subpage,
     );
