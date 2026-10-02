@@ -217,8 +217,8 @@ pub(crate) enum WindowAction {
     CutFolder,
     /// Copy of the folder in the string target.
     CopyFolder,
-    /// Pastes into the folder in the string target.
-    PasteInto,
+    /// Pastes into the folder tree destination in the string target.
+    PasteIntoFolder,
     /// Asks for a new name for the folder in the string target.
     RenameFolder,
     /// Moves the folder in the string target to the Trash, after asking.
@@ -509,7 +509,7 @@ impl WindowAction {
             WindowAction::Duplicate => "duplicate",
             WindowAction::CutFolder => "cut-folder",
             WindowAction::CopyFolder => "copy-folder",
-            WindowAction::PasteInto => "paste-into",
+            WindowAction::PasteIntoFolder => "paste-into-folder",
             WindowAction::RenameFolder => "rename-folder",
             WindowAction::TrashFolder => "trash-folder",
             WindowAction::DeleteFolder => "delete-folder",

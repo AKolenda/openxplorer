@@ -92,7 +92,7 @@ fn entries(uri: &str, facts: FolderFacts, options: FolderTreeOptions) -> Vec<Men
         folder_item(
             &gettext("Paste"),
             Icon::ClipboardPaste,
-            WindowAction::PasteInto,
+            WindowAction::PasteIntoFolder,
             uri,
             facts.can_paste,
         ),

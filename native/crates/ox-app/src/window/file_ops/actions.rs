@@ -169,7 +169,7 @@ impl BrowserWindow {
             text_action(WindowAction::CopyFolder, |window, uri| {
                 window.copy_folder_at(ClipboardMode::Copy, uri);
             }),
-            location_task_action(WindowAction::PasteInto, |window, uri| async move {
+            location_task_action(WindowAction::PasteIntoFolder, |window, uri| async move {
                 window.paste_into(&uri).await;
             }),
             location_task_action(WindowAction::RenameFolder, |window, uri| async move {
