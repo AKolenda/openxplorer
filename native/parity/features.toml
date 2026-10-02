@@ -3470,8 +3470,8 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/test_v06.py::PrefTests::test_columns_whitelist"]
 bridge = ["preferences", "list"]
 dolphin = "additional_info / header context menu"
-native = "todo"
-native_note = "Porting notes: Explorer also picks columns from the header menu. OpenXplorer has a fixed set: Name, Date modified, Type, Size, plus Folder path in search results."
+native = "done"
+native_note = "A secondary click on the column titles opens the app's menu with every column but Name as check items: Date modified, Date created, Type, Size, File extension, Owner and Permissions; Folder path shows in searches. The choice is saved as viewOptions.detailsColumns and every window follows (native/crates/ox-app/src/window/view_options.rs the_titles_menu_shows_and_hides_columns, folder_view/details/column_choice.rs, column_text.rs). Columns that need metadata the listing does not read (rating, tags, comments, media metadata, Downloaded From) are not offered."
 
 [[feature]]
 id = "VIEW-034"
@@ -3488,7 +3488,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "DetailsModeSettings::ColumnPositions"
-native = "todo"
+native = "done"
+native_note = "Column titles are dragged to move their columns (GtkColumnView reordering); Name stays first and Folder path follows it in a search, and the new order of the shown columns is saved with them (native/crates/ox-app/src/folder_view/details/column_choice.rs, dragged_columns_keep_their_order_behind_name; window/view_options.rs)."
 
 [[feature]]
 id = "VIEW-035"
@@ -3541,8 +3542,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DirectorySizeCount=true (Number of items)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer leaves the folder Size empty unless an explicit folder-size scan was run."
+native = "done"
+native_note = "A folder's Size in the Details view says 'N items' until it is measured, counted off the main thread two folders at a time for folders on this computer only (hidden names left out), skipped for rows scrolled away before their turn, and kept with the item (native/crates/ox-app/src/folder_view/details/column_text.rs, a_folder_size_counts_its_items). Settings > Appearance > 'Show the number of items in folders' turns it off. The status bar's description of a folder uses the count too."
 
 [[feature]]
 id = "VIEW-038"
@@ -3853,8 +3854,8 @@ sources = [
 python_tests = []
 bridge = ["list", "cancel"]
 dolphin = "stop action + status bar progress"
-native = "todo"
-native_note = "Porting notes: OpenXplorer shows an indeterminate loading line. A listing is cancelled only by navigating away or closing the tab. Existing OpenXplorer part is protected by VIEW-047 and NAV-016. Owner decision (2026-09-29): no 'Loading' text while switching folders; a slow listing shows only the thin line after 300 ms (VIEW-047), so a status-bar percentage or Stop button must not bring the text back."
+native = "done"
+native_note = "While the loading line shows (after 300 ms, VIEW-047), the Refresh button before the address bar turns into Stop, as in Windows Explorer; win.stop ends the listing, keeps the items that arrived and says 'Stopped. Some items may be missing; press F5 to list the folder again.' in the message line (native/crates/ox-app/src/window/stop_listing.rs, window/tests/stopping.rs stop_ends_a_slow_listing). Per the owner's decision of 2026-09-29 no 'Loading' text or percentage is added; GIO's enumerator gives no total to show a percentage of."
 
 [[feature]]
 id = "VIEW-050"
@@ -3888,8 +3889,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinView::requestStatusBarText"
-native = "partial"
-native_note = "The selection shows its count and the selected files' total size, as Windows does (native/crates/ox-app/src/window/status_bar.rs, the_selection_shows_its_count_and_file_size). Missing: the folder's own total size beside its item count; Windows 11 shows only the count there."
+native = "done"
+native_note = "The status bar adds the total size of the files shown to the item count ('12 items  4.2 MB', summed once per change of the items shown) and the selection keeps its count and files' size, as Windows does (native/crates/ox-app/src/window/status_bar.rs, the_count_adds_the_files_size_and_one_item_is_described; folder_view/model.rs shown_file_bytes). Folder sizes are never measured by themselves: Calculate folder size(s) measures on request, with Cancel scan (PROP-026, PROP-029), so remote folders are only measured when the user asks."
 
 [[feature]]
 id = "VIEW-052"
@@ -3906,7 +3907,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KFileItem::getStatusBarInfo"
-native = "todo"
+native = "done"
+native_note = "One selected item is described in the status bar by name, type and size (or item count, or measured size), and the item under the pointer is described the same way until the pointer leaves the items, then the selection again (native/crates/ox-app/src/window/status_bar.rs item_text and show_hovered, window/details_hover.rs; the_count_adds_the_files_size_and_one_item_is_described)."
 
 [[feature]]
 id = "VIEW-053"
@@ -3927,8 +3929,8 @@ python_tests = []
 bridge = ["properties", "list"]
 dolphin = "ShowSpaceInfo (default true); Status bar space info (ShowSpaceInfo, on by default)"
 gnome = "g_file_query_filesystem_info_async(filesystem::free)"
-native = "partial"
-native_note = "The status bar shows '<X> free' for the current folder's volume, with the tooltip '<X> free out of <Y> (<Z>% used)', read again when a listing ends or a tab is shown and hidden on landing pages (native/crates/ox-app/src/window/free_space.rs, the_status_bar_says_how_much_room_is_left). Missing: the capacity bar and the disk-usage tools on click."
+native = "done"
+native_note = "The status bar shows '<X> free' with a 3-pixel capacity bar (red from 90% used) and the tooltip '<X> free out of <Y> (<Z>% used)', read again when a listing ends or a tab is shown, hidden on landing pages (native/crates/ox-app/src/window/free_space.rs the_status_bar_says_how_much_room_is_left, status_bar.rs). A click on it, or a secondary click on the status bar, offers Analyse disk usage when an analyser is installed (window/disk_tools.rs, the_status_bar_offers_the_analyser_for_a_local_folder)."
 
 [[feature]]
 id = "VIEW-054"
@@ -3989,7 +3991,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "A folder whose monitor cannot be created (a backend without change notifications, such as an SMB share through GVfs) is reported by its watch, listed again every network refresh interval of Settings (30 s, 1 min, 5 min), and the status bar says 'Not updated live' with a tooltip naming the interval and F5 (native/crates/ox-app/src/folder_view/watch.rs an_unwatchable_folder_is_reported_and_checked_again, window/watch_state.rs). Background tabs on shares keep their changes until shown (TAB-056). There is no monitor cap in the native app."
 
 [[feature]]
 id = "VIEW-057"
@@ -4013,8 +4016,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "show_preview (PreviewsShown default true); View → Show Previews (F12), KIO thumbnail plugins, shared freedesktop cache"
 gnome = "freedesktop Thumbnail Managing Standard (~/.cache/thumbnails) via GnomeDesktopThumbnailFactory / the GIO 'thumbnail::path' and 'thumbnail::is-valid' attributes, as Nautilus does; freedesktop thumbnail cache (~/.cache/thumbnails) / GnomeDesktopThumbnailFactory; GIO thumbnail::path / thumbnail::is-valid / thumbnail::failed, GnomeDesktopThumbnailFactory (libgnome-desktop-4) or org.freedesktop.thumbnails.Thumbnailer1 (tumbler installed); /usr/share/thumbnailers/*.thumbnailer (evince, totem, gdk-pixbuf, heif, webp, font-viewer, xapp)"
-native = "todo"
-native_note = "native/crates/ox-core/src/entry/info.rs keeps valid thumbnail paths (valid_thumbnail_path_is_kept_byte_for_byte), but no view shows thumbnails. Porting notes: The OpenXplorer About text states that thumbnails are not implemented."
+native = "done"
+native_note = "Files show previews in the details and icon views from the shared freedesktop cache (GIO thumbnail::path / is-valid / failed), looked up at low priority when a row or tile is bound and dropped when GTK unbinds it (native/crates/ox-app/src/thumbnails.rs, folder_view/cells/custom_icon.rs). A missing thumbnail is made by org.freedesktop.thumbnails.Thumbnailer1 when the session has it and it supports the type (Queue, with Dequeue for requests no longer needed; thumbnails/service.rs), else for the picture types gdk-pixbuf reads by the app itself, written per the Thumbnail Managing Standard: normal or large, Thumb::URI and Thumb::MTime, 0600 file renamed into place in 0700 folders (thumbnails/writer.rs, a_picture_gets_a_standard_thumbnail; thumbnails_are_named_by_the_hash_of_their_uri). Decoding and making run off the main thread, a few at a time; failures keep the icon for the session. A custom icon (PROP-016) takes precedence."
 
 [[feature]]
 id = "VIEW-058"
@@ -4034,7 +4037,8 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "Settings › General › Previews; Settings → Interface → Previews (plugins, “Skip previews for remote files above N MiB”)"
 gnome = "org.gnome.nautilus.preferences show-image-thumbnails ('local-only') and thumbnail-limit; Reference: org.gnome.nautilus.preferences show-image-thumbnails / thumbnail-limit; org.gnome.desktop.thumbnailers disable-all"
-native = "todo"
+native = "partial"
+native_note = "Settings > Appearance > Files and folders: Show previews (on), Show previews in network folders (off: SMB, servers, phones and kernel CIFS mounts keep icons), Skip previews of large files (on, 50 MB), and Preview pictures / videos / documents and other files, saved as viewOptions and followed by every window (native/crates/ox-core/src/settings/view_options.rs view_options_round_trip_and_ignore_odd_values; ox-app thumbnails.rs previews_follow_the_settings; settings_page/folder_views.rs). Dolphin's free size limits (MiB spin boxes) became one on/off limit. Missing, needs an owner decision because it changes the Windows 11 folder art: previews of a folder's contents inside its folder icon."
 
 [[feature]]
 id = "VIEW-059"

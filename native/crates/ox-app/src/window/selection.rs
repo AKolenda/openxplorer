@@ -16,7 +16,7 @@ use ox_core::location::is_smb_location;
 use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts};
-use super::status_bar::StatusSubject;
+use super::status_bar::{self, StatusSubject};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -120,11 +120,17 @@ impl BrowserWindow {
         } else {
             StatusSubject::Folder {
                 shown,
+                bytes: self.folder_pane().model().shown_file_bytes(),
                 loading: self.is_loading() && self.folder_pane().shows_loading_line(),
             }
         };
-        let selected = self.folder_pane().model().summary();
-        self.status_bar().set_counts(subject, selected);
+        let model = self.folder_pane().model();
+        let selected = model.summary();
+        let single = (selected.count == 1)
+            .then(|| model.selected_items().first().map(status_bar::item_text))
+            .flatten();
+        self.status_bar().set_counts(subject, selected, single);
+        self.show_watch_state();
     }
 
     /// Shows the selection's properties, or the folder's, in the details

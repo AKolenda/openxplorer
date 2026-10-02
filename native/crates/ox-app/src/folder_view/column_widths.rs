@@ -33,6 +33,10 @@ pub(crate) const fn settings_column(column: SortColumn) -> Column {
         SortColumn::FolderPath | SortColumn::OriginalLocation => Column::ParentUri,
         SortColumn::Type => Column::Type,
         SortColumn::Size => Column::Size,
+        SortColumn::Created => Column::Created,
+        SortColumn::Extension => Column::Extension,
+        SortColumn::Owner => Column::Owner,
+        SortColumn::Permissions => Column::Permissions,
     }
 }
 
@@ -40,11 +44,7 @@ pub(crate) const fn settings_column(column: SortColumn) -> Column {
 const fn edge_gutter(column: SortColumn) -> u32 {
     match column {
         SortColumn::Name | SortColumn::Size => EDGE_GUTTER,
-        SortColumn::Modified
-        | SortColumn::FolderPath
-        | SortColumn::OriginalLocation
-        | SortColumn::Deleted
-        | SortColumn::Type => 0,
+        _ => 0,
     }
 }
 
@@ -55,10 +55,11 @@ const fn edge_gutter(column: SortColumn) -> u32 {
 const fn default_width(column: SortColumn) -> Option<u32> {
     match column {
         SortColumn::Name => None,
-        SortColumn::Modified | SortColumn::Deleted => Some(176),
+        SortColumn::Modified | SortColumn::Created | SortColumn::Deleted => Some(176),
         SortColumn::FolderPath | SortColumn::OriginalLocation => Some(330),
         SortColumn::Type => Some(135),
-        SortColumn::Size => Some(90),
+        SortColumn::Size | SortColumn::Extension => Some(90),
+        SortColumn::Owner | SortColumn::Permissions => Some(110),
     }
 }
 
@@ -95,12 +96,7 @@ pub(crate) fn saved_width(column: SortColumn, fixed_width: i32) -> Option<f64> {
 const fn fit_padding(column: SortColumn) -> f64 {
     match column {
         SortColumn::Name => 64.0,
-        SortColumn::Modified
-        | SortColumn::FolderPath
-        | SortColumn::OriginalLocation
-        | SortColumn::Deleted
-        | SortColumn::Type
-        | SortColumn::Size => 30.0,
+        _ => 30.0,
     }
 }
 

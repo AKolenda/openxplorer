@@ -31,6 +31,15 @@ pub(crate) enum SortColumn {
     Type,
     /// File size in bytes.
     Size,
+    /// Creation timestamp; this and the next three are offered by the
+    /// header's menu (VIEW-033).
+    Created,
+    /// The file extension.
+    Extension,
+    /// The owner's name.
+    Owner,
+    /// The permission bits.
+    Permissions,
 }
 
 impl SortColumn {
@@ -38,7 +47,7 @@ impl SortColumn {
     /// search Folder path (`columnFields` in app.js) and the Recycle Bin
     /// Original location and Date deleted, in the same place, as Windows
     /// File Explorer and Dolphin do.
-    pub(crate) const ALL: [SortColumn; 7] = [
+    pub(crate) const ALL: [SortColumn; 11] = [
         SortColumn::Name,
         SortColumn::Modified,
         SortColumn::FolderPath,
@@ -46,6 +55,22 @@ impl SortColumn {
         SortColumn::Deleted,
         SortColumn::Type,
         SortColumn::Size,
+        SortColumn::Created,
+        SortColumn::Extension,
+        SortColumn::Owner,
+        SortColumn::Permissions,
+    ];
+
+    /// The columns the header's menu shows and hides; Name and Folder
+    /// path always show where they apply.
+    pub(crate) const CHOOSABLE: [SortColumn; 7] = [
+        SortColumn::Modified,
+        SortColumn::Created,
+        SortColumn::Type,
+        SortColumn::Size,
+        SortColumn::Extension,
+        SortColumn::Owner,
+        SortColumn::Permissions,
     ];
 
     /// The columns the Sort menu offers, as app.js's Sort menu does; a
@@ -67,6 +92,10 @@ impl SortColumn {
             SortColumn::Deleted => "deleted",
             SortColumn::Type => "type",
             SortColumn::Size => "size",
+            SortColumn::Created => "created",
+            SortColumn::Extension => "extension",
+            SortColumn::Owner => "owner",
+            SortColumn::Permissions => "permissions",
         }
     }
 
@@ -85,6 +114,10 @@ impl SortColumn {
             SortColumn::Deleted => "Date deleted",
             SortColumn::Type => "Type",
             SortColumn::Size => "Size",
+            SortColumn::Created => "Date created",
+            SortColumn::Extension => "File extension",
+            SortColumn::Owner => "Owner",
+            SortColumn::Permissions => "Permissions",
         }
     }
 }

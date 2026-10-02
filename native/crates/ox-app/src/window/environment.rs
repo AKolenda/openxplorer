@@ -93,6 +93,8 @@ impl BrowserWindow {
     fn places_changed(&self) {
         self.imp().locations.borrow_mut().network_mounts = self.network_mount_points();
         self.render_places();
+        // The settings may have changed too.
+        self.apply_view_options();
     }
 
     /// The mount points of the kernel's CIFS and SMB3 mounts, as last read:

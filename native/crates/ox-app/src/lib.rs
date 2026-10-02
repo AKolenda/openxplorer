@@ -39,6 +39,7 @@ mod settings_store;
 mod snapshot;
 mod text_size;
 mod theme;
+mod thumbnails;
 mod typeahead;
 mod update;
 mod volumes;

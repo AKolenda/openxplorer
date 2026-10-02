@@ -30,5 +30,8 @@ pub fn item(kind: EntryKind, name: &str) -> Entry {
         can_delete: None,
         can_write: None,
         serialized_icon: None,
+        created: None,
+        owner: None,
+        unix_mode: None,
     }
 }

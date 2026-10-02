@@ -7,7 +7,7 @@
 //! natural order, ties by name ascending, as `filtered()` in app.js) and one
 //! multi-selection shared by the details and icon views.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -16,6 +16,7 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::search::SearchFacets;
 
+use crate::folder_view::details::column_text;
 use crate::folder_view::filter::FilterState;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::sorting::{self, SortColumn};
@@ -42,6 +43,13 @@ fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> Ordering {
         SortColumn::Deleted => a.entry().trash_deletion_date.cmp(&b.entry().trash_deletion_date),
         SortColumn::Type => a.type_sort_key().natural_cmp(b.type_sort_key()),
         SortColumn::Size => a.sort_size().cmp(&b.sort_size()),
+        SortColumn::Created => a.entry().created.cmp(&b.entry().created),
+        SortColumn::Extension => {
+            let (a, b) = (column_text::extension_of(a), column_text::extension_of(b));
+            a.to_lowercase().cmp(&b.to_lowercase())
+        }
+        SortColumn::Owner => a.entry().owner.cmp(&b.entry().owner),
+        SortColumn::Permissions => a.entry().unix_mode.cmp(&b.entry().unix_mode),
     }
 }
 
@@ -93,6 +101,9 @@ pub(crate) struct FolderModel {
     filter_model: gtk::FilterListModel,
     sort_model: gtk::SortListModel,
     selection: gtk::MultiSelection,
+    /// The total size of the files shown, once added up; forgotten when
+    /// the items shown change.
+    shown_bytes: Rc<Cell<Option<u64>>>,
 }
 
 impl FolderModel {
@@ -108,13 +119,29 @@ impl FolderModel {
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
         let selection = gtk::MultiSelection::new(Some(sort_model.clone()));
+        let shown_bytes = Rc::new(Cell::new(None));
+        let forget = Rc::clone(&shown_bytes);
+        filter_model.connect_items_changed(move |_, _, _, _| forget.set(None));
         Self {
             filter_state,
             filter,
             filter_model,
             sort_model,
             selection,
+            shown_bytes,
         }
+    }
+
+    /// The total size of the files shown (VIEW-051), added up once per
+    /// change of the items shown.
+    pub(crate) fn shown_file_bytes(&self) -> u64 {
+        if let Some(bytes) = self.shown_bytes.get() {
+            return bytes;
+        }
+        let items = self.filter_model.iter::<glib::Object>().filter_map(Result::ok);
+        let bytes = items.filter_map(|item| as_item(&item).file_size()).sum();
+        self.shown_bytes.set(Some(bytes));
+        bytes
     }
 
     /// Completes the sorter once the details view exists: folders first,

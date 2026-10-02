@@ -79,6 +79,26 @@ impl BrowserWindow {
             }
         ));
         self.status_bar().add_controller(click);
+        // Dolphin's space indicator offers the tools on a click too.
+        let free_space = self.status_bar().free_space_widget();
+        let primary = gtk::GestureClick::new();
+        primary.connect_released(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            free_space,
+            move |_, _, x, y| {
+                #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+                let point = free_space.compute_point(
+                    window.status_bar(),
+                    &gtk::graphene::Point::new(x as f32, y as f32),
+                );
+                if let Some(point) = point {
+                    window.show_status_bar_menu(f64::from(point.x()), f64::from(point.y()));
+                }
+            }
+        ));
+        free_space.add_controller(primary);
     }
 
     /// The status bar's menu at (`x`, `y`), when it has something to

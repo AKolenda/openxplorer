@@ -98,7 +98,10 @@ fn the_file_list_its_items_and_every_icon_button_are_named() {
     );
     let resizers = descendants::<ResizerControl>(&details);
     assert_eq!(resizers.len(), titles.len(), "every column has its resizer");
-    let size = resizers.last().expect("the Size column's resizer");
+    let size_position = SortColumn::ALL
+        .iter()
+        .position(|column| *column == SortColumn::Size);
+    let size = &resizers[size_position.expect("a Size column")];
     assert_eq!(size.accessible_role(), gtk::AccessibleRole::Separator);
     assert!(!size.is_focusable(), "the title takes the keys");
     assert!(size.request_value(130.0), "a screen reader can set the width");

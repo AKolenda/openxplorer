@@ -205,6 +205,7 @@ impl BrowserWindow {
                 move || window.folder_changed(id)
             ),
         );
+        self.follow_watch_health(&watch);
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.watch = Some(watch);
         }
@@ -467,6 +468,7 @@ impl BrowserWindow {
             };
             pane.show_empty(&state);
         }
+        self.apply_view_options();
         self.update_status();
         self.update_file_commands();
         self.learn_trash_support();

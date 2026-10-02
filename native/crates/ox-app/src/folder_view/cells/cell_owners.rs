@@ -29,6 +29,7 @@ use gtk::prelude::*;
 use super::row_tooltip::RowTooltip;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
+use crate::thumbnails::PreviewPolicy;
 
 /// The CSS class of a cell whose item a cut put on the clipboard. The
 /// stylesheet draws such cells at half opacity (`.file-row.cut{opacity:.5}`
@@ -125,6 +126,10 @@ pub(crate) struct CellOwners {
     drop_row: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
     /// What the rows' tooltips name.
     row_tooltip: Cell<RowTooltip>,
+    /// Which items show previews in the folder shown.
+    previews: Cell<PreviewPolicy>,
+    /// Folders in the Size column say how many items they hold.
+    counts_items: Cell<bool>,
 }
 
 impl CellOwners {
@@ -184,19 +189,49 @@ impl CellOwners {
         }
     }
 
+    /// Whether folders in the Size column say how many items they hold.
+    pub(crate) fn counts_items(&self) -> bool {
+        self.counts_items.get()
+    }
+
+    /// Makes folders in the Size column count their items, or not.
+    pub(crate) fn set_counts_items(&self, counts: bool) {
+        self.counts_items.set(counts);
+    }
+
+    /// Which items show previews now.
+    pub(crate) fn previews(&self) -> PreviewPolicy {
+        self.previews.get()
+    }
+
+    /// Makes the items `previews` allows show previews, and looks the
+    /// pictures up again in every cell on screen when that changed.
+    pub(crate) fn set_previews(&self, previews: PreviewPolicy) {
+        if self.previews.replace(previews) != previews {
+            self.look_up_pictures(|_| true);
+        }
+    }
+
     /// Looks up the custom icon of the item at `uri` again in every cell
     /// that shows it (PROP-016).
     pub(crate) fn refresh_custom_icon(&self, uri: &str) {
+        self.look_up_pictures(|item| item.entry().uri == uri);
+    }
+
+    /// Looks up the custom icon or preview again in every cell on screen
+    /// whose item `matches`.
+    fn look_up_pictures(&self, matches: impl Fn(&FileItem) -> bool) {
         let showing: Vec<(gtk::Widget, FileItem)> = self
             .owners
             .borrow()
             .iter()
             .filter_map(CellOwner::bound_cell)
-            .filter(|(_, item)| item.entry().uri == uri)
+            .filter(|(_, item)| matches(item))
             .collect();
+        let previews = self.previews();
         for (cell, item) in showing {
             if let Some(cell) = cell.downcast_ref::<FileCell>() {
-                cell.look_up_custom_icon(&item);
+                cell.look_up_picture(&item, previews);
             }
         }
     }
