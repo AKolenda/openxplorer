@@ -17,9 +17,11 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::settings::{
-    ColumnWidth, DetailsPaneOptions, PreferencesUpdate, SettingsError, Theme, WindowSize, SIDEBAR_WIDTHS,
+    ColumnWidth, DetailsPaneOptions, FolderTreeOptions, PreferencesUpdate, SettingsError, Theme, ViewOptions,
+    WindowSize, SIDEBAR_WIDTHS,
 };
 
+use super::folder_pane::FolderView;
 use super::BrowserWindow;
 use crate::text_size::TextSize;
 
@@ -57,6 +59,11 @@ pub(super) enum Preference {
     Sidebar(bool),
     /// The sidebar's icon size in pixels, 0 for automatic (SIDE-012).
     SidebarIconSize(u32),
+    /// The folder views' options: previews, item counts and the details
+    /// columns (VIEW-033, VIEW-058).
+    ViewOptions(ViewOptions),
+    /// The folder tree's options (SIDE-028).
+    FolderTree(FolderTreeOptions),
 }
 
 impl Preference {
@@ -74,6 +81,8 @@ impl Preference {
             Preference::DetailsPaneOptions(options) => update.details_pane_options = Some(options),
             Preference::Sidebar(shown) => update.hide_sidebar = Some(!shown),
             Preference::SidebarIconSize(size) => update.sidebar_icon_size = Some(size),
+            Preference::ViewOptions(options) => update.view_options = Some(options),
+            Preference::FolderTree(options) => update.folder_tree = Some(options),
             Preference::DefaultLayout => {
                 update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
                 // An empty list clears every saved column width.
@@ -145,6 +154,18 @@ impl BrowserWindow {
     /// the ones the user changes.
     pub(super) fn apply_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
+        let view = FolderView::from_setting(preferences.view);
+        for pane in self.folder_panes() {
+            pane.model().set_show_hidden(preferences.show_hidden);
+            pane.show_view(view);
+            let details_view = pane.details();
+            details_view.apply_column_widths(preferences.column_widths.as_ref());
+            details_view.connect_columns_resized(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |widths| window.save_preference(Preference::ColumnWidths(widths))
+            ));
+        }
         // `win.details-pane` starts from the same preferences.
         self.details_pane()
             .set_options(preferences.details_pane_options.clone());
@@ -155,18 +176,12 @@ impl BrowserWindow {
         self.follow_item_preferences();
         let workspace = self.workspace();
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
-        let details_view = self.folder_pane().details();
-        details_view.apply_column_widths(preferences.column_widths.as_ref());
-        details_view.connect_columns_resized(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |widths| window.save_preference(Preference::ColumnWidths(widths))
-        ));
         self.save_sidebar_width_after_drags();
         self.keep_sidebar_within_limit();
         self.reset_sidebar_on_double_click();
         self.install_sidebar_resizer();
         self.install_sidebar_toggle();
+        self.install_folder_tree();
         self.follow_layout_reset();
     }
 
@@ -192,7 +207,9 @@ impl BrowserWindow {
     /// saving them: the window that reset the layout saves it once.
     fn show_default_layout(&self) {
         self.workspace().set_position(DEFAULT_SIDEBAR_WIDTH);
-        self.folder_pane().details().apply_column_widths(None);
+        for pane in self.folder_panes() {
+            pane.details().apply_column_widths(None);
+        }
     }
 
     /// The widest the sidebar may be now, or `None` before the workspace

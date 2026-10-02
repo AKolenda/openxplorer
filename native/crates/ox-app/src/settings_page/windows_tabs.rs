@@ -13,17 +13,48 @@
 use gtk::prelude::*;
 use ox_core::settings::PreferencesUpdate;
 
-use super::bindings::PreferenceBinding;
+use super::bindings::{Choice, PreferenceBinding};
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
 use super::row::{ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
+use super::startup::startup_group;
 use super::SettingsPage;
 use crate::application::AppAction;
 use crate::icons::Icon;
 use crate::window::list_open_windows_on_click;
+
+const NEW_TAB_POSITION: RowText = RowText {
+    title: "Open new tabs",
+    description: "Where a folder opened in a new tab goes. Ctrl+T always adds a tab at the end.",
+    keywords: "new tab position after current end tab bar order middle click",
+};
+
+/// The choices of "Open new tabs" (Dolphin's `OpenNewTabAfterLastTab`).
+const NEW_TAB_POSITIONS: [Choice<bool>; 2] = [
+    Choice {
+        value: false,
+        label: "After the current tab",
+    },
+    Choice {
+        value: true,
+        label: "At the end of the tab bar",
+    },
+];
+
+const BEGIN_SPLIT: RowText = RowText {
+    title: "Open new windows in split view",
+    description: "New windows show two folders side by side. F3 splits or unsplits a tab.",
+    keywords: "split view dual pane two panes side by side f3 commander",
+};
+
+const TAB_SWITCHES_PANES: RowText = RowText {
+    title: "Switch between split panes with Tab",
+    description: "Off: Tab moves keyboard focus through the window as usual.",
+    keywords: "split view tab key switch pane focus keyboard",
+};
 
 const OPEN_WINDOWS: RowText = RowText {
     title: "Open windows",
@@ -133,6 +164,8 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::WindowsAndTabs;
     let windows = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     windows.append_group(&windows_group(page));
+    windows.append_group(&startup_group(page));
+    windows.append_group(&split_view_group(page));
     windows.append_group(&address_group(page));
     windows.append_group(&archives_group(page));
     windows.append_group(&confirmations_group(page));
@@ -179,6 +212,53 @@ fn windows_group(page: &SettingsPage) -> SettingsGroup {
     };
     title_path.add_control(&page.preference_switch(full_path_in_title), ControlName::RowTitle);
     group.add_row(&title_path);
+    let new_tabs = SettingRow::new(NEW_TAB_POSITION);
+    let at_end = PreferenceBinding {
+        read: |preferences| preferences.open_tabs_at_end,
+        write: |at_end| PreferencesUpdate {
+            open_tabs_at_end: Some(at_end),
+            ..PreferencesUpdate::default()
+        },
+    };
+    new_tabs.add_control(
+        &page.preference_choice(&NEW_TAB_POSITIONS, at_end),
+        ControlName::RowTitle,
+    );
+    group.add_row(&new_tabs);
+    group
+}
+
+/// Split view's options (VIEW-059, Dolphin's "Begin in split view mode"
+/// and "Switch between split views with tab key").
+fn split_view_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new("Split view");
+    let bindings = [
+        (
+            BEGIN_SPLIT,
+            PreferenceBinding {
+                read: |preferences| preferences.begin_in_split_view,
+                write: |on| PreferencesUpdate {
+                    begin_in_split_view: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            TAB_SWITCHES_PANES,
+            PreferenceBinding {
+                read: |preferences| preferences.tab_switches_split_panes,
+                write: |on| PreferencesUpdate {
+                    tab_switches_split_panes: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+    ];
+    for (text, binding) in bindings {
+        let row = SettingRow::new(text);
+        row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+        group.add_row(&row);
+    }
     group
 }
 

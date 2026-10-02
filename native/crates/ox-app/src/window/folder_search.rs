@@ -19,6 +19,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use ox_core::location::{same_location, TRASH_URI};
 use ox_core::search::{HiddenItems, SearchFacets, SearchIn, SearchQuery, SearchResults};
 
 use crate::folder_view::cells::RowTooltip;
@@ -295,15 +296,14 @@ impl BrowserWindow {
             facets: search.facets(),
         };
         let report = search.report().cloned();
-        let (listing, row_tooltip) = if search.is_active() {
-            (DetailsListing::SearchResults, RowTooltip::FullPath)
+        let row_tooltip = if search.is_active() {
+            RowTooltip::FullPath
         } else {
-            (DetailsListing::Folder, RowTooltip::Name)
+            RowTooltip::Name
         };
         // Released first: the strip's lists change as it shows them.
         drop(search);
         self.search_strip().show_report(report.as_ref(), options);
-        self.folder_pane().details().show_listing(listing);
         self.folder_pane().owners().set_row_tooltip(row_tooltip);
         self.update_expandability();
         self.update_content();
@@ -372,11 +372,23 @@ impl BrowserWindow {
 
     /// Ends the search as leaving the folder does: empties the box and
     /// forgets the scope.
-    fn end_search(&self) {
+    pub(super) fn end_search(&self) {
         self.imp().search.borrow_mut().end();
         self.search_box().clear();
         self.show_searched_items();
         self.show_search_state();
+    }
+
+    /// What the details view lists, for its columns: search results, the
+    /// Recycle Bin or a folder.
+    pub(super) fn details_listing(&self, uri: &str) -> DetailsListing {
+        if self.is_searching() {
+            DetailsListing::SearchResults
+        } else if same_location(uri, TRASH_URI) {
+            DetailsListing::RecycleBin
+        } else {
+            DetailsListing::Folder
+        }
     }
 
     /// What the empty page says while a search shows nothing.

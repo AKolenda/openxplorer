@@ -19,8 +19,9 @@ use super::labels::bookmark_fallback_label;
 use super::model::{Bookmark, RecentEntry, SettingsData, MAX_BOOKMARKS, MAX_HIDDEN, MAX_ORDER, MAX_RECENT};
 use super::preferences::PreferencesUpdate;
 use super::python_conversions::{python_count, python_str};
+use super::stored_location::{normalise, require_share};
 use super::{FileState, Settings, SettingsError};
-use crate::location::{normalise, require_share, safe_label, LocationError};
+use crate::location::{safe_label, LocationError};
 use crate::private_storage::{private_directory, private_file, read_limited_text, PrivateFileOptions};
 
 /// Largest settings file read, in bytes: the default limit of
@@ -190,6 +191,7 @@ fn read_recent(item: &Value) -> Option<RecentEntry> {
         is_dir: false,
         size: python_count(fields.get("size"))?,
         modified: python_count(fields.get("modified"))?,
+        opened: fields.get("opened").and_then(Value::as_u64),
     };
     Some(entry.into_stored())
 }

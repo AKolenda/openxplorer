@@ -39,8 +39,11 @@ mod preferences;
 mod python_conversions;
 mod read;
 mod save;
+mod stored_location;
 #[cfg(test)]
 mod test_support;
+mod tree_options;
+mod view_options;
 mod view_properties;
 
 use std::path::{Path, PathBuf};
@@ -55,6 +58,9 @@ pub use preferences::{
     Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, WindowSize, DEFAULT_TEXT_SIZE,
     NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS, WINDOW_WIDTHS,
 };
+pub use view_options::{ViewOptions, DEFAULT_DETAILS_COLUMNS, PREVIEW_SIZE_LIMIT};
+
+pub use tree_options::FolderTreeOptions;
 pub use view_properties::{may_remember, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS};
 
 use crate::location::same_location;
@@ -308,14 +314,30 @@ impl Settings {
         self.mutate(move |data| mutate::remember_open(data, entry))
     }
 
-    /// Saves `properties` as the display style of `uri` with `scope`
-    /// (VIEW-020, VIEW-021), changing only that folder's style, or only
-    /// the shared one, as the file now holds them. Returns the resulting
-    /// preferences.
+    /// Forgets the recent files opened before `opened_before` (seconds
+    /// since the Unix epoch), and those with no time of opening; `None`
+    /// forgets them all. The file is written only when something is
+    /// forgotten.
     ///
     /// # Errors
     ///
     /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn forget_recent(&mut self, opened_before: Option<u64>) -> Result<(), SettingsError> {
+        let mut kept = self.data.clone();
+        if !mutate::forget_recent(&mut kept, opened_before) {
+            return Ok(());
+        }
+        self.mutate(move |data| {
+            mutate::forget_recent(data, opened_before);
+            Ok(())
+        })
+    }
+
+    /// Saves a folder or shared display style.
+    ///
+    /// # Errors
+    ///
+    /// The settings cannot be written.
     pub fn remember_view(
         &mut self,
         uri: &str,

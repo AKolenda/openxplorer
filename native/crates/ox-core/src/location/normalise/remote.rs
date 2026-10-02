@@ -38,6 +38,23 @@ pub(super) fn normalise_remote_url(address: &str) -> Result<String, LocationErro
     Ok(format!("{scheme}://{user}{authority}{}", quote_path(&path)))
 }
 
+/// `uri` without the user name of an SFTP, FTP or WebDAV address
+/// (`sftp://anna@build/srv` is `sftp://build/srv`), for what leaves the
+/// session: settings.json, tab titles, the clipboard and GTK's recent
+/// servers, which never hold a user name, as for SMB (SAFE-010). Other
+/// addresses are returned as they are.
+pub fn without_user(uri: &str) -> String {
+    let Some((scheme, rest)) = uri.split_once("://") else {
+        return uri.to_owned();
+    };
+    if !matches!(scheme, "sftp" | "ftp" | "ftps" | "dav" | "davs") {
+        return uri.to_owned();
+    }
+    let authority_end = rest.find('/').unwrap_or(rest.len());
+    let (authority, path) = rest.split_at(authority_end);
+    format!("{scheme}://{}{path}", after_user(authority))
+}
+
 /// The user name of a remote URL, if any.
 ///
 /// # Errors

@@ -27,7 +27,7 @@
 //! [`file_drop`]), moving tabs ([`tab_moves`]), the context menus
 //! ([`context_menu`], [`tab_menu`]), searching ([`folder_search`],
 //! [`cache_folder`]), Properties and previous versions ([`item_dialogs`],
-//! [`snapshot_tabs`], [`version_restore`]), folder sizes
+//! [`snapshot_tabs`], [`version_restore`]), split tabs ([`split_view`]), folder sizes
 //! ([`folder_size_scan`]), moving a relocated standard folder's files
 //! ([`relocated_files`]), ZIP archives ([`archive_actions`]), requests
 //! from other applications and the command line ([`external_requests`]),
@@ -68,7 +68,6 @@ mod crumb_menus;
 mod desktop_link;
 mod details_hover;
 mod details_pane;
-mod dialog;
 mod disabled_reasons;
 mod disk_tools;
 mod empty_page;
@@ -82,6 +81,7 @@ mod focus_regions;
 mod folder_pane;
 mod folder_search;
 mod folder_size_scan;
+mod folder_tree;
 mod free_space;
 mod gestures;
 mod grid_keys;
@@ -106,6 +106,7 @@ mod network_page;
 mod network_session;
 mod network_sign_out;
 mod open_several;
+mod pane_content;
 mod place_editor;
 mod place_menus;
 mod preferences;
@@ -122,15 +123,19 @@ mod select_matching;
 mod selection;
 mod selection_keys;
 mod session;
+mod session_restore;
 mod settings_tab;
 mod sidebar;
 mod sidebar_hiding;
 mod sidebar_resizer;
 mod sidebar_toggle;
+mod slow_click_rename;
 mod snapshot_tabs;
 mod software_search;
 mod sort_actions;
+mod split_view;
 mod status_bar;
+mod stop_listing;
 mod tab_commands;
 mod tab_layout;
 mod tab_menu;
@@ -142,9 +147,11 @@ mod transfer_panel;
 mod type_applications;
 mod type_to_select;
 mod version_restore;
+mod view_options;
 mod view_properties_dialog;
 mod view_style;
 mod view_zoom;
+mod watch_state;
 pub(crate) mod widget_tree;
 mod window_action;
 mod window_keys;
@@ -169,11 +176,11 @@ use sidebar::Sidebar;
 use status_bar::StatusBar;
 use tab_strip::TabStrip;
 
+pub(crate) use crate::dialog::Dialog;
 pub(crate) use actions::follow_text_size_keys;
 pub(crate) use actions::install_accelerators;
 pub(crate) use button_style::ButtonStyle;
 pub(crate) use closing::QUIT_WHILE_WRITING;
-pub(crate) use dialog::Dialog;
 pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
@@ -201,6 +208,7 @@ impl BrowserWindow {
             .expect("a new window has no context yet");
         window.start_network();
         window.install_actions();
+        window.install_split_view();
         window.install_size_scans();
         window.install_item_dialogs();
         window.install_archive_actions();
@@ -264,9 +272,10 @@ impl BrowserWindow {
         &self.imp().sidebar
     }
 
-    /// The folder pane.
+    /// The folder pane that shows the active pane of the tab in front:
+    /// the left one, or the right one of a split tab ([`split_view`]).
     fn folder_pane(&self) -> &FolderPane {
-        &self.imp().folder_pane
+        self.pane_on(self.imp().active_side.get())
     }
 
     /// The details pane.

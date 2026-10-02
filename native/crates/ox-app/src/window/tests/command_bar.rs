@@ -13,10 +13,11 @@ use super::geometry::laid_out;
 use crate::icons::Icon;
 use crate::locations::Page;
 use crate::test_support::harness::{
-    descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+    application, descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::window::menu_popover::MenuPopover;
 use crate::window::widget_tree::children;
+use crate::window::window_action::WindowAction;
 
 /// How a test names a command bar control: "|" for a separator, the
 /// visible label of a text command, else the first line of its tooltip.
@@ -292,6 +293,25 @@ fn the_view_menu_checks_hidden_files_and_the_details_pane_while_on() {
     test.activate("details-pane", None);
 
     assert_eq!(checked_now(), before.map(|was_checked| !was_checked));
+}
+
+/// View > Terminal and Ctrl+Shift+F4, Dolphin's Terminal panel keys, open
+/// the desktop's terminal in the folder shown: VTE, which Dolphin's panel
+/// would need, is not linked.
+///
+/// parity: OPEN-022
+#[gtk::test]
+fn the_view_menu_and_ctrl_shift_f4_open_the_terminal_here() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let view = menu_of(&test, "View");
+    view.popup();
+    wait_for_frames(&test.window, 2);
+    assert!(view.row("Terminal").is_sensitive());
+    view.popdown();
+
+    let keys = application().accels_for_action(&WindowAction::OpenTerminal.detailed_name());
+    assert!(keys.iter().any(|key| key == "<Shift><Control>F4"), "{keys:?}");
 }
 
 /// More options: "Pin current folder" and the cache toggle need a

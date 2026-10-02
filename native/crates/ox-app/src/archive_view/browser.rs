@@ -20,7 +20,7 @@ use ox_core::format;
 use ox_core::transfer::Cancellation;
 
 use super::{archive_art, ArchiveTarget};
-use crate::dialog_layer::{quiet_text, DialogFrame, DialogWidth};
+use crate::dialog::{quiet_text, DialogFrame, DialogWidth};
 use crate::icons::{self, ArtImage, Icon};
 use crate::window::ButtonStyle;
 

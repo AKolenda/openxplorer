@@ -22,7 +22,7 @@ use super::permissions_editor::{permissions_editor, EditedItems};
 use super::tabs::PropertiesTabs;
 use super::view::{can_edit_permissions, PropertiesContext};
 use super::{PropertiesTab, CALCULATING, READING};
-use crate::dialog_layer::{note, quiet_text, PropertyGrid};
+use crate::dialog::{note, quiet_text, PropertyGrid};
 use crate::icons::{Art, ArtImage};
 
 /// The Permissions tab when some item cannot be changed here.

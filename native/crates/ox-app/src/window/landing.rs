@@ -68,7 +68,7 @@ impl Capacity {
     }
 
     /// Whether the bar turns red (`.capacity.full`).
-    fn is_nearly_full(self) -> bool {
+    pub(super) fn is_nearly_full(self) -> bool {
         self.used_share() >= NEARLY_FULL
     }
 

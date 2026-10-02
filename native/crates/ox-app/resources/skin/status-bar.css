@@ -21,6 +21,11 @@ window.ox .statusbar button {
   color: @ox_muted;
 }
 window.ox .statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
+/* How full the volume is: a 3px bar beside its free space (VIEW-053). */
+.statusbar .capacity { min-width: 64px; min-height: 3px; margin-top: 1px; }
+.statusbar .capacity > trough { min-height: 3px; background-color: @ox_hover; border-radius: 2px; border: none; }
+.statusbar .capacity > trough > progress { min-height: 3px; min-width: 0; margin: 0; background-color: @ox_accent; border-radius: 2px; border: none; }
+.statusbar .capacity.full > trough > progress { background-color: @ox_critical_fill; }
 /* The icon-size slider (VIEW-010): a thin Windows 11 track with the accent
    filling up to its round thumb. */
 window.ox .statusbar scale.zoom-slider { min-width: 96px; margin: 1px 18px 0 0; padding: 0; }

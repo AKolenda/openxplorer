@@ -265,3 +265,27 @@ window.ox .files entry.rename-field {
   box-shadow: inset 0 -1px @ox_accent;
 }
 
+
+/* ---- Split view (VIEW-059) ---- */
+/* Each pane of a split tab says where it is above its items. The active
+   pane's caption carries the accent line under it, as the selected item
+   of a Windows 11 navigation view does; the other pane is dimmed, as
+   Dolphin dims its inactive view, and lights up again under the pointer. */
+.pane-caption {
+  background-color: @ox_bg;
+  color: @ox_muted;
+  padding: 6px 14px 4px 14px;
+  border-bottom: 2px solid transparent;
+}
+.active-pane > .pane-caption { color: @ox_text; border-bottom-color: @ox_accent; }
+.inactive-pane > .pane-caption { border-bottom-color: @ox_border; }
+.inactive-pane > .folder-pane-host { opacity: 0.75; }
+.inactive-pane:hover > .folder-pane-host { opacity: 0.9; }
+/* The divider between the panes: a 1px border line that turns into the
+   accent while it is dragged or hovered, as the sidebar's resizer. */
+paned.pane-split > separator {
+  min-width: 1px;
+  background-color: @ox_border;
+  background-image: none;
+}
+paned.pane-split > separator:hover { background-color: @ox_accent; }

@@ -23,7 +23,6 @@ use crate::devices::Removal;
 use crate::locations::Page;
 use crate::window::{ButtonStyle, Dialog};
 
-use super::session::Tab;
 use super::BrowserWindow;
 
 /// The note of "Disconnect this mount?", under the location.
@@ -180,17 +179,14 @@ impl BrowserWindow {
             let mut session = self.imp().session.borrow_mut();
             let active = session.active_id();
             let is_active_inside = session.active().is_some_and(|tab| is_inside(tab.uri(), root));
-            let behind = session
-                .tabs_mut()
-                .iter_mut()
-                .filter(|tab| Some(tab.id) != active && is_inside(tab.uri(), root));
-            let stale = behind
-                .map(|tab| {
+            let mut stale = Vec::new();
+            session.change_panes(|tab| {
+                if Some(tab.id) != active && is_inside(tab.uri(), root) {
                     tab.history.push(&home);
                     tab.forget_location_state();
-                    tab.mark_stale()
-                })
-                .collect();
+                    stale.push(tab.mark_stale());
+                }
+            });
             (stale, is_active_inside)
         };
         self.change_model(|| {
@@ -214,13 +210,12 @@ impl BrowserWindow {
     /// dropped after the session is released, because dropping the active
     /// tab's items runs the view's handlers, which read the session.
     pub(super) fn mark_tabs_stale(&self, is_stale: impl Fn(&str) -> bool) {
-        let stale: Vec<gio::ListStore> = {
-            let mut session = self.imp().session.borrow_mut();
-            let tabs = session.tabs_mut().iter_mut();
-            tabs.filter(|tab| is_stale(tab.uri()))
-                .map(Tab::mark_stale)
-                .collect()
-        };
+        let mut stale: Vec<gio::ListStore> = Vec::new();
+        self.imp().session.borrow_mut().change_panes(|tab| {
+            if is_stale(tab.uri()) {
+                stale.push(tab.mark_stale());
+            }
+        });
         self.change_model(|| {
             for items in &stale {
                 items.remove_all();

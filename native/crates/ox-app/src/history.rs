@@ -68,6 +68,16 @@ impl History {
         }
     }
 
+    /// A history of `entries` at `position`, as a saved session kept it;
+    /// `None` when there are no entries or `position` is past them.
+    pub(crate) fn restored(entries: Vec<String>, position: usize) -> Option<Self> {
+        (position < entries.len()).then_some(Self {
+            entries,
+            position,
+            moves: 0,
+        })
+    }
+
     /// The location currently shown.
     pub(crate) fn current(&self) -> &str {
         &self.entries[self.position]

@@ -108,11 +108,11 @@ mod imp {
         pub(super) icon_size: Cell<i32>,
         /// The text field in the name's place while the item is renamed.
         pub(super) name_editor: RefCell<Option<gtk::Entry>>,
-        /// The item's custom icon, shown over the art, which it hides
-        /// (PROP-016).
+        /// The item's custom icon (PROP-016) or preview (VIEW-057), shown
+        /// in place of the art.
         pub(super) custom_icon: gtk::Picture,
-        /// Counts the lookups, so a late custom icon is dropped.
-        pub(super) icon_lookup: Cell<u64>,
+        /// The running lookup of the custom icon or preview.
+        pub(super) picture_lookup: RefCell<Option<glib::JoinHandle<()>>>,
         /// Holds the icon, with the selection marker over its corner.
         pub(super) icon_frame: gtk::Overlay,
         /// Adds the item to the selection or takes it out (SEL-014).
@@ -233,6 +233,20 @@ impl FileCell {
         imp.name_editor.replace(Some(editor.clone()));
     }
 
+    /// Whether `point`, in the cell's coordinates, is on the name's text
+    /// rather than beside it.
+    pub(crate) fn name_text_contains(&self, point: gtk::graphene::Point) -> bool {
+        let label = &self.imp().label;
+        let Some(point) = self.compute_point(label, &point).filter(|_| label.is_visible()) else {
+            return false;
+        };
+        let (left, top) = label.layout_offsets();
+        let (width, height) = label.layout().pixel_size();
+        #[expect(clippy::cast_precision_loss, reason = "label sizes are small")]
+        let text = gtk::graphene::Rect::new(left as f32, top as f32, width as f32, height as f32);
+        text.contains_point(&point)
+    }
+
     /// Shows the name again in place of the text field, if one shows.
     pub(crate) fn hide_name_editor(&self) {
         let imp = self.imp();
@@ -298,8 +312,13 @@ pub(crate) fn connect_file_cells(
             // A tile is named after its item (`aria-label` in app.js).
             list_item.set_accessible_label(&item.entry().name);
             cell.bind(&item);
-            cell.look_up_custom_icon(&item);
+            cell.look_up_picture(&item, bind_owners.previews());
             bind_owners.style_cell(&cell, &item);
+        }
+    });
+    factory.connect_unbind(|_, object| {
+        if let Some(cell) = as_list_item(object).child().and_downcast::<FileCell>() {
+            cell.cancel_picture_lookup();
         }
     });
 }

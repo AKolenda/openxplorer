@@ -38,7 +38,7 @@ enum Resolved {
     /// Open this folder in the tab.
     Folder(String),
     /// Browse this ZIP archive.
-    Archive(Entry),
+    Archive(Box<Entry>),
     /// The file opened in its application.
     Opened,
 }
@@ -211,6 +211,8 @@ impl BrowserWindow {
     /// or closed meanwhile; a folder opens in that tab even when another
     /// one is in front by then (OPEN-001, OPEN-004).
     pub(super) fn activate_item(&self, position: u32) {
+        // A double-click opens; it never also renames (OPS-011).
+        self.cancel_slow_click_rename();
         let Some(item) = self.folder_pane().model().item(position) else {
             return;
         };
@@ -247,7 +249,7 @@ impl BrowserWindow {
         let fresh = queried.map_err(|error| error.to_string())?;
         match activation_for(&fresh) {
             Activation::Folder(uri) => Ok(Resolved::Folder(uri)),
-            Activation::Archive => Ok(Resolved::Archive(fresh)),
+            Activation::Archive => Ok(Resolved::Archive(Box::new(fresh))),
             Activation::Refused(message) => Err(message.to_owned()),
             Activation::File => {
                 if let Some(target) = desktop_link(&fresh) {

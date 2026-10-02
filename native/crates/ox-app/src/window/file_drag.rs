@@ -247,6 +247,7 @@ impl BrowserWindow {
     /// The drag started: its icon follows the pointer, and the window
     /// shows the drag's feedback.
     fn begin_file_drag(&self, drag: &gdk::Drag) {
+        self.cancel_slow_click_rename();
         let Some(outgoing) = self.show_file_drag_feedback() else {
             return;
         };
@@ -279,7 +280,9 @@ impl BrowserWindow {
         if self.imp().outgoing_drag.replace(None).is_some() {
             announce(self, DRAG_ENDED, gtk::AccessibleAnnouncementPriority::Medium);
         }
-        self.folder_pane().owners().show_dragged_items(HashSet::new());
+        for pane in self.folder_panes() {
+            pane.owners().show_dragged_items(HashSet::new());
+        }
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_END);
     }
 

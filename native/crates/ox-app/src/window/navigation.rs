@@ -18,8 +18,19 @@ use crate::history::LeftView;
 use crate::locations::{self, Page};
 
 use super::loading::LoadMode;
-use super::session::{Direction, TabId, TabPlacement};
+use super::session::{Direction, PaneSide, TabId, TabPlacement, TabPosition};
 use super::BrowserWindow;
+
+/// Where keyboard focus goes when a tab is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FocusOnShow {
+    /// Into the tab's list, on the item that had it, when the list had it
+    /// before.
+    Restore,
+    /// Nowhere: a click or a focus change in a split tab's other pane made
+    /// it active, and focus is going there already.
+    Keep,
+}
 
 /// What a tab needs to be put back on screen.
 #[derive(Debug)]
@@ -32,6 +43,8 @@ struct SavedTabView {
     focused: Option<String>,
     /// Its vertical scroll position.
     scroll: f64,
+    /// The folder pane that shows it.
+    side: PaneSide,
     /// It was opened in the background and has not been listed yet.
     needs_listing: bool,
     /// Its network folder changed while it was in the background.
@@ -91,16 +104,42 @@ impl BrowserWindow {
         folder.unwrap_or_else(|| self.imp().locations.borrow().home_uri())
     }
 
-    /// Adds a tab for `address`, in front or in the background. A
+    /// Adds a tab for `address` opened from the active one (a folder, a
+    /// place or a crumb), in front or in the background: after the active
+    /// tab, or at the end when the settings ask for that (TAB-017). A
     /// background tab is listed when it is first shown.
     ///
     /// # Errors
     ///
     /// The address is not a location the app can open; nothing changes.
     pub(super) fn open_tab(&self, address: &str, placement: TabPlacement) -> Result<(), LocationError> {
+        self.open_tab_at(address, placement, self.opened_tab_position())
+    }
+
+    /// Where a tab opened from the active one goes (TAB-017).
+    pub(super) fn opened_tab_position(&self) -> TabPosition {
+        if self.context().settings_data().preferences.open_tabs_at_end {
+            TabPosition::End
+        } else {
+            TabPosition::AfterActive
+        }
+    }
+
+    /// Adds a tab for `address` at `position`, in front or in the
+    /// background.
+    ///
+    /// # Errors
+    ///
+    /// The address is not a location the app can open; nothing changes.
+    pub(super) fn open_tab_at(
+        &self,
+        address: &str,
+        placement: TabPlacement,
+        position: TabPosition,
+    ) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
         self.save_tab_view();
-        let id = self.imp().session.borrow_mut().add(&uri, placement);
+        let id = self.imp().session.borrow_mut().add_at(&uri, placement, position);
         if self.imp().session.borrow().is_active(id) {
             self.show_tab(id);
         } else {
@@ -109,13 +148,14 @@ impl BrowserWindow {
         Ok(())
     }
 
-    /// Adds a tab for `address` and shows it.
+    /// Adds a tab for `address` at the end and shows it: Ctrl+T, and
+    /// locations from other applications and the command line.
     ///
     /// # Errors
     ///
     /// The address is not a location the app can open; nothing changes.
     pub(crate) fn add_tab(&self, address: &str) -> Result<(), LocationError> {
-        self.open_tab(address, TabPlacement::Foreground)
+        self.open_tab_at(address, TabPlacement::Foreground, TabPosition::End)
     }
 
     /// Navigates the active tab, or opens a first tab. A tab that is
@@ -246,6 +286,12 @@ impl BrowserWindow {
     /// Puts the active tab's items, selection and scroll position on
     /// screen, and lists a tab that was opened in the background.
     pub(super) fn show_tab(&self, id: TabId) {
+        self.show_tab_with(id, FocusOnShow::Restore);
+    }
+
+    /// [`Self::show_tab`], with keyboard focus going where `focus` says,
+    /// and the pane beside it when the tab is split.
+    pub(super) fn show_tab_with(&self, id: TabId, focus: FocusOnShow) {
         self.keep_activations_of(id);
         self.reset_typeahead();
         self.hide_message();
@@ -253,7 +299,9 @@ impl BrowserWindow {
         let Some(view) = self.saved_tab_view(id) else {
             return;
         };
-        let had_focus = self.folder_pane().view_has_focus();
+        let had_focus =
+            focus == FocusOnShow::Restore && self.folder_panes().iter().any(|pane| pane.view_has_focus());
+        self.imp().active_side.set(view.side);
         if let Some(uri) = self.current_uri() {
             self.follow_folder_style(&uri);
         }
@@ -268,6 +316,8 @@ impl BrowserWindow {
         self.update_content();
         self.update_details_pane();
         self.refresh_free_space();
+        self.show_pane_view_state();
+        self.show_beside_pane();
         let pane = self.folder_pane();
         pane.restore_scroll_position(view.scroll);
         if had_focus {
@@ -294,6 +344,7 @@ impl BrowserWindow {
             selected: tab.selected.clone(),
             focused: tab.focused.clone(),
             scroll: tab.scroll,
+            side: tab.side,
             needs_listing: tab.listing_state.needs_listing(),
         })
     }

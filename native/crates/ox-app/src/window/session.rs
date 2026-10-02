@@ -18,6 +18,10 @@ use crate::history::{History, HistoryViews};
 
 use super::listing_state::{ListingEnd, ListingState};
 
+mod split;
+
+pub(super) use split::PaneSide;
+
 /// Identifies a tab for the lifetime of its window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) struct TabId(u64);
@@ -55,6 +59,18 @@ pub(super) enum TabPlacement {
     /// first shown, so an SMB sign-in never appears over the current tab
     /// (`addTab(uri, {background: true})` in app.js).
     Background,
+}
+
+/// Where a new tab goes in the strip (TAB-017).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum TabPosition {
+    /// Right after the active tab, and after the tabs it opened before,
+    /// so several tabs opened from one folder keep their order: a tab
+    /// opened from a folder, a place or a crumb, as in Dolphin.
+    AfterActive,
+    /// At the end of the strip: Ctrl+T, and every tab while the settings
+    /// ask for new tabs at the end.
+    End,
 }
 
 /// Which way a step goes, through a tab's history or along the tab strip.
@@ -134,6 +150,12 @@ pub(super) struct Tab {
     /// An item of this tab is being opened; a second one waits for it
     /// (`tab.opening` in `openEntry`).
     pub is_activating: bool,
+    /// The folder pane that shows this tab: the start pane, or the end
+    /// pane of a split tab.
+    pub side: PaneSide,
+    /// The other pane of a split tab (VIEW-059), while this pane is the
+    /// active one; see [`split`].
+    beside: Option<Box<Tab>>,
 }
 
 impl Tab {
@@ -159,6 +181,8 @@ impl Tab {
             revealed_item: None,
             changed_while_hidden: false,
             is_activating: false,
+            side: PaneSide::Start,
+            beside: None,
         }
     }
 
@@ -220,6 +244,9 @@ pub(super) struct Session {
     tabs: Vec<Tab>,
     /// The tab in front; always one of `tabs`, or `None` once none is left.
     active: Option<TabId>,
+    /// The last tab opened after the active one, and the tab that opened
+    /// it: the next tab it opens goes after that one.
+    last_opened: Option<(TabId, TabId)>,
     next_id: u64,
 }
 
@@ -230,13 +257,47 @@ impl Session {
     /// # Panics
     ///
     /// Only after `u64::MAX` tabs in one window.
+    #[cfg(test)]
     pub(super) fn add(&mut self, uri: &str, placement: TabPlacement) -> TabId {
+        self.add_at(uri, placement, TabPosition::End)
+    }
+
+    /// Adds a tab at `position`. A background tab becomes active only when
+    /// it is the first one.
+    ///
+    /// # Panics
+    ///
+    /// Only after `u64::MAX` tabs in one window.
+    pub(super) fn add_at(&mut self, uri: &str, placement: TabPlacement, position: TabPosition) -> TabId {
         let id = self.next_tab_id();
-        self.tabs.push(Tab::new(id, uri));
+        let index = match position {
+            TabPosition::AfterActive => self.index_after_active(),
+            TabPosition::End => self.tabs.len(),
+        };
+        self.tabs.insert(index, Tab::new(id, uri));
+        if position == TabPosition::AfterActive {
+            self.last_opened = self.active.map(|opener| (opener, id));
+        }
         if placement == TabPlacement::Foreground || self.active.is_none() {
             self.active = Some(id);
         }
         id
+    }
+
+    /// Where a tab opened from the active one goes: after the tab it
+    /// opened last, while that tab is still to its right, else right after
+    /// it; at the end when no tab is active.
+    fn index_after_active(&self) -> usize {
+        let index_of = |id: TabId| self.tabs.iter().position(|tab| tab.id == id);
+        let Some(opener) = self.active.and_then(index_of) else {
+            return self.tabs.len();
+        };
+        let after_opened = self
+            .last_opened
+            .filter(|(by, _)| Some(*by) == self.active)
+            .and_then(|(_, opened)| index_of(opened))
+            .filter(|&opened| opened > opener);
+        after_opened.unwrap_or(opener) + 1
     }
 
     /// Adds a tab that moved here from another window, with its `history`,
@@ -291,24 +352,43 @@ impl Session {
         TabId(self.next_id)
     }
 
-    /// The open tabs, left to right, to change.
-    pub(super) fn tabs_mut(&mut self) -> &mut [Tab] {
-        &mut self.tabs
-    }
-
     /// The open tabs, left to right.
     pub(super) fn tabs(&self) -> &[Tab] {
         &self.tabs
     }
 
-    /// The tab `id`, if it is open.
-    pub(super) fn tab(&self, id: TabId) -> Option<&Tab> {
-        self.tabs.iter().find(|tab| tab.id == id)
+    /// Every pane of every tab: the tabs, and the panes beside the active
+    /// panes of split tabs.
+    pub(super) fn panes(&self) -> impl Iterator<Item = &Tab> {
+        self.tabs
+            .iter()
+            .flat_map(|tab| std::iter::once(tab).chain(tab.beside.as_deref()))
     }
 
-    /// The tab `id`, to change it.
+    /// Runs `change` on every pane of every tab.
+    pub(super) fn change_panes(&mut self, mut change: impl FnMut(&mut Tab)) {
+        for tab in &mut self.tabs {
+            change(tab);
+            if let Some(beside) = tab.beside.as_deref_mut() {
+                change(beside);
+            }
+        }
+    }
+
+    /// The tab or pane `id`, if it is open.
+    pub(super) fn tab(&self, id: TabId) -> Option<&Tab> {
+        self.panes().find(|tab| tab.id == id)
+    }
+
+    /// The tab or pane `id`, to change it.
     pub(super) fn tab_mut(&mut self, id: TabId) -> Option<&mut Tab> {
-        self.tabs.iter_mut().find(|tab| tab.id == id)
+        self.tabs.iter_mut().find_map(|tab| {
+            if tab.id == id {
+                Some(tab)
+            } else {
+                tab.beside.as_deref_mut().filter(|beside| beside.id == id)
+            }
+        })
     }
 
     /// The id of the tab in front.
@@ -334,13 +414,13 @@ impl Session {
 
     /// True when tab `id` is open and not already in front.
     pub(super) fn can_activate(&self, id: TabId) -> bool {
-        !self.is_active(id) && self.tab(id).is_some()
+        !self.is_active(id) && self.tabs.iter().any(|tab| tab.id == id)
     }
 
     /// Brings tab `id` to the front. An id that is not open changes
     /// nothing, so the active id always names an open tab.
     pub(super) fn activate(&mut self, id: TabId) {
-        if self.tab(id).is_some() {
+        if self.tabs.iter().any(|tab| tab.id == id) {
             self.active = Some(id);
         }
     }
@@ -531,6 +611,20 @@ mod tests {
         let tab = session.tab(moved).expect("the moved tab is open");
         assert_eq!(tab.history, history);
         assert_eq!(tab.uri(), "file:///moved/a");
+    }
+
+    /// parity: TAB-017
+    #[test]
+    fn tabs_opened_from_a_tab_follow_it_in_order_and_new_tabs_go_last() {
+        let (mut session, [first, second, third]) = three_tabs();
+        session.activate(first);
+
+        let opened = session.add_at("file:///a", TabPlacement::Background, TabPosition::AfterActive);
+        let next = session.add_at("file:///b", TabPlacement::Background, TabPosition::AfterActive);
+        let new_tab = session.add("file:///home", TabPlacement::Background);
+
+        assert_eq!(tab_order(&session), [first, opened, next, second, third, new_tab]);
+        assert_eq!(session.active_id(), Some(first));
     }
 
     /// parity: NAV-016

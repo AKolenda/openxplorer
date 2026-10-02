@@ -40,7 +40,9 @@ pub use error::EntryError;
 pub use info::entry_from_info;
 pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
 pub use meta::EntryMeta;
-pub use thumbnail::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
+pub use thumbnail::{
+    cached_thumbnail, thumbnail_file, thumbnail_path, CachedThumbnail, ThumbnailFlavor, THUMBNAIL_ATTRIBUTES,
+};
 
 use std::path::PathBuf;
 
@@ -53,7 +55,7 @@ use std::path::PathBuf;
 pub const ATTRIBUTES: &str = concat!(
     "standard::name,standard::display-name,standard::type,standard::is-hidden,",
     "standard::is-symlink,standard::size,standard::content-type,standard::target-uri,",
-    "standard::is-virtual,standard::icon,time::modified,",
+    "standard::is-virtual,standard::icon,time::modified,time::created,owner::user,unix::mode,",
     "access::can-rename,access::can-trash,access::can-delete,access::can-write,",
     "trash::orig-path,trash::deletion-date,",
     // EntryMeta, for the further sort keys (VIEW-019).

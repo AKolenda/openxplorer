@@ -4,7 +4,10 @@
 
 use std::thread;
 
-use ox_core::transfer::{MoveByCopyingItem, UnstorableAnswer, UnstorableItem, UnstorableReason};
+use ox_core::transfer::{
+    FailedItem, FailureAnswer, MoveByCopyingItem, TransferMode, UnstorableAnswer, UnstorableItem,
+    UnstorableReason,
+};
 
 use super::file_ops_support::{open_dialog, wait_for_no_dialog};
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
@@ -59,5 +62,29 @@ fn a_move_is_finished_by_copying_only_when_the_user_agrees() {
         let question = item.clone();
         let answer = answer_on_worker(&test, move || asker.ask(&question), button);
         assert_eq!(answer, agrees, "{button}");
+    }
+}
+
+/// The failed-item dialog answers Retry, Skip all or Cancel to the worker.
+#[gtk::test]
+fn the_failed_item_dialog_answers_retry_skip_all_or_cancel_to_the_worker() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let item = FailedItem {
+        mode: TransferMode::Copy,
+        name: "report.pdf".into(),
+        error: "Permission denied".into(),
+        more_items: true,
+    };
+
+    for (button, expected) in [
+        ("Retry", FailureAnswer::Retry),
+        ("Skip all", FailureAnswer::SkipAll),
+        ("Cancel", FailureAnswer::Cancel),
+    ] {
+        let asker = test.window.failure_asker();
+        let question = item.clone();
+        let answer = answer_on_worker(&test, move || asker.ask(&question), button);
+        assert_eq!(answer, expected, "{button}");
     }
 }

@@ -13,10 +13,10 @@
 
 use ox_core::entry::Entry;
 
-use super::dialog::Dialog;
 use super::file_drop::{query_program, ProgramTarget};
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 
 /// What to do with an opened item that may be a program.
 #[derive(Debug, Clone, PartialEq, Eq)]

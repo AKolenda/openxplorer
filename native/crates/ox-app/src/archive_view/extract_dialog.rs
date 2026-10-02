@@ -22,7 +22,7 @@ use ox_core::location::{normalise_location, validate_name};
 use ox_core::transfer::Cancellation;
 
 use super::ArchiveTarget;
-use crate::dialog_layer::{check_row, labelled_entry, quiet_text, DialogFrame, DialogWidth};
+use crate::dialog::{check_row, labelled_entry, quiet_text, DialogFrame, DialogWidth};
 use crate::icons::{Art, ArtImage};
 use crate::window::ButtonStyle;
 

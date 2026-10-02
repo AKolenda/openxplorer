@@ -122,8 +122,21 @@ pub(crate) enum WindowAction {
     /// Switches the details pane option or field named by the string
     /// target (the pane's menu).
     DetailsPaneOption,
+    /// Shows or hides the details column whose key is the string target
+    /// (the column titles' menu, VIEW-033).
+    DetailsColumn,
+    /// Stops the listing of the folder shown (VIEW-049).
+    Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
     Sidebar,
+    /// Splits the tab into two panes, or closes its active pane (F3,
+    /// VIEW-059).
+    SplitView,
+    /// Shows or hides the folder tree (F7, SIDE-028).
+    FolderTree,
+    /// Switches the folder tree option named by the string target (its
+    /// menu).
+    FolderTreeOption,
     /// The sidebar's icon size: `0` (automatic), `16`, `22`, `32` or `48`.
     SidebarIconSize,
     /// Lists the hidden sidebar rows, dimmed (SIDE-010).
@@ -188,6 +201,18 @@ pub(crate) enum WindowAction {
     DeletePermanently,
     /// Copies each selected item next to itself.
     Duplicate,
+    /// Cut of the folder in the string target (the folder tree's menu).
+    CutFolder,
+    /// Copy of the folder in the string target.
+    CopyFolder,
+    /// Pastes into the folder in the string target.
+    PasteInto,
+    /// Asks for a new name for the folder in the string target.
+    RenameFolder,
+    /// Moves the folder in the string target to the Trash, after asking.
+    TrashFolder,
+    /// Deletes the folder in the string target permanently, after asking.
+    DeleteFolder,
     /// Reverses the newest file operation (Ctrl+Z).
     Undo,
     /// Takes the newest Undo back (Ctrl+Shift+Z, Ctrl+Y).
@@ -200,6 +225,9 @@ pub(crate) enum WindowAction {
     EmptyRecycleBin,
     /// The same from the sidebar's Recycle Bin, wherever the window is.
     EmptyTrash,
+    /// Empties the recent files of the app and the desktop, from the
+    /// sidebar's Recent files (SAFE-022).
+    ClearRecentFiles,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -416,7 +444,12 @@ impl WindowAction {
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
             WindowAction::DetailsPaneOption => "details-pane-option",
+            WindowAction::DetailsColumn => "details-column",
+            WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
+            WindowAction::SplitView => "split-view",
+            WindowAction::FolderTree => "folder-tree",
+            WindowAction::FolderTreeOption => "folder-tree-option",
             WindowAction::SidebarIconSize => "sidebar-icon-size",
             WindowAction::SidebarShowAll => "sidebar-show-all",
             WindowAction::HideSection => "hide-section",
@@ -447,12 +480,19 @@ impl WindowAction {
             WindowAction::Trash => "trash",
             WindowAction::DeletePermanently => "delete-permanently",
             WindowAction::Duplicate => "duplicate",
+            WindowAction::CutFolder => "cut-folder",
+            WindowAction::CopyFolder => "copy-folder",
+            WindowAction::PasteInto => "paste-into",
+            WindowAction::RenameFolder => "rename-folder",
+            WindowAction::TrashFolder => "trash-folder",
+            WindowAction::DeleteFolder => "delete-folder",
             WindowAction::Undo => "undo",
             WindowAction::Redo => "redo",
             WindowAction::CancelOperation => "cancel-operation",
             WindowAction::Restore => "restore",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
             WindowAction::EmptyTrash => "empty-trash",
+            WindowAction::ClearRecentFiles => "clear-recent-files",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::Unpin => "unpin",

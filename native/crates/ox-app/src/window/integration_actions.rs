@@ -18,10 +18,10 @@ use ox_core::location::{is_smb_server, parent_location};
 use ox_core::update::Activity;
 
 use super::actions::{plain_action, text_action};
-use super::dialog::Dialog;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 use crate::integration::{self, OpenWithDialog, OpenWithSubject, Tool};
 use crate::locations::Page;
 use crate::update::{UpdateDialog, UpdateState};
@@ -457,7 +457,8 @@ impl BrowserWindow {
     /// Whether any tab of this window is being listed.
     fn is_listing_any_tab(&self) -> bool {
         let session = self.imp().session.borrow();
-        session.tabs().iter().any(|tab| tab.listing_state.is_listing())
+        let is_listing = session.panes().any(|tab| tab.listing_state.is_listing());
+        is_listing
     }
 }
 

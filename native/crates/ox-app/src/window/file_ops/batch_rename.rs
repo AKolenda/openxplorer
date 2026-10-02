@@ -16,7 +16,7 @@ use ox_core::ops::{
 };
 
 use super::running::FinishedOperation;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

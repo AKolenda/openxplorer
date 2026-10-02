@@ -102,7 +102,11 @@ fn escape_empties_the_box_and_brings_the_listing_back() {
     assert!(!test.window.search_strip().is_visible());
     assert!(test.shows_column(SortColumn::Modified));
     assert!(!test.shows_column(SortColumn::FolderPath));
-    assert_eq!(test.status_count(), "4 items");
+    assert!(
+        test.status_count().starts_with("4 items"),
+        "{}",
+        test.status_count()
+    );
 }
 
 /// Enter moves to the results and keeps the search; Escape empties the

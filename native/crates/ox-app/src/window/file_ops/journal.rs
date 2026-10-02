@@ -18,8 +18,8 @@ use ox_core::ops::{
 };
 
 use super::FileCommand;
+use crate::dialog::{self, Dialog};
 use crate::window::background_notice::Destination;
-use crate::window::dialog::{self, Dialog};
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

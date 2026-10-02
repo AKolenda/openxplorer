@@ -19,7 +19,9 @@ use super::file_drop::DropZone;
 use super::folder_pane::PanePage;
 use super::gestures;
 use super::session::Direction;
+use super::split_view::is_plain_tab;
 use super::type_to_select::monotonic_now;
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// What screen readers call a folder view (`#main`'s `aria-label`).
@@ -30,6 +32,20 @@ const FOLDER_VIEW_LABEL: &str = "Folder contents — type a filename prefix to s
 /// toggles its items with Ctrl and adds them with Shift (SEL-012).
 fn press_keeps_selection(modifiers: gdk::ModifierType) -> bool {
     modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK)
+}
+
+/// How a folder opened with `modifiers` held opens (TAB-026): Ctrl in a new
+/// tab behind, Ctrl+Shift in a new tab in front, Shift in a new window;
+/// `None` opens it in place.
+fn open_folder_action(modifiers: gdk::ModifierType) -> Option<WindowAction> {
+    let ctrl = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
+    let shift = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+    match (ctrl, shift) {
+        (true, true) => Some(WindowAction::OpenTab),
+        (true, false) => Some(WindowAction::OpenTabBackground),
+        (false, true) => Some(WindowAction::OpenWindow),
+        (false, false) => None,
+    }
 }
 
 /// Keys that only modify another key; pressing one keeps the prefix, so
@@ -59,11 +75,14 @@ impl BrowserWindow {
     /// Adds keyboard and pointer handling to both folder views, and makes
     /// Escape in the address entry return to the breadcrumbs.
     pub(super) fn install_input(&self) {
-        let details = self.folder_pane().details().column_view().clone();
-        let grid = self.folder_pane().icon_view().grid().clone();
-        self.folder_input(details.upcast_ref());
-        self.folder_input(grid.upcast_ref());
+        for pane in self.folder_panes() {
+            let details = pane.details().column_view().clone();
+            let grid = pane.icon_view().grid().clone();
+            self.folder_input(details.upcast_ref());
+            self.folder_input(grid.upcast_ref());
+        }
         self.install_selection_keys();
+        self.install_slow_click_rename();
         self.address_bar().connect_cancelled(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -128,36 +147,50 @@ impl BrowserWindow {
     /// `itemsActivated` does (OPEN-003); an item outside a selection of
     /// several is never opened.
     pub(super) fn connect_view_activation(&self) {
-        let activate = glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |position: u32| {
-                // DND-007: the press or release of a drag never opens an
-                // item.
-                if window.are_item_clicks_paused() {
-                    return;
-                }
-                let selected = window.folder_pane().model().selected_positions();
-                if selected.is_empty() || selected == [position] {
-                    window.activate_item(position);
-                } else if selected.contains(&position) {
-                    window.open_selection();
-                }
-            }
-        );
-        let on_row = activate.clone();
-        self.folder_pane()
-            .details()
-            .column_view()
-            .connect_activate(move |_, position| on_row(position));
-        self.folder_pane()
-            .icon_view()
-            .grid()
-            .connect_activate(move |_, position| activate(position));
+        for pane in self.folder_panes() {
+            pane.details().column_view().connect_activate(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_, position| window.activate_from_view(position)
+            ));
+            pane.icon_view().grid().connect_activate(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_, position| window.activate_from_view(position)
+            ));
+        }
+    }
+
+    /// Opens the item at `position` of the active pane, which Enter or a
+    /// double-click activated. A folder opened with Ctrl goes to a new tab
+    /// behind, with Ctrl+Shift to a new tab in front and with Shift to a
+    /// new window, whatever is selected, as in Dolphin (TAB-026).
+    pub(super) fn activate_from_view(&self, position: u32) {
+        // DND-007: the press or release of a drag never opens an item.
+        if self.are_item_clicks_paused() {
+            return;
+        }
+        let modifiers = self
+            .imp()
+            .view_modifiers
+            .get()
+            .unwrap_or(gdk::ModifierType::empty());
+        let opened_elsewhere = open_folder_action(modifiers).zip(self.folder_in_view(position));
+        if let Some((action, uri)) = opened_elsewhere {
+            action.activate_from(self, Some(&uri.to_variant()));
+            return;
+        }
+        let selected = self.folder_pane().model().selected_positions();
+        if selected.is_empty() || selected == [position] {
+            self.activate_item(position);
+        } else if selected.contains(&position) {
+            self.open_selection();
+        }
     }
 
     /// Gives `view` type-to-select, the window's key handling, prefix
-    /// resets on clicks, deselection by a click on blank space,
+    /// resets on clicks, deselection by a click on blank space, rename by
+    /// a slow second click on a name,
     /// middle-click to open a folder, the context menu, and file drag and
     /// drop.
     fn folder_input(&self, view: &gtk::Widget) {
@@ -174,6 +207,7 @@ impl BrowserWindow {
         ));
         view.add_controller(keys);
         view.add_controller(self.blank_space_press(view));
+        self.attach_slow_click_rename(view);
         // After the press, which clears the selection the band starts from.
         self.attach_rubber_band(view);
         view.add_controller(self.folder_middle_click(view));
@@ -244,6 +278,10 @@ impl BrowserWindow {
         // Keys typed while an item is renamed in place belong to its field.
         if self.focus_is_in_text_field() {
             return glib::Propagation::Proceed;
+        }
+        self.imp().view_modifiers.set(Some(modifiers));
+        if is_plain_tab(key, modifiers) && self.tab_to_other_pane() {
+            return glib::Propagation::Stop;
         }
         let shortcut =
             gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK;
@@ -344,6 +382,7 @@ impl BrowserWindow {
             #[weak]
             view,
             move |press, _, x, y| {
+                window.imp().view_modifiers.set(Some(press.current_event_state()));
                 if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
                     return;
                 }
@@ -394,9 +433,14 @@ impl BrowserWindow {
     /// The location of the folder at (`x`, `y`) in `view`, if a folder is
     /// there.
     fn folder_at(&self, view: &gtk::Widget, x: f64, y: f64) -> Option<String> {
-        let pane = self.folder_pane();
-        let position = pane.owners().position_at(view, x, y)?;
-        let item = pane.model().item(position)?;
+        let position = self.folder_pane().owners().position_at(view, x, y)?;
+        self.folder_in_view(position)
+    }
+
+    /// The location of the folder at `position` of the active pane, if a
+    /// folder is there.
+    fn folder_in_view(&self, position: u32) -> Option<String> {
+        let item = self.folder_pane().model().item(position)?;
         match activation_for(item.entry()) {
             Activation::Folder(uri) => Some(uri),
             Activation::File | Activation::Archive | Activation::Refused(_) => None,

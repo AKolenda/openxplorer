@@ -22,7 +22,7 @@ use ox_core::transfer::ConflictPolicy;
 
 use super::conflict_compare::{compare, compare_dates, Comparison};
 use super::conflict_rename::{checked_new_name, suggested_name};
-use crate::window::dialog::{Dialog, DialogButton};
+use crate::dialog::{Dialog, DialogButton};
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

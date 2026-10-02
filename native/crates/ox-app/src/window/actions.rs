@@ -142,6 +142,8 @@ impl BrowserWindow {
         self.install_search_actions();
         self.install_saved_search_actions();
         self.install_details_pane_actions();
+        self.install_view_option_actions();
+        self.install_stop_action();
         self.install_integration_actions();
         self.install_context_menu_actions();
         let [journal, clipboard] = self.install_file_actions();
@@ -154,7 +156,9 @@ impl BrowserWindow {
         self.add_action_entries([
             plain_action(WindowAction::NewTab, |window| {
                 let home = window.imp().locations.borrow().home_uri();
-                window.open_tab_or_report(&home, TabPlacement::Foreground);
+                if let Err(error) = window.add_tab(&home) {
+                    window.show_message(&error.to_string());
+                }
             }),
             plain_action(WindowAction::CloseTab, |window| {
                 let active = window.imp().session.borrow().active_id();
@@ -367,18 +371,22 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 9] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 10] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
     (WindowAction::Search, &["<Primary>f"]),
     (WindowAction::DetailsPane, &["<Alt><Shift>p"]),
     (WindowAction::Settings, &["<Primary>comma"]),
-    // Dolphin's Open Terminal and Open Terminal Here (OPEN-021).
-    (WindowAction::OpenTerminal, &["<Shift>F4"]),
+    // Dolphin's Open Terminal and Open Terminal Here (OPEN-021); Ctrl+Shift+F4
+    // is its Terminal panel key, which opens the terminal here (OPEN-022).
+    (WindowAction::OpenTerminal, &["<Shift>F4", "<Primary><Shift>F4"]),
     (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
     // Dolphin's Open Preferred Search Tool (OPEN-024).
     (WindowAction::SearchTool, &["<Primary><Shift>f"]),
+    // Dolphin's Split (VIEW-059); Explorer leaves F3 to its search box,
+    // which Ctrl+F reaches here.
+    (WindowAction::SplitView, &["F3"]),
 ];
 
 /// Ctrl+Q: quit the application, from any window and any focus (TAB-058).

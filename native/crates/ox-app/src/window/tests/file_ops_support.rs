@@ -8,8 +8,8 @@ use std::path::PathBuf;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 
+use crate::dialog::Dialog;
 use crate::test_support::harness::{descendants, wait_until, TestWindow};
-use crate::window::dialog::Dialog;
 
 /// The dialog open over `test`'s window, once it shows.
 ///

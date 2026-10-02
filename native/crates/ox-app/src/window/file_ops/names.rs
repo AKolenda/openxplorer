@@ -28,6 +28,31 @@ pub(super) fn check_typed_name(name: &str) -> Result<&str, InvalidName> {
     Ok(name)
 }
 
+/// The folder names of `path`, a New folder name whose slashes make
+/// folders inside folders (`Photos/2026`, OPS-007), each checked as
+/// [`check_typed_name`] checks a name.
+///
+/// # Errors
+///
+/// [`InvalidName`] when any part is refused, including an empty part
+/// (`a//b`, a leading or trailing slash).
+pub(super) fn check_folder_path(path: &str) -> Result<Vec<&str>, InvalidName> {
+    path.split('/').map(check_typed_name).collect()
+}
+
+/// What New folder says, while the user types, about a name with
+/// slashes: the folders it will make, each inside the one before.
+pub(super) fn folder_path_preview(names: &[&str]) -> Option<String> {
+    if names.len() < 2 {
+        return None;
+    }
+    let quoted: Vec<String> = names.iter().map(|name| format!("“{name}”")).collect();
+    Some(format!(
+        "Creates {}, each inside the one before.",
+        quoted.join(" › ")
+    ))
+}
+
 /// What the name dialogs say, while the user types, about a valid `name`
 /// that may surprise: that it is `taken` in the folder, that a leading
 /// dot hides the item, or that a leading space or tilde is unusual

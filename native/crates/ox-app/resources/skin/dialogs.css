@@ -3,7 +3,7 @@
    (ui-spec.md §4.9, §4.11, §4.15; style.css .modal, .transfer, .menu.win11
    and .context-strip). */
 
-/* ---- Dialogs (§4.11, E02; src/window/dialog.rs, src/update/dialog.rs
+/* ---- Dialogs (§4.11, E02; src/dialog/window.rs, src/update/dialog.rs
    and the dialogs of src/integration/) ---- */
 window.ox.ox-dialog {
   background-color: @ox_bg;
@@ -62,7 +62,7 @@ window.ox.ox-dialog .dialog-actions {
   border-radius: 0 0 8px 8px;
   padding: 18px 24px;
 }
-/* The dialog frame in a window (src/window/dialog.rs): the body a little
+/* The dialog frame in a window (src/dialog/window.rs): the body a little
    under the message, and the buttons 8 apart. */
 window.ox.ox-dialog ox-dialog-frame .dialog-body { margin-top: 3px; }
 window.ox.ox-dialog ox-dialog-frame .dialog-actions { border-spacing: 8px; }
