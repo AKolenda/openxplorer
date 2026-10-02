@@ -262,9 +262,10 @@ impl BrowserWindow {
         self.reset_typeahead();
     }
 
-    /// Remembers the active tab's selection, focused item and scroll
-    /// position before another tab is shown.
+    /// Remembers both panes of the active tab before another tab is shown,
+    /// including an inactive pane scrolled without receiving focus.
     pub(super) fn save_tab_view(&self) {
+        self.save_beside_view();
         self.save_selection();
         let pane = self.folder_pane();
         let scroll = pane.scroll_position();

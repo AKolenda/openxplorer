@@ -46,6 +46,7 @@ struct BesideView {
     selected: Vec<String>,
     scroll: f64,
     needs_listing: bool,
+    changed_while_hidden: bool,
 }
 
 impl BrowserWindow {
@@ -170,7 +171,6 @@ impl BrowserWindow {
     /// its own, in the left folder pane, with its view and order.
     fn close_active_pane(&self) {
         self.leave_pane();
-        self.save_beside_view();
         let remaining_side = self.active_side().other();
         let remaining = self.imp().session.borrow_mut().close_active_pane();
         if let Some(id) = remaining {
@@ -197,7 +197,6 @@ impl BrowserWindow {
             return;
         }
         self.leave_pane();
-        self.save_beside_view();
         let active = self.imp().session.borrow_mut().activate_beside();
         if let Some(id) = active {
             self.show_tab_with(id, FocusOnShow::Keep);
@@ -253,14 +252,18 @@ impl BrowserWindow {
     /// pane is active. Called when a tab is shown.
     pub(super) fn show_beside_pane(&self) {
         let beside = {
-            let session = self.imp().session.borrow();
-            session.active().and_then(Tab::beside).map(|tab| BesideView {
-                id: tab.id,
-                store: tab.store.clone(),
-                selected: tab.selected.clone(),
-                scroll: tab.scroll,
-                needs_listing: tab.listing_state.needs_listing(),
-            })
+            let mut session = self.imp().session.borrow_mut();
+            session
+                .active_mut()
+                .and_then(Tab::beside_mut)
+                .map(|tab| BesideView {
+                    id: tab.id,
+                    store: tab.store.clone(),
+                    selected: tab.selected.clone(),
+                    scroll: tab.scroll,
+                    needs_listing: tab.listing_state.needs_listing(),
+                    changed_while_hidden: std::mem::take(&mut tab.changed_while_hidden),
+                })
         };
         self.show_split_layout(beside.is_some());
         let Some(beside) = beside else { return };
@@ -281,6 +284,8 @@ impl BrowserWindow {
         self.update_beside_pane();
         if beside.needs_listing {
             self.load_tab(beside.id, LoadMode::Navigate);
+        } else if beside.changed_while_hidden {
+            self.folder_changed(beside.id);
         }
     }
 

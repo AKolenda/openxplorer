@@ -73,7 +73,6 @@ impl BrowserWindow {
     /// Settings.
     pub(crate) fn saved_session(&self) -> Option<SavedSession> {
         self.save_tab_view();
-        self.save_beside_view();
         let session = self.imp().session.borrow();
         let kept = session
             .tabs()

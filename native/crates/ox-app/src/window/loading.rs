@@ -50,8 +50,8 @@ use mount_retry::MountRetry;
 /// a background tab on a network share is not listed again, and so never
 /// asks for a sign-in, merely because its folder changed. Local folders in
 /// the background stay current, keeping their selection and scroll.
-fn waits_until_shown(is_active: bool, uri: &str) -> bool {
-    !is_active && is_smb_location(uri)
+fn waits_until_shown(is_visible: bool, uri: &str) -> bool {
+    !is_visible && is_smb_location(uri)
 }
 
 /// Why a tab is listed.
@@ -224,9 +224,9 @@ impl BrowserWindow {
     pub(super) fn folder_changed(&self, id: TabId) {
         {
             let mut session = self.imp().session.borrow_mut();
-            let is_active = session.is_active(id);
+            let is_visible = session.is_active(id) || session.beside_active() == Some(id);
             let Some(tab) = session.tab_mut(id) else { return };
-            if waits_until_shown(is_active, tab.uri()) {
+            if waits_until_shown(is_visible, tab.uri()) {
                 tab.changed_while_hidden = true;
                 return;
             }
