@@ -157,6 +157,12 @@ pub(crate) fn group_of(by: SortBy, item: &FileItem, clock: &GroupClock) -> Group
         SortBy::Column(SortColumn::Modified) => clock.period(entry.modified),
         SortBy::Column(SortColumn::Type) => Group::texted(&entry.type_label, 1),
         SortBy::Column(SortColumn::FolderPath) => Group::texted(&item.folder_path().text, 1),
+        SortBy::Column(SortColumn::OriginalLocation) => Group::texted(&item.original_location().text, 1),
+        SortBy::Column(SortColumn::Deleted) => clock.period(entry.trash_deletion_date),
+        SortBy::Column(SortColumn::Created) => group_of(SortBy::Role(SortRole::Created), item, clock),
+        SortBy::Column(SortColumn::Extension) => group_of(SortBy::Role(SortRole::Extension), item, clock),
+        SortBy::Column(SortColumn::Owner) => group_of(SortBy::Role(SortRole::Owner), item, clock),
+        SortBy::Column(SortColumn::Permissions) => group_of(SortBy::Role(SortRole::Permissions), item, clock),
         SortBy::Role(SortRole::Created) => clock.period(entry.meta.created),
         SortBy::Role(SortRole::Accessed) => clock.period(entry.meta.accessed),
         SortBy::Role(SortRole::Extension) => {
