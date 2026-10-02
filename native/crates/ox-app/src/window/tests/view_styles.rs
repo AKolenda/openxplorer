@@ -336,6 +336,17 @@ fn a_folder_expands_in_place_and_back_keeps_it_open() {
     tree.set_expanded(&documents, true);
     wait_until("the folder's contents", || model.n_items() == shown + 1);
     assert_eq!(model.name_at(1).as_deref(), Some("inner.txt"));
+    // GTK can deliver a queued search notification after the listing even
+    // though the empty entry still shows the same folder.
+    test.window
+        .search_box()
+        .entry()
+        .emit_by_name::<()>("search-changed", &[]);
+    assert_eq!(
+        model.n_items(),
+        shown + 1,
+        "an unchanged search keeps the branch open"
+    );
     let cell = test
         .window
         .folder_pane()
@@ -354,6 +365,11 @@ fn a_folder_expands_in_place_and_back_keeps_it_open() {
     test.window.go_history(Direction::Backward);
     test.wait_for_listing("the folder again");
     wait_until("the folder expanded again", || model.n_items() == shown + 1);
+    test.window
+        .search_box()
+        .entry()
+        .emit_by_name::<()>("search-changed", &[]);
+    assert_eq!(model.n_items(), shown + 1, "the restored branch stays open");
 
     let documents = tree.row(0).expect("Documents is listed first");
     tree.set_expanded(&documents, false);

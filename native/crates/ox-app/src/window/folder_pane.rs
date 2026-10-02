@@ -321,6 +321,16 @@ impl FolderPane {
         glib::idle_add_local_once(move || adjustment.set_value(position));
     }
 
+    /// Scrolls to the first item without moving focus or selecting it.
+    /// The item request replaces any pending reveal; an adjustment alone
+    /// can be overwritten when GTK next lays out the list.
+    pub(super) fn scroll_to_start(&self) {
+        self.visible_vadjustment().set_value(0.0);
+        if self.model().n_items() > 0 {
+            self.scroll_to(0, gtk::ListScrollFlags::NONE, None);
+        }
+    }
+
     /// The visible view, as a widget.
     pub(super) fn view_widget(&self) -> gtk::Widget {
         match self.view() {

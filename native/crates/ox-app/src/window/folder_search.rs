@@ -115,7 +115,7 @@ impl BrowserWindow {
         self.show_searched_items();
         self.folder_pane().model().select_none();
         if self.is_searching() {
-            self.folder_pane().restore_scroll_position(0.0);
+            self.folder_pane().scroll_to_start();
         }
         self.show_search_state();
     }
@@ -141,6 +141,11 @@ impl BrowserWindow {
 
     /// Runs the search once typing paused (`runSearch`).
     fn run_search(&self) {
+        // Clearing the query already restores the listing synchronously.
+        // A delayed search-changed signal must not reset its expanded rows.
+        if !self.is_searching() {
+            return;
+        }
         let Some(folder) = self.searched_folder() else {
             return;
         };

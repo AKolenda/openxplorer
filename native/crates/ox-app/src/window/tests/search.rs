@@ -14,7 +14,9 @@ use ox_core::search::{
 use super::file_ops_support::{is_enabled, select_names};
 use crate::folder_view::sorting::SortColumn;
 use crate::search::SearchScope;
-use crate::test_support::harness::{capture, wait_until, Fixture, OpenedWindows, TestWindow, STANDARD_NAMES};
+use crate::test_support::harness::{
+    capture, wait_for_frames, wait_until, Fixture, OpenedWindows, TestWindow, STANDARD_NAMES,
+};
 use crate::window::activation::{activation_for, Activation};
 use crate::window::folder_pane::PanePage;
 
@@ -503,17 +505,37 @@ fn ctrl_f_moves_focus_to_the_box_and_selects_its_text() {
 #[gtk::test]
 fn typing_clears_the_selection_and_scrolls_to_the_top() {
     let fixture = Fixture::with_files(300);
-    let test = TestWindow::open(&fixture.uri());
-    let pane = test.window.folder_pane();
-    let last = pane.model().n_items() - 1;
-    pane.model().select_only(last);
-    pane.reveal(last);
-    wait_until("the view to scroll", || pane.scroll_position() > 0.0);
+    for view in ["details", "compact", "large"] {
+        let test = TestWindow::open(&fixture.uri());
+        test.activate("view", Some(view));
+        wait_for_frames(&test.window, 2);
+        let pane = test.window.folder_pane();
+        let last = pane.model().n_items() - 1;
+        pane.model().select_only(last);
+        pane.reveal(last);
+        wait_until("the view to scroll", || pane.scroll_position() > 0.0);
 
-    test.window.search_box().entry().set_text("file");
+        // Typing follows Search (Ctrl+F), so the last file no longer owns focus.
+        test.activate("search", None);
+        let entry = test.window.search_box().entry();
+        wait_until("the search box to take focus", || entry.focus_child().is_some());
+        entry.set_text("file");
 
-    wait_until("the view to scroll back", || pane.scroll_position() == 0.0);
-    assert!(test.selected_names().is_empty());
+        wait_until(&format!("the {view} view to scroll back"), || {
+            pane.scroll_position() == 0.0
+        });
+        wait_for_frames(&test.window, 2);
+        assert!(
+            pane.scroll_position().abs() < f64::EPSILON,
+            "the view stays at the top after layout"
+        );
+        assert!(test.selected_names().is_empty());
+        entry.set_text("no matching filename");
+        wait_until("an empty search", || pane.model().n_items() == 0);
+        wait_for_frames(&test.window, 2);
+        assert!(pane.scroll_position().abs() < f64::EPSILON);
+        assert!(entry.focus_child().is_some(), "scrolling keeps focus in Search");
+    }
 }
 
 /// A folder another process indexes shows up in this window's cache
