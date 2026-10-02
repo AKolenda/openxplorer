@@ -284,7 +284,7 @@ fn add_templates(
     templates: &mut Vec<Template>,
 ) -> Result<(), OpsError> {
     let mut entries = folder_entries(directory, cancel)?;
-    entries.sort_by(|a, b| a.name().cmp(&b.name()));
+    entries.sort_by_key(gio::FileInfo::name);
     let mut subfolders = Vec::new();
     for info in &entries {
         if templates.len() >= MAX_USER_TEMPLATES {
