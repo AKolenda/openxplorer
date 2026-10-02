@@ -538,4 +538,23 @@ mod tests {
     fn a_landing_page_is_ready() {
         assert_eq!(count_text(StatusSubject::Page), "Ready");
     }
+
+    /// A hovered filename must not force a narrow window wider, including
+    /// when font metrics grow at a different display scale.
+    #[gtk::test]
+    fn long_hover_descriptions_keep_the_status_bars_minimum_width() {
+        use crate::test_support::harness::{Fixture, TestWindow};
+
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let bar = test.window.status_bar();
+        bar.show_hovered(Some("Notes.txt".to_owned()));
+        let minimum = bar.measure(gtk::Orientation::Horizontal, -1).0;
+        let description = format!("{}.txt · Text document · 2 KiB", "Project notes ".repeat(20));
+
+        bar.show_hovered(Some(description.clone()));
+
+        assert_eq!(bar.measure(gtk::Orientation::Horizontal, -1).0, minimum);
+        assert_eq!(bar.texts().1, description, "the full text remains accessible");
+    }
 }

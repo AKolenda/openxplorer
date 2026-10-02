@@ -25,6 +25,7 @@
       <!-- #status-selected -->
       <object class="GtkLabel" id="selection">
         <property name="xalign">0</property>
+        <property name="ellipsize">end</property>
       </object>
     </child>
     <child>
