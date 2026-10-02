@@ -246,7 +246,7 @@ impl DefaultAppsView {
         }
         set_sensitive(
             &self.enable_file_dialogs,
-            dialogs.is_available && !dialogs.is_enabled,
+            dialogs.is_available && dialogs.can_enable(),
         );
         set_sensitive(&self.apply_file_dialogs, dialogs.is_available);
         set_sensitive(&self.restore_file_dialogs, dialogs.is_enabled);

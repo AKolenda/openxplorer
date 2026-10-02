@@ -22,8 +22,8 @@ use ox_core::integration::{
     glob_matches, options_from_entries, path_variant, preferred_value, with_preference, without_preference,
     ChooserAnswer, ChooserCall, ChooserMode, ChooserNotShown, ChooserRequest, ChooserRequestError,
     DisabledFileDialogs, FileChooserBus, FileDialogError, FileDialogPaths, FileDialogRegistration,
-    FilterPattern, Sandbox, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY, MAX_LIST_ITEMS, PORTAL_BACKEND_PATH,
-    RESPONSE_CANCELLED, RESPONSE_OTHER, RESPONSE_SUCCESS,
+    FilterPattern, Sandbox, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY, KDE_PORTAL_VARIABLE, MAX_LIST_ITEMS,
+    PORTAL_BACKEND_PATH, RESPONSE_CANCELLED, RESPONSE_OTHER, RESPONSE_SUCCESS,
 };
 use tempfile::TempDir;
 
@@ -482,6 +482,57 @@ fn the_user_file_in_use_is_changed_and_not_hidden() {
         DisabledFileDialogs::Restored
     );
     assert_eq!(fs::read_to_string(&in_use).expect("user file"), original);
+}
+
+/// On KDE, enabling also writes the login script that makes KDE's own
+/// apps ask the portal; disabling removes it; a file of the user's with
+/// that name is never replaced; other desktops get no script.
+///
+/// parity: INT-032
+#[test]
+fn kde_apps_are_covered_by_a_login_script() {
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    let script = registration.kde_env_file();
+    assert!(script.ends_with("plasma-workspace/env/openxplorer-file-dialogs.sh"));
+    assert!(!registration.covers_kde_apps());
+
+    registration.enable().expect("enable");
+    let written = fs::read_to_string(&script).expect("the login script");
+    assert!(
+        written.contains(&format!("export {KDE_PORTAL_VARIABLE}=1\n")),
+        "{written}"
+    );
+    assert!(registration.covers_kde_apps());
+    registration.disable().expect("disable");
+    assert!(!script.exists());
+
+    // Enabled before KDE apps were covered: enabling again adds the script.
+    registration.enable().expect("enable");
+    fs::remove_file(&script).expect("an older version wrote none");
+    registration.enable().expect("enable again");
+    assert!(registration.covers_kde_apps());
+    registration.disable().expect("disable");
+
+    fs::write(&script, "export SOMETHING_ELSE=1\n").expect("the user's own file");
+    registration.enable().expect("enable");
+    registration.disable().expect("disable");
+    assert_eq!(
+        fs::read_to_string(&script).expect("kept"),
+        "export SOMETHING_ELSE=1\n"
+    );
+
+    let gnome = FileDialogRegistration::new(
+        FileDialogPaths {
+            desktops: vec!["gnome".to_owned()],
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    );
+    fs::remove_file(&script).expect("cleared");
+    gnome.enable().expect("enable on GNOME");
+    assert!(!script.exists(), "GNOME apps already ask the portal");
 }
 
 /// A later edit by the user wins: disabling then removes only the app's

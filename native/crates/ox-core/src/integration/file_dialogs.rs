@@ -27,6 +27,15 @@
 //!
 //! The portal reads its configuration when it starts, so a change applies
 //! at the next login, or at once after [`PORTAL_SERVICE`] restarts.
+//!
+//! KDE's own applications (Plasma, Kate, System Settings, a Plasma
+//! widget's settings) do not ask the portal: their Qt platform theme shows
+//! KDE's dialog itself unless `PLASMA_INTEGRATION_USE_PORTAL=1` is set.
+//! On a KDE session, enabling therefore also writes
+//! `$XDG_CONFIG_HOME/plasma-workspace/env/openxplorer-file-dialogs.sh`,
+//! which Plasma runs at login, exporting that variable; disabling removes
+//! it if it still holds what the app wrote. It applies from the next
+//! login, as Plasma reads it only then.
 
 use std::fs;
 use std::future::Future;
@@ -55,6 +64,20 @@ const RECORD_FILE_NAME: &str = "file-dialogs.json";
 
 /// The section that holds the preferences.
 const PREFERRED_SECTION: &str = "[preferred]";
+
+/// The variable that makes KDE's Qt platform theme ask the portal for
+/// file dialogs instead of showing its own.
+pub const KDE_PORTAL_VARIABLE: &str = "PLASMA_INTEGRATION_USE_PORTAL";
+
+/// The folder below `$XDG_CONFIG_HOME` whose `*.sh` scripts Plasma runs at
+/// login, and the app's script there.
+const KDE_ENV_SUBDIR: &str = "plasma-workspace/env";
+const KDE_ENV_FILE_NAME: &str = "openxplorer-file-dialogs.sh";
+
+/// What the app's login script holds.
+const KDE_ENV_SCRIPT: &str = "# Open and Save dialogs of KDE apps go to the desktop portal, which sends them to\n\
+                              # OpenXplorer. Set by OpenXplorer (Settings > Default apps); Restore removes it.\n\
+                              export PLASMA_INTEGRATION_USE_PORTAL=1\n";
 
 /// The folders and the desktop the opt-in works with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,7 +257,8 @@ impl FileDialogRegistration {
             return Err(FileDialogError::Unsupported);
         }
         if self.is_enabled() {
-            return Ok(());
+            // Enabled before KDE apps were covered: add their script.
+            return self.enable_for_kde_apps();
         }
         let file = self.config_file();
         refuse_symlink(&file)?;
@@ -254,7 +278,54 @@ impl FileDialogRegistration {
         } else {
             self.update_written(&written)?;
         }
-        write_text(&file, &written)
+        write_text(&file, &written)?;
+        self.enable_for_kde_apps()
+    }
+
+    /// Whether this is a KDE session, whose own applications need
+    /// [`KDE_PORTAL_VARIABLE`] to ask the portal.
+    pub fn is_kde_session(&self) -> bool {
+        self.paths.desktops.iter().any(|desktop| desktop == "kde")
+    }
+
+    /// The login script that sets [`KDE_PORTAL_VARIABLE`].
+    pub fn kde_env_file(&self) -> PathBuf {
+        self.paths
+            .config_home
+            .join(KDE_ENV_SUBDIR)
+            .join(KDE_ENV_FILE_NAME)
+    }
+
+    /// Whether KDE's own applications are set to ask the portal at the
+    /// next login: this is a KDE session and the app's login script is in
+    /// place. Reading only reads.
+    pub fn covers_kde_apps(&self) -> bool {
+        self.is_kde_session()
+            && fs::read_to_string(self.kde_env_file()).is_ok_and(|contents| contents == KDE_ENV_SCRIPT)
+    }
+
+    /// Writes the login script on a KDE session. A file of the user's at
+    /// that name, or a symlink, is left alone.
+    fn enable_for_kde_apps(&self) -> Result<(), FileDialogError> {
+        if !self.is_kde_session() {
+            return Ok(());
+        }
+        let script = self.kde_env_file();
+        refuse_symlink(&script)?;
+        match read_optional(&script)? {
+            Some(_) => Ok(()),
+            None => write_text(&script, KDE_ENV_SCRIPT),
+        }
+    }
+
+    /// Removes the login script if it still holds what the app wrote.
+    fn disable_for_kde_apps(&self) -> Result<(), FileDialogError> {
+        let script = self.kde_env_file();
+        refuse_symlink(&script)?;
+        if read_optional(&script)?.as_deref() == Some(KDE_ENV_SCRIPT) {
+            remove_file(&script)?;
+        }
+        Ok(())
     }
 
     /// Gives file dialogs back: restores the file if it still holds what
@@ -285,6 +356,7 @@ impl FileDialogRegistration {
             _ => DisabledFileDialogs::NotEnabled,
         };
         remove_file(&self.record_path())?;
+        self.disable_for_kde_apps()?;
         Ok(outcome)
     }
 

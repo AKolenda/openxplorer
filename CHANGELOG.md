@@ -9,6 +9,14 @@
   packages install `/usr/share/xdg-desktop-portal/portals/<id>.portal`;
   the Flatpak cannot offer it.
 
+- Open and Save dialogs now cover KDE's own apps too (Plasma and its
+  widgets, Kate, System Settings): on KDE Plasma, Enable also adds a login
+  script, `~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh`,
+  that sets `PLASMA_INTEGRATION_USE_PORTAL=1`, so they ask the portal
+  instead of showing KDE's dialog. It applies from the next login, and
+  Restore removes it. Enable stays available for those who enabled the
+  dialogs before, to add it.
+
 # 2.0.0 — 2026-09-28
 
 OpenXplorer is now a native GTK 4 application written in Rust. It replaces the

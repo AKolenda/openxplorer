@@ -13,7 +13,7 @@
 //! caller and its options are ox-core's
 //! ([`ox_core::integration::FileChooserBus`]).
 
-use ox_core::integration::{DisabledFileDialogs, FileDialogRegistration, PortalRestart};
+use ox_core::integration::{DisabledFileDialogs, FileDialogRegistration, PortalRestart, KDE_PORTAL_VARIABLE};
 
 use super::changes::IntegrationError;
 use super::DesktopIntegration;
@@ -27,23 +27,66 @@ pub(crate) struct FileDialogsStatus {
     pub(crate) is_enabled: bool,
     /// The backend the portal configuration names now, if any.
     pub(crate) backend: Option<String>,
+    /// Where KDE's own apps stand.
+    pub(crate) kde_apps: KdeApps,
+}
+
+/// Whether KDE's own apps, which need a login script to ask the portal,
+/// send their dialogs to the app.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum KdeApps {
+    /// Not a KDE session: nothing to do.
+    #[default]
+    NotKde,
+    /// A KDE session without the app's login script.
+    NotCovered,
+    /// The script is in place; it applies at the next login.
+    NextLogin,
+    /// The script is in place and this session started with it.
+    Following,
 }
 
 impl FileDialogsStatus {
+    /// Whether Enable has something to do: dialogs do not use the app
+    /// yet, or (enabled with an earlier version) KDE's own apps are not
+    /// covered yet.
+    pub(crate) fn can_enable(&self) -> bool {
+        !self.is_enabled || self.kde_apps == KdeApps::NotCovered
+    }
+
     /// The row's status line.
     pub(crate) fn text(&self) -> String {
         if !self.is_available {
             return "Open and Save dialogs: available in the installed package, not the Flatpak.".to_owned();
         }
         if self.is_enabled {
-            return "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their file \
-                    dialogs here after Apply now or the next login."
+            let mut text = "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their \
+                            file dialogs here after Apply now or the next login."
                 .to_owned();
+            match self.kde_apps {
+                KdeApps::Following => text.push_str(" KDE apps do too."),
+                KdeApps::NextLogin => text.push_str(" KDE apps follow after you log out and back in."),
+                KdeApps::NotKde | KdeApps::NotCovered => {}
+            }
+            return text;
         }
         match self.backend.as_deref() {
             Some(backend) => format!("Open and Save dialogs: the desktop's ({backend})."),
             None => "Open and Save dialogs: the desktop's.".to_owned(),
         }
+    }
+}
+
+/// Where KDE's own apps stand for `registration`, in this session.
+fn kde_apps(registration: &FileDialogRegistration) -> KdeApps {
+    if !registration.is_kde_session() {
+        KdeApps::NotKde
+    } else if !registration.covers_kde_apps() {
+        KdeApps::NotCovered
+    } else if std::env::var(KDE_PORTAL_VARIABLE).is_ok_and(|value| value == "1") {
+        KdeApps::Following
+    } else {
+        KdeApps::NextLogin
     }
 }
 
@@ -55,11 +98,18 @@ impl DesktopIntegration {
     /// [`IntegrationError::FileDialogs`] when the configuration cannot be
     /// written, or inside Flatpak.
     pub(crate) async fn enable_file_dialogs(&self) -> Result<String, IntegrationError> {
-        self.file_dialogs()
-            .run_in_background(FileDialogRegistration::enable)
+        let kde = self
+            .file_dialogs()
+            .run_in_background(|registration| registration.enable().map(|()| registration.is_kde_session()))
             .await?;
         self.notify_changed();
-        Ok("Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in.".to_owned())
+        Ok(if kde {
+            "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; KDE apps \
+             follow after you log out and back in."
+        } else {
+            "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in."
+        }
+        .to_owned())
     }
 
     /// Gives Open and Save dialogs back to the desktop.
@@ -117,6 +167,7 @@ impl DesktopIntegration {
             .run_in_background(|registration| FileDialogsStatus {
                 is_available: registration.is_available(),
                 is_enabled: registration.is_enabled(),
+                kde_apps: kde_apps(registration),
                 backend: registration.current_backend(),
             })
             .await
@@ -124,5 +175,38 @@ impl DesktopIntegration {
 
     fn file_dialogs(&self) -> &FileDialogRegistration {
         &self.services().file_dialogs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn enabled(kde_apps: KdeApps) -> FileDialogsStatus {
+        FileDialogsStatus {
+            is_available: true,
+            is_enabled: true,
+            backend: Some("io.winspace.Development".to_owned()),
+            kde_apps,
+        }
+    }
+
+    /// On KDE the status says when KDE's own apps follow, and Enable stays
+    /// available to add their login script for those who enabled the
+    /// dialogs before.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn the_status_says_when_kde_apps_follow() {
+        assert!(enabled(KdeApps::NextLogin)
+            .text()
+            .ends_with("KDE apps follow after you log out and back in."));
+        assert!(enabled(KdeApps::Following).text().ends_with("KDE apps do too."));
+        assert!(!enabled(KdeApps::NotKde).text().contains("KDE"));
+        assert!(enabled(KdeApps::NotCovered).can_enable());
+        assert!(!enabled(KdeApps::NextLogin).can_enable());
+        assert!(!enabled(KdeApps::NotKde).can_enable());
+        let off = FileDialogsStatus::default();
+        assert!(off.can_enable());
     }
 }
