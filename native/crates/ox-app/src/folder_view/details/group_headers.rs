@@ -18,7 +18,10 @@ pub(crate) type GroupTitle = Rc<dyn Fn(&FileItem) -> Option<String>>;
 
 /// "Today (3)": a group's title and how many items it holds.
 fn header_text(title: &str, count: u32) -> String {
-    format!("{title} ({count})")
+    ox_core::i18n::format_message(
+        "{title} ({count})",
+        &[("title", title), ("count", &count.to_string())],
+    )
 }
 
 /// Headers showing `title` of their group's first item and its count, with

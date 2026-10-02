@@ -12,10 +12,12 @@
 use std::cmp::Ordering;
 
 use gtk::glib;
+use ox_core::i18n::{gettext, gettext_static};
 
 use crate::folder_view::item::FileItem;
 use crate::folder_view::sort_roles::{extension, SortBy, SortRole};
 use crate::folder_view::sorting::{SortColumn, SortKey};
+use crate::i18n::message_id;
 
 /// Seconds in a day for the fixed-offset test dates.
 #[cfg(test)]
@@ -23,12 +25,12 @@ const DAY: i64 = 24 * 60 * 60;
 
 /// Explorer's size groups: the title and the size each one ends below.
 const SIZE_GROUPS: [(&str, u64); 6] = [
-    ("Tiny (0 – 16 KB)", 16 * 1024),
-    ("Small (16 KB – 1 MB)", 1024 * 1024),
-    ("Medium (1 – 128 MB)", 128 * 1024 * 1024),
-    ("Large (128 MB – 1 GB)", 1024 * 1024 * 1024),
-    ("Huge (1 – 4 GB)", 4 * 1024 * 1024 * 1024),
-    ("Gigantic (> 4 GB)", u64::MAX),
+    (message_id("Tiny (0 – 16 KB)"), 16 * 1024),
+    (message_id("Small (16 KB – 1 MB)"), 1024 * 1024),
+    (message_id("Medium (1 – 128 MB)"), 128 * 1024 * 1024),
+    (message_id("Large (128 MB – 1 GB)"), 1024 * 1024 * 1024),
+    (message_id("Huge (1 – 4 GB)"), 4 * 1024 * 1024 * 1024),
+    (message_id("Gigantic (> 4 GB)"), u64::MAX),
 ];
 
 /// The starts of the periods dates are grouped in, worked out once when the
@@ -89,17 +91,17 @@ impl GroupClock {
     /// periods oldest first.
     fn period(&self, seconds: Option<u64>) -> Group {
         let Some(time) = seconds.and_then(|seconds| i64::try_from(seconds).ok()) else {
-            return Group::numbered("Unknown date", i64::MIN);
+            return Group::numbered(&gettext("Unknown date"), i64::MIN);
         };
         let periods = [
-            (self.tomorrow, "In the future"),
-            (self.today, "Today"),
-            (self.yesterday, "Yesterday"),
-            (self.this_week, "Earlier this week"),
-            (self.last_week, "Last week"),
-            (self.this_month, "Earlier this month"),
-            (self.last_month, "Last month"),
-            (self.this_year, "Earlier this year"),
+            (self.tomorrow, gettext_static("In the future")),
+            (self.today, gettext_static("Today")),
+            (self.yesterday, gettext_static("Yesterday")),
+            (self.this_week, gettext_static("Earlier this week")),
+            (self.last_week, gettext_static("Last week")),
+            (self.this_month, gettext_static("Earlier this month")),
+            (self.last_month, gettext_static("Last month")),
+            (self.this_year, gettext_static("Earlier this year")),
         ];
         if let Some((start, title)) = periods.into_iter().find(|(start, _)| time >= *start) {
             return Group::numbered(title, start);
@@ -170,7 +172,7 @@ pub(crate) fn group_of(by: SortBy, item: &FileItem, clock: &GroupClock) -> Group
         SortBy::Role(SortRole::Accessed) => clock.period(entry.meta.accessed),
         SortBy::Role(SortRole::Extension) => {
             let extension = extension(&entry.name, entry.is_dir).map(str::to_uppercase);
-            text_or(extension.as_deref(), "No extension")
+            text_or(extension.as_deref(), &gettext("No extension"))
         }
         SortBy::Role(SortRole::Permissions) => {
             let permissions = entry.meta.permissions_text();
@@ -178,12 +180,14 @@ pub(crate) fn group_of(by: SortBy, item: &FileItem, clock: &GroupClock) -> Group
                 Some(&permissions)
                     .filter(|text| !text.is_empty())
                     .map(String::as_str),
-                "Unknown",
+                &gettext("Unknown"),
             )
         }
-        SortBy::Role(SortRole::Owner) => text_or(entry.meta.owner.as_deref(), "Unknown"),
-        SortBy::Role(SortRole::Group) => text_or(entry.meta.group.as_deref(), "Unknown"),
-        SortBy::Role(SortRole::LinkTarget) => text_or(entry.meta.link_target.as_deref(), "Not a link"),
+        SortBy::Role(SortRole::Owner) => text_or(entry.meta.owner.as_deref(), &gettext("Unknown")),
+        SortBy::Role(SortRole::Group) => text_or(entry.meta.group.as_deref(), &gettext("Unknown")),
+        SortBy::Role(SortRole::LinkTarget) => {
+            text_or(entry.meta.link_target.as_deref(), &gettext("Not a link"))
+        }
     }
 }
 
@@ -192,7 +196,7 @@ pub(crate) fn group_of(by: SortBy, item: &FileItem, clock: &GroupClock) -> Group
 fn name_group(item: &FileItem) -> Group {
     let first = item.lowercase_name().chars().next().unwrap_or(' ');
     if first.is_numeric() {
-        Group::numbered("0 – 9", 1)
+        Group::numbered(&gettext("0 – 9"), 1)
     } else if first.is_alphabetic() {
         let letter: String = first.to_uppercase().collect();
         Group::texted(&letter, 2)
@@ -204,17 +208,20 @@ fn name_group(item: &FileItem) -> Group {
 /// Folders that were not measured first, then Explorer's size buckets.
 fn size_group(item: &FileItem) -> Group {
     if item.entry().is_dir && item.folder_size().is_none() {
-        return Group::numbered("Folders", -1);
+        return Group::numbered(&gettext("Folders"), -1);
     }
     let size = item.sort_size();
     if size == 0 {
-        return Group::numbered("Empty (0 KB)", 0);
+        return Group::numbered(&gettext("Empty (0 KB)"), 0);
     }
     let bucket = SIZE_GROUPS
         .iter()
         .position(|(_, below)| size < *below)
         .unwrap_or(SIZE_GROUPS.len() - 1);
-    Group::numbered(SIZE_GROUPS[bucket].0, i64::try_from(bucket).unwrap_or(0) + 1)
+    Group::numbered(
+        &gettext(SIZE_GROUPS[bucket].0),
+        i64::try_from(bucket).unwrap_or(0) + 1,
+    )
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@ use std::cmp::Ordering;
 
 use crate::folder_view::item::FileItem;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortKey};
+use ox_core::i18n::gettext_static;
 
 /// A sort key that is not a details column (VIEW-019).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,15 +59,15 @@ impl SortRole {
     }
 
     /// The Sort menu's label.
-    pub(crate) const fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
-            SortRole::Created => "Date created",
-            SortRole::Accessed => "Date accessed",
-            SortRole::Extension => "File extension",
-            SortRole::Permissions => "Permissions",
-            SortRole::Owner => "Owner",
-            SortRole::Group => "User group",
-            SortRole::LinkTarget => "Link destination",
+            SortRole::Created => gettext_static("Date created"),
+            SortRole::Accessed => gettext_static("Date accessed"),
+            SortRole::Extension => gettext_static("File extension"),
+            SortRole::Permissions => gettext_static("Permissions"),
+            SortRole::Owner => gettext_static("Owner"),
+            SortRole::Group => gettext_static("User group"),
+            SortRole::LinkTarget => gettext_static("Link destination"),
         }
     }
 

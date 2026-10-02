@@ -24,9 +24,9 @@ const ARROW_GLYPH: i32 = 16;
 /// The arrow of a folder that is `expanded`, and what it does.
 fn arrow_look(expanded: bool) -> (Icon, &'static str) {
     if expanded {
-        (Icon::ChevronDown16, "Collapse")
+        (Icon::ChevronDown16, ox_core::i18n::gettext_static("Collapse"))
     } else {
-        (Icon::ChevronRight16, "Expand")
+        (Icon::ChevronRight16, ox_core::i18n::gettext_static("Expand"))
     }
 }
 

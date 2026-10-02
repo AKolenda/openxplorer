@@ -12,21 +12,30 @@
 
 use gtk::glib;
 use gtk::prelude::*;
+use ox_core::i18n::{gettext, gettext_static};
 use ox_core::settings::{may_remember, PreferencesUpdate, ViewProperties, ViewScope};
 
 use super::{BrowserWindow, ButtonStyle};
 use crate::dialog::Dialog;
 use crate::folder_view::sort_roles::{SortBy, SortRole};
 use crate::folder_view::sorting::SortColumn;
+use crate::i18n::message_id;
 
 /// The view modes the dialog offers, as Dolphin's View mode list does.
-const MODES: [(&str, &str); 3] = [("details", "Details"), ("compact", "List"), ("icons", "Icons")];
+const MODES: [(&str, &str); 3] = [
+    ("details", message_id("Details")),
+    ("compact", message_id("List")),
+    ("icons", message_id("Icons")),
+];
 
 /// The scopes the dialog offers, in order.
 const SCOPES: [(ViewScope, &str); 3] = [
-    (ViewScope::Folder, "This folder"),
-    (ViewScope::FolderAndSubfolders, "This folder and its subfolders"),
-    (ViewScope::AllFolders, "All folders"),
+    (ViewScope::Folder, message_id("This folder")),
+    (
+        ViewScope::FolderAndSubfolders,
+        message_id("This folder and its subfolders"),
+    ),
+    (ViewScope::AllFolders, message_id("All folders")),
 ];
 
 /// Every sort key the dialog offers, with its label.
@@ -68,20 +77,27 @@ impl StyleForm {
     /// folder keeps its own style.
     fn add_to(dialog: &Dialog, style: &ViewProperties, per_folder: bool) -> Self {
         let mode_at = MODES.iter().position(|(mode, _)| *mode == style.mode);
-        let mode = drop_down(&MODES.map(|(_, label)| label), mode_at.unwrap_or(0));
-        dialog.add_labelled("View mode", &mode);
+        let mode = drop_down(
+            &MODES.map(|(_, label)| gettext_static(label)),
+            mode_at.unwrap_or(0),
+        );
+        dialog.add_labelled(&gettext("View mode"), &mode);
         let sorts = sort_choices();
         let sort_at = sorts.iter().position(|(by, _)| by.as_str() == style.sort);
         let labels: Vec<&str> = sorts.iter().map(|(_, label)| *label).collect();
         let sort = drop_down(&labels, sort_at.unwrap_or(0));
-        dialog.add_labelled("Sort by", &sort);
-        let descending = drop_down(&["Ascending", "Descending"], usize::from(style.descending));
-        dialog.add_labelled("Order", &descending);
-        let groups = dialog.add_check_button("Show in groups", style.groups);
-        let folders_first = dialog.add_check_button("Show folders first", style.folders_first);
-        let hidden = dialog.add_check_button("Show hidden files", style.show_hidden);
-        let hidden_last = dialog.add_check_button("Show hidden items last", style.hidden_last);
-        let previews = dialog.add_check_button("Show previews", style.show_previews.unwrap_or(true));
+        dialog.add_labelled(&gettext("Sort by"), &sort);
+        let descending = drop_down(
+            &[gettext_static("Ascending"), gettext_static("Descending")],
+            usize::from(style.descending),
+        );
+        dialog.add_labelled(&gettext("Order"), &descending);
+        let groups = dialog.add_check_button(&gettext("Show in groups"), style.groups);
+        let folders_first = dialog.add_check_button(&gettext("Show folders first"), style.folders_first);
+        let hidden = dialog.add_check_button(&gettext("Show hidden files"), style.show_hidden);
+        let hidden_last = dialog.add_check_button(&gettext("Show hidden items last"), style.hidden_last);
+        let previews =
+            dialog.add_check_button(&gettext("Show previews"), style.show_previews.unwrap_or(true));
         let columns_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
         let columns = SortColumn::CHOOSABLE
             .into_iter()
@@ -96,15 +112,18 @@ impl StyleForm {
                 (column, check)
             })
             .collect();
-        dialog.add_labelled("Additional information", &columns_box);
+        dialog.add_labelled(&gettext("Additional information"), &columns_box);
         let mut scopes: Vec<gtk::CheckButton> = Vec::new();
         for (index, (_, label)) in SCOPES.iter().enumerate() {
-            let scope = dialog.add_check_button(label, index == 0);
+            let scope = dialog.add_check_button(&gettext(label), index == 0);
             scope.set_group(scopes.first());
             Dialog::set_field_visible(&scope, per_folder);
             scopes.push(scope);
         }
-        let as_default = dialog.add_check_button("Use these settings as the default for all folders", false);
+        let as_default = dialog.add_check_button(
+            &gettext("Use these settings as the default for all folders"),
+            false,
+        );
         Dialog::set_field_visible(&as_default, per_folder);
         Self {
             mode,
@@ -179,12 +198,12 @@ impl BrowserWindow {
         let per_folder = self.context().settings_data().preferences.per_folder_views;
         let dialog = Dialog::new(
             self,
-            "Adjust view display style",
-            "Choose how the items of this folder are shown.",
+            &gettext("Adjust view display style"),
+            &gettext("Choose how the items of this folder are shown."),
         );
         let form = StyleForm::add_to(&dialog, &shown, per_folder);
         dialog.add_cancel_button();
-        dialog.add_button("OK", ButtonStyle::Accent);
+        dialog.add_button(&gettext("OK"), ButtonStyle::Accent);
         dialog.open_on_first_button();
         let answer = dialog.next_response().await;
         dialog.finish();
@@ -206,11 +225,11 @@ impl BrowserWindow {
     async fn confirm_wide_style(&self) -> bool {
         let dialog = Dialog::new(
             self,
-            "Change the display style of other folders?",
-            "Folders that kept a display style of their own will show this one instead.",
+            &gettext("Change the display style of other folders?"),
+            &gettext("Folders that kept a display style of their own will show this one instead."),
         );
         dialog.add_cancel_button();
-        dialog.add_button("Change", ButtonStyle::Accent);
+        dialog.add_button(&gettext("Change"), ButtonStyle::Accent);
         dialog.open_on_first_button();
         let answer = dialog.next_response().await;
         dialog.finish();

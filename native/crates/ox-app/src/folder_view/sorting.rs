@@ -105,19 +105,19 @@ impl SortColumn {
     }
 
     /// Column header and Sort menu label.
-    pub(crate) const fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
-            SortColumn::Name => "Name",
-            SortColumn::Modified => "Date modified",
-            SortColumn::FolderPath => "Folder path",
-            SortColumn::OriginalLocation => "Original location",
-            SortColumn::Deleted => "Date deleted",
-            SortColumn::Type => "Type",
-            SortColumn::Size => "Size",
-            SortColumn::Created => "Date created",
-            SortColumn::Extension => "File extension",
-            SortColumn::Owner => "Owner",
-            SortColumn::Permissions => "Permissions",
+            SortColumn::Name => ox_core::i18n::gettext_static("Name"),
+            SortColumn::Modified => ox_core::i18n::gettext_static("Date modified"),
+            SortColumn::FolderPath => ox_core::i18n::gettext_static("Folder path"),
+            SortColumn::OriginalLocation => ox_core::i18n::gettext_static("Original location"),
+            SortColumn::Deleted => ox_core::i18n::gettext_static("Date deleted"),
+            SortColumn::Type => ox_core::i18n::gettext_static("Type"),
+            SortColumn::Size => ox_core::i18n::gettext_static("Size"),
+            SortColumn::Created => ox_core::i18n::gettext_static("Date created"),
+            SortColumn::Extension => ox_core::i18n::gettext_static("File extension"),
+            SortColumn::Owner => ox_core::i18n::gettext_static("Owner"),
+            SortColumn::Permissions => ox_core::i18n::gettext_static("Permissions"),
         }
     }
 }

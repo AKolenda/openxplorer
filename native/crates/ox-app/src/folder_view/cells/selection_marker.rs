@@ -22,9 +22,9 @@ const MARKER_GLYPH: i32 = 12;
 /// The glyph and the name of the marker of an item that is `selected`.
 fn marker_look(selected: bool) -> (Icon, &'static str) {
     if selected {
-        (Icon::Subtract, "Deselect")
+        (Icon::Subtract, ox_core::i18n::gettext_static("Deselect"))
     } else {
-        (Icon::Add, "Select")
+        (Icon::Add, ox_core::i18n::gettext_static("Select"))
     }
 }
 

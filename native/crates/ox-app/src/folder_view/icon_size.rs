@@ -7,6 +7,7 @@
 //! level is an [`IconSize`]; the named ones keep the keys and CSS classes the
 //! icon view had before it zoomed (VIEW-005, VIEW-010).
 
+use crate::i18n::message_id;
 use crate::text_size::{self, TextSize};
 
 /// A large tile's width beyond its icon: the 135-pixel `gridWidth` less
@@ -28,14 +29,19 @@ struct Level {
 const LEVELS: [Level; 14] = [
     plain_level(16, "icons-16"),
     plain_level(22, "icons-22"),
-    named_level(28, "small", "icons-small", "Small icons"),
+    named_level(28, "small", "icons-small", message_id("Small icons")),
     plain_level(32, "icons-32"),
-    named_level(40, "medium", "icons-medium", "Medium icons"),
+    named_level(40, "medium", "icons-medium", message_id("Medium icons")),
     plain_level(48, "icons-48"),
-    named_level(56, "large", "icons-large", "Large icons"),
+    named_level(56, "large", "icons-large", message_id("Large icons")),
     plain_level(64, "icons-64"),
     plain_level(80, "icons-80"),
-    named_level(96, "extra-large", "icons-extra-large", "Extra large icons"),
+    named_level(
+        96,
+        "extra-large",
+        "icons-extra-large",
+        message_id("Extra large icons"),
+    ),
     plain_level(128, "icons-128"),
     plain_level(160, "icons-160"),
     plain_level(192, "icons-192"),
@@ -102,8 +108,8 @@ impl IconSize {
     }
 
     /// The Layout menu's name, for Explorer's four named sizes.
-    pub(crate) const fn label(self) -> Option<&'static str> {
-        self.level().label
+    pub(crate) fn label(self) -> Option<&'static str> {
+        self.level().label.map(ox_core::i18n::gettext_static)
     }
 
     /// Action-state key: `large` for a named size, `icons-64` otherwise.
