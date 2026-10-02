@@ -14,6 +14,9 @@
 mod parts;
 mod view;
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -293,15 +296,29 @@ impl FolderPane {
     /// When the items were regrouped (VIEW-022) or the group headings
     /// appeared, GTK lays the rows out again a moment later and would move
     /// the view to wherever its scroll anchor went; so the position is
-    /// also set again each time the view's size changes in the next
-    /// [`RELAYOUT_WINDOW`].
+    /// set once more at that first relayout, if it comes within
+    /// [`RELAYOUT_WINDOW`]. Later relayouts and the user's own scrolling
+    /// are left alone.
     pub(super) fn restore_scroll_position(&self, position: f64) {
+        self.details().note_scroll_restore();
         let adjustment = self.visible_vadjustment();
         adjustment.set_value(position);
         let again = adjustment.clone();
         glib::idle_add_local_once(move || again.set_value(position));
-        let relayout = adjustment.connect_changed(move |adjustment| adjustment.set_value(position));
-        glib::timeout_add_local_once(RELAYOUT_WINDOW, move || adjustment.disconnect(relayout));
+        let handler: Rc<Cell<Option<glib::SignalHandlerId>>> = Rc::default();
+        let first = Rc::clone(&handler);
+        let relayout = adjustment.connect_changed(move |adjustment| {
+            adjustment.set_value(position);
+            if let Some(id) = first.take() {
+                adjustment.disconnect(id);
+            }
+        });
+        handler.set(Some(relayout));
+        glib::timeout_add_local_once(RELAYOUT_WINDOW, move || {
+            if let Some(id) = handler.take() {
+                adjustment.disconnect(id);
+            }
+        });
     }
 
     /// The visible view, as a widget.

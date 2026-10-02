@@ -208,3 +208,40 @@ fn the_first_heading_is_shown_when_a_folder_opens_or_is_regrouped() {
     assert!(scroll(&test) < 0.5, "a regrouped folder is shown from the top");
     assert_eq!(headings(&test).first().map(String::as_str), Some("A – H (40)"));
 }
+
+/// Back to a grouped folder puts the view where it was: showing a list
+/// from its top must not override a restored position.
+///
+/// parity: VIEW-022, NAV-008
+#[gtk::test]
+fn back_to_a_grouped_folder_keeps_its_scroll_position() {
+    let home = TestHome::new();
+    for number in 0..80 {
+        fs::write(
+            home.home.join("Downloads").join(format!("file {number}.txt")),
+            "x",
+        )
+        .expect("a file");
+    }
+    let test = TestWindow::open_with_standard_folders(&home.downloads(), home.locations(), |_| {});
+    let adjustment = test.window.folder_pane().details().vadjustment();
+    wait_for_frames(&test.window, 5);
+    adjustment.set_value(400.0);
+    wait_for_frames(&test.window, 3);
+    let scrolled = adjustment.value();
+    assert!(scrolled > 300.0, "the list scrolls: {scrolled}");
+
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    test.activate("back", None);
+    test.wait_for_listing("Downloads");
+    wait_for_frames(&test.window, 8);
+
+    let restored = test.window.folder_pane().details().vadjustment().value();
+    assert!(
+        (restored - scrolled).abs() < 1.0,
+        "back to {scrolled}, not {restored}"
+    );
+}

@@ -190,6 +190,9 @@ mod imp {
         pub(super) listing: Cell<DetailsListing>,
         /// The group headings, shown while the folder is grouped.
         pub(super) headings: OnceCell<gtk::SignalListItemFactory>,
+        /// Counts the scroll positions the window restored, so a list
+        /// filled from empty does not override one restored meanwhile.
+        pub(super) scroll_restores: Cell<u64>,
     }
 
     #[glib::object_subclass]
@@ -271,8 +274,9 @@ impl DetailsView {
         view
     }
 
-    /// Shows a list filled from empty (a folder's first items) from its
-    /// top. GTK keeps the first row at
+    /// Shows a grouped list filled from empty (a folder's first items)
+    /// from its top, unless the window restored a scroll position (Back,
+    /// a tab switch) since the items arrived. GTK keeps the first row at
     /// the top edge, which would leave the first group's heading above it,
     /// scrolled out of sight. A scroll position restored afterwards (Back,
     /// a tab switch) still wins: it is set later.
@@ -281,15 +285,22 @@ impl DetailsView {
             #[weak(rename_to = view)]
             self,
             move |list, position, removed, added| {
-                if position != 0 || removed != 0 || added == 0 || list.n_items() != added {
+                let filled = position == 0 && removed == 0 && added > 0 && list.n_items() == added;
+                if !filled || !view.shows_group_headings() {
                     return;
                 }
                 let adjustment = view.vadjustment();
-                glib::idle_add_local_once(move || {
-                    if adjustment.value() > 0.0 {
-                        adjustment.set_value(0.0);
+                let restores = view.imp().scroll_restores.get();
+                glib::idle_add_local_once(glib::clone!(
+                    #[weak]
+                    view,
+                    move || {
+                        let restored = view.imp().scroll_restores.get() != restores;
+                        if !restored && adjustment.value() > 0.0 {
+                            adjustment.set_value(0.0);
+                        }
                     }
-                });
+                ));
             }
         ));
     }
@@ -301,8 +312,13 @@ impl DetailsView {
         self.column_view().set_header_factory(headings);
     }
 
+    /// Notes that the window restores a scroll position now.
+    pub(crate) fn note_scroll_restore(&self) {
+        let restores = &self.imp().scroll_restores;
+        restores.set(restores.get().wrapping_add(1));
+    }
+
     /// Whether the group headings are shown.
-    #[cfg(test)]
     pub(crate) fn shows_group_headings(&self) -> bool {
         self.column_view().header_factory().is_some()
     }
