@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! One file operation at a time: its start, its progress in the transfer
-//! panel, Cancel, and what the user is told when it ends (OPS-019,
+//! Starting exclusive operations and reporting each transfer job
+//! through its panel, cancellation and completion message (OPS-019,
 //! OPS-022, OPS-023, OPS-024).
 //!
 //! Ports `runOperation`, `updateTransfer` and the `cancel` request of
@@ -21,9 +21,9 @@ use ox_core::ops::{
 use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
 use super::unfinished::mark_unfinished;
+use crate::dialog;
 use crate::search::changed_folders;
 use crate::window::background_notice::Destination;
-use crate::window::dialog;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::{TransferKind, TransferPanel};
 use crate::window::window_action::WindowAction;
@@ -57,15 +57,17 @@ impl FinishedOperation {
 }
 
 impl BrowserWindow {
-    /// The panel of the running operation.
+    /// The primary panel, used by an exclusive operation or one transfer job.
+    /// Concurrent jobs use additional panels managed by `jobs`.
     pub(in crate::window) fn transfer_panel(&self) -> &TransferPanel {
         &self.imp().transfer_panel
     }
 
     /// Whether this window writes files now: a file operation runs or is
     /// being planned, or an extraction, compression or restored copy
-    /// runs. Data safety (OPS-024): no other write starts meanwhile, and
-    /// Sign out, Disconnect, moving a tab and an update's restart wait.
+    /// runs. Exclusive writes, Sign out, Disconnect, moving a tab and an
+    /// update's restart wait (OPS-024). Additional transfers must pass
+    /// `begin_transfer`'s job limit and overlapping-path checks.
     pub(crate) fn is_writing_files(&self) -> bool {
         let is_operating = !self.imp().file_operations.borrow().is_idle();
         is_operating || self.transfer_panel().is_busy()
@@ -84,13 +86,13 @@ impl BrowserWindow {
         true
     }
 
-    /// Starts an operation whose panel reads `label` until the first
+    /// Starts an exclusive operation whose panel reads `label` until the first
     /// progress report. Returns its context, or `None` while another
     /// operation runs (OPS-024: `if(state.operation)return` in app.js),
     /// an archive operation included, or once an application update
     /// waits for its restart, which the message line says (UPD-006).
     pub(crate) fn begin_operation(&self, label: &str) -> Option<OperationContext> {
-        if self.transfer_panel().is_busy() {
+        if self.is_writing_files() {
             return None;
         }
         if self.refuses_writes_during_update() {
@@ -103,6 +105,9 @@ impl BrowserWindow {
         // XFER-011 and XFER-013: a move the location cannot do natively is
         // finished by copying only when the user agrees.
         context.move_by_copying = Some(self.move_by_copying_asker());
+        // OPS-047: an item that fails asks whether to retry, skip or
+        // cancel.
+        context.item_failure = Some(self.failure_asker());
         {
             let mut operations = self.imp().file_operations.borrow_mut();
             if operations.is_running() {
@@ -128,7 +133,7 @@ impl BrowserWindow {
     /// the user cancels; after that the panel keeps saying "Cancelling…".
     pub(super) fn progress_reporter(&self, cancel: &Cancellation) -> impl FnMut(Progress) + Send + 'static {
         let (reports, report_queue) = async_channel::unbounded::<Progress>();
-        let panel = self.transfer_panel().clone();
+        let panel = self.panel_for_operation(cancel);
         let cancel = cancel.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak]
@@ -136,7 +141,7 @@ impl BrowserWindow {
             async move {
                 // The loop ends when the worker drops its sender.
                 while let Ok(progress) = report_queue.recv().await {
-                    if !cancel.is_cancelled() {
+                    if !cancel.is_cancelled() && panel.tracks(&cancel) {
                         panel.show_progress(&progress);
                     }
                 }
@@ -148,29 +153,34 @@ impl BrowserWindow {
         }
     }
 
-    /// Cancel operation: stops the running file operation between steps,
-    /// as the transfer panel's Cancel does; what is finished stays
-    /// finished (OPS-022).
+    /// Stops every running operation between steps; each panel's Cancel
+    /// button stops only its own job. Finished work remains (OPS-022).
     pub(in crate::window) fn cancel_operation(&self) {
-        if self.imp().file_operations.borrow().running.is_some() {
-            self.transfer_panel().cancel();
+        self.transfer_panel().cancel();
+        for job in &self.imp().file_operations.borrow().jobs {
+            job.panel.cancel();
         }
     }
 
-    /// Runs `request` on the transfer engine as the window's one
-    /// operation (`runOperation`); `None` when another one runs. The panel
-    /// has hidden when this returns; conclude with
+    /// Runs `request` as a transfer job with its own panel and cancellation
+    /// token. Returns `None` when `begin_transfer` refuses the job because
+    /// of an exclusive write, an update, the job limit or overlapping paths.
+    /// Its panel is hidden before returning; conclude with
     /// [`Self::conclude_operation`].
     pub(super) async fn run_request(
         &self,
         request: &TransferRequest,
     ) -> Option<Result<TransferOutcome, OpsError>> {
-        let context = self.begin_operation(starting_label(request.mode))?;
+        let context = self.begin_transfer(
+            starting_label(request.mode),
+            &request.uris,
+            request.destination_folder.as_deref(),
+        )?;
         let progress = self.progress_reporter(&context.cancel);
         let mark = mark_unfinished(request.destination_folder.as_deref());
         let outcome = run_transfer(request, &context, progress).await;
         drop(mark);
-        self.end_operation();
+        self.end_transfer(&context.cancel);
         let destination = request.destination_folder.as_deref();
         let changed = changed_folders(destination, request.uris.iter().map(String::as_str));
         self.context().search_cache().folders_written(changed);
@@ -181,6 +191,7 @@ impl BrowserWindow {
     /// [`Self::run_request`], then [`Self::conclude_operation`], which
     /// selects `next`, the item that followed the removed ones (SEL-017).
     pub(super) async fn run_deletion(&self, request: &TransferRequest, next: Option<&str>) {
+        let origin = self.current_uri();
         let Some(outcome) = self.run_request(request).await else {
             return;
         };
@@ -188,7 +199,7 @@ impl BrowserWindow {
             select_after: next.map(str::to_owned).into_iter().collect(),
             ..FinishedOperation::of_transfer(request.mode, outcome)
         });
-        self.conclude_operation(finished).await;
+        self.conclude_operation_in(finished, origin.as_deref()).await;
     }
 
     /// Concludes an ended operation: Undo remembers it, the folder is
@@ -197,6 +208,17 @@ impl BrowserWindow {
     /// started). The toast of an operation Undo can reverse has an Undo
     /// button (OPS-032).
     pub(super) async fn conclude_operation(&self, outcome: Result<FinishedOperation, OpsError>) {
+        let origin = self.current_uri();
+        self.conclude_operation_in(outcome, origin.as_deref()).await;
+    }
+
+    /// Completion must not replace a selection made while browsing another folder.
+    pub(super) async fn conclude_operation_in(
+        &self,
+        outcome: Result<FinishedOperation, OpsError>,
+        origin: Option<&str>,
+    ) {
+        let still_here = self.current_uri().as_deref() == origin;
         match outcome {
             Ok(finished) => {
                 let is_undoable = finished.undo.is_some();
@@ -204,7 +226,9 @@ impl BrowserWindow {
                     self.context().record_operation(record);
                 }
                 let destination = Destination::items(finished.select_after.clone());
-                self.reload_selecting(finished.select_after);
+                if still_here {
+                    self.reload_selecting(finished.select_after);
+                }
                 match finished.summary {
                     OperationSummary::Toast(text) if is_undoable => {
                         // The toast has Undo; the desktop hears it too while
@@ -216,8 +240,15 @@ impl BrowserWindow {
                 }
             }
             Err(error) => {
-                self.reload_selecting(Vec::new());
-                dialog::show_message(self, STOPPED_TITLE, &error.to_string()).await;
+                if still_here {
+                    self.reload_selecting(Vec::new());
+                }
+                dialog::show_message(
+                    self,
+                    ox_core::i18n::gettext_static(STOPPED_TITLE),
+                    &error.to_string(),
+                )
+                .await;
             }
         }
     }
@@ -245,7 +276,9 @@ impl BrowserWindow {
         self.notify_if_in_background(&summary, destination);
         match summary {
             OperationSummary::Toast(text) => self.show_message(&text),
-            OperationSummary::Report(text) => dialog::show_message(self, RESULT_TITLE, &text).await,
+            OperationSummary::Report(text) => {
+                dialog::show_message(self, ox_core::i18n::gettext_static(RESULT_TITLE), &text).await;
+            }
         }
     }
 

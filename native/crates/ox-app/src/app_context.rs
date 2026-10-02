@@ -25,10 +25,12 @@ mod file_operations;
 mod known_folders;
 mod network_places;
 mod previous_versions;
+mod recent_privacy;
 mod saved_searches;
 mod search_cache;
 
 pub(crate) use default_open::add_to_desktop_history;
+pub(crate) use recent_privacy::desktop_recent_policy;
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -40,7 +42,9 @@ use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::folder_locations::FolderRelocation;
 use ox_core::places::FolderLocations;
-use ox_core::settings::{PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
+use ox_core::settings::{
+    PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError, ViewProperties, ViewScope,
+};
 use ox_core::versions::PreviousVersions;
 
 use crate::integration::DesktopIntegration;
@@ -130,6 +134,9 @@ mod imp {
             RefCell<Option<std::sync::mpsc::Sender<Vec<ox_core::settings::Bookmark>>>>,
         /// The pins as last mirrored there.
         pub(super) exported_pins: RefCell<Option<Vec<ox_core::settings::Bookmark>>>,
+        /// GNOME's privacy settings, which say what may be remembered of
+        /// the files opened, when the desktop has them.
+        pub(super) privacy: RefCell<Option<gtk::gio::Settings>>,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,
@@ -199,6 +206,7 @@ impl AppContext {
             .expect("a new AppContext has no settings yet");
         context.watch_known_folders(folder_locations);
         context.read_saved_searches();
+        context.follow_recent_privacy();
         context
     }
 
@@ -340,6 +348,21 @@ impl AppContext {
         self.change_settings(change, reply);
     }
 
+    /// Saves `properties` as the display style of `uri` with `scope` off
+    /// the main thread (VIEW-020); `reply` hears the outcome.
+    pub(crate) fn remember_view(
+        &self,
+        uri: String,
+        properties: ViewProperties,
+        scope: ViewScope,
+        reply: impl FnOnce(Result<(), SettingsError>) + 'static,
+    ) {
+        let change: Change = Box::new(move |settings: &mut Settings| {
+            settings.remember_view(&uri, properties, scope).map(|_| ())
+        });
+        self.change_settings(change, reply);
+    }
+
     /// Tells every window to return its sidebar and columns to their
     /// default widths.
     pub(crate) fn announce_layout_reset(&self) {
@@ -422,5 +445,6 @@ pub(super) fn recent_entry(entry: &Entry) -> RecentEntry {
         size: entry.size.unwrap_or(0),
         // `settings.json` keeps 0 for an unknown time, as core.py does.
         modified: entry.modified.unwrap_or(0),
+        opened: None,
     }
 }

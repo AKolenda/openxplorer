@@ -13,7 +13,11 @@ use serde_json::Value;
 
 use super::choices::{ContextMenu, Theme, View};
 use super::pane_options::DetailsPaneOptions;
+use super::tree_options::FolderTreeOptions;
+use super::view_options::ViewOptions;
+use super::view_properties::{read_folder_views, FolderView, ViewProperties};
 use super::SettingsError;
+use crate::location;
 
 /// Text sizes offered in Settings, in percent.
 pub const TEXT_SIZES: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
@@ -83,16 +87,29 @@ pub enum Column {
     Type,
     /// The size.
     Size,
+    /// Date created; this and the next three are the native app's own.
+    Created,
+    /// The file extension.
+    Extension,
+    /// The owner's name.
+    Owner,
+    /// The permission bits.
+    Permissions,
 }
 
 impl Column {
-    /// Every column, in the order the Python app stores them.
-    pub const ALL: [Column; 5] = [
+    /// Every column: the Python app's, in the order it stores them, then
+    /// the native app's own.
+    pub const ALL: [Column; 9] = [
         Column::Name,
         Column::Modified,
         Column::ParentUri,
         Column::Type,
         Column::Size,
+        Column::Created,
+        Column::Extension,
+        Column::Owner,
+        Column::Permissions,
     ];
 
     /// The key used in `columnWidths` and by the UI (`parentUri`, ...).
@@ -103,6 +120,10 @@ impl Column {
             Column::ParentUri => "parentUri",
             Column::Type => "type",
             Column::Size => "size",
+            Column::Created => "created",
+            Column::Extension => "extension",
+            Column::Owner => "owner",
+            Column::Permissions => "permissions",
         }
     }
 
@@ -110,9 +131,9 @@ impl Column {
     pub fn width_range(self) -> RangeInclusive<u32> {
         match self {
             Column::Name | Column::ParentUri => 140..=1600,
-            Column::Modified => 100..=1000,
-            Column::Type => 80..=1000,
-            Column::Size => 70..=600,
+            Column::Modified | Column::Created => 100..=1000,
+            Column::Type | Column::Owner | Column::Permissions => 80..=1000,
+            Column::Size | Column::Extension => 70..=600,
         }
     }
 }
@@ -146,6 +167,18 @@ pub struct ColumnWidths {
     /// Width of [`Column::Size`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u32>,
+    /// Width of [`Column::Created`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<u32>,
+    /// Width of [`Column::Extension`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extension: Option<u32>,
+    /// Width of [`Column::Owner`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner: Option<u32>,
+    /// Width of [`Column::Permissions`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<u32>,
 }
 
 impl ColumnWidths {
@@ -157,6 +190,10 @@ impl ColumnWidths {
             Column::ParentUri => self.parent_uri,
             Column::Type => self.file_type,
             Column::Size => self.size,
+            Column::Created => self.created,
+            Column::Extension => self.extension,
+            Column::Owner => self.owner,
+            Column::Permissions => self.permissions,
         }
     }
 
@@ -184,6 +221,10 @@ impl ColumnWidths {
             Column::ParentUri => &mut self.parent_uri,
             Column::Type => &mut self.file_type,
             Column::Size => &mut self.size,
+            Column::Created => &mut self.created,
+            Column::Extension => &mut self.extension,
+            Column::Owner => &mut self.owner,
+            Column::Permissions => &mut self.permissions,
         }
     }
 }
@@ -245,6 +286,10 @@ pub struct Preferences {
     /// settings of a new installation stay as the Python app writes them.
     #[serde(skip_serializing_if = "DetailsPaneOptions::is_default")]
     pub details_pane_options: DetailsPaneOptions,
+    /// The folder views' options: previews, item counts and the details
+    /// columns; saved only once changed.
+    #[serde(skip_serializing_if = "ViewOptions::is_default")]
+    pub view_options: ViewOptions,
     /// The window's title is the folder's full path instead of its name
     /// (Dolphin's `ShowFullPathInTitlebar`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -267,6 +312,9 @@ pub struct Preferences {
     /// its application (Dolphin's "Always ask"); off, it only ever opens.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub ask_to_run_programs: bool,
+    /// Explicitly enabled installed service actions, keyed by definition digest.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub enabled_service_actions: Vec<String>,
     /// Text uses the desktop's interface font and its size instead of the
     /// Windows font stack. Stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -290,6 +338,53 @@ pub struct Preferences {
     /// one is hidden.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hidden_sidebar_places: Vec<String>,
+    /// Tabs opened from a folder go at the end of the strip instead of
+    /// after the current tab (Dolphin's `OpenNewTabAfterLastTab`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub open_tabs_at_end: bool,
+    /// A start without locations reopens the tabs of the last window
+    /// closed (Dolphin's `RememberOpenedTabs`, Explorer's "Restore
+    /// previous folder windows at logon"); off, as in Explorer.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub restore_session: bool,
+    /// Where new windows open, as a canonical location or a landing page
+    /// such as This PC; Home when unset (Dolphin's `HomeUrl`, Explorer's
+    /// "Open File Explorer to").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_folder: Option<String>,
+    /// New windows open split in two panes (Dolphin's `SplitView`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub begin_in_split_view: bool,
+    /// Tab in a folder view moves to the other pane of a split tab
+    /// (Dolphin's `SwitchBetweenSplitViewsWithTabKey`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub tab_switches_split_panes: bool,
+    /// The folder tree's options (SIDE-028); saved only once changed.
+    #[serde(skip_serializing_if = "FolderTreeOptions::is_default")]
+    pub folder_tree: FolderTreeOptions,
+    /// Date columns show absolute dates instead of "Today at 3:00 PM"
+    /// (Dolphin's `UseShortRelativeDates`, inverted). Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub absolute_dates: bool,
+    /// Each folder remembers its own display style (Dolphin's
+    /// `GlobalViewProps`, inverted). Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub per_folder_views: bool,
+    /// Hovering an item shows the marker that adds it to the selection or
+    /// takes it out (Dolphin's `ShowSelectionToggle`). Stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub selection_marker: bool,
+    /// Folders in the details view expand in place (Dolphin's
+    /// `ExpandableFolders`). Stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub expandable_folders: bool,
+    /// The display style of every folder without its own, once the user
+    /// changed it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_defaults: Option<ViewProperties>,
+    /// The folders that keep their own display style, oldest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub folder_views: Vec<FolderView>,
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
@@ -332,22 +427,47 @@ impl Default for Preferences {
             external_folders_in_new_window: false,
             browse_archives: true,
             details_pane_options: DetailsPaneOptions::default(),
+            view_options: ViewOptions::default(),
             full_path_in_title: false,
             confirm_trash: true,
             confirm_delete: true,
             confirm_empty_trash: true,
             confirm_close_tabs: false,
             ask_to_run_programs: false,
+            enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
+            open_tabs_at_end: false,
+            restore_session: false,
+            startup_folder: None,
+            begin_in_split_view: false,
+            tab_switches_split_panes: false,
+            folder_tree: FolderTreeOptions::default(),
+            absolute_dates: false,
+            per_folder_views: false,
+            selection_marker: true,
+            expandable_folders: true,
+            view_defaults: None,
+            folder_views: Vec::new(),
         }
     }
 }
 
 impl Preferences {
+    fn apply_service_actions(&mut self, keys: Option<&Vec<String>>) {
+        if let Some(keys) = keys.filter(|keys| {
+            keys.len() <= 256
+                && keys
+                    .iter()
+                    .all(|key| key.len() <= 4096 && !key.chars().any(char::is_control))
+        }) {
+            self.enabled_service_actions.clone_from(keys);
+        }
+    }
+
     /// Applies every valid value in `update` and silently ignores the rest,
     /// exactly like `update_preferences` in the Python app. A present
     /// `column_widths` replaces all saved column widths.
@@ -381,6 +501,7 @@ impl Preferences {
         replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
         replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
         replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
+        self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         let icon_size = update
@@ -420,6 +541,77 @@ impl Preferences {
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
+        if let Some(options) = &update.view_options {
+            self.view_options = options.clone();
+        }
+        replace_if_some(&mut self.open_tabs_at_end, update.open_tabs_at_end);
+        replace_if_some(&mut self.restore_session, update.restore_session);
+        replace_if_some(&mut self.begin_in_split_view, update.begin_in_split_view);
+        replace_if_some(
+            &mut self.tab_switches_split_panes,
+            update.tab_switches_split_panes,
+        );
+        if let Some(folder) = &update.startup_folder {
+            if folder.is_empty() {
+                self.startup_folder = None;
+            } else if let Ok(uri) = location::normalise_navigation(folder, None, &glib::home_dir()) {
+                self.startup_folder = Some(location::without_user(&uri));
+            }
+        }
+        replace_if_some(&mut self.folder_tree, update.folder_tree);
+        replace_if_some(&mut self.absolute_dates, update.absolute_dates);
+        replace_if_some(&mut self.per_folder_views, update.per_folder_views);
+        replace_if_some(&mut self.selection_marker, update.selection_marker);
+        replace_if_some(&mut self.expandable_folders, update.expandable_folders);
+        if let Some(defaults) = &update.view_defaults {
+            self.view_defaults = Some(defaults.clone());
+        }
+        if let Some(folder_views) = &update.folder_views {
+            self.folder_views.clone_from(folder_views);
+        }
+        self.sync_style_defaults(update);
+    }
+
+    /// Global Settings changes also update the shared display style.
+    fn sync_style_defaults(&mut self, update: &PreferencesUpdate) {
+        let Some(defaults) = self.view_defaults.as_mut() else {
+            return;
+        };
+        if update.column_widths.is_some() {
+            defaults.column_widths.clone_from(&self.column_widths);
+        }
+        if let Some(options) = &update.view_options {
+            defaults.show_previews = Some(options.show_previews);
+            defaults.details_columns = Some(options.details_columns.clone());
+        }
+    }
+
+    /// The display style `uri` is shown in: its own when each folder
+    /// keeps one, else the shared style (VIEW-020).
+    pub fn view_for(&self, uri: &str) -> ViewProperties {
+        // Before a style was saved, the Python app's view and hidden files.
+        let defaults = self.view_defaults.clone().unwrap_or_else(|| ViewProperties {
+            mode: match self.view {
+                View::Details => "details",
+                View::Grid => "icons",
+            }
+            .to_owned(),
+            show_hidden: self.show_hidden,
+            ..ViewProperties::default()
+        });
+        let mut style = if self.per_folder_views {
+            super::view_properties::style_for(&self.folder_views, &defaults, uri)
+        } else {
+            defaults
+        };
+        style.show_previews.get_or_insert(self.view_options.show_previews);
+        style
+            .details_columns
+            .get_or_insert_with(|| self.view_options.details_columns.clone());
+        if style.column_widths.is_none() {
+            style.column_widths.clone_from(&self.column_widths);
+        }
+        style
     }
 }
 
@@ -459,6 +651,8 @@ pub struct PreferencesUpdate {
     pub browse_archives: Option<bool>,
     /// Replaces the details pane's options.
     pub details_pane_options: Option<DetailsPaneOptions>,
+    /// Replaces the folder views' options.
+    pub view_options: Option<ViewOptions>,
     /// Show the folder's full path in the window title.
     pub full_path_in_title: Option<bool>,
     /// Ask before moving items to the Trash.
@@ -471,6 +665,8 @@ pub struct PreferencesUpdate {
     pub confirm_close_tabs: Option<bool>,
     /// Ask whether to run a program or script that is opened.
     pub ask_to_run_programs: Option<bool>,
+    /// Replaces the allowlist of installed service actions.
+    pub enabled_service_actions: Option<Vec<String>>,
     /// Use the desktop's font, or the Windows font stack.
     pub desktop_font: Option<bool>,
     /// Hide or show the navigation pane.
@@ -483,6 +679,33 @@ pub struct PreferencesUpdate {
     /// Replaces the sidebar places hidden one by one; up to 64 locations,
     /// else ignored.
     pub hidden_sidebar_places: Option<Vec<String>>,
+    /// Open tabs from a folder at the end, or after the current tab.
+    pub open_tabs_at_end: Option<bool>,
+    /// Reopen the last window's tabs on a start without locations.
+    pub restore_session: Option<bool>,
+    /// Where new windows open; empty for Home. A location the location
+    /// rules refuse is ignored.
+    pub startup_folder: Option<String>,
+    /// Open new windows split.
+    pub begin_in_split_view: Option<bool>,
+    /// Let Tab move between the panes of a split tab.
+    pub tab_switches_split_panes: Option<bool>,
+    /// Replaces the folder tree's options.
+    pub folder_tree: Option<FolderTreeOptions>,
+    /// Show absolute dates instead of relative ones.
+    pub absolute_dates: Option<bool>,
+    /// Remember a display style for each folder.
+    pub per_folder_views: Option<bool>,
+    /// Show the hover selection marker.
+    pub selection_marker: Option<bool>,
+    /// Let folders expand in place in the details view.
+    pub expandable_folders: Option<bool>,
+    /// Replaces the shared display style.
+    pub view_defaults: Option<ViewProperties>,
+    /// Replaces the folders' own styles; read from the file only, as
+    /// windows change one folder at a time with
+    /// [`Settings::remember_view`](super::Settings::remember_view).
+    pub folder_views: Option<Vec<FolderView>>,
 }
 
 impl PreferencesUpdate {
@@ -496,7 +719,9 @@ impl PreferencesUpdate {
     /// [`SettingsError::Invalid`] if `value` is not an object.
     pub fn from_json(value: &Value) -> Result<Self, SettingsError> {
         let Some(values) = value.as_object() else {
-            return Err(SettingsError::invalid("Preferences must be an object."));
+            return Err(SettingsError::invalid(crate::i18n::gettext(
+                "Preferences must be an object.",
+            )));
         };
         let text = |key: &str| values.get(key).and_then(Value::as_str);
         let flag = |key: &str| values.get(key).and_then(Value::as_bool);
@@ -519,12 +744,14 @@ impl PreferencesUpdate {
             details_pane_options: values
                 .get("detailsPaneOptions")
                 .and_then(DetailsPaneOptions::from_json),
+            view_options: values.get("viewOptions").and_then(ViewOptions::from_json),
             full_path_in_title: flag("fullPathInTitle"),
             confirm_trash: flag("confirmTrash"),
             confirm_delete: flag("confirmDelete"),
             confirm_empty_trash: flag("confirmEmptyTrash"),
             confirm_close_tabs: flag("confirmCloseTabs"),
             ask_to_run_programs: flag("askToRunPrograms"),
+            enabled_service_actions: values.get("enabledServiceActions").and_then(read_keys),
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
             sidebar_icon_size: values
@@ -533,6 +760,18 @@ impl PreferencesUpdate {
                 .and_then(|size| u32::try_from(size).ok()),
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
+            open_tabs_at_end: flag("openTabsAtEnd"),
+            restore_session: flag("restoreSession"),
+            startup_folder: text("startupFolder").map(str::to_owned),
+            begin_in_split_view: flag("beginInSplitView"),
+            tab_switches_split_panes: flag("tabSwitchesSplitPanes"),
+            folder_tree: values.get("folderTree").and_then(FolderTreeOptions::from_json),
+            absolute_dates: flag("absoluteDates"),
+            per_folder_views: flag("perFolderViews"),
+            selection_marker: flag("selectionMarker"),
+            expandable_folders: flag("expandableFolders"),
+            view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
+            folder_views: values.get("folderViews").and_then(read_folder_views),
         })
     }
 }
@@ -569,7 +808,7 @@ fn read_network_interval(value: &Value) -> Option<u32> {
 /// The numeric widths of the known columns in a `columnWidths` object;
 /// `None` if it is not an object. Out-of-range widths are dropped when
 /// applied.
-fn read_column_widths(value: &Value) -> Option<Vec<ColumnWidth>> {
+pub(super) fn read_column_widths(value: &Value) -> Option<Vec<ColumnWidth>> {
     let columns = value.as_object()?;
     let numeric_width = |column: Column| {
         let pixels = columns.get(column.as_str())?.as_f64()?;
@@ -638,6 +877,22 @@ mod tests {
             "autoIndex": true, "contextMenu": "win10", "networkInterval": 60, "textSize": 100
         });
         assert_eq!(stored, python);
+    }
+
+    /// The same validation handles both changed preferences and older
+    /// settings files that already contain an account in the startup path.
+    ///
+    /// parity: SAFE-010, TAB-055
+    #[test]
+    fn the_startup_folder_does_not_keep_a_remote_account() {
+        for address in ["sftp://demo@server/docs", "davs://demo@server/docs"] {
+            let update =
+                PreferencesUpdate::from_json(&json!({"startupFolder": address})).expect("a valid preference");
+            let mut preferences = Preferences::default();
+            preferences.apply(&update);
+            let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+            assert_eq!(stored["startupFolder"], location::without_user(address));
+        }
     }
 
     /// parity: SET-016, VIEW-045

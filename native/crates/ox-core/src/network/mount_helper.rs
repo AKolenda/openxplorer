@@ -51,47 +51,71 @@ const ROOT_UID: u32 = 0;
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum MountHelperError {
     /// A relative path, or one with `..`.
-    #[error("Administrative paths must be absolute, without parent traversal.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Administrative paths must be absolute, without parent traversal.")
+    )]
     NotAbsolute,
     /// A directory in the chain is a symlink, not owned by root, or
     /// writable by the group or others.
-    #[error("Refusing unsafe directory: {}", .0.display())]
+    #[error("{}", crate::i18n::format_message("Refusing unsafe directory: {path}", &[("path", &.0.display().to_string())]))]
     UnsafeDirectory(PathBuf),
     /// A user name or password with a line break or NUL, or no user name.
-    #[error("Invalid credentials. Newlines and NUL characters are not supported.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Invalid credentials. Newlines and NUL characters are not supported.")
+    )]
     InvalidCredentials,
     /// `DOMAIN\` without a user name.
-    #[error("Enter a username after the domain.")]
+    #[error("{}", crate::i18n::gettext("Enter a username after the domain."))]
     MissingUsername,
     /// Run from a root login, or `SUDO_UID` names root.
-    #[error("Run with sudo from your normal desktop account, not a root login.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Run with sudo from your normal desktop account, not a root login.")
+    )]
     RootLogin,
     /// The desktop account is not in the user database.
-    #[error("No account has the user ID {0}.")]
+    #[error("{}", crate::i18n::format_message("No account has the user ID {user_id}.", &[("user_id", .0.as_str())]))]
     UnknownAccount(String),
     /// The share cannot be planned.
     #[error(transparent)]
     Plan(#[from] MountPlanError),
     /// A change was asked for without `sudo`.
-    #[error("This operation requires sudo. The GUI itself must stay unprivileged.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("This operation requires sudo. The GUI itself must stay unprivileged.")
+    )]
     NotAdministrator,
     /// Standard input is not a terminal, so nobody can review the change.
-    #[error("Run in a terminal so you can review and confirm the change.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Run in a terminal so you can review and confirm the change.")
+    )]
     NotATerminal,
     /// A managed file to remove is missing, a symlink or not root's.
-    #[error("Missing or unsafe managed files; refusing automatic removal.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Missing or unsafe managed files; refusing automatic removal.")
+    )]
     UnsafeManagedFiles,
     /// A managed unit no longer has the text the helper wrote.
-    #[error("Unit files have been edited. Remove them manually after review.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Unit files have been edited. Remove them manually after review.")
+    )]
     EditedUnits,
     /// `mount.cifs` is not installed.
-    #[error("Install the cifs-utils package first, then run this command again.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Install the cifs-utils package first, then run this command again.")
+    )]
     MissingCifsUtils,
     /// A unit, the credential file or the mount point already exists.
-    #[error("This mount already exists or a path is in use. Nothing was overwritten.\nRemoval command: {0}")]
+    #[error("{}", crate::i18n::format_message("This mount already exists or a path is in use. Nothing was overwritten.\nRemoval command: {command}", &[("command", .0.as_str())]))]
     AlreadyExists(String),
     /// `systemctl` failed or took too long.
-    #[error("systemctl {command} {reason}")]
+    #[error("{}", crate::i18n::format_message("systemctl {command} {reason}", &[("command", command), ("reason", reason)]))]
     Systemctl {
         /// The arguments, joined with spaces.
         command: String,

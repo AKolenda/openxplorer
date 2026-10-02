@@ -11,6 +11,7 @@ use ox_core::settings::DetailsPaneOptions;
 
 use super::actions::text_action;
 use super::preferences::Preference;
+use super::status_bar;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -35,16 +36,24 @@ impl BrowserWindow {
         view.add_controller(motion);
     }
 
-    /// The pointer is at `point` in `view`, or has left it.
+    /// The pointer is at `point` in `view`, or has left it: the status
+    /// bar describes the item under it (VIEW-052), and so does the details
+    /// pane while it follows the pointer.
     pub(super) fn pointer_over_items(&self, view: &gtk::Widget, point: Option<(f64, f64)>) {
-        let pane = self.details_pane();
-        if !pane.options().follow_hover {
+        // Hover descriptions belong to the active pane only.
+        if self.side_holding(view) != Some(self.active_side()) {
             return;
         }
         let pane_model = self.folder_pane();
         let item = point
             .and_then(|(x, y)| pane_model.owners().position_at(view, x, y))
             .and_then(|position| pane_model.model().item(position));
+        self.status_bar()
+            .show_hovered(item.as_ref().map(status_bar::item_text));
+        let pane = self.details_pane();
+        if !pane.options().follow_hover {
+            return;
+        }
         if pane.set_hovered(item) {
             self.update_details_pane();
         }

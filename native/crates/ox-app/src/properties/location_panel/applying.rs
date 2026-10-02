@@ -14,9 +14,10 @@ use crate::integration::BraveDialog;
 use crate::window::BrowserWindow;
 
 /// The status after a change, before any file moves.
-const UPDATED: &str = "Location updated. Configuration backed up. No files moved.";
+const UPDATED: &str = crate::i18n::message_id("Location updated. Configuration backed up. No files moved.");
 /// The status after every offered item moved.
-const FILES_MOVED: &str = "Location updated. Configuration backed up. Files moved to the new location.";
+const FILES_MOVED: &str =
+    crate::i18n::message_id("Location updated. Configuration backed up. Files moved to the new location.");
 
 impl LocationPanel {
     /// Check location: validates the field's destination and, if it still
@@ -26,7 +27,10 @@ impl LocationPanel {
         check_button.set_sensitive(false);
         self.forget_check();
         let requested = self.field().text().to_string();
-        self.set_status("Checking the folder and write access…", Tone::Plain);
+        self.set_status(
+            &ox_core::i18n::gettext("Checking the folder and write access…"),
+            Tone::Plain,
+        );
         let folder = self.folder();
         let relocation = self.relocation();
         glib::spawn_future_local(glib::clone!(
@@ -48,7 +52,10 @@ impl LocationPanel {
 
     fn show_check(&self, requested: &str, checked: Result<CheckedLocation, RelocationError>) {
         if self.field().text() != requested {
-            self.set_status("The destination changed. Check it again.", Tone::Plain);
+            self.set_status(
+                &ox_core::i18n::gettext("The destination changed. Check it again."),
+                Tone::Plain,
+            );
             return;
         }
         match checked {
@@ -71,11 +78,17 @@ impl LocationPanel {
     /// Apply location: moves the folder to the checked destination.
     pub(super) fn apply_location(&self) {
         if !self.consent().is_active() {
-            self.set_status("Confirm the change using the checkbox first.", Tone::Plain);
+            self.set_status(
+                &ox_core::i18n::gettext("Confirm the change using the checkbox first."),
+                Tone::Plain,
+            );
             return;
         }
         if !self.is_field_checked() {
-            self.set_status("Check the destination first.", Tone::Plain);
+            self.set_status(
+                &ox_core::i18n::gettext("Check the destination first."),
+                Tone::Plain,
+            );
             return;
         }
         self.imp().is_applying.set(true);
@@ -111,7 +124,7 @@ impl LocationPanel {
         }
         self.consent().set_active(false);
         self.imp().checked.replace(None);
-        self.set_status(UPDATED, Tone::Valid);
+        self.set_status(ox_core::i18n::gettext_static(UPDATED), Tone::Valid);
         let Some(window) = self.root().and_downcast::<BrowserWindow>() else {
             return;
         };
@@ -163,8 +176,11 @@ impl LocationPanel {
 fn moved_status(result: &TransferResult, previous: &str) -> String {
     let is_complete = result.skipped.is_empty() && result.errors.is_empty() && !result.cancelled;
     if is_complete {
-        FILES_MOVED.to_owned()
+        ox_core::i18n::gettext_static(FILES_MOVED).to_owned()
     } else {
-        format!("Location updated. Configuration backed up. Some items stayed in {previous}.")
+        ox_core::i18n::format_message(
+            "Location updated. Configuration backed up. Some items stayed in {previous}.",
+            &[("previous", previous)],
+        )
     }
 }

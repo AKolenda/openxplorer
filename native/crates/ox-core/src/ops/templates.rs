@@ -6,8 +6,13 @@
 //! OPS-048 limits which files count as user templates: at most
 //! [`MAX_USER_TEMPLATES`] regular files of at most [`MAX_TEMPLATE_BYTES`]
 //! that are neither hidden, links nor `.desktop` launchers, listed without
-//! following links. `new_from_template` re-checks a chosen template against
-//! a fresh list and reads it under the same limits.
+//! following links. Subfolders of Templates that are neither hidden nor
+//! links are listed too, [`MAX_TEMPLATE_DEPTH`] deep, so the New menu can
+//! show them as submenus, as Nautilus does (OPS-003); a template inside
+//! one is known by its path below Templates, such as `Office/Letter.odt`.
+//! Each folder is listed in name order. `new_from_template` re-checks a
+//! chosen template against a fresh list and reads it under the same
+//! limits.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -24,6 +29,12 @@ pub const MAX_USER_TEMPLATES: usize = 100;
 
 /// The largest user template, in bytes (16 MiB).
 pub const MAX_TEMPLATE_BYTES: u64 = 16 * 1024 * 1024;
+
+/// How many folders deep below Templates templates are listed.
+pub const MAX_TEMPLATE_DEPTH: usize = 3;
+
+/// What separates the folders of a template's path below Templates.
+pub const TEMPLATE_PATH_SEPARATOR: char = '/';
 
 /// The attributes the Templates folder is listed with.
 const LISTING_ATTRIBUTES: &str =
@@ -75,12 +86,12 @@ impl BuiltinTemplate {
     /// The name New shows, for example `Text document`.
     pub fn label(self) -> &'static str {
         match self {
-            BuiltinTemplate::Text => "Text document",
-            BuiltinTemplate::Markdown => "Markdown document",
-            BuiltinTemplate::Csv => "CSV file",
-            BuiltinTemplate::Json => "JSON file",
-            BuiltinTemplate::Html => "HTML document",
-            BuiltinTemplate::Empty => "Empty file",
+            BuiltinTemplate::Text => crate::i18n::gettext_static("Text document"),
+            BuiltinTemplate::Markdown => crate::i18n::gettext_static("Markdown document"),
+            BuiltinTemplate::Csv => crate::i18n::gettext_static("CSV file"),
+            BuiltinTemplate::Json => crate::i18n::gettext_static("JSON file"),
+            BuiltinTemplate::Html => crate::i18n::gettext_static("HTML document"),
+            BuiltinTemplate::Empty => crate::i18n::gettext_static("Empty file"),
         }
     }
 
@@ -116,7 +127,8 @@ impl BuiltinTemplate {
 pub enum TemplateId {
     /// One of the built-in starters.
     Builtin(BuiltinTemplate),
-    /// A file in the Templates folder, by its file name.
+    /// A file in the Templates folder, by its path below it, folders
+    /// separated by [`TEMPLATE_PATH_SEPARATOR`].
     User(String),
 }
 
@@ -132,7 +144,11 @@ impl FromStr for TemplateId {
             .into_iter()
             .find(|template| template.id() == id)
             .map(TemplateId::Builtin)
-            .ok_or_else(|| OpsError::failed("Choose an available template or Empty file."))
+            .ok_or_else(|| {
+                OpsError::failed(crate::i18n::gettext(
+                    "Choose an available template or Empty file.",
+                ))
+            })
     }
 }
 
@@ -151,7 +167,8 @@ impl fmt::Display for TemplateId {
 pub struct Template {
     /// What New from template is asked to copy.
     pub id: TemplateId,
-    /// The name New shows: a starter's label or the template's file name.
+    /// The name New shows: a starter's label or the template's path below
+    /// the Templates folder.
     pub label: String,
     /// The file name the dialog suggests.
     pub suggested_name: String,
@@ -173,13 +190,26 @@ impl Template {
         }
     }
 
-    /// The entry for the user template `file_name`.
-    fn user(file_name: &str) -> Self {
+    /// The entry for the user template at `path` below Templates; the
+    /// file name is suggested for the new file.
+    fn user(path: &str) -> Self {
+        let file_name = path.rsplit(TEMPLATE_PATH_SEPARATOR).next().unwrap_or(path);
         Self {
-            id: TemplateId::User(file_name.to_owned()),
-            label: file_name.to_owned(),
+            id: TemplateId::User(path.to_owned()),
+            label: path.to_owned(),
             suggested_name: file_name.to_owned(),
         }
+    }
+
+    /// The folders of a user template's path below Templates, outermost
+    /// first; none for a starter or a template directly in Templates.
+    pub fn folders(&self) -> Vec<&str> {
+        let TemplateId::User(path) = &self.id else {
+            return Vec::new();
+        };
+        let mut parts: Vec<&str> = path.split(TEMPLATE_PATH_SEPARATOR).collect();
+        parts.pop();
+        parts
     }
 }
 
@@ -237,35 +267,78 @@ pub(crate) fn list_templates_blocking(
     })
 }
 
-/// OPS-048: the first [`MAX_USER_TEMPLATES`] files in `directory` that
-/// qualify as templates. Links are never followed, so a link cannot make a
-/// device, a FIFO or a file outside the folder a template. The listing is
-/// closed on success, cancellation and error alike.
+/// OPS-048: the first [`MAX_USER_TEMPLATES`] files in `directory` and its
+/// subfolders that qualify as templates. Links are never followed, so a
+/// link cannot make a device, a FIFO or a file outside the folder a
+/// template.
 fn user_templates(directory: &gio::File, cancel: &Cancellation) -> Result<Vec<Template>, OpsError> {
+    let mut templates = Vec::new();
+    add_templates(directory, "", 0, cancel, &mut templates)?;
+    Ok(templates)
+}
+
+/// Adds the templates of `directory`, whose path below Templates is
+/// `prefix`, in name order, its files before its subfolders' templates,
+/// until [`MAX_USER_TEMPLATES`] are listed.
+fn add_templates(
+    directory: &gio::File,
+    prefix: &str,
+    depth: usize,
+    cancel: &Cancellation,
+    templates: &mut Vec<Template>,
+) -> Result<(), OpsError> {
+    let mut entries = folder_entries(directory, cancel)?;
+    entries.sort_by_key(gio::FileInfo::name);
+    let mut subfolders = Vec::new();
+    for info in &entries {
+        if templates.len() >= MAX_USER_TEMPLATES {
+            return Ok(());
+        }
+        if let Some(file_name) = template_name(info) {
+            templates.push(Template::user(&format!("{prefix}{file_name}")));
+        } else if let Some(folder_name) = subfolder_name(info).filter(|_| depth < MAX_TEMPLATE_DEPTH) {
+            subfolders.push(folder_name);
+        }
+    }
+    for folder_name in subfolders {
+        let child = directory.child(&folder_name);
+        let prefix = format!("{prefix}{folder_name}{TEMPLATE_PATH_SEPARATOR}");
+        add_templates(&child, &prefix, depth + 1, cancel, templates)?;
+    }
+    Ok(())
+}
+
+/// Every entry of `directory`, listed without following links. The
+/// listing is closed on success, cancellation and error alike.
+fn folder_entries(directory: &gio::File, cancel: &Cancellation) -> Result<Vec<gio::FileInfo>, OpsError> {
     let listing = directory.enumerate_children(
         LISTING_ATTRIBUTES,
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         Some(cancel.cancellable()),
     )?;
-    let templates = read_templates(&listing, cancel);
+    let mut entries = Vec::new();
+    let read = loop {
+        if let Err(error) = cancel.check() {
+            break Err(error.into());
+        }
+        match listing.next_file(Some(cancel.cancellable())) {
+            Ok(Some(info)) => entries.push(info),
+            Ok(None) => break Ok(entries),
+            Err(error) => break Err(error.into()),
+        }
+    };
     // Closing only releases the listing; what was read stays valid.
     let _ = listing.close(gio::Cancellable::NONE);
-    templates
+    read
 }
 
-/// Reads qualifying templates from an open listing.
-fn read_templates(listing: &gio::FileEnumerator, cancel: &Cancellation) -> Result<Vec<Template>, OpsError> {
-    let mut templates = Vec::new();
-    while templates.len() < MAX_USER_TEMPLATES {
-        cancel.check()?;
-        let Some(info) = listing.next_file(Some(cancel.cancellable()))? else {
-            break;
-        };
-        if let Some(file_name) = template_name(&info) {
-            templates.push(Template::user(&file_name));
-        }
-    }
-    Ok(templates)
+/// The name of a subfolder whose templates are listed: a folder, not
+/// hidden and not a link, with a UTF-8 name.
+fn subfolder_name(info: &gio::FileInfo) -> Option<String> {
+    let is_folder = info.file_type() == gio::FileType::Directory && !info.is_symlink() && !info.is_hidden();
+    is_folder
+        .then(|| info.name().to_str().map(str::to_owned))
+        .flatten()
 }
 
 /// The file name of a qualifying template: a regular file, not hidden and

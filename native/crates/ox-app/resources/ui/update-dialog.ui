@@ -11,7 +11,7 @@
 <interface>
   <requires lib="gtk" version="4.14"/>
   <template class="OxUpdateDialog" parent="GtkWindow">
-    <property name="title">Software updates</property>
+    <property name="title" translatable="yes">Software updates</property>
     <property name="modal">true</property>
     <property name="resizable">false</property>
     <property name="destroy-with-parent">true</property>
@@ -46,8 +46,8 @@
                       <class name="dialog-content"/>
                     </style>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">Software updates</property>
+                      <object class="GtkLabel" id="i18n_1">
+                        <property name="label" translatable="yes">Software updates</property>
                         <property name="xalign">0</property>
                         <style>
                           <class name="dialog-title"/>
@@ -104,7 +104,7 @@
                     <property name="spacing">8</property>
                     <child>
                       <object class="GtkButton" id="close_button">
-                        <property name="label">Close</property>
+                        <property name="label" translatable="yes">Close</property>
                         <style>
                           <class name="bordered"/>
                           <class name="dialog-button"/>
@@ -113,7 +113,7 @@
                     </child>
                     <child>
                       <object class="GtkButton" id="check_button">
-                        <property name="label">Check again</property>
+                        <property name="label" translatable="yes">Check again</property>
                         <style>
                           <class name="bordered"/>
                           <class name="dialog-button"/>
@@ -122,7 +122,7 @@
                     </child>
                     <child>
                       <object class="GtkButton" id="install_button">
-                        <property name="label">Install update…</property>
+                        <property name="label" translatable="yes">Install update…</property>
                         <property name="visible">false</property>
                         <style>
                           <class name="accent"/>
@@ -132,7 +132,7 @@
                     </child>
                     <child>
                       <object class="GtkButton" id="restart_button">
-                        <property name="label">Restart now</property>
+                        <property name="label" translatable="yes">Restart now</property>
                         <property name="visible">false</property>
                         <style>
                           <class name="accent"/>

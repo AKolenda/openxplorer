@@ -20,25 +20,29 @@ use ox_core::format;
 use ox_core::transfer::Cancellation;
 
 use super::{archive_art, ArchiveTarget};
-use crate::dialog_layer::{quiet_text, DialogFrame, DialogWidth};
+use crate::dialog::{quiet_text, DialogFrame, DialogWidth};
 use crate::icons::{self, ArtImage, Icon};
 use crate::window::ButtonStyle;
 
 /// Under the heading: what the dialog is for.
-const BROWSE_MESSAGE: &str = "Browse without extracting the entire archive.";
+const BROWSE_MESSAGE: &str = crate::i18n::message_id("Browse without extracting the entire archive.");
 /// Above the list: what browsing does and does not do.
-const READ_ONLY_HELP: &str = "Read-only ZIP. Double-click a folder to browse it. Opening a supported file \
-                              creates only that file’s temporary copy; it does not update the ZIP.";
+const READ_ONLY_HELP: &str = crate::i18n::message_id(
+    "Read-only ZIP. Double-click a folder to browse it. Opening a supported file \
+                              creates only that file’s temporary copy; it does not update the ZIP.",
+);
 /// Shown while a folder of the archive is read.
-const READING: &str = "Reading ZIP directory…";
+const READING: &str = crate::i18n::message_id("Reading ZIP directory…");
 /// Shown for a folder without members.
-const EMPTY_FOLDER: &str = "This archive folder is empty.";
+const EMPTY_FOLDER: &str = crate::i18n::message_id("This archive folder is empty.");
 /// Shown for a member that cannot be opened as a copy.
-const NOT_OPENABLE: &str = "Use an archive manager for encrypted, large or unsupported members.";
+const NOT_OPENABLE: &str =
+    crate::i18n::message_id("Use an archive manager for encrypted, large or unsupported members.");
 /// Shown while a member is copied out.
-const OPENING: &str = "Opening a read-only temporary copy…";
+const OPENING: &str = crate::i18n::message_id("Opening a read-only temporary copy…");
 /// Shown once the copy opened.
-const OPENED: &str = "Opened a temporary copy. Changes are not saved back to the ZIP.";
+const OPENED: &str =
+    crate::i18n::message_id("Opened a temporary copy. Changes are not saved back to the ZIP.");
 /// The size of a row's picture (`fileIcon(item, 25)`).
 const ROW_ART_SIZE: i32 = 25;
 
@@ -63,19 +67,23 @@ pub(crate) fn archive_dialog(
     actions: ArchiveDialogActions,
 ) -> DialogFrame {
     let frame = DialogFrame::new(
-        &format!("{} — Compressed folder", archive.name),
+        &ox_core::i18n::format_message("{name} — Compressed folder", &[("name", &archive.name)]),
         DialogWidth::Archive,
     );
-    frame.set_message(BROWSE_MESSAGE);
+    frame.set_message(ox_core::i18n::gettext_static(BROWSE_MESSAGE));
     let view = ArchiveBrowserView::new(archive.clone(), browser, shown_path, actions.open_copy);
     frame.body().append(&view);
-    frame.add_closing_button("Extract all…", ButtonStyle::Bordered, actions.extract_all);
     frame.add_closing_button(
-        "Open in archive manager",
+        &ox_core::i18n::gettext("Extract all…"),
+        ButtonStyle::Bordered,
+        actions.extract_all,
+    );
+    frame.add_closing_button(
+        &ox_core::i18n::gettext("Open in archive manager"),
         ButtonStyle::Bordered,
         actions.open_externally,
     );
-    frame.add_closing_button("Close", ButtonStyle::Accent, || {});
+    frame.add_closing_button(&ox_core::i18n::gettext("Close"), ButtonStyle::Accent, || {});
     frame.connect_closed(glib::clone!(
         #[weak]
         view,
@@ -195,11 +203,13 @@ impl ArchiveBrowserView {
         imp.path_label.add_css_class("archive-path");
         toolbar.append(&imp.path_label);
         self.append(&toolbar);
-        self.append(&quiet_text(READ_ONLY_HELP));
+        self.append(&quiet_text(ox_core::i18n::gettext_static(READ_ONLY_HELP)));
         imp.list.add_css_class("archive-list");
         imp.list.set_selection_mode(gtk::SelectionMode::None);
         imp.list
-            .update_property(&[gtk::accessible::Property::Label("Archive contents")]);
+            .update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+                "Archive contents",
+            ))]);
         imp.list.connect_row_activated(glib::clone!(
             #[weak(rename_to = view)]
             self,
@@ -236,7 +246,8 @@ impl ArchiveBrowserView {
         imp.path_label.set_text(&path);
         imp.list.remove_all();
         imp.entries.borrow_mut().clear();
-        imp.list.append(&quiet_text(READING));
+        imp.list
+            .append(&quiet_text(ox_core::i18n::gettext_static(READING)));
         imp.status.set_text("");
         let cancel = self.restart_work();
         let browser = self.browser().clone();
@@ -289,7 +300,8 @@ impl ArchiveBrowserView {
             imp.list.append(&archive_row(entry));
         }
         if listing.entries.is_empty() {
-            imp.list.append(&quiet_text(EMPTY_FOLDER));
+            imp.list
+                .append(&quiet_text(ox_core::i18n::gettext_static(EMPTY_FOLDER)));
         }
         imp.status.set_text(&listing_notice(&listing));
         imp.entries.replace(listing.entries);
@@ -310,7 +322,10 @@ impl ArchiveBrowserView {
         match entry.kind {
             ArchiveEntryKind::Folder => self.show_folder(&entry.member),
             ArchiveEntryKind::File { .. } if entry.can_open => self.open_member(&entry.member),
-            ArchiveEntryKind::File { .. } => self.imp().status.set_text(NOT_OPENABLE),
+            ArchiveEntryKind::File { .. } => self
+                .imp()
+                .status
+                .set_text(ox_core::i18n::gettext_static(NOT_OPENABLE)),
         }
     }
 
@@ -323,7 +338,7 @@ impl ArchiveBrowserView {
     /// Copies `member` out privately and opens the copy.
     fn open_member(&self, member: &str) {
         let imp = self.imp();
-        imp.status.set_text(OPENING);
+        imp.status.set_text(ox_core::i18n::gettext_static(OPENING));
         let cancel = self.restart_work();
         let browser = self.browser().clone();
         let uri = self.archive().uri.clone();
@@ -336,7 +351,7 @@ impl ArchiveBrowserView {
                     Ok(copy) => {
                         let open_copy = view.imp().open_copy.get().expect("new sets the opener");
                         open_copy(copy.uri());
-                        view.imp().status.set_text(OPENED);
+                        view.imp().status.set_text(ox_core::i18n::gettext_static(OPENED));
                     }
                     Err(ArchiveError::Cancelled) => {}
                     Err(error) => view.imp().status.set_text(&error.to_string()),
@@ -409,9 +424,9 @@ impl ArchiveBrowserView {
 fn listing_notice(listing: &ArchiveListing) -> String {
     let mut notice = String::new();
     if listing.hidden_unsafe_count > 0 {
-        notice = format!(
-            "{} unsafe names or links are hidden.",
-            listing.hidden_unsafe_count
+        notice = ox_core::i18n::format_message(
+            "{hidden_unsafe_count} unsafe names or links are hidden.",
+            &[("hidden_unsafe_count", &listing.hidden_unsafe_count.to_string())],
         );
     }
     if listing.is_truncated {
@@ -433,10 +448,10 @@ fn parent_prefix(prefix: &str) -> String {
 fn up_button() -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     content.append(&icons::image(Icon::ArrowUp, 16));
-    content.append(&gtk::Label::new(Some("Up")));
+    content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Up"))));
     let button = gtk::Button::builder().child(&content).build();
     button.add_css_class(ButtonStyle::Bordered.css_class());
-    button.update_property(&[gtk::accessible::Property::Label("Up")]);
+    button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext("Up"))]);
     button
 }
 
@@ -452,7 +467,7 @@ fn archive_row(entry: &ArchiveEntry) -> gtk::ListBoxRow {
         .build();
     content.append(&name);
     let size = match entry.kind {
-        ArchiveEntryKind::Folder => "Folder".to_owned(),
+        ArchiveEntryKind::Folder => ox_core::i18n::gettext("Folder"),
         ArchiveEntryKind::File { size, .. } => format::pretty_bytes(size),
     };
     content.append(

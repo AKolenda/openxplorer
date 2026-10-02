@@ -24,7 +24,7 @@ use crate::window::BrowserWindow;
 
 /// The label of Delete in the Recycle Bin, whose items can only be
 /// deleted for good.
-const DELETE_PERMANENTLY: &str = "Delete permanently";
+const DELETE_PERMANENTLY: &str = crate::i18n::message_id("Delete permanently");
 
 /// The answers GIO gave, by folder.
 #[derive(Debug, Default)]
@@ -54,7 +54,7 @@ impl BrowserWindow {
     pub(crate) fn delete_label(&self) -> &'static str {
         let folder = self.current_uri().unwrap_or_default();
         if same_location(&folder, TRASH_URI) {
-            return DELETE_PERMANENTLY;
+            return ox_core::i18n::gettext_static(DELETE_PERMANENTLY);
         }
         let first_selected = self.folder_pane().model().selected_uris().into_iter().next();
         let scope = match first_selected {

@@ -11,7 +11,7 @@
 use ox_core::archive::{ArchiveError, CreatedArchive};
 
 /// The title of the dialog of a failed compression.
-pub(crate) const COMPRESSION_STOPPED: &str = "Compression stopped";
+pub(crate) const COMPRESSION_STOPPED: &str = crate::i18n::message_id("Compression stopped");
 
 /// How many names Compress tries before it gives up.
 const MAX_NAME_TRIES: u32 = 100;
@@ -37,19 +37,31 @@ fn file_stem(name: &str) -> &str {
 /// The text of "Compression stopped": the reason, then that nothing was
 /// replaced.
 pub(crate) fn compression_failure_text(error: &ArchiveError) -> String {
-    format!("{error}\n\nNo existing file was replaced.")
+    ox_core::i18n::format_message(
+        "{error}\n\nNo existing file was replaced.",
+        &[("error", &error.to_string())],
+    )
 }
 
 /// The toast after compressing: `Compressed 3 items into Photos.zip.`,
 /// and how many links or special files were left out.
 pub(crate) fn compression_success_text(archive: &CreatedArchive) -> String {
-    let compressed = format!("Compressed {} items into {}.", archive.item_count, archive.name);
+    let compressed = ox_core::i18n::format_message(
+        "Compressed {item_count} items into {name}.",
+        &[
+            ("item_count", &archive.item_count.to_string()),
+            ("name", &archive.name),
+        ],
+    );
     if archive.skipped_count == 0 {
         return compressed;
     }
-    format!(
-        "{compressed} {} links or special files were left out.",
-        archive.skipped_count
+    ox_core::i18n::format_message(
+        "{compressed} {skipped_count} links or special files were left out.",
+        &[
+            ("compressed", &compressed),
+            ("skipped_count", &archive.skipped_count.to_string()),
+        ],
     )
 }
 

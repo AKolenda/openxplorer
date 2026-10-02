@@ -92,9 +92,9 @@ impl StorageRules {
     /// to be stored here.
     pub(crate) fn check_file_size(&self, name: &str, size: u64) -> Result<(), TransferError> {
         match self.max_file_size {
-            Some(limit) if size > limit => Err(TransferError::failed(format!(
-                "{name} is too large for the destination file system, which only supports files \
-                 up to 4 GiB."
+            Some(limit) if size > limit => Err(TransferError::failed(crate::i18n::format_message(
+                "{name} is too large for the destination file system, which only supports files up to 4 GiB.",
+                &[("name", name)],
             ))),
             _ => Ok(()),
         }
@@ -141,7 +141,9 @@ impl Incoming<'_> {
     /// only renames, and items Skip will leave alone, need no space. An
     /// item that cannot be measured counts as empty: its copy reports the
     /// problem. `on_folder` is called before each folder is listed, so the
-    /// caller can show that a long walk is under way.
+    /// caller can show that a long walk is under way. Returns what the run
+    /// writes, when the destination's free space is known and so the
+    /// items were measured.
     ///
     /// # Errors
     ///
@@ -152,9 +154,9 @@ impl Incoming<'_> {
         uris: &[&str],
         cancel: &Cancellation,
         on_folder: &mut dyn FnMut(),
-    ) -> Result<(), TransferError> {
+    ) -> Result<Option<u64>, TransferError> {
         let Some(free) = self.filesystem.free else {
-            return Ok(());
+            return Ok(None);
         };
         let mut needed = 0_u64;
         for uri in uris {
@@ -166,15 +168,17 @@ impl Incoming<'_> {
             }
             needed = needed.saturating_add(tree_size(source.as_ref(), cancel, 0, on_folder)?);
             if needed > free {
-                return Err(TransferError::failed(format!(
-                    "Not enough free space on {}: {} needed, {} free.",
-                    self.folder.display_name(),
-                    pretty_bytes(needed),
-                    pretty_bytes(free)
+                return Err(TransferError::failed(crate::i18n::format_message(
+                    "Not enough free space on {destination}: {needed} needed, {free} free.",
+                    &[
+                        ("destination", &self.folder.display_name()),
+                        ("needed", &pretty_bytes(needed)),
+                        ("free", &pretty_bytes(free)),
+                    ],
                 )));
             }
         }
-        Ok(())
+        Ok(Some(needed))
     }
 
     /// True when the run will write `source`'s bytes into the folder. A

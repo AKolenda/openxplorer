@@ -21,12 +21,12 @@ use super::classify::FolderType;
 use crate::integration::MimeType;
 
 /// Label for an item whose content type is unknown or has no description.
-const UNKNOWN_TYPE: &str = "File";
+const UNKNOWN_TYPE: &str = crate::i18n::message_id("File");
 
 /// The Type column's name for ZIP archives, as Explorer and the preview
 /// listing call them, and as the ZIP browser's title reads
 /// (`"<name> — Compressed folder"` in `v2.0.0:desktop/ui/app.js`).
-const ZIP_LABEL: &str = "Compressed folder";
+const ZIP_LABEL: &str = crate::i18n::message_id("Compressed folder");
 
 /// Type column text: the label of `folder_type` for navigable items, then
 /// the interface's name for a common type, then GIO's description of
@@ -36,14 +36,14 @@ pub(super) fn type_label(folder_type: Option<FolderType>, content_type: Option<&
         return folder_type.label().to_owned();
     }
     let Some(content_type) = content_type.filter(|mime| !mime.is_empty()) else {
-        return UNKNOWN_TYPE.to_owned();
+        return crate::i18n::gettext(UNKNOWN_TYPE);
     };
     if let Some(label) = interface_label(content_type) {
         return label.to_owned();
     }
     let description = gio::content_type_get_description(content_type);
     if description.is_empty() {
-        UNKNOWN_TYPE.to_owned()
+        crate::i18n::gettext(UNKNOWN_TYPE)
     } else {
         description.into()
     }
@@ -54,22 +54,23 @@ pub(super) fn type_label(folder_type: Option<FolderType>, content_type: Option<&
 /// every other type.
 fn interface_label(content_type: &str) -> Option<&'static str> {
     if MimeType::from_name(content_type).is_some_and(MimeType::is_zip) {
-        return Some(ZIP_LABEL);
+        return Some(crate::i18n::gettext_static(ZIP_LABEL));
     }
-    let label =
-        match content_type {
-            "text/plain" => "Text document",
-            "application/msword"
-            | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => "Word document",
-            "application/vnd.ms-excel"
-            | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => "Excel worksheet",
-            "application/vnd.ms-powerpoint"
-            | "application/vnd.openxmlformats-officedocument.presentationml.presentation" => {
-                "PowerPoint presentation"
-            }
-            "video/mp4" => "MP4 video",
-            _ => return None,
-        };
+    let label = match content_type {
+        "text/plain" => crate::i18n::gettext_static("Text document"),
+        "application/msword" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => {
+            crate::i18n::gettext_static("Word document")
+        }
+        "application/vnd.ms-excel" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => {
+            crate::i18n::gettext_static("Excel worksheet")
+        }
+        "application/vnd.ms-powerpoint"
+        | "application/vnd.openxmlformats-officedocument.presentationml.presentation" => {
+            crate::i18n::gettext_static("PowerPoint presentation")
+        }
+        "video/mp4" => crate::i18n::gettext_static("MP4 video"),
+        _ => return None,
+    };
     Some(label)
 }
 

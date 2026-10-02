@@ -9,30 +9,38 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 
 use super::general_panel::glyph_button;
-use crate::dialog_layer::DialogFrame;
+use crate::dialog::DialogFrame;
 use crate::folder_view::CUSTOM_ICON;
 use crate::icons::Icon;
 
 /// The toasts after a change.
-const ICON_CHANGED: &str = "Icon changed.";
-const ICON_RESTORED: &str = "Default icon restored.";
+const ICON_CHANGED: &str = crate::i18n::message_id("Icon changed.");
+const ICON_RESTORED: &str = crate::i18n::message_id("Default icon restored.");
 
 /// Change icon…, and Restore default icon when `has_custom_icon`, for the
 /// local item at `uri`.
 pub(super) fn icon_buttons(row: &gtk::Box, uri: &str, has_custom_icon: bool) {
-    let change = glyph_button("Change icon…", Icon::Image);
+    let change = glyph_button(ox_core::i18n::gettext_static("Change icon…"), Icon::Image);
     let target = uri.to_owned();
     change.connect_clicked(move |button| choose_icon(button, &target));
     row.append(&change);
     if has_custom_icon {
-        let restore = glyph_button("Restore default icon", Icon::ArrowReset);
+        let restore = glyph_button(
+            ox_core::i18n::gettext_static("Restore default icon"),
+            Icon::ArrowReset,
+        );
         let target = uri.to_owned();
         restore.connect_clicked(move |button| {
             let button = button.clone();
             let target = target.clone();
             glib::spawn_future_local(async move {
                 let result = set_custom_icon(&target, None).await;
-                report(&button, &target, result, ICON_RESTORED);
+                report(
+                    &button,
+                    &target,
+                    result,
+                    ox_core::i18n::gettext_static(ICON_RESTORED),
+                );
             });
         });
         row.append(&restore);
@@ -47,7 +55,7 @@ fn choose_icon(button: &gtk::Button, uri: &str) {
     let filters = gio::ListStore::new::<gtk::FileFilter>();
     filters.append(&images);
     let dialog = gtk::FileDialog::builder()
-        .title("Choose an icon")
+        .title(ox_core::i18n::gettext("Choose an icon"))
         .modal(true)
         .filters(&filters)
         .build();
@@ -59,7 +67,7 @@ fn choose_icon(button: &gtk::Button, uri: &str) {
             return;
         };
         let result = set_custom_icon(&uri, Some(chosen.uri().to_string())).await;
-        report(&button, &uri, result, ICON_CHANGED);
+        report(&button, &uri, result, ox_core::i18n::gettext_static(ICON_CHANGED));
     });
 }
 

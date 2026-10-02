@@ -10,8 +10,9 @@
 
 use super::labels::{bookmark_fallback_label, pin_fallback_label};
 use super::model::{Bookmark, RecentEntry, SettingsData, MAX_BOOKMARKS, MAX_ORDER, MAX_RECENT};
+use super::stored_location::{normalise, require_share};
 use super::SettingsError;
-use crate::location::{normalise, require_share, safe_label};
+use crate::location::safe_label;
 
 /// Whether [`Settings::bookmark`](super::Settings::bookmark) adds or
 /// removes the location.
@@ -137,8 +138,9 @@ pub(super) fn pin_many(
     quick_order: Option<&[String]>,
 ) -> Result<Vec<Bookmark>, SettingsError> {
     if items.is_empty() || items.len() > MAX_BOOKMARKS {
-        return Err(SettingsError::invalid(format!(
-            "Drag between 1 and {MAX_BOOKMARKS} folders at a time."
+        return Err(SettingsError::invalid(crate::i18n::format_message(
+            "Drag between 1 and {MAX_BOOKMARKS} folders at a time.",
+            &[("MAX_BOOKMARKS", &MAX_BOOKMARKS.to_string())],
         )));
     }
     let dragged = clean_pins(items)?;
@@ -175,7 +177,9 @@ fn clean_pins(items: &[BookmarkRequest]) -> Result<Vec<Bookmark>, SettingsError>
 /// The sidebar order as shown, normalised and without duplicates.
 fn clean_order(shown: &[String]) -> Result<Vec<String>, SettingsError> {
     if shown.len() > MAX_ORDER {
-        return Err(SettingsError::invalid("Invalid sidebar order."));
+        return Err(SettingsError::invalid(crate::i18n::gettext(
+            "Invalid sidebar order.",
+        )));
     }
     let mut order = Vec::with_capacity(shown.len());
     for uri in shown {
@@ -194,8 +198,9 @@ fn merge_pins(saved: &[Bookmark], dragged: &[Bookmark]) -> Result<Vec<Bookmark>,
         }
     }
     if pins.len() > MAX_BOOKMARKS {
-        return Err(SettingsError::invalid(format!(
-            "Quick access supports up to {MAX_BOOKMARKS} custom pins."
+        return Err(SettingsError::invalid(crate::i18n::format_message(
+            "Quick access supports up to {MAX_BOOKMARKS} custom pins.",
+            &[("MAX_BOOKMARKS", &MAX_BOOKMARKS.to_string())],
         )));
     }
     Ok(pins)
@@ -261,6 +266,15 @@ pub(super) fn remember_open(settings: &mut SettingsData, entry: RecentEntry) -> 
     settings.recent.insert(0, stored);
     settings.recent.truncate(MAX_RECENT);
     Ok(())
+}
+
+/// Forgets the recent files opened before `opened_before`, and those
+/// with no time of opening; `None` forgets them all (SAFE-022). True when
+/// any were forgotten.
+pub(super) fn forget_recent(settings: &mut SettingsData, opened_before: Option<u64>) -> bool {
+    let before = settings.recent.len();
+    settings.recent.retain(|recent| recent.is_kept_by(opened_before));
+    settings.recent.len() != before
 }
 
 #[cfg(test)]
@@ -458,6 +472,7 @@ mod tests {
                 is_dir: true,
                 size: i,
                 modified: 1,
+                opened: None,
             };
             remember_open(&mut settings, entry).unwrap();
         }

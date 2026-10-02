@@ -15,7 +15,7 @@
 <interface>
   <requires lib="gtk" version="4.14"/>
   <template class="OxBrowserWindow" parent="GtkApplicationWindow">
-    <property name="title">OpenXplorer</property>
+    <property name="title" translatable="yes">OpenXplorer</property>
     <!-- set_default_size(1320, 810) in v2.0.0:desktop/winspace.py. -->
     <property name="default-width">1320</property>
     <property name="default-height">810</property>
@@ -49,13 +49,13 @@
             </child>
             <child>
               <object class="GtkButton" id="new_tab_button">
-                <property name="tooltip-text">New tab (Ctrl+T)</property>
+                <property name="tooltip-text" translatable="yes">New tab (Ctrl+T)</property>
                 <property name="valign">end</property>
                 <style>
                   <class name="newtab"/>
                 </style>
                 <accessibility>
-                  <property name="label">New tab</property>
+                  <property name="label" translatable="yes">New tab</property>
                 </accessibility>
               </object>
             </child>
@@ -72,13 +72,13 @@
             <child>
               <!-- #windows-button: the open windows, New window and Quit. -->
               <object class="GtkMenuButton" id="open_windows_button">
-                <property name="tooltip-text">Open windows</property>
+                <property name="tooltip-text" translatable="yes">Open windows</property>
                 <property name="valign">center</property>
                 <style>
                   <class name="windows-button"/>
                 </style>
                 <accessibility>
-                  <property name="label">Open windows</property>
+                  <property name="label" translatable="yes">Open windows</property>
                 </accessibility>
               </object>
             </child>
@@ -103,7 +103,7 @@
               <class name="navigation"/>
             </style>
             <accessibility>
-              <property name="label">Navigation</property>
+              <property name="label" translatable="yes">Navigation</property>
             </accessibility>
             <child>
               <!-- .nav-buttons: Back, Forward, Up and Refresh, added from
@@ -182,10 +182,68 @@
                                        and the details pane (`.transfer`). -->
                                   <object class="GtkOverlay">
                                     <property name="child">
-                                      <object class="OxFolderPane" id="folder_pane"/>
+                                      <!-- The folder pane, and a second one
+                                           beside it while the tab is split
+                                           (VIEW-059, split_view.rs). -->
+                                      <object class="GtkPaned" id="pane_split">
+                                        <style>
+                                          <class name="pane-split"/>
+                                        </style>
+                                        <property name="shrink-start-child">false</property>
+                                        <property name="shrink-end-child">false</property>
+                                        <property name="start-child">
+                                          <object class="GtkBox" id="start_pane_column">
+                                            <property name="orientation">vertical</property>
+                                            <child>
+                                              <object class="GtkLabel" id="start_pane_caption">
+                                                <property name="visible">false</property>
+                                                <property name="xalign">0</property>
+                                                <property name="ellipsize">middle</property>
+                                                <style>
+                                                  <class name="pane-caption"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="OxFolderPane" id="folder_pane">
+                                                <style>
+                                                  <class name="folder-pane-host"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </property>
+                                        <property name="end-child">
+                                          <object class="GtkBox" id="end_pane_column">
+                                            <property name="orientation">vertical</property>
+                                            <property name="visible">false</property>
+                                            <child>
+                                              <object class="GtkLabel" id="end_pane_caption">
+                                                <property name="xalign">0</property>
+                                                <property name="ellipsize">middle</property>
+                                                <style>
+                                                  <class name="pane-caption"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="OxFolderPane" id="split_pane">
+                                                <style>
+                                                  <class name="folder-pane-host"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </property>
+                                      </object>
                                     </property>
                                     <child type="overlay">
-                                      <object class="OxTransferPanel" id="transfer_panel"/>
+                                      <object class="GtkBox" id="transfer_panels">
+                                        <property name="orientation">vertical</property>
+                                        <property name="valign">end</property>
+                                        <property name="spacing">4</property>
+                                        <child><object class="OxTransferPanel" id="transfer_panel"/></child>
+                                      </object>
                                     </child>
                                   </object>
                                 </child>

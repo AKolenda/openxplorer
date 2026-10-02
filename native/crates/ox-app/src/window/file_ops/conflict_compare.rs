@@ -38,11 +38,18 @@ impl Side {
     /// "Folder", or the file's size, then its date.
     fn text(self) -> String {
         let kind = if self.is_folder {
-            "Folder".to_owned()
+            ox_core::i18n::gettext("Folder")
         } else {
-            self.size.map_or_else(|| "File".to_owned(), pretty_bytes)
+            self.size
+                .map_or_else(|| ox_core::i18n::gettext("File"), pretty_bytes)
         };
-        format!("{kind} · Modified {}", date_time_text(self.modified))
+        ox_core::i18n::format_message(
+            "{kind} · Modified {date_time_text}",
+            &[
+                ("kind", &kind),
+                ("date_time_text", &date_time_text(self.modified)),
+            ],
+        )
     }
 }
 
@@ -62,17 +69,19 @@ impl Comparison {
     /// The dialog's lines: each side, then how they differ.
     pub(super) fn lines(&self) -> Vec<String> {
         let mut lines = vec![
-            format!("Incoming: {}", self.incoming.text()),
-            format!("Existing: {}", self.existing.text()),
+            ox_core::i18n::format_message("Incoming: {text}", &[("text", &self.incoming.text())]),
+            ox_core::i18n::format_message("Existing: {text}", &[("text", &self.existing.text())]),
         ];
         let verdict = if self.same_item {
-            Some("This is the item itself, so it cannot replace itself.")
+            Some(ox_core::i18n::gettext_static(
+                "This is the item itself, so it cannot replace itself.",
+            ))
         } else if self.identical {
-            Some("The two files are identical.")
+            Some(ox_core::i18n::gettext_static("The two files are identical."))
         } else if self.existing_is_older() {
-            Some("The existing item is older.")
+            Some(ox_core::i18n::gettext_static("The existing item is older."))
         } else if self.existing.modified > self.incoming.modified {
-            Some("The existing item is newer.")
+            Some(ox_core::i18n::gettext_static("The existing item is newer."))
         } else {
             None
         };

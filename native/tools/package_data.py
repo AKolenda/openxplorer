@@ -23,6 +23,9 @@ import subprocess
 import sys
 from typing import Any
 
+import i18n
+import package_i18n
+
 REPOSITORY = Path(__file__).resolve().parents[2]
 NATIVE = REPOSITORY / 'native'
 PACKAGING_DATA = NATIVE / 'packaging' / 'data'
@@ -215,6 +218,7 @@ def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
     staging = Staging(request.staging)
     install_program(staging, request.program, paths)
     install_desktop_data(staging, request.channel, paths)
+    install_translations(staging, paths.share)
     install_licences(staging, paths.licences)
     install_crate_licences(staging, paths.licences / 'rust-crates', crates)
     if paths.mount_helper is not None:
@@ -235,10 +239,11 @@ def install_desktop_data(staging: Staging, channel: Channel, paths: InstalledPat
     """Install the desktop entry, metainfo, launcher icon and D-Bus service file."""
     app_id = channel.app_id
     share = paths.share
-    staging.copy(PACKAGING_DATA / f'{app_id}.desktop',
-                 share / 'applications' / f'{app_id}.desktop', DATA_MODE)
-    staging.copy(PACKAGING_DATA / f'{app_id}.metainfo.xml',
-                 share / 'metainfo' / f'{app_id}.metainfo.xml', DATA_MODE)
+    catalogues = {po.stem: dict(i18n.parse_po(po.read_text(encoding='utf-8')))
+                  for po in sorted(i18n.PO_FOLDER.glob('*.po'))}
+    for suffix, folder in (('.desktop', 'applications'), ('.metainfo.xml', 'metainfo')):
+        metadata = package_i18n.translate(PACKAGING_DATA / f'{app_id}{suffix}', catalogues)
+        staging.write(metadata, share / folder / f'{app_id}{suffix}', DATA_MODE)
     staging.copy(APP_ICON, share / 'icons/hicolor/scalable/apps' / f'{app_id}.svg', DATA_MODE)
     service = build_service_file(app_id, paths.command)
     staging.write(service, share / 'dbus-1/services' / f'{app_id}.service', DATA_MODE)
@@ -262,6 +267,16 @@ def build_portal_file(app_id: str) -> str:
     """Return the portal backend file naming app_id's bus name."""
     template = PORTAL_TEMPLATE.read_text(encoding='utf-8')
     return template.replace('@APP_ID@', app_id)
+
+
+def install_translations(staging: Staging, share: PurePosixPath) -> None:
+    """Install each translation in native/po compiled, where ox_core::i18n looks for it."""
+    for po in sorted(i18n.PO_FOLDER.glob('*.po')):
+        catalogue = share / 'locale' / po.stem / 'LC_MESSAGES' / f'{i18n.DOMAIN}.mo'
+        target = staging.path_of(catalogue)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(i18n.mo_bytes(i18n.parse_po(po.read_text(encoding='utf-8'))))
+        target.chmod(DATA_MODE)
 
 
 def build_service_file(app_id: str, command: PurePosixPath) -> str:

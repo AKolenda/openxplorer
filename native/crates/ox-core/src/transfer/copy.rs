@@ -28,7 +28,7 @@ use super::modes::{path_for_unix_modes, secure_local_staging, DirectoryModes, PR
 use super::names::child_node;
 use super::node::{Node, NodeInfo, NodeKind};
 use super::source_removal::CopiedItem;
-use super::types::{progress_fraction, Progress, ProgressScope};
+use super::types::{progress_fraction, ByteProgress, Progress, ProgressScope};
 use super::unstorable::{Fix, Unstorable};
 
 /// Copies one source tree into staging, reporting byte progress.
@@ -102,9 +102,9 @@ impl<'a> Copier<'a> {
         // alias of a folder inside the source that `guard_destination`
         // could not prove.
         if source.name() == self.own_stage_name {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "The destination resolves inside the source through an alias. Copy stopped.",
-            ));
+            )));
         }
         Ok(())
     }
@@ -127,9 +127,9 @@ impl<'a> Copier<'a> {
             }
             NodeKind::Symlink => self.copy_file(source, target)?,
             NodeKind::Special => {
-                return Err(TransferError::failed(
+                return Err(TransferError::failed(crate::i18n::gettext(
                     "Sockets, devices and other special files are not copied.",
-                ));
+                )));
             }
         }
         Ok(())
@@ -197,11 +197,13 @@ impl<'a> Copier<'a> {
     }
 
     /// Copies one file, or one link as a link, reporting its byte progress.
+    /// While the user pauses, the copy waits between blocks (OPS-021).
     fn copy_file(&mut self, source: &dyn Node, target: &dyn Node) -> Result<(), TransferError> {
         let name = source.display_name();
         let cancel = self.cancel;
         let emit = &mut *self.emit;
         let mut progress = |current: u64, total: u64| {
+            cancel.wait_while_paused();
             // Nothing more is reported once the user cancelled.
             if cancel.is_cancelled() {
                 return;
@@ -210,8 +212,18 @@ impl<'a> Copier<'a> {
                 label: copy_label(&name, current, total),
                 fraction: progress_fraction(current, total),
                 scope: ProgressScope::File,
+                bytes: Some(ByteProgress {
+                    file_written: current,
+                    file_size: total,
+                    // The engine fills in what the batch writes.
+                    batch_size: None,
+                    batch_written: 0,
+                }),
             });
         };
+        // An explicit boundary lets the engine accumulate bytes even when
+        // adjacent files have the same size. It is throttled after accounting.
+        progress(0, 0);
         source.copy_file(target, cancel, &mut progress)
     }
 }

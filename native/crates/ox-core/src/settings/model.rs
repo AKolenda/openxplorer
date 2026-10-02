@@ -56,9 +56,21 @@ pub struct RecentEntry {
     pub size: u64,
     /// Modification time, seconds since the Unix epoch.
     pub modified: u64,
+    /// When the file was opened, seconds since the Unix epoch, so the
+    /// desktop's "retain history" limit can forget it (SAFE-022). Entries
+    /// the Python app wrote have none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opened: Option<u64>,
 }
 
 impl RecentEntry {
+    /// Whether forgetting the files opened before `opened_before` keeps
+    /// this one: only a file opened since then is kept, and `None` keeps
+    /// none (SAFE-022).
+    pub fn is_kept_by(&self, opened_before: Option<u64>) -> bool {
+        opened_before.is_some_and(|cutoff| self.opened.is_some_and(|opened| opened >= cutoff))
+    }
+
     /// This entry as `settings.json` keeps it.
     ///
     /// Safety rule "recent entries are bounded" (SAFE-018; the slicing in
@@ -187,6 +199,7 @@ mod tests {
             is_dir: true,
             size: 7,
             modified: 9,
+            opened: None,
         };
 
         let stored = opened.clone().into_stored();

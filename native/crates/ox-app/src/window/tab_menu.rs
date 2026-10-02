@@ -21,31 +21,42 @@ pub(super) fn tab_menu(id: TabId, uri: &str, is_only_tab: bool) -> Vec<MenuEntry
     let tab = id.to_variant();
     vec![
         MenuItem::with_target(
-            "Move tab to new window",
+            &ox_core::i18n::gettext("Move tab to new window"),
             Icon::Share,
             WindowAction::MoveTabToNewWindow,
             tab.clone(),
         )
         .into(),
         MenuItem::with_target(
-            "Move tab to window…",
+            &ox_core::i18n::gettext("Move tab to window…"),
             Icon::Desktop,
             WindowAction::MoveTabToWindow,
             tab.clone(),
         )
         .into(),
-        MenuItem::with_text_target("Duplicate tab", Icon::Copy, WindowAction::OpenTab, uri).into(),
-        MenuItem::new("Open windows…", Icon::Desktop, WindowAction::OpenWindows).into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Duplicate tab"),
+            Icon::Copy,
+            WindowAction::OpenTab,
+            uri,
+        )
+        .into(),
+        MenuItem::new(
+            &ox_core::i18n::gettext("Open windows…"),
+            Icon::Desktop,
+            WindowAction::OpenWindows,
+        )
+        .into(),
         MenuEntry::Divider,
         MenuItem::with_target(
-            "Close tab",
+            &ox_core::i18n::gettext("Close tab"),
             Icon::Dismiss,
             WindowAction::CloseTabById,
             tab.clone(),
         )
         .into(),
         MenuItem::with_target(
-            "Close other tabs",
+            &ox_core::i18n::gettext("Close other tabs"),
             Icon::Dismiss,
             WindowAction::CloseOtherTabs,
             tab,

@@ -103,7 +103,7 @@ impl ClipboardMode {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ClipboardError {
     /// The selection is empty or has more than [`MAX_ITEMS`] items.
-    #[error("Copy or cut between 1 and {max} items at a time.", max = MAX_ITEMS)]
+    #[error("{}", crate::i18n::format_message("Copy or cut between 1 and {max} items at a time.", &[("max", &MAX_ITEMS.to_string())]))]
     ItemCount,
     /// An item is not a file or folder that can be copied: a share or
     /// device root, a foreign scheme or an address with credentials.

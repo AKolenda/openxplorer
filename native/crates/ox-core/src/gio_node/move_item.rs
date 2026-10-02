@@ -68,9 +68,9 @@ impl GioNode {
         }
         // XFER-026: the engine replaces through reversible renames instead.
         if overwrite == Overwrite::Replace {
-            return Err(TransferError::ReplaceUnsupported(
-                "This device cannot replace an item in one step.".into(),
-            ));
+            return Err(TransferError::ReplaceUnsupported(crate::i18n::gettext(
+                "This device cannot replace an item in one step.",
+            )));
         }
         self.move_on_device(target, &target_file, cancel)
     }
@@ -88,10 +88,10 @@ impl GioNode {
         }
         // GVfs would report success and keep the old name.
         if self.name() != target.name() {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "This device can move an item to another folder or rename it, \
                  but not both in one step. Nothing was changed.",
-            ));
+            )));
         }
         self.move_with_gio(target_file, cancel, Overwrite::Never)
     }
@@ -170,9 +170,9 @@ impl GioNode {
         // converted name.
         let target_name = target.name();
         let Some(new_name) = target_name.to_str() else {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "This device only accepts names that are valid UTF-8. Nothing was changed.",
-            ));
+            )));
         };
         match self.file.set_display_name(new_name, gio_cancellable(cancel)) {
             Ok(_) => Ok(()),
@@ -219,7 +219,9 @@ fn move_error(error: glib::Error, overwrite: Overwrite) -> TransferError {
     );
     let exists = code == Some(gio::IOErrorEnum::Exists);
     if overwrite == Overwrite::Replace && (unsupported || exists) {
-        return TransferError::ReplaceUnsupported("The backend does not support direct overwrite.".into());
+        return TransferError::ReplaceUnsupported(crate::i18n::gettext(
+            "The backend does not support direct overwrite.",
+        ));
     }
     if unsupported {
         return native_move_unsupported();

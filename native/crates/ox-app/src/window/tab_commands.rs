@@ -127,7 +127,7 @@ impl BrowserWindow {
     fn close_other_tabs(&self, keep: TabId) {
         let others: Vec<TabId> = {
             let session = self.imp().session.borrow();
-            if session.tab(keep).is_none() {
+            if !session.tabs().iter().any(|tab| tab.id == keep) {
                 return;
             }
             session

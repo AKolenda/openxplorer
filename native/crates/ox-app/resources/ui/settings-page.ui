@@ -19,11 +19,11 @@
           <class name="settings-navigation"/>
         </style>
         <accessibility>
-          <property name="label">Settings categories</property>
+          <property name="label" translatable="yes">Settings categories</property>
         </accessibility>
         <child>
           <object class="GtkLabel" id="heading">
-            <property name="label">Settings</property>
+            <property name="label" translatable="yes">Settings</property>
             <property name="xalign">0</property>
             <property name="accessible-role">heading</property>
             <style>
@@ -42,12 +42,12 @@
         </child>
         <child>
           <object class="GtkSearchEntry" id="search_entry">
-            <property name="placeholder-text">Search settings</property>
+            <property name="placeholder-text" translatable="yes">Search settings</property>
             <style>
               <class name="settings-search"/>
             </style>
             <accessibility>
-              <property name="label">Search settings</property>
+              <property name="label" translatable="yes">Search settings</property>
             </accessibility>
           </object>
         </child>
@@ -68,7 +68,7 @@
               <class name="settings-categories"/>
             </style>
             <accessibility>
-              <property name="label">Settings categories</property>
+              <property name="label" translatable="yes">Settings categories</property>
             </accessibility>
           </object>
         </child>
@@ -80,7 +80,7 @@
         <child>
           <object class="GtkButton" id="back_button">
             <property name="halign">start</property>
-            <property name="tooltip-text">Close Settings and return to your folders</property>
+            <property name="tooltip-text" translatable="yes">Close Settings and return to your folders</property>
             <style>
               <class name="settings-back"/>
             </style>
@@ -96,14 +96,14 @@
                   </object>
                 </child>
                 <child>
-                  <object class="GtkLabel">
-                    <property name="label">Back to files</property>
+                  <object class="GtkLabel" id="i18n_1">
+                    <property name="label" translatable="yes">Back to files</property>
                   </object>
                 </child>
               </object>
             </child>
             <accessibility>
-              <property name="label">Back to files</property>
+              <property name="label" translatable="yes">Back to files</property>
             </accessibility>
           </object>
         </child>

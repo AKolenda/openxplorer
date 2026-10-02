@@ -295,6 +295,7 @@ impl ZipCompressor {
             label,
             fraction,
             scope: ProgressScope::Batch,
+            bytes: None,
         });
     }
 }

@@ -46,10 +46,10 @@ const ROOT_WINDOW_DROP: &str = "application/x-rootwindow-drop";
 const TEAR_OUT_GAP: f64 = 40.0;
 
 /// The note over the folder pane while a release would tear the tab out.
-const TEAR_OUT_HINT: &str = "Release to open this tab in a new window";
+const TEAR_OUT_HINT: &str = crate::i18n::message_id("Release to open this tab in a new window");
 
 /// Why a tab that is being dragged does not close or navigate.
-const TAB_IS_MOVING: &str = "Wait for this tab to finish moving.";
+const TAB_IS_MOVING: &str = crate::i18n::message_id("Wait for this tab to finish moving.");
 
 /// The tab a drag carries: the window it comes from and its id there.
 #[derive(Debug, Clone, glib::Boxed)]
@@ -132,7 +132,7 @@ impl BrowserWindow {
             .as_ref()
             .is_some_and(|outgoing| outgoing.tab == id);
         if is_moving {
-            self.show_message(TAB_IS_MOVING);
+            self.show_message(ox_core::i18n::gettext_static(TAB_IS_MOVING));
         }
         is_moving
     }

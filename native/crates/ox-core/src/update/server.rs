@@ -29,16 +29,19 @@ pub trait ReleaseServer: Send + Sync {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum FetchError {
     /// The server answered with this HTTP status, after redirects.
-    #[error("HTTP {0}")]
+    #[error("{}", crate::i18n::format_message("HTTP {status}", &[("status", &.0.to_string())]))]
     Status(u32),
     /// No connection, a timeout, or a broken transfer.
-    #[error("the update server could not be reached")]
+    #[error("{}", crate::i18n::gettext("the update server could not be reached"))]
     Unreachable,
     /// A redirect led outside the trusted hosts.
-    #[error("the update server redirected to an untrusted location")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("the update server redirected to an untrusted location")
+    )]
     Untrusted,
     /// The fetch was cancelled.
-    #[error("the fetch was cancelled")]
+    #[error("{}", crate::i18n::gettext("the fetch was cancelled"))]
     Cancelled,
 }
 

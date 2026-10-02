@@ -39,18 +39,33 @@ impl KeptItems {
     /// What the user is told about the kept items of the source at
     /// `location`, or `None` when nothing was kept.
     pub(crate) fn notice(&self, location: &str) -> Option<String> {
-        let parts: Vec<String> = [
-            (self.changed, "changed during the move"),
-            (self.appeared, "appeared in the source during the move"),
-        ]
-        .into_iter()
-        .filter(|(count, _)| *count > 0)
-        .map(|(count, what)| match count {
-            1 => format!("1 item {what} and was"),
-            count => format!("{count} items {what} and were"),
+        let mut parts = Vec::new();
+        if self.changed > 0 {
+            parts.push(
+                crate::i18n::ngettext(
+                    "1 item changed during the move and was",
+                    "{count} items changed during the move and were",
+                    self.changed as u64,
+                )
+                .replace("{count}", &self.changed.to_string()),
+            );
+        }
+        if self.appeared > 0 {
+            parts.push(
+                crate::i18n::ngettext(
+                    "1 item appeared in the source during the move and was",
+                    "{count} items appeared in the source during the move and were",
+                    self.appeared as u64,
+                )
+                .replace("{count}", &self.appeared.to_string()),
+            );
+        }
+        (!parts.is_empty()).then(|| {
+            crate::i18n::format_message(
+                "{items} kept at {location}.",
+                &[("items", &parts.join("; ")), ("location", location)],
+            )
         })
-        .collect();
-        (!parts.is_empty()).then(|| format!("{} kept at {location}.", parts.join("; ")))
     }
 }
 

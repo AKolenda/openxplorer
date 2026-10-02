@@ -21,27 +21,31 @@ pub enum VersionsError {
     #[error(transparent)]
     Location(#[from] LocationError),
     /// The location is inside a snapshot or backup folder (PROP-024).
-    #[error(
-        "Previous-version locations are read-only in OpenXplorer. Restore a copy to a different folder first."
-    )]
+    #[error("{}", crate::i18n::gettext("Previous-version locations are read-only in OpenXplorer. Restore a copy to a different folder first."))]
     ReadOnly,
     /// "Restore a copy" was given a destination inside a snapshot or backup
     /// folder (PROP-025).
-    #[error("Choose a folder outside the snapshot collection.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Choose a folder outside the snapshot collection.")
+    )]
     RestoreIntoSnapshot,
     /// A snapshot layout other than `direct` or `snapper`.
-    #[error("Unknown snapshot folder layout.")]
+    #[error("{}", crate::i18n::gettext("Unknown snapshot folder layout."))]
     UnknownLayout,
     /// The snapshot folder is the live folder or contains it, so the live
     /// folder would become read-only.
-    #[error("The snapshot folder must not contain the current live folder.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The snapshot folder must not contain the current live folder.")
+    )]
     SnapshotFolderContainsLiveFolder,
     /// Saving another source would exceed
     /// [`MAX_SOURCES`](super::MAX_SOURCES).
-    #[error("At most 64 snapshot sources are supported.")]
+    #[error("{}", crate::i18n::gettext("At most 64 snapshot sources are supported."))]
     TooManySources,
     /// The user cancelled the lookup; not an error to show.
-    #[error("Operation cancelled.")]
+    #[error("{}", crate::i18n::gettext("Operation cancelled."))]
     Cancelled,
     /// Private storage refused `path` while saving the snapshot sources.
     #[error("{reason} ({})", path.display())]

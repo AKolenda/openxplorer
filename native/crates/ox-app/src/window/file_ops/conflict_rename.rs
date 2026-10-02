@@ -74,10 +74,15 @@ pub(super) async fn checked_new_name(
     validate_name(name).map_err(|error| error.to_string())?;
     let own_name = gio::File::for_uri(uri).basename();
     if own_name.is_some_and(|own| own.as_os_str() == name) {
-        return Err("Enter a name that differs from the item's own name.".to_owned());
+        return Err(ox_core::i18n::gettext(
+            "Enter a name that differs from the item's own name.",
+        ));
     }
     if is_taken(&gio::File::for_uri(destination_folder), name).await {
-        return Err(format!("“{name}” already exists here too. Enter another name."));
+        return Err(ox_core::i18n::format_message(
+            "“{name}” already exists here too. Enter another name.",
+            &[("name", name)],
+        ));
     }
     Ok(name.to_owned())
 }

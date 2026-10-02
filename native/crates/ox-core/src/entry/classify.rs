@@ -29,9 +29,9 @@ impl FolderType {
     /// The Type column text, in the Python app's wording.
     pub(super) fn label(self) -> &'static str {
         match self {
-            Self::FileFolder => "File folder",
-            Self::NetworkShare => "Network share",
-            Self::NetworkLocation => "Network location",
+            Self::FileFolder => crate::i18n::gettext_static("File folder"),
+            Self::NetworkShare => crate::i18n::gettext_static("Network share"),
+            Self::NetworkLocation => crate::i18n::gettext_static("Network location"),
         }
     }
 }

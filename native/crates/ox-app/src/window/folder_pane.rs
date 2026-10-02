@@ -20,7 +20,7 @@ use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
-use crate::folder_view::grid::IconView;
+use crate::folder_view::grid::{GridLayout, IconView};
 use crate::folder_view::model::FolderModel;
 use crate::text_size::TextSize;
 
@@ -114,9 +114,13 @@ impl FolderPane {
     /// Builds the pages, empty and in the details view.
     fn build_parts(&self) {
         let parts = PaneParts::new();
-        let overlay = gtk::Overlay::builder().child(&parts.stack).build();
+        let overlay = gtk::Overlay::builder()
+            .child(&parts.stack)
+            .css_classes(["folder-pane-overlay"])
+            .build();
         overlay.add_overlay(&parts.loading_line);
         overlay.add_overlay(&parts.drag_hint);
+        overlay.add_overlay(&parts.rubber_band);
         overlay.set_parent(self);
         self.imp()
             .parts
@@ -200,6 +204,48 @@ impl FolderPane {
         label.set_visible(hint.is_some());
     }
 
+    /// Draws a rubber band over `view` at `rect`, in the view's
+    /// coordinates and clipped to it, or hides it with `None`.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "widget sizes are far below 2^23 pixels"
+    )]
+    pub(super) fn show_rubber_band(&self, view: &gtk::Widget, rect: Option<&gtk::graphene::Rect>) {
+        let band = &self.parts().rubber_band;
+        let origin = view.compute_point(self, &gtk::graphene::Point::zero());
+        let (Some(rect), Some(origin)) = (rect, origin) else {
+            band.set_visible(false);
+            return;
+        };
+        let shown = gtk::graphene::Rect::new(0.0, 0.0, view.width() as f32, view.height() as f32);
+        let Some(clipped) = rect.intersection(&shown) else {
+            band.set_visible(false);
+            return;
+        };
+        // Whole pixels, as GTK lays widgets out.
+        #[expect(clippy::cast_possible_truncation, reason = "pixel coordinates")]
+        let pixel = |value: f32| value.round() as i32;
+        band.set_margin_start(pixel(origin.x() + clipped.x()));
+        band.set_margin_top(pixel(origin.y() + clipped.y()));
+        band.set_size_request(pixel(clipped.width()).max(1), pixel(clipped.height()).max(1));
+        band.set_visible(true);
+    }
+
+    /// Whether a rubber band is drawn now.
+    pub(super) fn rubber_band_shown(&self) -> bool {
+        self.parts().rubber_band.is_visible()
+    }
+
+    /// Whether this folder's style requests previews, before safety limits.
+    pub(super) fn previews_enabled(&self) -> bool {
+        self.parts().previews_enabled.get()
+    }
+
+    /// Keeps the folder's preview choice independently of its location policy.
+    pub(super) fn set_previews_enabled(&self, enabled: bool) {
+        self.parts().previews_enabled.set(enabled);
+    }
+
     /// The note over the pane while a drag shows one, for tests.
     #[cfg(test)]
     pub(super) fn drag_hint(&self) -> Option<String> {
@@ -221,12 +267,13 @@ impl FolderPane {
 
     /// The view that lists items now.
     pub(super) fn view(&self) -> FolderView {
-        let icons = FolderView::Icons(self.icon_view().icon_size());
         let shown = self.parts().views.visible_child_name();
-        if shown.as_deref() == Some(icons.stack_name()) {
-            icons
-        } else {
-            FolderView::Details
+        if shown.as_deref() == Some(FolderView::Details.stack_name()) {
+            return FolderView::Details;
+        }
+        match self.icon_view().layout() {
+            GridLayout::Compact => FolderView::Compact,
+            GridLayout::Icons(size) => FolderView::Icons(size),
         }
     }
 
@@ -236,26 +283,27 @@ impl FolderPane {
         let selection = parts.model.selection();
         let column_view = parts.details.column_view();
         let grid = parts.icon_view.grid();
-        match view {
-            FolderView::Details => {
+        match view.grid_layout() {
+            None => {
                 grid.set_model(None::<&gtk::MultiSelection>);
                 column_view.set_model(Some(selection));
             }
-            FolderView::Icons(size) => {
-                parts.icon_view.set_icon_size(size);
+            Some(layout) => {
+                parts.icon_view.set_layout(layout);
                 column_view.set_model(None::<&gtk::MultiSelection>);
                 grid.set_model(Some(selection));
-                parts.icon_view.fit_columns();
+                parts.icon_view.fit_lines();
             }
         }
         parts.views.set_visible_child_name(view.stack_name());
     }
 
-    /// The visible view's vertical scroll adjustment.
+    /// The visible view's scroll adjustment: the compact list scrolls
+    /// sideways, the others down.
     fn visible_vadjustment(&self) -> gtk::Adjustment {
         match self.view() {
             FolderView::Details => self.details().vadjustment(),
-            FolderView::Icons(_) => self.icon_view().vadjustment(),
+            FolderView::Compact | FolderView::Icons(_) => self.icon_view().scroll_adjustment(),
         }
     }
 
@@ -273,11 +321,21 @@ impl FolderPane {
         glib::idle_add_local_once(move || adjustment.set_value(position));
     }
 
+    /// Scrolls to the first item without moving focus or selecting it.
+    /// The item request replaces any pending reveal; an adjustment alone
+    /// can be overwritten when GTK next lays out the list.
+    pub(super) fn scroll_to_start(&self) {
+        self.visible_vadjustment().set_value(0.0);
+        if self.model().n_items() > 0 {
+            self.scroll_to(0, gtk::ListScrollFlags::NONE, None);
+        }
+    }
+
     /// The visible view, as a widget.
     pub(super) fn view_widget(&self) -> gtk::Widget {
         match self.view() {
             FolderView::Details => self.details().column_view().clone().upcast(),
-            FolderView::Icons(_) => self.icon_view().grid().clone().upcast(),
+            FolderView::Compact | FolderView::Icons(_) => self.icon_view().grid().clone().upcast(),
         }
     }
 
@@ -346,7 +404,9 @@ impl FolderPane {
                 .details()
                 .column_view()
                 .scroll_to(position, None, flags, scroll),
-            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, flags, scroll),
+            FolderView::Compact | FolderView::Icons(_) => {
+                self.icon_view().grid().scroll_to(position, flags, scroll);
+            }
         }
     }
 

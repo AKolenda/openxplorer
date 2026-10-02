@@ -10,9 +10,9 @@
 use gtk::glib;
 use gtk::prelude::*;
 
-use super::dialog::Dialog;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 
 /// Whether `name` matches `pattern`, with `*` for any run of characters
 /// and `?` for exactly one, ignoring case.
@@ -55,12 +55,14 @@ impl BrowserWindow {
             async move {
                 let dialog = Dialog::new(
                     &window,
-                    "Select items matching",
-                    "Use * for any characters and ? for one character, such as *.pdf.",
+                    &ox_core::i18n::gettext("Select items matching"),
+                    &ox_core::i18n::gettext(
+                        "Use * for any characters and ? for one character, such as *.pdf.",
+                    ),
                 );
-                let field = dialog.add_text_field("Pattern", "*");
+                let field = dialog.add_text_field(&ox_core::i18n::gettext("Pattern"), "*");
                 dialog.add_cancel_button();
-                dialog.add_button("Select", ButtonStyle::Accent);
+                dialog.add_button(&ox_core::i18n::gettext("Select"), ButtonStyle::Accent);
                 dialog.open();
                 let answer = dialog.next_response().await;
                 dialog.finish();

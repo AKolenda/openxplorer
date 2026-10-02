@@ -13,8 +13,13 @@
 //! crosses threads. Its events reach the main context as plain watch ids;
 //! the main thread keeps each watch's callback in `SUBSCRIBERS`. Dropping
 //! the `Watch` cancels a creation still in progress and ends the thread.
+//!
+//! A location that cannot be watched (a backend without monitors, such
+//! as an SMB share through `GVfs`) is reported (VIEW-056): the watch then
+//! lists the folder again every so often instead ([`Watch::when_unwatched`]),
+//! and says so, so the window can tell the user changes are not live.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -48,6 +53,13 @@ struct Subscriber {
     /// Runs `on_change` once the changes have been quiet for
     /// [`CHANGE_DEBOUNCE`]; restarted by every change.
     debounce_timer: Option<glib::SourceId>,
+    /// Set once the folder turned out not to be watchable.
+    unwatched: Rc<Cell<bool>>,
+    /// What to do then: how often to list the folder again, and whom to
+    /// tell.
+    fallback: Option<(Duration, Rc<dyn Fn()>)>,
+    /// Lists the folder again while it cannot be watched.
+    fallback_timer: Option<glib::SourceId>,
 }
 
 thread_local! {
@@ -103,6 +115,29 @@ fn debounce_elapsed(id: WatchId) {
     }
 }
 
+/// On the main thread: the folder of watch `id` cannot be watched. From
+/// now on it is listed again every fallback interval, and the watch's
+/// owner hears of it.
+fn monitor_failed(id: WatchId) {
+    let notify = SUBSCRIBERS.with_borrow_mut(|subscribers| {
+        let subscriber = subscribers.get_mut(&id)?;
+        subscriber.unwatched.set(true);
+        let (interval, on_unwatched) = subscriber.fallback.clone()?;
+        let on_change = Rc::clone(&subscriber.on_change);
+        let timer = glib::timeout_add_local(interval, move || {
+            on_change();
+            glib::ControlFlow::Continue
+        });
+        if let Some(previous) = subscriber.fallback_timer.replace(timer) {
+            previous.remove();
+        }
+        Some(on_unwatched)
+    });
+    if let Some(on_unwatched) = notify {
+        on_unwatched();
+    }
+}
+
 /// Watches one folder for changes. Dropping it stops watching.
 ///
 /// A watch lives on the main thread: dropping it removes its callback
@@ -116,6 +151,8 @@ pub(crate) struct Watch {
     stop: gio::Cancellable,
     /// The monitor thread's own main context.
     monitor_context: glib::MainContext,
+    /// Set once the folder turned out not to be watchable.
+    unwatched: Rc<Cell<bool>>,
     /// Main-thread-only rule: this `Rc` marker keeps the compiler from
     /// letting a watch move to, or be dropped on, another thread, where
     /// its callback would stay registered and keep running.
@@ -126,6 +163,26 @@ impl Watch {
     /// The folder being watched.
     pub(crate) fn uri(&self) -> &str {
         &self.uri
+    }
+
+    /// Whether changes to the folder are seen as they happen: false once
+    /// it turned out it cannot be watched.
+    pub(crate) fn is_live(&self) -> bool {
+        !self.unwatched.get()
+    }
+
+    /// Should the folder turn out not to be watchable, lists it again every
+    /// `interval` and calls `on_unwatched` once; at once if that is known
+    /// already.
+    pub(crate) fn when_unwatched(&self, interval: Duration, on_unwatched: impl Fn() + 'static) {
+        let known = SUBSCRIBERS.with_borrow_mut(|subscribers| {
+            let subscriber = subscribers.get_mut(&self.id)?;
+            subscriber.fallback = Some((interval, Rc::new(on_unwatched)));
+            Some(subscriber.unwatched.get())
+        });
+        if known == Some(true) {
+            monitor_failed(self.id);
+        }
     }
 
     /// Tells watches apart, for tests that a watch was kept.
@@ -142,7 +199,8 @@ impl Drop for Watch {
         self.stop.cancel();
         self.monitor_context.wakeup();
         let subscriber = SUBSCRIBERS.with_borrow_mut(|subscribers| subscribers.remove(&self.id));
-        if let Some(timer) = subscriber.and_then(|subscriber| subscriber.debounce_timer) {
+        let timers = subscriber.map(|subscriber| [subscriber.debounce_timer, subscriber.fallback_timer]);
+        for timer in timers.into_iter().flatten().flatten() {
             timer.remove();
         }
     }
@@ -179,10 +237,13 @@ impl MonitorThread {
     fn monitor_until_stopped(&self) {
         let folder = gio::File::for_uri(&self.uri);
         let flags = gio::FileMonitorFlags::WATCH_MOVES;
+        let id = self.id;
         let Ok(monitor) = folder.monitor_directory(flags, Some(&self.stop)) else {
+            if !self.stop.is_cancelled() {
+                self.main_context.invoke(move || monitor_failed(id));
+            }
             return;
         };
-        let id = self.id;
         let main_context = self.main_context.clone();
         monitor.connect_changed(move |_, _, _, event| {
             if changes_listing(event) {
@@ -202,9 +263,13 @@ impl MonitorThread {
 /// locations that cannot be monitored at all, changes are not seen.
 pub(crate) fn watch_folder(uri: &str, on_change: impl Fn() + 'static) -> Watch {
     let id = WatchId::next();
+    let unwatched = Rc::new(Cell::new(false));
     let subscriber = Subscriber {
         on_change: Rc::new(on_change),
         debounce_timer: None,
+        unwatched: Rc::clone(&unwatched),
+        fallback: None,
+        fallback_timer: None,
     };
     SUBSCRIBERS.with_borrow_mut(|subscribers| subscribers.insert(id, subscriber));
     let watch = Watch {
@@ -212,6 +277,7 @@ pub(crate) fn watch_folder(uri: &str, on_change: impl Fn() + 'static) -> Watch {
         id,
         stop: gio::Cancellable::new(),
         monitor_context: glib::MainContext::new(),
+        unwatched,
         _main_thread_only: PhantomData,
     };
     let thread = MonitorThread {
@@ -226,6 +292,7 @@ pub(crate) fn watch_folder(uri: &str, on_change: impl Fn() + 'static) -> Watch {
         .spawn(move || thread.run());
     if let Err(error) = spawned {
         glib::g_warning!(LOG_DOMAIN, "Could not watch {uri} for changes: {error}");
+        glib::MainContext::default().invoke_local(move || monitor_failed(id));
     }
     watch
 }
@@ -266,6 +333,26 @@ mod tests {
         wait_until("the monitor thread", || monitor_threads() == before + 1);
         drop(watch);
         wait_until("the monitor thread to end", || monitor_threads() == before);
+    }
+
+    /// A folder that cannot be watched says so and is listed again every
+    /// fallback interval.
+    ///
+    /// parity: VIEW-056
+    #[gtk::test]
+    fn an_unwatchable_folder_is_reported_and_checked_again() {
+        let changes = Rc::new(Cell::new(0));
+        let counter = Rc::clone(&changes);
+        let watch = watch_folder("smb://example.invalid/share", move || {
+            counter.set(counter.get() + 1);
+        });
+        let reported = Rc::new(Cell::new(false));
+        let report = Rc::clone(&reported);
+        watch.when_unwatched(Duration::from_millis(50), move || report.set(true));
+
+        wait_until("the report", || reported.get());
+        assert!(!watch.is_live());
+        wait_until("a fallback listing", || changes.get() > 0);
     }
 
     /// parity: VIEW-055, PERF-006

@@ -43,26 +43,26 @@ struct NavigationButton {
 const NAVIGATION_BUTTONS: [NavigationButton; 4] = [
     NavigationButton {
         glyph: Icon::ArrowLeft,
-        name: "Back",
-        tooltip: "Back (Alt+Left)",
+        name: crate::i18n::message_id("Back"),
+        tooltip: crate::i18n::message_id("Back (Alt+Left)"),
         action: WindowAction::Back,
     },
     NavigationButton {
         glyph: Icon::ArrowRight,
-        name: "Forward",
-        tooltip: "Forward (Alt+Right)",
+        name: crate::i18n::message_id("Forward"),
+        tooltip: crate::i18n::message_id("Forward (Alt+Right)"),
         action: WindowAction::Forward,
     },
     NavigationButton {
         glyph: Icon::ArrowUp,
-        name: "Up",
-        tooltip: "Up (Alt+Up)",
+        name: crate::i18n::message_id("Up"),
+        tooltip: crate::i18n::message_id("Up (Alt+Up)"),
         action: WindowAction::Up,
     },
     NavigationButton {
         glyph: Icon::ArrowClockwise,
-        name: "Refresh",
-        tooltip: "Refresh (F5)",
+        name: crate::i18n::message_id("Refresh"),
+        tooltip: crate::i18n::message_id("Refresh (F5)"),
         action: WindowAction::Refresh,
     },
 ];
@@ -79,6 +79,14 @@ const NAVIGATION_KEYS: [(WindowAction, &str); 7] = [
     (WindowAction::Forward, "Forward"),
     (WindowAction::Home, "HomePage"),
 ];
+
+/// The history keys and their actions' detailed names (the keyboard
+/// shortcuts window, CMD-032).
+pub(super) fn navigation_key_bindings() -> impl Iterator<Item = (String, &'static str)> {
+    NAVIGATION_KEYS
+        .into_iter()
+        .map(|(action, keys)| (action.detailed_name(), keys))
+}
 
 impl BrowserWindow {
     /// Fills the template's `.nav-buttons` row and adds the keys that
@@ -135,9 +143,11 @@ impl BrowserWindow {
 fn navigation_button(command: &NavigationButton) -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::image(command.glyph, NAVIGATION_GLYPH))
-        .tooltip_text(command.tooltip)
+        .tooltip_text(ox_core::i18n::gettext(command.tooltip))
         .action_name(command.action.detailed_name())
         .build();
-    button.update_property(&[gtk::accessible::Property::Label(command.name)]);
+    button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        command.name,
+    ))]);
     button
 }

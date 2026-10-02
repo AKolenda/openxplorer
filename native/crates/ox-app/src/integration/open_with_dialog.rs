@@ -126,6 +126,7 @@ mod imp {
     impl ObjectImpl for OpenWithDialog {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "open-with-dialog.ui");
             self.obj().connect_controls();
         }
     }
@@ -234,7 +235,8 @@ impl OpenWithDialog {
     /// Lists the applications again ("Finding installed applications…").
     fn fetch(&self) {
         let imp = self.imp();
-        imp.status_label.set_text("Finding installed applications…");
+        imp.status_label
+            .set_text(&ox_core::i18n::gettext("Finding installed applications…"));
         let scope = if imp.show_all_check.is_active() {
             ApplicationScope::AllInstalled
         } else {
@@ -263,7 +265,8 @@ impl OpenWithDialog {
         let preselected = list.preselected().map(|choice| choice.id.clone());
         imp.chosen.replace(preselected);
         imp.applications.replace(Some(list));
-        imp.status_label.set_text("Choose an installed application.");
+        imp.status_label
+            .set_text(&ox_core::i18n::gettext("Choose an installed application."));
         self.show_applications();
     }
 
@@ -373,7 +376,7 @@ impl OpenWithDialog {
                 match ran {
                     Ok(()) => {
                         if let Some(report) = dialog.imp().report.get() {
-                            report("Ran the command.");
+                            report(ox_core::i18n::gettext_static("Ran the command."));
                         }
                         dialog.close();
                     }
@@ -486,7 +489,9 @@ fn application_row(choice: &ApplicationChoice) -> gtk::ListBoxRow {
 
 /// The row shown when the filter matches nothing.
 fn empty_row() -> gtk::ListBoxRow {
-    let label = gtk::Label::new(Some("No matching installed applications."));
+    let label = gtk::Label::new(Some(&ox_core::i18n::gettext(
+        "No matching installed applications.",
+    )));
     label.add_css_class("apps-empty");
     gtk::ListBoxRow::builder()
         .child(&label)

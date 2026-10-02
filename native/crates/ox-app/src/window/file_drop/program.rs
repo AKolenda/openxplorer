@@ -37,7 +37,7 @@ use ox_core::integration::{
 use ox_core::network::local_path;
 
 use super::launcher;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
@@ -67,7 +67,8 @@ const PROGRAM_CONTENT_TYPES: [&str; 8] = [
 const HOLD_SCRIPT_NAME: &str = "openxplorer-drop";
 
 /// Why a program cannot run.
-const NO_LOCAL_PATH: &str = "This program has no local path. Mount its share before dropping files on it.";
+const NO_LOCAL_PATH: &str =
+    crate::i18n::message_id("This program has no local path. Mount its share before dropping files on it.");
 
 /// How a program runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -238,13 +239,17 @@ impl BrowserWindow {
             )
             .await
             .map_err(|error| error.to_string())?;
-        let path = local_path(&program.uri).ok_or_else(|| NO_LOCAL_PATH.to_owned())?;
+        let path = local_path(&program.uri)
+            .ok_or_else(|| ox_core::i18n::gettext_static(NO_LOCAL_PATH).to_owned())?;
         let may_run = match program.kind {
             ProgramKind::Launcher => launcher::is_trusted(&path, &info),
             ProgramKind::Binary | ProgramKind::Script => info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE),
         };
         if !may_run {
-            return Err(format!("“{}” is not a program you can run.", program.name));
+            return Err(ox_core::i18n::format_message(
+                "“{name}” is not a program you can run.",
+                &[("name", &program.name)],
+            ));
         }
         // Safety rule "ask before running a program from elsewhere".
         if self.is_from_elsewhere(program).await && !self.confirm_run(program).await {
@@ -267,13 +272,10 @@ impl BrowserWindow {
 
     /// Asks before running `program`; true when the user agreed.
     async fn confirm_run(&self, program: &ProgramTarget) -> bool {
-        let message = format!(
-            "“{}” is on a network share or a removable drive. Run it only if you trust where it came from.",
-            program.name
-        );
-        let dialog = Dialog::new(self, "Run this program?", &message);
+        let message = ox_core::i18n::format_message("“{name}” is on a network share or a removable drive. Run it only if you trust where it came from.", &[("name", &program.name)]);
+        let dialog = Dialog::new(self, &ox_core::i18n::gettext("Run this program?"), &message);
         dialog.add_cancel_button();
-        dialog.add_button("Run", ButtonStyle::Accent);
+        dialog.add_button(&ox_core::i18n::gettext("Run"), ButtonStyle::Accent);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();
@@ -308,7 +310,10 @@ impl BrowserWindow {
             }
         };
         spawn_program(&command, &folder, sandbox).map_err(|error| error.to_string())?;
-        self.show_message(&format!("Opened {} item(s) with {}.", items.len(), program.name));
+        self.show_message(&ox_core::i18n::format_message(
+            "Opened {len} item(s) with {name}.",
+            &[("len", &items.len().to_string()), ("name", &program.name)],
+        ));
         Ok(())
     }
 }

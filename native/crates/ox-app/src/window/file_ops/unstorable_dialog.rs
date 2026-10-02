@@ -15,7 +15,7 @@ use ox_core::ops::UnstorableAsker;
 use ox_core::transfer::{UnstorableAnswer, UnstorableItem, UnstorableReason};
 
 use super::worker_question::worker_question;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
@@ -24,15 +24,12 @@ fn question_text(item: &UnstorableItem) -> (&'static str, String) {
     let name = &item.name;
     match item.reason {
         UnstorableReason::InvalidCharacters => (
-            "Name not supported",
-            format!(
-                "“{name}” has characters the destination file system does not allow \
-                 (\" * : < > ? \\ | and control characters)."
-            ),
+            ox_core::i18n::gettext_static("Name not supported"),
+            ox_core::i18n::format_message("“{name}” has characters the destination file system does not allow (\" * : < > ? \\ | and control characters).", &[("name", name)]),
         ),
         UnstorableReason::SymbolicLink => (
-            "Link not supported",
-            format!("“{name}” is a symbolic link, which the destination file system cannot store."),
+            ox_core::i18n::gettext_static("Link not supported"),
+            ox_core::i18n::format_message("“{name}” is a symbolic link, which the destination file system cannot store.", &[("name", name)]),
         ),
     }
 }
@@ -64,11 +61,16 @@ impl BrowserWindow {
     async fn ask_about_unstorable(&self, item: &UnstorableItem) -> UnstorableAnswer {
         let (title, message) = question_text(item);
         let dialog = Dialog::new(self, title, &message);
-        let for_all = dialog.add_check_button("Do this for all such items", false);
+        let for_all =
+            dialog.add_check_button(ox_core::i18n::gettext_static("Do this for all such items"), false);
         dialog.add_cancel_button();
-        let skip = dialog.add_button("Skip", ButtonStyle::Bordered);
-        let replace = (item.reason == UnstorableReason::InvalidCharacters)
-            .then(|| dialog.add_button("Replace invalid characters", ButtonStyle::Accent));
+        let skip = dialog.add_button(ox_core::i18n::gettext_static("Skip"), ButtonStyle::Bordered);
+        let replace = (item.reason == UnstorableReason::InvalidCharacters).then(|| {
+            dialog.add_button(
+                ox_core::i18n::gettext_static("Replace invalid characters"),
+                ButtonStyle::Accent,
+            )
+        });
         dialog.open();
         let pressed = dialog.next_response().await;
         let for_all = for_all.is_active();

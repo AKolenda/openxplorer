@@ -72,8 +72,9 @@ impl BrowserWindow {
         if self.imp().session.borrow().is_active(id) {
             self.navigate_or_report(folder);
             let path = self.imp().locations.borrow().display_location(removed);
-            self.show_message(&format!(
-                "Current location changed, {path} is no longer accessible."
+            self.show_message(&ox_core::i18n::format_message(
+                "Current location changed, {path} is no longer accessible.",
+                &[("path", &path)],
             ));
             return;
         }
@@ -88,8 +89,6 @@ impl BrowserWindow {
     /// Shows why tab `id`'s folder could not be listed again.
     fn show_load_error(&self, id: TabId, error: EntryError) {
         self.fail_load(id, LoadMode::Reload, error);
-        if self.imp().session.borrow().is_active(id) {
-            self.update_content();
-        }
+        self.redraw_pane(id);
     }
 }

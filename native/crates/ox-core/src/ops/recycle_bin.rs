@@ -216,9 +216,9 @@ fn restore_item(uri: &str, context: &OperationContext) -> Result<String, OpsErro
     )?;
     let entry = entry_from_info(&item, &info);
     let Some(original_path) = entry.trash_orig_path else {
-        return Err(OpsError::failed(format!(
-            "The Recycle Bin does not record where “{}” came from.",
-            entry.name
+        return Err(OpsError::failed(crate::i18n::format_message(
+            "The Recycle Bin does not record where “{name}” came from.",
+            &[("name", &entry.name)],
         )));
     };
     put_back(&item, &original_path, context)
@@ -280,8 +280,9 @@ fn recreate_original_folder(target: &gio::File, context: &OperationContext) -> R
 /// The refusal to restore onto a name that is taken again.
 fn name_taken_in_original_folder(original_path: &Path) -> OpsError {
     let name = path_name(original_path);
-    OpsError::Exists(format!(
-        "An item named “{name}” already exists in its original folder. It was left in the Recycle Bin."
+    OpsError::Exists(crate::i18n::format_message(
+        "An item named “{name}” already exists in its original folder. It was left in the Recycle Bin.",
+        &[("name", &name)],
     ))
 }
 
@@ -318,9 +319,9 @@ pub(super) fn top_level_item(uri: &str) -> Result<gio::File, OpsError> {
     let bin = gio::File::for_uri(TRASH_URI);
     let is_top_level = item.parent().is_some_and(|parent| parent.equal(&bin));
     if !item.has_uri_scheme("trash") || !is_top_level {
-        return Err(OpsError::failed(
+        return Err(OpsError::failed(crate::i18n::gettext(
             "Only whole items in the Recycle Bin can be restored or deleted there.",
-        ));
+        )));
     }
     Ok(item)
 }
@@ -354,7 +355,7 @@ pub(crate) fn restore_trashed_since(
     for original_path in original_paths {
         let restored = match newest_trashed_from(&items, original_path, since) {
             Some(item) => put_back(&gio::File::for_uri(&item.uri), original_path, context),
-            None => Err(OpsError::NotFound(String::from(
+            None => Err(OpsError::NotFound(crate::i18n::gettext(
                 "It is no longer in the Recycle Bin.",
             ))),
         };

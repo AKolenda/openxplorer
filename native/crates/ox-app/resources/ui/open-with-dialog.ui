@@ -10,7 +10,7 @@
 <interface>
   <requires lib="gtk" version="4.14"/>
   <template class="OxOpenWithDialog" parent="GtkWindow">
-    <property name="title">Open with</property>
+    <property name="title" translatable="yes">Open with</property>
     <property name="modal">true</property>
     <property name="resizable">false</property>
     <property name="destroy-with-parent">true</property>
@@ -45,8 +45,8 @@
                       <class name="dialog-content"/>
                     </style>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">Open with</property>
+                      <object class="GtkLabel" id="i18n_1">
+                        <property name="label" translatable="yes">Open with</property>
                         <property name="xalign">0</property>
                         <style>
                           <class name="dialog-title"/>
@@ -64,8 +64,8 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">Find an application</property>
+                      <object class="GtkLabel" id="i18n_2">
+                        <property name="label" translatable="yes">Find an application</property>
                         <property name="xalign">0</property>
                         <property name="mnemonic-widget">filter_entry</property>
                         <style>
@@ -75,7 +75,7 @@
                     </child>
                     <child>
                       <object class="GtkEntry" id="filter_entry">
-                        <property name="placeholder-text">Search installed applications</property>
+                        <property name="placeholder-text" translatable="yes">Search installed applications</property>
                       </object>
                     </child>
                     <child>
@@ -91,7 +91,7 @@
                           <object class="GtkListBox" id="application_list">
                             <property name="selection-mode">single</property>
                             <accessibility>
-                              <property name="label">Installed applications</property>
+                              <property name="label" translatable="yes">Installed applications</property>
                             </accessibility>
                           </object>
                         </property>
@@ -99,7 +99,7 @@
                     </child>
                     <child>
                       <object class="GtkCheckButton" id="show_all_check">
-                        <property name="label">Show all installed applications</property>
+                        <property name="label" translatable="yes">Show all installed applications</property>
                         <style>
                           <class name="dialog-check"/>
                         </style>
@@ -107,7 +107,7 @@
                     </child>
                     <child>
                       <object class="GtkCheckButton" id="make_default_check">
-                        <property name="label">Always use this app for this file type</property>
+                        <property name="label" translatable="yes">Always use this app for this file type</property>
                         <style>
                           <class name="dialog-check"/>
                         </style>
@@ -115,8 +115,8 @@
                     </child>
                     <child>
                       <!-- A command line instead of an application (OPEN-014). -->
-                      <object class="GtkLabel">
-                        <property name="label">Or run a command</property>
+                      <object class="GtkLabel" id="i18n_3">
+                        <property name="label" translatable="yes">Or run a command</property>
                         <property name="xalign">0</property>
                         <property name="mnemonic-widget">command_entry</property>
                         <style>
@@ -126,12 +126,12 @@
                     </child>
                     <child>
                       <object class="GtkEntry" id="command_entry">
-                        <property name="placeholder-text">Such as gimp %f (%f is the file, %u its address)</property>
+                        <property name="placeholder-text" translatable="yes">Such as gimp %f (%f is the file, %u its address)</property>
                       </object>
                     </child>
                     <child>
                       <object class="GtkCheckButton" id="terminal_check">
-                        <property name="label">Run in terminal</property>
+                        <property name="label" translatable="yes">Run in terminal</property>
                         <style>
                           <class name="dialog-check"/>
                         </style>
@@ -139,7 +139,7 @@
                     </child>
                     <child>
                       <object class="GtkCheckButton" id="keep_open_check">
-                        <property name="label">Keep the terminal open when the command ends</property>
+                        <property name="label" translatable="yes">Keep the terminal open when the command ends</property>
                         <property name="sensitive">false</property>
                         <style>
                           <class name="dialog-check"/>
@@ -148,7 +148,7 @@
                     </child>
                     <child>
                       <object class="GtkLabel" id="status_label">
-                        <property name="label">Loading…</property>
+                        <property name="label" translatable="yes">Loading…</property>
                         <property name="xalign">0</property>
                         <property name="wrap">true</property>
                         <property name="max-width-chars">60</property>
@@ -174,7 +174,7 @@
                     <property name="spacing">8</property>
                     <child>
                       <object class="GtkButton" id="cancel_button">
-                        <property name="label">Cancel</property>
+                        <property name="label" translatable="yes">Cancel</property>
                         <style>
                           <class name="bordered"/>
                           <class name="dialog-button"/>
@@ -183,7 +183,7 @@
                     </child>
                     <child>
                       <object class="GtkButton" id="open_button">
-                        <property name="label">Open</property>
+                        <property name="label" translatable="yes">Open</property>
                         <property name="sensitive">false</property>
                         <style>
                           <class name="accent"/>

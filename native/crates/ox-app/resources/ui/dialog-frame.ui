@@ -6,8 +6,8 @@
   native/docs/ui-spec.md §4.11 refines it to WinUI's ContentDialog. The
   title, an optional message, the body the dialog fills in, the error line
   and the footer with its buttons. It is shown in a window of its own
-  (src/window/dialog.rs) or on the dimmed layer over a browser window
-  (src/dialog_layer.rs). src/dialog_layer/frame.rs adds the buttons and
+  (src/dialog/window.rs) or on the dimmed layer over a browser window
+  (src/dialog/layer.rs). src/dialog/frame.rs adds the buttons and
   the body.
 -->
 <interface>
@@ -59,7 +59,7 @@
             <child>
               <!-- Only the body scrolls, so the title and the buttons stay
                    in view when the dialog would be taller than its window
-                   (src/modal.rs, src/dialog_layer.rs). -->
+                   (src/modal.rs, src/dialog/layer.rs). -->
               <object class="GtkScrolledWindow" id="scroller">
                 <property name="hscrollbar-policy">never</property>
                 <property name="propagate-natural-height">true</property>

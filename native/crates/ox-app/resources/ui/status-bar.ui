@@ -17,7 +17,7 @@
         <!-- Screen readers hear the item count and the type-to-select
              hint change (the live regions of index.html). -->
         <property name="accessible-role">status</property>
-        <property name="label">Ready</property>
+        <property name="label" translatable="yes">Ready</property>
         <property name="xalign">0</property>
       </object>
     </child>
@@ -25,6 +25,7 @@
       <!-- #status-selected -->
       <object class="GtkLabel" id="selection">
         <property name="xalign">0</property>
+        <property name="ellipsize">end</property>
       </object>
     </child>
     <child>
@@ -43,9 +44,29 @@
       </object>
     </child>
     <child>
-      <!-- The current volume's free space (Dolphin's space info). -->
-      <object class="GtkLabel" id="free_space">
+      <!-- Shown while the folder cannot be watched for changes. -->
+      <object class="GtkLabel" id="watch_state">
         <property name="visible">false</property>
+        <property name="label" translatable="yes">Not updated live</property>
+      </object>
+    </child>
+    <child>
+      <!-- The current volume's free space and how full it is (Dolphin's
+           space info); a click offers the disk-usage tools. -->
+      <object class="GtkBox" id="free_space_box">
+        <property name="visible">false</property>
+        <property name="spacing">8</property>
+        <child>
+          <object class="GtkLabel" id="free_space"/>
+        </child>
+        <child>
+          <object class="GtkProgressBar" id="capacity">
+            <property name="valign">center</property>
+            <style>
+              <class name="capacity"/>
+            </style>
+          </object>
+        </child>
       </object>
     </child>
     <child>
@@ -62,25 +83,40 @@
       <object class="GtkButton" id="check_updates_button">
         <property name="valign">center</property>
         <accessibility>
-          <property name="label">Check for updates</property>
+          <property name="label" translatable="yes">Check for updates</property>
+        </accessibility>
+      </object>
+    </child>
+    <child>
+      <!-- Dolphin's zoom slider: the icon size, shown in the icon view. -->
+      <object class="GtkScale" id="zoom_slider">
+        <property name="visible">false</property>
+        <property name="valign">center</property>
+        <property name="draw-value">false</property>
+        <property name="tooltip-text" translatable="yes">Icon size</property>
+        <style>
+          <class name="zoom-slider"/>
+        </style>
+        <accessibility>
+          <property name="label" translatable="yes">Icon size</property>
         </accessibility>
       </object>
     </child>
     <child>
       <object class="GtkButton" id="details_view_button">
-        <property name="tooltip-text">Details view</property>
+        <property name="tooltip-text" translatable="yes">Details view</property>
         <property name="valign">center</property>
         <accessibility>
-          <property name="label">Details view</property>
+          <property name="label" translatable="yes">Details view</property>
         </accessibility>
       </object>
     </child>
     <child>
       <object class="GtkButton" id="icons_view_button">
-        <property name="tooltip-text">Large icons</property>
+        <property name="tooltip-text" translatable="yes">Large icons</property>
         <property name="valign">center</property>
         <accessibility>
-          <property name="label">Large icons</property>
+          <property name="label" translatable="yes">Large icons</property>
         </accessibility>
       </object>
     </child>

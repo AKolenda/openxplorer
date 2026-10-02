@@ -41,8 +41,8 @@ pub async fn trash_support(folder_uri: &str, cancel: &Cancellation) -> Result<bo
 /// where the folder is known to have no Trash.
 pub fn delete_command_label(trash_support: Option<bool>) -> &'static str {
     match trash_support {
-        Some(false) => "Delete permanently",
-        Some(true) | None => "Move to Trash",
+        Some(false) => crate::i18n::gettext_static("Delete permanently"),
+        Some(true) | None => crate::i18n::gettext_static("Move to Trash"),
     }
 }
 
@@ -152,11 +152,12 @@ fn folder_has_trash(folder_uri: &str, cancel: &Cancellation) -> Result<bool, Ops
 pub fn permanent_delete_confirmation(items: &[DeleteItem]) -> DeleteConfirmation {
     let what = selection_text(items);
     DeleteConfirmation {
-        title: "Delete permanently?",
-        body: format!(
-            "{what}\n\nThe items are deleted permanently, without the Trash, and cannot be recovered."
+        title: crate::i18n::gettext_static("Delete permanently?"),
+        body: crate::i18n::format_message(
+            "{what}\n\nThe items are deleted permanently, without the Trash, and cannot be recovered.",
+            &[("what", &what)],
         ),
-        confirm_label: "Delete permanently",
+        confirm_label: crate::i18n::gettext_static("Delete permanently"),
     }
 }
 
@@ -164,7 +165,7 @@ pub fn permanent_delete_confirmation(items: &[DeleteItem]) -> DeleteConfirmation
 fn selection_text(items: &[DeleteItem]) -> String {
     match items {
         [only] => only.name.clone(),
-        _ => format!("{} selected items", items.len()),
+        _ => crate::i18n::format_message("{count} selected items", &[("count", &(items.len()).to_string())]),
     }
 }
 
@@ -176,29 +177,25 @@ impl DeletePlan {
         let delete_count = self.to_delete.len();
         if trash_count > 0 && delete_count > 0 {
             return DeleteConfirmation {
-                title: "Delete items?",
-                body: format!(
-                    "{what}\n\n{trash_count} item(s) go to the Trash and can be restored from there.\n\
-                     {delete_count} item(s) are on a location without Trash and are deleted permanently, \
-                     without any way to recover them."
-                ),
-                confirm_label: "Delete items",
+                title: crate::i18n::gettext_static("Delete items?"),
+                body: crate::i18n::format_message("{what}\n\n{trash_count} item(s) go to the Trash and can be restored from there.\n{delete_count} item(s) are on a location without Trash and are deleted permanently, without any way to recover them.", &[("what", what), ("trash_count", &(trash_count).to_string()), ("delete_count", &(delete_count).to_string())]),
+                confirm_label: crate::i18n::gettext_static("Delete items"),
             };
         }
         if delete_count > 0 {
             return DeleteConfirmation {
-                title: "Delete permanently?",
-                body: format!(
-                    "{what}\n\nThis location has no Trash. The items are deleted permanently and cannot be \
-                     recovered."
-                ),
-                confirm_label: "Delete permanently",
+                title: crate::i18n::gettext_static("Delete permanently?"),
+                body: crate::i18n::format_message("{what}\n\nThis location has no Trash. The items are deleted permanently and cannot be recovered.", &[("what", what)]),
+                confirm_label: crate::i18n::gettext_static("Delete permanently"),
             };
         }
         DeleteConfirmation {
-            title: "Move to Trash?",
-            body: format!("{what}\n\nItems go to the Trash and can be restored from there."),
-            confirm_label: "Move to Trash",
+            title: crate::i18n::gettext_static("Move to Trash?"),
+            body: crate::i18n::format_message(
+                "{what}\n\nItems go to the Trash and can be restored from there.",
+                &[("what", what)],
+            ),
+            confirm_label: crate::i18n::gettext_static("Move to Trash"),
         }
     }
 }

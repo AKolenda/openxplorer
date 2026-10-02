@@ -16,21 +16,21 @@ use ox_core::transfer::Cancellation;
 
 use super::general_panel::glyph_button;
 use super::CALCULATING;
-use crate::dialog_layer::{quiet_text, PropertyGrid};
+use crate::dialog::{quiet_text, PropertyGrid};
 use crate::icons::Icon;
 
 /// A checksum not asked for yet.
-const NOT_CALCULATED: &str = "Not calculated";
+const NOT_CALCULATED: &str = crate::i18n::message_id("Not calculated");
 /// The verdict when the pasted checksum is the file's.
-pub(super) const MATCH: &str = "Checksums match.";
+pub(super) const MATCH: &str = crate::i18n::message_id("Checksums match.");
 /// The verdict when it is not.
-pub(super) const MISMATCH: &str = "Checksums do not match.";
+pub(super) const MISMATCH: &str = crate::i18n::message_id("Checksums do not match.");
 /// The verdict for text that is no known checksum.
-const NOT_A_CHECKSUM: &str = "Enter an MD5, SHA1, SHA256 or SHA512 checksum.";
+const NOT_A_CHECKSUM: &str = crate::i18n::message_id("Enter an MD5, SHA1, SHA256 or SHA512 checksum.");
 /// Above the field for the expected checksum.
-const VERIFY_NOTE: &str = "Paste the checksum the file should have to check it.";
+const VERIFY_NOTE: &str = crate::i18n::message_id("Paste the checksum the file should have to check it.");
 /// The toast after a checksum was copied.
-const COPIED: &str = "Checksum copied.";
+const COPIED: &str = crate::i18n::message_id("Checksum copied.");
 
 /// One algorithm's line: its value and its Calculate or Copy button.
 #[derive(Debug)]
@@ -65,20 +65,22 @@ impl ChecksumsPanel {
         let grid = PropertyGrid::new();
         let mut rows = HashMap::new();
         for (line, kind) in (0..).zip(ChecksumKind::ALL) {
-            let value = grid.add_row(kind.label(), NOT_CALCULATED);
+            let value = grid.add_row(kind.label(), ox_core::i18n::gettext_static(NOT_CALCULATED));
             value.set_wrap_mode(gtk::pango::WrapMode::Char);
-            let button = glyph_button("Calculate", Icon::Checkmark);
+            let button = glyph_button(ox_core::i18n::gettext_static("Calculate"), Icon::Checkmark);
             button.set_valign(gtk::Align::Start);
-            let name = format!("Calculate {}", kind.label());
+            let name = ox_core::i18n::format_message("Calculate {label}", &[("label", kind.label())]);
             button.update_property(&[gtk::accessible::Property::Label(&name)]);
             grid.widget().attach(&button, 2, line, 1, 1);
             rows.insert(kind, Row { value, button });
         }
         widget.append(grid.widget());
         let expected = gtk::Entry::builder()
-            .placeholder_text("Expected checksum")
+            .placeholder_text(ox_core::i18n::gettext("Expected checksum"))
             .build();
-        expected.update_property(&[gtk::accessible::Property::Label("Expected checksum")]);
+        expected.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Expected checksum",
+        ))]);
         let verdict = quiet_text("");
         let checksums = Rc::new(Checksums {
             uri: uri.to_owned(),
@@ -95,7 +97,7 @@ impl ChecksumsPanel {
                 move |button| checksums.calculate_or_copy(kind, button)
             ));
         }
-        widget.append(&quiet_text(VERIFY_NOTE));
+        widget.append(&quiet_text(ox_core::i18n::gettext_static(VERIFY_NOTE)));
         widget.append(&checksums.expected);
         widget.append(&checksums.verdict);
         checksums.expected.connect_changed(glib::clone!(
@@ -143,7 +145,7 @@ impl Checksums {
             Some(value) => {
                 button.clipboard().set_text(&value);
                 if let Some(window) = button.root().and_downcast::<crate::window::BrowserWindow>() {
-                    window.show_message(COPIED);
+                    window.show_message(ox_core::i18n::gettext_static(COPIED));
                 }
             }
             None => self.calculate(kind),
@@ -177,10 +179,14 @@ impl Checksums {
         match result {
             Ok(value) => {
                 row.value.set_text(&value);
-                set_button_label(&row.button, "Copy", &format!("Copy {}", kind.label()));
+                set_button_label(
+                    &row.button,
+                    "Copy",
+                    &ox_core::i18n::format_message("Copy {label}", &[("label", kind.label())]),
+                );
                 self.computed.borrow_mut().insert(kind, value);
             }
-            Err(EntryError::Cancelled) => row.value.set_text(NOT_CALCULATED),
+            Err(EntryError::Cancelled) => row.value.set_text(ox_core::i18n::gettext_static(NOT_CALCULATED)),
             Err(error) => row.value.set_text(&error.to_string()),
         }
         self.verify();
@@ -194,13 +200,16 @@ impl Checksums {
             return;
         }
         let Some(kind) = ChecksumKind::of_expected(&text) else {
-            self.verdict.set_text(NOT_A_CHECKSUM);
+            self.verdict
+                .set_text(ox_core::i18n::gettext_static(NOT_A_CHECKSUM));
             return;
         };
         let computed = self.computed.borrow().get(&kind).cloned();
         match computed {
-            Some(value) if matches(&text, &value) => self.verdict.set_text(MATCH),
-            Some(_) => self.verdict.set_text(MISMATCH),
+            Some(value) if matches(&text, &value) => {
+                self.verdict.set_text(ox_core::i18n::gettext_static(MATCH));
+            }
+            Some(_) => self.verdict.set_text(ox_core::i18n::gettext_static(MISMATCH)),
             None => {
                 self.verdict.set_text(CALCULATING);
                 self.calculate(kind);

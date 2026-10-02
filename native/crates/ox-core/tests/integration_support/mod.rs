@@ -30,5 +30,6 @@ pub fn item(kind: EntryKind, name: &str) -> Entry {
         can_delete: None,
         can_write: None,
         serialized_icon: None,
+        meta: Box::default(),
     }
 }

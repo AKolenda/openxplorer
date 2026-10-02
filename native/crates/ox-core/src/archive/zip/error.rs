@@ -18,31 +18,40 @@ use super::python_repr::{PythonBytesRepr, PythonRepr};
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ZipFormatError {
     /// No end of central directory record was found.
-    #[error("File is not a zip file")]
+    #[error("{}", crate::i18n::gettext("File is not a zip file"))]
     NotAZip,
     /// The central directory would start before the file does.
-    #[error("Bad offset for central directory")]
+    #[error("{}", crate::i18n::gettext("Bad offset for central directory"))]
     BadDirectoryOffset,
     /// The central directory ends in the middle of a record.
-    #[error("Truncated central directory")]
+    #[error("{}", crate::i18n::gettext("Truncated central directory"))]
     TruncatedDirectory,
     /// A central directory record has the wrong signature.
-    #[error("Bad magic number for central directory")]
+    #[error("{}", crate::i18n::gettext("Bad magic number for central directory"))]
     BadDirectorySignature,
     /// The archive is split over several files.
-    #[error("zipfiles that span multiple disks are not supported")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("zipfiles that span multiple disks are not supported")
+    )]
     MultipleDisks,
     /// The ZIP64 locator points past its own position.
-    #[error("Corrupt zip64 end of central directory locator")]
+    #[error("{}", crate::i18n::gettext("Corrupt zip64 end of central directory locator"))]
     CorruptZip64Locator,
     /// A ZIP64 locator exists, but the record it points to does not.
-    #[error("Zip64 end of central directory record not found")]
+    #[error("{}", crate::i18n::gettext("Zip64 end of central directory record not found"))]
     MissingZip64Record,
     /// The ZIP64 end record contradicts the locator.
-    #[error("Corrupt zip64 end of central directory record")]
+    #[error("{}", crate::i18n::gettext("Corrupt zip64 end of central directory record"))]
     CorruptZip64Record,
     /// An extra field is longer than the space left for it.
-    #[error("Corrupt extra field {field_id:04x} (size={size})")]
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "Corrupt extra field {field_id} (size={size})",
+            &[("field_id", &format!("{field_id:04x}")), ("size", &size.to_string())]
+        )
+    )]
     CorruptExtraField {
         /// The field's header id.
         field_id: u16,
@@ -50,31 +59,42 @@ pub enum ZipFormatError {
         size: u16,
     },
     /// A ZIP64 extra field lacks a value its member needs.
-    #[error("Corrupt zip64 extra field. {0} not found.")]
+    #[error("{}", crate::i18n::format_message("Corrupt zip64 extra field. {field} not found.", &[("field", &.0.to_string())]))]
     CorruptZip64Field(Zip64Field),
     /// An Info-ZIP Unicode path field is too short.
-    #[error("Corrupt unicode path extra field (0x7075)")]
+    #[error("{}", crate::i18n::gettext("Corrupt unicode path extra field (0x7075)"))]
     CorruptUnicodePathField,
     /// An Info-ZIP Unicode path field is not UTF-8.
-    #[error("Corrupt unicode path extra field (0x7075): invalid utf-8 bytes")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Corrupt unicode path extra field (0x7075): invalid utf-8 bytes")
+    )]
     InvalidUnicodePath,
     /// A name flagged as UTF-8 is not valid UTF-8.
-    #[error("A file name in this ZIP is marked as UTF-8 but is not valid UTF-8.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("A file name in this ZIP is marked as UTF-8 but is not valid UTF-8.")
+    )]
     NameNotUtf8,
     /// A member needs a newer ZIP version than 6.3 to be read.
-    #[error("zip file version {}.{}", .0 / 10, .0 % 10)]
+    #[error("{}", crate::i18n::format_message("zip file version {major}.{minor}", &[("major", &(.0 / 10).to_string()), ("minor", &(.0 % 10).to_string())]))]
     UnsupportedVersion(u8),
     /// A member's local header ends early.
-    #[error("Truncated file header")]
+    #[error("{}", crate::i18n::gettext("Truncated file header"))]
     TruncatedHeader,
     /// A member's local header has the wrong signature.
-    #[error("Bad magic number for file header")]
+    #[error("{}", crate::i18n::gettext("Bad magic number for file header"))]
     BadHeaderSignature,
     /// The local header names another file than the central directory.
     #[error(
-        "File name in directory {} and header {} differ.",
-        PythonRepr(.directory),
-        PythonBytesRepr(.header)
+        "{}",
+        crate::i18n::format_message(
+            "File name in directory {directory} and header {header} differ.",
+            &[
+                ("directory", &PythonRepr(.directory).to_string()),
+                ("header", &PythonBytesRepr(.header).to_string()),
+            ]
+        )
     )]
     NameMismatch {
         /// The name in the central directory.
@@ -83,28 +103,28 @@ pub enum ZipFormatError {
         header: Vec<u8>,
     },
     /// A member's data runs into the next member: a ZIP bomb technique.
-    #[error("Overlapped entries: {} (possible zip bomb)", PythonRepr(.0))]
+    #[error("{}", crate::i18n::format_message("Overlapped entries: {name} (possible zip bomb)", &[("name", &PythonRepr(.0).to_string())]))]
     OverlappedEntries(String),
     /// Compressed patched data (general purpose flag bit 5).
-    #[error("compressed patched data (flag bit 5)")]
+    #[error("{}", crate::i18n::gettext("compressed patched data (flag bit 5)"))]
     CompressedPatchedData,
     /// Strong encryption (general purpose flag bit 6).
-    #[error("strong encryption (flag bit 6)")]
+    #[error("{}", crate::i18n::gettext("strong encryption (flag bit 6)"))]
     StrongEncryption,
     /// The member is encrypted and no password is ever supplied. The
     /// archive services refuse encrypted members before they open one, so
     /// this only guards the reader itself.
-    #[error("File {} is encrypted, password required for extraction", PythonRepr(.0))]
+    #[error("{}", crate::i18n::format_message("File {name} is encrypted, password required for extraction", &[("name", &PythonRepr(.0).to_string())]))]
     PasswordRequired(String),
     /// The compression method is not stored, deflate, bzip2 or LZMA.
-    #[error("That compression method is not supported")]
+    #[error("{}", crate::i18n::gettext("That compression method is not supported"))]
     UnsupportedMethod,
     /// The decompressed data does not match the member's CRC-32.
-    #[error("Bad CRC-32 for file {}", PythonRepr(.0))]
+    #[error("{}", crate::i18n::format_message("Bad CRC-32 for file {name}", &[("name", &PythonRepr(.0).to_string())]))]
     BadCrc(String),
     /// The compressed data cannot be decompressed. The member's name is
     /// quoted like the names in `zipfile`'s messages.
-    #[error("Error while decompressing {}: {detail}", PythonRepr(.name))]
+    #[error("{}", crate::i18n::format_message("Error while decompressing {name}: {detail}", &[("name", &PythonRepr(.name).to_string()), ("detail", detail)]))]
     CorruptData {
         /// The member's name.
         name: String,
@@ -127,9 +147,9 @@ pub enum Zip64Field {
 impl fmt::Display for Zip64Field {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            Zip64Field::FileSize => "File size",
-            Zip64Field::CompressedSize => "Compress size",
-            Zip64Field::HeaderOffset => "Header offset",
+            Zip64Field::FileSize => crate::i18n::gettext_static("File size"),
+            Zip64Field::CompressedSize => crate::i18n::gettext_static("Compress size"),
+            Zip64Field::HeaderOffset => crate::i18n::gettext_static("Header offset"),
         };
         formatter.write_str(name)
     }

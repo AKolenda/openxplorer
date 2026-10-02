@@ -36,17 +36,19 @@ pub fn validate_name(name: &str) -> Result<&str, LocationError> {
     // component, so creating or renaming an item never reaches outside its
     // folder.
     if name.is_empty() || name == "." || name == ".." {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Enter a non-empty file name, not “.” or “..”.",
-        ));
+        )));
     }
     if name.contains(['/', '\\']) || has_control_character(name) {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "A name cannot contain slashes or control characters.",
-        ));
+        )));
     }
     if name.len() > NAME_MAX_BYTES {
-        return Err(LocationError::new("This name is longer than 255 bytes."));
+        return Err(LocationError::new(crate::i18n::gettext(
+            "This name is longer than 255 bytes.",
+        )));
     }
     Ok(name)
 }
@@ -73,9 +75,9 @@ pub fn new_copy_name(name: &str, number: u32, kind: ItemKind) -> Result<String, 
         stem = without_last_char(stem);
     }
     if stem.is_empty() {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "This file name is too long to generate a duplicate name.",
-        ));
+        )));
     }
     Ok(format!("{stem}{marker}{suffix}"))
 }
@@ -95,9 +97,9 @@ pub fn safe_label(label: &str, fallback: &str) -> Result<String, LocationError> 
     // only bounded labels, and no control character that could break the
     // sidebar row or hide part of the label.
     if has_control_character(label) || label.chars().count() > MAX_LABEL_CHARS {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "A sidebar label must be at most 120 characters and contain no control characters.",
-        ));
+        )));
     }
     Ok(label.to_string())
 }

@@ -7,32 +7,42 @@ use super::types::TransferMode;
 /// `Copy: report.pdf (2/5)`, emitted when an item starts. Permanent delete
 /// reads `Delete`, the other modes use their title-cased name.
 pub(crate) fn item_label(mode: TransferMode, name: &str, position: usize, total: usize) -> String {
-    let verb = match mode {
-        TransferMode::Copy => "Copy",
-        TransferMode::Move => "Move",
-        TransferMode::Trash => "Trash",
-        TransferMode::Delete => "Delete",
+    let message = match mode {
+        TransferMode::Copy => crate::i18n::message_id("Copy: {name} ({position}/{total})"),
+        TransferMode::Move => crate::i18n::message_id("Move: {name} ({position}/{total})"),
+        TransferMode::Trash => crate::i18n::message_id("Trash: {name} ({position}/{total})"),
+        TransferMode::Delete => crate::i18n::message_id("Delete: {name} ({position}/{total})"),
     };
-    format!("{verb}: {name} ({position}/{total})")
+    crate::i18n::format_message(
+        message,
+        &[
+            ("name", name),
+            ("position", &position.to_string()),
+            ("total", &total.to_string()),
+        ],
+    )
 }
 
 /// `Copying report.pdf · 8,192 / 35,000 bytes`, emitted while bytes move.
 pub(crate) fn copy_label(name: &str, current: u64, total: u64) -> String {
-    format!(
-        "Copying {name} · {} / {} bytes",
-        group_thousands(current),
-        group_thousands(total)
+    crate::i18n::format_message(
+        "Copying {name} · {current} / {total} bytes",
+        &[
+            ("name", name),
+            ("current", &group_thousands(current)),
+            ("total", &group_thousands(total)),
+        ],
     )
 }
 
 /// Shown while the free-space check measures the items (XFER-028), as
 /// Dolphin shows its examining phase. Not in the Python app, which had no
 /// such check.
-pub(crate) const CHECKING_SPACE_LABEL: &str = "Checking free space…";
+pub(crate) const CHECKING_SPACE_LABEL: &str = crate::i18n::message_id("Checking free space…");
 
 /// `3 item(s) completed`, emitted once at the end of every run.
 pub(crate) fn completed_label(done: usize) -> String {
-    format!("{done} item(s) completed")
+    crate::i18n::format_message("{done} item(s) completed", &[("done", &(done).to_string())])
 }
 
 /// Formats like Python's `{value:,}`: `35000` becomes `35,000`.

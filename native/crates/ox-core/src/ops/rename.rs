@@ -79,7 +79,9 @@ pub(super) fn rename_item_blocking(
     context.protection.check(&uri)?;
     let source = GioNode::new(&uri);
     let Some(folder) = source.parent() else {
-        return Err(OpsError::failed("Cannot rename a filesystem root."));
+        return Err(OpsError::failed(crate::i18n::gettext(
+            "Cannot rename a filesystem root.",
+        )));
     };
     let destination = folder.child(new_name.as_ref());
     let renamed = RenamedItem {
@@ -113,9 +115,9 @@ pub(crate) fn rename_back(
     let source = GioNode::new(renamed_uri);
     let original = GioNode::new(original_uri);
     if !are_in_same_folder(&source, &original) {
-        return Err(OpsError::failed(
+        return Err(OpsError::failed(crate::i18n::gettext(
             "Undo can only rename an item back within its own folder.",
-        ));
+        )));
     }
     context.protection.check(renamed_uri)?;
     move_within_folder(&source, &original, context)

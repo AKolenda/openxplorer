@@ -9,7 +9,10 @@
 
 /// A name the dialogs refuse before asking the backend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("Use a name without slashes or control characters.")]
+#[error(
+    "{}",
+    ox_core::i18n::gettext("Use a name without slashes or control characters.")
+)]
 pub(super) struct InvalidName;
 
 /// `name`, when it is not empty, `.` or `..`, and has no slash,
@@ -28,20 +31,48 @@ pub(super) fn check_typed_name(name: &str) -> Result<&str, InvalidName> {
     Ok(name)
 }
 
+/// The folder names of `path`, a New folder name whose slashes make
+/// folders inside folders (`Photos/2026`, OPS-007), each checked as
+/// [`check_typed_name`] checks a name.
+///
+/// # Errors
+///
+/// [`InvalidName`] when any part is refused, including an empty part
+/// (`a//b`, a leading or trailing slash).
+pub(super) fn check_folder_path(path: &str) -> Result<Vec<&str>, InvalidName> {
+    path.split('/').map(check_typed_name).collect()
+}
+
+/// What New folder says, while the user types, about a name with
+/// slashes: the folders it will make, each inside the one before.
+pub(super) fn folder_path_preview(names: &[&str]) -> Option<String> {
+    if names.len() < 2 {
+        return None;
+    }
+    let quoted: Vec<String> = names.iter().map(|name| format!("“{name}”")).collect();
+    Some(ox_core::i18n::format_message(
+        "Creates {join}, each inside the one before.",
+        &[("join", &quoted.join(" › "))],
+    ))
+}
+
 /// What the name dialogs say, while the user types, about a valid `name`
 /// that may surprise: that it is `taken` in the folder, that a leading
 /// dot hides the item, or that a leading space or tilde is unusual
 /// (OPS-007, Dolphin's New folder dialog).
 pub(super) fn name_warning(name: &str, taken: bool) -> Option<String> {
     if taken {
-        return Some(format!("An item named “{name}” already exists here."));
+        return Some(ox_core::i18n::format_message(
+            "An item named “{name}” already exists here.",
+            &[("name", name)],
+        ));
     }
     let warning = if name.starts_with('.') {
-        "A name starting with a dot hides the item."
+        ox_core::i18n::gettext_static("A name starting with a dot hides the item.")
     } else if name.starts_with(char::is_whitespace) {
-        "A name starting with a space is unusual."
+        ox_core::i18n::gettext_static("A name starting with a space is unusual.")
     } else if name.starts_with('~') {
-        "A name starting with a tilde is unusual."
+        ox_core::i18n::gettext_static("A name starting with a tilde is unusual.")
     } else {
         return None;
     };

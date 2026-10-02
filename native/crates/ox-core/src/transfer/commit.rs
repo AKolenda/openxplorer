@@ -80,9 +80,9 @@ pub(crate) fn publish_staged(
     // Always leave the exact final mode, whether or not the rename worked.
     match set_mode(&staged.directory, staged.mode) {
         Ok(()) => moved,
-        Err(error) if moved.is_ok() => Err(TransferError::RecoveryRequired(format!(
-            "The copied folder exists at {}, but its final permissions could not be restored. {error}",
-            destination.uri()
+        Err(error) if moved.is_ok() => Err(TransferError::RecoveryRequired(crate::i18n::format_message(
+            "The copied folder exists at {uri}, but its final permissions could not be restored. {error}",
+            &[("uri", &destination.uri()), ("error", &(error).to_string())],
         ))),
         // Like the Python engine, a failure to restore the mode after a
         // failed rename is what gets reported.
@@ -164,15 +164,17 @@ impl Replacement<'_> {
         match (incoming, existing) {
             (NodeKind::Directory, NodeKind::Directory) => self.merge(source, destination, modes, depth),
             // XFER-009: never delete a tree as a side effect of Replace.
-            (NodeKind::Directory, _) | (_, NodeKind::Directory) => Err(TransferError::failed(
-                "A file and folder have the same name. Rename or remove one of them, then try again.",
-            )),
+            (NodeKind::Directory, _) | (_, NodeKind::Directory) => {
+                Err(TransferError::failed(crate::i18n::gettext(
+                    "A file and folder have the same name. Rename or remove one of them, then try again.",
+                )))
+            }
             (NodeKind::File | NodeKind::Symlink, NodeKind::File | NodeKind::Symlink) => {
                 self.overwrite(source, destination)
             }
-            _ => Err(TransferError::failed(
+            _ => Err(TransferError::failed(crate::i18n::gettext(
                 "This item type cannot be replaced automatically.",
-            )),
+            ))),
         }
     }
 
@@ -222,7 +224,7 @@ fn replace_via_backup(
 ) -> Result<(), TransferError> {
     let parent = destination
         .parent()
-        .ok_or_else(|| TransferError::failed("Filesystem roots cannot be replaced."))?;
+        .ok_or_else(|| TransferError::failed(crate::i18n::gettext("Filesystem roots cannot be replaced.")))?;
     let backup = reserve_backup_name(parent.as_ref(), cancel)?;
     let backup = backup.as_ref();
     // Last chance to stop: from here on, the renames run to completion.
@@ -240,11 +242,7 @@ fn replace_via_backup(
     // Only now, with the new file installed, is the old one discarded, as the
     // user's Replace asked. A failure leaves it, and the message says where.
     backup.delete().map_err(|cleanup_error| {
-        TransferError::RecoveryRequired(format!(
-            "Replacement completed, but the prior file remains at {}. \
-             Remove that backup after checking the new file. {cleanup_error}",
-            backup.uri()
-        ))
+        TransferError::RecoveryRequired(crate::i18n::format_message("Replacement completed, but the prior file remains at {uri}. Remove that backup after checking the new file. {cleanup_error}", &[("uri", &backup.uri()), ("cleanup_error", &(cleanup_error).to_string())]))
     })
 }
 
@@ -266,12 +264,7 @@ fn move_aside(destination: &dyn Node, backup: &dyn Node) -> Result<(), TransferE
         // The backup name was taken meanwhile; the original was not moved.
         AsideOutcome::Unknown if matches!(aside_error, TransferError::Exists(_)) => {}
         AsideOutcome::Unknown => {
-            return Err(TransferError::RecoveryRequired(format!(
-                "Replacement stopped before installation. Check {} and the possible \
-                 recovery file at {} before retrying. {aside_error}",
-                destination.uri(),
-                backup.uri()
-            )));
+            return Err(TransferError::RecoveryRequired(crate::i18n::format_message("Replacement stopped before installation. Check {uri} and the possible recovery file at {backup} before retrying. {aside_error}", &[("uri", &destination.uri()), ("backup", &backup.uri()), ("aside_error", &(aside_error).to_string())])));
         }
     }
     Err(aside_error)
@@ -307,11 +300,7 @@ fn restore_backup(backup: &dyn Node, destination: &dyn Node) -> Result<(), Trans
         .move_native(destination, None)
         .and_then(|()| verify_installation(backup, destination))
         .map_err(|error| {
-            TransferError::RecoveryRequired(format!(
-                "Replacement failed and restoration could not be verified. Check the original \
-                 at {} and restore it manually before retrying. {error}",
-                backup.uri()
-            ))
+            TransferError::RecoveryRequired(crate::i18n::format_message("Replacement failed and restoration could not be verified. Check the original at {uri} and restore it manually before retrying. {error}", &[("uri", &backup.uri()), ("error", &(error).to_string())]))
         })
 }
 
@@ -330,10 +319,10 @@ pub(crate) fn verify_installation(source: &dyn Node, destination: &dyn Node) -> 
     match source.info(None) {
         Err(error) if error.is_not_found() => Ok(()),
         Err(error) => Err(error),
-        Ok(_) => Err(TransferError::failed(
+        Ok(_) => Err(TransferError::failed(crate::i18n::gettext(
             "The backend reported success, but the incoming item was not moved. \
              The prior file was retained.",
-        )),
+        ))),
     }
 }
 
@@ -364,7 +353,7 @@ fn reserve_backup_name(parent: &dyn Node, cancel: &Cancellation) -> Result<Box<d
             return Ok(candidate);
         }
     }
-    Err(TransferError::failed(
+    Err(TransferError::failed(crate::i18n::gettext(
         "Could not reserve a temporary replacement name.",
-    ))
+    )))
 }

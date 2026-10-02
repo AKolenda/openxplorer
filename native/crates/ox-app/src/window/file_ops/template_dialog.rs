@@ -23,38 +23,41 @@ use ox_core::transfer::Cancellation;
 use super::names::check_typed_name;
 use super::new_items::NewFileKind;
 use super::FileCommand;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
 /// Why an empty office document is useless, and that templates are safe
 /// (`.modal-note` in `newTemplateDialog`).
-const TEMPLATE_NOTE: &str = "An empty .docx, .xlsx, .pdf, or .odt file is not a valid document. For those \
+const TEMPLATE_NOTE: &str = crate::i18n::message_id(
+    "An empty .docx, .xlsx, .pdf, or .odt file is not a valid document. For those \
                              formats, place a real starter document in your Templates folder and choose it \
-                             here. Templates are copied, never executed.";
+                             here. Templates are copied, never executed.",
+);
 
 /// The suffix of a template from the Templates folder in the list.
-const USER_TEMPLATE_SUFFIX: &str = " · Your template";
+const USER_TEMPLATE_SUFFIX: &str = crate::i18n::message_id(" · Your template");
 
 /// The title and the line under it, for `kind`.
-fn dialog_text(kind: NewFileKind) -> (&'static str, &'static str) {
+fn dialog_text(kind: &NewFileKind) -> (&'static str, &'static str) {
     match kind {
         NewFileKind::Empty => (
-            "New file",
-            "Create an empty file with any filename and extension.",
+            ox_core::i18n::gettext_static("New file"),
+            ox_core::i18n::gettext_static("Create an empty file with any filename and extension."),
         ),
-        NewFileKind::Starter(_) | NewFileKind::AnyTemplate => (
-            "New from template",
-            "Create a new copy without changing the template.",
+        NewFileKind::Starter(_) | NewFileKind::AnyTemplate | NewFileKind::Template(_) => (
+            ox_core::i18n::gettext_static("New from template"),
+            ox_core::i18n::gettext_static("Create a new copy without changing the template."),
         ),
     }
 }
 
 /// The template `kind` starts with: its own, or the first of the list.
-fn initial_position(kind: NewFileKind, list: &TemplateList) -> usize {
+fn initial_position(kind: &NewFileKind, list: &TemplateList) -> usize {
     let wanted = match kind {
         NewFileKind::Empty => Some(TemplateId::Builtin(BuiltinTemplate::Empty)),
-        NewFileKind::Starter(template) => Some(TemplateId::Builtin(template)),
+        NewFileKind::Starter(template) => Some(TemplateId::Builtin(*template)),
+        NewFileKind::Template(id) => Some(id.clone()),
         NewFileKind::AnyTemplate => None,
     };
     wanted
@@ -73,7 +76,7 @@ fn list_label(template: &Template) -> String {
 
 /// The user's Templates folder, read from `user-dirs.dirs` as the Python
 /// bridge reads it for every request.
-async fn templates_folder() -> Option<PathBuf> {
+pub(super) async fn templates_folder() -> Option<PathBuf> {
     let reading = gio::spawn_blocking(|| {
         let paths = FolderLocations::from_environment().read_paths();
         paths.path(KnownFolder::Templates).to_path_buf()
@@ -108,7 +111,7 @@ impl BrowserWindow {
                 return;
             }
         };
-        let created = self.ask_for_template_file(kind, &list, &folder_uri).await;
+        let created = self.ask_for_template_file(&kind, &list, &folder_uri).await;
         if let Some(created) = created {
             self.finish_creation(created);
         }
@@ -117,7 +120,7 @@ impl BrowserWindow {
     /// Shows the dialog until a file is created or the user cancels.
     async fn ask_for_template_file(
         &self,
-        kind: NewFileKind,
+        kind: &NewFileKind,
         list: &TemplateList,
         folder_uri: &str,
     ) -> Option<CreatedItem> {
@@ -125,7 +128,7 @@ impl BrowserWindow {
         let dialog = Dialog::new(self, title, description);
         let fields = add_template_fields(&dialog, list, initial_position(kind, list));
         dialog.add_cancel_button();
-        dialog.add_button("Create", ButtonStyle::Accent);
+        dialog.add_button(ox_core::i18n::gettext_static("Create"), ButtonStyle::Accent);
         dialog.open();
         loop {
             dialog.next_response().await?;
@@ -154,13 +157,13 @@ fn add_template_fields(dialog: &Dialog, list: &TemplateList, initial: usize) -> 
         .templates
         .get(initial)
         .map_or("", |template| template.suggested_name.as_str());
-    let name = dialog.add_text_field("File name", suggested);
+    let name = dialog.add_text_field(ox_core::i18n::gettext_static("File name"), suggested);
     let labels: Vec<String> = list.templates.iter().map(list_label).collect();
     let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
     let choice = gtk::DropDown::from_strings(&label_refs);
     choice.set_selected(u32::try_from(initial).unwrap_or(0));
     choice.add_css_class("template-select");
-    dialog.add_labelled("File type / template", &choice);
+    dialog.add_labelled(ox_core::i18n::gettext_static("File type / template"), &choice);
     let suggestions: Vec<String> = list
         .templates
         .iter()
@@ -176,8 +179,11 @@ fn add_template_fields(dialog: &Dialog, list: &TemplateList, initial: usize) -> 
             }
         }
     ));
-    dialog.add_note(TEMPLATE_NOTE);
-    dialog.add_hint(&format!("Templates folder: {}", list.folder.display()));
+    dialog.add_note(ox_core::i18n::gettext_static(TEMPLATE_NOTE));
+    dialog.add_hint(&ox_core::i18n::format_message(
+        "Templates folder: {display}",
+        &[("display", &list.folder.display().to_string())],
+    ));
     TemplateFields { name, choice }
 }
 
@@ -232,13 +238,13 @@ mod tests {
         let list = starters();
         let markdown = NewFileKind::Starter(BuiltinTemplate::Markdown);
 
-        assert_eq!(initial_position(NewFileKind::Empty, &list), 5);
-        assert_eq!(initial_position(markdown, &list), 1);
-        assert_eq!(initial_position(NewFileKind::AnyTemplate, &list), 0);
-        assert_eq!(dialog_text(NewFileKind::Empty).0, "New file");
-        assert_eq!(dialog_text(markdown).0, "New from template");
+        assert_eq!(initial_position(&NewFileKind::Empty, &list), 5);
+        assert_eq!(initial_position(&markdown, &list), 1);
+        assert_eq!(initial_position(&NewFileKind::AnyTemplate, &list), 0);
+        assert_eq!(dialog_text(&NewFileKind::Empty).0, "New file");
+        assert_eq!(dialog_text(&markdown).0, "New from template");
         assert_eq!(
-            dialog_text(NewFileKind::AnyTemplate).1,
+            dialog_text(&NewFileKind::AnyTemplate).1,
             "Create a new copy without changing the template."
         );
     }

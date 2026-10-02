@@ -16,6 +16,7 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use super::gestures;
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// A window-wide key and what it does.
@@ -33,6 +34,18 @@ impl WindowKey {
         (WindowKey::SelectAll, "<Primary>a"),
         (WindowKey::ClearSelection, "Escape"),
     ];
+}
+
+/// The window-wide selection keys and the actions they match, by
+/// detailed name (the keyboard shortcuts window, CMD-032).
+pub(super) fn selection_key_bindings() -> impl Iterator<Item = (String, &'static str)> {
+    WindowKey::ALL.into_iter().map(|(key, keys)| {
+        let action = match key {
+            WindowKey::SelectAll => WindowAction::SelectAll,
+            WindowKey::ClearSelection => WindowAction::SelectNone,
+        };
+        (action.detailed_name(), keys)
+    })
 }
 
 impl BrowserWindow {

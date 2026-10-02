@@ -39,8 +39,10 @@ use ox_core::location::{parent_location, require_item_uri, same_location, Locati
 use ox_core::ops::{is_recycle_bin_item, LinkRequest};
 use ox_core::transfer::TransferMode;
 
+use super::activation::query_entry;
 use super::file_drag::{has_open_popover, DraggedItems};
 use super::file_ops::IncomingItems;
+use super::session::{TabPlacement, TabPosition};
 use super::BrowserWindow;
 
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
@@ -79,6 +81,10 @@ pub(crate) enum DropDestination {
     Program(ProgramTarget),
     /// Moved to the Trash: a drop on the Recycle Bin (OPS-045).
     RecycleBin,
+    /// Each folder opened in a new tab at the end, behind the active one:
+    /// a drop on the tab strip beside the tabs (TAB-018). Files are left
+    /// alone, as in Dolphin.
+    NewTabs,
 }
 
 impl DropDestination {
@@ -96,43 +102,64 @@ impl DropDestination {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum DropRefusal {
     /// No items, or more than [`MAX_DROPPED_ITEMS`].
-    #[error("Drop between 1 and 200 files or folders.")]
+    #[error("{}", ox_core::i18n::gettext("Drop between 1 and 200 files or folders."))]
     ItemCount,
     /// A link or text rather than local or SMB files.
-    #[error("Drop files or folders, rather than links or text.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Drop files or folders, rather than links or text.")
+    )]
     NotFiles,
     /// A whole server, or anything but a local or SMB location, dropped on
     /// Quick access (`receiveFileDrop`).
-    #[error("Drop up to 200 local files or connected network items.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Drop up to 200 local files or connected network items.")
+    )]
     NotPinnable,
     /// An item that is not a file or folder that can be copied, such as a
     /// whole share.
     #[error(transparent)]
     Location(#[from] LocationError),
     /// A file operation runs or is being planned.
-    #[error("Finish the current operation before dropping files.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Finish the current operation before dropping files.")
+    )]
     Busy,
     /// A dialog, sign-in prompt or menu is open.
-    #[error("Close the dialog and finish the current operation before dropping files.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Close the dialog and finish the current operation before dropping files.")
+    )]
     DialogOpen,
     /// Nothing under the pointer takes files: a search, a page, a server
     /// listing or a previous version.
-    #[error("Open a writable destination folder before dropping files.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Open a writable destination folder before dropping files.")
+    )]
     NoDestination,
     /// A folder dropped onto itself.
-    #[error("A folder cannot be copied into itself.")]
+    #[error("{}", ox_core::i18n::gettext("A folder cannot be copied into itself."))]
     IntoItself,
     /// The tab moved to another folder while the items were read.
-    #[error("The destination changed. Drop the files again.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("The destination changed. Drop the files again.")
+    )]
     DestinationChanged,
     /// The items could not be read in time, or at all.
-    #[error("The file drop is empty or too large.")]
+    #[error("{}", ox_core::i18n::gettext("The file drop is empty or too large."))]
     Unreadable,
     /// Recycle Bin items dropped on the Recycle Bin.
-    #[error("These items are in the Recycle Bin already.")]
+    #[error("{}", ox_core::i18n::gettext("These items are in the Recycle Bin already."))]
     InRecycleBin,
     /// Recycle Bin items dropped together with other items.
-    #[error("Drag items out of the Recycle Bin on their own.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Drag items out of the Recycle Bin on their own.")
+    )]
     MixedWithRecycleBin,
 }
 
@@ -384,6 +411,15 @@ impl BrowserWindow {
                 self.open_with_program(program, items);
                 Ok(())
             }
+            DropDestination::NewTabs => {
+                let items = dropped_uris(uris)?;
+                glib::spawn_future_local(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    async move { window.open_dropped_folders(items).await }
+                ));
+                Ok(())
+            }
             DropDestination::RecycleBin => {
                 if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
                     return Err(DropRefusal::InRecycleBin);
@@ -460,6 +496,20 @@ impl BrowserWindow {
             async move { window.move_out_of_recycle_bin(uris, folder).await }
         ));
         Ok(())
+    }
+
+    /// Opens each of `items` that is a folder in a new tab at the end,
+    /// behind the active one, in their order (`tabDropEvent` in Dolphin).
+    pub(super) async fn open_dropped_folders(&self, items: Vec<String>) {
+        for uri in items {
+            let is_folder = query_entry(&uri).await.is_ok_and(|entry| entry.is_dir);
+            if !is_folder {
+                continue;
+            }
+            if let Err(error) = self.open_tab_at(&uri, TabPlacement::Background, TabPosition::End) {
+                self.show_message(&error.to_string());
+            }
+        }
     }
 
     /// Runs `incoming` through the conflict check and the transfer engine

@@ -57,7 +57,7 @@
               <object class="GtkEntry" id="entry">
                 <property name="hexpand">true</property>
                 <accessibility>
-                  <property name="label">Location</property>
+                  <property name="label" translatable="yes">Location</property>
                 </accessibility>
               </object>
             </property>
@@ -68,13 +68,13 @@
     <child>
       <!-- #address-edit: the chevron that edits the address. -->
       <object class="GtkButton" id="edit_button">
-        <property name="tooltip-text">Edit location (Ctrl+L)</property>
+        <property name="tooltip-text" translatable="yes">Edit location (Ctrl+L)</property>
         <property name="valign">center</property>
         <style>
           <class name="address-chevron"/>
         </style>
         <accessibility>
-          <property name="label">Edit location</property>
+          <property name="label" translatable="yes">Edit location</property>
         </accessibility>
       </object>
     </child>

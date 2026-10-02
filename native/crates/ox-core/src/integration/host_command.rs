@@ -71,13 +71,13 @@ pub(crate) struct HostCommand {
 pub(crate) enum CommandFailure {
     /// The program is not installed on the host, or `flatpak-spawn` is not
     /// installed in the sandbox.
-    #[error("the program is not installed")]
+    #[error("{}", crate::i18n::gettext("the program is not installed"))]
     NotInstalled,
     /// The program exited unsuccessfully.
-    #[error("the program exited with {0}")]
+    #[error("{}", crate::i18n::format_message("the program exited with {status}", &[("status", &.0.to_string())]))]
     Failed(ExitStatus),
     /// The program did not finish in time and was stopped.
-    #[error("the program did not finish in time")]
+    #[error("{}", crate::i18n::gettext("the program did not finish in time"))]
     TimedOut,
     /// Starting or waiting for the program failed.
     #[error(transparent)]

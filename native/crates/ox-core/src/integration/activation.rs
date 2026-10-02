@@ -23,22 +23,33 @@ const OWN_DESKTOP_IDS: [&str; 2] = [
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum OpenError {
     /// The item is a special file, a dangling link or of unknown type.
-    #[error("This item is not a regular file or a readable folder.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("This item is not a regular file or a readable folder.")
+    )]
     NotRegularOrFolder,
     /// No other application handles the content type.
-    #[error("No application is installed for this file type. Use Open with… to choose one.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "No application is installed for this file type. Use Open with… to choose one."
+        )
+    )]
     NoApplication,
     /// The item turned out to be a folder, which is navigated instead.
-    #[error("This item is a folder.")]
+    #[error("{}", crate::i18n::gettext("This item is a folder."))]
     IsFolder,
     /// The item is not a regular file.
-    #[error("Cannot open a special filesystem object.")]
+    #[error("{}", crate::i18n::gettext("Cannot open a special filesystem object."))]
     SpecialObject,
     /// The item is on a share without a local path, and the application
     /// only accepts local paths.
     #[error(
-        "This application needs a local path. Install gvfs-fuse or mount the share with CIFS, then \
+        "{}",
+        crate::i18n::gettext(
+            "This application needs a local path. Install gvfs-fuse or mount the share with CIFS, then \
          reopen it; or choose a URI-capable application with Open with…"
+        )
     )]
     NeedsLocalPath,
     /// The item could not be inspected; [`EntryError::needs_mount`] asks

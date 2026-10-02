@@ -21,13 +21,15 @@ use super::FileCommand;
 use crate::window::BrowserWindow;
 
 /// The panel's label while items are restored.
-const RESTORING: &str = "Restoring items…";
+const RESTORING: &str = crate::i18n::message_id("Restoring items…");
 
 /// The question Empty Recycle Bin asks.
 fn empty_confirmation() -> DeleteConfirmation {
     DeleteConfirmation {
         title: "Empty Recycle Bin?",
-        body: "Every item in the Recycle Bin is deleted permanently and cannot be recovered.".to_owned(),
+        body: ox_core::i18n::gettext(
+            "Every item in the Recycle Bin is deleted permanently and cannot be recovered.",
+        ),
         confirm_label: "Empty Recycle Bin",
     }
 }
@@ -41,7 +43,7 @@ impl BrowserWindow {
             return;
         }
         let uris = self.folder_pane().model().selected_uris();
-        let Some(context) = self.begin_operation(RESTORING) else {
+        let Some(context) = self.begin_operation(ox_core::i18n::gettext_static(RESTORING)) else {
             return;
         };
         let outcome = restore_from_recycle_bin(&uris, &context).await;
@@ -57,7 +59,7 @@ impl BrowserWindow {
     /// Recycle Bin items dropped into `folder`: moved there under their
     /// original names, never overwriting (OPS-046).
     pub(crate) async fn move_out_of_recycle_bin(&self, uris: Vec<String>, folder: String) {
-        let Some(context) = self.begin_operation(RESTORING) else {
+        let Some(context) = self.begin_operation(ox_core::i18n::gettext_static(RESTORING)) else {
             return;
         };
         let outcome = move_out_of_recycle_bin(&uris, &folder, &context).await;

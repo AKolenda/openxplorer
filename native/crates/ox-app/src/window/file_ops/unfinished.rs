@@ -9,7 +9,7 @@
 
 use ox_core::ops::{leftovers_message, UnfinishedMark, UnfinishedMarks, UNFINISHED_TITLE};
 
-use crate::window::dialog;
+use crate::dialog;
 use crate::window::BrowserWindow;
 
 /// Marks a copy or move into `destination` as running until the mark is
@@ -29,7 +29,12 @@ impl BrowserWindow {
             .await
             .unwrap_or_default();
         if !leftovers.is_empty() {
-            dialog::show_message(self, UNFINISHED_TITLE, &leftovers_message(&leftovers)).await;
+            dialog::show_message(
+                self,
+                ox_core::i18n::gettext_static(UNFINISHED_TITLE),
+                &leftovers_message(&leftovers),
+            )
+            .await;
         }
     }
 }

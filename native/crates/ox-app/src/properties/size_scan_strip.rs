@@ -19,7 +19,7 @@ use ox_core::sizes::FolderSize;
 use crate::window::{ButtonStyle, WindowAction};
 
 /// The label while the scan stops.
-const CANCELLING: &str = "Cancelling size scan…";
+const CANCELLING: &str = crate::i18n::message_id("Cancelling size scan…");
 
 /// Where one folder of a run is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,16 +54,19 @@ pub(crate) fn progress_text(
     is_cancelling: bool,
 ) -> String {
     let lead = if is_cancelling {
-        "Cancelling… "
+        ox_core::i18n::gettext_static("Cancelling… ")
     } else {
-        "Scanning folder size · "
+        ox_core::i18n::gettext_static("Scanning folder size · ")
     };
-    let counted = format!(
-        "{}/{} · {name} · {} · {} files",
-        position.index + 1,
-        position.total,
-        format::pretty_bytes(size.bytes),
-        group_thousands(size.files)
+    let counted = ox_core::i18n::format_message(
+        "{value1}/{total} · {name} · {value3} · {group_thousands} files",
+        &[
+            ("value1", &(position.index + 1).to_string()),
+            ("total", &position.total.to_string()),
+            ("name", name),
+            ("value3", &format::pretty_bytes(size.bytes)),
+            ("group_thousands", &group_thousands(size.files)),
+        ],
     );
     format!("{lead}{counted}")
 }
@@ -72,13 +75,23 @@ pub(crate) fn progress_text(
 /// bytes; recalculate after changes`, or `Size scan cancelled · …`.
 pub(crate) fn end_text(end: RunEnd) -> String {
     let hint = match end {
-        RunEnd::Cancelled => "Size scan cancelled".to_owned(),
-        RunEnd::Finished { complete, partial: 0 } => format!("Size scan finished · {complete} complete"),
-        RunEnd::Finished { complete, partial } => {
-            format!("Size scan finished · {complete} complete · {partial} partial/unavailable")
-        }
+        RunEnd::Cancelled => ox_core::i18n::gettext_static("Size scan cancelled").to_owned(),
+        RunEnd::Finished { complete, partial: 0 } => ox_core::i18n::format_message(
+            "Size scan finished · {complete} complete",
+            &[("complete", &complete.to_string())],
+        ),
+        RunEnd::Finished { complete, partial } => ox_core::i18n::format_message(
+            "Size scan finished · {complete} complete · {partial} partial/unavailable",
+            &[
+                ("complete", &complete.to_string()),
+                ("partial", &partial.to_string()),
+            ],
+        ),
     };
-    format!("{hint} · Logical bytes; recalculate after changes")
+    ox_core::i18n::format_message(
+        "{hint} · Logical bytes; recalculate after changes",
+        &[("hint", &hint)],
+    )
 }
 
 /// `1234567` as `1,234,567`, as `toLocaleString` writes it in English.
@@ -159,7 +172,7 @@ impl SizeScanStrip {
     /// Shows the bar for a new run, with Cancel scan.
     pub(crate) fn start(&self) {
         let button = &self.imp().button;
-        button.set_label("Cancel scan");
+        button.set_label(&ox_core::i18n::gettext("Cancel scan"));
         button.set_sensitive(true);
         self.set_visible(true);
     }
@@ -171,7 +184,9 @@ impl SizeScanStrip {
 
     /// Says the run is stopping; Cancel scan cannot be pressed again.
     pub(crate) fn show_cancelling(&self) {
-        self.imp().label.set_text(CANCELLING);
+        self.imp()
+            .label
+            .set_text(ox_core::i18n::gettext_static(CANCELLING));
         self.imp().button.set_sensitive(false);
     }
 
@@ -179,7 +194,7 @@ impl SizeScanStrip {
     pub(crate) fn show_end(&self, end: RunEnd) {
         let imp = self.imp();
         imp.label.set_text(&end_text(end));
-        imp.button.set_label("Dismiss");
+        imp.button.set_label(&ox_core::i18n::gettext("Dismiss"));
         imp.button.set_sensitive(true);
     }
 

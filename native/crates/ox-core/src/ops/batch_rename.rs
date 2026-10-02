@@ -25,13 +25,13 @@ use crate::location::validate_name;
 pub const NUMBER_PLACEHOLDER: char = '#';
 
 /// The name the batch rename dialog starts with (Dolphin's "New name #").
-pub const DEFAULT_BATCH_NAME: &str = "New name #";
+pub const DEFAULT_BATCH_NAME: &str = crate::i18n::message_id("New name #");
 
 /// Extensions of two parts, kept whole: "backup.tar.gz" keeps ".tar.gz".
 const COMPOUND_EXTENSIONS: [&str; 5] = [".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar.lz"];
 
 /// Why the typed name would give two items the same name.
-const NEEDS_NUMBER: &str = "Add # to the name, so each item gets its own number.";
+const NEEDS_NUMBER: &str = crate::i18n::message_id("Add # to the name, so each item gets its own number.");
 
 /// One item of a batch rename.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,7 +65,9 @@ impl BatchRename {
     pub fn new_names(&self) -> Result<Vec<String>, OpsError> {
         let pattern = self.pattern.trim();
         if pattern.is_empty() {
-            return Err(OpsError::failed("Enter a name for the items."));
+            return Err(OpsError::failed(crate::i18n::gettext(
+                "Enter a name for the items.",
+            )));
         }
         let names: Vec<String> = self
             .items
@@ -83,7 +85,7 @@ impl BatchRename {
         sorted.sort();
         sorted.dedup();
         if sorted.len() != names.len() {
-            return Err(OpsError::failed(NEEDS_NUMBER));
+            return Err(OpsError::failed(crate::i18n::gettext(NEEDS_NUMBER)));
         }
         Ok(names)
     }

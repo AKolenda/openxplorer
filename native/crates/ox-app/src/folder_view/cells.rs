@@ -12,7 +12,9 @@
 
 mod cell_owners;
 mod custom_icon;
+mod expander;
 mod row_tooltip;
+mod selection_marker;
 
 use std::rc::Rc;
 
@@ -22,6 +24,7 @@ use gtk::{glib, pango};
 
 pub(crate) use cell_owners::CellOwners;
 pub(crate) use custom_icon::CUSTOM_ICON;
+pub(crate) use expander::connect_expanders;
 pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip};
 
 use crate::folder_view::item::FileItem;
@@ -32,6 +35,14 @@ const ROW_ICON_GAP: i32 = 11;
 
 /// Gap between a tile's icon and its name (`.file-tile{gap:8px}`).
 const TILE_ICON_GAP: i32 = 8;
+
+/// Gap between a compact item's icon and its name.
+const COMPACT_ICON_GAP: i32 = 6;
+
+/// How wide a compact item's name is, in characters: the columns are all
+/// this wide, and a longer name is cut off with an ellipsis (Dolphin's
+/// Compact view caps its columns the same way).
+const COMPACT_NAME_CHARS: i32 = 28;
 
 /// Lines of name a tile shows (`.tile-name{max-height:33px}` at a 1.35
 /// line height).
@@ -72,6 +83,9 @@ pub(crate) enum CellLayout {
     DetailsRow,
     /// An icon-view tile: the icon above up to two centred lines of name.
     IconTile,
+    /// A compact-view item: a small icon left of a name
+    /// [`COMPACT_NAME_CHARS`] wide (VIEW-008).
+    CompactItem,
 }
 
 mod imp {
@@ -94,10 +108,19 @@ mod imp {
         pub(super) icon_size: Cell<i32>,
         /// The text field in the name's place while the item is renamed.
         pub(super) name_editor: RefCell<Option<gtk::Entry>>,
-        /// The item's custom icon, shown in place of the art (PROP-016).
+        /// The item's custom icon (PROP-016) or preview (VIEW-057), shown
+        /// in place of the art.
         pub(super) custom_icon: gtk::Picture,
-        /// Counts the lookups, so a late custom icon is dropped.
-        pub(super) icon_lookup: Cell<u64>,
+        /// The running lookup of the custom icon or preview.
+        pub(super) picture_lookup: RefCell<Option<glib::JoinHandle<()>>>,
+        /// Holds the icon, with the selection marker over its corner.
+        pub(super) icon_frame: gtk::Overlay,
+        /// Adds the item to the selection or takes it out (SEL-014).
+        pub(super) marker: gtk::Button,
+        /// Expands a folder of a details row in place (VIEW-035).
+        pub(super) expander: gtk::Button,
+        /// The tree row the cell follows, and its handler.
+        pub(super) tree_row: RefCell<Option<(gtk::TreeListRow, glib::SignalHandlerId)>>,
     }
 
     #[glib::object_subclass]
@@ -111,10 +134,12 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let cell = self.obj();
-            cell.append(&self.image);
+            self.icon_frame.set_child(Some(&self.image));
             self.custom_icon.set_content_fit(gtk::ContentFit::Contain);
             self.custom_icon.set_visible(false);
-            cell.append(&self.custom_icon);
+            self.icon_frame.add_overlay(&self.custom_icon);
+            self.icon_frame.add_overlay(&self.marker);
+            cell.append(&self.icon_frame);
             cell.append(&self.label);
         }
     }
@@ -144,6 +169,7 @@ impl FileCell {
         match layout {
             CellLayout::DetailsRow => cell.lay_out_as_row(),
             CellLayout::IconTile => cell.lay_out_as_tile(),
+            CellLayout::CompactItem => cell.lay_out_as_compact_item(),
         }
         cell
     }
@@ -160,11 +186,25 @@ impl FileCell {
         label.set_single_line_mode(true);
     }
 
+    /// The icon left of a one-line name [`COMPACT_NAME_CHARS`] wide.
+    fn lay_out_as_compact_item(&self) {
+        self.set_orientation(gtk::Orientation::Horizontal);
+        self.set_spacing(COMPACT_ICON_GAP);
+        let label = &self.imp().label;
+        label.set_xalign(0.0);
+        label.set_ellipsize(pango::EllipsizeMode::End);
+        label.set_single_line_mode(true);
+        label.set_width_chars(COMPACT_NAME_CHARS);
+        label.set_max_width_chars(COMPACT_NAME_CHARS);
+    }
+
     /// The icon above a centred name wrapped to [`TILE_NAME_LINES`].
     fn lay_out_as_tile(&self) {
         self.set_orientation(gtk::Orientation::Vertical);
         self.set_spacing(TILE_ICON_GAP);
         self.set_valign(gtk::Align::Start);
+        // The marker sits on the icon's corner, not the tile's.
+        self.imp().icon_frame.set_halign(gtk::Align::Center);
         let label = &self.imp().label;
         label.set_wrap(true);
         label.set_wrap_mode(pango::WrapMode::WordChar);
@@ -191,6 +231,20 @@ impl FileCell {
         self.insert_child_after(editor, Some(&imp.label));
         imp.label.set_visible(false);
         imp.name_editor.replace(Some(editor.clone()));
+    }
+
+    /// Whether `point`, in the cell's coordinates, is on the name's text
+    /// rather than beside it.
+    pub(crate) fn name_text_contains(&self, point: gtk::graphene::Point) -> bool {
+        let label = &self.imp().label;
+        let Some(point) = self.compute_point(label, &point).filter(|_| label.is_visible()) else {
+            return false;
+        };
+        let (left, top) = label.layout_offsets();
+        let (width, height) = label.layout().pixel_size();
+        #[expect(clippy::cast_precision_loss, reason = "label sizes are small")]
+        let text = gtk::graphene::Rect::new(left as f32, top as f32, width as f32, height as f32);
+        text.contains_point(&point)
     }
 
     /// Shows the name again in place of the text field, if one shows.
@@ -226,8 +280,10 @@ impl FileCell {
 /// file list (`#file-canvas` and `#main` in index.html).
 pub(crate) fn label_view(view: &gtk::Widget) {
     view.update_property(&[
-        gtk::accessible::Property::Label("Files"),
-        gtk::accessible::Property::Description("Folder contents — type a filename prefix to select"),
+        gtk::accessible::Property::Label(&ox_core::i18n::gettext("Files")),
+        gtk::accessible::Property::Description(&ox_core::i18n::gettext(
+            "Folder contents — type a filename prefix to select",
+        )),
     ]);
 }
 
@@ -248,6 +304,7 @@ pub(crate) fn connect_file_cells(
         list_item.set_child(Some(&cell));
         setup_owners.register(&cell, list_item);
         show_row_tooltip(&cell, &setup_owners, |_| None);
+        cell.follow_selection_marker(list_item, &setup_owners);
     });
     let bind_owners = Rc::clone(owners);
     factory.connect_bind(move |_, object| {
@@ -257,8 +314,13 @@ pub(crate) fn connect_file_cells(
             // A tile is named after its item (`aria-label` in app.js).
             list_item.set_accessible_label(&item.entry().name);
             cell.bind(&item);
-            cell.look_up_custom_icon(&item);
+            cell.look_up_picture(&item, bind_owners.previews());
             bind_owners.style_cell(&cell, &item);
+        }
+    });
+    factory.connect_unbind(|_, object| {
+        if let Some(cell) = as_list_item(object).child().and_downcast::<FileCell>() {
+            cell.cancel_picture_lookup();
         }
     });
 }

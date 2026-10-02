@@ -35,11 +35,14 @@ pub(super) enum CommandOption {
     SoftwareRendering,
     /// `--quit`: closes every window once file operations finish.
     Quit,
+    /// `--split`: the window opens split, the locations paired into its
+    /// panes (Dolphin's `--split`, INT-005).
+    Split,
 }
 
 impl CommandOption {
     /// Every option, in `CLI_OPTIONS` order.
-    pub(super) const ALL: [Self; 7] = [
+    pub(super) const ALL: [Self; 8] = [
         Self::NewWindow,
         Self::Windows,
         Self::Settings,
@@ -47,6 +50,7 @@ impl CommandOption {
         Self::FileManagerService,
         Self::SoftwareRendering,
         Self::Quit,
+        Self::Split,
     ];
 
     /// The option's long name, without the dashes.
@@ -59,20 +63,28 @@ impl CommandOption {
             Self::FileManagerService => "filemanager-service",
             Self::SoftwareRendering => "software-rendering",
             Self::Quit => "quit",
+            Self::Split => "split",
         }
     }
 
     /// What `--help` says about the option, word for word from
     /// `CLI_OPTIONS`.
-    pub(super) const fn description(self) -> &'static str {
+    pub(super) fn description(self) -> &'static str {
         match self {
-            Self::NewWindow => "Create a separate OpenXplorer window",
-            Self::Windows => "Show existing OpenXplorer windows",
-            Self::Settings => "Open Settings",
-            Self::Select => "Reveal files in their parent folders",
-            Self::FileManagerService => "Start the opted-in FileManager1 service",
-            Self::SoftwareRendering => "Use software rendering for a new window",
-            Self::Quit => "Close all OpenXplorer windows after file operations finish",
+            Self::NewWindow => ox_core::i18n::gettext_static("Create a separate OpenXplorer window"),
+            Self::Windows => ox_core::i18n::gettext_static("Show existing OpenXplorer windows"),
+            Self::Settings => ox_core::i18n::gettext_static("Open Settings"),
+            Self::Select => ox_core::i18n::gettext_static("Reveal files in their parent folders"),
+            Self::FileManagerService => {
+                ox_core::i18n::gettext_static("Start the opted-in FileManager1 service")
+            }
+            Self::SoftwareRendering => {
+                ox_core::i18n::gettext_static("Use software rendering for a new window")
+            }
+            Self::Quit => {
+                ox_core::i18n::gettext_static("Close all OpenXplorer windows after file operations finish")
+            }
+            Self::Split => ox_core::i18n::gettext_static("Show the locations side by side in split view"),
         }
     }
 }
@@ -91,6 +103,13 @@ pub(super) enum CommandRequest {
     Windows,
     /// `--settings`.
     Settings,
+    /// `--split [locations]`, in a new window with `--new-window`.
+    Split {
+        /// The locations, paired into the panes of split tabs.
+        locations: Vec<String>,
+        /// `--new-window` was given too.
+        new_window: bool,
+    },
     /// `--new-window [locations]`.
     NewWindow(Vec<String>),
     /// Locations to open in the active window.
@@ -104,7 +123,7 @@ pub(super) enum CommandRequest {
 #[derive(Debug, thiserror::Error)]
 pub(super) enum CommandLineError {
     /// `--select` without a file.
-    #[error("--select needs a file path.")]
+    #[error("{}", ox_core::i18n::gettext("--select needs a file path."))]
     SelectWithoutFile,
     /// A location the app cannot open.
     #[error(transparent)]
@@ -156,6 +175,11 @@ impl CommandRequest {
             Self::Windows
         } else if has_option(CommandOption::Settings) {
             Self::Settings
+        } else if has_option(CommandOption::Split) {
+            Self::Split {
+                locations,
+                new_window: has_option(CommandOption::NewWindow),
+            }
         } else if has_option(CommandOption::NewWindow) {
             Self::NewWindow(locations)
         } else if locations.is_empty() {
@@ -240,6 +264,14 @@ mod tests {
                 request: CommandRequest::NewWindow(vec![documents.to_owned()]),
             },
             RequestCase {
+                options: &[CommandOption::Split, CommandOption::NewWindow],
+                locations: &[DOCUMENTS],
+                request: CommandRequest::Split {
+                    locations: vec![documents.to_owned()],
+                    new_window: true,
+                },
+            },
+            RequestCase {
                 options: &[],
                 locations: &[DOCUMENTS],
                 request: CommandRequest::Open(vec![documents.to_owned()]),
@@ -276,6 +308,7 @@ mod tests {
                 "filemanager-service",
                 "software-rendering",
                 "quit",
+                "split",
             ]
         );
     }

@@ -15,13 +15,15 @@ use gtk::prelude::*;
 use ox_core::location::normalise_location;
 use ox_core::versions::{PreviousVersion, PreviousVersions};
 
-use crate::dialog_layer::{labelled_entry, note, DialogFrame, DialogWidth};
+use crate::dialog::{labelled_entry, note, DialogFrame, DialogWidth};
 use crate::window::ButtonStyle;
 
 /// What the dialog says the copy does, and does not do.
-const RESTORE_NOTE: &str = "Copies this version into a destination you choose. Existing names are kept; \
+const RESTORE_NOTE: &str = crate::i18n::message_id(
+    "Copies this version into a destination you choose. Existing names are kept; \
                             the restored item receives a copy name if needed. The live original and \
-                            snapshot are not replaced.";
+                            snapshot are not replaced.",
+);
 
 /// A previous version to restore a copy of.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,14 +70,14 @@ impl RestoreRequest {
         home: &str,
         restore: impl Fn(String) + 'static,
     ) -> DialogFrame {
-        let frame = DialogFrame::new("Restore a copy", DialogWidth::Standard);
+        let frame = DialogFrame::new(&ox_core::i18n::gettext("Restore a copy"), DialogWidth::Standard);
         frame.set_message(&format!("{} · {}", self.label, self.name));
         let body = frame.body();
-        body.append(&note(RESTORE_NOTE));
+        body.append(&note(ox_core::i18n::gettext_static(RESTORE_NOTE)));
         let shown_home = glib::filename_from_uri(home)
             .map_or_else(|_| home.to_owned(), |(path, _)| path.display().to_string());
-        let destination = labelled_entry(&body, "Destination folder", &shown_home);
-        frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
+        let destination = labelled_entry(&body, &ox_core::i18n::gettext("Destination folder"), &shown_home);
+        frame.add_closing_button(&ox_core::i18n::gettext("Cancel"), ButtonStyle::Bordered, || {});
         // Copy version and Enter in the field both confirm.
         let confirm = Rc::new(glib::clone!(
             #[weak]
@@ -90,7 +92,7 @@ impl RestoreRequest {
                 }
             }
         ));
-        let copy = frame.add_button("Copy version", ButtonStyle::Accent);
+        let copy = frame.add_button(&ox_core::i18n::gettext("Copy version"), ButtonStyle::Accent);
         copy.connect_clicked(glib::clone!(
             #[strong]
             confirm,

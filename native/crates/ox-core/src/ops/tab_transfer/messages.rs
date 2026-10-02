@@ -81,14 +81,24 @@ impl KeptReason {
     /// `v2.0.0:desktop/tab_transfers.py` sends it.
     pub fn message(self) -> &'static str {
         match self {
-            KeptReason::Cancelled => "Tab move cancelled. The original tab was kept.",
-            KeptReason::DestinationUnreachable => "The destination could not receive the tab.",
-            KeptReason::DestinationBusy => "The destination was busy or closed. The original tab was kept.",
-            KeptReason::TimedOut => "The tab move timed out. The original tab was kept.",
-            KeptReason::WindowClosed => "A window closed before the tab move finished.",
-            KeptReason::NotPending => {
-                "The tab move has expired or was already accepted. The original tab was kept."
+            KeptReason::Cancelled => {
+                crate::i18n::gettext_static("Tab move cancelled. The original tab was kept.")
             }
+            KeptReason::DestinationUnreachable => {
+                crate::i18n::gettext_static("The destination could not receive the tab.")
+            }
+            KeptReason::DestinationBusy => {
+                crate::i18n::gettext_static("The destination was busy or closed. The original tab was kept.")
+            }
+            KeptReason::TimedOut => {
+                crate::i18n::gettext_static("The tab move timed out. The original tab was kept.")
+            }
+            KeptReason::WindowClosed => {
+                crate::i18n::gettext_static("A window closed before the tab move finished.")
+            }
+            KeptReason::NotPending => crate::i18n::gettext_static(
+                "The tab move has expired or was already accepted. The original tab was kept.",
+            ),
         }
     }
 }
@@ -163,31 +173,37 @@ pub enum Delivery {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TabTransferError {
     /// The source window closed or is not ready.
-    #[error("The source window is no longer ready.")]
+    #[error("{}", crate::i18n::gettext("The source window is no longer ready."))]
     SourceNotReady,
     /// The tab identifier is empty or longer than 80 characters.
-    #[error("Invalid tab identifier.")]
+    #[error("{}", crate::i18n::gettext("Invalid tab identifier."))]
     InvalidTabId,
     /// The tab is already moving, or
     /// [`MAX_PENDING_TAB_TRANSFERS`](crate::ops::MAX_PENDING_TAB_TRANSFERS)
     /// moves are waiting.
-    #[error("That tab is already moving. Wait for it to finish.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("That tab is already moving. Wait for it to finish.")
+    )]
     AlreadyMoving,
     /// The token is unknown, expired, already claimed or already used.
-    #[error("The tab move has expired or was already accepted. The original tab was kept.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The tab move has expired or was already accepted. The original tab was kept.")
+    )]
     NotPending,
     /// The destination is the source window, or not ready.
-    #[error("Choose a different, ready OpenXplorer window.")]
+    #[error("{}", crate::i18n::gettext("Choose a different, ready OpenXplorer window."))]
     DestinationNotReady,
     /// The tab to insert before is named by an identifier over 80
     /// characters.
-    #[error("Invalid tab position.")]
+    #[error("{}", crate::i18n::gettext("Invalid tab position."))]
     InvalidPosition,
     /// The destination window could not be reached; the move was rolled
     /// back.
-    #[error("The destination could not receive the tab.")]
+    #[error("{}", crate::i18n::gettext("The destination could not receive the tab."))]
     DestinationUnreachable,
     /// No capability could be generated; nothing was offered.
-    #[error("Could not create a private tab-move capability. The original tab was kept. {0}")]
+    #[error("{}", crate::i18n::format_message("Could not create a private tab-move capability. The original tab was kept. {error}", &[("error", .0.as_str())]))]
     NoCapability(String),
 }

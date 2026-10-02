@@ -19,64 +19,82 @@ use crate::private_storage::{StorageError, StorageRefusal};
 #[derive(Debug, thiserror::Error)]
 pub enum UpdateError {
     /// The answer is not a release, or a draft or pre-release.
-    #[error("No stable release is available.")]
+    #[error("{}", crate::i18n::gettext("No stable release is available."))]
     NoStableRelease,
     /// The release tag does not start with `v`.
-    #[error("The release tag is invalid.")]
+    #[error("{}", crate::i18n::gettext("The release tag is invalid."))]
     InvalidTag,
     /// The version is not `MAJOR.MINOR.PATCH`.
-    #[error("The release does not have a supported stable version.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The release does not have a supported stable version.")
+    )]
     UnsupportedVersion,
     /// The release's `assets` is not a list.
-    #[error("The release asset list is invalid.")]
+    #[error("{}", crate::i18n::gettext("The release asset list is invalid."))]
     InvalidAssetList,
     /// No asset has the expected installer name and download URL.
-    #[error("The release is missing its expected Debian installer.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The release is missing its expected Debian installer.")
+    )]
     MissingInstaller,
     /// The installer has no SHA-256 digest yet.
-    #[error("The release installer has no verified SHA-256 digest yet. Try again later.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The release installer has no verified SHA-256 digest yet. Try again later.")
+    )]
     MissingDigest,
     /// The installer size is missing, not an integer or out of range.
-    #[error("The release installer size is invalid.")]
+    #[error("{}", crate::i18n::gettext("The release installer size is invalid."))]
     InvalidInstallerSize,
     /// An address or redirect outside the trusted hosts.
-    #[error("The update server returned an untrusted download location.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The update server returned an untrusted download location.")
+    )]
     UntrustedLocation,
     /// The release answer is over 2 MiB.
-    #[error("The update response is too large.")]
+    #[error("{}", crate::i18n::gettext("The update response is too large."))]
     ResponseTooLarge,
     /// The release answer is not JSON. Python showed the JSON parser's own
     /// message.
-    #[error("The update response is not valid JSON.")]
+    #[error("{}", crate::i18n::gettext("The update response is not valid JSON."))]
     InvalidResponse,
     /// GitHub answered the check with an HTTP error.
-    #[error("GitHub could not check for updates (HTTP {status}). Try again later.")]
+    #[error("{}", crate::i18n::format_message("GitHub could not check for updates (HTTP {status}). Try again later.", &[("status", &status.to_string())]))]
     CheckRefused {
         /// The HTTP status code.
         status: u32,
     },
     /// GitHub answered the download with an HTTP error. Python showed
     /// urllib's own message.
-    #[error("GitHub could not provide the installer (HTTP {status}). Nothing was installed.")]
+    #[error("{}", crate::i18n::format_message("GitHub could not provide the installer (HTTP {status}). Nothing was installed.", &[("status", &status.to_string())]))]
     DownloadRefused {
         /// The HTTP status code.
         status: u32,
     },
     /// No connection, or it timed out.
-    #[error("Could not reach GitHub. Check your connection and try again.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Could not reach GitHub. Check your connection and try again.")
+    )]
     Unreachable,
     /// Another check or installation holds the updater.
-    #[error("An update task is already running.")]
+    #[error("{}", crate::i18n::gettext("An update task is already running."))]
     TaskRunning,
     /// The user cancelled before the package manager started. Python had
     /// no cancellation.
-    #[error("The update was cancelled. Nothing was installed.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The update was cancelled. Nothing was installed.")
+    )]
     Cancelled,
     /// Installation was asked for without the user's confirmation.
-    #[error("Confirm installation before updating.")]
+    #[error("{}", crate::i18n::gettext("Confirm installation before updating."))]
     NotConfirmed,
     /// No check found this newer version.
-    #[error("Check for updates again before installing.")]
+    #[error("{}", crate::i18n::gettext("Check for updates again before installing."))]
     NotChecked,
     /// This build cannot install updates itself.
     #[error("{}", installation.install_refusal())]
@@ -85,29 +103,47 @@ pub enum UpdateError {
         installation: Installation,
     },
     /// The download is larger than the release said.
-    #[error("The downloaded installer is larger than expected.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The downloaded installer is larger than expected.")
+    )]
     InstallerTooLarge,
     /// The download's size or SHA-256 digest is not the release's.
-    #[error("The installer checksum or size did not match. Nothing was installed.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The installer checksum or size did not match. Nothing was installed.")
+    )]
     ChecksumMismatch,
     /// `dpkg-deb` reports another package, version or architecture.
-    #[error("The installer metadata did not match this release. Nothing was installed.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The installer metadata did not match this release. Nothing was installed.")
+    )]
     MetadataMismatch,
     /// The administrator prompt was refused, or APT failed.
-    #[error("Installation was cancelled or failed. {details}")]
+    #[error("{}", crate::i18n::format_message("Installation was cancelled or failed. {details}", &[("details", details)]))]
     InstallFailed {
         /// The end of APT's error output.
         details: String,
     },
     /// `dpkg-query` does not report the new version as installed.
-    #[error("The package manager did not confirm the expected installed version.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The package manager did not confirm the expected installed version.")
+    )]
     InstallNotConfirmed,
     /// `dpkg-deb` or `dpkg-query` failed. Python showed `subprocess`'s own
     /// message.
     ///
     /// The message does not say whether anything was installed:
     /// `dpkg-query` runs after APT, which may have changed the system.
-    #[error("The package tool {program} failed (exit status {status}).")]
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "The package tool {program} failed (exit status {status}).",
+            &[("program", program), ("status", &status.to_string())]
+        )
+    )]
     PackageToolFailed {
         /// The tool's path.
         program: &'static str,
@@ -117,7 +153,13 @@ pub enum UpdateError {
     },
     /// `dpkg-deb` or `dpkg-query` did not finish in time and was stopped.
     /// Python showed `subprocess`'s own message.
-    #[error("The package tool {program} did not finish within {} seconds.", limit.as_secs())]
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "The package tool {program} did not finish within {seconds} seconds.",
+            &[("program", program), ("seconds", &limit.as_secs().to_string())]
+        )
+    )]
     PackageToolTimedOut {
         /// The tool's path.
         program: &'static str,
@@ -141,29 +183,52 @@ pub enum UpdateError {
         error: io::Error,
     },
     /// An update is installing: everything but window chrome waits.
-    #[error("An application update is running. Wait for it to finish before using files.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("An application update is running. Wait for it to finish before using files.")
+    )]
     UpdateRunning,
     /// An installation changed the application's files: restart first.
-    #[error("Restart OpenXplorer to finish the application update before using files.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Restart OpenXplorer to finish the application update before using files.")
+    )]
     RestartRequired,
     /// File operations, folder loading, mount prompts or tab moves are
     /// running somewhere.
-    #[error("Wait for file operations, folder loading and tab moves to finish, then try again.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "Wait for file operations, folder loading and tab moves to finish, then try again."
+        )
+    )]
     WorkInProgress,
     /// Restart was asked for without an installed update.
-    #[error("No installed update is waiting for restart.")]
+    #[error("{}", crate::i18n::gettext("No installed update is waiting for restart."))]
     NoRestartPending,
     /// A file operation is still writing somewhere.
-    #[error("Wait for file operations to finish before restarting.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Wait for file operations to finish before restarting.")
+    )]
     WritesRunning,
     /// A new window was asked for during an update or before its restart.
-    #[error("Finish the application update and restart before opening another window.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Finish the application update and restart before opening another window.")
+    )]
     WindowsBlocked,
     /// A window was closed while an update installs.
-    #[error("Wait for the application update to finish before closing.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Wait for the application update to finish before closing.")
+    )]
     CloseRefused,
     /// The app was quit while an update installs.
-    #[error("Wait for the application update to finish before quitting.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Wait for the application update to finish before quitting.")
+    )]
     QuitRefused,
 }
 
@@ -194,21 +259,25 @@ pub enum InstanceError {
     /// A different or older instance runs and the user did not agree to
     /// restart it.
     #[error(
-        "A different or older OpenXplorer process is running. Finish file operations and run \
+        "{}",
+        crate::i18n::gettext(
+            "A different or older OpenXplorer process is running. Finish file operations and run \
          openxplorer --restart."
+        )
     )]
     OutdatedInstance,
     /// The instance asked to quit still runs, for example because a file
     /// operation is writing.
     #[error(
-        "OpenXplorer is still running. Finish or cancel active file operations, then run \
+        "{}",
+        crate::i18n::gettext(
+            "OpenXplorer is still running. Finish or cancel active file operations, then run \
          openxplorer --restart again. No process was killed."
+        )
     )]
     StillRunning,
     /// Another instance took the application name while waiting.
-    #[error(
-        "Another OpenXplorer process started during restart. No process was killed. Retry after closing it."
-    )]
+    #[error("{}", crate::i18n::gettext("Another OpenXplorer process started during restart. No process was killed. Retry after closing it."))]
     AnotherInstance,
     /// The session bus refused a call.
     #[error("{0}")]

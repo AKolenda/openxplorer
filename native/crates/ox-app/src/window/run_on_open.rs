@@ -13,10 +13,10 @@
 
 use ox_core::entry::Entry;
 
-use super::dialog::Dialog;
 use super::file_drop::{query_program, ProgramTarget};
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 
 /// What to do with an opened item that may be a program.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,15 +40,15 @@ impl BrowserWindow {
         let Some(program) = query_program(entry).await else {
             return RunChoice::Open;
         };
-        let message = format!(
-            "“{}” is a program or script. Run it, or open it in its application?",
-            program.name
+        let message = ox_core::i18n::format_message(
+            "“{name}” is a program or script. Run it, or open it in its application?",
+            &[("name", &program.name)],
         );
-        let dialog = Dialog::new(self, "Run this program?", &message);
+        let dialog = Dialog::new(self, &ox_core::i18n::gettext("Run this program?"), &message);
         dialog.add_cancel_button();
         // Open is first and primary, so Enter never runs it by accident.
-        let open = dialog.add_button("Open", ButtonStyle::Accent);
-        let run = dialog.add_button("Run", ButtonStyle::Bordered);
+        let open = dialog.add_button(&ox_core::i18n::gettext("Open"), ButtonStyle::Accent);
+        let run = dialog.add_button(&ox_core::i18n::gettext("Run"), ButtonStyle::Bordered);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();

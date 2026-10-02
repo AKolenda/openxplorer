@@ -13,13 +13,16 @@
 //! | `tab` | [`TabSnapshot`]: a tab's navigation state | `tab_snapshot` |
 //! | `file_manager` | [`FileManagerRequest`]: `ShowFolders`, `ShowItems`, `ShowItemProperties` | `filemanager_request` |
 //! | `error` | [`WindowStateError`] with the app's messages | both |
+//! | `saved` | [`SavedSession`]: the tabs a start reopens (TAB-053) | — |
 
 mod error;
 mod file_manager;
+mod saved;
 mod tab;
 
 pub use error::WindowStateError;
 pub use file_manager::{FileManagerMethod, FileManagerRequest, MAX_REQUEST_LOCATIONS};
+pub use saved::{SavedSession, SavedTab, MAX_SAVED_TABS};
 pub use tab::{
     SettingsSection, SortDirection, SortField, TabSnapshot, MAX_HISTORY_ENTRIES, MAX_SCROLL,
     MAX_SELECTED_ITEMS,

@@ -383,7 +383,7 @@ fn only_the_visible_view_holds_the_model() {
     test.activate("view", Some("large"));
     assert_eq!(
         pane.view(),
-        FolderView::Icons(crate::folder_view::grid::IconSize::Large)
+        FolderView::Icons(crate::folder_view::grid::IconSize::LARGE)
     );
     assert!(
         pane.details().column_view().model().is_none(),

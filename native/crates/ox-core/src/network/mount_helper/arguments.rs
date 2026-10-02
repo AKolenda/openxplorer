@@ -45,13 +45,13 @@ pub(super) struct Arguments {
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub(super) enum UsageError {
     /// No `--share`.
-    #[error("the following arguments are required: --share")]
+    #[error("{}", crate::i18n::gettext("the following arguments are required: --share"))]
     MissingShare,
     /// `--share` as the last argument.
-    #[error("argument --share: expected one argument")]
+    #[error("{}", crate::i18n::gettext("argument --share: expected one argument"))]
     MissingValue,
     /// Anything else.
-    #[error("unrecognized arguments: {0}")]
+    #[error("{}", crate::i18n::format_message("unrecognized arguments: {arguments}", &[("arguments", .0.as_str())]))]
     Unrecognized(String),
 }
 
