@@ -101,11 +101,48 @@ columnview.files .row-icon { margin-top: 1px; }
 /* A cut hidden item fades further, so the cut still shows (0.6 x 0.5). */
 .files .hidden-item.cut { opacity: 0.3; }
 
-columnview.files rubberband, gridview.files rubberband {
+/* The rubber band the window draws over the views (SEL-012). */
+.folder-pane-overlay > .rubber-band {
   border: 1px solid @ox_accent;
   background-color: alpha(@ox_accent, .15);
   border-radius: 0;
 }
+
+/* A group's header in the details view (VIEW-022): Explorer's semibold
+   title and count, then a line to the right edge. */
+columnview.files > listview > header { padding: 0; background: none; }
+columnview.files .group-header { padding: 12px 26px 4px 26px; }
+columnview.files .group-title { font-weight: 600; color: @ox_text; }
+columnview.files .group-header separator { background-color: @ox_border; min-height: 1px; }
+
+/* The arrow before a folder that expands in place (VIEW-035). */
+columnview.files .folder-expander {
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
+  /* In the cell's left padding, so icons stay under the Name title. */
+  margin: 0 -7px 0 -20px;
+  border-radius: 4px;
+  background: none;
+  box-shadow: none;
+  color: @ox_muted;
+}
+columnview.files .folder-expander:hover { background-color: @ox_hover; color: @ox_text; }
+
+/* The hover selection marker (SEL-014): a small check-box-like button on
+   the icon's corner, as Explorer's item check boxes. */
+.files .selection-marker {
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
+  margin: -3px 0 0 -3px;
+  border-radius: 4px;
+  border: 1px solid @ox_muted;
+  background-color: @ox_bg;
+  color: @ox_text;
+  box-shadow: none;
+}
+.files .selection-marker:hover { border-color: @ox_accent; color: @ox_accent; }
 
 /* ---- Icon view ---- */
 /* Tiles as renderRows places them: the first 10px in and 5px down, 4px
@@ -138,6 +175,14 @@ gridview.files > child:selected {
 }
 gridview.files > child:selected:hover { background-color: @ox_selected_hover; }
 gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+
+/* ---- Compact view (Explorer's List layout, VIEW-008) ---- */
+/* Small icons with one-line names in columns: rows as tight as Explorer's
+   list, 4px of padding beside the name. Their height follows the text
+   size (src/theme/fonts.rs). */
+gridview.files.compact { padding: 4px 8px 8px 12px; }
+gridview.files.compact > child { padding: 0 8px 0 6px; margin: 0 2px 0 0; border-radius: 4px; }
+gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
 
 /* ---- Loading line (§4.15, M06, M08) ---- */
 /* A 2px line over the top of the pane with a quarter-width bar sliding

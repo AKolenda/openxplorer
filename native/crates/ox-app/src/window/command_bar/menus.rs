@@ -12,6 +12,7 @@ use ox_core::settings::Theme;
 
 use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
+use crate::folder_view::sort_roles::SortRole;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::icons::Icon;
 use crate::text_size::Step;
@@ -81,24 +82,36 @@ fn direction_item(label: &str, glyph: Icon, direction: SortDirection) -> MenuEnt
     MenuItem::choice(label, glyph, WindowAction::Direction, direction.as_str()).into()
 }
 
-/// The Sort menu: the columns, then the direction. The direction has an
-/// item each, where app.js had one item that flips it.
+/// The Sort menu's item for a further key (VIEW-019).
+fn role_item(role: SortRole) -> MenuEntry {
+    MenuItem::choice(role.label(), Icon::ArrowSort, WindowAction::Sort, role.as_str()).into()
+}
+
+/// The Sort menu: the columns and Dolphin's further keys, then the
+/// direction, then grouping and folders first. The direction has an item
+/// each, where app.js had one item that flips it.
 pub(super) fn sort_menu() -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = SortColumn::IN_SORT_MENU.into_iter().map(column_item).collect();
+    entries.push(MenuEntry::Divider);
+    entries.extend(SortRole::ALL.into_iter().map(role_item));
     entries.extend([
         MenuEntry::Divider,
         direction_item(&gettext("Ascending"), Icon::ArrowUp, SortDirection::Ascending),
         direction_item(&gettext("Descending"), Icon::ArrowDown, SortDirection::Descending),
+        MenuEntry::Divider,
+        MenuItem::toggle("Show in groups", Icon::TextBulletList, WindowAction::Groups).into(),
+        MenuItem::toggle("Folders first", Icon::Folder, WindowAction::FoldersFirst).into(),
     ]);
     entries
 }
 
 /// The View menu's item for `view`, showing its Explorer shortcut.
 fn view_item(label: &str, glyph: Icon, view: FolderView) -> MenuEntry {
-    let (_, shortcut) = view.shortcut();
-    MenuItem::choice(label, glyph, WindowAction::View, view.as_str())
-        .with_shortcut(shortcut)
-        .into()
+    let item = MenuItem::choice(label, glyph, WindowAction::View, view.as_str());
+    match view.shortcut() {
+        Some((_, shortcut)) => item.with_shortcut(shortcut).into(),
+        None => item.into(),
+    }
 }
 
 /// The View menu's item for a text-size `step`, showing its `shortcut`.
@@ -108,15 +121,17 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
         .into()
 }
 
-/// The View menu: the views (every icon size the native app has), the
-/// hidden-files, details-pane, navigation-pane and folder-tree toggles
-/// and the terminal, then the text size.
+/// The View menu: the views (Details, List and Explorer's four icon
+/// sizes), the hidden-files, details-pane and navigation-pane toggles,
+/// Dolphin's display style dialog, then the text size.
 pub(super) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details);
-    let mut entries = vec![details];
-    let icon_sizes = IconSize::ALL
-        .into_iter()
-        .map(|size| view_item(size.label(), Icon::Grid, FolderView::Icons(size)));
+    let compact = view_item(&gettext("List"), Icon::Table, FolderView::Compact);
+    let mut entries = vec![details, compact];
+    let icon_sizes = IconSize::NAMED.into_iter().filter_map(|size| {
+        let label = size.label()?;
+        Some(view_item(label, Icon::Grid, FolderView::Icons(size)))
+    });
     entries.extend(icon_sizes);
     entries.extend([
         MenuEntry::Divider,
@@ -153,6 +168,12 @@ pub(super) fn view_menu() -> Vec<MenuEntry> {
         )
         .with_shortcut("Ctrl+Shift+F4")
         .into(),
+        MenuEntry::Divider,
+        item(
+            "Adjust view display style…",
+            Icon::Settings,
+            WindowAction::ViewProperties,
+        ),
         MenuEntry::Divider,
         text_size_item(&gettext("Larger text"), Icon::Add, Step::Increase, "Ctrl++"),
         text_size_item(&gettext("Smaller text"), Icon::Subtract, Step::Decrease, "Ctrl+−"),

@@ -68,7 +68,7 @@ impl BrowserWindow {
                     }
                 }
             ));
-            model.sorted().connect_items_changed(glib::clone!(
+            model.selection().connect_items_changed(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
                 #[weak]

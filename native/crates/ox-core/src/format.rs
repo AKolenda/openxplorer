@@ -31,6 +31,7 @@
 //! data from ICU.
 
 mod locale_pattern;
+mod relative_date;
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -38,6 +39,7 @@ use glib::DateTime;
 
 pub use locale_pattern::ClockFormat;
 use locale_pattern::LocalePatterns;
+pub use relative_date::DateStyle;
 
 /// The [`ClockFormat`] times are shown on, as its position in
 /// [`CLOCK_FORMATS`]; set by [`set_clock_format`].
@@ -173,6 +175,22 @@ pub fn date_short_time_text(unix_seconds: Option<u64>) -> String {
         .and_then(local_time)
         .and_then(|time| format_date_short_time_with(&time, locale_pattern::current(), clock_format()))
         .unwrap_or_else(|| UNKNOWN_DATE.to_owned())
+}
+
+/// The Date modified column's text in `style`: "Today at 7:35 PM" or
+/// "Yesterday at 7:35 PM" for recent dates in [`DateStyle::Relative`],
+/// else [`date_short_time_text`] (VIEW-004).
+pub fn column_date_text(unix_seconds: Option<u64>, style: DateStyle) -> String {
+    let relative = || {
+        let time = local_time(unix_seconds?)?;
+        let now = DateTime::now_local().ok()?;
+        relative_date::relative_text(&time, &now, locale_pattern::current(), clock_format())
+    };
+    let text = match style {
+        DateStyle::Relative => relative(),
+        DateStyle::Absolute => None,
+    };
+    text.unwrap_or_else(|| date_short_time_text(unix_seconds))
 }
 
 /// [`date_text`] for a time GIO already returned as a [`DateTime`], in the

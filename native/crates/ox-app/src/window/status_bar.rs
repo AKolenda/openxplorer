@@ -6,7 +6,8 @@
 //! type-to-select hint, then at the right the volume's free space, the
 //! build, "Check for updates"
 //! and the Details and Large icons view buttons, the current view's
-//! button highlighted. "Check for updates" takes the accent colour when a
+//! button highlighted. In the icon view a slider beside them zooms the
+//! icons, as Dolphin's status bar does (VIEW-010). "Check for updates" takes the accent colour when a
 //! check in any window found a newer release (UPD-001).
 //!
 //! As Dolphin's status bar does, the count adds the size of the files
@@ -135,13 +136,14 @@ pub(super) fn item_text(item: &FileItem) -> String {
 }
 
 mod imp {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
 
     use gtk::glib;
     use gtk::subclass::prelude::*;
 
-    /// Private state of [`super::StatusBar`]: the template's widgets, and
-    /// what the selection label says when no item is under the pointer.
+    use crate::folder_view::grid::IconSize;
+
+    /// Private state of [`super::StatusBar`]: the template's widgets.
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/status-bar.ui")]
     pub(crate) struct StatusBar {
@@ -172,6 +174,9 @@ mod imp {
         /// "Check for updates" (`#check-updates`).
         #[template_child]
         pub(super) check_updates_button: TemplateChild<gtk::Button>,
+        /// Zooms the icon view through its icon sizes.
+        #[template_child]
+        pub(super) zoom_slider: TemplateChild<gtk::Scale>,
         /// Shows the details view.
         #[template_child]
         pub(super) details_view_button: TemplateChild<gtk::Button>,
@@ -182,6 +187,8 @@ mod imp {
         pub(super) selection_text: RefCell<String>,
         /// The item under the pointer, described, while there is one.
         pub(super) hovered_text: RefCell<Option<String>>,
+        /// The icon size the window shows, which the slider then shows.
+        pub(super) shown_level: Cell<Option<IconSize>>,
     }
 
     #[glib::object_subclass]
@@ -224,13 +231,35 @@ impl StatusBar {
         let imp = self.imp();
         imp.build.set_text(BUILD_NAME);
         self.finish_check_updates_button();
-        let large_icons = FolderView::Icons(IconSize::Large);
+        let large_icons = FolderView::Icons(IconSize::LARGE);
         show_view_on(
             &imp.details_view_button,
             Icon::TextBulletList,
             FolderView::Details,
         );
         show_view_on(&imp.icons_view_button, Icon::Grid, large_icons);
+        self.finish_zoom_slider();
+    }
+
+    /// The slider steps through every icon size and shows the icon view
+    /// at the one it is moved to.
+    fn finish_zoom_slider(&self) {
+        let slider = &*self.imp().zoom_slider;
+        slider.set_range(0.0, level_value(IconSize::LARGEST));
+        slider.set_increments(1.0, 1.0);
+        slider.set_round_digits(0);
+        slider.connect_value_changed(glib::clone!(
+            #[weak(rename_to = bar)]
+            self,
+            move |slider| {
+                let level = IconSize::at_index(zoom_level_at(slider.value()));
+                if bar.imp().shown_level.get() == Some(level) {
+                    return;
+                }
+                let view = FolderView::Icons(level);
+                WindowAction::View.activate_from(slider, Some(&view.as_str().to_variant()));
+            }
+        ));
     }
 
     /// "Check for updates" opens the Software updates dialog.
@@ -367,12 +396,25 @@ impl StatusBar {
     /// view, as the Python app's single grid view did.
     pub(super) fn show_view(&self, view: FolderView) {
         let imp = self.imp();
-        let (on, off) = match view {
-            FolderView::Details => (&imp.details_view_button, &imp.icons_view_button),
-            FolderView::Icons(_) => (&imp.icons_view_button, &imp.details_view_button),
-        };
-        on.add_css_class("active");
-        off.remove_css_class("active");
+        let details = view == FolderView::Details;
+        let icons = matches!(view, FolderView::Icons(_));
+        for (button, active) in [
+            (&imp.details_view_button, details),
+            (&imp.icons_view_button, icons),
+        ] {
+            if active {
+                button.add_css_class("active");
+            } else {
+                button.remove_css_class("active");
+            }
+        }
+        let slider = &*imp.zoom_slider;
+        slider.set_visible(icons);
+        if let FolderView::Icons(size) = view {
+            // Recorded first, so moving the slider here runs no action.
+            imp.shown_level.set(Some(size));
+            slider.set_value(level_value(size));
+        }
     }
 
     /// The count and selection as shown, for tests.
@@ -388,6 +430,12 @@ impl StatusBar {
         self.imp().typeahead_hint.get()
     }
 
+    /// The icon-size slider, for tests.
+    #[cfg(test)]
+    pub(super) fn zoom_slider(&self) -> gtk::Scale {
+        self.imp().zoom_slider.get()
+    }
+
     /// The view buttons that show as active, for tests.
     #[cfg(test)]
     pub(super) fn active_view_buttons(&self) -> Vec<String> {
@@ -398,6 +446,24 @@ impl StatusBar {
             .filter_map(|button| button.tooltip_text().map(|text| text.to_string()))
             .collect()
     }
+}
+
+/// The slider position of `size`.
+fn level_value(size: IconSize) -> f64 {
+    // A handful of levels: the index converts exactly.
+    f64::from(u8::try_from(size.index()).unwrap_or(u8::MAX))
+}
+
+/// The level nearest the slider position `value`.
+fn zoom_level_at(value: f64) -> usize {
+    // The slider's range is 0 to the last level, so the cast is exact.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a small, non-negative index"
+    )]
+    let level = value.round().max(0.0) as usize;
+    level
 }
 
 /// Makes `button` show `glyph` and switch to `view`.

@@ -184,7 +184,7 @@ impl DetailsView {
         let widths = (0..shown)
             .filter_map(|position| model.item(position).and_downcast::<FileItem>())
             .map(|item| {
-                let layout = view.create_pango_layout(Some(&cell_text(column, &item)));
+                let layout = view.create_pango_layout(Some(&cell_text(column, &item, self.date_style())));
                 layout.pixel_size().0
             });
         f64::from(widths.max().unwrap_or_default())

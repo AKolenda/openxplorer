@@ -21,11 +21,15 @@ pub(crate) mod column_widths;
 pub(crate) mod details;
 pub(crate) mod filter;
 pub(crate) mod grid;
+pub(crate) mod groups;
+pub(crate) mod icon_size;
 pub(crate) mod item;
 pub(crate) mod loader;
 pub(crate) mod model;
 pub(crate) mod reconcile;
+pub(crate) mod sort_roles;
 pub(crate) mod sorting;
+pub(crate) mod tree;
 pub(crate) mod watch;
 
 pub(crate) use cells::CUSTOM_ICON;

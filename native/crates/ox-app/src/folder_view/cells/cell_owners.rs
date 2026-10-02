@@ -130,6 +130,8 @@ pub(crate) struct CellOwners {
     previews: Cell<PreviewPolicy>,
     /// Folders in the Size column say how many items they hold.
     counts_items: Cell<bool>,
+    /// Hovering an item shows no selection marker (SEL-014).
+    hides_selection_markers: Cell<bool>,
 }
 
 impl CellOwners {
@@ -366,6 +368,36 @@ impl CellOwners {
             .filter_map(|owner| owner.cell_showing(position))
             .filter(|cell| cell.is_ancestor(view))
             .find_map(|cell| cell.downcast::<FileCell>().ok())
+    }
+
+    /// The rows or tiles on screen inside `view`, each once, with the
+    /// position each shows, for a rubber band to test against.
+    pub(crate) fn shown_items(&self, view: &impl IsA<gtk::Widget>) -> Vec<(u32, gtk::Widget)> {
+        let view = view.as_ref();
+        let mut shown: Vec<(u32, gtk::Widget)> = Vec::new();
+        for owner in self.owners.borrow().iter() {
+            let Some(list_item) = owner.list_item.upgrade() else {
+                continue;
+            };
+            let (Some(position), Some(cell)) = (bound_position(&list_item), owner.cell.upgrade()) else {
+                continue;
+            };
+            let row = item_widget(&cell).filter(|row| row.is_ancestor(view));
+            if let Some(row) = row.filter(|_| !shown.iter().any(|(seen, _)| *seen == position)) {
+                shown.push((position, row));
+            }
+        }
+        shown
+    }
+
+    /// Whether hovering an item shows its selection marker.
+    pub(crate) fn shows_selection_markers(&self) -> bool {
+        !self.hides_selection_markers.get()
+    }
+
+    /// Shows selection markers on hovered items, or never.
+    pub(crate) fn set_selection_markers(&self, shown: bool) {
+        self.hides_selection_markers.set(!shown);
     }
 
     /// The list item whose content widget is `widget`.

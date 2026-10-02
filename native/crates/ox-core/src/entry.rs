@@ -29,6 +29,7 @@ mod enumerate;
 mod error;
 mod info;
 mod inspect;
+mod meta;
 #[cfg(test)]
 mod test_support;
 mod thumbnail;
@@ -38,6 +39,7 @@ pub use enumerate::enumerate_folder;
 pub use error::EntryError;
 pub use info::entry_from_info;
 pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
+pub use meta::EntryMeta;
 pub use thumbnail::{
     cached_thumbnail, thumbnail_file, thumbnail_path, CachedThumbnail, ThumbnailFlavor, THUMBNAIL_ATTRIBUTES,
 };
@@ -55,7 +57,9 @@ pub const ATTRIBUTES: &str = concat!(
     "standard::is-symlink,standard::size,standard::content-type,standard::target-uri,",
     "standard::is-virtual,standard::icon,time::modified,time::created,owner::user,unix::mode,",
     "access::can-rename,access::can-trash,access::can-delete,access::can-write,",
-    "trash::orig-path,trash::deletion-date",
+    "trash::orig-path,trash::deletion-date,",
+    // EntryMeta, for the further sort keys (VIEW-019).
+    "time::created,time::access,owner::user,owner::group,unix::mode,standard::symlink-target",
 );
 
 /// What GIO says an item is (`standard::type`).
@@ -174,13 +178,9 @@ pub struct Entry {
     /// `standard::icon`, serialized with `g_icon_serialize` because a
     /// `GIcon` cannot cross threads. Use [`Entry::icon`].
     pub serialized_icon: Option<glib::Variant>,
-    /// `time::created` in seconds since the Unix epoch, where the file
-    /// system records it.
-    pub created: Option<u64>,
-    /// `owner::user`, the name of the item's owner.
-    pub owner: Option<String>,
-    /// `unix::mode`: the item's type and permission bits.
-    pub unix_mode: Option<u32>,
+    /// The other times, the owner, the permissions and a link's target;
+    /// boxed, as most code never reads them.
+    pub meta: Box<EntryMeta>,
 }
 
 impl Entry {

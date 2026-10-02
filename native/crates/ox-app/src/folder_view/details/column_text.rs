@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::format;
+use ox_core::format::{self, DateStyle};
 use ox_core::search::display_path;
 
 use crate::folder_view::cells::{CellOwners, CellTooltip};
@@ -30,18 +30,19 @@ thread_local! {
 /// The text `column` shows for `item`. A folder shows its measured size
 /// once measured, else its item count once counted, else nothing; a file
 /// of unknown size shows `—` (`prettyBytes` in app.js).
-pub(crate) fn cell_text(column: SortColumn, item: &FileItem) -> String {
+pub(crate) fn cell_text(column: SortColumn, item: &FileItem, dates: DateStyle) -> String {
     let entry = item.entry();
     match column {
         SortColumn::Name => entry.name.clone(),
-        SortColumn::Modified => format::date_short_time_text(entry.modified),
+        SortColumn::Modified => format::column_date_text(entry.modified, dates),
         SortColumn::Created => entry
+            .meta
             .created
-            .map(|created| format::date_short_time_text(Some(created)))
+            .map(|created| format::column_date_text(Some(created), dates))
             .unwrap_or_default(),
         SortColumn::FolderPath => item.folder_path().text.clone(),
         SortColumn::OriginalLocation => item.original_location().text.clone(),
-        SortColumn::Deleted => format::date_short_time_text(entry.trash_deletion_date),
+        SortColumn::Deleted => format::column_date_text(entry.trash_deletion_date, dates),
         SortColumn::Type => entry.type_label.clone(),
         SortColumn::Size => match (item.folder_size(), item.item_count()) {
             (Some(measured), _) => measured.size_text(),
@@ -50,8 +51,22 @@ pub(crate) fn cell_text(column: SortColumn, item: &FileItem) -> String {
             (None, None) => format::size_text(item.file_size()),
         },
         SortColumn::Extension => extension_of(item).to_owned(),
-        SortColumn::Owner => entry.owner.clone().unwrap_or_default(),
-        SortColumn::Permissions => entry.unix_mode.map(permissions_text).unwrap_or_default(),
+        SortColumn::Owner => entry.meta.owner.clone().unwrap_or_default(),
+        SortColumn::Permissions => entry
+            .meta
+            .permissions
+            .map(|bits| {
+                permissions_text(
+                    bits | if entry.is_dir {
+                        0o040_000
+                    } else if entry.is_symlink {
+                        0o120_000
+                    } else {
+                        0o100_000
+                    },
+                )
+            })
+            .unwrap_or_default(),
     }
 }
 
@@ -146,7 +161,7 @@ pub(super) fn request_item_count(label: &gtk::Label, item: &FileItem, owners: &R
         };
         item.set_item_count(count);
         if let Some(label) = shows_item() {
-            label.set_text(&cell_text(SortColumn::Size, &item));
+            label.set_text(&cell_text(SortColumn::Size, &item, DateStyle::Absolute));
         }
     });
 }
@@ -181,11 +196,11 @@ mod tests {
         let mut entry = crate::test_support::file_entry("Projects");
         entry.is_dir = true;
         let item = FileItem::new(entry);
-        assert_eq!(cell_text(SortColumn::Size, &item), "");
+        assert_eq!(cell_text(SortColumn::Size, &item, DateStyle::Absolute), "");
 
         item.set_item_count(count_items(&uri).expect("a local folder"));
 
-        assert_eq!(cell_text(SortColumn::Size, &item), "2 items");
+        assert_eq!(cell_text(SortColumn::Size, &item, DateStyle::Absolute), "2 items");
         assert_eq!(permissions_text(0o040_755), "drwxr-xr-x");
     }
 }

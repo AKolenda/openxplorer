@@ -12,7 +12,6 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::folder_pane::FolderPane;
-use super::preferences::Preference;
 use super::{BrowserWindow, WindowAction};
 
 /// Touchpad movement, in pixels, that makes one step: about a wheel
@@ -71,7 +70,7 @@ impl BrowserWindow {
         let kept = pane.model().first_selected();
         self.set_action_state(WindowAction::View, &zoomed.as_str().to_variant());
         self.show_view(zoomed);
-        self.save_preference(Preference::View(zoomed));
+        self.remember_style();
         if let Some(position) = kept {
             glib::idle_add_local_once(glib::clone!(
                 #[weak]

@@ -15,7 +15,6 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::activation::{activation_for, Activation};
-use super::file_drag::allow_rubber_band;
 use super::file_drop::DropZone;
 use super::folder_pane::PanePage;
 use super::gestures;
@@ -29,9 +28,8 @@ use super::BrowserWindow;
 const FOLDER_VIEW_LABEL: &str = "Folder contents — type a filename prefix to select";
 
 /// Whether a press on blank space with `modifiers` held keeps the
-/// selection: Ctrl and Shift do, for the rubber band that may follow. GTK's
-/// band adds its items to the kept selection with Ctrl and removes them
-/// with Shift (SEL-012).
+/// selection: Ctrl and Shift do, for the rubber band that may follow, which
+/// toggles its items with Ctrl and adds them with Shift (SEL-012).
 fn press_keeps_selection(modifiers: gdk::ModifierType) -> bool {
     modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK)
 }
@@ -210,6 +208,8 @@ impl BrowserWindow {
         view.add_controller(keys);
         view.add_controller(self.blank_space_press(view));
         self.attach_slow_click_rename(view);
+        // After the press, which clears the selection the band starts from.
+        self.attach_rubber_band(view);
         view.add_controller(self.folder_middle_click(view));
         self.attach_context_menu(view);
         self.attach_file_drag(view);
@@ -296,6 +296,9 @@ impl BrowserWindow {
         if let Some(handled) = self.grid_row_key(key, modifiers) {
             return handled;
         }
+        if let Some(handled) = self.tree_key(key, modifiers) {
+            return handled;
+        }
         // The input method composes text before it reaches type-to-select.
         let consumed = controller
             .current_event()
@@ -364,11 +367,11 @@ impl BrowserWindow {
         }
     }
 
-    /// A primary press in `view` decides whether a drag draws a rubber band:
-    /// only from blank space (see [`allow_rubber_band`]). On blank space,
-    /// below the rows or between the tiles, it also clears the selection
-    /// and keeps keyboard focus on the view, as in Windows Explorer and
-    /// Dolphin; with Ctrl or Shift held the selection stays.
+    /// A primary press on blank space in `view`, below the rows or between
+    /// the tiles, clears the selection and keeps keyboard focus on the view,
+    /// as in Windows Explorer and Dolphin; with Ctrl or Shift held the
+    /// selection stays. A drag from there draws a rubber band
+    /// ([`super::rubber_band`]).
     fn blank_space_press(&self, view: &gtk::Widget) -> gtk::GestureClick {
         let press = gtk::GestureClick::new();
         press.set_button(gdk::BUTTON_PRIMARY);
@@ -380,10 +383,7 @@ impl BrowserWindow {
             view,
             move |press, _, x, y| {
                 window.imp().view_modifiers.set(Some(press.current_event_state()));
-                let on_blank_space = window.is_blank_space(&view, x, y);
-                // Before the rubber band's own gesture sees the press.
-                allow_rubber_band(&view, on_blank_space);
-                if window.are_item_clicks_paused() || !on_blank_space {
+                if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
                     return;
                 }
                 if !press_keeps_selection(press.current_event_state()) {
@@ -397,7 +397,7 @@ impl BrowserWindow {
 
     /// Whether (`x`, `y`) in `view` is its blank space: inside the list,
     /// not on an item, and not on the column titles.
-    fn is_blank_space(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
+    pub(super) fn is_blank_space(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
         if self.folder_pane().owners().position_at(view, x, y).is_some() {
             return false;
         }

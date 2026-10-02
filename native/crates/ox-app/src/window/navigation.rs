@@ -232,6 +232,7 @@ impl BrowserWindow {
         Some(LeftView {
             scroll: pane.scroll_position(),
             current: pane.model().selected_uris().into_iter().next(),
+            expanded: pane.model().tree().expanded_uris(),
         })
     }
 
@@ -301,6 +302,9 @@ impl BrowserWindow {
         let had_focus =
             focus == FocusOnShow::Restore && self.folder_panes().iter().any(|pane| pane.view_has_focus());
         self.imp().active_side.set(view.side);
+        if let Some(uri) = self.current_uri() {
+            self.follow_folder_style(&uri);
+        }
         self.change_model(|| {
             let model = self.folder_pane().model();
             self.search_box().clear();
@@ -465,6 +469,7 @@ impl BrowserWindow {
         if let Some(returned) = tab.left_views.take(tab.history.position()) {
             tab.selected = returned.current.into_iter().collect();
             tab.scroll_after_listing = Some(returned.scroll);
+            tab.expand_after_listing = returned.expanded;
         }
         Some(tab.id)
     }

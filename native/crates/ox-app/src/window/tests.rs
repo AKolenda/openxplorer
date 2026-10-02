@@ -55,5 +55,6 @@ mod stopping;
 mod support;
 mod tab_commands;
 mod tabs;
+mod view_styles;
 mod views;
 mod worker_questions;

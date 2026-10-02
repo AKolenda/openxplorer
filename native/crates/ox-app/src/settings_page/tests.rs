@@ -472,6 +472,10 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Preview videos",
             "Preview documents and other files",
             "Show the number of items in folders",
+            "Relative dates",
+            "Remember each folder's view",
+            "Selection marker",
+            "Expandable folders",
             "Sidebar and column widths"
         ]
     );

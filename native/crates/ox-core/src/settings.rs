@@ -44,6 +44,7 @@ mod stored_location;
 mod test_support;
 mod tree_options;
 mod view_options;
+mod view_properties;
 
 use std::path::{Path, PathBuf};
 
@@ -60,6 +61,7 @@ pub use preferences::{
 pub use view_options::{ViewOptions, DEFAULT_DETAILS_COLUMNS, PREVIEW_SIZE_LIMIT};
 
 pub use tree_options::FolderTreeOptions;
+pub use view_properties::{may_remember, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS};
 
 use crate::location::same_location;
 use save::{replace_private_file, OldFile, SettingsLock};
@@ -328,6 +330,30 @@ impl Settings {
         self.mutate(move |data| {
             mutate::forget_recent(data, opened_before);
             Ok(())
+        })
+    }
+
+    /// Saves a folder or shared display style.
+    ///
+    /// # Errors
+    ///
+    /// The settings cannot be written.
+    pub fn remember_view(
+        &mut self,
+        uri: &str,
+        properties: ViewProperties,
+        scope: ViewScope,
+    ) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let preferences = &mut data.preferences;
+            view_properties::remember(
+                &mut preferences.folder_views,
+                &mut preferences.view_defaults,
+                uri,
+                properties,
+                scope,
+            );
+            Ok(preferences.clone())
         })
     }
 

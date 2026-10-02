@@ -60,7 +60,7 @@ impl FileCell {
         self.cancel_picture_lookup();
         let imp = self.imp();
         imp.custom_icon.set_visible(false);
-        imp.image.set_visible(true);
+        imp.image.set_opacity(1.0);
         let entry = item.entry();
         let uri = entry.uri.clone();
         let pixels = imp.icon_size.get() * self.scale_factor().max(1);
@@ -83,7 +83,7 @@ impl FileCell {
                 let imp = cell.imp();
                 imp.custom_icon.set_paintable(Some(&texture));
                 imp.custom_icon.set_visible(true);
-                imp.image.set_visible(false);
+                imp.image.set_opacity(0.0);
                 imp.picture_lookup.take();
             }
         });

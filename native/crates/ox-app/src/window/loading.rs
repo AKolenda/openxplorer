@@ -111,6 +111,9 @@ impl BrowserWindow {
         }
         if mode == LoadMode::Navigate {
             self.clear_rows(id);
+            if is_active {
+                self.follow_folder_style(&start.uri);
+            }
         }
         let signing_out = self.context().network().sign_out_registry();
         if let Err(refusal) = signing_out.check_listing(&start.uri) {
@@ -329,6 +332,7 @@ impl BrowserWindow {
             self.update_details_pane();
             self.focus_new_file_list();
             self.restore_scroll_after_listing(id);
+            self.restore_expanded_after_listing(id);
             self.reveal_located_item(id);
         } else {
             self.finish_beside_listing(id);

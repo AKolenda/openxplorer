@@ -113,10 +113,17 @@ fn the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted() {
         .find(|item| item.entry().name == "Budget.txt")
         .expect("Budget.txt is listed");
     let alpha = fixture.path("Alpha").display().to_string();
-    assert_eq!(cell_text(SortColumn::OriginalLocation, &budget), alpha);
+    assert_eq!(
+        cell_text(
+            SortColumn::OriginalLocation,
+            &budget,
+            ox_core::format::DateStyle::Absolute
+        ),
+        alpha
+    );
     let unknown = ox_core::format::date_short_time_text(None);
     assert_ne!(
-        cell_text(SortColumn::Deleted, &budget),
+        cell_text(SortColumn::Deleted, &budget, ox_core::format::DateStyle::Absolute),
         unknown,
         "the deletion date is known"
     );

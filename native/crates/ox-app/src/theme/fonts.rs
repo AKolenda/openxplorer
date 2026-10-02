@@ -7,6 +7,7 @@
 //! from one table of base sizes (the values in `v2.0.0:desktop/ui/style.css`).
 
 use crate::folder_view::grid::{self, IconSize};
+use crate::folder_view::icon_size::compact_row;
 use crate::text_size::{self, TextSize};
 
 /// The stylesheet for `text_size`: every font size, the bars, rows, menus
@@ -20,7 +21,8 @@ pub(crate) fn css_for_text_size(text_size: TextSize) -> String {
     rules.push(solid_frame_rule(scale));
     rules.push(details_row_rule(metrics.detail_row));
     rules.push(menu_rules(scale));
-    rules.extend(IconSize::ALL.map(|icon_size| tile_rule(icon_size, text_size)));
+    rules.extend(IconSize::levels().map(|icon_size| tile_rule(icon_size, text_size)));
+    rules.push(compact_rule(text_size));
     rules.join("\n") + "\n"
 }
 
@@ -292,6 +294,13 @@ fn tile_rule(icon_size: IconSize, text_size: TextSize) -> String {
     let width = icon_size.pixels();
     let class = icon_size.css_class();
     format!("gridview.files.{class} > child {{ min-width: {width}px; min-height: {height}px; }}")
+}
+
+/// The height of the compact view's items at `text_size`
+/// ([`compact_row`]), less the 1-pixel gap below each.
+fn compact_rule(text_size: TextSize) -> String {
+    let height = compact_row(text_size) - 1;
+    format!("gridview.files.compact > child {{ min-height: {height}px; }}")
 }
 
 #[cfg(test)]

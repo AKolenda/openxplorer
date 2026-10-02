@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Appearance: the theme, the text size, the right-click menu and the
-//! pane widths.
+//! Appearance: the theme, the text size, the right-click menu, how files
+//! and folders are shown, and the pane widths.
 //!
 //! Ports the "Appearance & layout" section of `renderSettingsPage`,
 //! `textSizeControls` and `menuPreferenceControls` in

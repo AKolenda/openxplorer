@@ -96,6 +96,8 @@ impl BrowserWindow {
         self.render_places();
         // The settings may have changed too.
         self.apply_view_options();
+        // Settings may have changed how items are shown.
+        self.follow_item_preferences();
     }
 
     /// The mount points of the kernel's CIFS and SMB3 mounts, as last read:

@@ -13,7 +13,6 @@ use gtk::{gio, glib};
 use ox_core::settings::{Theme, SIDEBAR_ICON_SIZES};
 
 use crate::application::AppAction;
-use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::text_size::Step;
 
 use super::folder_pane::FolderView;
@@ -64,7 +63,7 @@ pub(super) fn tab_action(
 
 /// A radio action: `apply` returns false for a value it does not accept,
 /// and the state changes only when it accepts it.
-fn choice_action(
+pub(super) fn choice_action(
     window_action: WindowAction,
     initial: &str,
     apply: impl Fn(&BrowserWindow, &str) -> bool + 'static,
@@ -298,82 +297,18 @@ impl BrowserWindow {
         ]);
     }
 
-    /// The Sort menu's column and direction choices, which follow sorting
-    /// by a column header too.
-    fn install_sort_actions(&self) {
-        self.add_action_entries([
-            choice_action(WindowAction::Sort, SortColumn::Name.as_str(), |window, key| {
-                let Some(column) = SortColumn::from_key(key) else {
-                    return false;
-                };
-                window.sort_by_column(column);
-                true
-            }),
-            choice_action(
-                WindowAction::Direction,
-                SortDirection::Ascending.as_str(),
-                |window, key| {
-                    let Some(direction) = SortDirection::from_key(key) else {
-                        return false;
-                    };
-                    window.sort_in_direction(direction);
-                    true
-                },
-            ),
-        ]);
-        self.follow_header_sorting();
-    }
-
-    /// Sorts the details view by `column`, keeping the direction.
-    fn sort_by_column(&self, column: SortColumn) {
-        let details = self.folder_pane().details();
-        details.sort_by(SortOrder {
-            column,
-            ..details.sort_order()
-        });
-    }
-
-    /// Sorts the details view in `direction`, keeping the column.
-    fn sort_in_direction(&self, direction: SortDirection) {
-        let details = self.folder_pane().details();
-        details.sort_by(SortOrder {
-            direction,
-            ..details.sort_order()
-        });
-    }
-
     /// Show hidden files: lists or hides them, and saves the choice.
     fn set_hidden_files_shown(&self, shown: bool) {
-        for pane in self.folder_panes() {
-            pane.model().set_show_hidden(shown);
-        }
-        self.update_beside_pane();
+        self.show_hidden_files(shown);
+        self.remember_style();
+    }
+
+    /// Lists or hides hidden files, without saving the choice.
+    pub(super) fn show_hidden_files(&self, shown: bool) {
+        self.folder_pane().model().set_show_hidden(shown);
         self.update_content();
         // The folder's item count changes with it.
         self.update_details_pane();
-        self.save_preference(Preference::ShowHidden(shown));
-    }
-
-    /// Keeps the Sort menu in step with sorting by a column header, in
-    /// either folder pane.
-    fn follow_header_sorting(&self) {
-        for pane in self.folder_panes() {
-            let Some(sorter) = pane.details().column_view().sorter() else {
-                continue;
-            };
-            sorter.connect_changed(glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |_, _| window.show_sort_state()
-            ));
-        }
-    }
-
-    /// Shows the active pane's sort order in the Sort menu.
-    pub(super) fn show_sort_state(&self) {
-        let order = self.folder_pane().details().sort_order();
-        self.set_action_state(WindowAction::Sort, &order.column.as_str().to_variant());
-        self.set_action_state(WindowAction::Direction, &order.direction.as_str().to_variant());
     }
 
     fn install_appearance_actions(&self) {
@@ -414,11 +349,12 @@ impl BrowserWindow {
     }
 
     /// The user chose `view`: shows it from the top and saves it as the
-    /// view of every tab and new window (`changeView` in app.js).
+    /// view of every tab and new window (`changeView` in app.js), or of
+    /// the folder when each folder keeps its own (VIEW-020).
     fn change_view(&self, view: FolderView) {
         self.show_view(view);
         self.folder_pane().restore_scroll_position(0.0);
-        self.save_preference(Preference::View(view));
+        self.remember_style();
     }
 
     /// Shows `view` in the folder pane and the status bar, without saving
@@ -427,6 +363,7 @@ impl BrowserWindow {
         self.reset_typeahead();
         self.folder_pane().show_view(view);
         self.status_bar().show_view(view);
+        self.update_expandability();
     }
 }
 
@@ -503,8 +440,9 @@ pub(crate) fn install_accelerators(app: &gtk::Application) {
         app.set_accels_for_action(&WindowAction::TextSize(step).detailed_name(), &keys);
     }
     let action = WindowAction::View.detailed_name();
-    for view in FolderView::ZOOM_ORDER {
-        let (accelerator, _) = view.shortcut();
-        app.set_accels_for_action(&format!("{action}::{}", view.as_str()), &[accelerator]);
+    for view in FolderView::NAMED {
+        if let Some((accelerator, _)) = view.shortcut() {
+            app.set_accels_for_action(&format!("{action}::{}", view.as_str()), &[accelerator]);
+        }
     }
 }

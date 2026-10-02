@@ -15,13 +15,18 @@
 mod column_choice;
 mod column_fit;
 pub(crate) mod column_text;
+mod group_headers;
 
+pub(crate) use group_headers::GroupTitle;
+
+use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::format::DateStyle;
 use ox_core::settings::{ColumnWidth, ColumnWidths};
 
 pub(crate) use column_choice::chosen_from_keys;
@@ -34,6 +39,7 @@ use crate::folder_view::column_widths;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::model::{self, FolderModel};
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
+use crate::folder_view::tree::FolderTree;
 
 /// Icon edge in details rows (`.name-cell svg{height:21px}`).
 const ROW_ICON_SIZE: i32 = 21;
@@ -50,16 +56,23 @@ const COLUMNS_RESIZED: &str = "columns-resized";
 /// another place.
 const COLUMNS_CHOSEN: &str = "columns-chosen";
 
-/// The Name column's cells: the item's icon beside its name.
-fn name_factory(owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
+/// The Name column's cells: the item's icon beside its name, after the
+/// arrow of a folder that expands in `tree`.
+fn name_factory(owners: &Rc<CellOwners>, tree: &FolderTree) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     cells::connect_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON_SIZE, owners);
+    cells::connect_expanders(&factory, tree);
     factory
 }
 
-/// The cells of every column but Name: one dim label, registered in
-/// `owners`, which dims the cells of cut items.
-fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
+/// The cells of the Date modified, Folder path, Type or Size column: one
+/// dim label, registered in `owners`, which dims the cells of cut items.
+/// Dates are written in the style `dates` holds when a cell is bound.
+fn text_factory(
+    column: SortColumn,
+    owners: &Rc<CellOwners>,
+    dates: &Rc<Cell<DateStyle>>,
+) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let setup_owners = Rc::clone(owners);
     factory.connect_setup(move |_, object| {
@@ -74,11 +87,12 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
         cells::show_row_tooltip(&label, &setup_owners, column_text::cell_tooltip(column));
     });
     let bind_owners = Rc::clone(owners);
+    let dates = Rc::clone(dates);
     factory.connect_bind(move |_, object| {
         let list_item = cells::as_list_item(object);
         let label = list_item.child().and_downcast::<gtk::Label>();
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
-            label.set_text(&cell_text(column, &item));
+            label.set_text(&cell_text(column, &item, dates.get()));
             bind_owners.style_cell(&label, &item);
             if column == SortColumn::Size {
                 column_text::request_item_count(&label, &item, &bind_owners);
@@ -88,12 +102,28 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
     factory
 }
 
+/// What the columns' cells share: the registry they are kept in, how dates
+/// are written, and the folders that expand.
+#[derive(Debug)]
+struct CellContext {
+    owners: Rc<CellOwners>,
+    dates: Rc<Cell<DateStyle>>,
+    tree: FolderTree,
+}
+
+impl CellContext {
+    /// The factory of `column`'s cells.
+    fn factory(&self, column: SortColumn) -> gtk::SignalListItemFactory {
+        match column {
+            SortColumn::Name => name_factory(&self.owners, &self.tree),
+            _ => text_factory(column, &self.owners, &self.dates),
+        }
+    }
+}
+
 /// A resizable column showing `column`, sorted by its header.
-fn new_view_column(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::ColumnViewColumn {
-    let factory = match column {
-        SortColumn::Name => name_factory(owners),
-        _ => text_factory(column, owners),
-    };
+fn new_view_column(column: SortColumn, cells: &CellContext) -> gtk::ColumnViewColumn {
+    let factory = cells.factory(column);
     let view_column = gtk::ColumnViewColumn::new(Some(column.label()), Some(factory));
     view_column.set_id(Some(column.as_str()));
     view_column.set_resizable(true);
@@ -211,6 +241,8 @@ mod imp {
         /// Set while the view puts its own columns in order, which is not
         /// the user reordering them.
         pub(super) arranging: Cell<bool>,
+        /// What the cells share, set by [`super::DetailsView::new`].
+        pub(super) cells: OnceCell<super::CellContext>,
     }
 
     #[glib::object_subclass]
@@ -241,7 +273,6 @@ mod imp {
             self.parent_constructed();
             let column_view = &self.column_view;
             column_view.add_css_class("files");
-            column_view.set_enable_rubberband(true);
             column_view.set_show_row_separators(false);
             column_view.set_show_column_separators(false);
             // Titles are dragged to reorder the columns (VIEW-034).
@@ -276,10 +307,19 @@ impl DetailsView {
     pub(crate) fn new(model: &FolderModel, owners: &Rc<CellOwners>) -> Self {
         let view: Self = glib::Object::new();
         let column_view = view.column_view();
+        let cells = CellContext {
+            owners: Rc::clone(owners),
+            dates: Rc::default(),
+            tree: model.tree().clone(),
+        };
         for column in SortColumn::ALL {
-            column_view.append_column(&new_view_column(column, owners));
+            column_view.append_column(&new_view_column(column, &cells));
         }
         view.imp().chosen.replace(column_choice::default_chosen());
+        view.imp()
+            .cells
+            .set(cells)
+            .expect("DetailsView::new sets the cells' context once");
         view.apply_column_widths(None);
         view.show_fitting_columns();
         view.watch_column_widths();
@@ -347,8 +387,36 @@ impl DetailsView {
         };
         (0..items.n_items().min(limit))
             .filter_map(|position| items.item(position).and_downcast::<FileItem>())
-            .map(|item| cell_text(column, &item))
+            .map(|item| cell_text(column, &item, self.date_style()))
             .collect()
+    }
+
+    /// The cells' shared context, which `new` sets.
+    fn cells(&self) -> &CellContext {
+        self.imp()
+            .cells
+            .get()
+            .expect("DetailsView::new sets the cells' context")
+    }
+
+    /// How dates are written.
+    pub(crate) fn date_style(&self) -> DateStyle {
+        self.cells().dates.get()
+    }
+
+    /// Writes dates in `style` (VIEW-004), redrawing the date cells
+    /// shown.
+    pub(crate) fn set_date_style(&self, style: DateStyle) {
+        if self.cells().dates.replace(style) != style {
+            self.redraw_column(SortColumn::Modified);
+        }
+    }
+
+    /// Binds every shown cell of `column` again, through a new factory.
+    pub(crate) fn redraw_column(&self, column: SortColumn) {
+        if let Some(view_column) = self.column(column) {
+            view_column.set_factory(Some(&self.cells().factory(column)));
+        }
     }
 
     /// The column view's column for `column`.
@@ -522,7 +590,7 @@ impl DetailsView {
 
     /// The column and direction the view sorts by, or `None` while
     /// unsorted.
-    fn primary_sort(&self) -> Option<SortOrder> {
+    pub(crate) fn primary_sort(&self) -> Option<SortOrder> {
         let sorter = self.column_view().sorter();
         let sorter = sorter.and_downcast::<gtk::ColumnViewSorter>()?;
         let id = sorter.primary_sort_column()?.id()?;
