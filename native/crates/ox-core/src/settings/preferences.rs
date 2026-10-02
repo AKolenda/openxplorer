@@ -312,6 +312,9 @@ pub struct Preferences {
     /// its application (Dolphin's "Always ask"); off, it only ever opens.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub ask_to_run_programs: bool,
+    /// Explicitly enabled installed service actions, keyed by definition digest.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub enabled_service_actions: Vec<String>,
     /// Text uses the desktop's interface font and its size instead of the
     /// Windows font stack. Stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -431,6 +434,7 @@ impl Default for Preferences {
             confirm_empty_trash: true,
             confirm_close_tabs: false,
             ask_to_run_programs: false,
+            enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,
             sidebar_icon_size: 0,
@@ -453,6 +457,17 @@ impl Default for Preferences {
 }
 
 impl Preferences {
+    fn apply_service_actions(&mut self, keys: Option<&Vec<String>>) {
+        if let Some(keys) = keys.filter(|keys| {
+            keys.len() <= 256
+                && keys
+                    .iter()
+                    .all(|key| key.len() <= 4096 && !key.chars().any(char::is_control))
+        }) {
+            self.enabled_service_actions.clone_from(keys);
+        }
+    }
+
     /// Applies every valid value in `update` and silently ignores the rest,
     /// exactly like `update_preferences` in the Python app. A present
     /// `column_widths` replaces all saved column widths.
@@ -486,6 +501,7 @@ impl Preferences {
         replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
         replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
         replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
+        self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         let icon_size = update
@@ -649,6 +665,8 @@ pub struct PreferencesUpdate {
     pub confirm_close_tabs: Option<bool>,
     /// Ask whether to run a program or script that is opened.
     pub ask_to_run_programs: Option<bool>,
+    /// Replaces the allowlist of installed service actions.
+    pub enabled_service_actions: Option<Vec<String>>,
     /// Use the desktop's font, or the Windows font stack.
     pub desktop_font: Option<bool>,
     /// Hide or show the navigation pane.
@@ -731,6 +749,7 @@ impl PreferencesUpdate {
             confirm_empty_trash: flag("confirmEmptyTrash"),
             confirm_close_tabs: flag("confirmCloseTabs"),
             ask_to_run_programs: flag("askToRunPrograms"),
+            enabled_service_actions: values.get("enabledServiceActions").and_then(read_keys),
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
             sidebar_icon_size: values

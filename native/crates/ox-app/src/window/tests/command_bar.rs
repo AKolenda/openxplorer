@@ -197,7 +197,13 @@ const MORE_MENU_START: [&str; 11] = [
 ];
 
 /// How the More options menu ends.
-const MORE_MENU_END: [&str; 3] = ["-", "License & source", "About this build"];
+const MORE_MENU_END: [&str; 5] = [
+    "-",
+    "Keyboard shortcuts",
+    "Help",
+    "License & source",
+    "About this build",
+];
 
 /// parity: VIEW-013
 #[gtk::test]

@@ -62,7 +62,7 @@ impl SavedSession {
                     .panes
                     .iter()
                     .cloned()
-                    .map(without_accounts)
+                    .map(for_saved_session)
                     .map(|pane| pane.to_json())
                     .collect();
                 json!({ "panes": panes, "activePane": tab.active_pane })
@@ -124,19 +124,24 @@ fn saved_tab(value: &Value) -> Result<SavedTab, WindowStateError> {
         .ok_or(WindowStateError::InvalidTab)?;
     let panes = panes
         .iter()
-        .map(|pane| TabSnapshot::from_json(pane).map(without_accounts))
+        .map(|pane| TabSnapshot::from_json(pane).map(for_saved_session))
         .collect::<Result<Vec<_>, _>>()?;
     let active_pane = index_in(value.get("activePane"), panes.len());
     Ok(SavedTab { panes, active_pane })
 }
 
-/// Removes account names only at the persistent-session boundary.
+/// Removes account names and administrator access at the persistent-session boundary.
 /// In-process tab transfers keep their original addresses so they reach
 /// the mounted account; reopening a saved tab asks for that account again.
-fn without_accounts(mut pane: TabSnapshot) -> TabSnapshot {
-    pane.uri = without_user(&pane.uri);
+fn for_saved_session(mut pane: TabSnapshot) -> TabSnapshot {
+    let saved_uri = |uri: &str| {
+        let uri = without_user(uri);
+        uri.strip_prefix("admin:")
+            .map_or_else(|| uri.clone(), |path| format!("file:{path}"))
+    };
+    pane.uri = saved_uri(&pane.uri);
     for uri in pane.history.iter_mut().chain(pane.selection.iter_mut()) {
-        *uri = without_user(uri);
+        *uri = saved_uri(uri);
     }
     pane
 }
@@ -224,5 +229,12 @@ mod tests {
         assert_eq!(restored.history, ["sftp://server/one", "sftp://server/two"]);
         assert_eq!(restored.selection, ["sftp://server/two/notes.txt"]);
         assert_eq!(restored.index, 1);
+    }
+    /// parity: OPS-039
+    #[test]
+    fn restored_sessions_reopen_administrator_locations_without_elevation() {
+        let saved = SavedSession::from_json(&json!({"tabs": [{"panes": [{"uri": "admin:///etc", "history": ["admin:///etc"], "index": 0}], "activePane": 0}], "activeTab": 0})).unwrap();
+        assert_eq!(saved.tabs[0].panes[0].uri, "file:///etc");
+        assert!(!saved.to_json().to_string().contains("admin:"));
     }
 }

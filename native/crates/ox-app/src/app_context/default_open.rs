@@ -69,6 +69,9 @@ impl AppContext {
 /// named as `OpenXplorer`'s. Tests add only with a private data folder
 /// (native/tools/check.py), never to the user's.
 pub(crate) fn add_to_desktop_history(uri: &str, content_type: &str) {
+    if !super::desktop_recent_policy().remember || uri.starts_with("admin:") {
+        return;
+    }
     #[cfg(test)]
     if !gtk::glib::user_data_dir().starts_with(std::env::temp_dir()) {
         return;

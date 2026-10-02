@@ -109,7 +109,16 @@ mod imp {
             let list = super::item_list(&popover);
             let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
             content.append(&strip);
-            content.append(&list);
+            // A service catalogue can make a menu taller than the monitor.
+            // Keep every command reachable by scrolling and keyboard focus.
+            let rows = gtk::ScrolledWindow::builder()
+                .hscrollbar_policy(gtk::PolicyType::Never)
+                .vscrollbar_policy(gtk::PolicyType::Automatic)
+                .propagate_natural_height(true)
+                .max_content_height(560)
+                .child(&list)
+                .build();
+            content.append(&rows);
             popover.set_child(Some(&content));
             self.strip.set(strip).expect("constructed runs once per object");
             self.list.set(list).expect("constructed runs once per object");

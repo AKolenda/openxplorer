@@ -54,6 +54,10 @@ pub(crate) enum Comparison {
 /// What a file or folder's menu depends on: the right-clicked item and
 /// the selection it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent selection and location facts determine menu availability"
+)]
 pub(crate) struct ItemFacts {
     /// Where the item opens: a folder's, share's or shortcut's target.
     pub(crate) navigation_uri: String,

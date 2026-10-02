@@ -256,6 +256,18 @@ fn every_items_batch_report_arrives_in_a_quick_copy() {
     ))
     .unwrap();
 
+    let bytes: Vec<_> = reports
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|report| report.bytes)
+        .collect();
+    assert_eq!(bytes.last().unwrap().batch_written, 15);
+    assert_eq!(bytes.last().unwrap().batch_size, Some(15));
+    assert!(bytes
+        .windows(2)
+        .all(|pair| pair[0].batch_written <= pair[1].batch_written));
+
     let batch_labels: Vec<String> = reports
         .lock()
         .unwrap()

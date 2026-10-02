@@ -80,9 +80,22 @@ pub async fn run_chosen_transfer(
 fn run_chosen_transfer_blocking(
     request: &ChosenTransfer,
     context: &OperationContext,
-    progress: impl FnMut(Progress) + Send + 'static,
+    mut progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<TransferOutcome, OpsError> {
-    let mut engine = gio_transfer_engine(context, progress);
+    let mut previous_groups = 0_u64;
+    let mut current_group = 0_u64;
+    let mut engine = gio_transfer_engine(context, move |mut report: Progress| {
+        if let Some(bytes) = report.bytes.as_mut() {
+            current_group = bytes.batch_written;
+            bytes.batch_written = bytes.batch_written.saturating_add(previous_groups);
+            // Policies run in separate groups, whose sizes are not the whole job.
+            bytes.batch_size = None;
+        } else if report.scope == crate::transfer::ProgressScope::Batch && report.fraction >= 1.0 {
+            previous_groups = previous_groups.saturating_add(current_group);
+            current_group = 0;
+        }
+        progress(report);
+    });
     let mut total = TransferOutcome::default();
     let mut undo = CombinedUndo::Nothing;
     let renamed = request

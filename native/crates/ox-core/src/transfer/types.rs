@@ -170,6 +170,8 @@ pub struct ByteProgress {
     pub file_written: u64,
     /// The current file's size.
     pub file_size: u64,
+    /// Bytes processed across this run, including earlier files.
+    pub batch_written: u64,
     /// What the whole batch writes, when the free-space check measured it.
     pub batch_size: Option<u64>,
 }

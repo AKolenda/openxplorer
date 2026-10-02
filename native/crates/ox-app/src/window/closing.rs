@@ -275,7 +275,7 @@ impl BrowserWindow {
     /// Cancels the running write: a file operation, an extraction, a
     /// compression or a restored copy.
     fn cancel_every_write(&self) {
-        self.transfer_panel().cancel();
+        self.cancel_operation();
     }
 
     /// Whether a dialog shows over this window.

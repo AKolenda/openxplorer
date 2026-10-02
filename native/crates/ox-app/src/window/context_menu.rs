@@ -143,7 +143,20 @@ impl BrowserWindow {
         let Some(popover) = context_menu_of(view) else {
             return;
         };
-        let menu = self.menu_for_selection(style);
+        let mut menu = self.menu_for_selection(style);
+        if !self.command_facts().folder.is_recycle_bin {
+            self.append_service_actions(&mut menu.entries);
+        }
+        if self.administrator_target().is_some() {
+            menu.entries.push(
+                super::menu_popover::MenuItem::new(
+                    "Open as administrator…",
+                    crate::icons::Icon::ShieldLock,
+                    WindowAction::OpenAsAdministrator,
+                )
+                .into(),
+            );
+        }
         popover.set_entries(menu.entries);
         popover.set_style_and_strip(style, menu.strip);
         popover.set_pointing_to(Some(point));
@@ -262,10 +275,10 @@ impl BrowserWindow {
                 window.show_menu_in_place(new_menu(window.template_menu_entries()));
             }),
             plain_action(WindowAction::ShowSortMenu, |window| {
-                window.show_menu_in_place(sort_menu())
+                window.show_menu_in_place(sort_menu());
             }),
             plain_action(WindowAction::ShowViewMenu, |window| {
-                window.show_menu_in_place(view_menu())
+                window.show_menu_in_place(view_menu());
             }),
             text_action(WindowAction::Unpin, BrowserWindow::unpin),
             plain_action(WindowAction::AddPlace, |window| {

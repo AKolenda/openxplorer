@@ -238,7 +238,12 @@
                                       </object>
                                     </property>
                                     <child type="overlay">
-                                      <object class="OxTransferPanel" id="transfer_panel"/>
+                                      <object class="GtkBox" id="transfer_panels">
+                                        <property name="orientation">vertical</property>
+                                        <property name="valign">end</property>
+                                        <property name="spacing">4</property>
+                                        <child><object class="OxTransferPanel" id="transfer_panel"/></child>
+                                      </object>
                                     </child>
                                   </object>
                                 </child>

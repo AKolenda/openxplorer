@@ -137,6 +137,9 @@ pub(crate) struct BrowserWindow {
     /// folder pane.
     #[template_child]
     pub(super) transfer_panel: TemplateChild<TransferPanel>,
+    /// A bounded stack of independently cancellable jobs.
+    #[template_child]
+    pub(super) transfer_panels: TemplateChild<gtk::Box>,
     /// The message at the bottom of the workspace.
     #[template_child]
     pub(super) toast: TemplateChild<Toast>,
@@ -166,6 +169,8 @@ pub(crate) struct BrowserWindow {
     pub(super) activations: RefCell<Activations>,
     /// Display names of the home folder and the mounted devices.
     pub(super) locations: RefCell<LocationContext>,
+    /// Installed service actions, read on a worker and enabled individually.
+    pub(super) service_actions: RefCell<Vec<ox_core::service_actions::ServiceAction>>,
     /// The drives and devices the volume monitor reported last.
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
