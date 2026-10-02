@@ -10,7 +10,9 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::{self, is_device_location, is_server_location, parent_location, LocationContext};
+use ox_core::location::{
+    self, is_archive_location, is_device_location, is_server_location, parent_location, LocationContext,
+};
 use ox_core::places::NetworkLocation;
 
 use crate::icons::{Art, Icon};
@@ -41,6 +43,8 @@ pub(super) fn address_icon(uri: &str, home_uri: &str) -> Icon {
     }
     if location::same_location(uri, home_uri) {
         Icon::Home
+    } else if is_archive_location(uri) {
+        Icon::FolderZip
     } else if is_server_location(uri) {
         Icon::Organization
     } else if is_device_location(uri) {
@@ -91,6 +95,8 @@ fn tab_icon(uri: &str, locations: &LocationContext, network: &[NetworkLocation])
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
+    } else if is_archive_location(uri) {
+        Art::ZipFolder
     } else if locations.is_network_location(uri) {
         Art::for_smb_location(uri, network)
     } else {
@@ -148,11 +154,15 @@ impl BrowserWindow {
         self.set_action_enabled(WindowAction::Back, location.can_go_back);
         self.set_action_enabled(WindowAction::Forward, location.can_go_forward);
         self.set_action_enabled(WindowAction::Up, parent_location(uri).is_some());
-        self.set_action_enabled(WindowAction::PinFolder, !on_page);
+        let in_zip = is_archive_location(uri);
+        // A ZIP opened like a folder is neither pinned nor searched: its
+        // location is the app's own, and search reads real folders.
+        self.set_action_enabled(WindowAction::PinFolder, !on_page && !in_zip);
         self.render_address(uri);
         let search = self.search_box();
         search.set_folder_title(&title);
-        search.set_enabled(!on_page && !is_device_location(uri));
+        search.set_enabled(!on_page && !in_zip && !is_device_location(uri));
+        self.command_bar().show_extract_all(in_zip);
         self.update_cache_folder_action();
         self.render_tabs();
         self.show_snapshot_banner();

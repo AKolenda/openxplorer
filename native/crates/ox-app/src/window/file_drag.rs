@@ -215,6 +215,24 @@ impl BrowserWindow {
         let items = model.selected_items();
         let entries: Vec<&Entry> = items.iter().map(FileItem::entry).collect();
         let art = items.first().map_or(Art::Folder, FileItem::art);
+        let uris: Vec<String> = entries.iter().map(|entry| entry.uri.clone()).collect();
+        // Inside a ZIP opened like a folder, the drop gets copies, made
+        // when it asks for them (ARC-026).
+        if let Some(inside) = super::zip_copies::zip_items(&uris) {
+            let content = self.zip_drag_content(inside);
+            // The drag's icon and feedback count the items; the drop reads
+            // only the copies the content makes.
+            let payload = DragPayload {
+                uris,
+                exported: Vec::new(),
+                text: String::new(),
+                remote_only: 0,
+            };
+            self.imp()
+                .outgoing_drag
+                .replace(Some(OutgoingDrag { payload, art }));
+            return Some(content);
+        }
         let prepared = dragged_uris(&entries).and_then(|uris| DragPayload::new(uris, local_path));
         self.offer_drag(prepared, art)
     }

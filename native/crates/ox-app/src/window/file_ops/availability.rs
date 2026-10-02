@@ -24,7 +24,7 @@
 //! restored or deleted.
 
 use gtk::subclass::prelude::*;
-use ox_core::location::{is_smb_share_root, same_location, LocationContext, TRASH_URI};
+use ox_core::location::{is_archive_location, is_smb_share_root, same_location, LocationContext, TRASH_URI};
 use ox_core::ops::JournalDirection;
 
 use crate::folder_view::item::FileItem;
@@ -139,6 +139,8 @@ pub(crate) struct FolderFacts {
     pub(crate) is_recycle_bin: bool,
     /// It shows at least one item.
     pub(crate) has_items: bool,
+    /// It is inside a ZIP opened like a folder, read-only (ARC-026).
+    pub(crate) is_zip: bool,
 }
 
 /// Everything the rules read.
@@ -212,6 +214,9 @@ impl CommandFacts {
             FileCommand::New | FileCommand::Paste if folder.is_searching => {
                 "Clear the search to add items to this folder."
             }
+            FileCommand::New | FileCommand::Paste if folder.is_zip => {
+                "A ZIP is read-only. Extract it to add items."
+            }
             FileCommand::New => "This folder is read-only.",
             FileCommand::Paste if !selection.has_inoperable => "This folder is read-only.",
             _ if selection.count == 0 => "Select an item first.",
@@ -220,6 +225,9 @@ impl CommandFacts {
                 if folder.is_recycle_bin =>
             {
                 "Items in the Recycle Bin can only be restored or deleted."
+            }
+            _ if selection.has_read_only && folder.is_zip => {
+                "Items in a ZIP are read-only. Copy them out or use Extract all."
             }
             _ if selection.has_read_only => "A previous version is read-only.",
             _ => "Rename one item at a time.",
@@ -235,9 +243,10 @@ pub(crate) fn selection_facts(items: &[FileItem], locations: &LocationContext) -
         let entry = item.entry();
         !entry.can_operate || entry.is_virtual || is_smb_share_root(&entry.uri)
     });
-    let has_read_only = items
-        .iter()
-        .any(|item| locations.is_snapshot_location(&item.entry().uri));
+    let has_read_only = items.iter().any(|item| {
+        let uri = &item.entry().uri;
+        locations.is_snapshot_location(uri) || is_archive_location(uri)
+    });
     SelectionFacts {
         count: items.len(),
         has_inoperable,
@@ -256,6 +265,7 @@ impl BrowserWindow {
             is_searching: self.is_searching(),
             is_recycle_bin: same_location(&folder_uri, TRASH_URI),
             has_items: model.n_items() > 0,
+            is_zip: is_archive_location(&folder_uri),
         };
         let operations = self.imp().file_operations.borrow();
         let context = self.context();

@@ -39,6 +39,35 @@ pub(super) struct Subfolder {
 /// `show_hidden`. A folder that cannot be listed has none.
 pub(super) async fn list_subfolders(uri: &str, show_hidden: bool) -> Vec<Subfolder> {
     let mut folders = Vec::new();
+    if let Some(inside) = super::zip_folder::archive_location(uri) {
+        // Inside a ZIP opened like a folder, the archive reader lists them.
+        let browser = ox_core::archive::ArchiveBrowser::new(
+            std::sync::Arc::new(ox_core::archive::GioArchiveOpener),
+            ox_core::archive::default_preview_root(),
+        );
+        let listed = browser
+            .list_in_background(
+                inside.archive_uri.clone(),
+                inside.listing_prefix(),
+                ox_core::transfer::Cancellation::new(),
+            )
+            .await;
+        let Ok(listing) = listed else {
+            return Vec::new();
+        };
+        folders.extend(
+            listing
+                .entries
+                .into_iter()
+                .filter(|member| matches!(member.kind, ox_core::archive::ArchiveEntryKind::Folder))
+                .filter(|member| show_hidden || !member.name.starts_with('.'))
+                .map(|member| Subfolder {
+                    uri: inside.member(&member.member).uri(),
+                    name: member.name,
+                }),
+        );
+        return sorted_naturally(folders);
+    }
     let listed = enumerate_folder(uri, |entries| {
         let visible = entries
             .into_iter()
@@ -52,6 +81,11 @@ pub(super) async fn list_subfolders(uri: &str, show_hidden: bool) -> Vec<Subfold
     if listed.is_err() {
         return Vec::new();
     }
+    sorted_naturally(folders)
+}
+
+/// `folders` in natural order of their names.
+fn sorted_naturally(folders: Vec<Subfolder>) -> Vec<Subfolder> {
     let mut keyed: Vec<(SortKey, Subfolder)> = folders
         .into_iter()
         .map(|folder| (SortKey::new(&folder.name), folder))

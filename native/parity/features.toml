@@ -12839,6 +12839,24 @@ native = "done"
 native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_here_uses_the_next_free_name, the_archive_commands_follow_the_selection); native/crates/ox-app/src/archive_view/extraction.rs (extract_here_tries_the_name_then_numbered_names); native/crates/ox-core/src/archive/extract/lift.rs (a_lone_top_folder_becomes_the_output_under_a_free_name, a_folder_named_like_the_archive_takes_its_name_and_mixed_content_stays). Extract here extracts beside the archive into '<name>', '<name> (2)', … with every ZIP rule, progress and Cancel, and is disabled in pages, server listings and previous versions. When the output holds exactly one visible top-level folder, that folder is renamed up beside the archive under the first free name (its own, then '(2)', …) instead of being nested; each step is a rename in the destination that never replaces or copies, and a failed step puts the output back. Porting notes: OpenXplorer offers only the dialog (ARC-009) and never overwrites (ARC-012). ARC-024 extends this to other archive formats."
 
 [[feature]]
+id = "ARC-026"
+area = "ARC"
+title = "Browse a ZIP in the tab like a folder"
+behaviour = "With Settings › Windows & tabs › 'Open ZIP files' set to 'Like a folder (Windows)', opening a ZIP shows it in the tab as Windows Explorer shows a compressed folder: the address bar shows the path through the ZIP, its crumbs and Up walk through it and out of it, Back, Forward, tabs and views work, folders inside open in the tab and files open as read-only copies. The ZIP is read-only: New, Paste, Cut, Rename, Delete and Properties are off and the menus offer Open, Copy, Copy path and Extract all. Copy and dragging items out hand over real copies, extracted with every ZIP rule. The command bar shows Extract all inside a ZIP. 'In a pop-up window' (the default) keeps the Compressed folder window (ARC-002)."
+origin = ["dolphin"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/views/dolphinview.cpp:1678-1719",
+  "dolphin:src/settings/dolphin_generalsettings.kcfg:66-69",
+]
+python_tests = []
+bridge = ["archiveInspect", "archiveExtract"]
+dolphin = "kio-extras zip:/ and tar:/ browse archives in the view, with copy out"
+native = "done"
+native_note = "native/crates/ox-core/src/location/archive_location.rs (locations_round_trip_and_name_their_parents, unsafe_members_and_bad_archives_are_refused, a_zip_is_shown_like_a_folder_and_is_read_only): ox-zip: locations, their address text, crumbs, Up and the read-only rule; native/crates/ox-core/tests/archive_extract_dispatch.rs (a_selection_extracts_only_the_chosen_members) and native/crates/ox-core/src/archive/copies.rs (old_copies_are_removed_and_nothing_else): copies taken out into ~/.cache/winspace/zip-copies, removed after a day; native/crates/ox-core/src/settings/tests/preferences.rs (zip_opening_is_the_window_until_the_folder_is_chosen); native/crates/ox-app/src/window/tests/zip_folder.rs (a_zip_opens_in_the_tab_like_a_folder, extract_all_in_the_bar_extracts_the_zip_shown, copied_items_paste_as_real_files, a_drag_offers_copies_made_when_the_drop_asks, a_path_through_the_zip_opens_the_folder_inside, the_menus_inside_a_zip_are_short, the_pop_up_window_stays_the_default). A drag offers text/uri-list lazily: the copies are extracted only when the drop asks for the file list. TAR archives keep the window; search is off inside a ZIP; at most 5,000 items of a folder are listed, as in the window."
+
+[[feature]]
 id = "PROP-001"
 area = "PROP"
 title = "Opening Properties"

@@ -177,3 +177,44 @@ fn an_existing_output_folder_fails_without_merging() {
     assert_eq!(fs::read_to_string(out.join("sentinel")).expect("kept"), "keep");
     assert!(!out.join("data").exists());
 }
+
+/// Copying items out of a ZIP extracts only them, at their paths, after
+/// the whole archive passed the checks (ARC-026).
+///
+/// parity: ARC-026
+#[test]
+fn a_selection_extracts_only_the_chosen_members() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_zip(&[
+        TestMember::file("tidewater/maps/a.txt", b"a"),
+        TestMember::file("tidewater/maps/deep/b.txt", b"bb"),
+        TestMember::file("tidewater/readme.md", b"read"),
+        TestMember::file("tidewater/other.txt", b"other"),
+        TestMember::file("top.txt", b"top"),
+    ]);
+    let request = ExtractionRequest {
+        archive_uri: fixture.archive_uri(),
+        destination_uri: fixture.destination_uri(),
+        folder_name: "copy".to_owned(),
+    };
+    let extracted = fixture
+        .extractor()
+        .with_selection(&["tidewater/maps/".to_owned(), "tidewater/readme.md".to_owned()])
+        .extract(&request, &fixture.cancel)
+        .expect("extracted");
+
+    let copy = fixture.destination.join("copy");
+    assert_eq!(fs::read(copy.join("tidewater/maps/a.txt")).expect("a"), b"a");
+    assert_eq!(
+        fs::read(copy.join("tidewater/maps/deep/b.txt")).expect("b"),
+        b"bb"
+    );
+    assert_eq!(
+        fs::read(copy.join("tidewater/readme.md")).expect("readme"),
+        b"read"
+    );
+    assert!(!copy.join("tidewater/other.txt").exists());
+    assert!(!copy.join("top.txt").exists());
+    assert_eq!(extracted.summary.file_count, 3);
+    assert_eq!(extracted.summary.unpacked_bytes, 7);
+}

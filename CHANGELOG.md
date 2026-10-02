@@ -18,6 +18,11 @@
 - Open in archive manager no longer reopens the archive in OpenXplorer when
   OpenXplorer is the default application for ZIPs.
 - The ZIP's name in the Extract dialog no longer wraps mid-word.
+- ZIPs can open like folders, as in Windows Explorer: Settings > Windows &
+  tabs > Open ZIP files > Like a folder (Windows). The ZIP opens in the tab,
+  with the address bar, crumbs, Back and Up working through it, Extract all
+  in the bar, and Copy, Paste and dragging items out (as real copies). It
+  stays read-only. The default, In a pop-up window, keeps today's window.
 
 # 2.0.0 — 2026-09-28
 

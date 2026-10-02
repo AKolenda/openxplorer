@@ -169,7 +169,7 @@ impl BrowserWindow {
             folder_name: name,
         };
         let extracted = self
-            .run_extraction(request)
+            .run_extraction(request, None)
             .await
             .map_err(|error| extraction_failure_text(&error))?;
         let lifted = gio::spawn_blocking(move || lift_same_named_folder(extracted))
@@ -194,7 +194,7 @@ impl BrowserWindow {
             folder_name: private,
         };
         let extracted = self
-            .run_extraction(request)
+            .run_extraction(request, None)
             .await
             .map_err(|error| extraction_failure_text(&error))?;
         let staging = extracted.uri.clone();
@@ -234,15 +234,23 @@ impl BrowserWindow {
         }
     }
 
-    /// Runs `request` with the transfer panel and the window's progress.
-    async fn run_extraction(&self, request: ExtractionRequest) -> Result<ExtractedFolder, ArchiveError> {
+    /// Runs `request` with the transfer panel and the window's progress;
+    /// only the members `selection` names, when it names some.
+    pub(super) async fn run_extraction(
+        &self,
+        request: ExtractionRequest,
+        selection: Option<&[String]>,
+    ) -> Result<ExtractedFolder, ArchiveError> {
         let cancel = Cancellation::new();
         self.transfer_panel()
             .start(TransferKind::Archive, PREPARING, cancel.clone());
         self.update_archive_actions();
-        let extractor = self
+        let mut extractor = self
             .zip_extractor()
             .with_progress(self.operation_progress_sender());
+        if let Some(members) = selection {
+            extractor = extractor.with_selection(members);
+        }
         let extracted = extractor.extract_in_background(request, cancel).await;
         self.finish_archive_operation();
         extracted

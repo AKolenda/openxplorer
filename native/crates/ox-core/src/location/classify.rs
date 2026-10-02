@@ -35,13 +35,15 @@ impl LocationContext {
     }
 
     /// True where New and Paste may create items: a real folder that is not
-    /// an SMB server listing, a virtual place or a snapshot. The web UI's
+    /// an SMB server listing, a virtual place, a snapshot or a ZIP. The web UI's
     /// `writableLocation`.
     pub fn is_writable_location(&self, uri: &str) -> bool {
         // Safety rule (app.js `writableLocation`): New and Paste never
         // create items on a page, in a virtual folder, in a server's list
-        // of shares or in a read-only snapshot.
+        // of shares or in a read-only snapshot. A ZIP browsed as a folder
+        // is read-only too.
         !uri.is_empty()
+            && !super::is_archive_location(uri)
             && VirtualPlace::from_uri(uri).is_none()
             && !is_in_virtual_folder(uri)
             && !is_smb_server(uri)

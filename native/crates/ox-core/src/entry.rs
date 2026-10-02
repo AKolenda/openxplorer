@@ -42,6 +42,8 @@ pub use thumbnail::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
 
 use std::path::PathBuf;
 
+use gio::prelude::Cast;
+
 /// Attributes requested for every listed item.
 ///
 /// Thumbnails are deliberately left out. For `thumbnail::*` GIO hashes the
@@ -179,6 +181,59 @@ impl Entry {
     /// no Explorer-style artwork for its type.
     pub fn icon(&self) -> Option<gio::Icon> {
         self.serialized_icon.as_ref().and_then(gio::Icon::deserialize)
+    }
+
+    /// An item inside a ZIP browsed as a folder (ARC-026): read-only, with
+    /// the type and icon its name suggests. `uri` is its `ox-zip:`
+    /// location; `size` is `None` for a folder.
+    pub fn archive_member(
+        uri: String,
+        name: String,
+        is_dir: bool,
+        size: Option<u64>,
+        modified: Option<u64>,
+    ) -> Self {
+        let content_type = if is_dir {
+            None
+        } else {
+            let (guessed, _) = gio::content_type_guess(Some(name.as_str()), None);
+            Some(guessed.to_string())
+        };
+        let folder_type = is_dir.then_some(classify::FolderType::FileFolder);
+        let type_label = type_label::type_label(folder_type, content_type.as_deref());
+        let serialized_icon = content_type
+            .as_deref()
+            .map(gio::content_type_get_icon)
+            .or_else(|| is_dir.then(|| gio::ThemedIcon::new("folder").upcast::<gio::Icon>()))
+            .and_then(|icon| gio::prelude::IconExt::serialize(&icon));
+        Self {
+            uri,
+            is_hidden: name.starts_with('.'),
+            name,
+            kind: if is_dir {
+                EntryKind::Directory
+            } else {
+                EntryKind::File
+            },
+            is_dir,
+            is_virtual: false,
+            can_operate: true,
+            target_uri: None,
+            size: if is_dir { None } else { size },
+            type_label,
+            content_type,
+            modified: modified.filter(|&seconds| seconds > 0),
+            is_symlink: false,
+            trash_orig_path: None,
+            trash_deletion_date: None,
+            can_rename: Some(false),
+            can_trash: Some(false),
+            can_delete: Some(false),
+            // Not reported, as Explorer marks no item inside a ZIP: the
+            // whole ZIP is read-only, which the commands say.
+            can_write: None,
+            serialized_icon,
+        }
     }
 
     /// The URI to open when the item is activated: the validated target of

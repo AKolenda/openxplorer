@@ -127,8 +127,13 @@ impl BrowserWindow {
     pub(super) fn update_properties_actions(&self) {
         let selected = self.folder_pane().model().summary().count;
         let on_page = self.current_uri().as_deref().and_then(Page::from_uri).is_some();
-        let one_item = selected == 1 || (selected == 0 && !on_page);
-        self.set_action_enabled(WindowAction::Properties, one_item || selected > 1);
+        // Items inside a ZIP opened like a folder have no file of their
+        // own to describe or to find versions of (ARC-026).
+        let in_zip = self
+            .current_uri()
+            .is_some_and(|uri| ox_core::location::is_archive_location(&uri));
+        let one_item = !in_zip && (selected == 1 || (selected == 0 && !on_page));
+        self.set_action_enabled(WindowAction::Properties, one_item || (!in_zip && selected > 1));
         self.set_action_enabled(WindowAction::PreviousVersions, one_item);
     }
 

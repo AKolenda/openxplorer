@@ -45,7 +45,7 @@ mod test_support;
 use std::path::{Path, PathBuf};
 
 pub use crate::private_storage::{StorageError, StorageRefusal};
-pub use choices::{Appearance, ContextMenu, Theme, View};
+pub use choices::{Appearance, ContextMenu, Theme, View, ZipOpening};
 pub use error::SettingsError;
 pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};

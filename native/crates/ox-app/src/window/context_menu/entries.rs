@@ -427,6 +427,37 @@ fn open_with_application(application: &ApplicationChoice) -> MenuItem {
         .with_application_icon(application.icon.as_deref())
 }
 
+/// The menu of items inside a ZIP opened like a folder, as Explorer's
+/// inside a "Compressed (zipped) Folder": Open, Copy, Copy path and
+/// Extract all (ARC-026). The ZIP is read-only, so nothing else applies.
+pub(crate) fn zip_item_menu() -> Vec<MenuEntry> {
+    vec![
+        item("Open", Icon::Open, WindowAction::Open)
+            .with_shortcut("Enter")
+            .into(),
+        MenuEntry::Divider,
+        item("Copy", Icon::Copy, WindowAction::Copy)
+            .with_shortcut("Ctrl+C")
+            .into(),
+        item("Copy path", Icon::Link, WindowAction::CopyPath)
+            .with_shortcut("Ctrl+Shift+C")
+            .into(),
+        MenuEntry::Divider,
+        item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll).into(),
+    ]
+}
+
+/// The menu of blank space inside a ZIP opened like a folder: Extract
+/// all and Refresh (ARC-026).
+pub(crate) fn zip_background_menu() -> Vec<MenuEntry> {
+    vec![
+        item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll).into(),
+        item("Refresh", Icon::ArrowClockwise, WindowAction::Refresh)
+            .with_shortcut("F5")
+            .into(),
+    ]
+}
+
 /// The menu of items in the Recycle Bin: Restore, Delete permanently and
 /// Properties (OPS-040).
 pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {

@@ -24,7 +24,7 @@ use ox_core::archive::{
 use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;
 use ox_core::integration::Activation;
-use ox_core::location::{is_smb_server, parent_location};
+use ox_core::location::{is_archive_location, is_smb_server, parent_location};
 use ox_core::ops::OperationSummary;
 use ox_core::transfer::{Cancellation, Node, NodeFactory, Progress};
 use ox_core::versions::snapshot_location;
@@ -107,13 +107,16 @@ impl BrowserWindow {
         ]
     }
 
-    /// The one selected item, when it is a ZIP archive.
+    /// The one selected item, when it is a ZIP archive, else the ZIP the
+    /// tab shows the inside of (ARC-026). A ZIP inside a ZIP is not one
+    /// here: it has no file of its own to extract.
     fn selected_archive(&self) -> Option<ArchiveTarget> {
         let selected = self.folder_pane().model().selected_items();
-        let [item] = selected.as_slice() else {
-            return None;
+        let one = match selected.as_slice() {
+            [item] if !is_archive_location(&item.entry().uri) => archive_target(item.entry()),
+            _ => None,
         };
-        archive_target(item.entry())
+        one.or_else(|| self.shown_zip())
     }
 
     /// True for a folder the user may write into: not a page, a server
@@ -159,7 +162,7 @@ impl BrowserWindow {
     /// `OpenXplorer` is never chosen, even when it is the default for
     /// ZIPs: asking the desktop for the default would reopen the archive
     /// here (ARC-021).
-    fn open_externally(&self, uri: &str) {
+    pub(super) fn open_externally(&self, uri: &str) {
         let uri = uri.to_owned();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -420,6 +423,10 @@ fn archive_target(entry: &Entry) -> Option<ArchiveTarget> {
 /// True for a location the user may extract into (`writableLocation`):
 /// not a page, a server listing or a previous version.
 fn is_writable_location(uri: &str, snapshot_roots: &[String]) -> bool {
+    if is_archive_location(uri) {
+        // A ZIP opened like a folder is read-only (ARC-026).
+        return false;
+    }
     let is_page = Page::from_uri(uri).is_some();
     let is_previous_version = snapshot_location(uri, snapshot_roots).is_some();
     !is_page && !is_smb_server(uri) && !is_previous_version

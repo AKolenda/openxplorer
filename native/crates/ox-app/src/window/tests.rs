@@ -54,3 +54,4 @@ mod tab_commands;
 mod tabs;
 mod views;
 mod worker_questions;
+mod zip_folder;

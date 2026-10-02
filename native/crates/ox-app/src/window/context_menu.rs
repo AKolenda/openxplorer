@@ -36,8 +36,8 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 use entries::{
-    background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu, Comparison, ContextMenu,
-    ItemFacts, ItemLocation, ItemShape,
+    background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu, zip_background_menu,
+    zip_item_menu, Comparison, ContextMenu, ItemFacts, ItemLocation, ItemShape,
 };
 
 /// How far into a row, and from the view's corner without one, a menu
@@ -153,7 +153,19 @@ impl BrowserWindow {
     /// What the menu lists for the selection now.
     fn menu_for_selection(&self, style: MenuStyle) -> ContextMenu {
         let items = self.folder_pane().model().selected_items();
-        let in_recycle_bin = self.command_facts().folder.is_recycle_bin;
+        let facts = self.command_facts();
+        if facts.folder.is_zip {
+            let entries = if items.is_empty() {
+                zip_background_menu()
+            } else {
+                zip_item_menu()
+            };
+            return ContextMenu {
+                entries,
+                strip: Vec::new(),
+            };
+        }
+        let in_recycle_bin = facts.folder.is_recycle_bin;
         let entries = match (items.first(), in_recycle_bin) {
             (None, true) => recycle_bin_background_menu(),
             (None, false) => background_menu(

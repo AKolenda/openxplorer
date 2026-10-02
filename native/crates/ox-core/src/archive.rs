@@ -41,6 +41,7 @@
 //! | `error` | [`ArchiveError`] with the app's messages | all of them |
 
 mod browse;
+mod copies;
 mod create;
 mod error;
 mod extract;
@@ -55,6 +56,9 @@ mod zip;
 pub use browse::{
     default_preview_root, ArchiveBrowser, ArchiveEntry, ArchiveEntryKind, ArchiveListing, MAX_LISTED_ENTRIES,
 };
+pub use copies::{
+    copied_member, copies_root, copy_folder_name, prepare_copies_root, remove_old_copies, COPY_LIFETIME,
+};
 pub use create::{CompressionRequest, CreatedArchive, ZipCompressor};
 pub use error::ArchiveError;
 pub use extract::{
@@ -63,6 +67,13 @@ pub use extract::{
 };
 pub use gio_reader::GioArchiveReader;
 pub use member_names::{is_supported_archive, suggested_folder_name};
+
+/// Whether `name` is a member name the archive reader treats as safe: no
+/// absolute path, no `.` or `..` or empty component, no backslash or
+/// control character (a folder's trailing `/` is allowed).
+pub fn is_safe_member_name(name: &str) -> bool {
+    member_names::is_safe_member(name)
+}
 pub use preview::{PreviewCopy, PREVIEW_NOTICE};
 pub use source::{ArchiveOpener, ArchiveStream, GioArchiveOpener};
 pub use zip::{Zip64Field, ZipFormatError};

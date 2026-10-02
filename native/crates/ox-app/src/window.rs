@@ -146,6 +146,8 @@ pub(crate) mod widget_tree;
 mod window_action;
 mod window_keys;
 mod window_size;
+mod zip_copies;
+mod zip_folder;
 
 #[cfg(test)]
 mod tests;

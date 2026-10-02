@@ -215,6 +215,11 @@ impl BrowserWindow {
             return;
         };
         let entry = item.entry().clone();
+        // An item listed inside a ZIP has no file of its own to read again
+        // (ARC-026).
+        if self.activate_zip_member(&entry) {
+            return;
+        }
         let Some(origin) = self.begin_item_activation() else {
             return;
         };
@@ -330,7 +335,10 @@ impl BrowserWindow {
     /// as folders" off (ARC-022), in its default application other than
     /// this one.
     fn open_archive_or_file(&self, entry: &Entry) {
-        if self.context().settings_data().preferences.browse_archives {
+        if self.opens_zip_as_folder(entry) {
+            // Like a folder, in the tab (ARC-026).
+            self.navigate_or_report(&Self::zip_root_of(entry));
+        } else if self.context().settings_data().preferences.browse_archives {
             self.open_archive(entry);
         } else {
             // The default opener never picks this app, so the archive is
@@ -534,6 +542,9 @@ impl BrowserWindow {
             Activation::File => self.open_file(&entry),
             // The user handed the archive to this app, which may be its
             // default application: it is browsed whatever the setting.
+            Activation::Archive if self.opens_zip_as_folder(&entry) => {
+                self.open_incoming_folder(&Self::zip_root_of(&entry), tab);
+            }
             Activation::Archive => self.open_archive(&entry),
             Activation::Refused(message) => self.show_message(message),
         }
