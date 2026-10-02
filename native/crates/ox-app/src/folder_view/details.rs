@@ -408,7 +408,9 @@ impl DetailsView {
     /// shown.
     pub(crate) fn set_date_style(&self, style: DateStyle) {
         if self.cells().dates.replace(style) != style {
-            self.redraw_column(SortColumn::Modified);
+            for column in [SortColumn::Modified, SortColumn::Created, SortColumn::Deleted] {
+                self.redraw_column(column);
+            }
         }
     }
 
@@ -503,7 +505,7 @@ impl DetailsView {
 
     /// The widths the user set, in the form settings save them. Name
     /// counts only once it has a width of its own.
-    fn widths_to_save(&self) -> Vec<ColumnWidth> {
+    pub(crate) fn widths_to_save(&self) -> Vec<ColumnWidth> {
         let listing = self.imp().listing.get();
         let saved = self
             .view_columns()

@@ -5,6 +5,7 @@
 //! views in a stack of their own, the empty page and the landing page, all
 //! in the stack of pages [`super::PanePage`] names.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -44,6 +45,8 @@ pub(super) struct PaneParts {
     pub(super) drag_hint: gtk::Label,
     /// The rubber band over the views while one is drawn (SEL-012).
     pub(super) rubber_band: gtk::Box,
+    /// The requested preview visibility before remote-file policy is applied.
+    pub(super) previews_enabled: Cell<bool>,
 }
 
 impl PaneParts {
@@ -69,6 +72,7 @@ impl PaneParts {
             loading_line: LoadingLine::new(),
             drag_hint: drag_hint(),
             rubber_band: rubber_band(),
+            previews_enabled: Cell::new(true),
         }
     }
 }

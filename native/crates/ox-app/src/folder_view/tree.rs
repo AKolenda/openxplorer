@@ -19,6 +19,7 @@ use gtk::{gio, glib};
 
 use crate::folder_view::item::FileItem;
 use crate::folder_view::loader::{self, Listing};
+use crate::folder_view::reconcile;
 
 /// The tree of expanded folders over the sorted items.
 #[derive(Debug, Clone)]
@@ -183,6 +184,36 @@ impl FolderTree {
         self.0.pending.borrow_mut().clear();
     }
 
+    /// Refreshes the expanded contents too when F5 or a file operation
+    /// reloads the containing folder, keeping unchanged item objects.
+    pub(crate) fn refresh_expanded(&self) {
+        for row in self.expanded_rows() {
+            let Some(uri) = row_uri(&row) else { continue };
+            let Some(store) = row.children().as_ref().and_then(child_store) else {
+                continue;
+            };
+            let entries = Rc::new(RefCell::new(Vec::new()));
+            let batch = Rc::clone(&entries);
+            let weak_store = store.downgrade();
+            let state = Rc::downgrade(&self.0);
+            let listing = loader::list_folder(
+                &uri,
+                move |next| batch.borrow_mut().extend(next),
+                move |result| {
+                    if result.is_ok() {
+                        if let (Some(store), Some(state)) = (weak_store.upgrade(), state.upgrade()) {
+                            let tree = FolderTree(state);
+                            let expanded = tree.expanded_uris();
+                            reconcile::update_in_place(&store, entries.take());
+                            tree.expand_when_listed(expanded);
+                        }
+                    }
+                },
+            );
+            self.0.listings.borrow_mut().insert(uri, listing);
+        }
+    }
+
     /// Lists the folder at `uri` into `children`, the sorted list the tree
     /// made for it, unless it is listed already.
     fn list_children(&self, uri: &str, children: &gio::ListModel) {
@@ -269,11 +300,14 @@ mod tests {
         std::fs::write(fixture.path("Documents").join("new.txt"), b"Synthetic data\n").expect("another file");
         tree.set_expanded(&documents, true);
         wait_until("fresh contents on reopen", || tree.model().n_items() == 3);
-        assert!(tree
-            .model()
-            .iter::<FileItem>()
-            .filter_map(Result::ok)
+        assert!((0..tree.model().n_items())
+            .filter_map(|position| tree.model().item(position).and_downcast::<FileItem>())
             .any(|item| item.entry().name == "new.txt"));
+        std::fs::remove_file(fixture.path("Documents").join("new.txt")).expect("remove a fixture file");
+        tree.refresh_expanded();
+        wait_until("refresh removes stale expanded children", || {
+            tree.model().n_items() == 2
+        });
         tree.collapse_all();
     }
 }

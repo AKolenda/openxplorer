@@ -61,6 +61,11 @@ impl FileCell {
         }
         let arrow = &imp.expander;
         arrow.set_visible(tree.is_expandable());
+        if tree.is_expandable() {
+            self.add_css_class("has-folder-expander");
+        } else {
+            self.remove_css_class("has-folder-expander");
+        }
         let Some(row) = row.filter(|_| tree.is_expandable()) else {
             return;
         };

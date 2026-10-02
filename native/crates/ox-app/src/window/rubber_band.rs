@@ -73,6 +73,8 @@ pub(super) fn banded_selection(
 /// A band being drawn.
 #[derive(Debug)]
 pub(super) struct Band {
+    /// The pane that owns the band, even if focus moves elsewhere.
+    pane: super::folder_pane::FolderPane,
     /// The view it is drawn in.
     view: gtk::Widget,
     /// Where it started, in the view's scrolled content.
@@ -161,14 +163,29 @@ impl BrowserWindow {
             self,
             move |_| window.end_band()
         ));
-        self.folder_pane()
-            .model()
-            .selection()
-            .connect_items_changed(glib::clone!(
+        for pane in self
+            .folder_panes()
+            .into_iter()
+            .filter(|pane| view.is_ancestor(*pane))
+        {
+            pane.model().selection().connect_items_changed(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |_, _, _, _| window.end_band()
+                #[weak]
+                pane,
+                move |_, _, _, _| {
+                    let changed = window
+                        .imp()
+                        .rubber_band
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|band| band.pane == pane);
+                    if changed {
+                        window.end_band();
+                    }
+                }
             ));
+        }
         view.add_controller(drag);
     }
 
@@ -183,6 +200,7 @@ impl BrowserWindow {
             .into_iter()
             .collect();
         self.imp().rubber_band.replace(Some(Band {
+            pane: self.folder_pane().clone(),
             view: view.clone(),
             start: (point.0 + dx, point.1 + dy),
             pointer: point,
@@ -195,7 +213,11 @@ impl BrowserWindow {
 
     /// Whether a band is drawn now.
     fn band_is_shown(&self) -> bool {
-        self.folder_pane().rubber_band_shown()
+        self.imp()
+            .rubber_band
+            .borrow()
+            .as_ref()
+            .is_some_and(|band| band.pane.rubber_band_shown())
     }
 
     /// Moves the band's free corner to `pointer` in its view: selects what
@@ -210,21 +232,21 @@ impl BrowserWindow {
 
     /// Selects what the band touches and draws it where it is now.
     fn update_band(&self) {
-        let pane = self.folder_pane();
         let mut state = self.imp().rubber_band.borrow_mut();
         let Some(band) = state.as_mut() else { return };
+        let pane = band.pane.clone();
         let (dx, dy) = scroll_offsets(&band.view);
         let start = (band.start.0 - dx, band.start.1 - dy);
         let mut rect = rect_between(start, band.pointer);
         let content_rect = rect_between(band.start, (band.pointer.0 + dx, band.pointer.1 + dy));
         let full_rows = band.view.is::<gtk::ColumnView>();
         for (position, row) in pane.owners().shown_items(&band.view) {
-            let Some(bounds) = row.compute_bounds(&band.view) else {
+            let Some(mut bounds) = row.compute_bounds(&band.view) else {
                 continue;
             };
             #[expect(clippy::cast_possible_truncation, reason = "pixel coordinates")]
-            let content_bounds = bounds.offset(dx as f32, dy as f32);
-            band.bounds.insert(position, content_bounds);
+            bounds.offset(dx as f32, dy as f32);
+            band.bounds.insert(position, bounds);
         }
         let touched = touched_positions(&band.bounds, &content_rect, full_rows);
         if full_rows {
@@ -289,7 +311,7 @@ impl BrowserWindow {
                 if let Some(adjustment) = adjustment.filter(|_| delta != 0.0) {
                     let before = adjustment.value();
                     adjustment.set_value(before + delta);
-                    moved |= adjustment.value() != before;
+                    moved |= (adjustment.value() - before).abs() > f64::EPSILON;
                 }
             }
         }
@@ -311,7 +333,7 @@ impl BrowserWindow {
         if let Some(timer) = band.scroll_timer.take() {
             timer.remove();
         }
-        self.folder_pane().show_rubber_band(&band.view, None);
+        band.pane.show_rubber_band(&band.view, None);
     }
 }
 

@@ -20,10 +20,14 @@ impl BrowserWindow {
     /// Lets folders expand when the preference, the view, the search and
     /// the groups allow it, and redraws the arrows when that changes.
     pub(super) fn update_expandability(&self) {
-        let pane = self.folder_pane();
+        self.update_expandability_for(self.folder_pane());
+    }
+
+    /// The inactive split pane keeps its own view and search state.
+    pub(super) fn update_expandability_for(&self, pane: &super::folder_pane::FolderPane) {
         let expandable = self.context().settings_data().preferences.expandable_folders
             && pane.view() == FolderView::Details
-            && !self.imp().search.borrow().is_active()
+            && !(self.is_active_pane(pane) && self.imp().search.borrow().is_active())
             && pane.model().grouping().is_none();
         let tree = pane.model().tree();
         if tree.is_expandable() != expandable {

@@ -53,25 +53,30 @@ impl BrowserWindow {
     /// Keeps the Sort menu and the groups in step with sorting by a column
     /// title, which also ends sorting by a further key, and saves it.
     fn follow_header_sorting(&self) {
-        let Some(sorter) = self.folder_pane().details().column_view().sorter() else {
-            return;
-        };
-        sorter.connect_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _| {
-                // The window sorts by a saved style or a menu choice: it
-                // brings everything in step itself.
-                if window.imp().applying_style.get() {
-                    return;
+        for pane in self.folder_panes() {
+            let Some(sorter) = pane.details().column_view().sorter() else {
+                continue;
+            };
+            sorter.connect_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                pane,
+                move |_, _| {
+                    // The window sorts by a saved style or a menu choice: it
+                    // brings everything in step itself.
+                    if window.imp().applying_style.get() {
+                        return;
+                    }
+                    if pane.details().primary_sort().is_some() {
+                        pane.model().set_sort_role(None);
+                    }
+                    if window.is_active_pane(&pane) {
+                        window.show_sort_state();
+                    }
+                    window.remember_pane_style(&pane);
                 }
-                let pane = window.folder_pane();
-                if pane.details().primary_sort().is_some() {
-                    pane.model().set_sort_role(None);
-                }
-                window.show_sort_state();
-                window.remember_style();
-            }
-        ));
+            ));
+        }
     }
 }

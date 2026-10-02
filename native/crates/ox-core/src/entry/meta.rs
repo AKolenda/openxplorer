@@ -58,7 +58,20 @@ impl EntryMeta {
             let bits = (mode >> shift) & 0o7;
             text.push(if bits & 0o4 == 0 { '-' } else { 'r' });
             text.push(if bits & 0o2 == 0 { '-' } else { 'w' });
-            text.push(if bits & 0o1 == 0 { '-' } else { 'x' });
+            let executable = bits & 0o1 != 0;
+            let special = match shift {
+                6 => 0o4000,
+                3 => 0o2000,
+                _ => 0o1000,
+            };
+            text.push(match (mode & special != 0, executable, shift) {
+                (true, true, 0) => 't',
+                (true, false, 0) => 'T',
+                (true, true, _) => 's',
+                (true, false, _) => 'S',
+                (false, true, _) => 'x',
+                (false, false, _) => '-',
+            });
         }
         text
     }
@@ -80,6 +93,11 @@ mod tests {
         assert_eq!(meta.owner.as_deref(), Some("ada"));
         assert_eq!(meta.permissions, Some(0o754));
         assert_eq!(meta.permissions_text(), "rwxr-xr--");
+        let special = EntryMeta {
+            permissions: Some(0o7740),
+            ..EntryMeta::default()
+        };
+        assert_eq!(special.permissions_text(), "rwsr-S--T");
         assert_eq!(EntryMeta::default().permissions_text(), "");
     }
 }

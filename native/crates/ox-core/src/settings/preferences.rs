@@ -553,6 +553,21 @@ impl Preferences {
         if let Some(folder_views) = &update.folder_views {
             self.folder_views.clone_from(folder_views);
         }
+        self.sync_style_defaults(update);
+    }
+
+    /// Global Settings changes also update the shared display style.
+    fn sync_style_defaults(&mut self, update: &PreferencesUpdate) {
+        let Some(defaults) = self.view_defaults.as_mut() else {
+            return;
+        };
+        if update.column_widths.is_some() {
+            defaults.column_widths.clone_from(&self.column_widths);
+        }
+        if let Some(options) = &update.view_options {
+            defaults.show_previews = Some(options.show_previews);
+            defaults.details_columns = Some(options.details_columns.clone());
+        }
     }
 
     /// The display style `uri` is shown in: its own when each folder
@@ -568,10 +583,19 @@ impl Preferences {
             show_hidden: self.show_hidden,
             ..ViewProperties::default()
         });
-        if !self.per_folder_views {
-            return defaults;
+        let mut style = if self.per_folder_views {
+            super::view_properties::style_for(&self.folder_views, &defaults, uri)
+        } else {
+            defaults
+        };
+        style.show_previews.get_or_insert(self.view_options.show_previews);
+        style
+            .details_columns
+            .get_or_insert_with(|| self.view_options.details_columns.clone());
+        if style.column_widths.is_none() {
+            style.column_widths.clone_from(&self.column_widths);
         }
-        super::view_properties::style_for(&self.folder_views, &defaults, uri)
+        style
     }
 }
 
@@ -763,7 +787,7 @@ fn read_network_interval(value: &Value) -> Option<u32> {
 /// The numeric widths of the known columns in a `columnWidths` object;
 /// `None` if it is not an object. Out-of-range widths are dropped when
 /// applied.
-fn read_column_widths(value: &Value) -> Option<Vec<ColumnWidth>> {
+pub(super) fn read_column_widths(value: &Value) -> Option<Vec<ColumnWidth>> {
     let columns = value.as_object()?;
     let numeric_width = |column: Column| {
         let pixels = columns.get(column.as_str())?.as_f64()?;

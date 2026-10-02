@@ -91,6 +91,59 @@ struct ViewOptionBinding {
 /// The "Files and folders" group.
 pub(super) fn group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new("Files and folders");
+    add_preview_rows(page, &group);
+    let rows = [
+        (
+            RELATIVE_DATES,
+            PreferenceBinding {
+                read: |preferences| !preferences.absolute_dates,
+                write: |on| PreferencesUpdate {
+                    absolute_dates: Some(!on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            FOLDER_STYLES,
+            PreferenceBinding {
+                read: |preferences| preferences.per_folder_views,
+                write: |on| PreferencesUpdate {
+                    per_folder_views: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            SELECTION_MARKER,
+            PreferenceBinding {
+                read: |preferences| preferences.selection_marker,
+                write: |on| PreferencesUpdate {
+                    selection_marker: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            EXPANDABLE_FOLDERS,
+            PreferenceBinding {
+                read: |preferences| preferences.expandable_folders,
+                write: |on| PreferencesUpdate {
+                    expandable_folders: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+    ];
+    for (text, binding) in rows {
+        let row = SettingRow::new(text);
+        row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+        group.add_row(&row);
+    }
+    group
+}
+
+/// Preview and item-count settings share the same options record.
+fn add_preview_rows(page: &SettingsPage, group: &SettingsGroup) {
     let rows = [
         (
             SHOW_PREVIEWS,
@@ -147,54 +200,6 @@ pub(super) fn group(page: &SettingsPage) -> SettingsGroup {
         row.add_control(&view_option_switch(page, binding), ControlName::RowTitle);
         group.add_row(&row);
     }
-    let rows = [
-        (
-            RELATIVE_DATES,
-            PreferenceBinding {
-                read: |preferences| !preferences.absolute_dates,
-                write: |on| PreferencesUpdate {
-                    absolute_dates: Some(!on),
-                    ..PreferencesUpdate::default()
-                },
-            },
-        ),
-        (
-            FOLDER_STYLES,
-            PreferenceBinding {
-                read: |preferences| preferences.per_folder_views,
-                write: |on| PreferencesUpdate {
-                    per_folder_views: Some(on),
-                    ..PreferencesUpdate::default()
-                },
-            },
-        ),
-        (
-            SELECTION_MARKER,
-            PreferenceBinding {
-                read: |preferences| preferences.selection_marker,
-                write: |on| PreferencesUpdate {
-                    selection_marker: Some(on),
-                    ..PreferencesUpdate::default()
-                },
-            },
-        ),
-        (
-            EXPANDABLE_FOLDERS,
-            PreferenceBinding {
-                read: |preferences| preferences.expandable_folders,
-                write: |on| PreferencesUpdate {
-                    expandable_folders: Some(on),
-                    ..PreferencesUpdate::default()
-                },
-            },
-        ),
-    ];
-    for (text, binding) in rows {
-        let row = SettingRow::new(text);
-        row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
-        group.add_row(&row);
-    }
-    group
 }
 
 /// A switch showing the option `binding` reads, which saves the user's

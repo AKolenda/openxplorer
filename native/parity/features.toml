@@ -2975,8 +2975,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "view_zoom_in Ctrl++/Ctrl+=, view_zoom_out Ctrl+-, view_zoom_reset Ctrl+0"
-native = "done"
-native_note = "The icon view zooms through 14 levels from 16 to 256 pixels (folder_view/icon_size.rs), with Explorer's four named sizes on Ctrl+Shift+1..4. Ctrl+wheel steps through them (stopping at Details and at 256), and a slider in the status bar, shown in the icon view as Dolphin's is, sets the size; the level is saved with the view style. Ctrl+plus/minus/0 keep changing the text size (VIEW-043), so zoom has no keys of its own. Test zooming_changes_and_saves_the_view."
+native = "partial"
+native_note = "The icon view zooms through 14 levels from 16 to 256 pixels, through Ctrl+wheel and the status-bar slider; each folder can remember its icon size and switching through List preserves it. Explorer's named views use Ctrl+Shift+1..6. The existing Ctrl+plus/minus/0 text-size shortcuts are preserved (VIEW-043), so the inventory's separate icon-zoom shortcuts remain unavailable. Tests zooming_changes_and_saves_the_view, switching_the_icon_size_restyles_the_tiles and the_wheel_steps_through_the_views_and_stops_at_the_ends."
 
 [[feature]]
 id = "VIEW-011"
@@ -3145,8 +3145,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "sort_by_* for every KFileItemModel role"
-native = "done"
-native_note = "Besides the four columns, the Sort menu sorts by Date created, Date accessed, File extension, Permissions, Owner, User group and Link destination (read with each listing as EntryMeta; native/crates/ox-app/src/folder_view/sort_roles.rs); the column titles then show no arrow, as Dolphin's header does for a role it does not show, and a title click returns to that column. Deletion time is the Recycle Bin's Date deleted column (dialogs track). Rating, Tags, Comment and media metadata need Baloo or a metadata extractor the app does not link. Test further_sort_keys_compare_their_values."
+native = "partial"
+native_note = "The Sort menu offers Date created, Date accessed, File extension, Permissions, Owner, User group and Link destination in addition to the basic columns; Created/Extension/Owner/Permissions share the same sort implementation and canonical keys as their Details columns. Folder path and Date deleted are sortable columns where shown. Rating, Tags, Comment and media metadata remain unavailable because this build has no metadata extraction or indexing provider for them. Test further_sort_keys_compare_their_values."
 
 [[feature]]
 id = "VIEW-020"
@@ -3172,7 +3172,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "GlobalViewProps (default true) + ViewProperties"
 native = "done"
-native_note = "View mode, icon size, sort key and order, groups, folders first and hidden files are saved as one style for all folders (viewDefaults, with the Python app's view and showHidden kept in step) or, with Settings > Appearance > Files and folders > Remember each folder's view (perFolderViews, Dolphin's GlobalViewProps off), for each folder (folderViews, at most 500, no user names): a folder opened or a tab shown later appears in its own style, a style saved for sub-folders reaches below. Column widths stay global (VIEW-028). native/crates/ox-core/src/settings/view_properties.rs, native/crates/ox-app/src/window/view_style.rs; tests folders_keep_their_own_style_and_the_rest_share_the_default and each_folder_keeps_its_own_style_when_asked."
+native_note = "View mode, icon size, sort key/order, groups, folders first, hidden-last, hidden files, previews, visible-column order and widths persist in a global default or per folder. Saved folder scopes can include descendants; at most 500 folder styles are kept and credentials are rejected. Split panes use their own locations and header/resize callbacks, with independent preview safety policy. Reset layout clears saved per-folder widths too. Native files settings/view_properties.rs, window/view_style.rs and window/view_options.rs; tests each_folder_keeps_its_own_style_when_asked, folders_keep_their_own_style_and_the_rest_share_the_default and split_panes_keep_their_own_display_styles."
 
 [[feature]]
 id = "VIEW-021"
@@ -3193,7 +3193,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "view_properties"
 native = "done"
-native_note = "View > Adjust view display style… opens the app's dialog with View mode, Sort by, Order, Show in groups, Show folders first and Show hidden files; while each folder keeps its own style it applies to this folder, this folder and its subfolders, or all folders (the last two after a confirmation) and can become the default, as Dolphin's dialog does; with one style for all folders it applies everywhere. native/crates/ox-app/src/window/view_properties_dialog.rs; test the_display_style_dialog_applies_its_choices."
+native_note = "View > Adjust view display style opens the shared dialog with view mode, sorting/order, groups, folders first, hidden-last, hidden files, previews and additional Details columns. Per-folder mode offers this folder, this folder and subfolders, or all folders, with confirmation before replacing wider scopes, plus saving the default. Remote/large-file preview safety still applies. Tests the_display_style_dialog_applies_its_choices and hidden_items_sort_after_visible_items_when_requested; window/view_properties_dialog.rs."
 
 [[feature]]
 id = "VIEW-022"
@@ -3211,8 +3211,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "show_in_groups"
-native = "done"
-native_note = "Sort > Show in groups groups the listing by its sort key, in the sort's order: names by first letter ('0 – 9', '#'), sizes by Explorer's buckets (Tiny … Gigantic, unmeasured Folders first), dates by Today, Yesterday, Earlier this week, Last week, Earlier this month, Last month, Earlier this year, then the year, and types, permissions, owners and the other keys by their text. The details view heads each group with its title, item count and a line (folder_view/details/group_headers.rs); GTK 4.14's grid view has no section headers, so the List and icon views show the grouped order without titles. Tests items_group_by_letter_size_and_period and show_in_groups_heads_each_group."
+native = "partial"
+native_note = "The listing groups by the sort key: name initials, size buckets, local calendar date periods (including daylight-saving boundaries), and text values such as permissions and owner. Details shows a title and item count for every group and preserves selection when grouping changes. GTK 4.14 GridView provides no section-header factory, so Icons and List use grouped ordering without titles. Tests items_group_by_letter_size_and_period, calendar_groups_follow_short_and_long_days and show_in_groups_heads_each_group."
 
 [[feature]]
 id = "VIEW-023"
@@ -3509,7 +3509,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "ExpandableFolders (Details)"
 native = "done"
-native_note = "In the details view of a folder (not while searching or grouped) a chevron before each folder expands it in place: its contents are listed beneath it, indented 16 pixels a level, filtered and sorted as the folder's own items, through a GTK tree list model that passes the items through (folder_view/tree.rs, folder_view/cells/expander.rs). Right expands the current and selected folders, Left collapses them or goes to the containing folder; Back and Forward return with the same folders expanded. Settings > Appearance > Files and folders > Expandable folders turns it off. Expanded folders are listed once and not watched. Test a_folder_expands_in_place_and_back_keeps_it_open."
+native_note = "Details folders expand under their rows with indented Fluent chevrons; Left/Right collapse/expand, and Back/Forward restore expanded folders. Children use the same filtering and sorting. Collapsing cancels all descendant listings and reopening lists fresh contents; F5 and file-operation reloads refresh expanded children while preserving unchanged items. Settings can disable expansion. Nested folders are not independently watched. Tests a_folder_expands_in_place_and_back_keeps_it_open and collapsing_a_branch_discards_all_its_child_listings."
 
 [[feature]]
 id = "VIEW-036"
@@ -4449,7 +4449,7 @@ python_tests = []
 bridge = []
 dolphin = "KItemListRubberBand; Rubber-band selection"
 native = "done"
-native_note = "The window draws its own rubber band (window/rubber_band.rs), as GTK 4.14's applies only when it ends: a drag from blank space selects the touched items while it moves, Ctrl toggles them and Shift adds them to the selection it started from, as in Dolphin; the view scrolls near its edges, the details view takes whole rows, and a press on an item still drags it. Tests a_band_replaces_adds_or_toggles_what_it_touches and a_rubber_band_selects_the_rows_it_crosses_as_it_moves."
+native_note = "Dragging from blank space updates selection live: Ctrl toggles and Shift adds against the initial selection, including modifier changes during the drag. The view scrolls near edges; cached content bounds correctly remove scrolled-away items when the band shrinks. Details draws the band across full row width. Cancellation, view changes and model changes stop the gesture and timer. Tests a_band_replaces_adds_or_toggles_what_it_touches and a_rubber_band_selects_the_rows_it_crosses_as_it_moves; window/rubber_band.rs."
 
 [[feature]]
 id = "SEL-013"

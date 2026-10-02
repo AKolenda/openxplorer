@@ -176,7 +176,8 @@ mod tests {
         );
         assert_eq!(extension(".bashrc", false), None);
         for role in SortRole::ALL {
-            assert_eq!(SortBy::from_key(role.as_str()), Some(SortBy::Role(role)));
+            let canonical = SortColumn::from_key(role.as_str()).map_or(SortBy::Role(role), SortBy::Column);
+            assert_eq!(SortBy::from_key(role.as_str()), Some(canonical));
         }
         assert_eq!(SortBy::from_key("size"), Some(SortBy::Column(SortColumn::Size)));
     }

@@ -11,6 +11,9 @@
 use serde::Serialize;
 use serde_json::Value;
 
+use super::preferences::{read_column_widths, ColumnWidths};
+use super::view_options::read_column_keys;
+
 use crate::location::{parent_location, same_location};
 
 /// The most folders whose own style is kept; the oldest go first.
@@ -47,6 +50,17 @@ pub struct ViewProperties {
     pub folders_first: bool,
     /// Hidden items shown.
     pub show_hidden: bool,
+    /// Hidden items sort after visible ones within the folder/file groups.
+    pub hidden_last: bool,
+    /// Previews, inheriting the shared option for older saved styles.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_previews: Option<bool>,
+    /// Visible details columns after Name, in their display order.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details_columns: Option<Vec<String>>,
+    /// Saved widths, inheriting the shared layout until customized.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column_widths: Option<ColumnWidths>,
 }
 
 impl Default for ViewProperties {
@@ -60,6 +74,10 @@ impl Default for ViewProperties {
             groups: false,
             folders_first: true,
             show_hidden: false,
+            hidden_last: false,
+            show_previews: None,
+            details_columns: None,
+            column_widths: None,
         }
     }
 }
@@ -91,6 +109,13 @@ impl ViewProperties {
             groups: flag("groups", defaults.groups),
             folders_first: flag("foldersFirst", defaults.folders_first),
             show_hidden: flag("showHidden", defaults.show_hidden),
+            hidden_last: flag("hiddenLast", defaults.hidden_last),
+            show_previews: values.get("showPreviews").and_then(Value::as_bool),
+            details_columns: values.get("detailsColumns").and_then(read_column_keys),
+            column_widths: values
+                .get("columnWidths")
+                .and_then(read_column_widths)
+                .map(|widths| ColumnWidths::from_values(&widths)),
         })
     }
 }
