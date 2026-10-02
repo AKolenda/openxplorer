@@ -500,7 +500,6 @@ pub fn run() -> glib::ExitCode {
         }
     };
     choose_renderer(&arguments);
-    file_dialogs::prepare_service_launch(&arguments);
     if let Err(error) = check_command_line(&arguments) {
         eprintln!("{error}");
         return glib::ExitCode::from(INVALID_COMMAND_LINE);

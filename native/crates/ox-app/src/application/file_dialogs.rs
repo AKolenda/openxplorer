@@ -18,9 +18,7 @@
 //!   [`SERVICE_LINGER`] without a window, so the portal's first call, which
 //!   may come seconds after it started the app, finds it running
 //!   ([`linger_as_service`]), and waits for the portal before reading the
-//!   desktop's appearance from it rather than starting a second portal;
-//! - GTK in such an instance reaches the portal only when needed and never
-//!   blocks on it at startup ([`prepare_service_launch`]).
+//!   desktop's appearance from it rather than starting a second portal.
 
 use std::cell::RefCell;
 use std::fmt;
@@ -123,38 +121,6 @@ pub(super) fn export(
             None
         }
     }
-}
-
-/// Prepares GTK for a D-Bus-activated launch (`arguments` holds
-/// `--gapplication-service`), before GTK starts: it uses the desktop
-/// portal as it does inside Flatpak (`GDK_DEBUG=portals`).
-///
-/// Otherwise, on a desktop without a GNOME or Xfce session manager, such
-/// as Plasma, `GtkApplication`'s startup asks for the portal's inhibit
-/// interface with a blocking call that starts the portal and loads its
-/// properties. When the portal itself started the app, while it starts,
-/// to serve Open and Save dialogs, the portal waits for this backend's
-/// properties while the backend waits for the portal: both stall until
-/// their D-Bus timeouts, delaying every portal at login. In portal mode
-/// GTK skips that setup and reaches the portal only when needed,
-/// asynchronously. A user's own `GDK_DEBUG` flags are kept.
-pub(super) fn prepare_service_launch(arguments: &[String]) {
-    if !arguments.iter().any(|argument| argument == SERVICE_OPTION) {
-        return;
-    }
-    let flags = std::env::var("GDK_DEBUG").unwrap_or_default();
-    if flags
-        .split([',', ':', ' '])
-        .any(|flag| flag == "portals" || flag == "no-portals")
-    {
-        return;
-    }
-    let flags = if flags.is_empty() {
-        "portals".to_owned()
-    } else {
-        format!("{flags},portals")
-    };
-    std::env::set_var("GDK_DEBUG", flags);
 }
 
 /// Keeps a D-Bus-activated instance (`arguments` holds

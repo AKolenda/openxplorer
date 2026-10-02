@@ -747,3 +747,41 @@ fn a_refused_call_is_an_error() {
     let error = fixture.finish(pending).expect_err("refused");
     assert!(error.to_string().contains("Not a file name"), "{error}");
 }
+
+/// The portal loads a backend's properties while it starts, when a GTK
+/// application's startup may be blocked waiting for the portal. The
+/// backend answers from its own thread, so the request succeeds while the
+/// main context is not running at all.
+///
+/// parity: INT-032
+#[test]
+fn properties_are_answered_while_the_main_thread_is_blocked() {
+    let fixture = ServiceFixture::new();
+    // A synchronous call, with the fixture's main context never iterated
+    // meanwhile, stands in for the app's blocked startup.
+    let reply = fixture.frontend.call_sync(
+        Some(&fixture.service_name),
+        PORTAL_BACKEND_PATH,
+        "org.freedesktop.DBus.Properties",
+        "GetAll",
+        Some(&(FILE_CHOOSER_INTERFACE,).to_variant()),
+        None,
+        gio::DBusCallFlags::NO_AUTO_START,
+        2000,
+        gio::Cancellable::NONE,
+    );
+    let properties = reply.expect("GetAll is answered without the main context");
+    assert_eq!(properties.type_().as_str(), "(a{sv})");
+    let introspection = fixture.frontend.call_sync(
+        Some(&fixture.service_name),
+        PORTAL_BACKEND_PATH,
+        "org.freedesktop.DBus.Introspectable",
+        "Introspect",
+        None,
+        None,
+        gio::DBusCallFlags::NO_AUTO_START,
+        2000,
+        gio::Cancellable::NONE,
+    );
+    assert!(introspection.is_ok(), "introspection is answered too");
+}
