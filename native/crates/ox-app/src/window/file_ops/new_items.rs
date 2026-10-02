@@ -7,12 +7,13 @@
 //! with an exclusive creation, so an existing name is refused inside the
 //! dialog and never overwritten (OPS-008). The new folder is selected
 //! afterwards, as Windows and Dolphin do (the Python app left the
-//! selection as it was), and Undo moves it to the Trash (OPS-029).
+//! selection as it was), and Undo moves it to the Trash (OPS-029). A name
+//! with slashes makes folders inside folders, as Dolphin's New folder
+//! does (OPS-007).
 //! Every file of the New menu opens the template dialog
 //! ([`super::template_dialog`]) with its template chosen.
 
-use ox_core::location::ItemKind;
-use ox_core::ops::{create_item, BuiltinTemplate, CreatedItem, OperationContext};
+use ox_core::ops::{create_folder_path, BuiltinTemplate, CreatedItem, OperationContext};
 
 use super::name_dialog::{ask_for_name, NameRequest, NameSelection};
 use super::FileCommand;
@@ -51,6 +52,7 @@ impl BrowserWindow {
             initial_name: NEW_FOLDER_NAME,
             selection: NameSelection::Whole,
             folder: &folder,
+            takes_folder_path: true,
         };
         let created = ask_for_name(self, request, |name, cancel| {
             let folder = folder.clone();
@@ -59,14 +61,16 @@ impl BrowserWindow {
                 ..OperationContext::new(protection.clone())
             };
             async move {
-                create_item(&folder, &name, ItemKind::Folder, &context)
+                let names: Vec<&str> = name.split('/').collect();
+                create_folder_path(&folder, &names, &context)
                     .await
                     .map_err(|error| error.to_string())
             }
         })
         .await;
         if let Some(created) = created {
-            self.finish_creation(created);
+            self.context().record_operation(created.created.undo_record());
+            self.reload_selecting(vec![created.first]);
         }
     }
 

@@ -22,7 +22,7 @@ use gtk::{gio, glib};
 use ox_core::location::{same_location, ItemKind};
 use ox_core::versions::SnapshotLocation;
 
-use crate::dialog_layer::{quiet_text, DialogFrame, DialogLayer, DialogWidth};
+use crate::dialog::{quiet_text, DialogFrame, DialogLayer, DialogWidth};
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::properties::{

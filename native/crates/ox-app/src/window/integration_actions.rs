@@ -18,10 +18,10 @@ use ox_core::location::{is_smb_server, parent_location};
 use ox_core::update::Activity;
 
 use super::actions::{plain_action, text_action};
-use super::dialog::Dialog;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 use crate::integration::{self, OpenWithDialog, OpenWithSubject, Tool};
 use crate::locations::Page;
 use crate::update::{UpdateDialog, UpdateState};

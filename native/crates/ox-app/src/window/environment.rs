@@ -153,7 +153,15 @@ impl BrowserWindow {
         let places = self.places();
         let searches = self.context().saved_searches();
         let mut entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
-        entries.extend(sidebar::recent_and_bin_entries(self.imp().trash_items.get()));
+        // Recent files hides while the desktop remembers no history
+        // (SAFE-022), as in Nautilus.
+        let remembers = self.context().recent_policy().remember;
+        let fixed = sidebar::recent_and_bin_entries(self.imp().trash_items.get());
+        entries.extend(
+            fixed
+                .into_iter()
+                .filter(|entry| remembers || entry.menu != Some(super::place_menus::PlaceMenu::RecentFiles)),
+        );
         let (rows, anything_hidden) = self.shown_sidebar_rows(entries);
         self.sidebar().set_rows(rows, anything_hidden);
         if let Some(uri) = self.current_uri() {

@@ -50,6 +50,8 @@ pub(crate) fn cell_text(column: SortColumn, item: &FileItem) -> String {
         SortColumn::Name => entry.name.clone(),
         SortColumn::Modified => format::date_short_time_text(entry.modified),
         SortColumn::FolderPath => item.folder_path().text.clone(),
+        SortColumn::OriginalLocation => item.original_location().text.clone(),
+        SortColumn::Deleted => format::date_short_time_text(entry.trash_deletion_date),
         SortColumn::Type => entry.type_label.clone(),
         SortColumn::Size => match item.folder_size() {
             Some(measured) => measured.size_text(),
@@ -66,7 +68,13 @@ fn cell_tooltip(column: SortColumn) -> CellTooltip {
     match column {
         SortColumn::FolderPath => |item| Some(display_path(&item.entry().uri)),
         SortColumn::Size => |item| item.folder_size().map(|measured| measured.cell_tooltip()),
-        SortColumn::Name | SortColumn::Modified | SortColumn::Type => |_| None,
+        SortColumn::OriginalLocation => |item| {
+            item.entry()
+                .trash_orig_path
+                .as_ref()
+                .map(|path| path.display().to_string())
+        },
+        SortColumn::Name | SortColumn::Modified | SortColumn::Deleted | SortColumn::Type => |_| None,
     }
 }
 
@@ -77,8 +85,8 @@ fn name_factory(owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     factory
 }
 
-/// The cells of the Date modified, Folder path, Type or Size column: one
-/// dim label, registered in `owners`, which dims the cells of cut items.
+/// The cells of every column but Name: one dim label, registered in
+/// `owners`, which dims the cells of cut items.
 fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let setup_owners = Rc::clone(owners);
@@ -109,9 +117,12 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
 fn new_view_column(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::ColumnViewColumn {
     let factory = match column {
         SortColumn::Name => name_factory(owners),
-        SortColumn::Modified | SortColumn::FolderPath | SortColumn::Type | SortColumn::Size => {
-            text_factory(column, owners)
-        }
+        SortColumn::Modified
+        | SortColumn::FolderPath
+        | SortColumn::OriginalLocation
+        | SortColumn::Deleted
+        | SortColumn::Type
+        | SortColumn::Size => text_factory(column, owners),
     };
     let view_column = gtk::ColumnViewColumn::new(Some(column.label()), Some(factory));
     view_column.set_id(Some(column.as_str()));
@@ -141,20 +152,48 @@ pub(crate) enum DetailsListing {
     /// The results of a search, which show Folder path in place of Date
     /// modified (`columnFields` in app.js, VIEW-042).
     SearchResults,
+    /// The Recycle Bin's items, which show Original location and Date
+    /// deleted in place of Date modified (VIEW-062).
+    RecycleBin,
+}
+
+/// Whether `listing` has `column` at all, whatever the room.
+const fn lists_column(listing: DetailsListing, column: SortColumn) -> bool {
+    match column {
+        SortColumn::Modified => matches!(listing, DetailsListing::Folder),
+        SortColumn::FolderPath => matches!(listing, DetailsListing::SearchResults),
+        SortColumn::OriginalLocation | SortColumn::Deleted => matches!(listing, DetailsListing::RecycleBin),
+        SortColumn::Name | SortColumn::Type | SortColumn::Size => true,
+    }
+}
+
+/// Whether settings save `column`'s width while the view lists
+/// `listing`: of the columns sharing a saved width, the one the listing
+/// has, else the first.
+fn saves_width(column: SortColumn, listing: DetailsListing) -> bool {
+    let shared = column_widths::settings_column(column);
+    let sharing = || {
+        SortColumn::ALL
+            .into_iter()
+            .filter(move |other| column_widths::settings_column(*other) == shared)
+    };
+    let owner = sharing()
+        .find(|other| lists_column(listing, *other))
+        .or_else(|| sharing().next());
+    owner == Some(column)
 }
 
 /// Whether `column` is shown in a window with room for `columns` while it
 /// lists `listing` (the `.searching` rules of `style.css` included).
 const fn is_column_shown(column: SortColumn, columns: DetailsColumns, listing: DetailsListing) -> bool {
     let is_roomy = matches!(columns, DetailsColumns::All);
-    let is_folder = matches!(listing, DetailsListing::Folder);
-    match column {
-        SortColumn::Name => true,
-        SortColumn::Modified => is_folder && is_roomy,
-        SortColumn::FolderPath => !is_folder,
-        SortColumn::Type => is_roomy,
-        SortColumn::Size => is_roomy || is_folder,
-    }
+    let is_search = matches!(listing, DetailsListing::SearchResults);
+    lists_column(listing, column)
+        && match column {
+            SortColumn::Name | SortColumn::FolderPath | SortColumn::OriginalLocation => true,
+            SortColumn::Modified | SortColumn::Deleted | SortColumn::Type => is_roomy,
+            SortColumn::Size => is_roomy || !is_search,
+        }
 }
 
 mod imp {
@@ -342,14 +381,39 @@ impl DetailsView {
     }
 
     /// Shows the columns of `listing`: Folder path in place of Date
-    /// modified for search results. A folder has no Folder path to sort
-    /// by, so a view sorted by it goes back to sorting by name.
+    /// modified for search results, Original location and Date deleted in
+    /// the Recycle Bin. A view sorted by a column only another listing
+    /// has, such as Folder path in a folder, goes back to sorting by name;
+    /// the Sort menu's columns sort every listing.
     pub(crate) fn show_listing(&self, listing: DetailsListing) {
-        self.imp().listing.set(listing);
+        let earlier = self.imp().listing.replace(listing);
+        if earlier != listing {
+            self.carry_shared_widths(earlier, listing);
+        }
         self.show_fitting_columns();
-        let sorts_by_folder_path = self.sort_order().column == SortColumn::FolderPath;
-        if listing == DetailsListing::Folder && sorts_by_folder_path {
+        let column = self.sort_order().column;
+        if !lists_column(listing, column) && !SortColumn::IN_SORT_MENU.contains(&column) {
             self.sort_by(SortOrder::DEFAULT);
+        }
+    }
+
+    /// Gives each column `listing` brings in the width of the column it
+    /// shares a saved width with in `earlier`, so a width the user set in
+    /// one listing holds in the other (Date deleted and Date modified).
+    fn carry_shared_widths(&self, earlier: DetailsListing, listing: DetailsListing) {
+        for (column, view_column) in self.view_columns() {
+            if !lists_column(listing, column) || lists_column(earlier, column) {
+                continue;
+            }
+            let shared = column_widths::settings_column(column);
+            let partner = SortColumn::ALL.into_iter().find(|other| {
+                *other != column
+                    && lists_column(earlier, *other)
+                    && column_widths::settings_column(*other) == shared
+            });
+            if let Some(partner) = partner.and_then(|partner| self.column(partner)) {
+                view_column.set_fixed_width(partner.fixed_width());
+            }
         }
     }
 
@@ -379,7 +443,11 @@ impl DetailsView {
     /// The widths the user set, in the form settings save them. Name
     /// counts only once it has a width of its own.
     fn widths_to_save(&self) -> Vec<ColumnWidth> {
-        let widths = self.view_columns().filter_map(|(column, view_column)| {
+        let listing = self.imp().listing.get();
+        let saved = self
+            .view_columns()
+            .filter(|(column, _)| saves_width(*column, listing));
+        let widths = saved.filter_map(|(column, view_column)| {
             let pixels = column_widths::saved_width(column, view_column.fixed_width())?;
             let column = column_widths::settings_column(column);
             Some(ColumnWidth { column, pixels })

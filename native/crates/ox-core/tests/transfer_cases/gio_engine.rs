@@ -258,3 +258,55 @@ fn a_move_to_another_filesystem_copies_then_removes_the_source() {
     );
     assert_eq!(raw_names(target_root.path()), [OsString::from("folder")]);
 }
+
+/// An unreadable item asks what to do: Retry runs it again once it can be
+/// read, "Skip all" leaves it and every later failure out without asking,
+/// and what failed is still reported.
+///
+/// parity: OPS-047
+#[test]
+fn a_failed_item_is_retried_or_skipped_as_answered() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::{Arc, Mutex};
+
+    use ox_core::transfer::{FailedItem, FailureAnswer};
+
+    let fixture = Fixture::new();
+    let names = ["a.txt", "b.txt", "c.txt", "d.txt"];
+    let paths: Vec<PathBuf> = names
+        .iter()
+        .map(|name| fixture.source_folder.join(name))
+        .collect();
+    for (path, name) in paths.iter().zip(names) {
+        write(path, name);
+    }
+    for unreadable in [&paths[0], &paths[1], &paths[3]] {
+        fs::set_permissions(unreadable, fs::Permissions::from_mode(0o000)).expect("chmod");
+    }
+    if fs::read(&paths[0]).is_ok() {
+        return; // Running as root, which reads anything.
+    }
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&asked);
+    let first = paths[0].clone();
+    let mut engine = gio_engine().with_failure_question(move |item: &FailedItem| {
+        let mut asked = log.lock().expect("question log");
+        asked.push(item.name.clone());
+        if asked.len() == 1 {
+            fs::set_permissions(&first, fs::Permissions::from_mode(0o644)).expect("chmod");
+            FailureAnswer::Retry
+        } else {
+            FailureAnswer::SkipAll
+        }
+    });
+    let sources: Vec<&Path> = paths.iter().map(PathBuf::as_path).collect();
+
+    let result = fixture.run(&mut engine, &sources, Request::Copy(ConflictPolicy::Skip));
+
+    assert_eq!(*asked.lock().expect("question log"), ["a.txt", "b.txt"]);
+    assert_eq!(result.done, [file_uri(&paths[0]), file_uri(&paths[2])]);
+    assert_eq!(result.errors.len(), 2, "{result:?}");
+    assert!(!result.cancelled);
+    assert_eq!(list(&fixture.destination_folder), ["a.txt", "c.txt"]);
+    fixture.assert_no_staging();
+}

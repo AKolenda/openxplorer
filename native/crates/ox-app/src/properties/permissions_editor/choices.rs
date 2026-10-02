@@ -7,7 +7,7 @@
 use gtk::prelude::*;
 use ox_core::permissions::{Access, Account};
 
-use crate::dialog_layer::check_row;
+use crate::dialog::check_row;
 
 /// Shown by a choice whose items differ.
 const VARYING: &str = "Varying (No Change)";

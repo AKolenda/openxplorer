@@ -11,7 +11,7 @@ use ox_core::location::validate_name;
 use ox_core::transfer::Cancellation;
 
 use crate::archive_view::{compressed_file_name, compression_success_text};
-use crate::dialog_layer::{labelled_entry, DialogFrame, DialogWidth};
+use crate::dialog::{labelled_entry, DialogFrame, DialogWidth};
 
 use super::transfer_panel::TransferKind;
 use super::{BrowserWindow, ButtonStyle};

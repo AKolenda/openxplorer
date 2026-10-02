@@ -23,12 +23,14 @@ const EDGE_GUTTER: u32 = 14;
 /// GTK's fixed width for a column without one, which shares the space.
 const NO_FIXED_WIDTH: i32 = -1;
 
-/// The settings column of a details column.
+/// The settings column of a details column. The Recycle Bin's columns
+/// share the width of the column they stand in for: Original location
+/// that of Folder path, Date deleted that of Date modified.
 pub(crate) const fn settings_column(column: SortColumn) -> Column {
     match column {
         SortColumn::Name => Column::Name,
-        SortColumn::Modified => Column::Modified,
-        SortColumn::FolderPath => Column::ParentUri,
+        SortColumn::Modified | SortColumn::Deleted => Column::Modified,
+        SortColumn::FolderPath | SortColumn::OriginalLocation => Column::ParentUri,
         SortColumn::Type => Column::Type,
         SortColumn::Size => Column::Size,
     }
@@ -38,7 +40,11 @@ pub(crate) const fn settings_column(column: SortColumn) -> Column {
 const fn edge_gutter(column: SortColumn) -> u32 {
     match column {
         SortColumn::Name | SortColumn::Size => EDGE_GUTTER,
-        SortColumn::Modified | SortColumn::FolderPath | SortColumn::Type => 0,
+        SortColumn::Modified
+        | SortColumn::FolderPath
+        | SortColumn::OriginalLocation
+        | SortColumn::Deleted
+        | SortColumn::Type => 0,
     }
 }
 
@@ -49,8 +55,8 @@ const fn edge_gutter(column: SortColumn) -> u32 {
 const fn default_width(column: SortColumn) -> Option<u32> {
     match column {
         SortColumn::Name => None,
-        SortColumn::Modified => Some(176),
-        SortColumn::FolderPath => Some(330),
+        SortColumn::Modified | SortColumn::Deleted => Some(176),
+        SortColumn::FolderPath | SortColumn::OriginalLocation => Some(330),
         SortColumn::Type => Some(135),
         SortColumn::Size => Some(90),
     }
@@ -89,7 +95,12 @@ pub(crate) fn saved_width(column: SortColumn, fixed_width: i32) -> Option<f64> {
 const fn fit_padding(column: SortColumn) -> f64 {
     match column {
         SortColumn::Name => 64.0,
-        SortColumn::Modified | SortColumn::FolderPath | SortColumn::Type | SortColumn::Size => 30.0,
+        SortColumn::Modified
+        | SortColumn::FolderPath
+        | SortColumn::OriginalLocation
+        | SortColumn::Deleted
+        | SortColumn::Type
+        | SortColumn::Size => 30.0,
     }
 }
 

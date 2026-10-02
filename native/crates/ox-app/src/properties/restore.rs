@@ -15,7 +15,7 @@ use gtk::prelude::*;
 use ox_core::location::normalise_location;
 use ox_core::versions::{PreviousVersion, PreviousVersions};
 
-use crate::dialog_layer::{labelled_entry, note, DialogFrame, DialogWidth};
+use crate::dialog::{labelled_entry, note, DialogFrame, DialogWidth};
 use crate::window::ButtonStyle;
 
 /// What the dialog says the copy does, and does not do.

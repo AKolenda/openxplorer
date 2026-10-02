@@ -4116,8 +4116,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Trash view default columns: Name, “Path” (original location) and “Deletion Time”"
 gnome = "trash::orig-path, trash::deletion-date"
-native = "todo"
-native_note = "native/crates/ox-core/src/entry/info.rs reads trash::orig-path and deletion dates (trash_items_keep_their_origin_and_deletion_date); no Trash view exists."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted). In trash:/// the details view shows Original location (the folder of trash::orig-path; its tooltip is the full original path) and Date deleted (trash::deletion-date) where a folder shows Date modified, as Windows File Explorer and Dolphin do; both titles sort, by natural path order and by time (folder_view/details.rs, DetailsListing::RecycleBin). The two columns share their saved width with Folder path and Date modified, so the settings file keeps the Python app's columnWidths keys. Date deleted hides in a compact window, as Date modified does. native/crates/ox-core/src/entry/info.rs reads the attributes (trash_items_keep_their_origin_and_deletion_date)."
 
 [[feature]]
 id = "VIEW-063"
@@ -6636,7 +6636,7 @@ python_tests = [
 ]
 bridge = ["create", "rename", "createTemplate", "archiveExtract"]
 native = "done"
-native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open) does the same for the Extract dialog's folder name."
+native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open) does the same for the Extract dialog's folder name. Differs: New folder takes slashes for folders inside folders (OPS-007, Dolphin), so it refuses only backslashes, control characters and empty parts, with 'Use names without backslashes or control characters, one slash between folders.'"
 
 [[feature]]
 id = "OPS-007"
@@ -6654,8 +6654,8 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/test_core.py::CoreTests::test_names"]
 bridge = ["create"]
 dolphin = "KNewFileMenu name validation"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/renaming.rs (the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing); native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-app/src/window/file_ops/name_dialog.rs checks each typed name against the folder. While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. Missing: a slash is still refused (\"Names must not contain slashes.\", the current app's rule) instead of creating nested folders with a preview."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing); native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-core/src/ops/create.rs (a_folder_path_creates_each_folder_inside_the_one_before). While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. New folder takes slashes, as Dolphin's does: its description reads 'A slash makes a folder inside the one before it.', the line previews 'Creates “Plans” › “2026”, each inside the one before.', and Save makes each folder inside the one before (an existing folder on the way is entered, the last name must be free), selects the first one in the current folder, and Undo moves the outermost new folder to the Trash. Rename and Extract still refuse slashes (OPS-006)."
 
 [[feature]]
 id = "OPS-008"
@@ -6756,8 +6756,8 @@ sources = [
 python_tests = []
 bridge = ["rename"]
 dolphin = "two-clicks renaming (RenameInline)"
-native = "todo"
-native_note = "Porting notes: Explorer has the same slow-click rename."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (a_slow_second_click_on_the_selected_name_renames_it_in_place); native/crates/ox-app/src/window/slow_click_rename.rs. A plain primary press on the name text (not the icon or the space beside it) of the item that is already the only one selected schedules a rename in place, which starts after the desktop's double-click interval (gtk-double-click-time) unless the second press of a double-click, a drag, another press, a changed selection or the window losing focus cancels it; nothing starts where Rename is not allowed. Explorer has the same slow-click rename."
 
 [[feature]]
 id = "OPS-012"
@@ -7386,8 +7386,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "trash:/ context menus; Trash place, Restore"
 gnome = "GVfs trash:/// with the 'trash::orig-path' and 'trash::deletion-date' attributes; trash:/// GVfs backend"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs: the Recycle Bin opens as a folder (address \"trash:///\" or \"Recycle Bin\") with its own item and background menus (Restore, Delete permanently, Properties; Empty Recycle Bin), and an empty Recycle Bin says \"Recycle Bin is empty\" (empty_recycle_bin_asks_then_deletes_everything_in_it). Missing: the Original location and Date deleted columns of the details view, and a sidebar entry."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs: the Recycle Bin opens as a folder (address \"trash:///\" or \"Recycle Bin\") with its own item and background menus (Restore, Delete permanently, Properties; Empty Recycle Bin), and an empty Recycle Bin says \"Recycle Bin is empty\" (empty_recycle_bin_asks_then_deletes_everything_in_it); its details view shows each item's Original location and Date deleted in place of Date modified, both sortable (the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted); the sidebar has a Recycle Bin entry (the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere)."
 
 [[feature]]
 id = "OPS-041"
@@ -7428,8 +7428,8 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "Trash::empty; Places “Empty Trash” (KIO::emptyTrash)"
 gnome = "Delete the children of trash:/// (as Nautilus 'Empty Trash'); Delete each top-level child of trash:/// (Nautilus EmptyTrash)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_then_deletes_everything_in_it); native/crates/ox-app/src/window/file_ops/availability.rs disables it while the Recycle Bin is empty. Missing: the sidebar entry."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_then_deletes_everything_in_it: from the Recycle Bin's background menu; the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere: from the sidebar entry's menu, from any folder); native/crates/ox-app/src/window/file_ops/availability.rs disables it while the Recycle Bin is empty. Both ask \"Empty Recycle Bin?\" first unless the setting says not to (SET-010)."
 
 [[feature]]
 id = "OPS-043"
@@ -7515,8 +7515,8 @@ python_tests = []
 bridge = ["operate", "cancel"]
 dolphin = "KIO::SkipDialog through AskUserActionInterface::askUserSkip (Retry, Skip, Skip All, Cancel)"
 gnome = "Nautilus file-operation error dialogs (Skip, Skip All, Retry, Cancel)"
-native = "todo"
-native_note = "Existing OpenXplorer part (record the error, continue and list it at the end) is protected by OPS-023. Porting notes: 'Skip all' must end in the OPS-023 report. OPS-028 covers name conflicts only."
+native = "done"
+native_note = "native/crates/ox-core/tests/transfer_cases/gio_engine.rs (a_failed_item_is_retried_or_skipped_as_answered); native/crates/ox-core/src/transfer/item_failure.rs; native/crates/ox-app/src/window/file_ops/failure_dialog.rs (window/tests/worker_questions.rs, the_failed_item_dialog_answers_retry_skip_all_or_cancel_to_the_worker). When an item of a copy, move, Trash or delete fails for a reason other than a name conflict, a cancellation or a problem that needs recovery by hand, the engine asks from its worker thread: the dialog 'Error while copying “name”' shows the error and offers Cancel, 'Skip all' (with more items to come), Skip and Retry. Retry removes the item's staging and runs it again; Skip and 'Skip all' record '<name>: <error>' as before, 'Skip all' for the rest of the operation without asking; Cancel records it and stops, keeping what is done. Every failure still appears in the result (OPS-023), and a skipped item's staging is removed. Without an asker (background and non-interactive runs) or when the window cannot show the dialog, the error is recorded and the next item runs."
 
 [[feature]]
 id = "OPS-048"
@@ -14477,7 +14477,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/look.rs (a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance): 510 px, content colour of each appearance, accent Save button. Refined to WinUI ContentDialog (8 px radius, 24 px padding, footer on the chrome colour, 32 px buttons, @ox_critical_fill danger button); in-window dialogs (dialog_layer) cap the width at the window less 30 px."
+native_note = "native/crates/ox-app/src/window/tests/look.rs (a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance): 510 px, content colour of each appearance, accent Save button. Refined to WinUI ContentDialog (8 px radius, 24 px padding, footer on the chrome colour, 32 px buttons, @ox_critical_fill danger button); in-window dialogs (dialog/layer.rs) cap the width at the window less 30 px."
 
 [[feature]]
 id = "LOOK-021"
@@ -16156,7 +16156,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (closing_a_dialog_gives_focus_back_to_the_control_that_had_it, a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button); native/crates/ox-app/src/dialog_layer.rs (in-window dialogs make the content under them take neither focus nor clicks). A dialog is a modal window over the browser window, so the covered content is inert, every focusable widget (text areas and links included) is in its Tab cycle, and closing it gives focus back to the control that had it, which GTK keeps as the window's focus widget."
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (closing_a_dialog_gives_focus_back_to_the_control_that_had_it, a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button); native/crates/ox-app/src/dialog/layer.rs (in-window dialogs make the content under them take neither focus nor clicks). A dialog is a modal window over the browser window, so the covered content is inert, every focusable widget (text areas and links included) is in its Tab cycle, and closing it gives focus back to the control that had it, which GTK keeps as the window's focus widget."
 
 [[feature]]
 id = "ACC-006"
@@ -16781,8 +16781,8 @@ python_tests = [
   "v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_virtual_bad_scheme_is_not_followed",
 ]
 bridge = ["normalise", "authReply", "connect", "bookmark", "pin"]
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); address rejection compared with Python in native/crates/ox-core/tests/location_python.rs; native/crates/ox-app/src/network/sign_in_queue/tests.rs (connect_hands_gvfs_the_account_and_empties_the_password: the password field is emptied before the answer leaves the dialog and neither field is spell-checked); native/crates/ox-app/src/dialogs/network_map.rs (the Map dialog note says no passwords are saved in settings). The sign-in dialog empties the password on dismiss and keeps it in non-pageable memory. SMB addresses still refuse any user name. SFTP, FTP and WebDAV addresses accept a plain user name (sftp://anna@host/), as Dolphin, Files and GVfs expect, since an SSH account is not a secret; a password, an escaped or empty user, and any user on NFS are refused (native/crates/ox-core/src/location/normalise/remote.rs, sftp_ftp_webdav_and_nfs_urls_are_canonical). Such a user name can reach settings.json, tab titles, the clipboard and GTK's recent-servers list."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/stored_location.rs (settings_keep_remote_addresses_without_the_user_name); native/crates/ox-core/src/settings/mutate.rs (a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); address rejection compared with Python in native/crates/ox-core/tests/location_python.rs; native/crates/ox-core/src/location/display.rs (remote_addresses_show_their_path_decoded: Copy path and Copy address leave the user out, and a tab titles a server root by its host); native/crates/ox-app/src/network/sign_in_queue/tests.rs (connect_hands_gvfs_the_account_and_empties_the_password: the password field is emptied before the answer leaves the dialog and neither field is spell-checked); native/crates/ox-app/src/dialogs/network_map.rs (the Map dialog note says no passwords are saved in settings). The sign-in dialog empties the password on dismiss and keeps it in non-pageable memory. SMB addresses refuse any user name. SFTP, FTP and WebDAV addresses accept a plain user name for the session (sftp://anna@host/), as Dolphin, Files and GVfs need it to reach that account; a password, an escaped or empty user, and any user on NFS are refused (native/crates/ox-core/src/location/normalise/remote.rs). As for SMB, the user name never leaves the session: settings.json stores pins, saved shares, the Quick access order and recent files without it (location::without_user, also when reading an older file), GTK's recent-servers list gets the address without it (network/recent_servers.rs), Copy path, Copy address and Properties' Copy full path copy it without it, and a tab or window titled by the server root shows the host only. The address bar still shows it, so editing the address keeps the account; the file clipboard (Copy/Cut of items) keeps GIO's URIs so a paste reaches the same mount."
 
 [[feature]]
 id = "SAFE-011"
@@ -16852,7 +16852,7 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/ui_regressions.cjs::Navigation supersedes a delayed activation"]
 bridge = ["cancel"]
 native = "done"
-native_note = "Every late reply is dropped. Listings: load generations per tab (window/session.rs, old_results_cannot_repopulate_a_navigated_or_closed_tab). Typed addresses and file locations: each tab keeps its own newest lookup (window/tests/opening.rs, navigating_drops_a_typed_address_that_answers_late, a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it). Searches: search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results). Archive listings: a generation (archive_view/browser.rs; window/tests/archives.rs, a_late_archive_listing_never_replaces_a_newer_one, which delivers the older Docs listing after the newer top listing and fails without the check). Extraction preflight: closing the Extract dialog cancels the check and an answer after that is ignored (archive_view/extract_dialog.rs; window/tests/archives.rs, closing_the_extract_dialog_drops_its_check). Discovery: Stop aborts the passes (network/discovery.rs, a_pass_that_answers_after_stop_is_ignored). Map network location: closing the dialog aborts the connection (window/dialog.rs, Dialog::run; dialogs/network_map.rs, a_connection_that_answers_after_cancel_is_ignored). Properties: a read that answers after the dialog closed is ignored (properties/view.rs) and a Previous versions lookup overtaken by Refresh is dropped by its generation (properties/versions_panel.rs); window/tests/late_replies.rs, a_properties_read_after_close_changes_nothing, a_versions_lookup_overtaken_by_refresh_is_dropped."
+native_note = "Every late reply is dropped. Listings: load generations per tab (window/session.rs, old_results_cannot_repopulate_a_navigated_or_closed_tab). Typed addresses and file locations: each tab keeps its own newest lookup (window/tests/opening.rs, navigating_drops_a_typed_address_that_answers_late, a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it). Searches: search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results). Archive listings: a generation (archive_view/browser.rs; window/tests/archives.rs, a_late_archive_listing_never_replaces_a_newer_one, which delivers the older Docs listing after the newer top listing and fails without the check). Extraction preflight: closing the Extract dialog cancels the check and an answer after that is ignored (archive_view/extract_dialog.rs; window/tests/archives.rs, closing_the_extract_dialog_drops_its_check). Discovery: Stop aborts the passes (network/discovery.rs, a_pass_that_answers_after_stop_is_ignored). Map network location: closing the dialog aborts the connection (dialog/window.rs, Dialog::run; dialogs/network_map.rs, a_connection_that_answers_after_cancel_is_ignored). Properties: a read that answers after the dialog closed is ignored (properties/view.rs) and a Previous versions lookup overtaken by Refresh is dropped by its generation (properties/versions_panel.rs); window/tests/late_replies.rs, a_properties_read_after_close_changes_nothing, a_versions_lookup_overtaken_by_refresh_is_dropped."
 
 [[feature]]
 id = "SAFE-014"
@@ -17033,4 +17033,5 @@ python_tests = []
 bridge = ["environment", "open", "openWith"]
 dolphin = "KDE Activities privacy “Remember opened documents”"
 gnome = "GSettings org.gnome.desktop.privacy remember-recent-files and recent-files-max-age (GtkRecentManager honours them automatically)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (recent_files_follow_the_desktop_history_setting); native/crates/ox-app/src/app_context/recent_privacy.rs. The app follows GNOME's org.gnome.desktop.privacy, as Nautilus does: while remember-recent-files is off (or recent-files-max-age is 0) an opened file or visited folder is added neither to the desktop's recently used list nor to settings.json, the recent files settings.json holds are forgotten, and the sidebar hides Recent files; with a recent-files-max-age of N days, files opened longer ago are forgotten (settings.json now keeps an \"opened\" time per entry; entries the Python app wrote have none and count as old). The sidebar's Recent files has a menu with \"Clear recent files\", which empties the app's list and the desktop's (GtkRecentManager::purge_items). Without the GNOME schema everything is remembered, as before. GtkRecentManager prunes the desktop's own list by the same settings."

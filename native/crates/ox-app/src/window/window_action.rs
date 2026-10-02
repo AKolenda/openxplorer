@@ -194,6 +194,9 @@ pub(crate) enum WindowAction {
     EmptyRecycleBin,
     /// The same from the sidebar's Recycle Bin, wherever the window is.
     EmptyTrash,
+    /// Empties the recent files of the app and the desktop, from the
+    /// sidebar's Recent files (SAFE-022).
+    ClearRecentFiles,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -444,6 +447,7 @@ impl WindowAction {
             WindowAction::Restore => "restore",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
             WindowAction::EmptyTrash => "empty-trash",
+            WindowAction::ClearRecentFiles => "clear-recent-files",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::Unpin => "unpin",

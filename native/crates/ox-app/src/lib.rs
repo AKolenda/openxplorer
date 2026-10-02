@@ -19,7 +19,7 @@ pub mod application;
 mod archive_view;
 mod config;
 mod devices;
-mod dialog_layer;
+mod dialog;
 mod dialogs;
 mod folder_view;
 mod history;

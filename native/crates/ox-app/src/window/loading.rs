@@ -316,7 +316,8 @@ impl BrowserWindow {
             // listed joins the desktop's recent list; the landing pages and
             // the Recycle Bin are not places to reopen.
             let is_folder = run.uri.starts_with("file://") || run.uri.starts_with("smb://");
-            if run.mode == LoadMode::Navigate && is_folder {
+            let remembers = self.context().recent_policy().remember;
+            if run.mode == LoadMode::Navigate && is_folder && remembers {
                 add_to_desktop_history(&run.uri, FOLDER_CONTENT_TYPE);
             }
         }
@@ -441,6 +442,7 @@ impl BrowserWindow {
             (tab.uri().to_owned(), page, loading, tab.reloading, error)
         };
         let pane = self.folder_pane();
+        pane.details().show_listing(self.details_listing(&uri));
         pane.set_loading(loading && page.is_none());
         if page.is_some() {
             pane.show_page(PanePage::Landing);

@@ -25,6 +25,7 @@ mod file_operations;
 mod known_folders;
 mod network_places;
 mod previous_versions;
+mod recent_privacy;
 mod saved_searches;
 mod search_cache;
 
@@ -130,6 +131,9 @@ mod imp {
             RefCell<Option<std::sync::mpsc::Sender<Vec<ox_core::settings::Bookmark>>>>,
         /// The pins as last mirrored there.
         pub(super) exported_pins: RefCell<Option<Vec<ox_core::settings::Bookmark>>>,
+        /// GNOME's privacy settings, which say what may be remembered of
+        /// the files opened, when the desktop has them.
+        pub(super) privacy: RefCell<Option<gtk::gio::Settings>>,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,
@@ -199,6 +203,7 @@ impl AppContext {
             .expect("a new AppContext has no settings yet");
         context.watch_known_folders(folder_locations);
         context.read_saved_searches();
+        context.follow_recent_privacy();
         context
     }
 
@@ -422,5 +427,6 @@ pub(super) fn recent_entry(entry: &Entry) -> RecentEntry {
         size: entry.size.unwrap_or(0),
         // `settings.json` keeps 0 for an unknown time, as core.py does.
         modified: entry.modified.unwrap_or(0),
+        opened: None,
     }
 }

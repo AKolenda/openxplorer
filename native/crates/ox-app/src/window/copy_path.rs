@@ -41,7 +41,7 @@ fn copied_path(selected: &[String], folder_uri: Option<&str>, locations: &Locati
     let Some(uri) = uri.filter(|uri| Page::from_uri(uri).is_none()) else {
         return CopiedPath::NoFolder;
     };
-    CopiedPath::Address(locations.display_location(uri))
+    CopiedPath::Address(locations.copied_location(uri))
 }
 
 impl BrowserWindow {

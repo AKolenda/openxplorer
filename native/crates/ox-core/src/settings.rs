@@ -39,6 +39,7 @@ mod preferences;
 mod python_conversions;
 mod read;
 mod save;
+mod stored_location;
 #[cfg(test)]
 mod test_support;
 
@@ -304,6 +305,25 @@ impl Settings {
     /// error of [`update_preferences`](Self::update_preferences).
     pub fn remember_open(&mut self, entry: RecentEntry) -> Result<(), SettingsError> {
         self.mutate(move |data| mutate::remember_open(data, entry))
+    }
+
+    /// Forgets the recent files opened before `opened_before` (seconds
+    /// since the Unix epoch), and those with no time of opening; `None`
+    /// forgets them all. The file is written only when something is
+    /// forgotten.
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn forget_recent(&mut self, opened_before: Option<u64>) -> Result<(), SettingsError> {
+        let mut kept = self.data.clone();
+        if !mutate::forget_recent(&mut kept, opened_before) {
+            return Ok(());
+        }
+        self.mutate(move |data| {
+            mutate::forget_recent(data, opened_before);
+            Ok(())
+        })
     }
 
     /// Locks, re-reads, changes a copy of the data, saves it, and only then

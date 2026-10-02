@@ -21,7 +21,7 @@ use ox_core::versions::{PreviousVersions, VersionList, VersionsError};
 use super::snapshot_source::{fill_source_form, SourceItem};
 use super::version_row::version_row;
 use super::PropertiesTarget;
-use crate::dialog_layer::{note, quiet_text};
+use crate::dialog::{note, quiet_text};
 use crate::icons::{self, Icon};
 use crate::window::ButtonStyle;
 

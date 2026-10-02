@@ -16,7 +16,7 @@ use ox_core::transfer::Cancellation;
 
 use super::general_panel::glyph_button;
 use super::CALCULATING;
-use crate::dialog_layer::{quiet_text, PropertyGrid};
+use crate::dialog::{quiet_text, PropertyGrid};
 use crate::icons::Icon;
 
 /// A checksum not asked for yet.

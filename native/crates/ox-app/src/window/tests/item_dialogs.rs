@@ -12,7 +12,7 @@ use gtk::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 
 use super::icons::{assert_same_colour, css_colour, painted_colour, TRANSITION_TIME};
-use crate::dialog_layer::DialogFrame;
+use crate::dialog::DialogFrame;
 use crate::integration::OpenWithDialog;
 use crate::properties::{FolderSizeState, PropertiesView, RestoreRequest, SnapshotTarget};
 use crate::test_support::harness::{

@@ -131,6 +131,9 @@ impl BrowserWindow {
             task_action(WindowAction::EmptyTrash, |window| async move {
                 window.empty_trash().await;
             }),
+            plain_action(WindowAction::ClearRecentFiles, |window| {
+                window.context().clear_recent_files();
+            }),
         ]);
     }
 }

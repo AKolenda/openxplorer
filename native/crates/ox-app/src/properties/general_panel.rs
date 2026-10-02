@@ -18,7 +18,7 @@ use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::{ItemProperties, MountFacts};
-use crate::dialog_layer::{note, quiet_text, DialogFrame, PropertyGrid};
+use crate::dialog::{note, quiet_text, DialogFrame, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::integration;
 use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};
@@ -249,7 +249,7 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
             row.append(&type_applications_button(content_type));
         }
     }
-    row.append(&copy_path_button(facts.locations.display_location(&entry.uri)));
+    row.append(&copy_path_button(facts.locations.copied_location(&entry.uri)));
     if entry.is_dir && !is_smb_server(&entry.uri) {
         row.append(&calculate_size_button(&entry.uri));
     }

@@ -211,6 +211,8 @@ pub(crate) struct BrowserWindow {
     /// The in-window dialogs, Properties by tab, and the tabs that
     /// browse snapshots.
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
+    /// The rename a slow second click on a name scheduled (OPS-011).
+    pub(super) slow_click_rename: super::slow_click_rename::SlowClickRename,
     /// Measured folder sizes and the running folder-size scan.
     pub(super) size_scans: super::folder_size_scan::SizeScans,
 }
