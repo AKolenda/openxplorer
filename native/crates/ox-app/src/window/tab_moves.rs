@@ -47,16 +47,27 @@ const UNTITLED_WINDOW: &str = crate::i18n::message_id("OpenXplorer window");
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub(super) enum TabMoveRefusal {
     /// The source window runs a file operation or shows a dialog.
-    #[error("Close this tab’s dialog and finish file operations before moving it.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Close this tab’s dialog and finish file operations before moving it.")
+    )]
     SourceBusy,
     /// The destination runs a file operation or shows a dialog, or closed.
-    #[error("The destination was busy or closed. The original tab was kept.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("The destination was busy or closed. The original tab was kept.")
+    )]
     DestinationBusy,
     /// The tab closed, or the destination is the window it is in.
-    #[error("Choose a different, ready OpenXplorer window.")]
+    #[error("{}", ox_core::i18n::gettext("Choose a different, ready OpenXplorer window."))]
     NoDestination,
     /// The drag ended without a place that takes the tab.
-    #[error("Tab move cancelled. To detach, release below the tab strip or use Move tab to new window.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext(
+            "Tab move cancelled. To detach, release below the tab strip or use Move tab to new window."
+        )
+    )]
     Cancelled,
 }
 

@@ -41,23 +41,31 @@ pub struct Usershare {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum UsershareError {
     /// Samba is missing or user shares are not permitted for this user.
-    #[error(
-        "Folder sharing needs Samba with user shares enabled, and your account in the sambashare \
-         group. {0}"
-    )]
+    #[error("{}", crate::i18n::format_message("Folder sharing needs Samba with user shares enabled, and your account in the sambashare group. {error}", &[("error", .0.as_str())]))]
     Unavailable(String),
     /// Samba's `net` command is not installed.
-    #[error("Folder sharing needs Samba, and its net command is not installed.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Folder sharing needs Samba, and its net command is not installed.")
+    )]
     NotInstalled,
     /// The share name is empty, too long or has a character Samba refuses.
-    #[error("Use a share name of up to 80 characters without % < > * ? | / \\ + = ; : \" or ,.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "Use a share name of up to 80 characters without % < > * ? | / \\ + = ; : \" or ,."
+        )
+    )]
     InvalidName,
     /// Samba refused the request; the text is Samba's.
-    #[error("Samba could not change the share: {0}")]
+    #[error("{}", crate::i18n::format_message("Samba could not change the share: {error}", &[("error", .0.as_str())]))]
     Refused(String),
     /// Another folder is already shared under the name; Samba would move
     /// that share to this folder.
-    #[error("This share name is already used for another folder.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("This share name is already used for another folder.")
+    )]
     NameInUse,
 }
 

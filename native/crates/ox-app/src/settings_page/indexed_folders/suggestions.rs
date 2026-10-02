@@ -199,8 +199,7 @@ impl IndexSuggestions {
             .active(is_selected)
             .valign(gtk::Align::Center)
             .build();
-        let name =
-            ox_core::i18n::format_message("Cache {label}", &[("label", &(candidate.label).to_string())]);
+        let name = ox_core::i18n::format_message("Cache {label}", &[("label", &candidate.label)]);
         check.update_property(&[gtk::accessible::Property::Label(&name)]);
         let uri = candidate.uri.clone();
         check.connect_toggled(glib::clone!(
@@ -214,8 +213,7 @@ impl IndexSuggestions {
     /// The Index button of `candidate`'s line.
     fn index_button(&self, candidate: &IndexCandidate) -> gtk::Button {
         let button = parts::button(&ox_core::i18n::gettext("Index"), ButtonStyle::Bordered);
-        let name =
-            ox_core::i18n::format_message("Index {label}", &[("label", &(candidate.label).to_string())]);
+        let name = ox_core::i18n::format_message("Index {label}", &[("label", &candidate.label)]);
         button.update_property(&[gtk::accessible::Property::Label(&name)]);
         let command = candidate.index_command();
         button.connect_clicked(glib::clone!(
@@ -264,7 +262,7 @@ impl IndexSuggestions {
         let count = imp.selected.borrow().len();
         imp.selection_label.set_text(&ox_core::i18n::format_message(
             "{count} selected",
-            &[("count", &(count).to_string())],
+            &[("count", &count.to_string())],
         ));
         imp.index_selected.set_sensitive(count > 0);
     }

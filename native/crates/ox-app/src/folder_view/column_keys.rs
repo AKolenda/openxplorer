@@ -138,7 +138,7 @@ fn add_column_resizer(view: &DetailsView, column: SortColumn, title: &gtk::Widge
     title.update_property(&[gtk::accessible::Property::Label(&name)]);
     let resizer = ResizerControl::new(&ox_core::i18n::format_message(
         "Resize {name} column",
-        &[("name", &(name).to_string())],
+        &[("name", name.as_ref())],
     ));
     title_box.prepend(&resizer);
     let announce = glib::clone!(

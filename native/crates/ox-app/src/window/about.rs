@@ -31,8 +31,7 @@ Desktop: Rust + GTK 4 + GIO/GVfs.",
 /// What About this build says after the channel: the limitations.
 const ABOUT_LIMITS: &str = crate::i18n::message_id(
     "Replacing existing files requires confirmation; locations without a \
-Recycle Bin offer a confirmed permanent delete. Cached filename/path search is opt-in. Thumbnails \
-are not implemented. ZIP files can be browsed read-only and extracted. Open folders update \
+Recycle Bin offer a confirmed permanent delete. Cached filename/path search is opt-in. Images and supported media show previews. ZIP files can be browsed read-only and extracted. Open folders update \
 through GIO file monitors.",
 );
 
@@ -40,25 +39,27 @@ through GIO file monitors.",
 /// this is.
 fn about_text() -> String {
     let channel = if IS_PREVIEW {
-        "Native preview build: it runs beside the stable release."
+        ox_core::i18n::gettext_static("Native preview build: it runs beside the stable release.")
     } else {
-        "Stable release."
+        ox_core::i18n::gettext_static("Stable release.")
     };
-    format!("{ABOUT_INTRODUCTION}\n\n{channel} {ABOUT_LIMITS}")
+    let introduction = ox_core::i18n::gettext_static(ABOUT_INTRODUCTION);
+    let limits = ox_core::i18n::gettext_static(ABOUT_LIMITS);
+    format!("{introduction}\n\n{channel} {limits}")
 }
 
 /// The project's website.
 const WEBSITE: &str = "https://openxplorer.app";
 
 /// The heading of License & source.
-const LICENSE_TITLE: &str = "OpenXplorer · License & source";
+const LICENSE_TITLE: &str = crate::i18n::message_id("OpenXplorer · License & source");
 
 /// The facts above the licence text (`showLicense`), with where this
 /// build's corresponding source is: its release tag in the repository,
 /// and the source archive published with each release.
 fn license_text() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    ox_core::i18n::format_message("Copyright (c) 2026 OpenXplorer contributors.\nAGPL-3.0-only. No warranty. You may redistribute and modify under the included terms.\n\nComplete corresponding source and build tools: {REPOSITORY}, tag v{version}, and the source archive published with each release at {REPOSITORY}/releases.", &[("REPOSITORY", &(REPOSITORY).to_string()), ("version", &(version).to_string())])
+    ox_core::i18n::format_message("Copyright (c) 2026 OpenXplorer contributors.\nAGPL-3.0-only. No warranty. You may redistribute and modify under the included terms.\n\nComplete corresponding source and build tools: {REPOSITORY}, tag v{version}, and the source archive published with each release at {REPOSITORY}/releases.", &[("REPOSITORY", REPOSITORY), ("version", version)])
 }
 
 /// The GNU Affero General Public License, version 3, word for word.
@@ -103,20 +104,21 @@ impl BrowserWindow {
     /// buttons.
     fn about_dialog(&self) -> (Dialog, [DialogButton; 2]) {
         let dialog = Dialog::new(self, BUILD_NAME, &about_text());
-        let report = dialog.add_button(REPORT_ISSUE, ButtonStyle::Bordered);
+        let report = dialog.add_button(ox_core::i18n::gettext_static(REPORT_ISSUE), ButtonStyle::Bordered);
         let website = dialog.add_button(&ox_core::i18n::gettext("Website"), ButtonStyle::Bordered);
         dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
         (dialog, [report, website])
     }
 
     fn license_dialog(&self) -> Dialog {
-        let dialog = Dialog::new(self, LICENSE_TITLE, &license_text());
+        let dialog = Dialog::new(
+            self,
+            ox_core::i18n::gettext_static(LICENSE_TITLE),
+            &license_text(),
+        );
         let notices = ox_core::i18n::format_message(
             "{AGPL}\n\nOriginal notice:\n\n{WINSPACE_NOTICE}",
-            &[
-                ("AGPL", &(AGPL).to_string()),
-                ("WINSPACE_NOTICE", &(WINSPACE_NOTICE).to_string()),
-            ],
+            &[("AGPL", AGPL), ("WINSPACE_NOTICE", WINSPACE_NOTICE)],
         );
         dialog.add_scrolled_text(&notices, LICENSE_TEXT_HEIGHT);
         dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);

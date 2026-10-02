@@ -39,7 +39,7 @@ fn file_stem(name: &str) -> &str {
 pub(crate) fn compression_failure_text(error: &ArchiveError) -> String {
     ox_core::i18n::format_message(
         "{error}\n\nNo existing file was replaced.",
-        &[("error", &(error).to_string())],
+        &[("error", &error.to_string())],
     )
 }
 
@@ -49,8 +49,8 @@ pub(crate) fn compression_success_text(archive: &CreatedArchive) -> String {
     let compressed = ox_core::i18n::format_message(
         "Compressed {item_count} items into {name}.",
         &[
-            ("item_count", &(archive.item_count).to_string()),
-            ("name", &(archive.name).to_string()),
+            ("item_count", &archive.item_count.to_string()),
+            ("name", &archive.name),
         ],
     );
     if archive.skipped_count == 0 {
@@ -59,8 +59,8 @@ pub(crate) fn compression_success_text(archive: &CreatedArchive) -> String {
     ox_core::i18n::format_message(
         "{compressed} {skipped_count} links or special files were left out.",
         &[
-            ("compressed", &(compressed).to_string()),
-            ("skipped_count", &(archive.skipped_count).to_string()),
+            ("compressed", &compressed),
+            ("skipped_count", &archive.skipped_count.to_string()),
         ],
     )
 }

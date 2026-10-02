@@ -40,7 +40,7 @@ fn topics() -> Vec<(&'static str, String)> {
         .skip(1)
         .map(|topic| {
             let (heading, body) = topic.split_once('\n').unwrap_or((topic, ""));
-            (heading.trim(), body.trim().to_owned())
+            (heading.trim(), ox_core::i18n::gettext(body.trim()))
         })
         .collect()
 }
@@ -60,7 +60,7 @@ impl BrowserWindow {
         } else if Page::from_uri(&uri) == Some(Page::ThisPc) {
             "Drives and phones"
         } else {
-            ox_core::i18n::gettext_static(FIRST_TOPIC)
+            FIRST_TOPIC
         }
     }
 
@@ -85,14 +85,18 @@ impl BrowserWindow {
     /// button.
     pub(super) fn help_dialog(&self, topic: &str) -> (Dialog, DialogButton) {
         let topics = topics();
-        let dialog = Dialog::new(
-            self,
-            &ox_core::i18n::gettext("OpenXplorer Help"),
-            &ox_core::i18n::gettext(""),
-        );
-        let headings: Vec<&str> = topics.iter().map(|(heading, _)| *heading).collect();
-        let chooser = gtk::DropDown::from_strings(&headings);
-        dialog.add_labelled("Topic", &chooser);
+        let dialog = Dialog::new(self, &ox_core::i18n::gettext("OpenXplorer Help"), "");
+        let position = topics
+            .iter()
+            .position(|(heading, _)| *heading == topic)
+            .unwrap_or_default();
+        let headings: Vec<String> = topics
+            .iter()
+            .map(|(heading, _)| ox_core::i18n::gettext(heading))
+            .collect();
+        let heading_refs: Vec<&str> = headings.iter().map(String::as_str).collect();
+        let chooser = gtk::DropDown::from_strings(&heading_refs);
+        dialog.add_labelled(ox_core::i18n::gettext_static("Topic"), &chooser);
         let text = dialog.add_hint("");
         let show = move |chooser: &gtk::DropDown| {
             let index = usize::try_from(chooser.selected()).unwrap_or_default();
@@ -101,10 +105,6 @@ impl BrowserWindow {
             }
         };
         chooser.connect_selected_notify(show.clone());
-        let position = headings
-            .iter()
-            .position(|heading| *heading == topic)
-            .unwrap_or_default();
         chooser.set_selected(u32::try_from(position).unwrap_or_default());
         show(&chooser);
         let report_button =

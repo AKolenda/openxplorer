@@ -886,7 +886,7 @@ mod tests {
     /// one question for every window with several tabs, however often it
     /// is asked, and Cancel keeps every window open.
     ///
-    /// parity: SET-010
+    /// parity: SET-010, TAB-051
     #[gtk::test]
     fn quit_asks_once_about_the_tabs_of_every_window() {
         let fixture = Fixture::standard();

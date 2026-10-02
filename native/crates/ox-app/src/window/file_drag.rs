@@ -69,9 +69,9 @@ fn drag_announcement(uris: &[String]) -> String {
             let name = gio::File::for_uri(uri)
                 .basename()
                 .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
-            ox_core::i18n::format_message("Dragging {name}", &[("name", &(name).to_string())])
+            ox_core::i18n::format_message("Dragging {name}", &[("name", &name)])
         }
-        _ => ox_core::i18n::format_message("Dragging {len} items", &[("len", &(uris.len()).to_string())]),
+        _ => ox_core::i18n::format_message("Dragging {len} items", &[("len", &uris.len().to_string())]),
     }
 }
 

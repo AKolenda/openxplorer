@@ -201,9 +201,11 @@ fn confirm_restart(status: &InstanceStatus) -> bool {
         .running
         .as_ref()
         .map_or("an older release", |identity| identity.version.as_str());
-    let detail = ox_core::i18n::format_message("The installed version is {running_version}; the existing background process is {running}. A restart closes existing windows. File operations must finish first; they will not be force-stopped.", &[("running_version", &(running_version()).to_string()), ("running", &(running).to_string())]);
+    let detail = ox_core::i18n::format_message("The installed version is {running_version}; the existing background process is {running}. A restart closes existing windows. File operations must finish first; they will not be force-stopped.", &[("running_version", &running_version().to_string()), ("running", running)]);
     let dialog = gtk::AlertDialog::builder()
-        .message("Restart OpenXplorer to finish updating")
+        .message(ox_core::i18n::gettext_static(
+            "Restart OpenXplorer to finish updating",
+        ))
         .detail(detail)
         .buttons(["Not now", "Restart OpenXplorer"])
         .cancel_button(0)

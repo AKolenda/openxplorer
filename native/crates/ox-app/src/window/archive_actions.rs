@@ -284,7 +284,7 @@ impl BrowserWindow {
                             &OperationSummary::Report(text.clone()),
                             Destination::default(),
                         );
-                        window.show_result_dialog(EXTRACTION_STOPPED, &text);
+                        window.show_result_dialog(ox_core::i18n::gettext_static(EXTRACTION_STOPPED), &text);
                     }
                 }
             }
@@ -335,7 +335,11 @@ impl BrowserWindow {
                     .await;
                 window.finish_archive_operation();
                 let outcome = extracted.map_err(|error| extraction_failure_text(&error));
-                window.report_in_folder(&folder, outcome, EXTRACTION_STOPPED);
+                window.report_in_folder(
+                    &folder,
+                    outcome,
+                    ox_core::i18n::gettext_static(EXTRACTION_STOPPED),
+                );
             }
         ));
     }
@@ -400,7 +404,11 @@ impl BrowserWindow {
                     .await;
                 window.finish_archive_operation();
                 let outcome = created.map_err(|error| compression_failure_text(&error));
-                window.report_in_folder(&folder, outcome, COMPRESSION_STOPPED);
+                window.report_in_folder(
+                    &folder,
+                    outcome,
+                    ox_core::i18n::gettext_static(COMPRESSION_STOPPED),
+                );
             }
         ));
     }

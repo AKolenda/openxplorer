@@ -92,7 +92,7 @@ impl SettingsPage {
             };
             let message = ox_core::i18n::format_message(
                 "Changed for this window, but could not be saved: {error}",
-                &[("error", &(error).to_string())],
+                &[("error", &error.to_string())],
             );
             page.emit_by_name::<()>(MESSAGE, &[&message]);
         });

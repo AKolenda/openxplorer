@@ -46,11 +46,11 @@ _GAP = r'\s*,\s*'
 _FUNCTION = r'(?<![.\w])'
 # The calls whose literal arguments are messages: (context, id, plural).
 CALLS = (
-    (re.compile(_FUNCTION + r'message_id\(\s*' + _STRING), None, 1, None),
-    (re.compile(_FUNCTION + r'format_message\(\s*' + _STRING), None, 1, None),
-    (re.compile(_FUNCTION + r'gettext(?:_static)?\(\s*' + _STRING), None, 1, None),
-    (re.compile(_FUNCTION + r'pgettext\(\s*' + _STRING + _GAP + _STRING), 1, 2, None),
-    (re.compile(_FUNCTION + r'ngettext\(\s*' + _STRING + _GAP + _STRING), None, 1, 2),
+    (re.compile(_FUNCTION + r'message_id\(\s*' + _STRING, re.DOTALL), None, 1, None),
+    (re.compile(_FUNCTION + r'format_message\(\s*' + _STRING, re.DOTALL), None, 1, None),
+    (re.compile(_FUNCTION + r'gettext(?:_static)?\(\s*' + _STRING, re.DOTALL), None, 1, None),
+    (re.compile(_FUNCTION + r'pgettext\(\s*' + _STRING + _GAP + _STRING, re.DOTALL), 1, 2, None),
+    (re.compile(_FUNCTION + r'ngettext\(\s*' + _STRING + _GAP + _STRING, re.DOTALL), None, 1, 2),
 )
 RUST_ESCAPES = {'n': '\n', 't': '\t', 'r': '\r', '0': '\0', '\\': '\\', '"': '"', "'": "'"}
 PO_ESCAPES = {'\\': '\\\\', '"': '\\"', '\n': '\\n', '\t': '\\t', '\r': '\\r'}
@@ -98,7 +98,7 @@ def source_files() -> Iterator[Path]:
     """Yield the Rust sources whose messages ship, leaving out test files."""
     for path in sorted(CRATES.rglob('*.rs')):
         parts = path.relative_to(CRATES).parts
-        if 'tests' in parts or path.name in ('tests.rs', 'test_support.rs') or 'test_support' in parts:
+        if 'tests' in parts or path.stem.endswith('_tests') or path.name in ('tests.rs', 'test_support.rs') or 'test_support' in parts:
             continue
         yield path
 
@@ -106,7 +106,7 @@ def source_files() -> Iterator[Path]:
 def messages_in(text: str, place: str) -> Iterator[Message]:
     """Yield the messages of one source file's text."""
     # Inline unit-test fixtures are not application messages.
-    text = re.split(r'#\[cfg\(test\)\]\s*mod tests\s*\{', text, maxsplit=1)[0]
+    text = re.split(r'#\[cfg\(test\)\]\s*mod \w+\s*\{', text, maxsplit=1)[0]
     for pattern, context, msgid, plural in CALLS:
         for match in pattern.finditer(text):
             values = [None if index is None else unescape_rust(match.group(index))
@@ -115,7 +115,7 @@ def messages_in(text: str, place: str) -> Iterator[Message]:
     # SettingRow is the one constructor for these static descriptions;
     # it translates the display and search text without changing IDs.
     for row in re.finditer(r'\bRowText\s*\{(?P<fields>.*?)\n\s*\}', text, re.DOTALL):
-        for value in re.finditer(r'\b(?:title|description|keywords):\s*' + _STRING, row['fields']):
+        for value in re.finditer(r'\b(?:title|description|keywords):\s*' + _STRING, row['fields'], re.DOTALL):
             message = unescape_rust(value.group(1))
             if message:
                 yield Message(None, message, None, [place])
@@ -168,6 +168,19 @@ def template_messages_source() -> str:
     return '\n'.join([*lines, '];', ''])
 
 
+def manual_messages(text: str) -> Iterator[str]:
+    """Extract each visible offline-help heading and its complete body.
+
+    English headings remain topic identifiers at runtime; only the chooser
+    label and displayed body are translated. Source URLs stay in the message.
+    """
+    for topic in text.split('\n## ')[1:]:
+        heading, _, body = topic.partition('\n')
+        yield heading.strip()
+        if body.strip():
+            yield body.strip()
+
+
 def extract() -> list[Message]:
     """Return every message of the sources, merged and in a stable order."""
     merged: dict[tuple[str | None, str], Message] = {}
@@ -198,6 +211,15 @@ def extract() -> list[Message]:
                     merged[key].places.append(place)
             else:
                 merged[key] = Message(None, message, None, [place])
+    manual = CRATES / 'ox-app/resources/manual.md'
+    place = manual.relative_to(NATIVE).as_posix()
+    for message in manual_messages(manual.read_text(encoding='utf-8')):
+        key = (None, message)
+        if key in merged:
+            if place not in merged[key].places:
+                merged[key].places.append(place)
+        else:
+            merged[key] = Message(None, message, None, [place])
     return sorted(merged.values(), key=lambda message: (message.places[0], message.msgid))
 
 

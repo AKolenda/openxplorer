@@ -40,9 +40,12 @@ impl BrowserWindow {
             ox_core::i18n::gettext_static(TITLE),
             ox_core::i18n::gettext_static(MESSAGE),
         );
-        let dont_ask = dialog.add_check_button("Don't ask again", false);
+        let dont_ask = dialog.add_check_button(ox_core::i18n::gettext_static("Don't ask again"), false);
         dialog.add_cancel_button();
-        dialog.add_button("Rename and Hide", ButtonStyle::Accent);
+        dialog.add_button(
+            ox_core::i18n::gettext_static("Rename and Hide"),
+            ButtonStyle::Accent,
+        );
         dialog.open();
         if dialog.next_response().await.is_none() {
             return false;

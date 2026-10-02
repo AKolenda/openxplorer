@@ -595,7 +595,7 @@ fn text_size_keys_work_inside_dialogs() {
 /// preference, as choosing the view does: past Details and List it steps
 /// through every icon size, which the status bar's slider shows and sets.
 ///
-/// parity: VIEW-010, VIEW-011
+/// parity: VIEW-010, VIEW-011, VIEW-012
 #[gtk::test]
 fn zooming_changes_and_saves_the_view() {
     let fixture = Fixture::standard();

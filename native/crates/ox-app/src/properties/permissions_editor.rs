@@ -190,29 +190,40 @@ pub(super) fn permissions_editor(items: EditedItems, versions: Arc<PreviousVersi
     let has_folders = items.items.iter().any(|item| item.is_folder);
     let grid = PropertyGrid::new();
     let access = |name: &str, class: PermissionClass| {
-        let label = ox_core::i18n::format_message("{name} access", &[("name", &(name).to_string())]);
+        let label = ox_core::i18n::format_message("{name} access", &[("name", name)]);
         let choice = AccessChoice::new(&label, items.common(|item| Some(Access::of(item.mode, class))));
         add_control_row(&grid, &label, &choice.choice);
         choice
     };
-    let owner = access("Owner", PermissionClass::Owner);
-    let group = access("Group", PermissionClass::Group);
-    let others = access("Others", PermissionClass::Others);
+    let owner = access(ox_core::i18n::gettext_static("Owner"), PermissionClass::Owner);
+    let group = access(ox_core::i18n::gettext_static("Group"), PermissionClass::Group);
+    let others = access(ox_core::i18n::gettext_static("Others"), PermissionClass::Others);
     let owner_account = current_user_is_superuser().then(|| {
-        let choice = AccountChoice::new("Owner", items.owner.as_ref(), user_choices());
+        let choice = AccountChoice::new(
+            ox_core::i18n::gettext_static("Owner"),
+            items.owner.as_ref(),
+            user_choices(),
+        );
         add_control_row(&grid, "Owner", &choice.choice);
         choice
     });
-    let group_account = AccountChoice::new("Group", items.group.as_ref(), group_choices());
+    let group_account = AccountChoice::new(
+        ox_core::i18n::gettext_static("Group"),
+        items.group.as_ref(),
+        group_choices(),
+    );
     add_control_row(&grid, "Group", &group_account.choice);
     editor.append(grid.widget());
     let executable = has_files.then(|| {
         let is_executable = items.common(|item| (!item.is_folder).then_some(item.mode & 0o100 != 0));
-        StateCheck::new("Is executable", is_executable)
+        StateCheck::new(ox_core::i18n::gettext_static("Is executable"), is_executable)
     });
     let owners_only_delete = has_folders.then(|| {
         let is_sticky = items.common(|item| item.is_folder.then_some(item.mode & 0o1000 != 0));
-        StateCheck::new("Only owner can rename and delete folder content", is_sticky)
+        StateCheck::new(
+            ox_core::i18n::gettext_static("Only owner can rename and delete folder content"),
+            is_sticky,
+        )
     });
     for check in executable.iter().chain(&owners_only_delete) {
         editor.append(&check.check);
@@ -257,7 +268,10 @@ pub(super) fn permissions_editor(items: EditedItems, versions: Arc<PreviousVersi
             }
         });
     }
-    let apply = glyph_button("Apply permissions", Icon::ShieldLock);
+    let apply = glyph_button(
+        ox_core::i18n::gettext_static("Apply permissions"),
+        Icon::ShieldLock,
+    );
     apply.set_halign(gtk::Align::Start);
     // Nothing is applied until the user changes something.
     apply.set_sensitive(false);

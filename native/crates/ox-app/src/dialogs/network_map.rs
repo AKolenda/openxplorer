@@ -102,7 +102,7 @@ impl ServerFields {
     fn add_to(dialog: &Dialog) -> Self {
         let labels = Protocol::ALL.map(Protocol::label);
         let protocol = gtk::DropDown::from_strings(&labels);
-        dialog.add_labelled("Type", &protocol);
+        dialog.add_labelled(ox_core::i18n::gettext_static("Type"), &protocol);
         let folder = address_field(dialog, "Folder", Protocol::Smb.placeholder());
         let port = address_field(dialog, "Port (optional)", "");
         port.set_input_purpose(gtk::InputPurpose::Digits);

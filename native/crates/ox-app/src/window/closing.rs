@@ -65,7 +65,7 @@ const CLOSE_TABS: &str = crate::i18n::message_id("Close all tabs");
 const QUIT_TABS_TITLE: &str = crate::i18n::message_id("Quit OpenXplorer?");
 
 /// The answer that closes every window and quits.
-const QUIT_TABS: &str = "Quit";
+const QUIT_TABS: &str = crate::i18n::message_id("Quit");
 
 /// How often a window that should close looks whether it may.
 const CLOSE_POLL: Duration = Duration::from_millis(100);
@@ -118,7 +118,8 @@ impl BrowserWindow {
     /// for tests outside the window's modules; false when one runs.
     #[cfg(test)]
     pub(crate) fn begin_test_write(&self) -> bool {
-        self.begin_operation("Preparing copy…").is_some()
+        self.begin_operation(ox_core::i18n::gettext_static("Preparing copy…"))
+            .is_some()
     }
 
     /// Ends the stand-in write of [`Self::begin_test_write`].
@@ -176,20 +177,17 @@ impl BrowserWindow {
         let question = if windows.len() == 1 {
             ox_core::i18n::format_message(
                 "This window has {tabs} tabs open. Close them all and quit?",
-                &[("tabs", &(tabs).to_string())],
+                &[("tabs", &tabs.to_string())],
             )
         } else {
             ox_core::i18n::format_message(
                 "{len} windows have {tabs} tabs open. Close them all and quit?",
-                &[
-                    ("len", &(windows.len()).to_string()),
-                    ("tabs", &(tabs).to_string()),
-                ],
+                &[("len", &windows.len().to_string()), ("tabs", &tabs.to_string())],
             )
         };
         let dialog = Dialog::new(self, ox_core::i18n::gettext_static(QUIT_TABS_TITLE), &question);
         dialog.add_cancel_button();
-        let quit = dialog.add_button(QUIT_TABS, ButtonStyle::Accent);
+        let quit = dialog.add_button(ox_core::i18n::gettext_static(QUIT_TABS), ButtonStyle::Accent);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();
@@ -208,7 +206,7 @@ impl BrowserWindow {
         let count = self.tab_count();
         let question = ox_core::i18n::format_message(
             "This window has {count} tabs open. Close them all?",
-            &[("count", &(count).to_string())],
+            &[("count", &count.to_string())],
         );
         let dialog = Dialog::new(self, ox_core::i18n::gettext_static(CLOSE_TABS_TITLE), &question);
         dialog.add_cancel_button();

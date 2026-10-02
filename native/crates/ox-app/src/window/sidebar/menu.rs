@@ -231,11 +231,11 @@ fn empty_space_menu(anything_hidden: bool) -> Vec<MenuEntry> {
         .into(),
         show_all.disabled_when(!anything_hidden).into(),
         MenuEntry::Divider,
-        size("Automatic icon size", "0"),
-        size("Small icons", "16"),
-        size("Medium icons", "22"),
-        size("Large icons", "32"),
-        size("Huge icons", "48"),
+        size(ox_core::i18n::gettext_static("Automatic icon size"), "0"),
+        size(ox_core::i18n::gettext_static("Small icons"), "16"),
+        size(ox_core::i18n::gettext_static("Medium icons"), "22"),
+        size(ox_core::i18n::gettext_static("Large icons"), "32"),
+        size(ox_core::i18n::gettext_static("Huge icons"), "48"),
     ]
 }
 
@@ -281,10 +281,7 @@ fn section_item(key: &str, name: &str, hidden: bool) -> MenuEntry {
     } else {
         ("Hide", WindowAction::HideSection)
     };
-    let label = ox_core::i18n::format_message(
-        "{verb} section “{name}”",
-        &[("verb", &(verb).to_string()), ("name", &(name).to_string())],
-    );
+    let label = ox_core::i18n::format_message("{verb} section “{name}”", &[("verb", verb), ("name", name)]);
     MenuItem::with_text_target(&label, Icon::Eye, action, key).into()
 }
 

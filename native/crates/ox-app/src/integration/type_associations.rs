@@ -123,7 +123,7 @@ pub(crate) fn change_type(content_type: &str, change: &TypeChange) -> Result<(),
 
 /// The installed application `id`.
 fn application(id: &str) -> Result<gio::AppInfo, String> {
-    installed_application(id).ok_or_else(|| "That application is not installed.".to_owned())
+    installed_application(id).ok_or_else(|| ox_core::i18n::gettext("That application is not installed."))
 }
 
 /// The applications the user added to `content_type`, from the user's

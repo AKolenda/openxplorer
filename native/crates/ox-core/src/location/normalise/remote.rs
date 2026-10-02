@@ -30,8 +30,8 @@ pub(super) fn normalise_remote_url(address: &str) -> Result<String, LocationErro
     };
     let authority = server_authority(
         &server,
-        "Enter a server name, for example sftp://server/folder.",
-        "Invalid port.",
+        crate::i18n::gettext_static("Enter a server name, for example sftp://server/folder."),
+        crate::i18n::gettext_static("Invalid port."),
     )?;
     let path = absolute_normal_path(&decoded);
     let user = user.map(|user| format!("{user}@")).unwrap_or_default();
@@ -72,9 +72,9 @@ fn remote_user<'a>(parts: &'a LocationParts, scheme: &str) -> Result<Option<&'a 
     // Safety rule (SAFE-010): a password never reaches settings.json, a
     // tab title or the clipboard.
     if !is_plain_name || scheme == "nfs" {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.",
-        ));
+        )));
     }
     Ok(Some(user))
 }

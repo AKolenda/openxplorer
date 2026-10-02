@@ -60,8 +60,8 @@ pub(crate) async fn open_terminal(
     Ok(ox_core::i18n::format_message(
         "Opened {terminal} in {display}",
         &[
-            ("terminal", &(launched.terminal).to_string()),
-            ("display", &(launched.path.display()).to_string()),
+            ("terminal", launched.terminal),
+            ("display", &launched.path.display().to_string()),
         ],
     ))
 }

@@ -210,33 +210,45 @@ impl CommandFacts {
         let selection = self.selection;
         let folder = self.folder;
         let reason = match command {
-            FileCommand::CancelOperation => "No file operation is running.",
-            FileCommand::Undo if !self.can_undo => "Nothing to undo.",
-            FileCommand::Redo if !self.can_redo => "Nothing to redo.",
+            FileCommand::CancelOperation => ox_core::i18n::gettext_static("No file operation is running."),
+            FileCommand::Undo if !self.can_undo => ox_core::i18n::gettext_static("Nothing to undo."),
+            FileCommand::Redo if !self.can_redo => ox_core::i18n::gettext_static("Nothing to redo."),
             FileCommand::Paste | FileCommand::PasteInto if !self.has_file_clipboard => {
-                "Nothing to paste here."
+                ox_core::i18n::gettext_static("Nothing to paste here.")
             }
             FileCommand::Restore if !folder.is_recycle_bin => {
-                "Only items in the Recycle Bin can be restored."
+                ox_core::i18n::gettext_static("Only items in the Recycle Bin can be restored.")
             }
-            FileCommand::EmptyRecycleBin if !folder.is_recycle_bin => "This is not the Recycle Bin.",
-            FileCommand::EmptyRecycleBin if !folder.has_items => "The Recycle Bin is empty.",
-            _ if self.is_busy => "Wait for the running file operation to finish.",
+            FileCommand::EmptyRecycleBin if !folder.is_recycle_bin => {
+                ox_core::i18n::gettext_static("This is not the Recycle Bin.")
+            }
+            FileCommand::EmptyRecycleBin if !folder.has_items => {
+                ox_core::i18n::gettext_static("The Recycle Bin is empty.")
+            }
+            _ if self.is_busy => {
+                ox_core::i18n::gettext_static("Wait for the running file operation to finish.")
+            }
             FileCommand::New | FileCommand::Paste if folder.is_searching => {
-                "Clear the search to add items to this folder."
+                ox_core::i18n::gettext_static("Clear the search to add items to this folder.")
             }
-            FileCommand::New => "This folder is read-only.",
-            FileCommand::Paste if !selection.has_inoperable => "This folder is read-only.",
-            FileCommand::PasteInto if selection.count != 1 => "Select one folder to paste into.",
-            _ if selection.count == 0 => "Select an item first.",
-            _ if selection.has_inoperable => "Drives, shares and virtual items cannot be changed here.",
+            FileCommand::New => ox_core::i18n::gettext_static("This folder is read-only."),
+            FileCommand::Paste if !selection.has_inoperable => {
+                ox_core::i18n::gettext_static("This folder is read-only.")
+            }
+            FileCommand::PasteInto if selection.count != 1 => {
+                ox_core::i18n::gettext_static("Select one folder to paste into.")
+            }
+            _ if selection.count == 0 => ox_core::i18n::gettext_static("Select an item first."),
+            _ if selection.has_inoperable => {
+                ox_core::i18n::gettext_static("Drives, shares and virtual items cannot be changed here.")
+            }
             FileCommand::Copy | FileCommand::Cut | FileCommand::Rename | FileCommand::Duplicate
                 if folder.is_recycle_bin =>
             {
-                "Items in the Recycle Bin can only be restored or deleted."
+                ox_core::i18n::gettext_static("Items in the Recycle Bin can only be restored or deleted.")
             }
-            _ if selection.has_read_only => "A previous version is read-only.",
-            _ => "Rename one item at a time.",
+            _ if selection.has_read_only => ox_core::i18n::gettext_static("A previous version is read-only."),
+            _ => ox_core::i18n::gettext_static("Rename one item at a time."),
         };
         Some(reason)
     }

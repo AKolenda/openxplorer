@@ -462,7 +462,7 @@ impl BrowserWindow {
         self.context().open_uri(address, self.upcast_ref(), on_error);
         self.show_message(&ox_core::i18n::format_message(
             "Opening {address} in your web browser.",
-            &[("address", &(address).to_string())],
+            &[("address", address)],
         ));
     }
 

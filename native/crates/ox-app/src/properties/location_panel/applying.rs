@@ -180,7 +180,7 @@ fn moved_status(result: &TransferResult, previous: &str) -> String {
     } else {
         ox_core::i18n::format_message(
             "Location updated. Configuration backed up. Some items stayed in {previous}.",
-            &[("previous", &(previous).to_string())],
+            &[("previous", previous)],
         )
     }
 }

@@ -29,10 +29,7 @@ fn title(item: &FailedItem) -> String {
     };
     ox_core::i18n::format_message(
         "Error while {doing} “{name}”",
-        &[
-            ("doing", &(doing).to_string()),
-            ("name", &(item.name).to_string()),
-        ],
+        &[("doing", doing), ("name", &item.name)],
     )
 }
 
@@ -54,9 +51,9 @@ impl BrowserWindow {
         dialog.add_cancel_button();
         let skip_all = item
             .more_items
-            .then(|| dialog.add_button("Skip all", ButtonStyle::Bordered));
-        let skip = dialog.add_button("Skip", ButtonStyle::Bordered);
-        let retry = dialog.add_button("Retry", ButtonStyle::Accent);
+            .then(|| dialog.add_button(ox_core::i18n::gettext_static("Skip all"), ButtonStyle::Bordered));
+        let skip = dialog.add_button(ox_core::i18n::gettext_static("Skip"), ButtonStyle::Bordered);
+        let retry = dialog.add_button(ox_core::i18n::gettext_static("Retry"), ButtonStyle::Accent);
         dialog.open();
         let pressed = dialog.next_response().await;
         dialog.finish();

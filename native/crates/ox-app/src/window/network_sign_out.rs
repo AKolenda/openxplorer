@@ -48,8 +48,12 @@ fn smb_host_of(uri: &str) -> Option<String> {
 /// What the window says once the server is signed out.
 fn signed_out_message(report: &SignOutReport) -> &'static str {
     match report.forget {
-        ForgetScope::AllScopes => "Signed out. Matching saved credentials were cleared or none were present.",
-        ForgetScope::SessionOnly => "Disconnected. Saved credentials are retained.",
+        ForgetScope::AllScopes => ox_core::i18n::gettext_static(
+            "Signed out. Matching saved credentials were cleared or none were present.",
+        ),
+        ForgetScope::SessionOnly => {
+            ox_core::i18n::gettext_static("Disconnected. Saved credentials are retained.")
+        }
     }
 }
 

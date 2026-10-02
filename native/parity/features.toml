@@ -2482,7 +2482,8 @@ sources = [
 python_tests = []
 bridge = ["windowMetadata", "preferences"]
 dolphin = "ShowFullPathInTitlebar"
-native = "todo"
+native = "partial"
+native_note = "Settings > Windows & tabs > Show full path in the title bar updates the native window title and persists the preference. Test: native/crates/ox-app/src/window/tests/address_bar.rs (the_title_shows_the_full_path_when_the_settings_ask). Missing: tab titles still elide at the end, as tested by native/crates/ox-app/src/window/tab_strip.rs (a_live_tab_has_no_badge_a_close_button_and_an_ellipsized_title), instead of the left specified here."
 
 [[feature]]
 id = "TAB-047"
@@ -2599,8 +2600,8 @@ sources = [
 python_tests = []
 bridge = ["window"]
 dolphin = "ConfirmClosingMultipleTabs"
-native = "todo"
-native_note = "Porting notes: Explorer does not ask. Only offer this as an option, and only when session restore is off."
+native = "partial"
+native_note = "The opt-in Ask before closing a window with several tabs setting asks once before closing a multi-tab window; Cancel keeps it open and Close all tabs closes it. Quit asks once for all affected windows. Tests: native/crates/ox-app/src/window/tests/file_operations.rs (the_confirmation_settings_decide_what_asks) and native/crates/ox-app/src/application/state.rs (quit_asks_once_about_the_tabs_of_every_window). Missing: Close Current Tab, Do not ask again in the question, and the session-restore/session-manager exemptions. The option remains off by default, preserving Explorer's ordinary close behaviour."
 
 [[feature]]
 id = "TAB-052"
@@ -3011,7 +3012,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "ShowZoomSlider"
-native = "todo"
+native = "partial"
+native_note = "The native status bar has an icon-size slider, visible in Icons mode, which steps through the 16-256 px levels and updates the view and saved size. Test: native/crates/ox-app/src/window/tests/views.rs (zooming_changes_and_saves_the_view). Missing: a Show zoom slider preference and a tooltip that reports the current pixel size; the tooltip currently says Icon size."
 
 [[feature]]
 id = "VIEW-013"
@@ -3110,8 +3112,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "folders_first / hidden_last"
-native = "todo"
-native_note = "Porting notes: OpenXplorer always sorts folders first and has no hidden-last option. Explorer also keeps folders first. Existing OpenXplorer part is protected by VIEW-015."
+native = "partial"
+native_note = "Folders first (on by default) is a Sort menu toggle. Adjust view display style offers both Show folders first and Show hidden items last (off by default); both values persist with the global or per-folder style. Tests: native/crates/ox-app/src/window/tests/view_styles.rs (the_display_style_dialog_applies_its_choices), native/crates/ox-app/src/folder_view/model/sorters.rs (hidden_items_sort_after_visible_items_when_requested), and settings/view_properties.rs. Missing: Hidden Files Last is not available directly in the Sort menu described here."
 
 [[feature]]
 id = "VIEW-018"
@@ -3451,8 +3453,8 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/test_v06.py::PrefTests::test_column_reset"]
 bridge = ["preferences"]
 dolphin = "header menu 'Automatic Column Widths' / 'Side Padding'"
-native = "todo"
-native_note = "Porting notes: OpenXplorer only has 'Reset sidebar and column widths' in Settings. Existing OpenXplorer part is protected by VIEW-028, VIEW-029 and VIEW-046."
+native = "partial"
+native_note = "Details columns can be fitted to loaded contents by double-clicking a resize edge or pressing Home on its focused title; resized/fitted widths persist globally or in the folder's display style. Tests: native/crates/ox-app/src/folder_view/details/column_fit.rs (a_double_click_on_a_resize_edge_fits_and_saves_the_column, titles_fit_and_nudge_their_columns) and native/crates/ox-app/src/window/tests/view_styles.rs (each_folder_keeps_its_own_style_when_asked). Missing: the header menu's Automatic Column Widths / Custom Column Widths modes and the optional 20 px side padding."
 
 [[feature]]
 id = "VIEW-033"
@@ -7260,7 +7262,8 @@ sources = ["docs/NATIVE-EXPERIENCE-ROADMAP.md (P3 Persistent operation history a
 python_tests = []
 bridge = []
 dolphin = "KDE job tracker"
-native = "todo"
+native = "partial"
+native_note = "Up to four independent transfers have their own progress and cancellation panels; the panel and its slot are released when that job finishes. Test: native/crates/ox-app/src/window/file_ops/jobs.rs (separate_jobs_have_independent_cancel_and_release_their_slots), also cited by OPS-025. Missing: a retained list of completed/failed jobs and a queue for subsequent work; an overlapping or fifth job is refused rather than queued."
 
 [[feature]]
 id = "OPS-034"
@@ -11437,7 +11440,7 @@ bridge = ["environment", "list"]
 dolphin = "kio-gdrive gdrive:/ (KAccounts), a separate add-on outside Dolphin"
 gnome = "GOA + GVfs google-drive / onedrive / davs backends (google.mount and onedrive.mount present) via the goa volume monitor"
 native = "todo"
-native_note = "Dolphin 23.08.5 has no online-account drives of its own, so the origin is GNOME Online Accounts. Not ported yet: GOA mounts use account-bound addresses (google-drive://user@gmail.com/…, onedrive://…, davs://user@host/… for Nextcloud), which the shared location rules refuse on purpose (only file:, smb: and the device schemes are accepted, and a user name in an address is refused). Admitting them changes those rules, which native/crates/ox-core/tests/location_python.rs holds equal to the Python app's normaliser, and needs an owner decision on the user-name rule."
+native_note = "Google Drive and OneDrive schemes and their GNOME Online Accounts workflows have no native implementation or test. The app now supports ordinary SFTP, FTP, WebDAV and NFS locations (NET-029 to NET-033), including a plain session-only user name for SFTP/FTP/WebDAV while saved/displayed addresses strip it (SAFE-010); the earlier file/SMB-only limitation no longer describes the native app. Generic WebDAV support does not prove discovery, browsing and copying through a GOA-managed Nextcloud mount. Account-specific URI handling and the persistence/privacy policy for account identities remain to be designed and verified."
 
 [[feature]]
 id = "OPEN-001"
@@ -15468,7 +15471,7 @@ bridge = []
 dolphin = "KI18n throughout, with translations for about 89 languages in po/; Configure › Switch Application Language"
 gnome = "gettext (bindtextdomain, ngettext) with installed .mo files for Rust and GtkBuilder strings; GTK text direction from the locale (gtk_widget_get_default_direction); msgfmt --desktop and --xml for the .desktop file and metainfo"
 native = "partial"
-native_note = "The infrastructure is in place: ox_core::i18n reads gettext .mo catalogues itself (no FFI; plural rules from the Plural-Forms expression, message contexts) and, at start-up, installs the catalogue of the first language g_get_language_names gives (LANGUAGE, LC_ALL, LC_MESSAGES, LANG) found as <XDG data dir>/locale/<lang>/LC_MESSAGES/openxplorer.mo, so /usr/share, /usr/local/share and the Flatpak's /app/share all work; English, the msgid, is the fallback. native/tools/i18n.py extracts every gettext, ngettext and pgettext call into the English template native/po/openxplorer.pot (check.py fails when it is stale) and compiles native/po/<lang>.po; package_data.py installs each compiled catalogue for every package format. No translation is committed (no machine translations). Strings through it so far: the command bar's New, Sort, View, More options and appearance menus, the folder tree's menu, and the status bar's counts with plural forms ('{count} item'). Still to do: the remaining hard-coded strings (about 2,800 literals in some 360 files, best done as one mechanical pass after the parallel tracks merge, to avoid conflicts), the GtkBuilder templates' strings (translatable=\"yes\" and a lookup after the template is built, since GtkBuilder's own translation needs bindtextdomain through FFI), the .desktop and metainfo translations (msgfmt --desktop/--xml), and an owner decision on right-to-left languages: GTK mirrors boxes, arrows and the caption buttons by itself from its own translations; whether the Windows 11 layout should mirror is not decided. Stable error codes (OPS-037) never go through the catalogue. Tests: crates/ox-core/src/i18n.rs, tools/test_i18n.py."
+native_note = "The gettext catalogue loader follows the desktop language, supports contexts and plural rules, and falls back to English. The integrated translation pass covers menus, dialogs, Settings, view labels, transfer/recovery messages, backend errors and shared file labels; interpolation preserves inserted paths as data. Explicitly marked GtkBuilder text and accessible properties are translated after construction, without translating entry contents. The offline manual and static message tables enter the same generated template. Package tooling compiles installed PO catalogues and adds translated display fields to desktop files and AppStream metadata while preserving commands, identifiers, licences and English fallback. Evidence: native/crates/ox-core/src/i18n.rs (the_catalogue_of_the_desktop_language_is_picked_up_with_its_plurals, translated_messages_reorder_values_without_interpreting_their_contents); native/crates/ox-core/tests/i18n_errors.rs (backend_errors_use_the_desktop_catalogue_and_preserve_inserted_paths); native/crates/ox-app/src/window/command_bar.rs (marked_template_text_uses_the_selected_catalogue); native/tools/test_i18n.py and test_package_i18n.py. Stable operation error codes are not translated. Still partial: no reviewed language catalogue ships, complete coverage of every visible string and plural is not established (for example, extraction summaries still compose English file/files and folder/folders fragments), and right-to-left layout, navigation artwork and mixed-direction file names have not been validated. The existing owner decision on mirroring the Windows 11 layout remains open."
 
 [[feature]]
 id = "UPD-001"

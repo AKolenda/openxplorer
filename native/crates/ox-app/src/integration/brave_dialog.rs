@@ -41,11 +41,13 @@ pub(crate) fn status_text(status: &BraveStatus) -> String {
         return BraveError::Sandboxed.to_string();
     }
     let state = if status.is_running {
-        "Brave is running. Quit it completely, then Recheck."
+        ox_core::i18n::gettext_static("Brave is running. Quit it completely, then Recheck.")
     } else if status.profiles.is_empty() {
-        "No supported native profiles found. Set brave://settings/downloads manually."
+        ox_core::i18n::gettext_static(
+            "No supported native profiles found. Set brave://settings/downloads manually.",
+        )
     } else {
-        "Brave is closed. Select the profiles to update."
+        ox_core::i18n::gettext_static("Brave is closed. Select the profiles to update.")
     };
     if !status.sandboxed_installs.is_empty() {
         let installs: Vec<&str> = status
@@ -56,7 +58,7 @@ pub(crate) fn status_text(status: &BraveStatus) -> String {
         let manual = installs.join(" / ");
         return ox_core::i18n::format_message(
             "{state} {manual} installations need manual browser settings.",
-            &[("state", &(state).to_string()), ("manual", &(manual).to_string())],
+            &[("state", state), ("manual", &manual)],
         );
     }
     state.to_owned()
@@ -68,7 +70,7 @@ pub(crate) fn sync_report(outcome: &SyncOutcome) -> Result<String, String> {
     if outcome.failures.is_empty() {
         return Ok(ox_core::i18n::format_message(
             "Brave Downloads updated for {len} profile(s).",
-            &[("len", &(outcome.updated.len()).to_string())],
+            &[("len", &outcome.updated.len().to_string())],
         ));
     }
     let reasons: Vec<String> = outcome
@@ -79,8 +81,8 @@ pub(crate) fn sync_report(outcome: &SyncOutcome) -> Result<String, String> {
     Err(ox_core::i18n::format_message(
         "{len} updated. {join}",
         &[
-            ("len", &(outcome.updated.len()).to_string()),
-            ("join", &(reasons.join(" ")).to_string()),
+            ("len", &outcome.updated.len().to_string()),
+            ("join", &reasons.join(" ")),
         ],
     ))
 }
@@ -367,7 +369,9 @@ impl BraveDialog {
             async move {
                 let restored = restoring.await;
                 let report = restored
-                    .map(|_| "Previous Brave download setting restored.".to_owned())
+                    .map(|_| {
+                        ox_core::i18n::gettext_static("Previous Brave download setting restored.").to_owned()
+                    })
                     .map_err(|error| error.to_string());
                 dialog.finish(report);
             }
@@ -425,7 +429,7 @@ impl BraveDialog {
 /// folder or "Uses browser default". Ticked, as in the Python dialog.
 fn profile_check(profile: &BraveProfile) -> gtk::CheckButton {
     let folder = if profile.download_path.is_empty() {
-        "Uses browser default"
+        ox_core::i18n::gettext_static("Uses browser default")
     } else {
         profile.download_path.as_str()
     };

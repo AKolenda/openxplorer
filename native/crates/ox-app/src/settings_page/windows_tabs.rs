@@ -182,7 +182,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
 /// "Open windows…" with the windows button's glyph, opening the title
 /// bar's windows menu.
 fn open_windows_button() -> gtk::MenuButton {
-    let button = parts::menu_button_with_glyph("Open windows…", Icon::Desktop);
+    let button = parts::menu_button_with_glyph(ox_core::i18n::gettext_static("Open windows…"), Icon::Desktop);
     list_open_windows_on_click(&button);
     button
 }

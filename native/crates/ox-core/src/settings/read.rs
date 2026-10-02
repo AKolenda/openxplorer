@@ -72,21 +72,30 @@ fn try_read_file(directory: &Path, settings: &mut SettingsData) -> Result<(), Se
 
 /// The file's text as JSON; the error keeps serde's line and column.
 fn parse_json(text: &str) -> Result<Value, SettingsError> {
-    serde_json::from_str(text)
-        .map_err(|error| SettingsError::invalid(format!("The settings file is not valid JSON ({error}).")))
+    serde_json::from_str(text).map_err(|error| {
+        SettingsError::invalid(crate::i18n::format_message(
+            "The settings file is not valid JSON ({error}).",
+            &[("error", &error.to_string())],
+        ))
+    })
 }
 
 /// The warning shown when reading fell back to defaults, in the Python
 /// app's words.
 fn read_warning(error: &impl Display) -> String {
-    format!("Could not fully read settings; using safe defaults. {error}")
+    crate::i18n::format_message(
+        "Could not fully read settings; using safe defaults. {error}",
+        &[("error", &error.to_string())],
+    )
 }
 
 /// Validates a parsed file into `settings`, section by section in the
 /// order Python reads them.
 fn read_sections(source: &Value, settings: &mut SettingsData) -> Result<(), SettingsError> {
     let Some(sections) = source.as_object() else {
-        return Err(SettingsError::invalid("Settings must be a JSON object."));
+        return Err(SettingsError::invalid(crate::i18n::gettext(
+            "Settings must be a JSON object.",
+        )));
     };
     settings.pins = read_bookmarks(entry_section(sections, "pins", MAX_BOOKMARKS)?, normalise);
     settings.shares = read_bookmarks(entry_section(sections, "shares", MAX_BOOKMARKS)?, require_share);
@@ -155,7 +164,10 @@ fn location_text(item: &Value) -> String {
 
 /// The warning for a section that is neither a list nor a string.
 fn wrong_type(key: &str) -> SettingsError {
-    SettingsError::invalid(format!("“{key}” must be a list."))
+    SettingsError::invalid(crate::i18n::format_message(
+        "“{key}” must be a list.",
+        &[("key", key)],
+    ))
 }
 
 /// The usable `{uri, label}` entries of a pins or shares section.

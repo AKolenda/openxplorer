@@ -45,7 +45,7 @@ pub(crate) struct CustomCommand {
 pub(crate) fn command_arguments(text: &str, target: &LaunchTarget) -> Result<Vec<OsString>, String> {
     let words = glib::shell_parse_argv(text).map_err(|error| error.message().to_owned())?;
     if words.is_empty() {
-        return Err("Type a command to run.".to_owned());
+        return Err(ox_core::i18n::gettext("Type a command to run."));
     }
     let path = || match target {
         LaunchTarget::Path(path) => Ok(path.clone().into_os_string()),
@@ -103,7 +103,7 @@ pub(crate) fn run_custom_command(command: &CustomCommand, prepared: &PreparedLau
     spawn_program(&arguments, &folder, sandbox).map_err(|error| {
         ox_core::i18n::format_message(
             "The command could not be started: {error}",
-            &[("error", &(error).to_string())],
+            &[("error", &error.to_string())],
         )
     })
 }

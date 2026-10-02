@@ -190,11 +190,11 @@ impl SignInDialog {
     /// Fills the password page for a sign-in to `host`.
     fn ask_for_account(&self, host: &str, fields: &PasswordChallenge) {
         let imp = self.imp();
-        self.set_title(Some("Enter network credentials"));
+        self.set_title(Some(ox_core::i18n::gettext_static("Enter network credentials")));
         imp.pages.set_visible_child_name("password");
         imp.host_label.set_text(&ox_core::i18n::format_message(
             "Connect to {host}",
-            &[("host", &(host).to_string())],
+            &[("host", host)],
         ));
         imp.target_label.set_text(host);
         let description = if fields.is_retry {
@@ -218,7 +218,7 @@ impl SignInDialog {
     /// Cancel, which replace the footer.
     fn ask_question(&self, question: &QuestionChallenge) {
         let imp = self.imp();
-        self.set_title(Some("Network connection"));
+        self.set_title(Some(ox_core::i18n::gettext_static("Network connection")));
         imp.pages.set_visible_child_name("question");
         imp.question_label.set_text(&question.message);
         imp.actions.set_visible(false);
@@ -277,9 +277,9 @@ impl SignInDialog {
         let revealed = imp.reveal_button.is_active();
         imp.password_entry.set_visibility(revealed);
         let tooltip = if revealed {
-            "Hide password"
+            ox_core::i18n::gettext_static("Hide password")
         } else {
-            "Show password"
+            ox_core::i18n::gettext_static("Show password")
         };
         imp.reveal_button.set_tooltip_text(Some(tooltip));
     }

@@ -20,12 +20,15 @@ const ICON_RESTORED: &str = crate::i18n::message_id("Default icon restored.");
 /// Change icon…, and Restore default icon when `has_custom_icon`, for the
 /// local item at `uri`.
 pub(super) fn icon_buttons(row: &gtk::Box, uri: &str, has_custom_icon: bool) {
-    let change = glyph_button("Change icon…", Icon::Image);
+    let change = glyph_button(ox_core::i18n::gettext_static("Change icon…"), Icon::Image);
     let target = uri.to_owned();
     change.connect_clicked(move |button| choose_icon(button, &target));
     row.append(&change);
     if has_custom_icon {
-        let restore = glyph_button("Restore default icon", Icon::ArrowReset);
+        let restore = glyph_button(
+            ox_core::i18n::gettext_static("Restore default icon"),
+            Icon::ArrowReset,
+        );
         let target = uri.to_owned();
         restore.connect_clicked(move |button| {
             let button = button.clone();

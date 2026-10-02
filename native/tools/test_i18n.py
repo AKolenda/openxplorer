@@ -42,6 +42,13 @@ msgstr "Terminal?"
 
 
 class I18nTest(unittest.TestCase):
+    def test_continued_literals_and_manual_bodies_are_extracted(self) -> None:
+        source = 'let label = gettext_static("A long \\\n    message");'
+        self.assertEqual([m.msgid for m in i18n.messages_in(source, 'ui.rs')], ['A long message'])
+        manual = '# Help\n\n## First topic\nA full paragraph.\n\nAnother paragraph.\n\n## Next\nText.\n'
+        self.assertEqual(list(i18n.manual_messages(manual)),
+                         ['First topic', 'A full paragraph.\n\nAnother paragraph.', 'Next', 'Text.'])
+
     def test_template_messages_are_explicit_and_xml_entities_are_decoded(self) -> None:
         source = '''<interface><object class="GtkLabel" id="label">
                     <property name="label" translatable="yes">Windows &amp; tabs</property>

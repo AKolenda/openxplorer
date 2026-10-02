@@ -169,10 +169,16 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
     // The folder the item is in, as `displayUri(parentUri(e.uri)||e.uri)`.
     let container = parent_location(&entry.uri).unwrap_or_else(|| entry.uri.clone());
     let properties = vec![
-        Property::new("Type", entry.type_label.clone()),
-        Property::new("Size", size_text(item)),
-        Property::new("Modified", modified_text(entry.modified, facts.condensed_dates)),
-        Property::new("Location", locations.display_location(&container)),
+        Property::new(ox_core::i18n::gettext_static("Type"), entry.type_label.clone()),
+        Property::new(ox_core::i18n::gettext_static("Size"), size_text(item)),
+        Property::new(
+            ox_core::i18n::gettext_static("Modified"),
+            modified_text(entry.modified, facts.condensed_dates),
+        ),
+        Property::new(
+            ox_core::i18n::gettext_static("Location"),
+            locations.display_location(&container),
+        ),
     ];
     PaneContent {
         preview: Preview::Art(item.art()),
@@ -207,9 +213,15 @@ fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
         kind: heading.kind.to_owned(),
         action,
         properties: vec![
-            Property::new("Items", items),
-            Property::new("Location", facts.locations.display_location(uri)),
-            Property::new("Storage", storage_of(uri).to_owned()),
+            Property::new(ox_core::i18n::gettext_static("Items"), items),
+            Property::new(
+                ox_core::i18n::gettext_static("Location"),
+                facts.locations.display_location(uri),
+            ),
+            Property::new(
+                ox_core::i18n::gettext_static("Storage"),
+                storage_of(uri).to_owned(),
+            ),
         ],
         note: note_for(uri),
         media: None,
@@ -223,9 +235,9 @@ fn folder_heading(facts: &PaneFacts<'_>) -> FolderHeading {
             preview: Preview::Several,
             name: ox_core::i18n::format_message(
                 "{selected} items selected",
-                &[("selected", &(selected).to_string())],
+                &[("selected", &selected.to_string())],
             ),
-            kind: "Multiple items",
+            kind: ox_core::i18n::gettext_static("Multiple items"),
         };
     }
     FolderHeading {
@@ -277,9 +289,9 @@ fn note_for(uri: &str) -> &'static str {
 /// Where a folder's items are stored, as the Storage row says.
 fn storage_of(uri: &str) -> &'static str {
     if is_smb_location(uri) {
-        "Network share"
+        ox_core::i18n::gettext_static("Network share")
     } else {
-        "This computer"
+        ox_core::i18n::gettext_static("This computer")
     }
 }
 

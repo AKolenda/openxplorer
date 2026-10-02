@@ -364,7 +364,7 @@ fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
 /// on, closing a window with two tabs asks first, once however often it
 /// is asked, and "Close all tabs" closes it.
 ///
-/// parity: SET-010
+/// parity: SET-010, TAB-051
 #[gtk::test]
 fn the_confirmation_settings_decide_what_asks() {
     require_private_trash();

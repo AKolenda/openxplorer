@@ -68,10 +68,7 @@ impl BrowserWindow {
             Err(reason) if is_active => self.report_open_failure(&reason, entry),
             Err(reason) => self.show_message(&ox_core::i18n::format_message(
                 "Could not open {name}: {reason}",
-                &[
-                    ("name", &(entry.name).to_string()),
-                    ("reason", &(reason).to_string()),
-                ],
+                &[("name", &entry.name), ("reason", &reason)],
             )),
         }
     }

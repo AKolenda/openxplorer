@@ -52,7 +52,7 @@ fn published_message(mode: ClipboardMode, count: usize) -> String {
     };
     ox_core::i18n::format_message(
         "{count} item(s) {verb} — ready to paste in another window.",
-        &[("count", &(count).to_string()), ("verb", &(verb).to_string())],
+        &[("count", &count.to_string()), ("verb", verb)],
     )
 }
 
@@ -144,11 +144,15 @@ impl BrowserWindow {
         }
         let facts = command_facts.selection;
         if facts.has_inoperable {
-            self.show_message("Open the share first, then select its files or folders.");
+            self.show_message(ox_core::i18n::gettext_static(
+                "Open the share first, then select its files or folders.",
+            ));
             return;
         }
         if mode == ClipboardMode::Cut && facts.has_read_only {
-            self.show_message("Previous versions are read-only. Use Restore a copy.");
+            self.show_message(ox_core::i18n::gettext_static(
+                "Previous versions are read-only. Use Restore a copy.",
+            ));
             return;
         }
         let uris: Vec<String> = items.iter().map(|item| item.entry().uri.clone()).collect();
@@ -170,7 +174,9 @@ impl BrowserWindow {
             }
         };
         if publish(&self.clipboard(), &files).is_err() {
-            self.show_message("The desktop clipboard could not be claimed.");
+            self.show_message(ox_core::i18n::gettext_static(
+                "The desktop clipboard could not be claimed.",
+            ));
             return;
         }
         let message = published_message(mode, files.uris().len());

@@ -92,7 +92,7 @@ impl Preference {
         match self {
             Preference::TextSize(_) => ox_core::i18n::format_message(
                 "Text size changed for this window, but could not be saved: {error}",
-                &[("error", &(error).to_string())],
+                &[("error", &error.to_string())],
             ),
             _ => not_saved_message(error),
         }
@@ -103,7 +103,7 @@ impl Preference {
 fn not_saved_message(error: &SettingsError) -> String {
     ox_core::i18n::format_message(
         "Changed for this window, but could not be saved: {error}",
-        &[("error", &(error).to_string())],
+        &[("error", &error.to_string())],
     )
 }
 
@@ -111,7 +111,7 @@ fn not_saved_message(error: &SettingsError) -> String {
 fn text_size_toast(size: TextSize) -> String {
     ox_core::i18n::format_message(
         "Text size: {percent}%",
-        &[("percent", &(size.percent()).to_string())],
+        &[("percent", &size.percent().to_string())],
     )
 }
 

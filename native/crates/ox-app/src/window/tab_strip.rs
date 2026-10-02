@@ -343,7 +343,7 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
         .valign(gtk::Align::Center)
         .tooltip_text(ox_core::i18n::format_message(
             "Previous version · {snapshot}",
-            &[("snapshot", &(snapshot).to_string())],
+            &[("snapshot", snapshot)],
         ))
         .css_classes(["snapshot-tab-badge"])
         .build();
@@ -354,10 +354,7 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
     widget.append(&badge);
     let name = ox_core::i18n::format_message(
         "{title} — Previous version — {snapshot}",
-        &[
-            ("title", &(title).to_string()),
-            ("snapshot", &(snapshot).to_string()),
-        ],
+        &[("title", title), ("snapshot", snapshot)],
     );
     widget.update_property(&[gtk::accessible::Property::Label(&name)]);
 }
@@ -520,7 +517,7 @@ fn close_button(tab: &TabView) -> gtk::Button {
         .valign(gtk::Align::Center)
         .css_classes(["tab-close"])
         .build();
-    let name = ox_core::i18n::format_message("Close {title}", &[("title", &(tab.title).to_string())]);
+    let name = ox_core::i18n::format_message("Close {title}", &[("title", &tab.title)]);
     close.update_property(&[gtk::accessible::Property::Label(&name)]);
     close
 }

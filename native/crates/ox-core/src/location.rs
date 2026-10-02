@@ -92,7 +92,9 @@ impl LocationError {
     /// A `?` or `#` in a URL. `urlsplit` would cut the path there, so the
     /// user must escape them or type a plain path, which may hold both.
     pub(crate) fn query_or_fragment() -> Self {
-        Self::new("In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.")
+        Self::new(crate::i18n::gettext(
+            "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.",
+        ))
     }
 }
 

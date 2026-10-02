@@ -99,14 +99,19 @@ impl VirtualPlace {
 
     /// The Explorer wording used for titles, tabs and the address bar.
     pub fn title(self) -> &'static str {
+        crate::i18n::gettext_static(self.title_id())
+    }
+
+    /// The English title remains a recognized address alias in every language.
+    const fn title_id(self) -> &'static str {
         match self {
-            VirtualPlace::Home => "Home",
-            VirtualPlace::ThisPc => "This PC",
-            VirtualPlace::Network => "Network",
-            VirtualPlace::RecycleBin => "Recycle Bin",
-            VirtualPlace::Recent => "Recent",
-            VirtualPlace::RecentLocations => "Recent locations",
-            VirtualPlace::Settings => "Settings",
+            VirtualPlace::Home => crate::i18n::message_id("Home"),
+            VirtualPlace::ThisPc => crate::i18n::message_id("This PC"),
+            VirtualPlace::Network => crate::i18n::message_id("Network"),
+            VirtualPlace::RecycleBin => crate::i18n::message_id("Recycle Bin"),
+            VirtualPlace::Recent => crate::i18n::message_id("Recent"),
+            VirtualPlace::RecentLocations => crate::i18n::message_id("Recent locations"),
+            VirtualPlace::Settings => crate::i18n::message_id("Settings"),
         }
     }
 
@@ -158,7 +163,7 @@ impl VirtualPlace {
         }
         Self::ALL
             .into_iter()
-            .find(|place| place.title().to_lowercase() == typed)
+            .find(|place| place.title_id().to_lowercase() == typed || place.title().to_lowercase() == typed)
     }
 
     /// The app page `uri` names, in the native (`ox:home`) or the web UI's
@@ -281,9 +286,9 @@ fn strip_empty_authority(place: VirtualPlace, after_scheme: &str) -> Result<&str
     };
     let has_authority = !after_slashes.is_empty() && !after_slashes.starts_with('/');
     if has_authority {
-        return Err(LocationError::new(format!(
-            "Use {} without a server name.",
-            place.uri()
+        return Err(LocationError::new(crate::i18n::format_message(
+            "Use {location} without a server name.",
+            &[("location", place.uri())],
         )));
     }
     Ok(after_slashes)

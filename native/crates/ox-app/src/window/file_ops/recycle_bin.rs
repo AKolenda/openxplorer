@@ -27,7 +27,9 @@ const RESTORING: &str = crate::i18n::message_id("Restoring items…");
 fn empty_confirmation() -> DeleteConfirmation {
     DeleteConfirmation {
         title: "Empty Recycle Bin?",
-        body: "Every item in the Recycle Bin is deleted permanently and cannot be recovered.".to_owned(),
+        body: ox_core::i18n::gettext(
+            "Every item in the Recycle Bin is deleted permanently and cannot be recovered.",
+        ),
         confirm_label: "Empty Recycle Bin",
     }
 }

@@ -180,7 +180,7 @@ impl BrowserWindow {
         };
         self.set_title(Some(&ox_core::i18n::format_message(
             "{place} — OpenXplorer",
-            &[("place", &(place).to_string())],
+            &[("place", &place)],
         )));
     }
 

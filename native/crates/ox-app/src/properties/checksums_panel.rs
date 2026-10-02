@@ -67,10 +67,9 @@ impl ChecksumsPanel {
         for (line, kind) in (0..).zip(ChecksumKind::ALL) {
             let value = grid.add_row(kind.label(), ox_core::i18n::gettext_static(NOT_CALCULATED));
             value.set_wrap_mode(gtk::pango::WrapMode::Char);
-            let button = glyph_button("Calculate", Icon::Checkmark);
+            let button = glyph_button(ox_core::i18n::gettext_static("Calculate"), Icon::Checkmark);
             button.set_valign(gtk::Align::Start);
-            let name =
-                ox_core::i18n::format_message("Calculate {label}", &[("label", &(kind.label()).to_string())]);
+            let name = ox_core::i18n::format_message("Calculate {label}", &[("label", kind.label())]);
             button.update_property(&[gtk::accessible::Property::Label(&name)]);
             grid.widget().attach(&button, 2, line, 1, 1);
             rows.insert(kind, Row { value, button });
@@ -183,7 +182,7 @@ impl Checksums {
                 set_button_label(
                     &row.button,
                     "Copy",
-                    &ox_core::i18n::format_message("Copy {label}", &[("label", &(kind.label()).to_string())]),
+                    &ox_core::i18n::format_message("Copy {label}", &[("label", kind.label())]),
                 );
                 self.computed.borrow_mut().insert(kind, value);
             }
@@ -208,7 +207,7 @@ impl Checksums {
         let computed = self.computed.borrow().get(&kind).cloned();
         match computed {
             Some(value) if matches(&text, &value) => {
-                self.verdict.set_text(ox_core::i18n::gettext_static(MATCH))
+                self.verdict.set_text(ox_core::i18n::gettext_static(MATCH));
             }
             Some(_) => self.verdict.set_text(ox_core::i18n::gettext_static(MISMATCH)),
             None => {

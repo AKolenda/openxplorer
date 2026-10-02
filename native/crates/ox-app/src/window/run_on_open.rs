@@ -42,7 +42,7 @@ impl BrowserWindow {
         };
         let message = ox_core::i18n::format_message(
             "“{name}” is a program or script. Run it, or open it in its application?",
-            &[("name", &(program.name).to_string())],
+            &[("name", &program.name)],
         );
         let dialog = Dialog::new(self, &ox_core::i18n::gettext("Run this program?"), &message);
         dialog.add_cancel_button();

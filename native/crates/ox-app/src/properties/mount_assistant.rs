@@ -48,7 +48,10 @@ pub(super) fn mount_assistant(use_path: impl Fn(&str) + 'static) -> gtk::Expande
     address.set_placeholder_text(Some(&ox_core::i18n::gettext("\\\\archive-nas\\Shared")));
     let result = gtk::Box::new(gtk::Orientation::Vertical, 0);
     result.add_css_class("mount-plan");
-    let prepare = glyph_button("Prepare setup command", Icon::Organization);
+    let prepare = glyph_button(
+        ox_core::i18n::gettext_static("Prepare setup command"),
+        Icon::Organization,
+    );
     prepare.set_halign(gtk::Align::Start);
     let use_path: Rc<dyn Fn(&str)> = Rc::new(use_path);
     prepare.connect_clicked(gtk::glib::clone!(
@@ -84,7 +87,7 @@ fn show_plan(result: &gtk::Box, address: &str, use_path: Rc<dyn Fn(&str)>) {
 fn fill_plan(result: &gtk::Box, plan: &MountPlan, use_path: Rc<dyn Fn(&str)>) {
     result.append(&quiet_text(ox_core::i18n::gettext_static(STEPS)));
     result.append(&command_view(&plan.command));
-    let copy = glyph_button("Copy command", Icon::Copy);
+    let copy = glyph_button(ox_core::i18n::gettext_static("Copy command"), Icon::Copy);
     copy.set_halign(gtk::Align::Start);
     let command = plan.command.clone();
     copy.connect_clicked(move |button| {
@@ -97,12 +100,12 @@ fn fill_plan(result: &gtk::Box, plan: &MountPlan, use_path: Rc<dyn Fn(&str)>) {
     let target = plan.target_path.to_string_lossy().into_owned();
     let target_label = quiet_text(&ox_core::i18n::format_message(
         "Linux folder: {target}",
-        &[("target", &(target).to_string())],
+        &[("target", &target)],
     ));
     target_label.set_selectable(true);
     target_label.add_css_class("mount-target");
     result.append(&target_label);
-    let use_this_path = glyph_button("Use this path", Icon::Folder);
+    let use_this_path = glyph_button(ox_core::i18n::gettext_static("Use this path"), Icon::Folder);
     use_this_path.set_halign(gtk::Align::Start);
     use_this_path.connect_clicked(move |_| use_path(&target));
     result.append(&use_this_path);

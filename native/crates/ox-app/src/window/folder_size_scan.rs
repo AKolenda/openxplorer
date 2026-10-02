@@ -131,10 +131,12 @@ impl BrowserWindow {
     pub(super) fn size_refusal(&self, action: WindowAction) -> Option<&'static str> {
         let is_running = self.size_scans().run.borrow().is_some();
         match action {
-            WindowAction::CalculateFolderSize | WindowAction::CalculateFolderSizes if is_running => {
-                Some("A folder size calculation is already running.")
+            WindowAction::CalculateFolderSize | WindowAction::CalculateFolderSizes if is_running => Some(
+                ox_core::i18n::gettext_static("A folder size calculation is already running."),
+            ),
+            WindowAction::CalculateFolderSize => {
+                Some(ox_core::i18n::gettext_static("Select a folder first."))
             }
-            WindowAction::CalculateFolderSize => Some("Select a folder first."),
             _ => None,
         }
     }

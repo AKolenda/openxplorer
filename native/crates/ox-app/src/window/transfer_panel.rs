@@ -154,7 +154,7 @@ impl TransferPanel {
         imp.cancel_button.set_sensitive(true);
         imp.pause_button.set_visible(kind == TransferKind::Files);
         imp.pause_button.set_sensitive(true);
-        imp.pause_button.set_label("Pause");
+        imp.pause_button.set_label(ox_core::i18n::gettext_static("Pause"));
         imp.rate.replace(rate::Rate::default());
         imp.rate_label.set_visible(false);
         imp.session.replace(Some(OperationSession::start(self)));
@@ -233,11 +233,12 @@ impl TransferPanel {
         if cancel.is_paused() {
             cancel.resume();
             imp.rate.borrow_mut().resume();
-            imp.pause_button.set_label("Pause");
+            imp.pause_button.set_label(ox_core::i18n::gettext_static("Pause"));
         } else {
             cancel.pause();
             imp.rate.borrow_mut().pause();
-            imp.pause_button.set_label("Resume");
+            imp.pause_button
+                .set_label(ox_core::i18n::gettext_static("Resume"));
         }
     }
 

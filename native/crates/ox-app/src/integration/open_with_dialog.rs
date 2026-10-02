@@ -376,7 +376,7 @@ impl OpenWithDialog {
                 match ran {
                     Ok(()) => {
                         if let Some(report) = dialog.imp().report.get() {
-                            report("Ran the command.");
+                            report(ox_core::i18n::gettext_static("Ran the command."));
                         }
                         dialog.close();
                     }

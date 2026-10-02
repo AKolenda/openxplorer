@@ -49,7 +49,7 @@ impl SearchReport {
     pub(crate) fn caption(&self) -> &str {
         match &self.progress {
             SearchProgress::Failed(message) => message,
-            SearchProgress::Searching => "Searching…",
+            SearchProgress::Searching => ox_core::i18n::gettext_static("Searching…"),
             SearchProgress::Shown { .. } => self.source.caption(),
         }
     }
@@ -58,15 +58,17 @@ impl SearchReport {
     /// ones are; `None` for a complete live search.
     pub(crate) fn freshness_note(&self) -> Option<&'static str> {
         if self.is_truncated() {
-            return Some("First 500 results · narrow your search");
+            return Some(ox_core::i18n::gettext_static(
+                "First 500 results · narrow your search",
+            ));
         }
         if !self.source.uses_cache() {
             return None;
         }
         let note = if self.source == SearchSource::CurrentFolderAndCachedSubfolders {
-            "Other subfolders are not indexed."
+            ox_core::i18n::gettext_static("Other subfolders are not indexed.")
         } else {
-            "Cached metadata · see update coverage in Settings"
+            ox_core::i18n::gettext_static("Cached metadata · see update coverage in Settings")
         };
         Some(note)
     }
@@ -101,12 +103,16 @@ impl SearchReport {
             return message;
         }
         match self.source {
-            SearchSource::CurrentFolder => "No items found in this folder or its subfolders.",
-            SearchSource::CurrentFolderOnly => {
-                "Only this folder is being filtered. Enable its search cache to include subfolders."
+            SearchSource::CurrentFolder => {
+                ox_core::i18n::gettext_static("No items found in this folder or its subfolders.")
             }
+            SearchSource::CurrentFolderOnly => ox_core::i18n::gettext_static(
+                "Only this folder is being filtered. Enable its search cache to include subfolders.",
+            ),
             SearchSource::Cache | SearchSource::CurrentFolderAndCachedSubfolders => {
-                "No cached matches. Refresh the cache if this folder changed, or try another search."
+                ox_core::i18n::gettext_static(
+                    "No cached matches. Refresh the cache if this folder changed, or try another search.",
+                )
             }
         }
     }
@@ -147,12 +153,12 @@ impl SearchCount {
             is_cached,
         } = self.progress
         else {
-            return "Searching…".to_owned();
+            return ox_core::i18n::gettext("Searching…");
         };
         let mut text = if self.shown == 1 {
             "1 result".to_owned()
         } else {
-            ox_core::i18n::format_message("{shown} results", &[("shown", &(self.shown).to_string())])
+            ox_core::i18n::format_message("{shown} results", &[("shown", &self.shown.to_string())])
         };
         if is_truncated {
             text.push_str(" (first 500)");

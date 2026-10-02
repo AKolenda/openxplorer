@@ -142,7 +142,7 @@ impl BrowserWindow {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         row.append(&entry);
         row.append(&browse);
-        dialog.add_labelled("Location", &row);
+        dialog.add_labelled(ox_core::i18n::gettext_static("Location"), &row);
         entry.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
             "Location",
         ))]);
@@ -179,7 +179,7 @@ impl BrowserWindow {
     fn place_request(&self, label: &str, location: &str) -> Result<BookmarkRequest, String> {
         let location = location.trim();
         if location.is_empty() {
-            return Err("Enter a folder or network location.".to_owned());
+            return Err(ox_core::i18n::gettext("Enter a folder or network location."));
         }
         let locations = self.imp().locations.borrow();
         let base = self.current_uri();
@@ -205,17 +205,21 @@ impl BrowserWindow {
         });
         let verified = verifying.await;
         if running.is_cancelled() {
-            return Err("Cancelled.".to_owned());
+            return Err(ox_core::i18n::gettext("Cancelled."));
         }
         let target = match verified {
             Ok(Ok(target)) => target,
             Ok(Err(error)) => {
                 return Err(ox_core::i18n::format_message(
                     "Could not add: {error}",
-                    &[("error", &(error).to_string())],
+                    &[("error", &error.to_string())],
                 ))
             }
-            Err(_panic) => return Err("Could not add: the location could not be checked.".to_owned()),
+            Err(_panic) => {
+                return Err(ox_core::i18n::gettext(
+                    "Could not add: the location could not be checked.",
+                ))
+            }
         };
         let shown: Vec<String> = self
             .places()
@@ -252,9 +256,9 @@ impl BrowserWindow {
             Ok(Ok(())) => Ok(()),
             Ok(Err(error)) => Err(ox_core::i18n::format_message(
                 "Could not save: {error}",
-                &[("error", &(error).to_string())],
+                &[("error", &error.to_string())],
             )),
-            Err(_) => Err("Could not save the entry.".to_owned()),
+            Err(_) => Err(ox_core::i18n::gettext("Could not save the entry.")),
         }
     }
 }

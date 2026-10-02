@@ -51,7 +51,9 @@ impl BrowserWindow {
                 .any(|active| locations.iter().any(|next| overlaps(active, next)))
         }) {
             drop(operations);
-            self.show_message("Wait for the operation using these files or folders to finish.");
+            self.show_message(ox_core::i18n::gettext_static(
+                "Wait for the operation using these files or folders to finish.",
+            ));
             return None;
         }
         let mut context = OperationContext::new(self.context().write_protection());
@@ -107,7 +109,7 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use crate::test_support::harness::TestWindow;
-    /// parity: OPS-025
+    /// parity: OPS-025, OPS-033
     #[gtk::test]
     fn separate_jobs_have_independent_cancel_and_release_their_slots() {
         let test = TestWindow::without_tabs();

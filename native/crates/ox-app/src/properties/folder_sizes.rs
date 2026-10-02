@@ -72,10 +72,7 @@ impl FolderSizeState {
         match self {
             FolderSizeState::Unavailable(reason) => ox_core::i18n::format_message(
                 "{ERROR_STATUS} · 0 files · 0 skipped · 0 unreadable. {reason} ",
-                &[
-                    ("ERROR_STATUS", &(ERROR_STATUS).to_string()),
-                    ("reason", &(reason).to_string()),
-                ],
+                &[("ERROR_STATUS", ERROR_STATUS), ("reason", reason)],
             ),
             FolderSizeState::Measured(size) => {
                 let status = size.status.as_str();
@@ -84,12 +81,12 @@ impl FolderSizeState {
                 ox_core::i18n::format_message(
                     "{status} · {files} files · {skipped} skipped · {errors} unreadable. {reason} {finished}",
                     &[
-                        ("status", &(status).to_string()),
-                        ("files", &(size.files).to_string()),
-                        ("skipped", &(size.skipped).to_string()),
-                        ("errors", &(size.errors).to_string()),
-                        ("reason", &(reason).to_string()),
-                        ("finished", &(finished).to_string()),
+                        ("status", status),
+                        ("files", &size.files.to_string()),
+                        ("skipped", &size.skipped.to_string()),
+                        ("errors", &size.errors.to_string()),
+                        ("reason", reason),
+                        ("finished", &finished),
                     ],
                 )
             }
@@ -172,12 +169,12 @@ pub(super) fn counts_text(files: u64, folders: u64) -> String {
     let files = if files == 1 {
         "1 file".to_owned()
     } else {
-        ox_core::i18n::format_message("{files} files", &[("files", &(files).to_string())])
+        ox_core::i18n::format_message("{files} files", &[("files", &files.to_string())])
     };
     let folders = if folders == 1 {
         "1 folder".to_owned()
     } else {
-        ox_core::i18n::format_message("{folders} folders", &[("folders", &(folders).to_string())])
+        ox_core::i18n::format_message("{folders} folders", &[("folders", &folders.to_string())])
     };
     format!("{files}, {folders}")
 }

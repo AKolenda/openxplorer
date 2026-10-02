@@ -178,13 +178,13 @@ impl VersionsPanel {
     /// Refresh and Snapshot source….
     fn toolbar(&self) -> gtk::Box {
         let toolbar = gtk::Box::builder().css_classes(["versions-toolbar"]).build();
-        let refresh = toolbar_button("Refresh", Icon::ArrowClockwise);
+        let refresh = toolbar_button(ox_core::i18n::gettext_static("Refresh"), Icon::ArrowClockwise);
         refresh.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
             move |_| panel.load()
         ));
-        let source = toolbar_button("Snapshot source…", Icon::Settings);
+        let source = toolbar_button(ox_core::i18n::gettext_static("Snapshot source…"), Icon::Settings);
         source.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,

@@ -9,7 +9,10 @@
 
 /// A name the dialogs refuse before asking the backend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("Use a name without slashes or control characters.")]
+#[error(
+    "{}",
+    ox_core::i18n::gettext("Use a name without slashes or control characters.")
+)]
 pub(super) struct InvalidName;
 
 /// `name`, when it is not empty, `.` or `..`, and has no slash,
@@ -49,7 +52,7 @@ pub(super) fn folder_path_preview(names: &[&str]) -> Option<String> {
     let quoted: Vec<String> = names.iter().map(|name| format!("“{name}”")).collect();
     Some(ox_core::i18n::format_message(
         "Creates {join}, each inside the one before.",
-        &[("join", &(quoted.join(" › ")).to_string())],
+        &[("join", &quoted.join(" › "))],
     ))
 }
 
@@ -61,15 +64,15 @@ pub(super) fn name_warning(name: &str, taken: bool) -> Option<String> {
     if taken {
         return Some(ox_core::i18n::format_message(
             "An item named “{name}” already exists here.",
-            &[("name", &(name).to_string())],
+            &[("name", name)],
         ));
     }
     let warning = if name.starts_with('.') {
-        "A name starting with a dot hides the item."
+        ox_core::i18n::gettext_static("A name starting with a dot hides the item.")
     } else if name.starts_with(char::is_whitespace) {
-        "A name starting with a space is unusual."
+        ox_core::i18n::gettext_static("A name starting with a space is unusual.")
     } else if name.starts_with('~') {
-        "A name starting with a tilde is unusual."
+        ox_core::i18n::gettext_static("A name starting with a tilde is unusual.")
     } else {
         return None;
     };

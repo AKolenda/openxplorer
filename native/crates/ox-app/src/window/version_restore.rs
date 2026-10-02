@@ -83,7 +83,8 @@ impl BrowserWindow {
                         &summarize(TransferMode::Copy, &outcome.result),
                         Destination::items(outcome.created),
                     ),
-                    Err(error) => window.show_result_dialog(STOPPED_TITLE, &error.to_string()),
+                    Err(error) => window
+                        .show_result_dialog(ox_core::i18n::gettext_static(STOPPED_TITLE), &error.to_string()),
                 }
             }
         ));
@@ -95,7 +96,9 @@ impl BrowserWindow {
         self.notify_if_in_background(summary, destination);
         match summary {
             OperationSummary::Toast(text) => self.show_message(text),
-            OperationSummary::Report(text) => self.show_result_dialog(RESULT_TITLE, text),
+            OperationSummary::Report(text) => {
+                self.show_result_dialog(ox_core::i18n::gettext_static(RESULT_TITLE), text);
+            }
         }
     }
 }

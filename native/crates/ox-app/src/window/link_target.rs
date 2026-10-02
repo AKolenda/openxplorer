@@ -32,7 +32,7 @@ pub(super) async fn link_destination(uri: &str) -> Result<String, String> {
     let Some(target) = info.symlink_target() else {
         return Err(ox_core::i18n::format_message(
             "“{name}” is not a link.",
-            &[("name", &(name).to_string())],
+            &[("name", name.as_ref())],
         ));
     };
     // A relative target is relative to the folder that holds the link.
@@ -52,8 +52,8 @@ pub(super) async fn link_destination(uri: &str) -> Result<String, String> {
         return Err(ox_core::i18n::format_message(
             "The target of “{name}” does not exist: {display}",
             &[
-                ("name", &(name).to_string()),
-                ("display", &(target.display()).to_string()),
+                ("name", name.as_ref()),
+                ("display", &target.display().to_string()),
             ],
         ));
     }

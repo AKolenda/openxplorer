@@ -56,14 +56,14 @@ impl KindFacet {
     ];
 
     /// What the search options show.
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            KindFacet::Any => "Any kind",
-            KindFacet::Folders => "Folders",
-            KindFacet::Documents => "Documents",
-            KindFacet::Images => "Images",
-            KindFacet::Audio => "Audio files",
-            KindFacet::Videos => "Videos",
+            KindFacet::Any => crate::i18n::gettext_static("Any kind"),
+            KindFacet::Folders => crate::i18n::gettext_static("Folders"),
+            KindFacet::Documents => crate::i18n::gettext_static("Documents"),
+            KindFacet::Images => crate::i18n::gettext_static("Images"),
+            KindFacet::Audio => crate::i18n::gettext_static("Audio files"),
+            KindFacet::Videos => crate::i18n::gettext_static("Videos"),
         }
     }
 
@@ -129,14 +129,14 @@ impl DateFacet {
     ];
 
     /// What the search options show.
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            DateFacet::Any => "Any date",
-            DateFacet::Today => "Today",
-            DateFacet::Yesterday => "Yesterday",
-            DateFacet::ThisWeek => "This week",
-            DateFacet::ThisMonth => "This month",
-            DateFacet::ThisYear => "This year",
+            DateFacet::Any => crate::i18n::gettext_static("Any date"),
+            DateFacet::Today => crate::i18n::gettext_static("Today"),
+            DateFacet::Yesterday => crate::i18n::gettext_static("Yesterday"),
+            DateFacet::ThisWeek => crate::i18n::gettext_static("This week"),
+            DateFacet::ThisMonth => crate::i18n::gettext_static("This month"),
+            DateFacet::ThisYear => crate::i18n::gettext_static("This year"),
         }
     }
 

@@ -67,10 +67,7 @@ pub(crate) fn archive_dialog(
     actions: ArchiveDialogActions,
 ) -> DialogFrame {
     let frame = DialogFrame::new(
-        &ox_core::i18n::format_message(
-            "{name} — Compressed folder",
-            &[("name", &(archive.name).to_string())],
-        ),
+        &ox_core::i18n::format_message("{name} — Compressed folder", &[("name", &archive.name)]),
         DialogWidth::Archive,
     );
     frame.set_message(ox_core::i18n::gettext_static(BROWSE_MESSAGE));
@@ -429,7 +426,7 @@ fn listing_notice(listing: &ArchiveListing) -> String {
     if listing.hidden_unsafe_count > 0 {
         notice = ox_core::i18n::format_message(
             "{hidden_unsafe_count} unsafe names or links are hidden.",
-            &[("hidden_unsafe_count", &(listing.hidden_unsafe_count).to_string())],
+            &[("hidden_unsafe_count", &listing.hidden_unsafe_count.to_string())],
         );
     }
     if listing.is_truncated {
@@ -470,7 +467,7 @@ fn archive_row(entry: &ArchiveEntry) -> gtk::ListBoxRow {
         .build();
     content.append(&name);
     let size = match entry.kind {
-        ArchiveEntryKind::Folder => "Folder".to_owned(),
+        ArchiveEntryKind::Folder => ox_core::i18n::gettext("Folder"),
         ArchiveEntryKind::File { size, .. } => format::pretty_bytes(size),
     };
     content.append(

@@ -69,7 +69,11 @@ pub(crate) fn unquote_strict(text: &str) -> Result<String, LocationError> {
     percent_decode_str(text)
         .decode_utf8()
         .map(Cow::into_owned)
-        .map_err(|_| LocationError::new("Percent-encoded text in the address must be valid UTF-8."))
+        .map_err(|_| {
+            LocationError::new(crate::i18n::gettext(
+                "Percent-encoded text in the address must be valid UTF-8.",
+            ))
+        })
 }
 
 /// [`unquote_strict`] for the path of an address, which must not decode to
@@ -86,7 +90,9 @@ pub(crate) fn unquote_strict(text: &str) -> Result<String, LocationError> {
 pub(crate) fn unquote_without_controls(text: &str) -> Result<String, LocationError> {
     let decoded = unquote_strict(text)?;
     if has_control_character(&decoded) {
-        return Err(LocationError::new("Encoded control characters are not allowed."));
+        return Err(LocationError::new(crate::i18n::gettext(
+            "Encoded control characters are not allowed.",
+        )));
     }
     Ok(decoded)
 }

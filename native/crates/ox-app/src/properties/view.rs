@@ -163,7 +163,8 @@ impl PropertiesView {
     fn add_pages(&self, context: &PropertiesContext) {
         let imp = self.imp();
         imp.general.set_orientation(gtk::Orientation::Vertical);
-        imp.general.append(&quiet_text(READING));
+        imp.general
+            .append(&quiet_text(ox_core::i18n::gettext_static(READING)));
         imp.permissions.set_orientation(gtk::Orientation::Vertical);
         self.add_page(PropertiesTab::General, imp.general.upcast_ref());
         if let Some((folder, usershares)) = self.shareable_folder().zip(context.usershares.as_ref()) {

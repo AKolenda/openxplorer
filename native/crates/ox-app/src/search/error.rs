@@ -13,17 +13,17 @@ use ox_core::search::SearchError;
 pub(crate) enum CacheError {
     /// The app did not start the search cache, as in tests that do not
     /// use it.
-    #[error("The search cache is not running.")]
+    #[error("{}", ox_core::i18n::gettext("The search cache is not running."))]
     NotStarted,
     /// Opening the cache or starting the index service failed; the
     /// message says why.
-    #[error("The search cache could not start: {0}")]
+    #[error("{}", ox_core::i18n::format_message("The search cache could not start: {value0}", &[("value0", .0.as_str())]))]
     StartFailed(String),
     /// The cache refused or failed the operation.
     #[error(transparent)]
     Search(#[from] SearchError),
     /// The worker thread running the operation ended without an answer.
-    #[error("The search cache stopped unexpectedly.")]
+    #[error("{}", ox_core::i18n::gettext("The search cache stopped unexpectedly."))]
     WorkerLost,
 }
 

@@ -150,10 +150,10 @@ where
         ox_core::i18n::gettext_static(NAME_HINT)
     };
     let dialog = Dialog::new(window, request.title, hint);
-    let field = dialog.add_text_field("Name", request.initial_name);
+    let field = dialog.add_text_field(ox_core::i18n::gettext_static("Name"), request.initial_name);
     warn_while_typing(&dialog, &field, &request);
     dialog.add_cancel_button();
-    dialog.add_button("Save", ButtonStyle::Accent);
+    dialog.add_button(ox_core::i18n::gettext_static("Save"), ButtonStyle::Accent);
     dialog.open();
     if request.selection == NameSelection::Stem {
         let stem = i32::try_from(stem_length(request.initial_name)).unwrap_or(-1);

@@ -142,7 +142,7 @@ impl BrowserWindow {
                     if let Err(error) = result {
                         window.show_message(&ox_core::i18n::format_message(
                             "Could not save the sidebar: {error}",
-                            &[("error", &(error).to_string())],
+                            &[("error", &error.to_string())],
                         ));
                     }
                 }

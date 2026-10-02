@@ -150,7 +150,7 @@ impl BrowserWindow {
         if self.administrator_target().is_some() {
             menu.entries.push(
                 super::menu_popover::MenuItem::new(
-                    "Open as administrator…",
+                    ox_core::i18n::gettext_static("Open as administrator…"),
                     crate::icons::Icon::ShieldLock,
                     WindowAction::OpenAsAdministrator,
                 )

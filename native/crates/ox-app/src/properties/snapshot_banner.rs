@@ -28,7 +28,10 @@ const GLYPH_SIZE: i32 = 16;
 /// name when it has no date, with the tooltip that explains it.
 pub(crate) fn date_line(snapshot: &SnapshotLocation) -> (String, &'static str) {
     let Some(date) = snapshot.date() else {
-        return (snapshot.label().to_owned(), NO_DATE_EXPLANATION);
+        return (
+            snapshot.label().to_owned(),
+            ox_core::i18n::gettext_static(NO_DATE_EXPLANATION),
+        );
     };
     let time = date.time_text();
     let day = medium_date(&date);

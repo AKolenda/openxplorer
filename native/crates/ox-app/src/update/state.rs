@@ -139,16 +139,14 @@ impl UpdateState {
             Self::Available(update) => ox_core::i18n::format_message(
                 "Installed: {current} · Available: {latest}",
                 &[
-                    ("current", &(update.current).to_string()),
-                    ("latest", &(update.latest).to_string()),
+                    ("current", &update.current.to_string()),
+                    ("latest", &update.latest.to_string()),
                 ],
             ),
             Self::UpToDate { current } => {
-                ox_core::i18n::format_message("Installed: {current}", &[("current", &(current).to_string())])
+                ox_core::i18n::format_message("Installed: {current}", &[("current", &current.to_string())])
             }
-            _ => {
-                ox_core::i18n::format_message("Installed: {running}", &[("running", &(running).to_string())])
-            }
+            _ => ox_core::i18n::format_message("Installed: {running}", &[("running", &running.to_string())]),
         }
     }
 
@@ -158,23 +156,28 @@ impl UpdateState {
     /// the match is longer than a function should be.
     pub(crate) fn status_text(&self) -> String {
         match self {
-            Self::NotChecked | Self::Checking => "Checking for updates…".to_owned(),
-            Self::UpToDate { .. } => "OpenXplorer is up to date.".to_owned(),
+            Self::NotChecked | Self::Checking => {
+                ox_core::i18n::gettext_static("Checking for updates…").to_owned()
+            }
+            Self::UpToDate { .. } => ox_core::i18n::gettext_static("OpenXplorer is up to date.").to_owned(),
             Self::Available(update) if update.installation.can_install() => {
-                "An update is available.".to_owned()
+                ox_core::i18n::gettext_static("An update is available.").to_owned()
             }
-            Self::Available(_) => "An update is available. Automatic installation is unavailable.".to_owned(),
-            Self::CheckFailed { reason } => ox_core::i18n::format_message(
-                "Could not check for updates. {reason}",
-                &[("reason", &(reason).to_string())],
-            ),
-            Self::Installing { step: None, .. } => {
-                "Preparing update. Approve the administrator prompt to install.".to_owned()
+            Self::Available(_) => ox_core::i18n::gettext_static(
+                "An update is available. Automatic installation is unavailable.",
+            )
+            .to_owned(),
+            Self::CheckFailed { reason } => {
+                ox_core::i18n::format_message("Could not check for updates. {reason}", &[("reason", reason)])
             }
+            Self::Installing { step: None, .. } => ox_core::i18n::gettext_static(
+                "Preparing update. Approve the administrator prompt to install.",
+            )
+            .to_owned(),
             Self::Installing { step: Some(step), .. } => step.to_string(),
             Self::Installed { version } => ox_core::i18n::format_message(
                 "OpenXplorer {version} is installed. Restart to use the update.",
-                &[("version", &(version).to_string())],
+                &[("version", &version.to_string())],
             ),
             Self::InstallFailed {
                 reason,
@@ -187,17 +190,15 @@ impl UpdateState {
                 };
                 ox_core::i18n::format_message(
                     "Update installation did not complete. {reason}{recovery}",
-                    &[
-                        ("reason", &(reason).to_string()),
-                        ("recovery", &(recovery).to_string()),
-                    ],
+                    &[("reason", reason), ("recovery", recovery)],
                 )
             }
-            Self::RestartPending => "Restart OpenXplorer to finish updating.".to_owned(),
-            Self::RestartFailed { reason } => ox_core::i18n::format_message(
-                "Could not restart. {reason}",
-                &[("reason", &(reason).to_string())],
-            ),
+            Self::RestartPending => {
+                ox_core::i18n::gettext_static("Restart OpenXplorer to finish updating.").to_owned()
+            }
+            Self::RestartFailed { reason } => {
+                ox_core::i18n::format_message("Could not restart. {reason}", &[("reason", reason)])
+            }
         }
     }
 
@@ -217,9 +218,11 @@ impl UpdateState {
         match self {
             Self::Available(update) => Some(ox_core::i18n::format_message(
                 "OpenXplorer {latest} is available.",
-                &[("latest", &(update.latest).to_string())],
+                &[("latest", &update.latest.to_string())],
             )),
-            _ if self.needs_restart() => Some("Restart OpenXplorer to finish updating.".to_owned()),
+            _ if self.needs_restart() => {
+                Some(ox_core::i18n::gettext_static("Restart OpenXplorer to finish updating.").to_owned())
+            }
             _ => None,
         }
     }
@@ -229,13 +232,13 @@ impl UpdateState {
         match self {
             Self::NotChecked => ox_core::i18n::format_message(
                 "Installed: {running}. Look for a newer OpenXplorer release.",
-                &[("running", &(running).to_string())],
+                &[("running", &running.to_string())],
             ),
             Self::Available(update) => ox_core::i18n::format_message(
                 "OpenXplorer {latest} is available. Installed: {current}.",
                 &[
-                    ("latest", &(update.latest).to_string()),
-                    ("current", &(update.current).to_string()),
+                    ("latest", &update.latest.to_string()),
+                    ("current", &update.current.to_string()),
                 ],
             ),
             other => format!("{} {}", other.versions_text(running), other.status_text()),

@@ -29,7 +29,12 @@ impl BrowserWindow {
             .await
             .unwrap_or_default();
         if !leftovers.is_empty() {
-            dialog::show_message(self, UNFINISHED_TITLE, &leftovers_message(&leftovers)).await;
+            dialog::show_message(
+                self,
+                ox_core::i18n::gettext_static(UNFINISHED_TITLE),
+                &leftovers_message(&leftovers),
+            )
+            .await;
         }
     }
 }

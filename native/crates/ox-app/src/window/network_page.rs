@@ -92,10 +92,14 @@ fn banner(discovery: &DiscoveryState) -> gtk::Box {
     banner.append(&glyph);
     banner.append(&words);
     let toggle = if discovery.is_busy {
-        command_button("Stop", WindowAction::StopDiscovery, ButtonStyle::Accent)
+        command_button(
+            ox_core::i18n::gettext_static("Stop"),
+            WindowAction::StopDiscovery,
+            ButtonStyle::Accent,
+        )
     } else {
         command_button(
-            "Discover servers",
+            ox_core::i18n::gettext_static("Discover servers"),
             WindowAction::DiscoverServers,
             ButtonStyle::Accent,
         )
@@ -130,7 +134,7 @@ fn server_address_field() -> gtk::Box {
     map_content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Map location"))));
     // Opens the connect dialog (`connectDialog`).
     let map = command_button(
-        "Map location",
+        ox_core::i18n::gettext_static("Map location"),
         WindowAction::MapNetworkLocation,
         ButtonStyle::Bordered,
     );
@@ -160,7 +164,7 @@ fn server_card(server: &DiscoveredServer, locations: &LocationContext) -> gtk::B
     let protocol = gtk::Label::builder()
         .label(ox_core::i18n::format_message(
             "{protocol_name} · Discovered",
-            &[("protocol_name", &(protocol_name(&server.uri)).to_string())],
+            &[("protocol_name", protocol_name(&server.uri))],
         ))
         .xalign(0.0)
         .css_classes(["network-protocol"])
@@ -183,7 +187,7 @@ fn protocol_name(uri: &str) -> &'static str {
 /// "Discovered servers" with their count, their cards, the notice while
 /// there are none, and the note on how discovery works.
 fn discovered_servers(body: &gtk::Box, discovery: &DiscoveryState, locations: &LocationContext) {
-    let title = section_title("Discovered servers", Icon::Desktop);
+    let title = section_title(ox_core::i18n::gettext_static("Discovered servers"), Icon::Desktop);
     let count = gtk::Label::builder()
         .label(discovery.servers.len().to_string())
         .hexpand(true)
@@ -227,7 +231,10 @@ fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk:
 
 /// Every connected, saved and visited network location.
 fn connected_and_saved(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&section_title("Connected & saved locations", Icon::Pin));
+    body.append(&section_title(
+        ox_core::i18n::gettext_static("Connected & saved locations"),
+        Icon::Pin,
+    ));
     let cards = card_grid(DRIVE_GRID);
     for location in &places.network {
         cards.append(&network_card(location, locations));

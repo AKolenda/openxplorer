@@ -35,19 +35,31 @@ pub(crate) enum OpenWithError {
     #[error(transparent)]
     Location(#[from] LocationError),
     /// A symbolic link has no content type of its own.
-    #[error("Open the link target first to choose an application.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Open the link target first to choose an application.")
+    )]
     Symlink,
     /// The application is not offered for this item any more.
-    #[error("That installed application is unavailable for this file/location.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("That installed application is unavailable for this file/location.")
+    )]
     Unavailable,
     /// The application was uninstalled since the list was made.
-    #[error("That application is no longer installed.")]
+    #[error("{}", ox_core::i18n::gettext("That application is no longer installed."))]
     NotInstalled,
     /// The application did not start.
-    #[error("The selected application could not be started.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("The selected application could not be started.")
+    )]
     NotStarted,
     /// The worker thread stopped without an answer.
-    #[error("The list of installed applications could not be read.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("The list of installed applications could not be read.")
+    )]
     Interrupted,
 }
 
@@ -95,13 +107,13 @@ impl ApplicationChoice {
     /// The line under its name.
     pub(crate) fn note(&self) -> &'static str {
         if self.is_default {
-            "Current default"
+            ox_core::i18n::gettext_static("Current default")
         } else if !self.is_available {
-            "Requires a local mount"
+            ox_core::i18n::gettext_static("Requires a local mount")
         } else if self.is_recommended {
-            "Recommended"
+            ox_core::i18n::gettext_static("Recommended")
         } else {
-            "Installed application"
+            ox_core::i18n::gettext_static("Installed application")
         }
     }
 }

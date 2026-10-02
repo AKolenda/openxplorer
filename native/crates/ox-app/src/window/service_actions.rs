@@ -107,7 +107,7 @@ impl BrowserWindow {
         if !available.is_empty() {
             entries.push(
                 MenuItem::submenu(
-                    "Service actions",
+                    ox_core::i18n::gettext_static("Service actions"),
                     Icon::Apps,
                     WindowAction::ManageServiceActions,
                     available,
@@ -117,7 +117,7 @@ impl BrowserWindow {
         }
         entries.push(
             MenuItem::new(
-                "Configure service actions…",
+                ox_core::i18n::gettext_static("Configure service actions…"),
                 Icon::Settings,
                 WindowAction::ManageServiceActions,
             )
@@ -129,7 +129,7 @@ impl BrowserWindow {
         let actions = service_actions::discover().await;
         self.imp().service_actions.replace(actions.clone());
         let enabled = self.context().settings_data().preferences.enabled_service_actions;
-        let prompt = Dialog::new(self, "Service actions", "Enable only actions you trust. Enabled programs run with your permissions when chosen from an item’s menu. Edited definitions must be enabled again.");
+        let prompt = Dialog::new(self, ox_core::i18n::gettext_static("Service actions"), ox_core::i18n::gettext_static("Enable only actions you trust. Enabled programs run with your permissions when chosen from an item’s menu. Edited definitions must be enabled again."));
         let rows = gtk::Box::new(gtk::Orientation::Vertical, 8);
         let checks: Vec<(ServiceAction, gtk::CheckButton)> = actions
             .into_iter()
@@ -142,17 +142,17 @@ impl BrowserWindow {
             })
             .collect();
         if checks.is_empty() {
-            prompt.add_note("No supported actions are installed. Add KDE .desktop service menus to your XDG data folder’s kio/servicemenus directory, or executable scripts to nautilus/scripts. Embedded shell substitutions and terminal actions are not supported.");
+            prompt.add_note(ox_core::i18n::gettext_static("No supported actions are installed. Add KDE .desktop service menus to your XDG data folder’s kio/servicemenus directory, or executable scripts to nautilus/scripts. Embedded shell substitutions and terminal actions are not supported."));
         } else {
             let scroll = gtk::ScrolledWindow::builder()
                 .child(&rows)
                 .max_content_height(320)
                 .propagate_natural_height(true)
                 .build();
-            prompt.add_labelled("Installed actions", &scroll);
+            prompt.add_labelled(ox_core::i18n::gettext_static("Installed actions"), &scroll);
         }
         prompt.add_cancel_button();
-        let save = prompt.add_button("Save", ButtonStyle::Accent);
+        let save = prompt.add_button(ox_core::i18n::gettext_static("Save"), ButtonStyle::Accent);
         prompt.open();
         let answer = prompt.next_response().await;
         prompt.finish();
@@ -203,9 +203,9 @@ impl BrowserWindow {
             .into_iter()
             .find(|action| action.id == id && action.accepts(selection))
         else {
-            self.show_message(
+            self.show_message(ox_core::i18n::gettext_static(
                 "This service action changed or no longer matches the selection. Configure it again.",
-            );
+            ));
             return;
         };
         let uris: Vec<String> = selection.iter().map(|(uri, _)| uri.clone()).collect();
@@ -224,7 +224,12 @@ impl BrowserWindow {
         }
         .await;
         if let Err(error) = result {
-            dialog::show_message(self, "Service action failed", &error).await;
+            dialog::show_message(
+                self,
+                ox_core::i18n::gettext_static("Service action failed"),
+                &error,
+            )
+            .await;
         }
     }
 }

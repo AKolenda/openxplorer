@@ -67,10 +67,7 @@ pub(crate) fn names_and_updates(root: &IndexRoot) -> String {
     let names = grouped_number(root.entry_count);
     ox_core::i18n::format_message(
         "{names} names · {as_str}",
-        &[
-            ("names", &(names).to_string()),
-            ("as_str", &(root.update_mode.as_str()).to_string()),
-        ],
+        &[("names", &names), ("as_str", root.update_mode.as_str())],
     )
 }
 
@@ -83,9 +80,9 @@ pub(crate) fn status_tooltip(root: &IndexRoot) -> String {
     match root.updated {
         Some(updated) => ox_core::i18n::format_message(
             "Last full refresh: {value1}",
-            &[("value1", &(format::date_time_text(Some(updated))).to_string())],
+            &[("value1", &format::date_time_text(Some(updated)))],
         ),
-        None => "Not yet scanned".to_owned(),
+        None => ox_core::i18n::gettext_static("Not yet scanned").to_owned(),
     }
 }
 
@@ -178,24 +175,24 @@ fn root_buttons(root: &IndexRoot, page: &SettingsPage) -> [gtk::Button; 3] {
     let scan = if root.status == RootStatus::Indexing {
         FolderAction {
             glyph: Icon::Dismiss,
-            name: "Stop indexing",
+            name: ox_core::i18n::gettext_static("Stop indexing"),
             command: IndexCommand::Stop(uri.clone()),
         }
     } else {
         FolderAction {
             glyph: Icon::ArrowClockwise,
-            name: "Refresh cache",
+            name: ox_core::i18n::gettext_static("Refresh cache"),
             command: IndexCommand::Refresh(uri.clone()),
         }
     };
     let clear = FolderAction {
         glyph: Icon::ArrowReset,
-        name: "Clear cached names only",
+        name: ox_core::i18n::gettext_static("Clear cached names only"),
         command: IndexCommand::Clear(uri.clone()),
     };
     let remove = FolderAction {
         glyph: Icon::Delete,
-        name: "Remove from index",
+        name: ox_core::i18n::gettext_static("Remove from index"),
         command: IndexCommand::StopIndexing(uri.clone()),
     };
     [scan, clear, remove].map(|action| action.into_button(&root.label, page))

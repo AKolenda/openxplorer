@@ -172,9 +172,9 @@ fn target_text(destination: &str, name: &str) -> String {
     ox_core::i18n::format_message(
         "Extract into: {trimmed}{separator}{name}",
         &[
-            ("trimmed", &(trimmed).to_string()),
-            ("separator", &(separator).to_string()),
-            ("name", &(name).to_string()),
+            ("trimmed", trimmed),
+            ("separator", &separator.to_string()),
+            ("name", name),
         ],
     )
 }
@@ -228,11 +228,11 @@ pub(super) fn summary_text(summary: &ExtractionSummary) -> String {
     ox_core::i18n::format_message(
         "{files} {file_word} · {folders} {folder_word} · {bytes} unpacked",
         &[
-            ("files", &(files).to_string()),
-            ("file_word", &(file_word).to_string()),
-            ("folders", &(folders).to_string()),
-            ("folder_word", &(folder_word).to_string()),
-            ("bytes", &(bytes).to_string()),
+            ("files", &files.to_string()),
+            ("file_word", file_word),
+            ("folders", &folders.to_string()),
+            ("folder_word", folder_word),
+            ("bytes", &bytes),
         ],
     )
 }

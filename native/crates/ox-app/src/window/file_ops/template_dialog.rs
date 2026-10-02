@@ -42,12 +42,12 @@ const USER_TEMPLATE_SUFFIX: &str = crate::i18n::message_id(" · Your template");
 fn dialog_text(kind: &NewFileKind) -> (&'static str, &'static str) {
     match kind {
         NewFileKind::Empty => (
-            "New file",
-            "Create an empty file with any filename and extension.",
+            ox_core::i18n::gettext_static("New file"),
+            ox_core::i18n::gettext_static("Create an empty file with any filename and extension."),
         ),
         NewFileKind::Starter(_) | NewFileKind::AnyTemplate | NewFileKind::Template(_) => (
-            "New from template",
-            "Create a new copy without changing the template.",
+            ox_core::i18n::gettext_static("New from template"),
+            ox_core::i18n::gettext_static("Create a new copy without changing the template."),
         ),
     }
 }
@@ -128,7 +128,7 @@ impl BrowserWindow {
         let dialog = Dialog::new(self, title, description);
         let fields = add_template_fields(&dialog, list, initial_position(kind, list));
         dialog.add_cancel_button();
-        dialog.add_button("Create", ButtonStyle::Accent);
+        dialog.add_button(ox_core::i18n::gettext_static("Create"), ButtonStyle::Accent);
         dialog.open();
         loop {
             dialog.next_response().await?;
@@ -157,13 +157,13 @@ fn add_template_fields(dialog: &Dialog, list: &TemplateList, initial: usize) -> 
         .templates
         .get(initial)
         .map_or("", |template| template.suggested_name.as_str());
-    let name = dialog.add_text_field("File name", suggested);
+    let name = dialog.add_text_field(ox_core::i18n::gettext_static("File name"), suggested);
     let labels: Vec<String> = list.templates.iter().map(list_label).collect();
     let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
     let choice = gtk::DropDown::from_strings(&label_refs);
     choice.set_selected(u32::try_from(initial).unwrap_or(0));
     choice.add_css_class("template-select");
-    dialog.add_labelled("File type / template", &choice);
+    dialog.add_labelled(ox_core::i18n::gettext_static("File type / template"), &choice);
     let suggestions: Vec<String> = list
         .templates
         .iter()
@@ -182,7 +182,7 @@ fn add_template_fields(dialog: &Dialog, list: &TemplateList, initial: usize) -> 
     dialog.add_note(ox_core::i18n::gettext_static(TEMPLATE_NOTE));
     dialog.add_hint(&ox_core::i18n::format_message(
         "Templates folder: {display}",
-        &[("display", &(list.folder.display()).to_string())],
+        &[("display", &list.folder.display().to_string())],
     ));
     TemplateFields { name, choice }
 }

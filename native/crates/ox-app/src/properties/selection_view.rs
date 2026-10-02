@@ -56,14 +56,14 @@ impl SelectionProperties {
         let cancel = Cancellation::new();
         let size = fill_general(&general, &entries, context);
         measure(&entries, &size, &cancel);
-        permissions.append(&quiet_text(READING));
+        permissions.append(&quiet_text(ox_core::i18n::gettext_static(READING)));
         read_permissions(&permissions, entries, context.clone());
         Self { root, cancel }
     }
 
     /// The dialog's title: `<count> items Properties`.
     pub(crate) fn dialog_title(count: usize) -> String {
-        ox_core::i18n::format_message("{count} items Properties", &[("count", &(count).to_string())])
+        ox_core::i18n::format_message("{count} items Properties", &[("count", &count.to_string())])
     }
 
     /// The widget, for the dialog's body.
@@ -141,9 +141,9 @@ fn common_type(entries: &[Entry]) -> String {
         .map(|entry| entry.type_label.as_str())
         .unwrap_or_default();
     if entries.iter().all(|entry| entry.type_label == first) {
-        ox_core::i18n::format_message("All of type {first}", &[("first", &(first).to_string())])
+        ox_core::i18n::format_message("All of type {first}", &[("first", first)])
     } else {
-        "Multiple types".to_owned()
+        ox_core::i18n::gettext_static("Multiple types").to_owned()
     }
 }
 
@@ -155,12 +155,9 @@ fn common_location(entries: &[Entry], context: &PropertiesContext) -> String {
     match first.filter(|_| shared) {
         Some(folder) => ox_core::i18n::format_message(
             "All in {display_location}",
-            &[(
-                "display_location",
-                &(context.locations.display_location(&folder)).to_string(),
-            )],
+            &[("display_location", &context.locations.display_location(&folder))],
         ),
-        None => "Multiple locations".to_owned(),
+        None => ox_core::i18n::gettext_static("Multiple locations").to_owned(),
     }
 }
 
@@ -238,7 +235,7 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
             if items.iter().all(|item| value(item) == first) {
                 first.unwrap_or_default().to_owned()
             } else {
-                "Multiple".to_owned()
+                ox_core::i18n::gettext("Multiple")
             }
         };
         grid.add_row(

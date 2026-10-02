@@ -133,12 +133,16 @@ fn for_one_item(item: MenuItem, facts: &ItemFacts, needs_writable: bool) -> Menu
 /// (SRCH-016).
 fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let is_folder = facts.shape == ItemShape::Folder;
-    let open = item("Open", Icon::Folder, WindowAction::Open)
-        .with_shortcut("Enter")
-        .disabled_because(
-            !is_folder && facts.is_read_only,
-            ox_core::i18n::gettext_static(READ_ONLY_VERSION),
-        );
+    let open = item(
+        ox_core::i18n::gettext_static("Open"),
+        Icon::Folder,
+        WindowAction::Open,
+    )
+    .with_shortcut("Enter")
+    .disabled_because(
+        !is_folder && facts.is_read_only,
+        ox_core::i18n::gettext_static(READ_ONLY_VERSION),
+    );
     let mut entries: Vec<MenuEntry> = vec![open.into()];
     if facts.shape == ItemShape::ZipArchive {
         entries.extend(extraction_items(facts));
@@ -162,7 +166,11 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
                 &facts.navigation_uri,
             )
         } else {
-            item("Open in new tabs", Icon::Add, WindowAction::OpenSelectionInTabs)
+            item(
+                ox_core::i18n::gettext_static("Open in new tabs"),
+                Icon::Add,
+                WindowAction::OpenSelectionInTabs,
+            )
         };
         let new_window = MenuItem::with_text_target(
             &ox_core::i18n::gettext("Open in new window"),
@@ -170,16 +178,31 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
             WindowAction::OpenWindow,
             &facts.navigation_uri,
         );
-        let pin = item("Pin to Quick access", Icon::Pin, WindowAction::PinSelected);
+        let pin = item(
+            ox_core::i18n::gettext_static("Pin to Quick access"),
+            Icon::Pin,
+            WindowAction::PinSelected,
+        );
         entries.push(new_tab.into());
         entries.push(for_one_item(new_window, facts, false).into());
         entries.push(for_one_item(pin, facts, false).into());
     }
     if facts.comparison == Comparison::TwoFiles {
-        entries.push(item("Compare files", Icon::DocumentCopy, WindowAction::CompareFiles).into());
+        entries.push(
+            item(
+                ox_core::i18n::gettext_static("Compare files"),
+                Icon::DocumentCopy,
+                WindowAction::CompareFiles,
+            )
+            .into(),
+        );
     }
     if facts.is_symlink {
-        let show_target = item("Show target", Icon::Open, WindowAction::ShowTarget);
+        let show_target = item(
+            ox_core::i18n::gettext_static("Show target"),
+            Icon::Open,
+            WindowAction::ShowTarget,
+        );
         entries.push(for_one_item(show_target, facts, false).into());
     }
     if facts.is_search_result {
@@ -205,8 +228,16 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
 
 /// Extract all… and, beyond the Python app, Dolphin's Extract here.
 fn extraction_items(facts: &ItemFacts) -> [MenuEntry; 2] {
-    let extract_all = item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll);
-    let extract_here = item("Extract here", Icon::FolderZip, WindowAction::ExtractHere);
+    let extract_all = item(
+        ox_core::i18n::gettext_static("Extract all…"),
+        Icon::FolderZip,
+        WindowAction::ExtractAll,
+    );
+    let extract_here = item(
+        ox_core::i18n::gettext_static("Extract here"),
+        Icon::FolderZip,
+        WindowAction::ExtractHere,
+    );
     [
         for_one_item(extract_all, facts, false).into(),
         for_one_item(extract_here, facts, false).into(),
@@ -236,7 +267,7 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     }
     entries.push(for_one_item(open_with, facts, true).into());
     for editor in &facts.editors {
-        let label = ox_core::i18n::format_message("Open in {name}", &[("name", &(editor.name).to_string())]);
+        let label = ox_core::i18n::format_message("Open in {name}", &[("name", &editor.name)]);
         let open_in_editor =
             MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
                 .with_application_icon(editor.icon.as_deref());
@@ -257,35 +288,59 @@ fn edit_items(facts: &ItemFacts) -> [MenuItem; 5] {
             &facts.navigation_uri,
         )
     } else {
-        item("Paste", Icon::ClipboardPaste, WindowAction::Paste).with_shortcut("Ctrl+V")
+        item(
+            ox_core::i18n::gettext_static("Paste"),
+            Icon::ClipboardPaste,
+            WindowAction::Paste,
+        )
+        .with_shortcut("Ctrl+V")
     };
     [
-        item("Cut", Icon::Cut, WindowAction::Cut).with_shortcut("Ctrl+X"),
-        item("Copy", Icon::Copy, WindowAction::Copy).with_shortcut("Ctrl+C"),
+        item(ox_core::i18n::gettext_static("Cut"), Icon::Cut, WindowAction::Cut).with_shortcut("Ctrl+X"),
+        item(
+            ox_core::i18n::gettext_static("Copy"),
+            Icon::Copy,
+            WindowAction::Copy,
+        )
+        .with_shortcut("Ctrl+C"),
         paste,
-        item("Rename", Icon::Rename, WindowAction::Rename).with_shortcut("F2"),
+        item(
+            ox_core::i18n::gettext_static("Rename"),
+            Icon::Rename,
+            WindowAction::Rename,
+        )
+        .with_shortcut("F2"),
         item(facts.delete_label, Icon::Delete, WindowAction::Trash).with_shortcut("Delete"),
     ]
 }
 
 /// Duplicate, which the Python app did not have.
 fn duplicate_item() -> MenuEntry {
-    item("Duplicate", Icon::DocumentCopy, WindowAction::Duplicate).into()
+    item(
+        ox_core::i18n::gettext_static("Duplicate"),
+        Icon::DocumentCopy,
+        WindowAction::Duplicate,
+    )
+    .into()
 }
 
 /// Copy path, one line per selected item (CLIP-014), with Explorer's key
 /// for "Copy as path" (CLIP-013).
 fn copy_path_item() -> MenuEntry {
-    item("Copy path", Icon::Link, WindowAction::CopyPath)
-        .with_shortcut("Ctrl+Shift+C")
-        .into()
+    item(
+        ox_core::i18n::gettext_static("Copy path"),
+        Icon::Link,
+        WindowAction::CopyPath,
+    )
+    .with_shortcut("Ctrl+Shift+C")
+    .into()
 }
 
 /// Compress to ZIP file, which the Python app did not have (Windows 11's
 /// "Compress to ZIP file").
 fn compress_item() -> MenuEntry {
     item(
-        "Compress to ZIP file",
+        ox_core::i18n::gettext_static("Compress to ZIP file"),
         Icon::FolderZip,
         WindowAction::CompressToZip,
     )
@@ -299,7 +354,7 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let is_measurable = facts.location != ItemLocation::SmbServer;
     if facts.shape == ItemShape::Folder && is_measurable {
         let size = item(
-            "Calculate folder size",
+            ox_core::i18n::gettext_static("Calculate folder size"),
             Icon::HardDrive,
             WindowAction::CalculateFolderSize,
         );
@@ -314,8 +369,17 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         );
         entries.push(for_one_item(analyse, facts, false).into());
     }
-    let versions = item("Previous versions", Icon::History, WindowAction::PreviousVersions);
-    let properties = item("Properties", Icon::Info, WindowAction::Properties).with_shortcut("Alt+Enter");
+    let versions = item(
+        ox_core::i18n::gettext_static("Previous versions"),
+        Icon::History,
+        WindowAction::PreviousVersions,
+    );
+    let properties = item(
+        ox_core::i18n::gettext_static("Properties"),
+        Icon::Info,
+        WindowAction::Properties,
+    )
+    .with_shortcut("Alt+Enter");
     entries.push(for_one_item(versions, facts, false).into());
     // Properties describe several items together (PROP-002).
     entries.push(properties.into());
@@ -341,7 +405,7 @@ fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     entries.extend(details_group(facts));
     entries.push(MenuEntry::Divider);
     let more = item(
-        "Show more options",
+        ox_core::i18n::gettext_static("Show more options"),
         Icon::MoreHorizontal,
         WindowAction::ShowMoreOptions,
     );
@@ -365,7 +429,12 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
         duplicate_item(),
         copy_path_item(),
         compress_item(),
-        item("Compress to…", Icon::FolderZip, WindowAction::CompressTo).into(),
+        item(
+            ox_core::i18n::gettext_static("Compress to…"),
+            Icon::FolderZip,
+            WindowAction::CompressTo,
+        )
+        .into(),
     ]);
     if let Some(caching) = facts.caching {
         entries.push(cache_item(&facts.navigation_uri, caching).into());
@@ -398,24 +467,47 @@ pub(crate) fn background_menu(
     let mut entries: Vec<MenuEntry> = vec![
         // Explorer's and Dolphin's View and Sort by (CMD-012), as the
         // command bar's menus.
-        item("View", Icon::Grid, WindowAction::ShowViewMenu).into(),
-        item("Sort by", Icon::ArrowSort, WindowAction::ShowSortMenu).into(),
+        item(
+            ox_core::i18n::gettext_static("View"),
+            Icon::Grid,
+            WindowAction::ShowViewMenu,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Sort by"),
+            Icon::ArrowSort,
+            WindowAction::ShowSortMenu,
+        )
+        .into(),
         MenuEntry::Divider,
-        item("New…", Icon::Add, WindowAction::ShowNewMenu).into(),
-        item("Paste", Icon::ClipboardPaste, WindowAction::Paste)
-            .with_shortcut("Ctrl+V")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("New…"),
+            Icon::Add,
+            WindowAction::ShowNewMenu,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Paste"),
+            Icon::ClipboardPaste,
+            WindowAction::Paste,
+        )
+        .with_shortcut("Ctrl+V")
+        .into(),
         item(undo_label, Icon::ArrowUndo, WindowAction::Undo)
             .with_shortcut("Ctrl+Z")
             .into(),
         item(redo_label, Icon::ArrowRedo, WindowAction::Redo)
             .with_shortcut("Ctrl+Y")
             .into(),
-        item("Refresh", Icon::ArrowClockwise, WindowAction::Refresh)
-            .with_shortcut("F5")
-            .into(),
         item(
-            "Open in Terminal",
+            ox_core::i18n::gettext_static("Refresh"),
+            Icon::ArrowClockwise,
+            WindowAction::Refresh,
+        )
+        .with_shortcut("F5")
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Open in Terminal"),
             Icon::WindowConsole,
             WindowAction::OpenInTerminal,
         )
@@ -427,10 +519,22 @@ pub(crate) fn background_menu(
             .iter()
             .map(|application| open_with_application(application).into()),
     );
-    entries.push(item("Open folder with…", Icon::Apps, WindowAction::OpenWith).into());
+    entries.push(
+        item(
+            ox_core::i18n::gettext_static("Open folder with…"),
+            Icon::Apps,
+            WindowAction::OpenWith,
+        )
+        .into(),
+    );
     entries.extend([
         MenuEntry::Divider,
-        item("Pin this folder", Icon::Pin, WindowAction::PinFolder).into(),
+        item(
+            ox_core::i18n::gettext_static("Pin this folder"),
+            Icon::Pin,
+            WindowAction::PinFolder,
+        )
+        .into(),
         MenuItem::toggle(
             &ox_core::i18n::gettext("Cache this folder for search"),
             Icon::Search,
@@ -438,16 +542,25 @@ pub(crate) fn background_menu(
         )
         .into(),
         item(
-            "Calculate folder sizes",
+            ox_core::i18n::gettext_static("Calculate folder sizes"),
             Icon::HardDrive,
             WindowAction::CalculateFolderSizes,
         )
         .into(),
         MenuEntry::Divider,
-        item("Previous versions", Icon::History, WindowAction::PreviousVersions).into(),
-        item("Properties", Icon::Info, WindowAction::Properties)
-            .with_shortcut("Alt+Enter")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("Previous versions"),
+            Icon::History,
+            WindowAction::PreviousVersions,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Properties"),
+            Icon::Info,
+            WindowAction::Properties,
+        )
+        .with_shortcut("Alt+Enter")
+        .into(),
     ]);
     entries
 }
@@ -455,8 +568,7 @@ pub(crate) fn background_menu(
 /// "Open with <app>", opening the item, or the folder when nothing is
 /// selected, in `application` (OPEN-013).
 fn open_with_application(application: &ApplicationChoice) -> MenuItem {
-    let label =
-        ox_core::i18n::format_message("Open with {name}", &[("name", &(application.name).to_string())]);
+    let label = ox_core::i18n::format_message("Open with {name}", &[("name", &application.name)]);
     MenuItem::with_text_target(&label, Icon::Apps, WindowAction::OpenWithApp, &application.id)
         .with_application_icon(application.icon.as_deref())
 }
@@ -464,12 +576,26 @@ fn open_with_application(application: &ApplicationChoice) -> MenuItem {
 /// The menu of items in the Recycle Bin: Restore, Delete permanently and
 /// Properties (OPS-040).
 pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
-    let properties = item("Properties", Icon::Info, WindowAction::Properties).with_shortcut("Alt+Enter");
+    let properties = item(
+        ox_core::i18n::gettext_static("Properties"),
+        Icon::Info,
+        WindowAction::Properties,
+    )
+    .with_shortcut("Alt+Enter");
     vec![
-        item("Restore", Icon::ArrowCounterclockwise, WindowAction::Restore).into(),
-        item("Delete permanently", Icon::Delete, WindowAction::Trash)
-            .with_shortcut("Delete")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("Restore"),
+            Icon::ArrowCounterclockwise,
+            WindowAction::Restore,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Delete permanently"),
+            Icon::Delete,
+            WindowAction::Trash,
+        )
+        .with_shortcut("Delete")
+        .into(),
         MenuEntry::Divider,
         properties
             .disabled_because(!is_single, ox_core::i18n::gettext_static(ONE_ITEM_AT_A_TIME))
@@ -482,14 +608,18 @@ pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
 pub(crate) fn recycle_bin_background_menu() -> Vec<MenuEntry> {
     vec![
         item(
-            "Empty Recycle Bin",
+            ox_core::i18n::gettext_static("Empty Recycle Bin"),
             Icon::DeleteDismiss,
             WindowAction::EmptyRecycleBin,
         )
         .into(),
-        item("Refresh", Icon::ArrowClockwise, WindowAction::Refresh)
-            .with_shortcut("F5")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("Refresh"),
+            Icon::ArrowClockwise,
+            WindowAction::Refresh,
+        )
+        .with_shortcut("F5")
+        .into(),
     ]
 }
 

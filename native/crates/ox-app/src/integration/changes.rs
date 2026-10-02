@@ -49,15 +49,18 @@ pub(crate) enum IntegrationError {
     Registration(#[from] RegistrationFailed),
     /// The test needs the service to own the name first (`revealTest`).
     #[error(
-        "OpenXplorer does not own Show in folder yet. Close other file managers, or log out and back in \
+        "{}",
+        ox_core::i18n::gettext(
+            "OpenXplorer does not own Show in folder yet. Close other file managers, or log out and back in \
          after enabling."
+        )
     )]
     NotOwner,
     /// The test request was not answered.
     #[error("{0}")]
     TestFailed(glib::Error),
     /// The application is not on the session bus, which the service needs.
-    #[error("Show in folder needs the desktop session bus.")]
+    #[error("{}", ox_core::i18n::gettext("Show in folder needs the desktop session bus."))]
     NoApplication,
 }
 
@@ -79,7 +82,7 @@ impl ShowInFolderReach {
             Self::Always => None,
             Self::WhileRunning(error) => Some(ox_core::i18n::format_message(
                 "Show in folder answers while OpenXplorer runs. {error}",
-                &[("error", &(error).to_string())],
+                &[("error", &error.to_string())],
             )),
         }
     }
@@ -113,12 +116,11 @@ impl ChangeOutcome {
             Self::Done(message) => (*message).to_owned(),
             Self::ShowInFolderFailed(error) => ox_core::i18n::format_message(
                 "File handlers updated, but Show in folder setup failed: {error}",
-                &[("error", &(error).to_string())],
+                &[("error", error)],
             ),
-            Self::ShowInFolderWhileRunning(note) => ox_core::i18n::format_message(
-                "File handlers updated. {note}",
-                &[("note", &(note).to_string())],
-            ),
+            Self::ShowInFolderWhileRunning(note) => {
+                ox_core::i18n::format_message("File handlers updated. {note}", &[("note", note)])
+            }
         }
     }
 }
@@ -149,9 +151,9 @@ impl DesktopIntegration {
                 }
             }
         }
-        Ok(ChangeOutcome::Done(
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
             "Requested associations updated. Review each status below.",
-        ))
+        )))
     }
 
     /// Puts every recorded handler back where the app is still the
@@ -167,7 +169,9 @@ impl DesktopIntegration {
             .run_in_background(|defaults| defaults.restore(RestoreScope::Everything))
             .await?;
         self.disable_show_in_folder().await?;
-        Ok(ChangeOutcome::Done("Previous recorded handlers restored."))
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
+            "Previous recorded handlers restored.",
+        )))
     }
 
     /// Makes the app the default for every ZIP type (`zipDefault`).
@@ -178,7 +182,9 @@ impl DesktopIntegration {
     pub(crate) async fn make_zip_default(&self) -> Result<ChangeOutcome, IntegrationError> {
         let defaults = &self.services().defaults;
         defaults.run_in_background(DefaultApps::make_zip_default).await?;
-        Ok(ChangeOutcome::Done("ZIP files now open in OpenXplorer."))
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
+            "ZIP files now open in OpenXplorer.",
+        )))
     }
 
     /// Gives ZIP files back to their recorded handler (`zipRestore`).
@@ -191,7 +197,9 @@ impl DesktopIntegration {
         defaults
             .run_in_background(|defaults| defaults.restore(RestoreScope::ZipOnly))
             .await?;
-        Ok(ChangeOutcome::Done("Previous ZIP handlers restored."))
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
+            "Previous ZIP handlers restored.",
+        )))
     }
 
     /// Writes the two Show in folder session files and starts answering
@@ -287,7 +295,9 @@ impl DesktopIntegration {
             TEST_TIMEOUT_MS,
         );
         call.await.map_err(IntegrationError::TestFailed)?;
-        Ok(ChangeOutcome::Done("Test request sent through FileManager1."))
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
+            "Test request sent through FileManager1.",
+        )))
     }
 }
 

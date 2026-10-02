@@ -180,13 +180,14 @@ fn status_bar_entries(folder: &str, has_analyser: bool) -> Vec<MenuEntry> {
 /// cannot.
 fn start(tool: DiskTool, target: &Path) -> Result<(), String> {
     let sandbox = Sandbox::detect();
-    let program = installed_program(tool).ok_or_else(|| "The tool is not installed.".to_owned())?;
+    let program =
+        installed_program(tool).ok_or_else(|| ox_core::i18n::gettext("The tool is not installed."))?;
     tool.launch(&program, target, sandbox).map_err(|error| {
         ox_core::i18n::format_message(
             "Could not start {display}: {error}",
             &[
-                ("display", &(program.display()).to_string()),
-                ("error", &(error).to_string()),
+                ("display", &program.display().to_string()),
+                ("error", &error.to_string()),
             ],
         )
     })

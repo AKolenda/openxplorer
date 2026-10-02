@@ -43,7 +43,7 @@ fn history_label(locations: &LocationContext, uri: &str) -> String {
         .and_then(|path| path.strip_prefix(locations.home_path()).ok())
     {
         if relative.as_os_str().is_empty() {
-            return "Home".to_owned();
+            return ox_core::i18n::gettext("Home");
         }
         return format!("Home/{}", relative.display());
     }

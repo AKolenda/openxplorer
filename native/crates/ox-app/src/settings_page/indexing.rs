@@ -203,11 +203,11 @@ impl CacheSummary {
     /// "Instant search is on for 5 folders", as the mockup's card says.
     fn title(self) -> String {
         match self.folders {
-            0 => "Instant search is off".to_owned(),
-            1 => "Instant search is on for 1 folder".to_owned(),
+            0 => ox_core::i18n::gettext("Instant search is off"),
+            1 => ox_core::i18n::gettext("Instant search is on for 1 folder"),
             folders => ox_core::i18n::format_message(
                 "Instant search is on for {folders} folders",
-                &[("folders", &(folders).to_string())],
+                &[("folders", &folders.to_string())],
             ),
         }
     }
@@ -219,7 +219,7 @@ impl CacheSummary {
         }
         let names = ox_core::i18n::format_message(
             "{grouped_number} names indexed",
-            &[("grouped_number", &(grouped_number(self.names)).to_string())],
+            &[("grouped_number", &grouped_number(self.names))],
         );
         let Some(updated) = self.last_updated else {
             return names;
@@ -227,7 +227,7 @@ impl CacheSummary {
         let when = format::date_time_text(Some(updated));
         ox_core::i18n::format_message(
             "{names} · last updated {when}",
-            &[("names", &(names).to_string()), ("when", &(when).to_string())],
+            &[("names", &names), ("when", &when)],
         )
     }
 }

@@ -100,10 +100,8 @@ fn closed_tab_items(window: &BrowserWindow) -> Vec<MenuEntry> {
     }
     let locations = window.imp().locations.borrow();
     let items = closed.iter().zip(0_u32..).map(|(tab, index)| {
-        let label = ox_core::i18n::format_message(
-            "Reopen {value1}",
-            &[("value1", &(locations.title_for(tab.uri())).to_string())],
-        );
+        let label =
+            ox_core::i18n::format_message("Reopen {value1}", &[("value1", &locations.title_for(tab.uri()))]);
         let item = MenuItem::with_target(
             &label,
             Icon::History,
@@ -123,9 +121,10 @@ fn closed_tab_items(window: &BrowserWindow) -> Vec<MenuEntry> {
 /// The item that brings `window` to the front, checked when it is
 /// `this_window`, the one whose menu is open.
 fn window_item(window: &BrowserWindow, this_window: &BrowserWindow) -> MenuEntry {
-    let title = window
-        .title()
-        .map_or_else(|| "OpenXplorer".to_owned(), |title| title.to_string());
+    let title = window.title().map_or_else(
+        || ox_core::i18n::gettext("OpenXplorer"),
+        |title| title.to_string(),
+    );
     let item = MenuItem {
         target: Some(window.id().to_variant()),
         check: ItemCheck::Fixed(window == this_window),

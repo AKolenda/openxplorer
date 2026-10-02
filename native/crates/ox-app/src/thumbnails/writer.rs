@@ -103,12 +103,9 @@ fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Opti
     });
     let mut buffer = vec![0; READ_CHUNK];
     loop {
-        let read = match stream.read(&mut buffer, Some(cancellation)) {
-            Ok(read) => read,
-            Err(_) => {
-                let _ = loader.close();
-                return None;
-            }
+        let Ok(read) = stream.read(&mut buffer, Some(cancellation)) else {
+            let _ = loader.close();
+            return None;
         };
         if read == 0 {
             break;

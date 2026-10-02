@@ -22,7 +22,7 @@ const MAX_NAME_TRIES: u32 = 100;
 pub(crate) fn extraction_failure_text(error: &ArchiveError) -> String {
     ox_core::i18n::format_message(
         "{error}\n\nThe ZIP is unchanged. Existing files were not overwritten.",
-        &[("error", &(error).to_string())],
+        &[("error", &error.to_string())],
     )
 }
 
@@ -31,8 +31,8 @@ pub(crate) fn extraction_success_text(folder: &ExtractedFolder) -> String {
     ox_core::i18n::format_message(
         "Extracted {file_count} files into {name}.",
         &[
-            ("file_count", &(folder.summary.file_count).to_string()),
-            ("name", &(folder.name).to_string()),
+            ("file_count", &folder.summary.file_count.to_string()),
+            ("name", &folder.name),
         ],
     )
 }

@@ -55,7 +55,7 @@ fn recent_dates_read_today_until_settings_turn_that_off() {
 /// With "Remember each folder's view" on, a folder keeps the sort order it
 /// was given, and another folder shows its own.
 ///
-/// parity: VIEW-020
+/// parity: VIEW-020, VIEW-032
 #[gtk::test]
 fn each_folder_keeps_its_own_style_when_asked() {
     let fixture = Fixture::standard();
@@ -135,7 +135,7 @@ fn each_folder_keeps_its_own_style_when_asked() {
 
 /// The dialog shows the view, sorting and groups it chose, and saves them.
 ///
-/// parity: VIEW-021
+/// parity: VIEW-017, VIEW-021
 #[gtk::test]
 fn the_display_style_dialog_applies_its_choices() {
     let fixture = Fixture::standard();

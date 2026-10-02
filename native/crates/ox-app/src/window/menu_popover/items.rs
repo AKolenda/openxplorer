@@ -278,10 +278,10 @@ impl MenuStyle {
     }
 
     /// The menu's accessible name, as `openMenu` sets `aria-label`.
-    pub(super) const fn accessible_name(self) -> &'static str {
+    pub(super) fn accessible_name(self) -> &'static str {
         match self {
-            MenuStyle::Classic => "Windows 10 style menu",
-            MenuStyle::Compact => "Windows 11 style menu",
+            MenuStyle::Classic => ox_core::i18n::gettext_static("Windows 10 style menu"),
+            MenuStyle::Compact => ox_core::i18n::gettext_static("Windows 11 style menu"),
         }
     }
 }

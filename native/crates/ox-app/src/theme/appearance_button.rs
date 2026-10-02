@@ -22,8 +22,8 @@ pub(crate) trait AppearanceExt {
 impl AppearanceExt for Appearance {
     fn label(self) -> &'static str {
         match self {
-            Appearance::Light => "Light",
-            Appearance::Dark => "Dark",
+            Appearance::Light => ox_core::i18n::gettext_static("Light"),
+            Appearance::Dark => ox_core::i18n::gettext_static("Dark"),
         }
     }
 
@@ -41,14 +41,11 @@ pub(crate) fn tooltip(theme: Theme, appearance: Appearance) -> String {
     let shown = match theme {
         Theme::System => {
             let current = appearance.label().to_lowercase();
-            ox_core::i18n::format_message("System ({current})", &[("current", &(current).to_string())])
+            ox_core::i18n::format_message("System ({current})", &[("current", &current)])
         }
         chosen => chosen.as_str().to_owned(),
     };
-    ox_core::i18n::format_message(
-        "Appearance: {shown}. Click to change.",
-        &[("shown", &(shown).to_string())],
-    )
+    ox_core::i18n::format_message("Appearance: {shown}. Click to change.", &[("shown", &shown)])
 }
 
 #[cfg(test)]

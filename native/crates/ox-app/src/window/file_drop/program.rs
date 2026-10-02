@@ -248,7 +248,7 @@ impl BrowserWindow {
         if !may_run {
             return Err(ox_core::i18n::format_message(
                 "“{name}” is not a program you can run.",
-                &[("name", &(program.name).to_string())],
+                &[("name", &program.name)],
             ));
         }
         // Safety rule "ask before running a program from elsewhere".
@@ -272,7 +272,7 @@ impl BrowserWindow {
 
     /// Asks before running `program`; true when the user agreed.
     async fn confirm_run(&self, program: &ProgramTarget) -> bool {
-        let message = ox_core::i18n::format_message("“{name}” is on a network share or a removable drive. Run it only if you trust where it came from.", &[("name", &(program.name).to_string())]);
+        let message = ox_core::i18n::format_message("“{name}” is on a network share or a removable drive. Run it only if you trust where it came from.", &[("name", &program.name)]);
         let dialog = Dialog::new(self, &ox_core::i18n::gettext("Run this program?"), &message);
         dialog.add_cancel_button();
         dialog.add_button(&ox_core::i18n::gettext("Run"), ButtonStyle::Accent);
@@ -312,10 +312,7 @@ impl BrowserWindow {
         spawn_program(&command, &folder, sandbox).map_err(|error| error.to_string())?;
         self.show_message(&ox_core::i18n::format_message(
             "Opened {len} item(s) with {name}.",
-            &[
-                ("len", &(items.len()).to_string()),
-                ("name", &(program.name).to_string()),
-            ],
+            &[("len", &items.len().to_string()), ("name", &program.name)],
         ));
         Ok(())
     }

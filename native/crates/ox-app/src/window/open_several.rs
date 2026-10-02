@@ -38,7 +38,7 @@ impl BrowserWindow {
         }
         let question = ox_core::i18n::format_message(
             "Are you sure you want to open {len} items?",
-            &[("len", &(entries.len()).to_string())],
+            &[("len", &entries.len().to_string())],
         );
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

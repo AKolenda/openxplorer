@@ -69,16 +69,22 @@ impl CommandOption {
 
     /// What `--help` says about the option, word for word from
     /// `CLI_OPTIONS`.
-    pub(super) const fn description(self) -> &'static str {
+    pub(super) fn description(self) -> &'static str {
         match self {
-            Self::NewWindow => "Create a separate OpenXplorer window",
-            Self::Windows => "Show existing OpenXplorer windows",
-            Self::Settings => "Open Settings",
-            Self::Select => "Reveal files in their parent folders",
-            Self::FileManagerService => "Start the opted-in FileManager1 service",
-            Self::SoftwareRendering => "Use software rendering for a new window",
-            Self::Quit => "Close all OpenXplorer windows after file operations finish",
-            Self::Split => "Show the locations side by side in split view",
+            Self::NewWindow => ox_core::i18n::gettext_static("Create a separate OpenXplorer window"),
+            Self::Windows => ox_core::i18n::gettext_static("Show existing OpenXplorer windows"),
+            Self::Settings => ox_core::i18n::gettext_static("Open Settings"),
+            Self::Select => ox_core::i18n::gettext_static("Reveal files in their parent folders"),
+            Self::FileManagerService => {
+                ox_core::i18n::gettext_static("Start the opted-in FileManager1 service")
+            }
+            Self::SoftwareRendering => {
+                ox_core::i18n::gettext_static("Use software rendering for a new window")
+            }
+            Self::Quit => {
+                ox_core::i18n::gettext_static("Close all OpenXplorer windows after file operations finish")
+            }
+            Self::Split => ox_core::i18n::gettext_static("Show the locations side by side in split view"),
         }
     }
 }
@@ -117,7 +123,7 @@ pub(super) enum CommandRequest {
 #[derive(Debug, thiserror::Error)]
 pub(super) enum CommandLineError {
     /// `--select` without a file.
-    #[error("--select needs a file path.")]
+    #[error("{}", ox_core::i18n::gettext("--select needs a file path."))]
     SelectWithoutFile,
     /// A location the app cannot open.
     #[error(transparent)]

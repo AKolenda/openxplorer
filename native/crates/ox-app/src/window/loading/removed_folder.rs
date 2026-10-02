@@ -74,7 +74,7 @@ impl BrowserWindow {
             let path = self.imp().locations.borrow().display_location(removed);
             self.show_message(&ox_core::i18n::format_message(
                 "Current location changed, {path} is no longer accessible.",
-                &[("path", &(path).to_string())],
+                &[("path", &path)],
             ));
             return;
         }

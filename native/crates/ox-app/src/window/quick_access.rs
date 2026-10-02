@@ -73,11 +73,11 @@ fn verified_pin(uri: &str, shown: &[Place]) -> Result<BookmarkRequest, EntryErro
 /// The toast after `count` folders were pinned.
 fn pinned_message(count: usize) -> String {
     if count == 1 {
-        "Pinned to Quick access. No files were moved.".to_owned()
+        ox_core::i18n::gettext("Pinned to Quick access. No files were moved.")
     } else {
         ox_core::i18n::format_message(
             "{count} folders pinned. No files were moved.",
-            &[("count", &(count).to_string())],
+            &[("count", &count.to_string())],
         )
     }
 }
@@ -151,10 +151,10 @@ impl BrowserWindow {
                 self,
                 move |result: Result<(), SettingsError>| {
                     let message = match result {
-                        Ok(()) => "Pinned to Quick access. No files were moved.".to_owned(),
+                        Ok(()) => ox_core::i18n::gettext("Pinned to Quick access. No files were moved."),
                         Err(error) => ox_core::i18n::format_message(
                             "Could not pin: {error}",
-                            &[("error", &(error).to_string())],
+                            &[("error", &error.to_string())],
                         ),
                     };
                     window.finish_pinning(&message);
@@ -200,12 +200,14 @@ impl BrowserWindow {
             Ok(Err(error)) => {
                 self.finish_pinning(&ox_core::i18n::format_message(
                     "Could not pin: {error}",
-                    &[("error", &(error).to_string())],
+                    &[("error", &error.to_string())],
                 ));
                 return;
             }
             Err(_panic) => {
-                self.finish_pinning("Could not pin: the folders could not be checked.");
+                self.finish_pinning(ox_core::i18n::gettext_static(
+                    "Could not pin: the folders could not be checked.",
+                ));
                 return;
             }
         };
@@ -225,7 +227,7 @@ impl BrowserWindow {
                         Ok(()) => pinned_message(count),
                         Err(error) => ox_core::i18n::format_message(
                             "Could not pin: {error}",
-                            &[("error", &(error).to_string())],
+                            &[("error", &error.to_string())],
                         ),
                     };
                     window.finish_pinning(&message);
@@ -247,7 +249,7 @@ impl BrowserWindow {
                 self,
                 move |result: Result<(), SettingsError>| {
                     let message = match result {
-                        Ok(()) => "Unpinned. The folder was not deleted.".to_owned(),
+                        Ok(()) => ox_core::i18n::gettext("Unpinned. The folder was not deleted."),
                         Err(error) => error.to_string(),
                     };
                     window.show_message(&message);

@@ -19,7 +19,7 @@ pub struct Command {
 pub(super) fn validate(exec: &str) -> Result<Vec<OsString>, String> {
     let words = glib::shell_parse_argv(exec).map_err(|e| e.to_string())?;
     let Some(program) = words.first() else {
-        return Err("No program is specified.".into());
+        return Err(crate::i18n::gettext("No program is specified."));
     };
     let program = PathBuf::from(program);
     let basename = program.file_name().unwrap_or_default().to_string_lossy();
@@ -29,15 +29,19 @@ pub(super) fn validate(exec: &str) -> Result<Vec<OsString>, String> {
     .contains(&basename.as_ref())
         || basename.starts_with("python3.")
     {
-        return Err("Use an executable script instead of an interpreter command.".into());
+        return Err(crate::i18n::gettext(
+            "Use an executable script instead of an interpreter command.",
+        ));
     }
     if program.to_string_lossy().contains('%') {
-        return Err("The program must be fixed.".into());
+        return Err(crate::i18n::gettext("The program must be fixed."));
     }
     for word in words.iter().skip(1) {
         let word = word.to_string_lossy();
         if word.contains('%') && !["%f", "%F", "%u", "%U", "%c", "%k", "%%"].contains(&word.as_ref()) {
-            return Err("File field codes must be standalone arguments.".into());
+            return Err(crate::i18n::gettext(
+                "File field codes must be standalone arguments.",
+            ));
         }
     }
     Ok(words)
@@ -53,7 +57,9 @@ pub(super) fn build(action: &ServiceAction, uris: &[String], folder: &str) -> Re
         for word in words {
             match word.to_str().unwrap_or_default() {
                 "%F" | "%f" => {
-                    let paths = paths.as_ref().ok_or("This service requires local files.")?;
+                    let paths = paths
+                        .as_ref()
+                        .ok_or_else(|| crate::i18n::gettext("This service requires local files."))?;
                     let count = if word == "%f" { 1 } else { paths.len() };
                     argv.extend(paths.iter().take(count).map(|path| path.as_os_str().to_owned()));
                 }
@@ -67,12 +73,16 @@ pub(super) fn build(action: &ServiceAction, uris: &[String], folder: &str) -> Re
         }
         argv
     } else {
-        let paths = paths.as_ref().ok_or("Nautilus scripts require local files.")?;
+        let paths = paths
+            .as_ref()
+            .ok_or_else(|| crate::i18n::gettext("Nautilus scripts require local files."))?;
         if paths
             .iter()
             .any(|path| path.to_string_lossy().contains(['\n', '\r']))
         {
-            return Err("Nautilus script variables cannot represent newline-containing names.".into());
+            return Err(crate::i18n::gettext(
+                "Nautilus script variables cannot represent newline-containing names.",
+            ));
         }
         environment.push((
             "NAUTILUS_SCRIPT_SELECTED_FILE_PATHS".into(),

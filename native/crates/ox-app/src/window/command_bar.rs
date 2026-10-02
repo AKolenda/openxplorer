@@ -303,7 +303,7 @@ impl CommandBar {
         };
         button.set_tooltip_text(Some(&ox_core::i18n::format_message(
             "{label} (Delete)",
-            &[("label", &(label).to_string())],
+            &[("label", label)],
         )));
         button.update_property(&[gtk::accessible::Property::Label(label)]);
     }

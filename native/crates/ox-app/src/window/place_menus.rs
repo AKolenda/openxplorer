@@ -117,8 +117,18 @@ fn removal_items(uri: &str, kind: VolumeKind, controls: MountControls) -> Vec<Me
 /// GNOME Disks handles (DEV-012), as Dolphin offers its partition manager.
 fn disks_items(uri: &str) -> [MenuEntry; 2] {
     [
-        item("Open in Disks", Icon::Settings, WindowAction::OpenInDisks, uri),
-        item("Format…", Icon::HardDrive, WindowAction::FormatDrive, uri),
+        item(
+            ox_core::i18n::gettext_static("Open in Disks"),
+            Icon::Settings,
+            WindowAction::OpenInDisks,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Format…"),
+            Icon::HardDrive,
+            WindowAction::FormatDrive,
+            uri,
+        ),
     ]
 }
 
@@ -155,8 +165,18 @@ fn drive_entries(
     caching: Option<Caching>,
 ) -> Vec<MenuEntry> {
     let mut entries = vec![
-        item("Open", Icon::HardDrive, WindowAction::GoTo, uri),
-        item("Open in new window", Icon::Add, WindowAction::OpenWindow, uri),
+        item(
+            ox_core::i18n::gettext_static("Open"),
+            Icon::HardDrive,
+            WindowAction::GoTo,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
+            Icon::Add,
+            WindowAction::OpenWindow,
+            uri,
+        ),
         terminal_item(uri),
     ];
     if !is_device_location(uri) {
@@ -171,7 +191,12 @@ fn drive_entries(
         entries.extend(drive_tools);
     }
     entries.push(MenuEntry::Divider);
-    entries.push(item("Properties", Icon::Info, WindowAction::PropertiesOf, uri));
+    entries.push(item(
+        ox_core::i18n::gettext_static("Properties"),
+        Icon::Info,
+        WindowAction::PropertiesOf,
+        uri,
+    ));
     entries
 }
 
@@ -182,9 +207,24 @@ fn drive_entries(
 fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<MenuEntry> {
     let uri = location.uri.as_str();
     let mut entries = vec![
-        item("Open", Icon::Folder, WindowAction::GoTo, uri),
-        item("Open in new tab", Icon::Add, WindowAction::OpenTab, uri),
-        item("Open in new window", Icon::Share, WindowAction::OpenWindow, uri),
+        item(
+            ox_core::i18n::gettext_static("Open"),
+            Icon::Folder,
+            WindowAction::GoTo,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
+            Icon::Share,
+            WindowAction::OpenWindow,
+            uri,
+        ),
         terminal_item(uri),
     ];
     entries.extend(cache_entries(uri, caching));
@@ -193,14 +233,14 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     let is_share = (is_smb || is_remote) && !is_smb_server(uri) && location.kind != NetworkKind::Server;
     if is_share && location.is_saved {
         entries.push(item(
-            "Remove saved location",
+            ox_core::i18n::gettext_static("Remove saved location"),
             Icon::Pin,
             WindowAction::RemoveSavedLocation,
             uri,
         ));
     } else if is_share {
         entries.push(item(
-            "Keep in Network",
+            ox_core::i18n::gettext_static("Keep in Network"),
             Icon::Pin,
             WindowAction::KeepInNetwork,
             uri,
@@ -208,7 +248,7 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     }
     if is_smb {
         entries.push(item(
-            "Sign out of server…",
+            ox_core::i18n::gettext_static("Sign out of server…"),
             Icon::ArrowEject,
             WindowAction::SignOut,
             uri,
@@ -218,7 +258,7 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     // their connection is ended as a mount, as Dolphin and Files do.
     if is_remote && location.is_connected {
         entries.push(item(
-            "Disconnect",
+            ox_core::i18n::gettext_static("Disconnect"),
             Icon::ArrowEject,
             WindowAction::Disconnect,
             uri,
@@ -226,7 +266,12 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     }
     let is_readable = location.kind == NetworkKind::Mount || (is_share && location.is_connected);
     if is_readable {
-        entries.push(item("Properties", Icon::Info, WindowAction::PropertiesOf, uri));
+        entries.push(item(
+            ox_core::i18n::gettext_static("Properties"),
+            Icon::Info,
+            WindowAction::PropertiesOf,
+            uri,
+        ));
     }
     entries
 }
@@ -235,10 +280,20 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
 /// empties the recent files of the app and the desktop (SAFE-022).
 fn recent_files_entries() -> Vec<MenuEntry> {
     vec![
-        item("Open", Icon::History, WindowAction::GoTo, RECENT_URI),
-        item("Open in new tab", Icon::Add, WindowAction::OpenTab, RECENT_URI),
         item(
-            "Open in new window",
+            ox_core::i18n::gettext_static("Open"),
+            Icon::History,
+            WindowAction::GoTo,
+            RECENT_URI,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            RECENT_URI,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
             Icon::WindowNew,
             WindowAction::OpenWindow,
             RECENT_URI,
@@ -262,10 +317,20 @@ fn recycle_bin_entries(has_items: bool) -> Vec<MenuEntry> {
         WindowAction::EmptyTrash,
     );
     vec![
-        item("Open", Icon::Delete, WindowAction::GoTo, TRASH_URI),
-        item("Open in new tab", Icon::Add, WindowAction::OpenTab, TRASH_URI),
         item(
-            "Open in new window",
+            ox_core::i18n::gettext_static("Open"),
+            Icon::Delete,
+            WindowAction::GoTo,
+            TRASH_URI,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            TRASH_URI,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
             Icon::WindowNew,
             WindowAction::OpenWindow,
             TRASH_URI,
@@ -279,10 +344,20 @@ fn recycle_bin_entries(has_items: bool) -> Vec<MenuEntry> {
 fn recent_locations_entries() -> Vec<MenuEntry> {
     let uri = RECENT_LOCATIONS_URI;
     vec![
-        item("Open", Icon::Clock, WindowAction::GoTo, uri),
-        item("Open in new tab", Icon::Add, WindowAction::OpenTab, uri),
         item(
-            "Open in new window",
+            ox_core::i18n::gettext_static("Open"),
+            Icon::Clock,
+            WindowAction::GoTo,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
             Icon::WindowNew,
             WindowAction::OpenWindow,
             uri,
@@ -318,7 +393,7 @@ impl PlaceMenu {
         match self {
             PlaceMenu::Drive { uri, kind, controls } => drive_entries(uri, *kind, *controls, caching),
             PlaceMenu::Volume { id } => vec![item(
-                "Mount volume",
+                ox_core::i18n::gettext_static("Mount volume"),
                 Icon::HardDrive,
                 WindowAction::MountVolume,
                 id,
@@ -330,18 +405,28 @@ impl PlaceMenu {
             PlaceMenu::RecentLocations => recent_locations_entries(),
             PlaceMenu::SavedShare { uri } => {
                 let mut entries = vec![
-                    item("Open", Icon::Folder, WindowAction::GoTo, uri),
-                    item("Open in new tab", Icon::Add, WindowAction::OpenTab, uri),
+                    item(
+                        ox_core::i18n::gettext_static("Open"),
+                        Icon::Folder,
+                        WindowAction::GoTo,
+                        uri,
+                    ),
+                    item(
+                        ox_core::i18n::gettext_static("Open in new tab"),
+                        Icon::Add,
+                        WindowAction::OpenTab,
+                        uri,
+                    ),
                 ];
                 entries.extend(cache_entries(uri, caching));
                 entries.push(item(
-                    "Remove saved location",
+                    ox_core::i18n::gettext_static("Remove saved location"),
                     Icon::Pin,
                     WindowAction::RemoveSavedLocation,
                     uri,
                 ));
                 entries.push(item(
-                    "Sign out of server…",
+                    ox_core::i18n::gettext_static("Sign out of server…"),
                     Icon::ArrowEject,
                     WindowAction::SignOut,
                     uri,

@@ -719,7 +719,9 @@ impl PreferencesUpdate {
     /// [`SettingsError::Invalid`] if `value` is not an object.
     pub fn from_json(value: &Value) -> Result<Self, SettingsError> {
         let Some(values) = value.as_object() else {
-            return Err(SettingsError::invalid("Preferences must be an object."));
+            return Err(SettingsError::invalid(crate::i18n::gettext(
+                "Preferences must be an object.",
+            )));
         };
         let text = |key: &str| values.get(key).and_then(Value::as_str);
         let flag = |key: &str| values.get(key).and_then(Value::as_bool);

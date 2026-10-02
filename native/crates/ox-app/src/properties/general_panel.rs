@@ -122,7 +122,7 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
             &ox_core::i18n::gettext("Dimensions"),
             &ox_core::i18n::format_message(
                 "{width} × {height} pixels",
-                &[("width", &(width).to_string()), ("height", &(height).to_string())],
+                &[("width", &width.to_string()), ("height", &height.to_string())],
             ),
         );
     }
@@ -172,8 +172,8 @@ fn add_mount_rows(grid: &PropertyGrid, mount: &MountFacts) {
     let text = ox_core::i18n::format_message(
         "{value1} free of {value2}",
         &[
-            ("value1", &(format::pretty_bytes(free)).to_string()),
-            ("value2", &(format::pretty_bytes(total)).to_string()),
+            ("value1", &format::pretty_bytes(free)),
+            ("value2", &format::pretty_bytes(total)),
         ],
     );
     let value = grid.add_row(&ox_core::i18n::gettext("Free space"), &text);
@@ -296,7 +296,10 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
 /// Analyse disk usage: a disk-usage analyser at the folder at `uri`, as
 /// Dolphin's "Explore in Filelight" (PROP-015).
 fn analyse_usage_button(uri: &str) -> gtk::Button {
-    let button = glyph_button("Analyse disk usage", Icon::HardDrive);
+    let button = glyph_button(
+        ox_core::i18n::gettext_static("Analyse disk usage"),
+        Icon::HardDrive,
+    );
     WindowAction::AnalyseDiskUsage.assign_with_target_to(&button, &uri.to_variant());
     button
 }
@@ -314,7 +317,7 @@ pub(super) fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
 
 /// Change app…: the Open with dialog for the file at `uri`.
 fn change_app_button(uri: &str) -> gtk::Button {
-    let button = glyph_button("Change app…", Icon::Grid);
+    let button = glyph_button(ox_core::i18n::gettext_static("Change app…"), Icon::Grid);
     WindowAction::ChangeApp.assign_with_target_to(&button, &uri.to_variant());
     button
 }
@@ -322,14 +325,14 @@ fn change_app_button(uri: &str) -> gtk::Button {
 /// Apps for this type…: the applications associated with the file's
 /// type (OPEN-026).
 fn type_applications_button(content_type: &str) -> gtk::Button {
-    let button = glyph_button("Apps for this type…", Icon::Apps);
+    let button = glyph_button(ox_core::i18n::gettext_static("Apps for this type…"), Icon::Apps);
     WindowAction::TypeApplications.assign_with_target_to(&button, &content_type.to_variant());
     button
 }
 
 /// Copy full path: puts `path` on the clipboard and says so.
 fn copy_path_button(path: String) -> gtk::Button {
-    let button = glyph_button("Copy full path", Icon::Copy);
+    let button = glyph_button(ox_core::i18n::gettext_static("Copy full path"), Icon::Copy);
     button.connect_clicked(move |button| {
         button.clipboard().set_text(&path);
         if let Some(window) = button.root().and_downcast::<crate::window::BrowserWindow>() {
@@ -342,7 +345,10 @@ fn copy_path_button(path: String) -> gtk::Button {
 /// Calculate folder size: measures the folder at `uri`, which shows in
 /// this tab, the details pane and the Size column.
 fn calculate_size_button(uri: &str) -> gtk::Button {
-    let button = glyph_button("Calculate folder size", Icon::HardDrive);
+    let button = glyph_button(
+        ox_core::i18n::gettext_static("Calculate folder size"),
+        Icon::HardDrive,
+    );
     WindowAction::CalculateFolderSizeOf.assign_with_target_to(&button, &uri.to_variant());
     button
 }
@@ -380,9 +386,9 @@ pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties, ed
 /// `Yes`, `No` or `Not reported by this backend`.
 fn access_text(allowed: Option<bool>) -> &'static str {
     match allowed {
-        Some(true) => "Yes",
-        Some(false) => "No",
-        None => "Not reported by this backend",
+        Some(true) => ox_core::i18n::gettext_static("Yes"),
+        Some(false) => ox_core::i18n::gettext_static("No"),
+        None => ox_core::i18n::gettext_static("Not reported by this backend"),
     }
 }
 

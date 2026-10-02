@@ -303,7 +303,7 @@ fn text_size_choice(page: &SettingsPage) -> gtk::MenuButton {
 fn text_size_label(size: TextSize) -> String {
     let percent = size.percent();
     if size == TextSize::DEFAULT {
-        ox_core::i18n::format_message("{percent}% (default)", &[("percent", &(percent).to_string())])
+        ox_core::i18n::format_message("{percent}% (default)", &[("percent", &percent.to_string())])
     } else {
         format!("{percent}%")
     }

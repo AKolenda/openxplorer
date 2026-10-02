@@ -368,7 +368,7 @@ impl StatusBar {
         let label = &*self.imp().watch_state;
         label.set_visible(interval.is_some());
         if let Some(interval) = interval {
-            label.set_tooltip_text(Some(&ox_core::i18n::format_message("Changes made elsewhere are not shown as they happen. OpenXplorer lists this folder again every {interval}; press F5 to list it now.", &[("interval", &(interval).to_string())])));
+            label.set_tooltip_text(Some(&ox_core::i18n::format_message("Changes made elsewhere are not shown as they happen. OpenXplorer lists this folder again every {interval}; press F5 to list it now.", &[("interval", interval)])));
         }
     }
 

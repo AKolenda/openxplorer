@@ -24,7 +24,7 @@ const COPY_AND_REMOVE: &str = crate::i18n::message_id("Copy, then remove origina
 
 /// The dialog's message for `item`.
 fn question_text(item: &MoveByCopyingItem) -> String {
-    ox_core::i18n::format_message("“{name}” cannot be moved directly to “{destination}”, which is on another drive, share or device. The items can be copied there and the originals removed once their copies are complete. An original that changes during the move is kept.", &[("name", &(item.name).to_string()), ("destination", &(item.destination).to_string())])
+    ox_core::i18n::format_message("“{name}” cannot be moved directly to “{destination}”, which is on another drive, share or device. The items can be copied there and the originals removed once their copies are complete. An original that changes during the move is kept.", &[("name", &item.name), ("destination", &item.destination)])
 }
 
 impl BrowserWindow {

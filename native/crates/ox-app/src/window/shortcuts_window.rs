@@ -50,15 +50,15 @@ impl Group {
     ];
 
     /// The group's heading.
-    const fn label(self) -> &'static str {
+    fn label(self) -> &'static str {
         match self {
-            Group::Navigation => "Navigation",
-            Group::TabsAndWindows => "Tabs and windows",
-            Group::Selection => "Selection",
-            Group::Files => "Files",
-            Group::View => "View",
-            Group::Search => "Search",
-            Group::TextSize => "Text size",
+            Group::Navigation => ox_core::i18n::gettext_static("Navigation"),
+            Group::TabsAndWindows => ox_core::i18n::gettext_static("Tabs and windows"),
+            Group::Selection => ox_core::i18n::gettext_static("Selection"),
+            Group::Files => ox_core::i18n::gettext_static("Files"),
+            Group::View => ox_core::i18n::gettext_static("View"),
+            Group::Search => ox_core::i18n::gettext_static("Search"),
+            Group::TextSize => ox_core::i18n::gettext_static("Text size"),
         }
     }
 }
@@ -68,67 +68,92 @@ impl Group {
 fn describe(name: &str) -> Option<(Group, String)> {
     if let Some(number) = name.strip_prefix("win.show-tab-number::") {
         let label = match number {
-            "0" => "Go to the last tab".to_owned(),
-            number => {
-                ox_core::i18n::format_message("Go to tab {number}", &[("number", &(number).to_string())])
-            }
+            "0" => ox_core::i18n::gettext_static("Go to the last tab").to_owned(),
+            number => ox_core::i18n::format_message("Go to tab {number}", &[("number", number)]),
         };
         return Some((Group::TabsAndWindows, label));
     }
     if let Some(view) = name.strip_prefix("win.view::") {
         let label = match view {
-            "details" => "Details",
-            "compact" => "List",
+            "details" => ox_core::i18n::gettext_static("Details"),
+            "compact" => ox_core::i18n::gettext_static("List"),
             key => IconSize::from_key(key)?.label()?,
         };
         return Some((Group::View, label.to_owned()));
     }
     let (group, label) = match name {
-        "win.back" => (Group::Navigation, "Back"),
-        "win.forward" => (Group::Navigation, "Forward"),
-        "win.up" => (Group::Navigation, "Up to the containing folder"),
-        "win.home" => (Group::Navigation, "Home folder"),
-        "win.refresh" => (Group::Navigation, "Refresh"),
-        "win.split-view" => (Group::View, "Split view"),
-        "win.folder-tree" => (Group::View, "Folder tree"),
-        "win.location" => (Group::Navigation, "Type an address"),
-        "win.address-history" => (Group::Navigation, "Address history"),
-        "region-next" => (Group::Navigation, "Next part of the window"),
-        "region-previous" => (Group::Navigation, "Previous part of the window"),
-        "app.new-window" => (Group::TabsAndWindows, "New window"),
-        "win.new-tab" => (Group::TabsAndWindows, "New tab"),
-        "win.close-tab" => (Group::TabsAndWindows, "Close tab"),
-        "win.reopen-closed-tab" => (Group::TabsAndWindows, "Reopen closed tab"),
-        "win.next-tab" => (Group::TabsAndWindows, "Next tab"),
-        "win.previous-tab" => (Group::TabsAndWindows, "Previous tab"),
-        "win.settings" => (Group::TabsAndWindows, "Settings"),
-        "win.keyboard-shortcuts" => (Group::TabsAndWindows, "Keyboard shortcuts"),
-        "win.help" => (Group::TabsAndWindows, "Help"),
-        "app.quit" => (Group::TabsAndWindows, "Quit"),
-        "win.select-all" => (Group::Selection, "Select all"),
-        "win.select-none" => (Group::Selection, "Clear the selection"),
-        "win.context-menu" => (Group::Selection, "Context menu"),
-        "win.cut" => (Group::Files, "Cut"),
-        "win.copy" => (Group::Files, "Copy"),
-        "win.paste" => (Group::Files, "Paste"),
-        "win.copy-path" => (Group::Files, "Copy path"),
-        "win.rename" => (Group::Files, "Rename"),
-        "win.trash" => (Group::Files, "Delete"),
-        "win.delete-permanently" => (Group::Files, "Delete permanently"),
-        "win.new-folder" => (Group::Files, "New folder"),
-        "win.undo" => (Group::Files, "Undo"),
-        "win.redo" => (Group::Files, "Redo"),
-        "win.properties" => (Group::Files, "Properties"),
-        "win.open-terminal" => (Group::Files, "Open Terminal"),
-        "win.open-terminal-here" => (Group::Files, "Open Terminal here"),
-        "win.hidden" => (Group::View, "Show hidden files"),
-        "win.details-pane" => (Group::View, "Details pane"),
-        "win.sidebar" => (Group::View, "Navigation pane"),
-        "win.search" => (Group::Search, "Search"),
-        "win.search-tool" => (Group::Search, "Search tool"),
-        "win.text-larger" => (Group::TextSize, "Larger text"),
-        "win.text-smaller" => (Group::TextSize, "Smaller text"),
-        "win.text-reset" => (Group::TextSize, "Reset text size"),
+        "win.back" => (Group::Navigation, ox_core::i18n::gettext_static("Back")),
+        "win.forward" => (Group::Navigation, ox_core::i18n::gettext_static("Forward")),
+        "win.up" => (
+            Group::Navigation,
+            ox_core::i18n::gettext_static("Up to the containing folder"),
+        ),
+        "win.home" => (Group::Navigation, ox_core::i18n::gettext_static("Home folder")),
+        "win.refresh" => (Group::Navigation, ox_core::i18n::gettext_static("Refresh")),
+        "win.split-view" => (Group::View, ox_core::i18n::gettext_static("Split view")),
+        "win.folder-tree" => (Group::View, ox_core::i18n::gettext_static("Folder tree")),
+        "win.location" => (
+            Group::Navigation,
+            ox_core::i18n::gettext_static("Type an address"),
+        ),
+        "win.address-history" => (
+            Group::Navigation,
+            ox_core::i18n::gettext_static("Address history"),
+        ),
+        "region-next" => (
+            Group::Navigation,
+            ox_core::i18n::gettext_static("Next part of the window"),
+        ),
+        "region-previous" => (
+            Group::Navigation,
+            ox_core::i18n::gettext_static("Previous part of the window"),
+        ),
+        "app.new-window" => (Group::TabsAndWindows, ox_core::i18n::gettext_static("New window")),
+        "win.new-tab" => (Group::TabsAndWindows, ox_core::i18n::gettext_static("New tab")),
+        "win.close-tab" => (Group::TabsAndWindows, ox_core::i18n::gettext_static("Close tab")),
+        "win.reopen-closed-tab" => (
+            Group::TabsAndWindows,
+            ox_core::i18n::gettext_static("Reopen closed tab"),
+        ),
+        "win.next-tab" => (Group::TabsAndWindows, ox_core::i18n::gettext_static("Next tab")),
+        "win.previous-tab" => (
+            Group::TabsAndWindows,
+            ox_core::i18n::gettext_static("Previous tab"),
+        ),
+        "win.settings" => (Group::TabsAndWindows, ox_core::i18n::gettext_static("Settings")),
+        "win.keyboard-shortcuts" => (
+            Group::TabsAndWindows,
+            ox_core::i18n::gettext_static("Keyboard shortcuts"),
+        ),
+        "win.help" => (Group::TabsAndWindows, ox_core::i18n::gettext_static("Help")),
+        "app.quit" => (Group::TabsAndWindows, ox_core::i18n::gettext_static("Quit")),
+        "win.select-all" => (Group::Selection, ox_core::i18n::gettext_static("Select all")),
+        "win.select-none" => (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Clear the selection"),
+        ),
+        "win.context-menu" => (Group::Selection, ox_core::i18n::gettext_static("Context menu")),
+        "win.cut" => (Group::Files, ox_core::i18n::gettext_static("Cut")),
+        "win.copy" => (Group::Files, ox_core::i18n::gettext_static("Copy")),
+        "win.paste" => (Group::Files, ox_core::i18n::gettext_static("Paste")),
+        "win.copy-path" => (Group::Files, ox_core::i18n::gettext_static("Copy path")),
+        "win.rename" => (Group::Files, ox_core::i18n::gettext_static("Rename")),
+        "win.trash" => (Group::Files, ox_core::i18n::gettext_static("Delete")),
+        "win.delete-permanently" => (Group::Files, ox_core::i18n::gettext_static("Delete permanently")),
+        "win.new-folder" => (Group::Files, ox_core::i18n::gettext_static("New folder")),
+        "win.undo" => (Group::Files, ox_core::i18n::gettext_static("Undo")),
+        "win.redo" => (Group::Files, ox_core::i18n::gettext_static("Redo")),
+        "win.properties" => (Group::Files, ox_core::i18n::gettext_static("Properties")),
+        "win.open-terminal" => (Group::Files, ox_core::i18n::gettext_static("Open Terminal")),
+        "win.open-terminal-here" => (Group::Files, ox_core::i18n::gettext_static("Open Terminal here")),
+        "win.hidden" => (Group::View, ox_core::i18n::gettext_static("Show hidden files")),
+        "win.details-pane" => (Group::View, ox_core::i18n::gettext_static("Details pane")),
+        "win.sidebar" => (Group::View, ox_core::i18n::gettext_static("Navigation pane")),
+        "win.search" => (Group::Search, ox_core::i18n::gettext_static("Search")),
+        "win.search-tool" => (Group::Search, ox_core::i18n::gettext_static("Search tool")),
+        "win.text-larger" => (Group::TextSize, ox_core::i18n::gettext_static("Larger text")),
+        "win.text-smaller" => (Group::TextSize, ox_core::i18n::gettext_static("Smaller text")),
+        "win.text-reset" => (Group::TextSize, ox_core::i18n::gettext_static("Reset text size")),
         _ => return None,
     };
     Some((group, label.to_owned()))
@@ -226,8 +251,8 @@ impl BrowserWindow {
     /// The keyboard shortcuts window: a search field, then one list per
     /// group, which the search narrows to the lines that match.
     pub(super) fn shortcuts_dialog(&self) -> Dialog {
-        let dialog = Dialog::new(self, "Keyboard shortcuts", "");
-        let search = dialog.add_text_field("Search shortcuts", "");
+        let dialog = Dialog::new(self, ox_core::i18n::gettext_static("Keyboard shortcuts"), "");
+        let search = dialog.add_text_field(ox_core::i18n::gettext_static("Search shortcuts"), "");
         let (rows, _) = self.shortcut_rows();
         let mut groups: BTreeMap<Group, Vec<&ShortcutRow>> = BTreeMap::new();
         for row in &rows {
@@ -273,7 +298,7 @@ impl BrowserWindow {
                 Dialog::set_field_visible(grid, any);
             }
         });
-        dialog.add_button("Close", ButtonStyle::Accent);
+        dialog.add_button(ox_core::i18n::gettext_static("Close"), ButtonStyle::Accent);
         dialog
     }
 }

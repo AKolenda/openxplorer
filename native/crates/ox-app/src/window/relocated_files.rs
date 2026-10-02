@@ -81,11 +81,11 @@ impl BrowserWindow {
         );
         dialog.add_hint(&ox_core::i18n::format_message(
             "Old location: {display}",
-            &[("display", &(previous.display()).to_string())],
+            &[("display", &previous.display().to_string())],
         ));
         dialog.add_hint(&ox_core::i18n::format_message(
             "New location: {display}",
-            &[("display", &(destination.display()).to_string())],
+            &[("display", &destination.display().to_string())],
         ));
         dialog.add_note(ox_core::i18n::gettext_static(CONFLICTS));
         dialog.add_button(&ox_core::i18n::gettext("Don't move"), ButtonStyle::Bordered);

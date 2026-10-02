@@ -115,7 +115,11 @@ impl SharingControls {
         let controls = Rc::clone(self);
         glib::spawn_future_local(async move {
             let read = gio::spawn_blocking(move || usershares.share_of(&folder)).await;
-            let read = read.unwrap_or_else(|_| Err(UsershareError::Refused("The check stopped.".into())));
+            let read = read.unwrap_or_else(|_| {
+                Err(UsershareError::Refused(
+                    ox_core::i18n::gettext_static("The check stopped.").into(),
+                ))
+            });
             controls.show(read);
         });
     }
@@ -126,10 +130,7 @@ impl SharingControls {
             Ok(Some(share)) => {
                 self.state.set_text(&ox_core::i18n::format_message(
                     "Shared as \\\\{value1}\\{name}",
-                    &[
-                        ("value1", &(glib::host_name()).to_string()),
-                        ("name", &(share.name).to_string()),
-                    ],
+                    &[("value1", glib::host_name().as_ref()), ("name", &share.name)],
                 ));
                 self.share.set_active(true);
                 self.name.set_text(&share.name);
@@ -169,7 +170,11 @@ impl SharingControls {
         glib::spawn_future_local(async move {
             let changed =
                 gio::spawn_blocking(move || change_share(&usershares, wanted.as_ref(), shared_as)).await;
-            match changed.unwrap_or_else(|_| Err(UsershareError::Refused("The change stopped.".into()))) {
+            match changed.unwrap_or_else(|_| {
+                Err(UsershareError::Refused(
+                    ox_core::i18n::gettext_static("The change stopped.").into(),
+                ))
+            }) {
                 Ok(()) => controls.reload(),
                 Err(error) => {
                     controls.state.set_text(&error.to_string());

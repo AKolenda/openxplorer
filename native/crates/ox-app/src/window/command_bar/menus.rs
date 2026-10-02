@@ -192,7 +192,7 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
         .into(),
         MenuEntry::Divider,
         item(
-            "Adjust view display style…",
+            ox_core::i18n::gettext_static("Adjust view display style…"),
             Icon::Settings,
             WindowAction::ViewProperties,
         ),

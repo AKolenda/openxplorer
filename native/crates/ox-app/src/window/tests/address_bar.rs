@@ -224,7 +224,7 @@ fn the_title_crumbs_and_address_call_a_phone_by_its_mount_name() {
 /// "Show full path in the title bar" titles the window with the folder's
 /// path instead of its name.
 ///
-/// parity: SET-011
+/// parity: SET-011, TAB-046
 #[gtk::test]
 fn the_title_shows_the_full_path_when_the_settings_ask() {
     let fixture = Fixture::standard();

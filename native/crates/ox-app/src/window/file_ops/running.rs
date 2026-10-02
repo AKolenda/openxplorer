@@ -241,7 +241,12 @@ impl BrowserWindow {
                 if still_here {
                     self.reload_selecting(Vec::new());
                 }
-                dialog::show_message(self, STOPPED_TITLE, &error.to_string()).await;
+                dialog::show_message(
+                    self,
+                    ox_core::i18n::gettext_static(STOPPED_TITLE),
+                    &error.to_string(),
+                )
+                .await;
             }
         }
     }
@@ -269,7 +274,9 @@ impl BrowserWindow {
         self.notify_if_in_background(&summary, destination);
         match summary {
             OperationSummary::Toast(text) => self.show_message(&text),
-            OperationSummary::Report(text) => dialog::show_message(self, RESULT_TITLE, &text).await,
+            OperationSummary::Report(text) => {
+                dialog::show_message(self, ox_core::i18n::gettext_static(RESULT_TITLE), &text).await;
+            }
         }
     }
 

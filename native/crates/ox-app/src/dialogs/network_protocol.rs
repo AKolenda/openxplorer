@@ -48,13 +48,13 @@ impl Protocol {
     /// The name in the Type list.
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Smb => "Windows share (SMB)",
-            Self::Sftp => "SSH (SFTP)",
-            Self::Ftp => "FTP",
-            Self::Ftps => "FTP with TLS (FTPS)",
-            Self::WebDav => "WebDAV",
-            Self::WebDavs => "Secure WebDAV (HTTPS)",
-            Self::Nfs => "NFS",
+            Self::Smb => ox_core::i18n::gettext_static("Windows share (SMB)"),
+            Self::Sftp => ox_core::i18n::gettext_static("SSH (SFTP)"),
+            Self::Ftp => ox_core::i18n::gettext_static("FTP"),
+            Self::Ftps => ox_core::i18n::gettext_static("FTP with TLS (FTPS)"),
+            Self::WebDav => ox_core::i18n::gettext_static("WebDAV"),
+            Self::WebDavs => ox_core::i18n::gettext_static("Secure WebDAV (HTTPS)"),
+            Self::Nfs => ox_core::i18n::gettext_static("NFS"),
         }
     }
 

@@ -47,10 +47,10 @@ impl FileManagerMethod {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum FileManagerRequestError {
     /// The method is not one of the three the interface has.
-    #[error("Unsupported method.")]
+    #[error("{}", crate::i18n::gettext("Unsupported method."))]
     UnsupportedMethod,
     /// The request names no location, or more than 100.
-    #[error("Expected 1–100 file locations.")]
+    #[error("{}", crate::i18n::gettext("Expected 1–100 file locations."))]
     WrongLocationCount,
     /// A location is not one the app can open.
     #[error(transparent)]

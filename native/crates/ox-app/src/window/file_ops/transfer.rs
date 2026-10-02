@@ -108,7 +108,9 @@ impl BrowserWindow {
     pub(crate) async fn paste(&self, into: Option<String>) {
         let clipboard = self.refresh_file_clipboard().await;
         if into.is_none() && self.is_searching() {
-            self.show_message("Open the destination folder before pasting.");
+            self.show_message(ox_core::i18n::gettext_static(
+                "Open the destination folder before pasting.",
+            ));
             return;
         }
         let Some(destination_folder) = into.or_else(|| self.current_uri()) else {
@@ -136,7 +138,7 @@ impl BrowserWindow {
             .borrow()
             .is_writable_location(&destination_folder)
         {
-            self.show_message("This folder is read-only.");
+            self.show_message(ox_core::i18n::gettext_static("This folder is read-only."));
             return;
         }
         let mode = match files.mode() {

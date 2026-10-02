@@ -167,7 +167,7 @@ mod tests {
 
     /// Hidden-last remains independent of the selected sort direction.
     ///
-    /// parity: VIEW-021
+    /// parity: VIEW-017, VIEW-021
     #[gtk::test]
     fn hidden_items_sort_after_visible_items_when_requested() {
         let options = SharedOptions::new(Cell::new(SortOptions {

@@ -438,10 +438,10 @@ fn renderer_for(arguments: &[String], is_chosen: bool) -> Option<&'static str> {
 /// instance (`is_remote`) that draws with `renderer` rather than Cairo:
 /// the option applies from a restart, which `--restart` offers.
 fn software_rendering_notice(asks: bool, is_remote: bool, renderer: Option<&str>) -> Option<&'static str> {
-    (asks && is_remote && renderer != Some(SOFTWARE_RENDERER)).then_some(
+    (asks && is_remote && renderer != Some(SOFTWARE_RENDERER)).then_some(ox_core::i18n::gettext_static(
         "OpenXplorer is already running with hardware rendering. To use software rendering, \
          run: openxplorer --restart --software-rendering",
-    )
+    ))
 }
 
 /// Runs the app under the build's application ID (`APP_ID` in

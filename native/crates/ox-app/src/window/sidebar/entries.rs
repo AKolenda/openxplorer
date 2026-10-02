@@ -50,11 +50,16 @@ impl Section {
     pub(in crate::window) fn hiding(self) -> Option<(&'static str, &'static str)> {
         match self {
             Section::Home => None,
-            Section::QuickAccess => Some(("quickAccess", "Quick access")),
-            Section::SavedSearches => Some(("savedSearches", "Saved searches")),
-            Section::ThisPc => Some(("thisPc", "This PC")),
-            Section::Network => Some(("network", "Network")),
-            Section::RecentAndBin => Some(("recent", "Recent files and Recycle Bin")),
+            Section::QuickAccess => Some(("quickAccess", ox_core::i18n::gettext_static("Quick access"))),
+            Section::SavedSearches => {
+                Some(("savedSearches", ox_core::i18n::gettext_static("Saved searches")))
+            }
+            Section::ThisPc => Some(("thisPc", ox_core::i18n::gettext_static("This PC"))),
+            Section::Network => Some(("network", ox_core::i18n::gettext_static("Network"))),
+            Section::RecentAndBin => Some((
+                "recent",
+                ox_core::i18n::gettext_static("Recent files and Recycle Bin"),
+            )),
         }
     }
 }
@@ -214,11 +219,11 @@ fn drive_eject_button(row: &VolumeRow) -> Option<EjectButton> {
 /// The state text of a network row, as `renderSidebar` titles it.
 fn network_state(location: &NetworkLocation) -> &'static str {
     if location.is_connected {
-        "Connected"
+        ox_core::i18n::gettext_static("Connected")
     } else if location.is_saved {
-        "Saved · connect on open"
+        ox_core::i18n::gettext_static("Saved · connect on open")
     } else {
-        "Opened this session"
+        ox_core::i18n::gettext_static("Opened this session")
     }
 }
 
@@ -263,7 +268,7 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
     SidebarEntry {
         section: Section::ThisPc,
         level: RowLevel::Child,
-        label: "Local Disk".to_owned(),
+        label: ox_core::i18n::gettext("Local Disk"),
         icon: Art::Glyph(Icon::HardDrive),
         target: RowTarget::Location(root.to_owned()),
         tooltip: locations.display_location(root),
@@ -284,10 +289,10 @@ fn pin_drop_tail() -> SidebarEntry {
     SidebarEntry {
         section: Section::QuickAccess,
         level: RowLevel::Place,
-        label: "Pin to Quick access".to_owned(),
+        label: ox_core::i18n::gettext("Pin to Quick access"),
         icon: Art::Glyph(Icon::Add),
         target: RowTarget::PinDropTail,
-        tooltip: "Quick access — drop folders here to pin".to_owned(),
+        tooltip: ox_core::i18n::gettext("Quick access — drop folders here to pin"),
         pinned: false,
         menu: None,
         eject: None,
@@ -338,7 +343,7 @@ pub(in crate::window) fn sidebar_entries(
 /// counts the items while `trash_items` are in it.
 pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEntry; 3] {
     let recent = SidebarEntry {
-        tooltip: "Recently used files".to_owned(),
+        tooltip: ox_core::i18n::gettext("Recently used files"),
         menu: Some(PlaceMenu::RecentFiles),
         ..fixed_entry(
             Section::RecentAndBin,
@@ -348,7 +353,7 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
         )
     };
     let recent_locations = SidebarEntry {
-        tooltip: "Recently visited folders".to_owned(),
+        tooltip: ox_core::i18n::gettext("Recently visited folders"),
         menu: Some(PlaceMenu::RecentLocations),
         ..fixed_entry(
             Section::RecentAndBin,
@@ -358,15 +363,15 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
         )
     };
     let (icon, state) = match trash_items {
-        0 => (Art::Glyph(Icon::Delete), "Empty".to_owned()),
+        0 => (Art::Glyph(Icon::Delete), ox_core::i18n::gettext("Empty")),
         1 => (Art::TintedGlyph(Icon::Delete, Tint::Home), "1 item".to_owned()),
         count => (
             Art::TintedGlyph(Icon::Delete, Tint::Home),
-            ox_core::i18n::format_message("{count} items", &[("count", &(count).to_string())]),
+            ox_core::i18n::format_message("{count} items", &[("count", &count.to_string())]),
         ),
     };
     let bin = SidebarEntry {
-        tooltip: ox_core::i18n::format_message("Recycle Bin · {state}", &[("state", &(state).to_string())]),
+        tooltip: ox_core::i18n::format_message("Recycle Bin · {state}", &[("state", &state)]),
         menu: Some(PlaceMenu::RecycleBin {
             has_items: trash_items > 0,
         }),

@@ -52,14 +52,14 @@ pub(super) fn startup_folder_for(typed: &str, base: Option<&str>) -> Result<Stri
     }
     let uri = normalise_navigation(typed, base, &glib::home_dir()).map_err(|error| error.to_string())?;
     if Page::from_uri(&uri) == Some(Page::Settings) {
-        return Err("Settings cannot be the startup folder.".to_owned());
+        return Err(ox_core::i18n::gettext("Settings cannot be the startup folder."));
     }
     // A share is checked when it is listed, which may ask for a sign-in.
     let is_missing = gio::File::for_uri(&uri).path().is_some_and(|path| !path.is_dir());
     if is_missing {
         return Err(ox_core::i18n::format_message(
             "“{typed}” is not a folder that exists.",
-            &[("typed", &(typed).to_string())],
+            &[("typed", typed)],
         ));
     }
     Ok(uri)

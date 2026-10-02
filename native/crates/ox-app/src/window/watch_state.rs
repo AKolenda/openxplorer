@@ -22,7 +22,7 @@ fn interval_text(seconds: u32) -> String {
         seconds if seconds % 60 == 0 => {
             ox_core::i18n::format_message("{value1} minutes", &[("value1", &(seconds / 60).to_string())])
         }
-        seconds => ox_core::i18n::format_message("{seconds} seconds", &[("seconds", &(seconds).to_string())]),
+        seconds => ox_core::i18n::format_message("{seconds} seconds", &[("seconds", &seconds.to_string())]),
     }
 }
 

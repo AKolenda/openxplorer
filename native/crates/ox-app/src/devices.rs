@@ -59,10 +59,10 @@ impl Removal {
     /// "Safely remove".
     pub(crate) fn label(self, kind: VolumeKind) -> &'static str {
         match (self, kind) {
-            (Removal::Disconnect, VolumeKind::Device) => "Disconnect device",
-            (Removal::Disconnect, VolumeKind::Drive) => "Disconnect mount",
-            (Removal::Eject, _) => "Eject",
-            (Removal::SafelyRemove, _) => "Safely remove",
+            (Removal::Disconnect, VolumeKind::Device) => ox_core::i18n::gettext_static("Disconnect device"),
+            (Removal::Disconnect, VolumeKind::Drive) => ox_core::i18n::gettext_static("Disconnect mount"),
+            (Removal::Eject, _) => ox_core::i18n::gettext_static("Eject"),
+            (Removal::SafelyRemove, _) => ox_core::i18n::gettext_static("Safely remove"),
         }
     }
 
@@ -73,7 +73,7 @@ impl Removal {
         match self {
             Removal::SafelyRemove => Some(ox_core::i18n::format_message(
                 "“{label}” can now be safely unplugged.",
-                &[("label", &(label).to_string())],
+                &[("label", label)],
             )),
             Removal::Disconnect | Removal::Eject => None,
         }
@@ -83,9 +83,9 @@ impl Removal {
     /// disconnect" in app.js).
     pub(crate) fn failure_title(self) -> &'static str {
         match self {
-            Removal::Disconnect => "Could not disconnect",
-            Removal::Eject => "Could not eject",
-            Removal::SafelyRemove => "Could not safely remove",
+            Removal::Disconnect => ox_core::i18n::gettext_static("Could not disconnect"),
+            Removal::Eject => ox_core::i18n::gettext_static("Could not eject"),
+            Removal::SafelyRemove => ox_core::i18n::gettext_static("Could not safely remove"),
         }
     }
 

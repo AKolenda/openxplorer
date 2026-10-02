@@ -96,7 +96,7 @@ pub(crate) struct PropertiesTarget {
 impl PropertiesTarget {
     /// The dialog's title: `<name> Properties`.
     pub(crate) fn dialog_title(&self) -> String {
-        ox_core::i18n::format_message("{title} Properties", &[("title", &(self.title).to_string())])
+        ox_core::i18n::format_message("{title} Properties", &[("title", &self.title)])
     }
 }
 
@@ -119,14 +119,14 @@ pub(crate) enum PropertiesTab {
 
 impl PropertiesTab {
     /// The tab's label.
-    pub(crate) const fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
-            PropertiesTab::General => "General",
-            PropertiesTab::Sharing => "Sharing",
-            PropertiesTab::Location => "Location",
-            PropertiesTab::Permissions => "Permissions",
-            PropertiesTab::Checksums => "Checksums",
-            PropertiesTab::PreviousVersions => "Previous versions",
+            PropertiesTab::General => ox_core::i18n::gettext_static("General"),
+            PropertiesTab::Sharing => ox_core::i18n::gettext_static("Sharing"),
+            PropertiesTab::Location => ox_core::i18n::gettext_static("Location"),
+            PropertiesTab::Permissions => ox_core::i18n::gettext_static("Permissions"),
+            PropertiesTab::Checksums => ox_core::i18n::gettext_static("Checksums"),
+            PropertiesTab::PreviousVersions => ox_core::i18n::gettext_static("Previous versions"),
         }
     }
 

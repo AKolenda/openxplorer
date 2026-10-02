@@ -68,7 +68,12 @@ impl BrowserWindow {
             Err(error) => {
                 self.context().put_back_journal_step(direction, step);
                 self.reload_selecting(Vec::new());
-                dialog::show_message(self, STOPPED_TITLE, &error.to_string()).await;
+                dialog::show_message(
+                    self,
+                    ox_core::i18n::gettext_static(STOPPED_TITLE),
+                    &error.to_string(),
+                )
+                .await;
             }
         }
     }
@@ -83,14 +88,14 @@ impl BrowserWindow {
         let message = if changed.len() == 1 {
             ox_core::i18n::format_message(
                 "“{first}” was changed after it was copied. Undo moves it to the Recycle Bin anyway?",
-                &[("first", &(first).to_string())],
+                &[("first", first)],
             )
         } else {
-            ox_core::i18n::format_message("{len} copies, such as “{first}”, were changed after they were copied. Undo moves them to the Recycle Bin anyway?", &[("len", &(changed.len()).to_string()), ("first", &(first).to_string())])
+            ox_core::i18n::format_message("{len} copies, such as “{first}”, were changed after they were copied. Undo moves them to the Recycle Bin anyway?", &[("len", &changed.len().to_string()), ("first", first)])
         };
         let dialog = Dialog::new(self, ox_core::i18n::gettext_static(UNDO_COPY_TITLE), &message);
         dialog.add_cancel_button();
-        dialog.add_button("Undo copy", ButtonStyle::Accent);
+        dialog.add_button(ox_core::i18n::gettext_static("Undo copy"), ButtonStyle::Accent);
         dialog.open();
         let confirmed = dialog.next_response().await.is_some();
         if confirmed {

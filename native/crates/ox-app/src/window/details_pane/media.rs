@@ -109,7 +109,7 @@ impl DetailsPane {
                     "Dimensions",
                     ox_core::i18n::format_message(
                         "{width} × {height} pixels",
-                        &[("width", &(width).to_string()), ("height", &(height).to_string())],
+                        &[("width", &width.to_string()), ("height", &height.to_string())],
                     ),
                 );
             }

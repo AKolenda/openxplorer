@@ -34,10 +34,10 @@ impl DefaultsReport {
     pub(crate) fn handler_label(&self, mime_type: MimeType) -> String {
         let handler = self.status.handler(mime_type);
         if handler.is_empty() {
-            return "Not set".to_owned();
+            return ox_core::i18n::gettext_static("Not set").to_owned();
         }
         if handler == APP_ID {
-            return "OpenXplorer".to_owned();
+            return ox_core::i18n::gettext("OpenXplorer");
         }
         self.names
             .get(handler)
@@ -48,7 +48,10 @@ impl DefaultsReport {
     /// The line under "ZIP files" (`#zip-status`).
     pub(crate) fn zip_text(&self) -> String {
         if self.status.is_zip_default() {
-            return "ZIP opening: OpenXplorer. This is separate from folder defaults.".to_owned();
+            return ox_core::i18n::gettext_static(
+                "ZIP opening: OpenXplorer. This is separate from folder defaults.",
+            )
+            .to_owned();
         }
         let handler = self.status.handler(MimeType::Zip);
         let handler = if handler.is_empty() {
@@ -58,7 +61,7 @@ impl DefaultsReport {
         };
         ox_core::i18n::format_message(
             "ZIP opening uses {handler}. Opening a download is not Show in folder.",
-            &[("handler", &(handler).to_string())],
+            &[("handler", &handler)],
         )
     }
 }
@@ -78,14 +81,18 @@ impl ShowInFolderStatus {
     /// The status line of Show in folder (`#reveal-status`, INT-016).
     pub(crate) fn text(&self) -> String {
         if self.is_owned {
-            return "Show in folder: OpenXplorer owns FileManager1. Browser portal routing is a \
-                    separate check."
-                .to_owned();
+            return ox_core::i18n::gettext_static(
+                "Show in folder: OpenXplorer owns FileManager1. Browser portal routing is a \
+                    separate check.",
+            )
+            .to_owned();
         }
         if !self.is_enabled {
-            return "Show in folder: not enabled. Folder associations alone do not control every \
-                    browser route."
-                .to_owned();
+            return ox_core::i18n::gettext_static(
+                "Show in folder: not enabled. Folder associations alone do not control every \
+                    browser route.",
+            )
+            .to_owned();
         }
         let owner = if self.owner_label.is_empty() {
             "the current file manager"
@@ -94,7 +101,7 @@ impl ShowInFolderStatus {
         };
         ox_core::i18n::format_message(
             "Show in folder: enabled, waiting for {owner}. Close other file managers or log out and back in.",
-            &[("owner", &(owner).to_string())],
+            &[("owner", owner)],
         )
     }
 }

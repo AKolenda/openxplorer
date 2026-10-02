@@ -74,11 +74,11 @@ impl BrowserWindow {
             ox_core::i18n::gettext_static(NEW_LINK_TITLE),
             ox_core::i18n::gettext_static(NEW_LINK_MESSAGE),
         );
-        let target = dialog.add_text_field("Link to", "");
-        target.set_placeholder_text(Some("For example ~/Documents"));
-        let name = dialog.add_text_field("Name", "");
+        let target = dialog.add_text_field(ox_core::i18n::gettext_static("Link to"), "");
+        target.set_placeholder_text(Some(ox_core::i18n::gettext_static("For example ~/Documents")));
+        let name = dialog.add_text_field(ox_core::i18n::gettext_static("Name"), "");
         dialog.add_cancel_button();
-        dialog.add_button("Create", ButtonStyle::Accent);
+        dialog.add_button(ox_core::i18n::gettext_static("Create"), ButtonStyle::Accent);
         dialog.open();
         let protection = self.context().write_protection();
         loop {

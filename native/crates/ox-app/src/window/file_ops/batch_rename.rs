@@ -46,16 +46,16 @@ impl BrowserWindow {
             .collect();
         let message = ox_core::i18n::format_message(
             "Rename the {len} selected items to:",
-            &[("len", &(items.len()).to_string())],
+            &[("len", &items.len().to_string())],
         );
         let dialog = Dialog::new(self, ox_core::i18n::gettext_static(TITLE), &message);
-        let name = dialog.add_text_field("Name", DEFAULT_BATCH_NAME);
+        let name = dialog.add_text_field(ox_core::i18n::gettext_static("Name"), DEFAULT_BATCH_NAME);
         let first_number = gtk::SpinButton::with_range(0.0, MAX_FIRST_NUMBER, 1.0);
         first_number.set_value(1.0);
         first_number.set_activates_default(true);
         dialog.add_labelled(ox_core::i18n::gettext_static(FIRST_NUMBER_LABEL), &first_number);
         dialog.add_cancel_button();
-        dialog.add_button("Rename", ButtonStyle::Accent);
+        dialog.add_button(ox_core::i18n::gettext_static("Rename"), ButtonStyle::Accent);
         dialog.open();
         select_before_number(&name);
         let batch = loop {

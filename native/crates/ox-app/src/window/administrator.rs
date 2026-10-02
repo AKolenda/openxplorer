@@ -26,12 +26,12 @@ impl BrowserWindow {
             let Some(uri) = window.administrator_target() else { return; };
             glib::spawn_future_local(glib::clone!(#[weak] window, async move {
                 if !gio::Vfs::default().supported_uri_schemes().iter().any(|scheme| scheme == "admin") {
-                    dialog::show_message(&window, "Administrator access unavailable", "Install your distribution’s `GVfs` administrator backend to use admin:// locations. OpenXplorer itself always runs as your user.").await;
+                    dialog::show_message(&window, ox_core::i18n::gettext_static("Administrator access unavailable"), ox_core::i18n::gettext_static("Install your distribution’s `GVfs` administrator backend to use admin:// locations. OpenXplorer itself always runs as your user.")).await;
                     return;
                 }
-                let prompt = Dialog::new(&window, "Open as administrator?", "This folder will use administrator permissions. Your desktop may ask you to authenticate. Changes here can affect every user.");
+                let prompt = Dialog::new(&window, ox_core::i18n::gettext_static("Open as administrator?"), ox_core::i18n::gettext_static("This folder will use administrator permissions. Your desktop may ask you to authenticate. Changes here can affect every user."));
                 prompt.add_cancel_button();
-                let open = prompt.add_button("Open as administrator", ButtonStyle::Accent);
+                let open = prompt.add_button(ox_core::i18n::gettext_static("Open as administrator"), ButtonStyle::Accent);
                 prompt.open();
                 let answer = prompt.next_response().await;
                 prompt.finish();

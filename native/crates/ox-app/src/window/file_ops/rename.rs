@@ -200,7 +200,7 @@ impl BrowserWindow {
             self.context().record_operation(record);
             self.show_message_with_undo(&ox_core::i18n::format_message(
                 "Renamed to “{name}”.",
-                &[("name", &(renamed.name).to_string())],
+                &[("name", &renamed.name)],
             ));
         }
     }

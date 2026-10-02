@@ -55,7 +55,10 @@ impl BrowserWindow {
             match mounted {
                 Ok(root) => window.navigate_or_report(&root),
                 Err(error) if error.is_cancelled() => {}
-                Err(error) => window.show_failure("Could not mount device", &error.to_string()),
+                Err(error) => window.show_failure(
+                    ox_core::i18n::gettext_static("Could not mount device"),
+                    &error.to_string(),
+                ),
             }
         });
     }
@@ -79,7 +82,10 @@ impl BrowserWindow {
             Ok(root) => Some(root),
             Err(error) if error.is_cancelled() => None,
             Err(error) => {
-                self.show_failure("Could not mount device", &error.to_string());
+                self.show_failure(
+                    ox_core::i18n::gettext_static("Could not mount device"),
+                    &error.to_string(),
+                );
                 None
             }
         }

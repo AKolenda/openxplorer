@@ -24,34 +24,49 @@ pub enum SearchError {
     Location(#[from] LocationError),
     /// An SMB server's share list was offered as a root (`configure` in
     /// `search_index.py`): only a shared folder holds files to index.
-    #[error("Open a share first. Cache a shared folder, not the server’s share list.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Open a share first. Cache a shared folder, not the server’s share list.")
+    )]
     ServerList,
     /// A phone, camera or iOS device was offered as a root (`cacheSet` in
     /// `winspace.py`).
-    #[error(
-        "Connected-device search caching is not supported. Copy files to local storage before indexing them."
-    )]
+    #[error("{}", crate::i18n::gettext("Connected-device search caching is not supported. Copy files to local storage before indexing them."))]
     DeviceLocation,
     /// A scan was started for a folder that is not an enabled root.
-    #[error("This folder is not enabled for caching.")]
+    #[error("{}", crate::i18n::gettext("This folder is not enabled for caching."))]
     NotEnabled,
     /// The search text is longer than [`MAX_QUERY_CHARS`](super::MAX_QUERY_CHARS).
-    #[error("Search must be at most 512 characters.")]
+    #[error("{}", crate::i18n::gettext("Search must be at most 512 characters."))]
     QueryTooLong,
     /// A search with no words was to be saved (SRCH-038).
-    #[error("Type what to search for before saving the search.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Type what to search for before saving the search.")
+    )]
     EmptySearch,
     /// The search or scan was cancelled; not an error to show.
-    #[error("Operation cancelled.")]
+    #[error("{}", crate::i18n::gettext("Operation cancelled."))]
     Cancelled,
     /// A root would hold more than a million entries.
-    #[error("One-million-entry limit reached. Select smaller roots; additional entries were not indexed.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "One-million-entry limit reached. Select smaller roots; additional entries were not indexed."
+        )
+    )]
     EntryLimit,
     /// One folder holds more than a million entries.
-    #[error("Directory exceeds the one-million-entry safety limit.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Directory exceeds the one-million-entry safety limit.")
+    )]
     FolderTooLarge,
     /// A live update found more than 10,000 new folders.
-    #[error("Many new directories appeared; use Refresh for a complete scan.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Many new directories appeared; use Refresh for a complete scan.")
+    )]
     TooManyNewFolders,
     /// A folder could not be read, for example because its share is not
     /// mounted or access is denied. The message is GIO's.
@@ -75,10 +90,10 @@ pub enum SearchError {
         error: io::Error,
     },
     /// SQLite reported an error.
-    #[error("The search cache database failed: {0}")]
+    #[error("{}", crate::i18n::format_message("The search cache database failed: {error}", &[("error", &.0.to_string())]))]
     Database(#[from] rusqlite::Error),
     /// The index service could not start its worker thread.
-    #[error("The search index could not start: {0}")]
+    #[error("{}", crate::i18n::format_message("The search index could not start: {error}", &[("error", &.0.to_string())]))]
     WorkerStart(io::Error),
 }
 

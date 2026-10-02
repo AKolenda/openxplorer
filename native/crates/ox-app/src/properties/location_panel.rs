@@ -176,7 +176,7 @@ impl LocationPanel {
     fn build(&self) {
         let imp = self.imp();
         let label = self.folder().label();
-        let intro = ox_core::i18n::format_message("Choose where {label} is stored. Applications that honor Linux’s standard-folder settings will use this location.", &[("label", &(label).to_string())]);
+        let intro = ox_core::i18n::format_message("Choose where {label} is stored. Applications that honor Linux’s standard-folder settings will use this location.", &[("label", label)]);
         self.append(&quiet_text(&intro));
         let field = labelled_entry(self.upcast_ref(), &ox_core::i18n::gettext("Folder location"), "");
         field.connect_changed(glib::clone!(
@@ -198,7 +198,10 @@ impl LocationPanel {
         self.append(&mount_assistant(glib::clone!(
             #[weak(rename_to = panel)]
             self,
-            move |path: &str| panel.fill_field(path, "After mounting, click Check location.")
+            move |path: &str| panel.fill_field(
+                path,
+                ox_core::i18n::gettext_static("After mounting, click Check location.")
+            )
         )));
     }
 
@@ -207,13 +210,13 @@ impl LocationPanel {
     fn build_controls(&self) {
         let imp = self.imp();
         imp.controls.add_css_class("location-controls");
-        let check = glyph_button("Check location", Icon::Checkmark);
+        let check = glyph_button(ox_core::i18n::gettext_static("Check location"), Icon::Checkmark);
         check.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
             move |_| panel.check_location()
         ));
-        let restore = glyph_button("Restore default", Icon::ArrowReset);
+        let restore = glyph_button(ox_core::i18n::gettext_static("Restore default"), Icon::ArrowReset);
         restore.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
@@ -238,7 +241,7 @@ impl LocationPanel {
             move |_| panel.update_apply()
         ));
         self.append(&consent);
-        let apply = glyph_button("Apply location", Icon::Checkmark);
+        let apply = glyph_button(ox_core::i18n::gettext_static("Apply location"), Icon::Checkmark);
         apply.remove_css_class(ButtonStyle::Bordered.css_class());
         apply.add_css_class(ButtonStyle::Accent.css_class());
         apply.set_halign(gtk::Align::Start);
@@ -287,7 +290,7 @@ impl LocationPanel {
     }
 
     fn add_use_previous(&self) {
-        let use_previous = glyph_button("Use previous", Icon::History);
+        let use_previous = glyph_button(ox_core::i18n::gettext_static("Use previous"), Icon::History);
         use_previous.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
@@ -324,7 +327,10 @@ impl LocationPanel {
                     return;
                 };
                 if let Some(path) = paths.get(index as usize) {
-                    panel.fill_field(path, "Check this destination before applying.");
+                    panel.fill_field(
+                        path,
+                        ox_core::i18n::gettext_static("Check this destination before applying."),
+                    );
                 }
             }
         ));
@@ -339,7 +345,9 @@ impl LocationPanel {
         let default_path = location.default_path.to_string_lossy();
         self.fill_field(
             &default_path,
-            "Check this folder, then Apply. Existing files stay where they are.",
+            ox_core::i18n::gettext_static(
+                "Check this folder, then Apply. Existing files stay where they are.",
+            ),
         );
     }
 
@@ -350,7 +358,7 @@ impl LocationPanel {
         };
         self.fill_field(
             &previous.to_string_lossy(),
-            "Check the previous folder, then Apply.",
+            ox_core::i18n::gettext_static("Check the previous folder, then Apply."),
         );
     }
 

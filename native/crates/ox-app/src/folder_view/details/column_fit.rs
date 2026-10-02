@@ -32,7 +32,8 @@ const RESIZE_EDGE: f64 = 8.0;
 const NUDGE_STEP: i32 = 10;
 
 /// What a title says about its edge (`handle.title` in app.js).
-const TITLE_TOOLTIP: &str = "Drag to resize · double-click to fit loaded items (up to 2,000)";
+const TITLE_TOOLTIP: &str =
+    crate::i18n::message_id("Drag to resize · double-click to fit loaded items (up to 2,000)");
 
 impl DetailsView {
     /// Lets the titles fit and nudge their columns, and keeps dragged
@@ -41,7 +42,7 @@ impl DetailsView {
         let Some(header) = self.header() else { return };
         for (column, title) in self.titles(&header) {
             title.set_focusable(true);
-            title.set_tooltip_text(Some(TITLE_TOOLTIP));
+            title.set_tooltip_text(Some(ox_core::i18n::gettext_static(TITLE_TOOLTIP)));
             describe_resizing(&title, column);
             let keys = gtk::EventControllerKey::new();
             keys.connect_key_pressed(glib::clone!(
@@ -200,7 +201,7 @@ fn describe_resizing(title: &gtk::Widget, column: SortColumn) {
     let limits = column_widths::width_limits(column);
     let description = ox_core::i18n::format_message(
         "Resize {label} column: Left and Right change its width, Home fits it",
-        &[("label", &(column.label()).to_string())],
+        &[("label", column.label())],
     );
     title.update_property(&[
         gtk::accessible::Property::Description(&description),
@@ -302,7 +303,7 @@ mod tests {
     /// A double-click on a title's end edge fits that column, and the
     /// fitted width is reported to be saved once it settles.
     ///
-    /// parity: VIEW-029
+    /// parity: VIEW-029, VIEW-032
     #[gtk::test]
     fn a_double_click_on_a_resize_edge_fits_and_saves_the_column() {
         let (view, _model) = view_of(&["a.txt", "A rather long file name that needs a wide column.txt"]);

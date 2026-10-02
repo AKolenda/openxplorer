@@ -113,16 +113,18 @@ impl Installation {
     pub fn install_refusal(self) -> &'static str {
         match self {
             Self::DebianPackage | Self::DebianPackageWithoutTools | Self::Unpackaged => {
-                "In-app installation requires the installed Debian package and polkit. Use GitHub \
-                 Releases for this build."
+                crate::i18n::gettext_static(
+                    "In-app installation requires the installed Debian package and polkit. Use GitHub \
+                 Releases for this build.",
+                )
             }
-            Self::Flatpak => {
-                "This build is a Flatpak. Update OpenXplorer with GNOME Software or flatpak update."
-            }
-            Self::OtherPackage => {
+            Self::Flatpak => crate::i18n::gettext_static(
+                "This build is a Flatpak. Update OpenXplorer with GNOME Software or flatpak update.",
+            ),
+            Self::OtherPackage => crate::i18n::gettext_static(
                 "This build was installed by a system package manager. Update OpenXplorer with it, \
-                 for example in GNOME Software."
-            }
+                 for example in GNOME Software.",
+            ),
         }
     }
 }

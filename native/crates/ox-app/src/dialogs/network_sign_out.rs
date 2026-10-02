@@ -48,7 +48,7 @@ pub(crate) fn sign_out_dialog(
     host: &str,
     on_sign_out: impl Fn(&Dialog, SignOutChoice) + 'static,
 ) -> Dialog {
-    let title = ox_core::i18n::format_message("Sign out of {host}?", &[("host", &(host).to_string())]);
+    let title = ox_core::i18n::format_message("Sign out of {host}?", &[("host", host)]);
     let dialog = Dialog::new(parent, &title, ox_core::i18n::gettext_static(MESSAGE));
     let forget = dialog.add_check_button(
         &ox_core::i18n::gettext("Forget saved credentials for this server"),

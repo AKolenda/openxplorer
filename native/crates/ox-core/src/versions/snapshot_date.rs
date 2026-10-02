@@ -11,14 +11,16 @@
 use super::paths::SMB_VERSION_PREFIX;
 
 /// Shown instead of a date when the snapshot's name has none.
-pub const DATE_UNAVAILABLE: &str = "Date unavailable";
+pub const DATE_UNAVAILABLE: &str = crate::i18n::message_id("Date unavailable");
 
 /// Where the date of a snapshot whose name has none would come from.
 pub const NO_DATE_IN_NAME: &str = "No date in name";
 
 /// The tooltip of [`DATE_UNAVAILABLE`].
-pub const NO_DATE_EXPLANATION: &str = "This snapshot has no recognized date in its name. Folder \
-                                       modification times do not establish snapshot creation time.";
+pub const NO_DATE_EXPLANATION: &str = crate::i18n::message_id(
+    "This snapshot has no recognized date in its name. Folder \
+     modification times do not establish snapshot creation time.",
+);
 
 /// Where the date of a snapshot whose name has one comes from.
 pub const DATE_FROM_NAME: &str = "From snapshot name";
@@ -107,10 +109,12 @@ impl SnapshotDate {
     /// Why the date can be trusted, for its tooltip.
     pub fn explanation(&self) -> &'static str {
         if self.is_utc {
-            "Date encoded in the @GMT snapshot name, shown in UTC."
+            crate::i18n::gettext_static("Date encoded in the @GMT snapshot name, shown in UTC.")
         } else {
-            "Date encoded in the snapshot name. Timezone was not supplied by the server; no conversion \
-             has been applied."
+            crate::i18n::gettext_static(
+                "Date encoded in the snapshot name. Timezone was not supplied by the server; no conversion \
+             has been applied.",
+            )
         }
     }
 

@@ -76,10 +76,7 @@ impl Capacity {
     fn text(self) -> String {
         let free = format::pretty_bytes(self.free);
         let size = format::pretty_bytes(self.size);
-        ox_core::i18n::format_message(
-            "{free} free of {size}",
-            &[("free", &(free).to_string()), ("size", &(size).to_string())],
-        )
+        ox_core::i18n::format_message("{free} free of {size}", &[("free", &free), ("size", &size)])
     }
 }
 
@@ -132,9 +129,9 @@ pub(super) fn card_texts(name: &str, subtitle: &str) -> gtk::Box {
 fn quick_card(place: &Place) -> gtk::Button {
     let network = is_server_location(&place.uri);
     let (art, subtitle) = if network {
-        (Art::SHARE, "Network folder")
+        (Art::SHARE, ox_core::i18n::gettext_static("Network folder"))
     } else {
-        (Art::Folder, "Stored on this PC")
+        (Art::Folder, ox_core::i18n::gettext_static("Stored on this PC"))
     };
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
     content.append(&ArtImage::new(art, QUICK_CARD_ART));
@@ -150,7 +147,10 @@ fn quick_card(place: &Place) -> gtk::Button {
 }
 
 fn quick_access(body: &gtk::Box, places: &Places) {
-    body.append(&section_title("Quick access", Icon::Pin));
+    body.append(&section_title(
+        ox_core::i18n::gettext_static("Quick access"),
+        Icon::Pin,
+    ));
     let cards = card_grid(QUICK_GRID);
     for place in &places.quick_access {
         cards.append(&quick_card(place));
@@ -215,9 +215,11 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
         VolumeKind::Drive => Icon::HardDrive,
     };
     let subtitle = match (&row.state, row.kind) {
-        (VolumeState::Mounted { .. }, VolumeKind::Device) => "Connected device".to_owned(),
+        (VolumeState::Mounted { .. }, VolumeKind::Device) => {
+            ox_core::i18n::gettext_static("Connected device").to_owned()
+        }
         (VolumeState::Mounted { uri, .. }, VolumeKind::Drive) => locations.display_location(uri),
-        (VolumeState::Mountable { .. }, _) => "Click to connect".to_owned(),
+        (VolumeState::Mountable { .. }, _) => ox_core::i18n::gettext_static("Click to connect").to_owned(),
     };
     let texts = card_texts(&row.label, &subtitle);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
@@ -249,7 +251,7 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
 
 fn local_disk() -> VolumeRow {
     VolumeRow {
-        label: "Local Disk".to_owned(),
+        label: ox_core::i18n::gettext_static("Local Disk").to_owned(),
         kind: VolumeKind::Drive,
         state: VolumeState::Mounted {
             uri: "file:///".to_owned(),
@@ -259,7 +261,10 @@ fn local_disk() -> VolumeRow {
 }
 
 fn devices_and_drives(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&section_title("Devices and drives", Icon::HardDrive));
+    body.append(&section_title(
+        ox_core::i18n::gettext_static("Devices and drives"),
+        Icon::HardDrive,
+    ));
     let cards = card_grid(DRIVE_GRID);
     let drives = std::iter::once(local_disk()).chain(places.drives.iter().cloned());
     for row in drives {
@@ -303,9 +308,9 @@ fn share_state(share: &SavedShare) -> gtk::Box {
         dot.add_css_class("offline");
     }
     let state_text = if share.is_connected {
-        "Mounted in this session"
+        ox_core::i18n::gettext_static("Mounted in this session")
     } else {
-        "Connect on open"
+        ox_core::i18n::gettext_static("Connect on open")
     };
     let state = gtk::Box::new(gtk::Orientation::Horizontal, 5);
     state.add_css_class("connected");
@@ -326,7 +331,10 @@ fn map_network_button() -> gtk::Button {
 
 /// The saved network locations with their state (`shares()` in app.js).
 fn saved_shares(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    let title = section_title("Network locations", Icon::Organization);
+    let title = section_title(
+        ox_core::i18n::gettext_static("Network locations"),
+        Icon::Organization,
+    );
     title.append(&map_network_button());
     body.append(&title);
     let cards = card_grid(DRIVE_GRID);
