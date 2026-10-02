@@ -9,6 +9,16 @@
   packages install `/usr/share/xdg-desktop-portal/portals/<id>.portal`;
   the Flatpak cannot offer it.
 
+- Extract all… works like Windows Explorer's: one field, "Files will be
+  extracted to this folder", filled in with the ZIP's folder and name, with
+  Browse…. A missing folder is created; an existing one (such as
+  Downloads) receives the files directly, asking before any file is
+  replaced; a ZIP holding one folder of the same name is no longer nested
+  (`tidewater/tidewater`).
+- Open in archive manager no longer reopens the archive in OpenXplorer when
+  OpenXplorer is the default application for ZIPs.
+- The ZIP's name in the Extract dialog no longer wraps mid-word.
+
 # 2.0.0 — 2026-09-28
 
 OpenXplorer is now a native GTK 4 application written in Rust. It replaces the

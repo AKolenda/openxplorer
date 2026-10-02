@@ -178,8 +178,12 @@ fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
     assert!(texts(&frame)
         .iter()
         .any(|text| text == "2 files · 1 folder · 12 bytes unpacked"));
-    let expected_target = format!("Extract into: {}/Bundle", fixture.root().display());
-    assert!(texts(&frame).contains(&expected_target), "{:?}", texts(&frame));
+    let fields = descendants::<gtk::Entry>(&frame);
+    assert_eq!(fields.len(), 1, "one folder field, as in Explorer");
+    assert_eq!(fields[0].text(), format!("{}/Bundle", fixture.root().display()));
+    assert!(texts(&frame)
+        .iter()
+        .any(|text| text == "Files will be extracted to this folder"));
     capture(&test.window, "native-extract-dialog.png");
     press(&frame, "Extract");
 
@@ -196,7 +200,7 @@ fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
 
 /// parity: ARC-010, OPS-006
 #[gtk::test]
-fn extract_refuses_a_bad_name_and_keeps_the_dialog_open() {
+fn extract_refuses_an_empty_folder_and_keeps_the_dialog_open() {
     let fixture = fixture_with_zip();
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
@@ -207,11 +211,91 @@ fn extract_refuses_a_bad_name_and_keeps_the_dialog_open() {
     });
     let fields = descendants::<gtk::Entry>(&frame);
 
-    fields[1].set_text("a/b");
+    fields[0].set_text("  ");
     press(&frame, "Extract");
 
-    assert!(!frame.error_text().is_empty());
+    assert_eq!(frame.error_text(), "Enter the folder to extract to.");
     assert_eq!(test.shown_dialog(), Some(frame));
+}
+
+/// The folder field as in Explorer: deleting the archive's name extracts
+/// straight into the existing folder, and a file already there is
+/// replaced only after asking; a missing folder is created with its
+/// parents, and a lone folder of the same name is not nested.
+///
+/// parity: ARC-009, ARC-011
+#[gtk::test]
+fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
+    let fixture = fixture_with_zip();
+    fs::write(fixture.path("readme.txt"), b"mine").expect("a file the archive also has");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.wait_for_dialog("the Extract dialog");
+    wait_until("the check", || {
+        texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+    });
+    descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
+    press(&frame, "Extract");
+
+    wait_until("the name-conflict question", || {
+        super::file_ops_support::dialog_over(&test).is_some()
+    });
+    super::file_ops_support::open_dialog(&test).press("Skip duplicates");
+
+    wait_until("the extracted folder", || fixture.path("Docs/a.txt").exists());
+    wait_until("the move's report", || {
+        super::file_ops_support::dialog_over(&test)
+            .is_some_and(|dialog| dialog.message_text().contains("1 skipped"))
+    });
+    super::file_ops_support::open_dialog(&test).press("OK");
+    wait_until("the message", || {
+        test.window.shown_message() == format!("Extracted 2 files into {}.", "Example projects")
+    });
+    assert_eq!(
+        fs::read(fixture.path("readme.txt")).expect("kept"),
+        b"mine",
+        "skipped, not replaced"
+    );
+    let leftovers: Vec<_> = fs::read_dir(fixture.root())
+        .expect("the folder")
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".openxplorer-extract-")
+        })
+        .collect();
+    assert!(leftovers.is_empty(), "the private folder is removed");
+    assert!(
+        !fixture.path("Bundle").exists(),
+        "no folder named after the archive"
+    );
+}
+
+/// parity: ARC-009
+#[gtk::test]
+fn extract_all_creates_a_missing_folder_with_its_parents() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.wait_for_dialog("the Extract dialog");
+    wait_until("the check", || {
+        texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+    });
+    let target = fixture.path("Unpacked/2026");
+    descendants::<gtk::Entry>(&frame)[0].set_text(&target.display().to_string());
+    press(&frame, "Extract");
+
+    wait_until("the extracted folder", || {
+        test.window.current_uri() == Some(file_uri(&target))
+    });
+    assert_eq!(
+        fs::read(target.join("readme.txt")).expect("extracted"),
+        b"read me"
+    );
 }
 
 /// parity: ARC-025
@@ -394,6 +478,7 @@ fn open_in_archive_manager_hands_the_zip_to_the_desktop() {
 
     press(&frame, "Open in archive manager");
 
+    wait_until("the launch", || !test.context.recorded_launches().is_empty());
     assert_eq!(test.context.recorded_launches(), [fixture.uri_of("Bundle.zip")]);
     assert!(test.shown_dialog().is_none());
 }

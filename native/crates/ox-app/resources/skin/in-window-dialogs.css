@@ -143,12 +143,12 @@ window.ox .version-actions button { min-height: 29px; padding: 0 7px; }
 .archive-status { color: @ox_muted; padding-top: 10px; }
 .extract-source { border-spacing: 14px; margin-bottom: 15px; }
 .extract-source-name { font-weight: 600; }
-.extract-target {
-  margin-top: 13px;
-  padding: 10px 12px;
-  background-color: @ox_chrome;
+/* Browse… beside the folder field, as tall as the field. */
+window.ox ox-dialog-layer .ox-dialog button.extract-browse {
+  min-height: 32px;
+  min-width: 90px;
+  padding: 0 12px;
   border-radius: 4px;
-  color: @ox_muted;
 }
 .extract-summary { margin: 14px 0; }
 .extract-summary.error { color: @ox_error; }

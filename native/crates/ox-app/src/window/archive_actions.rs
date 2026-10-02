@@ -32,13 +32,12 @@ use ox_core::versions::snapshot_location;
 use crate::archive_view::{
     archive_dialog, compressed_file_name, compression_failure_text, compression_success_text, extract_dialog,
     extraction_failure_text, extraction_success_text, unique_folder_names, ArchiveDialogActions,
-    ArchiveTarget, ExtractDialogSetup, ExtractionChoice, COMPRESSION_STOPPED, EXTRACTION_STOPPED,
+    ArchiveTarget, ExtractDialogSetup, COMPRESSION_STOPPED, EXTRACTION_STOPPED,
 };
 use crate::locations::Page;
 
 use super::actions::plain_action;
 use super::background_notice::Destination;
-use super::session::TabId;
 use super::transfer_panel::TransferKind;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -157,13 +156,24 @@ impl BrowserWindow {
 
     /// Opens `uri` in the desktop's application for its type: an archive
     /// in the archive manager, a member's private copy in its viewer.
+    /// `OpenXplorer` is never chosen, even when it is the default for
+    /// ZIPs: asking the desktop for the default would reopen the archive
+    /// here (ARC-021).
     fn open_externally(&self, uri: &str) {
-        let on_error = glib::clone!(
+        let uri = uri.to_owned();
+        glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |error: glib::Error| window.show_message(&error.to_string())
-        );
-        self.context().open_uri(uri, self.upcast_ref(), on_error);
+            async move {
+                let opened = window
+                    .context()
+                    .open_uri_in_application(uri, window.upcast_ref())
+                    .await;
+                if let Err(message) = opened {
+                    window.show_message(&message);
+                }
+            }
+        ));
     }
 
     /// True when no write runs in this window and no update waits for its
@@ -232,76 +242,10 @@ impl BrowserWindow {
     }
 
     /// An extractor over GIO that the write guard protects (ARC-020).
-    fn zip_extractor(&self) -> ZipExtractor {
+    pub(super) fn zip_extractor(&self) -> ZipExtractor {
         let factory: NodeFactory = Arc::new(|uri: &str| Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>));
         ZipExtractor::new(Arc::new(GioArchiveOpener), factory, Arc::new(GioExtractionOutput))
             .with_write_guard(self.context().previous_versions().write_guard())
-    }
-
-    /// Extracts `archive` as the user chose, with the transfer panel, then
-    /// shows the result in `origin` if it is still in front, else in a new
-    /// tab, or lists the destination again (ARC-011).
-    fn extract_archive(&self, archive: &ArchiveTarget, choice: ExtractionChoice, origin: Option<TabId>) {
-        // The dialog may have stayed open while another write or an
-        // update began.
-        if !self.may_start_archive_operation() {
-            return;
-        }
-        let cancel = Cancellation::new();
-        self.transfer_panel()
-            .start(TransferKind::Archive, PREPARING, cancel.clone());
-        self.update_archive_actions();
-        let request = ExtractionRequest {
-            archive_uri: archive.uri.clone(),
-            destination_uri: choice.destination_uri.clone(),
-            folder_name: choice.folder_name.clone(),
-        };
-        let extractor = self
-            .zip_extractor()
-            .with_progress(self.operation_progress_sender());
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            async move {
-                let extracted = extractor.extract_in_background(request, cancel).await;
-                window.finish_archive_operation();
-                match extracted {
-                    Ok(folder) => {
-                        // Listing a folder hides the toast, so it comes last.
-                        window.show_extracted(&folder.uri, &choice, origin);
-                        let text = extraction_success_text(&folder);
-                        let destination = Destination::items(vec![folder.uri.clone()]);
-                        window.notify_if_in_background(&OperationSummary::Toast(text.clone()), destination);
-                        window.show_message(&text);
-                    }
-                    Err(error) => {
-                        let text = extraction_failure_text(&error);
-                        window.notify_if_in_background(
-                            &OperationSummary::Report(text.clone()),
-                            Destination::default(),
-                        );
-                        window.show_result_dialog(EXTRACTION_STOPPED, &text);
-                    }
-                }
-            }
-        ));
-    }
-
-    /// Shows the extracted folder, or lists its destination again.
-    fn show_extracted(&self, folder_uri: &str, choice: &ExtractionChoice, origin: Option<TabId>) {
-        if !choice.show_result {
-            self.reload_tabs_showing(&choice.destination_uri);
-            return;
-        }
-        let active = self.imp().session.borrow().active_id();
-        let opened = if origin.is_some() && origin == active {
-            self.navigate(folder_uri)
-        } else {
-            self.add_tab(folder_uri)
-        };
-        if let Err(error) = opened {
-            self.show_message(&error.to_string());
-        }
     }
 
     /// Extract here: into a new folder beside the archive, named after it,

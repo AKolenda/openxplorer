@@ -42,7 +42,7 @@ ZIP browsing is read-only. Listing reads archive metadata; opening a selected me
 
 ## Extract ZIP files
 
-Right-click a ZIP and choose Extract all… in either context-menu style. Choose an existing destination and a new output-folder name. The ZIP stays unchanged, existing files are never overwritten, and Cancel is available in the transfer panel.
+Right-click a ZIP and choose Extract all… in either context-menu style. As in Windows Explorer, one field says where the files go, filled in with the ZIP's folder and name (for example Downloads/tidewater); Browse… picks another folder. A folder that does not exist yet is created. Delete the last part to extract straight into an existing folder such as Downloads: if a file with the same name is already there, you are asked whether to replace or skip it. A ZIP holding one folder of the same name is not nested (no tidewater/tidewater). The ZIP stays unchanged, and Cancel is available in the transfer panel. Open in archive manager opens your archive manager, even when OpenXplorer opens ZIPs by default.
 
 Local and already connected SMB locations are supported by the implementation; live SMB extraction still needs target-machine validation. Sign into the relevant shares first. Password-protected ZIPs, unsupported methods, and files exceeding the built-in safety limits need an external archive manager. Double-click continues to browse without extracting the entire ZIP.
 

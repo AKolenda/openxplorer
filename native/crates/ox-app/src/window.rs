@@ -74,6 +74,7 @@ mod disk_tools;
 mod empty_page;
 mod environment;
 mod external_requests;
+mod extract_into;
 mod file_drag;
 mod file_drop;
 mod file_ops;

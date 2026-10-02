@@ -6636,7 +6636,7 @@ python_tests = [
 ]
 bridge = ["create", "rename", "createTemplate", "archiveExtract"]
 native = "done"
-native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open) does the same for the Extract dialog's folder name."
+native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_an_empty_folder_and_keeps_the_dialog_open) keeps the Extract dialog open with its reason, and the last part of a folder Extract all… creates is checked by the same rule (native/crates/ox-app/src/window/extract_into.rs)."
 
 [[feature]]
 id = "OPS-007"
@@ -12412,7 +12412,7 @@ python_tests = [
 bridge = ["archiveInspect", "cancel", "normalise", "open"]
 dolphin = "Extract archive here / to…"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it, the_archive_commands_follow_the_selection); native/crates/ox-app/src/archive_view/extract_dialog.rs (the_target_line_joins_the_destination_and_the_new_name, the_summary_counts_files_and_folders_in_the_singular_and_plural): Extract all… from the context menu of one ZIP while no archive operation runs and from the browser, the dialog's texts, destination default (the ZIP's writable folder, else Downloads, else Home), the suggested name, the live target line, the preflight, the check box, the hint and the three buttons; closing cancels the check."
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it, the_archive_commands_follow_the_selection); native/crates/ox-app/src/archive_view/extract_dialog.rs (the_suggested_folder_joins_the_destination_and_the_archive_name, the_summary_counts_files_and_folders_in_the_singular_and_plural); native/crates/ox-core/src/archive/extract/lift.rs (only_a_same_named_lone_folder_is_lifted). The destination and new name are one field laid out like Windows Explorer's 'Extract Compressed (Zipped) Folders' ('Files will be extracted to this folder', filled in with the ZIP's folder and name, with Browse…): a missing folder is created with its parents (a lone top-level folder of the same name is not nested); an existing folder receives the contents directly, unpacked into a private hidden folder first and moved in through the name-conflict question (tests: extract_all_goes_straight_into_an_existing_folder_after_asking, extract_all_creates_a_missing_folder_with_its_parents). Extract all… from the context menu of one ZIP while no archive operation runs and from the browser, the dialog's texts, destination default (the ZIP's writable folder, else Downloads, else Home), the suggested name, the live target line, the preflight, the check box, the hint and the three buttons; closing cancels the check."
 
 [[feature]]
 id = "ARC-010"
@@ -12431,7 +12431,7 @@ python_tests = [
 ]
 bridge = ["archiveInspect", "normalise"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open); native/crates/ox-app/src/archive_view/extract_dialog.rs: Extract waits for the check, validates the name, normalises the destination and refuses a page, server listing or previous version, keeping the dialog open with the reason. The malformed-summary message has no counterpart: the summary is a typed value. Earlier evidence: native/crates/ox-core/tests/archive_extract_dispatch.rs (locations_are_normalised_first, a_server_listing_is_not_a_destination); native/crates/ox-core/tests/archive_extract.rs (a_protected_member_path_stops_the_extraction_before_writing)."
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_an_empty_folder_and_keeps_the_dialog_open); native/crates/ox-app/src/archive_view/extract_dialog.rs: Extract waits for the check, refuses an empty folder field ('Enter the folder to extract to.'), normalises the folder, refuses a file of that name ('A file with that name is already there.') and refuses a page, server listing or previous version, keeping the dialog open with the reason. The malformed-summary message has no counterpart: the summary is a typed value. Earlier evidence: native/crates/ox-core/tests/archive_extract_dispatch.rs (locations_are_normalised_first, a_server_listing_is_not_a_destination); native/crates/ox-core/tests/archive_extract.rs (a_protected_member_path_stops_the_extraction_before_writing)."
 
 [[feature]]
 id = "ARC-011"
@@ -12732,7 +12732,7 @@ bridge = ["open"]
 dolphin = "“Open with Ark”"
 gnome = "GAppInfo default for application/zip (org.gnome.FileRoller.desktop)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/archives.rs (open_in_archive_manager_hands_the_zip_to_the_desktop): the browser's and the Extract dialog's button close the dialog (cancelling the check) and open the ZIP with the desktop's default application for its type."
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (open_in_archive_manager_hands_the_zip_to_the_desktop): the browser's and the Extract dialog's button close the dialog (cancelling the check) and open the ZIP with the desktop's default application for its type, never OpenXplorer itself: with OpenXplorer as the default for ZIPs (Settings > Default apps), asking the desktop reopened the archive here, so the button uses the same opener as files (ox-core DefaultOpener, which skips OpenXplorer)."
 
 [[feature]]
 id = "ARC-022"

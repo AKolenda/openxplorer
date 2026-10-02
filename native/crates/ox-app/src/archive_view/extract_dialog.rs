@@ -1,34 +1,43 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The "Extract compressed folder" dialog (ARC-009, ARC-010).
 //!
-//! Ports `extractDialog` in `v2.0.0:desktop/ui/app.js`: the archive, the
-//! destination folder and the new folder's name with a live "Extract
-//! into:" line, the check of every member before anything is written
-//! ("Checking archive contents…", then the counts and size), "Show
-//! extracted files when finished", and Open in archive manager, Cancel
-//! and Extract. Extract waits for the check, validates the name and the
-//! destination, and keeps the dialog open with the reason when it
-//! refuses. Closing the dialog cancels the check.
+//! Laid out like Windows Explorer's "Extract Compressed (Zipped) Folders":
+//! one field, "Files will be extracted to this folder", filled in with
+//! the archive's folder and its name (`Downloads/tidewater`), and
+//! Browse…. A folder that does not exist yet is created; deleting the
+//! last part extracts straight into an existing folder, where the usual
+//! name-conflict question decides about files already there. From
+//! `extractDialog` in `v2.0.0:desktop/ui/app.js` it keeps the archive, the
+//! check of every member before anything is written ("Checking archive
+//! contents…", then the counts and size), "Show extracted files when
+//! finished", and Open in archive manager, Cancel and Extract. Extract
+//! waits for the check, validates the folder, and keeps the dialog open
+//! with the reason when it refuses. Closing the dialog cancels the
+//! check.
 
 use std::cell::Cell;
 use std::path::Path;
 use std::rc::Rc;
 
-use gtk::glib;
 use gtk::prelude::*;
+use gtk::{gio, glib};
 use ox_core::archive::{suggested_folder_name, ExtractionSummary, ZipExtractor};
 use ox_core::format;
-use ox_core::location::{normalise_location, validate_name};
+use ox_core::location::normalise_location;
 use ox_core::transfer::Cancellation;
 
 use super::ArchiveTarget;
-use crate::dialog_layer::{check_row, labelled_entry, quiet_text, DialogFrame, DialogWidth};
+use crate::dialog_layer::{check_row, quiet_text, DialogFrame, DialogWidth};
 use crate::icons::{Art, ArtImage};
 use crate::window::ButtonStyle;
 
 /// What the dialog promises.
-const EXTRACT_MESSAGE: &str =
-    "The ZIP is kept unchanged. Files are unpacked into a new folder; existing files are never replaced.";
+const EXTRACT_MESSAGE: &str = "The ZIP is kept unchanged. A folder that does not exist yet is created; \
+                               in an existing folder you are asked before any file is replaced.";
+/// The field's label, as Explorer words it.
+const TARGET_LABEL: &str = "Files will be extracted to this folder";
+/// Extract with an empty field.
+const NO_FOLDER: &str = "Enter the folder to extract to.";
 /// Shown while the members are checked.
 const CHECKING: &str = "Checking archive contents…";
 /// For shares and encrypted archives.
@@ -45,10 +54,9 @@ const SOURCE_ART_SIZE: i32 = 40;
 /// Where the user chose to extract to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ExtractionChoice {
-    /// The canonical folder the new folder goes in.
-    pub destination_uri: String,
-    /// The new folder's name.
-    pub folder_name: String,
+    /// The canonical folder the files go into: created when it does not
+    /// exist, filled when it does.
+    pub target_uri: String,
     /// Show the extracted files when the extraction finishes.
     pub show_result: bool,
 }
@@ -78,10 +86,8 @@ pub(crate) fn extract_dialog(
     frame.set_message(EXTRACT_MESSAGE);
     let body = frame.body();
     body.append(&source_heading(&archive.name));
-    let destination = labelled_entry(&body, "Destination folder", &setup.shown_destination);
     let suggested = suggested_folder_name(&archive.name).unwrap_or_default();
-    let name = labelled_entry(&body, "New folder name", &suggested);
-    body.append(&target_line(&destination, &name));
+    let target = target_field(&body, &suggested_target(&setup.shown_destination, &suggested));
     let summary = quiet_text(CHECKING);
     summary.add_css_class("extract-summary");
     summary.set_accessible_role(gtk::AccessibleRole::Status);
@@ -96,8 +102,7 @@ pub(crate) fn extract_dialog(
         move |_| check.cancel.cancel()
     });
     let form = ExtractForm {
-        destination,
-        name,
+        target,
         show,
         check,
         default_destination: setup.default_destination,
@@ -114,6 +119,9 @@ fn source_heading(name: &str) -> gtk::Box {
     let label = gtk::Label::builder()
         .label(name)
         .xalign(0.0)
+        // Given the row's width, a short name stays on one line instead of
+        // wrapping at its narrowest ("tidew-ater.zip").
+        .hexpand(true)
         .wrap(true)
         .wrap_mode(gtk::pango::WrapMode::WordChar)
         .css_classes(["extract-source-name"])
@@ -122,39 +130,82 @@ fn source_heading(name: &str) -> gtk::Box {
     heading
 }
 
-/// "Extract into: <destination>/<name>", following both fields.
-fn target_line(destination: &gtk::Entry, name: &gtk::Entry) -> gtk::Label {
-    let line = gtk::Label::builder()
-        .xalign(0.0)
-        .wrap(true)
-        .wrap_mode(gtk::pango::WrapMode::WordChar)
-        .selectable(true)
-        .css_classes(["extract-target"])
-        .build();
-    line.set_accessible_role(gtk::AccessibleRole::Status);
-    let update = glib::clone!(
-        #[weak]
-        line,
-        #[weak]
-        destination,
-        #[weak]
-        name,
-        move || line.set_text(&target_text(&destination.text(), &name.text()))
-    );
-    update();
-    let update = Rc::new(update);
-    for field in [destination, name] {
-        let update = Rc::clone(&update);
-        field.connect_changed(move |_| update());
-    }
-    line
-}
-
-/// The "Extract into:" text: `\` after a UNC destination, `/` otherwise.
-fn target_text(destination: &str, name: &str) -> String {
+/// The suggested folder: `destination` and the archive's `name`, joined
+/// with `\` after a UNC destination and `/` otherwise, as the field shows
+/// locations.
+fn suggested_target(destination: &str, name: &str) -> String {
     let trimmed = destination.trim_end_matches(['/', '\\']);
     let separator = if destination.starts_with('\\') { '\\' } else { '/' };
-    format!("Extract into: {trimmed}{separator}{name}")
+    format!("{trimmed}{separator}{name}")
+}
+
+/// "Files will be extracted to this folder" with its Browse… button.
+fn target_field(body: &gtk::Box, text: &str) -> gtk::Entry {
+    let caption = gtk::Label::builder()
+        .label(TARGET_LABEL)
+        .xalign(0.0)
+        .css_classes(["field-label"])
+        .build();
+    let entry = gtk::Entry::builder().text(text).hexpand(true).build();
+    entry.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
+    caption.set_mnemonic_widget(Some(&entry));
+    let browse = gtk::Button::with_label("Browse…");
+    browse.add_css_class(ButtonStyle::Bordered.css_class());
+    browse.add_css_class("extract-browse");
+    browse.set_valign(gtk::Align::Center);
+    browse.connect_clicked(glib::clone!(
+        #[weak]
+        entry,
+        move |button| pick_folder_into(button, &entry)
+    ));
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    row.append(&entry);
+    row.append(&browse);
+    body.append(&caption);
+    body.append(&row);
+    entry
+}
+
+/// Lets the user choose a folder, starting at the one the field names
+/// when it exists, and writes its path into `entry`.
+fn pick_folder_into(button: &gtk::Button, entry: &gtk::Entry) {
+    let picker = gtk::FileDialog::builder()
+        .title("Select a destination")
+        .modal(true)
+        .build();
+    let typed = entry.text();
+    let home = glib::home_dir();
+    let start = normalise_location(&typed, None, Path::new(&home))
+        .ok()
+        // Only a local folder is checked here, on the main thread; a share
+        // could take long to answer.
+        .filter(|uri| uri.starts_with("file://"))
+        .map(|uri| gio::File::for_uri(&uri))
+        .filter(|folder| {
+            folder.query_file_type(gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
+                == gio::FileType::Directory
+        });
+    if let Some(start) = start {
+        picker.set_initial_folder(Some(&start));
+    }
+    let window = button.root().and_downcast::<gtk::Window>();
+    picker.select_folder(
+        window.as_ref(),
+        gio::Cancellable::NONE,
+        glib::clone!(
+            #[weak]
+            entry,
+            move |chosen| {
+                if let Ok(folder) = chosen {
+                    let text = folder.path().map_or_else(
+                        || folder.uri().to_string(),
+                        |path| path.to_string_lossy().into_owned(),
+                    );
+                    entry.set_text(&text);
+                }
+            }
+        ),
+    );
 }
 
 /// The check of every member, which Extract waits for.
@@ -208,8 +259,7 @@ pub(super) fn summary_text(summary: &ExtractionSummary) -> String {
 
 /// The fields Extract reads.
 struct ExtractForm {
-    destination: gtk::Entry,
-    name: gtk::Entry,
+    target: gtk::Entry,
     show: gtk::CheckButton,
     check: Rc<ArchiveCheck>,
     default_destination: String,
@@ -222,18 +272,18 @@ impl ExtractForm {
         if !self.check.is_ready.get() {
             return Err(WAIT_FOR_CHECK.to_owned());
         }
-        let name = self.name.text();
-        let folder_name = validate_name(&name).map_err(|error| error.to_string())?;
-        let typed = self.destination.text();
+        let typed = self.target.text();
+        if typed.trim().is_empty() {
+            return Err(NO_FOLDER.to_owned());
+        }
         let home = glib::home_dir();
-        let destination = normalise_location(&typed, Some(&self.default_destination), Path::new(&home))
+        let target = normalise_location(typed.trim(), Some(&self.default_destination), Path::new(&home))
             .map_err(|error| error.to_string())?;
-        if !(self.is_writable)(&destination) {
+        if !(self.is_writable)(&target) {
             return Err(NOT_WRITABLE.to_owned());
         }
         Ok(ExtractionChoice {
-            destination_uri: destination,
-            folder_name: folder_name.to_owned(),
+            target_uri: target,
             show_result: self.show.is_active(),
         })
     }
@@ -268,14 +318,14 @@ mod tests {
 
     /// parity: ARC-009
     #[test]
-    fn the_target_line_joins_the_destination_and_the_new_name() {
+    fn the_suggested_folder_joins_the_destination_and_the_archive_name() {
         assert_eq!(
-            target_text("/home/demo/Downloads/", "Assets"),
-            "Extract into: /home/demo/Downloads/Assets"
+            suggested_target("/home/demo/Downloads/", "Assets"),
+            "/home/demo/Downloads/Assets"
         );
         assert_eq!(
-            target_text("\\\\nas\\share\\", "Assets"),
-            "Extract into: \\\\nas\\share\\Assets"
+            suggested_target("\\\\nas\\share\\", "Assets"),
+            "\\\\nas\\share\\Assets"
         );
     }
 

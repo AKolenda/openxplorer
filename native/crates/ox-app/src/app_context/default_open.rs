@@ -36,6 +36,39 @@ impl AppContext {
     /// a local path, or the application did not start.
     pub(crate) async fn open_file(&self, entry: &Entry, window: &gtk::Window) -> Result<(), String> {
         let uri = entry.navigation_uri().to_owned();
+        let Some(prepared) = self.launch_in_application(uri, window).await? else {
+            return Ok(());
+        };
+        let content_type = prepared.entry.content_type.as_deref();
+        add_to_desktop_history(&prepared.entry.uri, content_type.unwrap_or(UNKNOWN_CONTENT_TYPE));
+        self.remember_open(recent_entry(&prepared.entry));
+        Ok(())
+    }
+
+    /// Opens the file at `uri` in its default application, never
+    /// `OpenXplorer`, without recording it among the recent files: a ZIP
+    /// from its browser's "Open in archive manager", where the desktop's
+    /// default for ZIPs may be `OpenXplorer` itself (ARC-021), or a
+    /// member's private copy.
+    ///
+    /// # Errors
+    ///
+    /// The messages of [`AppContext::open_file`].
+    pub(crate) async fn open_uri_in_application(
+        &self,
+        uri: String,
+        window: &gtk::Window,
+    ) -> Result<(), String> {
+        self.launch_in_application(uri, window).await.map(|_| ())
+    }
+
+    /// Prepares and launches `uri` as [`AppContext::open_file`] does;
+    /// returns what was opened, or `None` when a test recorded the launch.
+    async fn launch_in_application(
+        &self,
+        uri: String,
+        window: &gtk::Window,
+    ) -> Result<Option<PreparedOpen>, String> {
         self.previous_versions()
             .check_writable(&uri)
             .map_err(|refusal| refusal.to_string())?;
@@ -52,13 +85,10 @@ impl AppContext {
                 OpenTarget::LocalPath(path) => ox_core::location::file_uri(path),
                 OpenTarget::Uri(uri) => uri.clone(),
             });
-            return Ok(());
+            return Ok(None);
         }
         launch(&prepared, window).await?;
-        let content_type = prepared.entry.content_type.as_deref();
-        add_to_desktop_history(&prepared.entry.uri, content_type.unwrap_or(UNKNOWN_CONTENT_TYPE));
-        self.remember_open(recent_entry(&prepared.entry));
-        Ok(())
+        Ok(Some(prepared))
     }
 }
 

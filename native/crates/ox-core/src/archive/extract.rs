@@ -40,7 +40,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::sync::Arc;
 
-pub use lift::lift_single_folder;
+pub use lift::{lift_same_named_folder, lift_single_folder, private_extraction_name};
 pub use limits::ExtractionLimits;
 pub use output::{ExtractionOutput, GioExtractionOutput, OutputFile};
 pub use plan::ExtractionSummary;
