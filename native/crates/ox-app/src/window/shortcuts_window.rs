@@ -76,7 +76,8 @@ fn describe(name: &str) -> Option<(Group, String)> {
     if let Some(view) = name.strip_prefix("win.view::") {
         let label = match view {
             "details" => "Details",
-            key => IconSize::from_key(key)?.label(),
+            "compact" => "List",
+            key => IconSize::from_key(key)?.label()?,
         };
         return Some((Group::View, label.to_owned()));
     }
