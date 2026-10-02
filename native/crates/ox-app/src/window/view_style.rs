@@ -157,6 +157,9 @@ impl BrowserWindow {
     pub(super) fn apply_style(&self, style: &ViewProperties) {
         let applying = self.imp().applying_style.replace(true);
         let view = FolderView::from_style(&style.mode, style.icon_size);
+        self.folder_pane()
+            .icon_view()
+            .set_icon_size(crate::folder_view::grid::IconSize::nearest(style.icon_size));
         self.set_action_state(WindowAction::View, &view.as_str().to_variant());
         self.show_view(view);
         self.show_folders_first(style.folders_first);

@@ -17,7 +17,8 @@ use crate::folder_view::item::FileItem;
 use crate::folder_view::sort_roles::{extension, SortBy, SortRole};
 use crate::folder_view::sorting::{SortColumn, SortKey};
 
-/// Seconds in a day.
+/// Seconds in a day for the fixed-offset test dates.
+#[cfg(test)]
 const DAY: i64 = 24 * 60 * 60;
 
 /// Explorer's size groups: the title and the size each one ends below.
@@ -59,21 +60,23 @@ impl GroupClock {
         )
         .ok()?;
         let today = midnight.to_unix();
-        let weekday = i64::from(now.day_of_week() - 1);
+        let weekday = now.day_of_week() - 1;
+        let day_start = |days: i32| midnight.add_days(days).ok().map(|date| date.to_unix());
         let month_start = |months_back: i32| {
             let date = midnight.add_months(-months_back).ok()?;
-            Some(date.to_unix() - i64::from(date.day_of_month() - 1) * DAY)
+            date.add_days(1 - date.day_of_month())
+                .ok()
+                .map(|date| date.to_unix())
         };
-        let year_start = today - i64::from(now.day_of_year() - 1) * DAY;
         Some(Self {
-            tomorrow: today + DAY,
+            tomorrow: day_start(1)?,
             today,
-            yesterday: today - DAY,
-            this_week: today - weekday * DAY,
-            last_week: today - (weekday + 7) * DAY,
+            yesterday: day_start(-1)?,
+            this_week: day_start(-weekday)?,
+            last_week: day_start(-weekday - 7)?,
             this_month: month_start(0)?,
             last_month: month_start(1)?,
-            this_year: year_start,
+            this_year: day_start(1 - now.day_of_year())?,
         })
     }
 
@@ -249,5 +252,22 @@ mod tests {
         let older = group_of(by_date, &modified_at(today - 400 * DAY), &clock);
         let newer = group_of(by_date, &modified_at(today), &clock);
         assert_eq!(older.compare(&newer), Ordering::Less);
+    }
+
+    /// Group boundaries follow calendar days through daylight-saving changes.
+    ///
+    /// parity: VIEW-022
+    #[test]
+    fn calendar_groups_follow_short_and_long_days() {
+        let zone = glib::TimeZone::from_identifier(Some("America/Edmonton")).expect("a time zone");
+        for (month, day) in [(3, 8), (11, 1)] {
+            let now = glib::DateTime::new(&zone, 2026, month, day, 12, 0, 0.0).expect("a date");
+            let clock = GroupClock::at(&now).expect("calendar boundaries");
+            let late = glib::DateTime::new(&zone, 2026, month, day, 23, 30, 0.0).expect("late today");
+            let tomorrow = late.add_days(1).expect("tomorrow");
+            let group = |date: &glib::DateTime| clock.period(u64::try_from(date.to_unix()).ok()).title;
+            assert_eq!(group(&late), "Today");
+            assert_eq!(group(&tomorrow), "In the future");
+        }
     }
 }
