@@ -1,5 +1,7 @@
 # Unreleased
 
+- The note at the bottom of the Details pane ("Select an item to see its
+  properties…") uses the pane's whole width instead of a narrow column.
 - Optional: other applications' Open and Save dialogs in OpenXplorer.
   Settings > Default apps > "Apps' Open and Save dialogs" > Enable makes
   applications that use the desktop portal (Chrome, Firefox, Flatpak apps)
