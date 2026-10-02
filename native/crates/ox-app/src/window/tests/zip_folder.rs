@@ -91,7 +91,30 @@ fn a_zip_opens_in_the_tab_like_a_folder() {
     wait_until("out of the ZIP", || {
         test.window.current_uri() == Some(fixture.uri())
     });
+    test.select_named("Notes 2.txt");
+    assert!(!extract_button(&test).is_visible(), "no ZIP selected or open");
+}
+
+/// Selecting a ZIP shows Extract all in the bar, as Explorer does, with
+/// either way of opening ZIPs; selecting anything else hides it.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn selecting_a_zip_shows_extract_all_in_the_bar() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the folder");
     assert!(!extract_button(&test).is_visible());
+
+    test.select_named("Bundle.zip");
+    assert!(extract_button(&test).is_visible());
+    test.select_named("Notes 2.txt");
+    assert!(!extract_button(&test).is_visible());
+    test.select_named("Bundle.zip");
+    extract_button(&test).emit_clicked();
+
+    let frame = test.wait_for_dialog("the Extract dialog");
+    assert_eq!(frame.title(), "Extract Bundle.zip");
 }
 
 /// Extract all in the bar opens the Extract dialog for the ZIP shown.

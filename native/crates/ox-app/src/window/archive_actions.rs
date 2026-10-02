@@ -69,6 +69,14 @@ impl BrowserWindow {
         for (action, refusal) in self.archive_command_refusals() {
             self.set_action_enabled(action, refusal.is_none());
         }
+        self.show_extract_button();
+    }
+
+    /// Shows Extract all in the command bar, as Explorer does, while one
+    /// ZIP is selected or the tab shows the inside of one.
+    pub(super) fn show_extract_button(&self) {
+        self.command_bar()
+            .show_extract_all(self.selected_archive().is_some());
     }
 
     /// Why the archive command `action` is disabled, when it is one.

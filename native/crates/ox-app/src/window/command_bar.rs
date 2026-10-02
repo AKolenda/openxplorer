@@ -303,7 +303,8 @@ impl CommandBar {
         }
     }
 
-    /// Shows Extract all while the window shows the inside of a ZIP.
+    /// Shows Extract all while a ZIP is selected or the window shows the
+    /// inside of one.
     pub(super) fn show_extract_all(&self, shown: bool) {
         if let Some(button) = self.imp().extract_button.get() {
             button.set_visible(shown);
@@ -360,8 +361,8 @@ fn text_menu_button(label: &str, glyph: Icon, css_class: &str, entries: Vec<Menu
         .build()
 }
 
-/// Extract all, as Windows Explorer's command bar shows it inside a ZIP;
-/// hidden until the window shows one.
+/// Extract all, as Windows Explorer's command bar shows it while a ZIP is
+/// selected or open; hidden otherwise.
 fn extract_all_button() -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     content.append(&icons::image(Icon::FolderZip, TEXT_COMMAND_GLYPH));

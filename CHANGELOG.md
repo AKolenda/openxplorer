@@ -27,6 +27,8 @@
   with the address bar, crumbs, Back and Up working through it, Extract all
   in the bar, and Copy, Paste and dragging items out (as real copies). It
   stays read-only. The default, In a pop-up window, keeps today's window.
+- Extract all appears in the command bar while a ZIP is selected, as in
+  Windows Explorer.
 
 # 2.0.0 — 2026-09-28
 

@@ -162,7 +162,7 @@ impl BrowserWindow {
         let search = self.search_box();
         search.set_folder_title(&title);
         search.set_enabled(!on_page && !in_zip && !is_device_location(uri));
-        self.command_bar().show_extract_all(in_zip);
+        self.show_extract_button();
         self.update_cache_folder_action();
         self.render_tabs();
         self.show_snapshot_banner();
