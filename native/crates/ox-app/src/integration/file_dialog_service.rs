@@ -40,6 +40,8 @@ pub(crate) enum KdeApps {
     NotKde,
     /// A KDE session without the app's login script.
     NotCovered,
+    /// A file of the user's sits where the script goes and is left alone.
+    LeftAlone,
     /// The script is in place; it applies at the next login.
     NextLogin,
     /// The script is in place and this session started with it.
@@ -66,6 +68,10 @@ impl FileDialogsStatus {
             match self.kde_apps {
                 KdeApps::Following => text.push_str(" KDE apps do too."),
                 KdeApps::NextLogin => text.push_str(" KDE apps follow after you log out and back in."),
+                KdeApps::LeftAlone => text.push_str(
+                    " KDE apps keep KDE's dialog: ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh \
+                     is not OpenXplorer's, so it was left alone.",
+                ),
                 KdeApps::NotKde | KdeApps::NotCovered => {}
             }
             return text;
@@ -81,6 +87,8 @@ impl FileDialogsStatus {
 fn kde_apps(registration: &FileDialogRegistration) -> KdeApps {
     if !registration.is_kde_session() {
         KdeApps::NotKde
+    } else if registration.kde_script_is_someone_elses() {
+        KdeApps::LeftAlone
     } else if !registration.covers_kde_apps() {
         KdeApps::NotCovered
     } else if std::env::var(KDE_PORTAL_VARIABLE).is_ok_and(|value| value == "1") {
@@ -206,6 +214,10 @@ mod tests {
         assert!(enabled(KdeApps::NotCovered).can_enable());
         assert!(!enabled(KdeApps::NextLogin).can_enable());
         assert!(!enabled(KdeApps::NotKde).can_enable());
+        assert!(enabled(KdeApps::LeftAlone)
+            .text()
+            .ends_with("so it was left alone."));
+        assert!(!enabled(KdeApps::LeftAlone).can_enable());
         let off = FileDialogsStatus::default();
         assert!(off.can_enable());
     }

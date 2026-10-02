@@ -79,6 +79,16 @@ const KDE_ENV_SCRIPT: &str = "# Open and Save dialogs of KDE apps go to the desk
                               # OpenXplorer. Set by OpenXplorer (Settings > Default apps); Restore removes it.\n\
                               export PLASMA_INTEGRATION_USE_PORTAL=1\n";
 
+/// What is at the KDE login script's path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KdeScript {
+    Missing,
+    /// The script the app writes.
+    Ours,
+    /// A file of the user's, or a symlink.
+    Other,
+}
+
 /// The folders and the desktop the opt-in works with.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileDialogPaths {
@@ -263,6 +273,11 @@ impl FileDialogRegistration {
         let file = self.config_file();
         refuse_symlink(&file)?;
         let previous = read_optional(&file)?;
+        // Fails before the portal file changes when KDE's login script
+        // cannot be read, so a failed Enable changes nothing.
+        if self.is_kde_session() {
+            self.kde_script()?;
+        }
         let base = match &previous {
             Some(contents) => contents.clone(),
             None => self.system_contents().unwrap_or_default(),
@@ -300,30 +315,43 @@ impl FileDialogRegistration {
     /// next login: this is a KDE session and the app's login script is in
     /// place. Reading only reads.
     pub fn covers_kde_apps(&self) -> bool {
-        self.is_kde_session()
-            && fs::read_to_string(self.kde_env_file()).is_ok_and(|contents| contents == KDE_ENV_SCRIPT)
+        self.is_kde_session() && matches!(self.kde_script(), Ok(KdeScript::Ours))
+    }
+
+    /// Whether a file of the user's, or a symlink, sits where the login
+    /// script goes on a KDE session, so the app leaves it alone and KDE's
+    /// own applications keep KDE's dialog.
+    pub fn kde_script_is_someone_elses(&self) -> bool {
+        self.is_kde_session() && matches!(self.kde_script(), Ok(KdeScript::Other))
+    }
+
+    /// What is at the login script's path.
+    fn kde_script(&self) -> Result<KdeScript, FileDialogError> {
+        let script = self.kde_env_file();
+        if refuse_symlink(&script).is_err_and(|error| matches!(error, FileDialogError::Symlink(_))) {
+            return Ok(KdeScript::Other);
+        }
+        Ok(match read_optional(&script)?.as_deref() {
+            None => KdeScript::Missing,
+            Some(KDE_ENV_SCRIPT) => KdeScript::Ours,
+            Some(_) => KdeScript::Other,
+        })
     }
 
     /// Writes the login script on a KDE session. A file of the user's at
     /// that name, or a symlink, is left alone.
     fn enable_for_kde_apps(&self) -> Result<(), FileDialogError> {
-        if !self.is_kde_session() {
+        if !self.is_kde_session() || self.kde_script()? != KdeScript::Missing {
             return Ok(());
         }
-        let script = self.kde_env_file();
-        refuse_symlink(&script)?;
-        match read_optional(&script)? {
-            Some(_) => Ok(()),
-            None => write_text(&script, KDE_ENV_SCRIPT),
-        }
+        write_text(&self.kde_env_file(), KDE_ENV_SCRIPT)
     }
 
-    /// Removes the login script if it still holds what the app wrote.
+    /// Removes the login script if it still holds what the app wrote; a
+    /// file of the user's, or a symlink, is left alone.
     fn disable_for_kde_apps(&self) -> Result<(), FileDialogError> {
-        let script = self.kde_env_file();
-        refuse_symlink(&script)?;
-        if read_optional(&script)?.as_deref() == Some(KDE_ENV_SCRIPT) {
-            remove_file(&script)?;
+        if self.kde_script()? == KdeScript::Ours {
+            remove_file(&self.kde_env_file())?;
         }
         Ok(())
     }

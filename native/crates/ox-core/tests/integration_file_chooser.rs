@@ -522,17 +522,22 @@ fn kde_apps_are_covered_by_a_login_script() {
         "export SOMETHING_ELSE=1\n"
     );
 
-    // A script that cannot be removed fails Restore before anything else
-    // changes, so the opt-in stays on and Restore can be tried again.
+    assert!(registration.kde_script_is_someone_elses());
+
+    // A symlink there is not the app's either: Enable and Restore leave it
+    // and still change the portal file.
     fs::remove_file(&script).expect("cleared");
-    registration.enable().expect("enable");
-    fs::remove_file(&script).expect("replaced below");
     symlink(fixture.user_file(), &script).expect("a symlink");
-    assert!(registration.disable().is_err());
+    registration.enable().expect("enable");
     assert!(registration.is_enabled());
-    fs::remove_file(&script).expect("the symlink");
+    assert!(registration.kde_script_is_someone_elses());
     registration.disable().expect("disable");
     assert!(!registration.is_enabled());
+    assert!(fs::symlink_metadata(&script)
+        .expect("kept")
+        .file_type()
+        .is_symlink());
+    fs::remove_file(&script).expect("the symlink");
 
     let gnome = FileDialogRegistration::new(
         FileDialogPaths {
