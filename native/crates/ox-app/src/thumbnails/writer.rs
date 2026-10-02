@@ -31,7 +31,12 @@ pub(super) struct Source {
 /// Makes the thumbnail of `source` in `flavor` under the cache folder
 /// `cache_dir`; `None` when the picture cannot be read or the thumbnail
 /// not written. Blocks: run it off the main thread.
-pub(super) fn write_thumbnail(cache_dir: &Path, source: &Source, flavor: ThumbnailFlavor) -> Option<PathBuf> {
+pub(super) fn write_thumbnail(
+    cache_dir: &Path,
+    source: &Source,
+    flavor: ThumbnailFlavor,
+    cancellation: &gio::Cancellable,
+) -> Option<PathBuf> {
     let target = thumbnail_file(cache_dir, &source.uri, flavor);
     let folder = target.parent()?;
     // A thumbnail of a thumbnail would grow the cache from itself.
@@ -42,7 +47,10 @@ pub(super) fn write_thumbnail(cache_dir: &Path, source: &Source, flavor: Thumbna
     ) {
         return None;
     }
-    let pixbuf = scaled_picture(&source.uri, flavor.pixels())?;
+    let pixbuf = scaled_picture(&source.uri, flavor.pixels(), cancellation)?;
+    if cancellation.is_cancelled() {
+        return None;
+    }
     fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
@@ -56,6 +64,7 @@ pub(super) fn write_thumbnail(cache_dir: &Path, source: &Source, flavor: Thumbna
         ("tEXt::Software", "OpenXplorer"),
     ];
     let saved = pixbuf.savev(&temporary, "png", &options).is_ok()
+        && !cancellation.is_cancelled()
         && fs::set_permissions(&temporary, fs::Permissions::from_mode(0o600)).is_ok()
         && fs::rename(&temporary, &target).is_ok();
     if !saved {
@@ -83,8 +92,8 @@ pub(super) fn find_thumbnail(
 /// The picture at `uri`, turned upright and decoded to fit `edge` pixels
 /// square, or at its own size when smaller: a large photo is never held
 /// in memory at full size.
-fn scaled_picture(uri: &str, edge: i32) -> Option<Pixbuf> {
-    let stream = gio::File::for_uri(uri).read(gio::Cancellable::NONE).ok()?;
+fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Option<Pixbuf> {
+    let stream = gio::File::for_uri(uri).read(Some(cancellation)).ok()?;
     let loader = PixbufLoader::new();
     loader.connect_size_prepared(move |loader, width, height| {
         if width > edge || height > edge {
@@ -94,7 +103,13 @@ fn scaled_picture(uri: &str, edge: i32) -> Option<Pixbuf> {
     });
     let mut buffer = vec![0; READ_CHUNK];
     loop {
-        let read = stream.read(&mut buffer, gio::Cancellable::NONE).ok()?;
+        let read = match stream.read(&mut buffer, Some(cancellation)) {
+            Ok(read) => read,
+            Err(_) => {
+                let _ = loader.close();
+                return None;
+            }
+        };
         if read == 0 {
             break;
         }
@@ -138,7 +153,8 @@ mod tests {
             modified: 1_700_000_000,
         };
 
-        let written = write_thumbnail(&cache, &source, ThumbnailFlavor::Normal).expect("a thumbnail");
+        let written = write_thumbnail(&cache, &source, ThumbnailFlavor::Normal, &gio::Cancellable::new())
+            .expect("a thumbnail");
 
         assert_eq!(
             written,
@@ -156,5 +172,11 @@ mod tests {
         );
         let mode = fs::metadata(&written).expect("the file").permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
+
+        let cancelled = gio::Cancellable::new();
+        cancelled.cancel();
+        let other_cache = folder.path().join("cancelled-cache");
+        assert!(write_thumbnail(&other_cache, &source, ThumbnailFlavor::Normal, &cancelled).is_none());
+        assert!(!other_cache.exists(), "a cancelled read leaves no cache file");
     }
 }

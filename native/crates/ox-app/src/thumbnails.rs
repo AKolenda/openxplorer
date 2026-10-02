@@ -150,13 +150,12 @@ pub(crate) async fn preview(request: PreviewRequest) -> Option<gdk::Texture> {
         return Some(texture);
     }
     let path = thumbnail_of(&request).await?;
-    let slot = DECODING.with(Rc::clone).take().await;
     let pixels = request.pixels;
-    let texture = gio::spawn_blocking(move || decode(&path, pixels))
+    let texture = DECODING
+        .with(Rc::clone)
+        .blocking(move |_| decode(&path, pixels))
         .await
-        .ok()
         .flatten();
-    drop(slot);
     let texture = texture?;
     KEPT.with_borrow_mut(|kept| {
         if kept.len() >= MAX_KEPT {
@@ -197,21 +196,24 @@ async fn thumbnail_of(request: &PreviewRequest) -> Option<PathBuf> {
 /// Makes the missing thumbnail of the item: by the thumbnailer service
 /// when it supports the type, else by gdk-pixbuf for a picture.
 async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
-    let _slot = MAKING.with(Rc::clone).take().await;
     let flavor = ThumbnailFlavor::for_pixels(request.pixels);
     let cache_dir = glib::user_cache_dir();
     // GIO looks up local files only, and one size: a thumbnail this app
     // made earlier may be there all the same.
     let earlier = (cache_dir.clone(), request.uri.clone(), request.modified);
-    let found = gio::spawn_blocking(move || {
-        let (cache_dir, uri, modified) = earlier;
-        writer::find_thumbnail(&cache_dir, &uri, modified?, flavor)
-    });
-    if let Ok(Some(path)) = found.await {
+    let found = MAKING
+        .with(Rc::clone)
+        .blocking(move |_| {
+            let (cache_dir, uri, modified) = earlier;
+            writer::find_thumbnail(&cache_dir, &uri, modified?, flavor)
+        })
+        .await;
+    if let Some(Some(path)) = found {
         return Some(path);
     }
     if let Some(service) = service::service().await {
         if service.supports(&request.uri, &request.content_type) {
+            let _slot = MAKING.with(Rc::clone).take().await;
             let made = service.make(&request.uri, &request.content_type, flavor).await;
             let path = ox_core::entry::thumbnail_file(&cache_dir, &request.uri, flavor);
             return made.then_some(path);
@@ -231,9 +233,10 @@ async fn make_thumbnail(request: &PreviewRequest) -> Option<PathBuf> {
         uri: request.uri.clone(),
         modified,
     };
-    gio::spawn_blocking(move || writer::write_thumbnail(&cache_dir, &source, flavor))
+    MAKING
+        .with(Rc::clone)
+        .blocking(move |cancel| writer::write_thumbnail(&cache_dir, &source, flavor, cancel))
         .await
-        .ok()
         .flatten()
 }
 
