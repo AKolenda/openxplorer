@@ -492,3 +492,55 @@ fn space_previews_the_selected_file_with_the_gnome_previewer() {
     wait_until("ShowFile", || previewer.calls().len() == 6);
     assert_eq!(previewer.calls()[5], shown("Notes 10.txt"));
 }
+
+/// Every letter shortcut is a GTK key trigger or an application
+/// accelerator, never a comparison of the typed letter: GTK matches those
+/// by the key's position in every layout group, so Ctrl+C copies with a
+/// Cyrillic, Greek, Hebrew or Arabic layout active, as in Nautilus.
+///
+/// parity: CMD-035
+#[gtk::test]
+fn letter_shortcuts_are_layout_independent_gtk_triggers() {
+    use crate::window::tests::file_ops_support::{is_triggered_by, shortcuts_of};
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let app = test.window.application().expect("the window has its application");
+    let window = test.window.upcast_ref::<gtk::Widget>();
+    let mut widgets = descendants::<gtk::Widget>(window);
+    widgets.push(window.clone());
+    let shortcuts: Vec<gtk::Shortcut> = widgets
+        .iter()
+        .flat_map(|widget| {
+            let mut all = shortcuts_of(widget, gtk::PropagationPhase::Capture);
+            all.extend(shortcuts_of(widget, gtk::PropagationPhase::Bubble));
+            all
+        })
+        .collect();
+
+    for accelerator in [
+        "<Primary>a",
+        "<Primary>c",
+        "<Primary>x",
+        "<Primary>v",
+        "<Primary>f",
+        "<Primary>h",
+        "<Primary>l",
+        "<Primary>n",
+        "<Primary>r",
+        "<Primary>t",
+        "<Primary>w",
+        "<Primary>z",
+        "<Primary><Shift>n",
+        "<Alt>d",
+    ] {
+        let (key, modifiers) = gtk::accelerator_parse(accelerator).expect("a valid accelerator");
+        let is_accelerator = !app.actions_for_accel(accelerator).is_empty();
+        let is_trigger = shortcuts.iter().any(|shortcut| {
+            shortcut
+                .trigger()
+                .is_some_and(|trigger| is_triggered_by(&trigger, key, modifiers))
+        });
+        assert!(is_accelerator || is_trigger, "{accelerator} is a GTK shortcut");
+    }
+}

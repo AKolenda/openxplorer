@@ -128,7 +128,7 @@ impl UnfinishedMarks {
 }
 
 /// The title of the dialog that reports leftovers.
-pub const UNFINISHED_TITLE: &str = "File operations did not finish";
+pub const UNFINISHED_TITLE: &str = crate::i18n::message_id("File operations did not finish");
 
 /// The most leftovers the dialog lists by name.
 const LISTED_LEFTOVERS: usize = 10;
@@ -146,14 +146,12 @@ pub fn leftovers_message(leftovers: &[String]) -> String {
         })
         .collect();
     if leftovers.len() > LISTED_LEFTOVERS {
-        lines.push(format!("…and {} more", leftovers.len() - LISTED_LEFTOVERS));
+        lines.push(crate::i18n::format_message(
+            "…and {count} more",
+            &[("count", &(leftovers.len() - LISTED_LEFTOVERS).to_string())],
+        ));
     }
-    format!(
-        "OpenXplorer stopped before a copy or move finished. It left these private items:\n\n{}\n\n\
-         Inspect them before removing them: an interrupted move may have left the only copy of an \
-         item there.",
-        lines.join("\n")
-    )
+    crate::i18n::format_message("OpenXplorer stopped before a copy or move finished. It left these private items:\n\n{items}\n\nInspect them before removing them: an interrupted move may have left the only copy of an item there.", &[("items", &lines.join("\n"))])
 }
 
 /// The staging and backup items directly in `folder`, without following

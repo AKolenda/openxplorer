@@ -11,11 +11,11 @@ use super::undo::UndoRecord;
 use crate::transfer::{TransferMode, TransferResult};
 
 /// The title of the dialog that lists what an operation did.
-pub const RESULT_TITLE: &str = "Operation result";
+pub const RESULT_TITLE: &str = crate::i18n::message_id("Operation result");
 
 /// The title of the dialog for a request that failed before any item was
 /// handled; its text is the error's message.
-pub const STOPPED_TITLE: &str = "Operation stopped";
+pub const STOPPED_TITLE: &str = crate::i18n::message_id("Operation stopped");
 
 /// How the end of an operation is reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,35 +30,35 @@ pub enum OperationSummary {
 /// The summary of a finished `mode` run, word for word as `app.js`
 /// writes it.
 pub fn summarize(mode: TransferMode, result: &TransferResult) -> OperationSummary {
-    let verb = match mode {
-        TransferMode::Copy => "copied",
-        TransferMode::Move => "moved",
-        TransferMode::Delete => "permanently deleted",
-        TransferMode::Trash => "sent to Trash",
+    let message = match mode {
+        TransferMode::Copy => crate::i18n::message_id("{count} item(s) copied."),
+        TransferMode::Move => crate::i18n::message_id("{count} item(s) moved."),
+        TransferMode::Delete => crate::i18n::message_id("{count} item(s) permanently deleted."),
+        TransferMode::Trash => crate::i18n::message_id("{count} item(s) sent to Trash."),
     };
-    summarize_items(verb, result)
+    summarize_items(message, result)
 }
 
 /// The summary of Duplicate, which the Python app did not have:
 /// `2 item(s) duplicated.` in the wording of the other toasts.
 pub fn summarize_duplicate(result: &TransferResult) -> OperationSummary {
-    summarize_items("duplicated", result)
+    summarize_items(crate::i18n::message_id("{count} item(s) duplicated."), result)
 }
 
 /// The summary of Restore from the Recycle Bin: `2 item(s) restored.`
 pub fn summarize_restore(result: &TransferResult) -> OperationSummary {
-    summarize_items("restored", result)
+    summarize_items(crate::i18n::message_id("{count} item(s) restored."), result)
 }
 
 /// The summary of Create links, which the Python app did not have:
 /// `2 item(s) linked.` in the wording of the other toasts.
 pub fn summarize_links(result: &TransferResult) -> OperationSummary {
-    summarize_items("linked", result)
+    summarize_items(crate::i18n::message_id("{count} item(s) linked."), result)
 }
 
 /// The summary of a batch rename (OPS-014): `3 item(s) renamed.`
 pub fn summarize_batch_rename(result: &TransferResult) -> OperationSummary {
-    summarize_items("renamed", result)
+    summarize_items(crate::i18n::message_id("{count} item(s) renamed."), result)
 }
 
 /// The summary of an Undo: `Rename undone.` when every step succeeded,
@@ -78,17 +78,20 @@ pub fn summarize_journal_step(
     if !is_complete_success(result) {
         return OperationSummary::Report(report_lines(result));
     }
-    let verb = match direction {
-        JournalDirection::Undo => "undone",
-        JournalDirection::Redo => "redone",
+    let message = match direction {
+        JournalDirection::Undo => crate::i18n::message_id("{title} undone."),
+        JournalDirection::Redo => crate::i18n::message_id("{title} redone."),
     };
-    OperationSummary::Toast(format!("{title} {verb}."))
+    OperationSummary::Toast(crate::i18n::format_message(message, &[("title", title)]))
 }
 
 /// `N item(s) <verb>.` when every item succeeded, otherwise the report.
-fn summarize_items(verb: &str, result: &TransferResult) -> OperationSummary {
+fn summarize_items(message: &str, result: &TransferResult) -> OperationSummary {
     if is_complete_success(result) {
-        return OperationSummary::Toast(format!("{} item(s) {verb}.", result.done.len()));
+        return OperationSummary::Toast(crate::i18n::format_message(
+            message,
+            &[("count", &result.done.len().to_string())],
+        ));
     }
     OperationSummary::Report(report_lines(result))
 }
@@ -101,12 +104,20 @@ fn is_complete_success(result: &TransferResult) -> bool {
 /// `N completed.`, then the skipped count, the cancellation and each
 /// error, one per line.
 fn report_lines(result: &TransferResult) -> String {
-    let mut lines = vec![format!("{} completed.", result.done.len())];
+    let mut lines = vec![crate::i18n::format_message(
+        "{count} completed.",
+        &[("count", &(result.done.len()).to_string())],
+    )];
     if !result.skipped.is_empty() {
-        lines.push(format!("{} skipped (name already exists).", result.skipped.len()));
+        lines.push(crate::i18n::format_message(
+            "{count} skipped (name already exists).",
+            &[("count", &(result.skipped.len()).to_string())],
+        ));
     }
     if result.cancelled {
-        lines.push(String::from("Cancelled. Completed items remain in place."));
+        lines.push(crate::i18n::gettext(
+            "Cancelled. Completed items remain in place.",
+        ));
     }
     lines.extend(result.errors.iter().cloned());
     lines.join("\n")

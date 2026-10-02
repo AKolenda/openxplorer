@@ -41,22 +41,33 @@ use super::BrowserWindow;
 pub(super) use drag::OutgoingTabDrag;
 
 /// The title of a window without one, in the list of windows.
-const UNTITLED_WINDOW: &str = "OpenXplorer window";
+const UNTITLED_WINDOW: &str = crate::i18n::message_id("OpenXplorer window");
 
 /// Why a tab did not move; the original stays where it was.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub(super) enum TabMoveRefusal {
     /// The source window runs a file operation or shows a dialog.
-    #[error("Close this tab’s dialog and finish file operations before moving it.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Close this tab’s dialog and finish file operations before moving it.")
+    )]
     SourceBusy,
     /// The destination runs a file operation or shows a dialog, or closed.
-    #[error("The destination was busy or closed. The original tab was kept.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("The destination was busy or closed. The original tab was kept.")
+    )]
     DestinationBusy,
     /// The tab closed, or the destination is the window it is in.
-    #[error("Choose a different, ready OpenXplorer window.")]
+    #[error("{}", ox_core::i18n::gettext("Choose a different, ready OpenXplorer window."))]
     NoDestination,
     /// The drag ended without a place that takes the tab.
-    #[error("Tab move cancelled. To detach, release below the tab strip or use Move tab to new window.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext(
+            "Tab move cancelled. To detach, release below the tab strip or use Move tab to new window."
+        )
+    )]
     Cancelled,
 }
 
@@ -89,7 +100,7 @@ fn move_tab_menu(id: TabId, windows: &[OtherWindow]) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = windows.iter().map(|window| window.menu_item(id).into()).collect();
     if entries.is_empty() {
         let none = MenuItem::new(
-            "No other OpenXplorer windows",
+            &ox_core::i18n::gettext("No other OpenXplorer windows"),
             Icon::Desktop,
             WindowAction::MoveTabIntoWindow,
         );
@@ -97,7 +108,7 @@ fn move_tab_menu(id: TabId, windows: &[OtherWindow]) -> Vec<MenuEntry> {
     }
     entries.push(MenuEntry::Divider);
     let new_window = MenuItem::with_target(
-        "Move tab to new window",
+        &ox_core::i18n::gettext("Move tab to new window"),
         Icon::Share,
         WindowAction::MoveTabToNewWindow,
         id.to_variant(),
@@ -304,9 +315,10 @@ impl BrowserWindow {
             .filter(|window| window != self)
             .map(|window| OtherWindow {
                 id: window.id(),
-                title: window
-                    .title()
-                    .map_or_else(|| UNTITLED_WINDOW.to_owned(), |title| title.to_string()),
+                title: window.title().map_or_else(
+                    || ox_core::i18n::gettext_static(UNTITLED_WINDOW).to_owned(),
+                    |title| title.to_string(),
+                ),
                 is_ready: !window.is_busy_for_tab_moves(),
             })
             .collect()
@@ -338,10 +350,10 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dialog::Dialog;
     use crate::test_support::harness::{
         capture_popover, settle, wait_until, Fixture, OpenedWindows, TestWindow,
     };
-    use crate::window::dialog::Dialog;
     use crate::window::menu_popover::ItemAvailability;
 
     fn labels(entries: &[MenuEntry]) -> Vec<String> {

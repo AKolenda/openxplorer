@@ -33,16 +33,25 @@ const SIZE_LIMIT: u64 = 128 * 1024;
 #[derive(Debug, thiserror::Error)]
 pub(super) enum UserDirsError {
     /// Over [`SIZE_LIMIT`], in Python's words.
-    #[error("The user-dirs configuration is unexpectedly large.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The user-dirs configuration is unexpectedly large.")
+    )]
     TooLarge,
     /// Not UTF-8, which Python's `read_text(encoding='utf-8')` refuses.
-    #[error("The user-dirs configuration is not valid UTF-8 text.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The user-dirs configuration is not valid UTF-8 text.")
+    )]
     NotText,
     /// A FIFO, device or directory.
-    #[error("The user-dirs configuration is not a regular file.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The user-dirs configuration is not a regular file.")
+    )]
     NotAFile,
     /// The operating system refused to open or read it.
-    #[error("The user-dirs configuration could not be read: {0}.")]
+    #[error("{}", crate::i18n::format_message("The user-dirs configuration could not be read: {error}.", &[("error", &.0.to_string())]))]
     Io(#[from] io::Error),
 }
 

@@ -34,30 +34,48 @@ use super::{HiddenRow, Sidebar};
 /// is `editable` (SIDE-011); a standard folder is not.
 pub(super) fn pin_menu(uri: &str, caching: Option<Caching>, editable: bool) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = vec![
-        MenuItem::with_text_target("Open", Icon::Folder, WindowAction::GoTo, uri).into(),
-        MenuItem::with_text_target("Open in new tab", Icon::Add, WindowAction::OpenTab, uri).into(),
         MenuItem::with_text_target(
-            "Open in new window",
+            &ox_core::i18n::gettext("Open"),
+            Icon::Folder,
+            WindowAction::GoTo,
+            uri,
+        )
+        .into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            uri,
+        )
+        .into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new window"),
             Icon::WindowNew,
             WindowAction::OpenWindow,
             uri,
         )
         .into(),
         MenuItem::with_text_target(
-            "Open in Terminal",
+            &ox_core::i18n::gettext("Open in Terminal"),
             Icon::WindowConsole,
             WindowAction::OpenInTerminalOf,
             uri,
         )
         .into(),
-        MenuItem::with_text_target("Open folder with…", Icon::Apps, WindowAction::OpenWithOf, uri).into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open folder with…"),
+            Icon::Apps,
+            WindowAction::OpenWithOf,
+            uri,
+        )
+        .into(),
     ];
     if let Some(caching) = caching {
         entries.push(cache_item(uri, caching).into());
     }
     if is_smb_location(uri) {
         let sign_out = MenuItem::with_text_target(
-            "Sign out of server…",
+            &ox_core::i18n::gettext("Sign out of server…"),
             Icon::ArrowEject,
             WindowAction::SignOut,
             uri,
@@ -66,19 +84,39 @@ pub(super) fn pin_menu(uri: &str, caching: Option<Caching>, editable: bool) -> V
     }
     entries.push(MenuEntry::Divider);
     if editable {
-        entries.push(MenuItem::with_text_target("Edit…", Icon::Rename, WindowAction::EditPin, uri).into());
+        entries.push(
+            MenuItem::with_text_target(
+                &ox_core::i18n::gettext("Edit…"),
+                Icon::Rename,
+                WindowAction::EditPin,
+                uri,
+            )
+            .into(),
+        );
     }
     entries.extend([
-        MenuItem::with_text_target("Unpin from Quick access", Icon::Pin, WindowAction::Unpin, uri).into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Unpin from Quick access"),
+            Icon::Pin,
+            WindowAction::Unpin,
+            uri,
+        )
+        .into(),
         MenuEntry::Divider,
         MenuItem::with_text_target(
-            "Previous versions",
+            &ox_core::i18n::gettext("Previous versions"),
             Icon::History,
             WindowAction::PreviousVersionsOf,
             uri,
         )
         .into(),
-        MenuItem::with_text_target("Properties", Icon::Info, WindowAction::PropertiesOf, uri).into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Properties"),
+            Icon::Info,
+            WindowAction::PropertiesOf,
+            uri,
+        )
+        .into(),
     ]);
     entries
 }
@@ -179,16 +217,25 @@ fn empty_space_menu(anything_hidden: bool) -> Vec<MenuEntry> {
     let size = |label: &str, pixels: &str| {
         MenuItem::choice(label, Icon::Grid, WindowAction::SidebarIconSize, pixels).into()
     };
-    let show_all = MenuItem::toggle("Show all entries", Icon::Eye, WindowAction::SidebarShowAll);
+    let show_all = MenuItem::toggle(
+        &ox_core::i18n::gettext("Show all entries"),
+        Icon::Eye,
+        WindowAction::SidebarShowAll,
+    );
     vec![
-        MenuItem::new("Add entry…", Icon::Add, WindowAction::AddPlace).into(),
+        MenuItem::new(
+            &ox_core::i18n::gettext("Add entry…"),
+            Icon::Add,
+            WindowAction::AddPlace,
+        )
+        .into(),
         show_all.disabled_when(!anything_hidden).into(),
         MenuEntry::Divider,
-        size("Automatic icon size", "0"),
-        size("Small icons", "16"),
-        size("Medium icons", "22"),
-        size("Large icons", "32"),
-        size("Huge icons", "48"),
+        size(ox_core::i18n::gettext_static("Automatic icon size"), "0"),
+        size(ox_core::i18n::gettext_static("Small icons"), "16"),
+        size(ox_core::i18n::gettext_static("Medium icons"), "22"),
+        size(ox_core::i18n::gettext_static("Large icons"), "32"),
+        size(ox_core::i18n::gettext_static("Huge icons"), "48"),
     ]
 }
 
@@ -197,7 +244,13 @@ fn show_place_menu(entry: &SidebarEntry) -> Vec<MenuEntry> {
     let RowTarget::Location(uri) = &entry.target else {
         return Vec::new();
     };
-    vec![MenuItem::with_text_target("Show", Icon::Eye, WindowAction::ShowPlace, uri).into()]
+    vec![MenuItem::with_text_target(
+        &ox_core::i18n::gettext("Show"),
+        Icon::Eye,
+        WindowAction::ShowPlace,
+        uri,
+    )
+    .into()]
 }
 
 /// "Hide" for a place other than a pin or a standard folder, which are
@@ -209,7 +262,15 @@ fn hide_place_item(entry: &SidebarEntry) -> Option<MenuEntry> {
     if entry.pinned || entry.level == RowLevel::Group {
         return None;
     }
-    Some(MenuItem::with_text_target("Hide", Icon::Eye, WindowAction::HidePlace, uri).into())
+    Some(
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Hide"),
+            Icon::Eye,
+            WindowAction::HidePlace,
+            uri,
+        )
+        .into(),
+    )
 }
 
 /// "Hide section" for a shown section, or "Show section" for a hidden
@@ -220,7 +281,7 @@ fn section_item(key: &str, name: &str, hidden: bool) -> MenuEntry {
     } else {
         ("Hide", WindowAction::HideSection)
     };
-    let label = format!("{verb} section \u{201c}{name}\u{201d}");
+    let label = ox_core::i18n::format_message("{verb} section “{name}”", &[("verb", verb), ("name", name)]);
     MenuItem::with_text_target(&label, Icon::Eye, action, key).into()
 }
 

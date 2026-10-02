@@ -100,10 +100,10 @@ impl RevealPaths {
 #[derive(Debug, thiserror::Error)]
 pub enum RevealError {
     /// One of the two files is a symlink, which is never replaced.
-    #[error("Refusing to replace a symlink: {}", .0.display())]
+    #[error("{}", crate::i18n::format_message("Refusing to replace a symlink: {path}", &[("path", &.0.display().to_string())]))]
     Symlink(PathBuf),
     /// One of the two files holds something the app did not write.
-    #[error("An existing user override needs review before enabling OpenXplorer: {}", .0.display())]
+    #[error("{}", crate::i18n::format_message("An existing user override needs review before enabling OpenXplorer: {path}", &[("path", &.0.display().to_string())]))]
     ForeignOverride(PathBuf),
     /// Reading, writing or removing a file failed.
     #[error("{error}: {}", path.display())]

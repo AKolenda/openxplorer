@@ -22,21 +22,55 @@ pub(crate) enum SortColumn {
     /// The folder a search result is in, shown instead of Date modified
     /// while searching (VIEW-042).
     FolderPath,
+    /// The folder a Recycle Bin item was deleted from, shown in the
+    /// Recycle Bin instead of Date modified (VIEW-062).
+    OriginalLocation,
+    /// When a Recycle Bin item was deleted (VIEW-062).
+    Deleted,
     /// Human-readable content type.
     Type,
     /// File size in bytes.
     Size,
+    /// Creation timestamp; this and the next three are offered by the
+    /// header's menu (VIEW-033).
+    Created,
+    /// The file extension.
+    Extension,
+    /// The owner's name.
+    Owner,
+    /// The permission bits.
+    Permissions,
 }
 
 impl SortColumn {
-    /// Every column, in display order. A folder shows Date modified and a
-    /// search Folder path, in the same place (`columnFields` in app.js).
-    pub(crate) const ALL: [SortColumn; 5] = [
+    /// Every column, in display order. A folder shows Date modified, a
+    /// search Folder path (`columnFields` in app.js) and the Recycle Bin
+    /// Original location and Date deleted, in the same place, as Windows
+    /// File Explorer and Dolphin do.
+    pub(crate) const ALL: [SortColumn; 11] = [
         SortColumn::Name,
         SortColumn::Modified,
         SortColumn::FolderPath,
+        SortColumn::OriginalLocation,
+        SortColumn::Deleted,
         SortColumn::Type,
         SortColumn::Size,
+        SortColumn::Created,
+        SortColumn::Extension,
+        SortColumn::Owner,
+        SortColumn::Permissions,
+    ];
+
+    /// The columns the header's menu shows and hides; Name and Folder
+    /// path always show where they apply.
+    pub(crate) const CHOOSABLE: [SortColumn; 7] = [
+        SortColumn::Modified,
+        SortColumn::Created,
+        SortColumn::Type,
+        SortColumn::Size,
+        SortColumn::Extension,
+        SortColumn::Owner,
+        SortColumn::Permissions,
     ];
 
     /// The columns the Sort menu offers, as app.js's Sort menu does; a
@@ -54,8 +88,14 @@ impl SortColumn {
             SortColumn::Name => "name",
             SortColumn::Modified => "modified",
             SortColumn::FolderPath => "parentUri",
+            SortColumn::OriginalLocation => "originalLocation",
+            SortColumn::Deleted => "deleted",
             SortColumn::Type => "type",
             SortColumn::Size => "size",
+            SortColumn::Created => "created",
+            SortColumn::Extension => "extension",
+            SortColumn::Owner => "owner",
+            SortColumn::Permissions => "permissions",
         }
     }
 
@@ -65,13 +105,19 @@ impl SortColumn {
     }
 
     /// Column header and Sort menu label.
-    pub(crate) const fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
-            SortColumn::Name => "Name",
-            SortColumn::Modified => "Date modified",
-            SortColumn::FolderPath => "Folder path",
-            SortColumn::Type => "Type",
-            SortColumn::Size => "Size",
+            SortColumn::Name => ox_core::i18n::gettext_static("Name"),
+            SortColumn::Modified => ox_core::i18n::gettext_static("Date modified"),
+            SortColumn::FolderPath => ox_core::i18n::gettext_static("Folder path"),
+            SortColumn::OriginalLocation => ox_core::i18n::gettext_static("Original location"),
+            SortColumn::Deleted => ox_core::i18n::gettext_static("Date deleted"),
+            SortColumn::Type => ox_core::i18n::gettext_static("Type"),
+            SortColumn::Size => ox_core::i18n::gettext_static("Size"),
+            SortColumn::Created => ox_core::i18n::gettext_static("Date created"),
+            SortColumn::Extension => ox_core::i18n::gettext_static("File extension"),
+            SortColumn::Owner => ox_core::i18n::gettext_static("Owner"),
+            SortColumn::Permissions => ox_core::i18n::gettext_static("Permissions"),
         }
     }
 }

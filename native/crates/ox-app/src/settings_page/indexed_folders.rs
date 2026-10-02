@@ -42,19 +42,24 @@ use crate::icons::Icon;
 use crate::window::ButtonStyle;
 
 /// The page's line under its title: the Python section's help text.
-const LEAD: &str = "Check a folder to index the names and paths of its files and subfolders. SMB \
+const LEAD: &str = crate::i18n::message_id(
+    "Check a folder to index the names and paths of its files and subfolders. SMB \
                     folders work too. File contents are never cached. Open a protected share and \
-                    sign in before indexing it.";
+                    sign in before indexing it.",
+);
 
 /// The limits of indexing, from the Python section's help.
-const LIMITS_NOTE: &str = "Local changes update the index after a short debounce. Watching uses up \
+const LIMITS_NOTE: &str = crate::i18n::message_id(
+    "Local changes update the index after a short debounce. Watching uses up \
                            to 8,192 directories; timed checks cover any remaining ones. Disk roots \
                            skip system/temporary folders, nested mounts and symlinks. Select each \
                            mounted volume separately. Initial scans are limited to 1 million \
-                           entries.";
+                           entries.",
+);
 
 /// What the "Indexed folders" group says while the index keeps nothing.
-const NOTHING_INDEXED: &str = "No folders are indexed yet. Add one below, or pin a folder to Quick access.";
+const NOTHING_INDEXED: &str =
+    crate::i18n::message_id("No folders are indexed yet. Add one below, or pin a folder to Quick access.");
 
 const ADD_FOLDER: RowText = RowText {
     title: "Add a folder",
@@ -144,18 +149,25 @@ fn candidate_of(root: &IndexRoot, candidates: &[IndexCandidate]) -> IndexCandida
 
 /// The Indexed folders page and its lists.
 pub(super) fn build(page: &SettingsPage) -> (SettingsSection, IndexedFolders) {
-    let section = SettingsSection::new("Indexed folders", LEAD, PageKind::Subpage);
-    let indexed = SettingsGroup::new("Indexed folders");
+    let section = SettingsSection::new(
+        &ox_core::i18n::gettext("Indexed folders"),
+        ox_core::i18n::gettext_static(LEAD),
+        PageKind::Subpage,
+    );
+    let indexed = SettingsGroup::new(&ox_core::i18n::gettext("Indexed folders"));
     // The list starts empty, so it says so until the index reports.
     show_nothing_indexed(&indexed);
     section.append_group(&indexed);
-    let add_group = SettingsGroup::new("Add folders to the index");
+    let add_group = SettingsGroup::new(&ox_core::i18n::gettext("Add folders to the index"));
     let add_field = add_folder_field();
     add_group.add_row(&add_folder_row(&add_field, page));
     section.append_group(&add_group);
     let suggestions = IndexSuggestions::new(page);
     section.append_text(&suggestions);
-    section.append_text(&parts::note(Icon::Info, LIMITS_NOTE));
+    section.append_text(&parts::note(
+        Icon::Info,
+        ox_core::i18n::gettext_static(LIMITS_NOTE),
+    ));
     let folders = IndexedFolders {
         indexed,
         suggestions,
@@ -166,7 +178,10 @@ pub(super) fn build(page: &SettingsPage) -> (SettingsSection, IndexedFolders) {
 
 /// Says in `group` that the index keeps no folder.
 fn show_nothing_indexed(group: &SettingsGroup) {
-    let empty = parts::wrapped_label(NOTHING_INDEXED, "setting-description");
+    let empty = parts::wrapped_label(
+        ox_core::i18n::gettext_static(NOTHING_INDEXED),
+        "setting-description",
+    );
     empty.add_css_class("empty-group");
     group.add_plain_row(&empty);
 }
@@ -175,11 +190,15 @@ fn show_nothing_indexed(group: &SettingsGroup) {
 /// off what was typed.
 fn add_folder_field() -> gtk::Entry {
     let field = gtk::Entry::builder()
-        .placeholder_text("Add a folder: /home/you/Projects or \\\\nas\\share")
+        .placeholder_text(ox_core::i18n::gettext(
+            "Add a folder: /home/you/Projects or \\\\nas\\share",
+        ))
         .hexpand(true)
         .width_chars(36)
         .build();
-    field.update_property(&[gtk::accessible::Property::Label("Folder to cache")]);
+    field.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "Folder to cache",
+    ))]);
     field
 }
 
@@ -189,7 +208,7 @@ fn add_folder_field() -> gtk::Entry {
 fn add_folder_row(field: &gtk::Entry, page: &SettingsPage) -> SettingRow {
     let row = SettingRow::new(ADD_FOLDER);
     row.add_control(field, ControlName::RowTitle);
-    let index = parts::button("Index", ButtonStyle::Accent);
+    let index = parts::button(&ox_core::i18n::gettext("Index"), ButtonStyle::Accent);
     row.add_control(&index, ControlName::OwnLabel);
     field.connect_activate(glib::clone!(
         #[weak]

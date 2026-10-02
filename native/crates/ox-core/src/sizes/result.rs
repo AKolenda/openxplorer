@@ -39,7 +39,7 @@ impl ScanStatus {
         match self {
             Self::Scanning | Self::Complete => "",
             Self::Partial(reason) => reason.as_str(),
-            Self::Cancelled => "Cancelled by user",
+            Self::Cancelled => crate::i18n::gettext_static("Cancelled by user"),
         }
     }
 }
@@ -60,11 +60,11 @@ impl PartialReason {
     /// The reason in the Python app's words.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::TimeLimitReached => "Time limit reached",
-            Self::ScanLimitReached => "Scan limit reached",
-            Self::EntriesExcluded => {
-                "Some links, mounts, snapshot collections or unreadable entries were excluded"
-            }
+            Self::TimeLimitReached => crate::i18n::gettext_static("Time limit reached"),
+            Self::ScanLimitReached => crate::i18n::gettext_static("Scan limit reached"),
+            Self::EntriesExcluded => crate::i18n::gettext_static(
+                "Some links, mounts, snapshot collections or unreadable entries were excluded",
+            ),
         }
     }
 }

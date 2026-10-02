@@ -21,16 +21,17 @@ use ox_core::transfer::Cancellation;
 
 use crate::settings_store::Change;
 
-use super::dialog::Dialog;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 
 /// The add dialog's heading and note.
-const ADD_TITLE: &str = "Add entry";
-const ADD_MESSAGE: &str = "Add a folder or network location to Quick access.";
+const ADD_TITLE: &str = crate::i18n::message_id("Add entry");
+const ADD_MESSAGE: &str = crate::i18n::message_id("Add a folder or network location to Quick access.");
 /// The edit dialog's heading and note.
-const EDIT_TITLE: &str = "Edit entry";
-const EDIT_MESSAGE: &str = "Change the name or the location of this Quick access entry.";
+const EDIT_TITLE: &str = crate::i18n::message_id("Edit entry");
+const EDIT_MESSAGE: &str =
+    crate::i18n::message_id("Change the name or the location of this Quick access entry.");
 
 /// The pin being edited: where it is now and the place after it.
 #[derive(Debug, Clone)]
@@ -65,12 +66,20 @@ impl BrowserWindow {
     /// `location`, and saves them as a new pin or as `edited`.
     async fn edit_place(&self, label: String, location: String, edited: Option<EditedPin>) {
         let (title, message, answer) = match edited {
-            Some(_) => (EDIT_TITLE, EDIT_MESSAGE, "Save"),
-            None => (ADD_TITLE, ADD_MESSAGE, "Add"),
+            Some(_) => (
+                ox_core::i18n::gettext_static(EDIT_TITLE),
+                ox_core::i18n::gettext_static(EDIT_MESSAGE),
+                "Save",
+            ),
+            None => (
+                ox_core::i18n::gettext_static(ADD_TITLE),
+                ox_core::i18n::gettext_static(ADD_MESSAGE),
+                "Add",
+            ),
         };
         let dialog = Dialog::new(self, title, message);
-        let label_field = dialog.add_text_field("Label", &label);
-        label_field.set_placeholder_text(Some("The folder's name"));
+        let label_field = dialog.add_text_field(&ox_core::i18n::gettext("Label"), &label);
+        label_field.set_placeholder_text(Some(&ox_core::i18n::gettext("The folder's name")));
         let shown_location = self.imp().locations.borrow().display_location(&location);
         let location_field = self.add_location_field(&dialog, &shown_location);
         dialog.add_cancel_button();
@@ -90,7 +99,9 @@ impl BrowserWindow {
             };
             // One pin request at a time (SIDE-007), as pinning does.
             if !self.start_pinning() {
-                dialog.show_error("Another folder is being pinned. Try again in a moment.");
+                dialog.show_error(&ox_core::i18n::gettext(
+                    "Another folder is being pinned. Try again in a moment.",
+                ));
                 continue;
             }
             let running = Cancellation::new();
@@ -114,11 +125,13 @@ impl BrowserWindow {
     fn add_location_field(&self, dialog: &Dialog, location: &str) -> gtk::Entry {
         let entry = gtk::Entry::builder()
             .text(location)
-            .placeholder_text("For example ~/Projects or smb://server/share")
+            .placeholder_text(ox_core::i18n::gettext(
+                "For example ~/Projects or smb://server/share",
+            ))
             .activates_default(true)
             .hexpand(true)
             .build();
-        let browse = gtk::Button::with_label("Browse…");
+        let browse = gtk::Button::with_label(&ox_core::i18n::gettext("Browse…"));
         browse.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -129,15 +142,17 @@ impl BrowserWindow {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         row.append(&entry);
         row.append(&browse);
-        dialog.add_labelled("Location", &row);
-        entry.update_property(&[gtk::accessible::Property::Label("Location")]);
+        dialog.add_labelled(ox_core::i18n::gettext_static("Location"), &row);
+        entry.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Location",
+        ))]);
         entry
     }
 
     /// Lets the user choose a folder and writes its path into `entry`.
     fn pick_folder_into(&self, entry: &gtk::Entry) {
         let picker = gtk::FileDialog::builder()
-            .title("Choose a folder")
+            .title(ox_core::i18n::gettext("Choose a folder"))
             .modal(true)
             .build();
         picker.select_folder(
@@ -164,7 +179,7 @@ impl BrowserWindow {
     fn place_request(&self, label: &str, location: &str) -> Result<BookmarkRequest, String> {
         let location = location.trim();
         if location.is_empty() {
-            return Err("Enter a folder or network location.".to_owned());
+            return Err(ox_core::i18n::gettext("Enter a folder or network location."));
         }
         let locations = self.imp().locations.borrow();
         let base = self.current_uri();
@@ -190,12 +205,21 @@ impl BrowserWindow {
         });
         let verified = verifying.await;
         if running.is_cancelled() {
-            return Err("Cancelled.".to_owned());
+            return Err(ox_core::i18n::gettext("Cancelled."));
         }
         let target = match verified {
             Ok(Ok(target)) => target,
-            Ok(Err(error)) => return Err(format!("Could not add: {error}")),
-            Err(_panic) => return Err("Could not add: the location could not be checked.".to_owned()),
+            Ok(Err(error)) => {
+                return Err(ox_core::i18n::format_message(
+                    "Could not add: {error}",
+                    &[("error", &error.to_string())],
+                ))
+            }
+            Err(_panic) => {
+                return Err(ox_core::i18n::gettext(
+                    "Could not add: the location could not be checked.",
+                ))
+            }
         };
         let shown: Vec<String> = self
             .places()
@@ -230,8 +254,11 @@ impl BrowserWindow {
             });
         match receiver.recv().await {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(error)) => Err(format!("Could not save: {error}")),
-            Err(_) => Err("Could not save the entry.".to_owned()),
+            Ok(Err(error)) => Err(ox_core::i18n::format_message(
+                "Could not save: {error}",
+                &[("error", &error.to_string())],
+            )),
+            Err(_) => Err(ox_core::i18n::gettext("Could not save the entry.")),
         }
     }
 }

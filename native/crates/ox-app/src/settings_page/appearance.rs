@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Appearance: the theme, the text size, the right-click menu and the
-//! pane widths.
+//! Appearance: the theme, the text size, the right-click menu, how files
+//! and folders are shown, and the pane widths.
 //!
 //! Ports the "Appearance & layout" section of `renderSettingsPage`,
 //! `textSizeControls` and `menuPreferenceControls` in
@@ -64,11 +64,11 @@ const PANE_WIDTHS: RowText = RowText {
 const MENU_STYLES: [Choice<ContextMenu>; 2] = [
     Choice {
         value: ContextMenu::Win10,
-        label: "Windows 10 · Classic (default)",
+        label: crate::i18n::message_id("Windows 10 · Classic (default)"),
     },
     Choice {
         value: ContextMenu::Win11,
-        label: "Windows 11 · Compact actions",
+        label: crate::i18n::message_id("Windows 11 · Compact actions"),
     },
 ];
 
@@ -86,17 +86,17 @@ struct ThemeCard {
 const THEME_CARDS: [ThemeCard; 3] = [
     ThemeCard {
         theme: Theme::System,
-        name: "System",
+        name: crate::i18n::message_id("System"),
         css_class: "system",
     },
     ThemeCard {
         theme: Theme::Light,
-        name: "Light",
+        name: crate::i18n::message_id("Light"),
         css_class: "light",
     },
     ThemeCard {
         theme: Theme::Dark,
-        name: "Dark",
+        name: crate::i18n::message_id("Dark"),
         css_class: "dark",
     },
 ];
@@ -107,6 +107,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let appearance = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     appearance.append_group(&theme_group());
     appearance.append_group(&text_and_menus_group(page));
+    appearance.append_group(&super::folder_views::group(page));
     appearance.append_group(&layout_group());
     appearance
 }
@@ -151,7 +152,7 @@ fn theme_cards() -> gtk::FlowBox {
 /// of the group, and the arrow keys move to the next and choose it.
 fn theme_radio(card: &ThemeCard, first: Option<&gtk::CheckButton>) -> gtk::CheckButton {
     let radio = gtk::CheckButton::builder()
-        .label(card.name)
+        .label(ox_core::i18n::gettext(card.name))
         .accessible_role(gtk::AccessibleRole::Radio)
         .css_classes(["theme-radio"])
         .build();
@@ -223,7 +224,7 @@ fn theme_preview() -> gtk::Box {
 }
 
 fn text_and_menus_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Text and menus");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Text and menus"));
     let text_size = SettingRow::new(TEXT_SIZE);
     text_size.add_control(&text_size_choice(page), ControlName::RowTitle);
     group.add_row(&text_size);
@@ -302,7 +303,7 @@ fn text_size_choice(page: &SettingsPage) -> gtk::MenuButton {
 fn text_size_label(size: TextSize) -> String {
     let percent = size.percent();
     if size == TextSize::DEFAULT {
-        format!("{percent}% (default)")
+        ox_core::i18n::format_message("{percent}% (default)", &[("percent", &percent.to_string())])
     } else {
         format!("{percent}%")
     }
@@ -319,9 +320,9 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
 }
 
 fn layout_group() -> SettingsGroup {
-    let group = SettingsGroup::new("Layout");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Layout"));
     let row = SettingRow::new(PANE_WIDTHS);
-    let reset = parts::button_with_glyph("Reset", Icon::ArrowClockwise);
+    let reset = parts::button_with_glyph(&ox_core::i18n::gettext("Reset"), Icon::ArrowClockwise);
     WindowAction::ResetLayout.assign_to(&reset);
     row.add_control(&reset, ControlName::OwnLabel);
     group.add_row(&row);

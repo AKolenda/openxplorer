@@ -18,7 +18,7 @@ use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::{ItemProperties, MountFacts};
-use crate::dialog_layer::{note, quiet_text, DialogFrame, PropertyGrid};
+use crate::dialog::{note, quiet_text, DialogFrame, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::integration;
 use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};
@@ -31,22 +31,26 @@ const HEADER_ART_SIZE: i32 = 48;
 const BUTTON_GLYPH: i32 = 16;
 
 /// Under Calculate folder size: what the measured size is, and is not.
-const SIZE_EXPLANATION: &str = "Logical file bytes, measured on demand. Skips links, nested mounts and \
+const SIZE_EXPLANATION: &str = crate::i18n::message_id(
+    "Logical file bytes, measured on demand. Skips links, nested mounts and \
                                 snapshot collections. The result may be partial; it is not ZFS compressed \
-                                or snapshot usage.";
+                                or snapshot usage.",
+);
 
 /// Under the permissions: what the tab does not do.
-const PERMISSIONS_NOTE: &str = "These are the permissions reported by Linux/GIO. This page does not edit \
-                                Windows ACLs, take ownership, or change server permissions.";
+const PERMISSIONS_NOTE: &str = crate::i18n::message_id(
+    "These are the permissions reported by Linux/GIO. This page does not edit \
+                                Windows ACLs, take ownership, or change server permissions.",
+);
 
 /// The Permissions tab when the item could not be read.
-const METADATA_UNREADABLE: &str = "Metadata could not be read.";
+const METADATA_UNREADABLE: &str = crate::i18n::message_id("Metadata could not be read.");
 
 /// A file's Opens with row without a default application.
-const NO_DEFAULT_APP: &str = "No default application";
+const NO_DEFAULT_APP: &str = crate::i18n::message_id("No default application");
 
 /// The toast after Copy full path.
-const PATH_COPIED: &str = "Full path copied.";
+const PATH_COPIED: &str = crate::i18n::message_id("Full path copied.");
 
 /// What the General tab shows besides the item's own properties.
 #[derive(Debug, Clone, Copy)]
@@ -91,10 +95,16 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     panel.append(&header(properties, facts.can_rename));
     let grid = PropertyGrid::new();
     let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
-    grid.add_row("Type", &entry.type_label);
-    grid.add_row("Location", &facts.locations.display_location(container));
-    grid.add_row("Full path", &facts.locations.display_location(&entry.uri));
-    let size_value = grid.add_row("Size", &size_text(facts));
+    grid.add_row(&ox_core::i18n::gettext("Type"), &entry.type_label);
+    grid.add_row(
+        &ox_core::i18n::gettext("Location"),
+        &facts.locations.display_location(container),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("Full path"),
+        &facts.locations.display_location(&entry.uri),
+    );
+    let size_value = grid.add_row(&ox_core::i18n::gettext("Size"), &size_text(facts));
     if let Some(state) = facts.folder_size.filter(|_| entry.is_dir) {
         size_value.set_tooltip_text(Some(&state.summary_tooltip()));
     }
@@ -102,28 +112,46 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
         let text = facts
             .folder_size
             .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::contains_text);
-        grid.add_row("Contains", &text)
+        grid.add_row(&ox_core::i18n::gettext("Contains"), &text)
     });
     if let Some(target) = &properties.link_target {
-        grid.add_row("Points to", target);
+        grid.add_row(&ox_core::i18n::gettext("Points to"), target);
     }
     if let Some((width, height)) = properties.dimensions {
-        grid.add_row("Dimensions", &format!("{width} × {height} pixels"));
+        grid.add_row(
+            &ox_core::i18n::gettext("Dimensions"),
+            &ox_core::i18n::format_message(
+                "{width} × {height} pixels",
+                &[("width", &width.to_string()), ("height", &height.to_string())],
+            ),
+        );
     }
     if !entry.is_dir {
-        let app = properties.default_app.as_deref().unwrap_or(NO_DEFAULT_APP);
-        grid.add_row("Opens with", app);
+        let app = properties
+            .default_app
+            .as_deref()
+            .unwrap_or(ox_core::i18n::gettext_static(NO_DEFAULT_APP));
+        grid.add_row(&ox_core::i18n::gettext("Opens with"), app);
     }
-    grid.add_row("Created", &format::date_time_text(properties.created));
-    grid.add_row("Modified", &format::date_time_text(entry.modified));
-    grid.add_row("Accessed", &format::date_time_text(properties.accessed));
+    grid.add_row(
+        &ox_core::i18n::gettext("Created"),
+        &format::date_time_text(properties.created),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("Modified"),
+        &format::date_time_text(entry.modified),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("Accessed"),
+        &format::date_time_text(properties.accessed),
+    );
     if let Some(mount) = &properties.mount {
         add_mount_rows(&grid, mount);
     }
     panel.append(grid.widget());
     panel.append(&buttons(facts));
     if entry.is_dir && !is_smb_server(&entry.uri) {
-        panel.append(&quiet_text(SIZE_EXPLANATION));
+        panel.append(&quiet_text(ox_core::i18n::gettext_static(SIZE_EXPLANATION)));
     }
     contains.map(|contains| FolderRows {
         size: size_value,
@@ -135,18 +163,20 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
 /// for a mount point (PROP-004, as Dolphin's General tab). They come last,
 /// so the bar under the free space ends the grid.
 fn add_mount_rows(grid: &PropertyGrid, mount: &MountFacts) {
-    grid.add_row("Mounted on", &mount.mounted_on);
-    grid.add_row("Mounted from", &mount.mounted_from);
-    grid.add_row("File system", &mount.filesystem);
+    grid.add_row(&ox_core::i18n::gettext("Mounted on"), &mount.mounted_on);
+    grid.add_row(&ox_core::i18n::gettext("Mounted from"), &mount.mounted_from);
+    grid.add_row(&ox_core::i18n::gettext("File system"), &mount.filesystem);
     let Some((free, total)) = mount.space.filter(|(_, total)| *total > 0) else {
         return;
     };
-    let text = format!(
-        "{} free of {}",
-        format::pretty_bytes(free),
-        format::pretty_bytes(total)
+    let text = ox_core::i18n::format_message(
+        "{value1} free of {value2}",
+        &[
+            ("value1", &format::pretty_bytes(free)),
+            ("value2", &format::pretty_bytes(total)),
+        ],
     );
-    let value = grid.add_row("Free space", &text);
+    let value = grid.add_row(&ox_core::i18n::gettext("Free space"), &text);
     let bar = gtk::LevelBar::builder()
         .min_value(0.0)
         .max_value(1.0)
@@ -194,7 +224,7 @@ fn name_field(uri: &str, name: &str) -> gtk::Entry {
         .hexpand(true)
         .valign(gtk::Align::Center)
         .build();
-    field.update_property(&[gtk::accessible::Property::Label("Name")]);
+    field.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext("Name"))]);
     let uri = uri.to_owned();
     let original = name.to_owned();
     field.connect_activate(move |field| {
@@ -249,7 +279,7 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
             row.append(&type_applications_button(content_type));
         }
     }
-    row.append(&copy_path_button(facts.locations.display_location(&entry.uri)));
+    row.append(&copy_path_button(facts.locations.copied_location(&entry.uri)));
     if entry.is_dir && !is_smb_server(&entry.uri) {
         row.append(&calculate_size_button(&entry.uri));
     }
@@ -266,7 +296,10 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
 /// Analyse disk usage: a disk-usage analyser at the folder at `uri`, as
 /// Dolphin's "Explore in Filelight" (PROP-015).
 fn analyse_usage_button(uri: &str) -> gtk::Button {
-    let button = glyph_button("Analyse disk usage", Icon::HardDrive);
+    let button = glyph_button(
+        ox_core::i18n::gettext_static("Analyse disk usage"),
+        Icon::HardDrive,
+    );
     WindowAction::AnalyseDiskUsage.assign_with_target_to(&button, &uri.to_variant());
     button
 }
@@ -284,7 +317,7 @@ pub(super) fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
 
 /// Change app…: the Open with dialog for the file at `uri`.
 fn change_app_button(uri: &str) -> gtk::Button {
-    let button = glyph_button("Change app…", Icon::Grid);
+    let button = glyph_button(ox_core::i18n::gettext_static("Change app…"), Icon::Grid);
     WindowAction::ChangeApp.assign_with_target_to(&button, &uri.to_variant());
     button
 }
@@ -292,18 +325,18 @@ fn change_app_button(uri: &str) -> gtk::Button {
 /// Apps for this type…: the applications associated with the file's
 /// type (OPEN-026).
 fn type_applications_button(content_type: &str) -> gtk::Button {
-    let button = glyph_button("Apps for this type…", Icon::Apps);
+    let button = glyph_button(ox_core::i18n::gettext_static("Apps for this type…"), Icon::Apps);
     WindowAction::TypeApplications.assign_with_target_to(&button, &content_type.to_variant());
     button
 }
 
 /// Copy full path: puts `path` on the clipboard and says so.
 fn copy_path_button(path: String) -> gtk::Button {
-    let button = glyph_button("Copy full path", Icon::Copy);
+    let button = glyph_button(ox_core::i18n::gettext_static("Copy full path"), Icon::Copy);
     button.connect_clicked(move |button| {
         button.clipboard().set_text(&path);
         if let Some(window) = button.root().and_downcast::<crate::window::BrowserWindow>() {
-            window.show_message(PATH_COPIED);
+            window.show_message(ox_core::i18n::gettext_static(PATH_COPIED));
         }
     });
     button
@@ -312,7 +345,10 @@ fn copy_path_button(path: String) -> gtk::Button {
 /// Calculate folder size: measures the folder at `uri`, which shows in
 /// this tab, the details pane and the Size column.
 fn calculate_size_button(uri: &str) -> gtk::Button {
-    let button = glyph_button("Calculate folder size", Icon::HardDrive);
+    let button = glyph_button(
+        ox_core::i18n::gettext_static("Calculate folder size"),
+        Icon::HardDrive,
+    );
     WindowAction::CalculateFolderSizeOf.assign_with_target_to(&button, &uri.to_variant());
     button
 }
@@ -321,26 +357,38 @@ fn calculate_size_button(uri: &str) -> gtk::Button {
 pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties, editor: Option<gtk::Box>) {
     clear(panel);
     let grid = PropertyGrid::new();
-    grid.add_row("Owner", properties.owner.as_deref().unwrap_or_default());
-    grid.add_row("Group", properties.group.as_deref().unwrap_or_default());
-    grid.add_row("POSIX mode", &properties.mode_text().unwrap_or_default());
+    grid.add_row(
+        &ox_core::i18n::gettext("Owner"),
+        properties.owner.as_deref().unwrap_or_default(),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("Group"),
+        properties.group.as_deref().unwrap_or_default(),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("POSIX mode"),
+        &properties.mode_text().unwrap_or_default(),
+    );
     let access = properties.access;
-    grid.add_row("Readable", access_text(access.readable));
-    grid.add_row("Writable", access_text(access.writable));
-    grid.add_row("Executable", access_text(access.executable));
+    grid.add_row(&ox_core::i18n::gettext("Readable"), access_text(access.readable));
+    grid.add_row(&ox_core::i18n::gettext("Writable"), access_text(access.writable));
+    grid.add_row(
+        &ox_core::i18n::gettext("Executable"),
+        access_text(access.executable),
+    );
     panel.append(grid.widget());
     if let Some(editor) = editor {
         panel.append(&editor);
     }
-    panel.append(&note(PERMISSIONS_NOTE));
+    panel.append(&note(ox_core::i18n::gettext_static(PERMISSIONS_NOTE)));
 }
 
 /// `Yes`, `No` or `Not reported by this backend`.
 fn access_text(allowed: Option<bool>) -> &'static str {
     match allowed {
-        Some(true) => "Yes",
-        Some(false) => "No",
-        None => "Not reported by this backend",
+        Some(true) => ox_core::i18n::gettext_static("Yes"),
+        Some(false) => ox_core::i18n::gettext_static("No"),
+        None => ox_core::i18n::gettext_static("Not reported by this backend"),
     }
 }
 
@@ -350,7 +398,7 @@ pub(super) fn show_read_failure(general: &gtk::Box, permissions: &gtk::Box, mess
     clear(general);
     general.append(&note(message));
     clear(permissions);
-    permissions.append(&quiet_text(METADATA_UNREADABLE));
+    permissions.append(&quiet_text(ox_core::i18n::gettext_static(METADATA_UNREADABLE)));
 }
 
 /// Removes every child of `panel`.

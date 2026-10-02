@@ -81,11 +81,13 @@ impl Page {
     }
 
     /// The line under the heading (`renderLanding` and `renderNetwork`).
-    pub(crate) const fn subtitle(self) -> &'static str {
+    pub(crate) fn subtitle(self) -> &'static str {
         match self {
-            Page::ThisPc => "Folders, devices, and connected storage.",
-            Page::Network => "Find shared storage on your local network, or enter an address.",
-            Page::Settings => "Your explorer, your way.",
+            Page::ThisPc => ox_core::i18n::gettext_static("Folders, devices, and connected storage."),
+            Page::Network => ox_core::i18n::gettext_static(
+                "Find shared storage on your local network, or enter an address.",
+            ),
+            Page::Settings => ox_core::i18n::gettext_static("Your explorer, your way."),
         }
     }
 

@@ -26,6 +26,7 @@ mod building;
 mod category_row;
 mod choice_list;
 mod default_apps;
+mod folder_views;
 mod group;
 mod indexed_folders;
 mod indexing;
@@ -35,6 +36,7 @@ mod parts;
 mod row;
 mod search;
 mod section;
+mod startup;
 mod status_card;
 mod troubleshooting;
 mod windows_tabs;
@@ -205,6 +207,7 @@ mod imp {
 
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "settings-page.ui");
             self.obj().finish_template();
         }
 

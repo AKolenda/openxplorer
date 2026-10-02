@@ -30,9 +30,11 @@ const MAX_WARNINGS: usize = 8;
 pub const PROVIDER_NAME: &str = "Exposed snapshot folders";
 
 /// The explanation shown when a lookup finds no version.
-pub const NO_VERSIONS_FOUND: &str = "No matching previous versions were found in readable snapshot \
-                                     folders. This does not prove that your server has no snapshots \
-                                     or backups.";
+pub const NO_VERSIONS_FOUND: &str = crate::i18n::message_id(
+    "No matching previous versions were found in readable snapshot \
+     folders. This does not prove that your server has no snapshots \
+     or backups.",
+);
 
 /// The collection folders looked for at the root of an SMB share. `#` is
 /// escaped because it is part of a URI.
@@ -105,7 +107,9 @@ pub struct VersionList {
 impl VersionList {
     /// [`NO_VERSIONS_FOUND`] when no version was found.
     pub fn message(&self) -> Option<&'static str> {
-        self.versions.is_empty().then_some(NO_VERSIONS_FOUND)
+        self.versions
+            .is_empty()
+            .then(|| crate::i18n::gettext_static(NO_VERSIONS_FOUND))
     }
 }
 
@@ -250,7 +254,7 @@ enum SnapshotProblem {
     #[error(transparent)]
     Name(#[from] LocationError),
     /// The item is not below the source's live folder.
-    #[error("This item is outside the live folder.")]
+    #[error("{}", crate::i18n::gettext("This item is outside the live folder."))]
     OutsideLiveFolder,
     /// The item could not be queried in the snapshot.
     #[error(transparent)]

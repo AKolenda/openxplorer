@@ -19,12 +19,14 @@ use gtk::{gio, glib};
 use ox_core::integration::Sandbox;
 use ox_core::network::{Usershare, UsershareError, Usershares};
 
-use crate::dialog_layer::{check_row, labelled_entry, note, quiet_text};
+use crate::dialog::{check_row, labelled_entry, note, quiet_text};
 use crate::window::ButtonStyle;
 
 /// The note under the controls.
-const SHARING_NOTE: &str = "Sharing uses Samba user shares on this computer. OpenXplorer never changes \
-                            permissions on other servers.";
+const SHARING_NOTE: &str = crate::i18n::message_id(
+    "Sharing uses Samba user shares on this computer. OpenXplorer never changes \
+                            permissions on other servers.",
+);
 
 /// Samba's `net`, which the Sharing tab runs; `None` in the Flatpak,
 /// which cannot run the host's. The app's own tests never read the
@@ -58,28 +60,28 @@ struct SharingControls {
 /// The Sharing tab of the local folder `folder`, using `usershares`.
 pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> gtk::Box {
     let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let state = quiet_text("Checking whether this folder is shared…");
+    let state = quiet_text(&ox_core::i18n::gettext("Checking whether this folder is shared…"));
     panel.append(&state);
-    let share = check_row("Share this folder", false);
+    let share = check_row(&ox_core::i18n::gettext("Share this folder"), false);
     panel.append(&share);
     let folder_name = folder
         .file_name()
         .unwrap_or_default()
         .to_string_lossy()
         .into_owned();
-    let name = labelled_entry(&panel, "Share name", &folder_name);
-    let comment = labelled_entry(&panel, "Comment", "");
-    let guests = check_row("Allow guests (no account needed)", false);
-    let read_only = check_row("Others can only read", true);
+    let name = labelled_entry(&panel, &ox_core::i18n::gettext("Share name"), &folder_name);
+    let comment = labelled_entry(&panel, &ox_core::i18n::gettext("Comment"), "");
+    let guests = check_row(&ox_core::i18n::gettext("Allow guests (no account needed)"), false);
+    let read_only = check_row(&ox_core::i18n::gettext("Others can only read"), true);
     panel.append(&guests);
     panel.append(&read_only);
     let apply = gtk::Button::builder()
-        .label("Apply")
+        .label(ox_core::i18n::gettext("Apply"))
         .halign(gtk::Align::Start)
         .css_classes([ButtonStyle::Bordered.css_class()])
         .build();
     panel.append(&apply);
-    panel.append(&note(SHARING_NOTE));
+    panel.append(&note(ox_core::i18n::gettext_static(SHARING_NOTE)));
     let controls = Rc::new(SharingControls {
         folder,
         usershares,
@@ -113,7 +115,11 @@ impl SharingControls {
         let controls = Rc::clone(self);
         glib::spawn_future_local(async move {
             let read = gio::spawn_blocking(move || usershares.share_of(&folder)).await;
-            let read = read.unwrap_or_else(|_| Err(UsershareError::Refused("The check stopped.".into())));
+            let read = read.unwrap_or_else(|_| {
+                Err(UsershareError::Refused(
+                    ox_core::i18n::gettext_static("The check stopped.").into(),
+                ))
+            });
             controls.show(read);
         });
     }
@@ -122,8 +128,10 @@ impl SharingControls {
     fn show(&self, read: Result<Option<Usershare>, UsershareError>) {
         match read {
             Ok(Some(share)) => {
-                self.state
-                    .set_text(&format!("Shared as \\\\{}\\{}", glib::host_name(), share.name));
+                self.state.set_text(&ox_core::i18n::format_message(
+                    "Shared as \\\\{value1}\\{name}",
+                    &[("value1", glib::host_name().as_ref()), ("name", &share.name)],
+                ));
                 self.share.set_active(true);
                 self.name.set_text(&share.name);
                 self.comment.set_text(&share.comment);
@@ -133,7 +141,8 @@ impl SharingControls {
                 self.set_sensitive(true);
             }
             Ok(None) => {
-                self.state.set_text("This folder is not shared.");
+                self.state
+                    .set_text(&ox_core::i18n::gettext("This folder is not shared."));
                 self.share.set_active(false);
                 self.shared_as.replace(None);
                 self.set_sensitive(true);
@@ -161,7 +170,11 @@ impl SharingControls {
         glib::spawn_future_local(async move {
             let changed =
                 gio::spawn_blocking(move || change_share(&usershares, wanted.as_ref(), shared_as)).await;
-            match changed.unwrap_or_else(|_| Err(UsershareError::Refused("The change stopped.".into()))) {
+            match changed.unwrap_or_else(|_| {
+                Err(UsershareError::Refused(
+                    ox_core::i18n::gettext_static("The change stopped.").into(),
+                ))
+            }) {
                 Ok(()) => controls.reload(),
                 Err(error) => {
                     controls.state.set_text(&error.to_string());

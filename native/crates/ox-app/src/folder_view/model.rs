@@ -7,65 +7,28 @@
 //! natural order, ties by name ascending, as `filtered()` in app.js) and one
 //! multi-selection shared by the details and icon views.
 
-use std::cell::RefCell;
-use std::cmp::Ordering;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::rc::Rc;
 
+use gtk::gio;
 use gtk::prelude::*;
-use gtk::{gio, glib};
 use ox_core::search::SearchFacets;
 
+use crate::folder_view::details::GroupTitle;
 use crate::folder_view::filter::{ChooserListing, FilterState};
+use crate::folder_view::groups::{self, GroupClock};
 use crate::folder_view::item::FileItem;
-use crate::folder_view::sorting::{self, SortColumn};
+use crate::folder_view::sort_roles::{SortRole, SortState};
+use crate::folder_view::sorting::SortDirection;
+use crate::folder_view::tree::FolderTree;
 
-/// The item a folder model hands to its filter or sorters.
-fn as_item(object: &glib::Object) -> &FileItem {
-    object
-        .downcast_ref::<FileItem>()
-        .expect("folder models hold FileItems")
-}
+mod sorters;
 
-/// Compares two items by one column, without folders-first or tie-breaks.
-/// Sizes that are not known, and folders never measured, count as 0, as
-/// in app.js.
-fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> Ordering {
-    match column {
-        SortColumn::Name => a.sort_name().key.natural_cmp(b.sort_name().key),
-        SortColumn::Modified => a.entry().modified.cmp(&b.entry().modified),
-        SortColumn::FolderPath => a.folder_path().key.natural_cmp(&b.folder_path().key),
-        SortColumn::Type => a.type_sort_key().natural_cmp(b.type_sort_key()),
-        SortColumn::Size => a.sort_size().cmp(&b.sort_size()),
-    }
-}
-
-/// The sorter a details column uses; the column view applies the
-/// direction.
-pub(crate) fn column_sorter(column: SortColumn) -> gtk::CustomSorter {
-    gtk::CustomSorter::new(move |a, b| {
-        let order = compare_column(column, as_item(a), as_item(b));
-        order.into()
-    })
-}
-
-/// Sorts folders before files, whichever way the column sorts.
-fn folders_first() -> gtk::CustomSorter {
-    gtk::CustomSorter::new(|a, b| {
-        let a_is_folder = as_item(a).entry().is_dir;
-        let b_is_folder = as_item(b).entry().is_dir;
-        // Reversed, so `true` sorts first.
-        b_is_folder.cmp(&a_is_folder).into()
-    })
-}
-
-/// Breaks ties by name, always ascending.
-fn names_ascending() -> gtk::CustomSorter {
-    gtk::CustomSorter::new(|a, b| {
-        let order = sorting::compare_names(as_item(a).sort_name(), as_item(b).sort_name());
-        order.into()
-    })
-}
+pub(crate) use sorters::column_sorter;
+use sorters::{
+    as_item, folders_first, group_sorter, names_ascending, role_sorter, SharedOptions, SortOptions,
+};
 
 /// Counts for the status bar.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -87,7 +50,16 @@ pub(crate) struct FolderModel {
     filter: gtk::CustomFilter,
     filter_model: gtk::FilterListModel,
     sort_model: gtk::SortListModel,
+    /// The sorted items with expanded folders' contents (VIEW-035).
+    tree: FolderTree,
     selection: gtk::MultiSelection,
+    /// The total size of the files shown, once added up; forgotten when
+    /// the items shown change.
+    shown_bytes: Rc<Cell<Option<u64>>>,
+    sort_options: SharedOptions,
+    folders_first: gtk::CustomSorter,
+    role_sorter: gtk::CustomSorter,
+    group_sorter: gtk::CustomSorter,
 }
 
 impl FolderModel {
@@ -104,25 +76,129 @@ impl FolderModel {
         });
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
-        let selection = gtk::MultiSelection::new(Some(sort_model.clone()));
+        let tree = FolderTree::new(&sort_model, &filter);
+        let selection = gtk::MultiSelection::new(Some(tree.model().clone()));
+        let sort_options = SharedOptions::default();
+        let shown_bytes = Rc::new(Cell::new(None));
+        let forget = Rc::clone(&shown_bytes);
+        filter_model.connect_items_changed(move |_, _, _, _| forget.set(None));
         Self {
             filter_state,
             filter,
             filter_model,
             sort_model,
+            tree,
             selection,
+            shown_bytes,
+            folders_first: folders_first(&sort_options),
+            role_sorter: role_sorter(&sort_options),
+            group_sorter: group_sorter(&sort_options),
+            sort_options,
         }
     }
 
+    /// The total size of the files shown (VIEW-051), added up once per
+    /// change of the items shown.
+    pub(crate) fn shown_file_bytes(&self) -> u64 {
+        if let Some(bytes) = self.shown_bytes.get() {
+            return bytes;
+        }
+        let items = self.filter_model.iter::<glib::Object>().filter_map(Result::ok);
+        let bytes = items.filter_map(|item| as_item(&item).file_size()).sum();
+        self.shown_bytes.set(Some(bytes));
+        bytes
+    }
+
     /// Completes the sorter once the details view exists: folders first,
-    /// then `column_sorter` (the column view's sorter, which applies the
-    /// chosen direction), then names ascending.
+    /// then a further sort key while one is chosen, then `column_sorter`
+    /// (the column view's sorter, which applies the chosen direction), then
+    /// names ascending.
     pub(crate) fn attach_column_sorter(&self, column_sorter: &gtk::Sorter) {
         let sorter = gtk::MultiSorter::new();
-        sorter.append(folders_first());
+        sorter.append(self.folders_first.clone());
+        sorter.append(self.role_sorter.clone());
         sorter.append(column_sorter.clone());
         sorter.append(names_ascending());
         self.sort_model.set_sorter(Some(&sorter));
+    }
+
+    /// Lists folders before files when `first`, else among them.
+    pub(crate) fn set_folders_first(&self, first: bool) {
+        self.change_sort_options(&self.folders_first, |options| options.folders_first = first);
+    }
+
+    /// Whether folders are listed before files.
+    pub(crate) fn folders_first(&self) -> bool {
+        self.sort_options.get().folders_first
+    }
+
+    /// Keeps hidden items after visible ones within folders/files.
+    pub(crate) fn set_hidden_last(&self, last: bool) {
+        self.change_sort_options(&self.folders_first, |options| options.hidden_last = last);
+    }
+
+    /// Whether hidden items sort last.
+    pub(crate) fn hidden_last(&self) -> bool {
+        self.sort_options.get().hidden_last
+    }
+
+    /// Sorts by a further key and direction, or by the details view's
+    /// column again with `None`.
+    pub(crate) fn set_sort_role(&self, role: Option<(SortRole, SortDirection)>) {
+        self.change_sort_options(&self.role_sorter, |options| options.role = role);
+    }
+
+    /// The further key the model sorts by, if one is chosen.
+    pub(crate) fn sort_role(&self) -> Option<(SortRole, SortDirection)> {
+        self.sort_options.get().role
+    }
+
+    /// Groups the items by the key `state` sorts by, or stops grouping
+    /// them with `None`. Dates are grouped by the periods as of now.
+    pub(crate) fn set_grouping(&self, state: Option<SortState>) {
+        let grouping = state.and_then(|state| Some((state, GroupClock::now()?)));
+        let was_grouped = self.sort_options.get().grouping.is_some();
+        self.change_sort_options(&self.group_sorter, |options| options.grouping = grouping);
+        if grouping.is_some() != was_grouped {
+            let selected = self.selected_uris();
+            let sections = grouping.map(|_| self.group_sorter.clone());
+            self.sort_model.set_section_sorter(sections.as_ref());
+            // GTK 4.14's tree list passes no groups through, so grouped
+            // items are shown without it, and folders do not expand.
+            if grouping.is_some() {
+                self.tree.set_expandable(false);
+                self.selection.set_model(Some(&self.sort_model));
+            } else {
+                self.selection.set_model(Some(self.tree.model()));
+            }
+            self.select_uris(&selected);
+        }
+    }
+
+    /// The key the items are grouped by, if they are grouped.
+    pub(crate) fn grouping(&self) -> Option<SortState> {
+        self.sort_options.get().grouping.map(|(state, _)| state)
+    }
+
+    /// Names the group an item is in, while the items are grouped.
+    pub(crate) fn group_titles(&self) -> GroupTitle {
+        let options = Rc::clone(&self.sort_options);
+        Rc::new(move |item| {
+            let (state, clock) = options.get().grouping?;
+            Some(groups::group_of(state.by, item, &clock).title)
+        })
+    }
+
+    /// Applies `change` to the sort options and sorts again with `sorter`
+    /// when they changed.
+    fn change_sort_options(&self, sorter: &gtk::CustomSorter, change: impl FnOnce(&mut SortOptions)) {
+        let mut options = self.sort_options.get();
+        change(&mut options);
+        if options == self.sort_options.get() {
+            return;
+        }
+        self.sort_options.set(options);
+        sorter.changed(gtk::SorterChange::Different);
     }
 
     /// The selection model both views display.
@@ -130,19 +206,27 @@ impl FolderModel {
         &self.selection
     }
 
-    /// The sorted, filtered items in display order.
+    /// The sorted, filtered items in display order, without the contents
+    /// of expanded folders.
+    #[cfg(test)]
     pub(crate) fn sorted(&self) -> &gtk::SortListModel {
         &self.sort_model
     }
 
-    /// Shows another tab's items.
+    /// The folders that expand in place in the details view.
+    pub(crate) fn tree(&self) -> &FolderTree {
+        &self.tree
+    }
+
+    /// Shows another tab's items, with no folder expanded.
     pub(crate) fn set_store(&self, store: Option<&gio::ListStore>) {
+        self.tree.collapse_all();
         self.filter_model.set_model(store);
     }
 
-    /// Items shown (after filtering).
+    /// Items shown (after filtering), expanded folders' contents included.
     pub(crate) fn n_items(&self) -> u32 {
-        self.sort_model.n_items()
+        self.selection.n_items()
     }
 
     /// How many of `store`'s items the folder lists, searched or not: the
@@ -160,7 +244,7 @@ impl FolderModel {
 
     /// The item at a display position.
     pub(crate) fn item(&self, position: u32) -> Option<FileItem> {
-        self.sort_model.item(position).and_downcast::<FileItem>()
+        self.selection.item(position).and_downcast::<FileItem>()
     }
 
     /// The display position of the item at `uri`, if it is shown.
@@ -182,6 +266,11 @@ impl FolderModel {
     /// Sets the search options (SRCH-037); returns true when they changed.
     pub(crate) fn set_facets(&self, facets: SearchFacets) -> bool {
         self.update_filter(|state| state.set_facets(facets))
+    }
+
+    /// Whether hidden items are shown.
+    pub(crate) fn shows_hidden(&self) -> bool {
+        self.filter_state.borrow().shows_hidden()
     }
 
     /// Shows or hides hidden items; returns true when that changed.
@@ -400,25 +489,6 @@ mod tests {
         assert!(model.set_query("a"));
         assert!(changes.get() > 0);
         assert_eq!(model.n_items(), 1);
-    }
-
-    /// Sizes sort by value; folders never measured and files of unknown
-    /// size count as 0.
-    ///
-    /// parity: VIEW-015
-    #[gtk::test]
-    fn unmeasured_folders_and_unknown_sizes_sort_as_nothing() {
-        let mut big = file_entry("big.bin");
-        big.size = Some(10);
-        let big = FileItem::new(big);
-        let folder = FileItem::new(crate::test_support::folder_entry("Photos"));
-        let unknown = FileItem::new(file_entry("unknown.bin"));
-        assert_eq!(compare_column(SortColumn::Size, &folder, &big), Ordering::Less);
-        assert_eq!(compare_column(SortColumn::Size, &unknown, &big), Ordering::Less);
-        assert_eq!(
-            compare_column(SortColumn::Size, &folder, &unknown),
-            Ordering::Equal
-        );
     }
 
     #[gtk::test]

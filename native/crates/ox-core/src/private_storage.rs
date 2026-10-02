@@ -67,17 +67,23 @@ pub enum StorageError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum StorageRefusal {
     /// The application's own directory belongs to another user.
-    #[error("Application state directory must be owned by this user.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Application state directory must be owned by this user.")
+    )]
     ForeignDirectory,
     /// A hard link, FIFO, device, or a file that belongs to another user.
-    #[error("Application state must be an owned regular file, not a link or device.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Application state must be an owned regular file, not a link or device.")
+    )]
     NotPrivateFile,
     /// Larger than the read limit. The message names 4 MiB whatever the
     /// limit, as `private_text` in `private_storage.py` does.
-    #[error("Settings file exceeds the 4 MiB safety limit.")]
+    #[error("{}", crate::i18n::gettext("Settings file exceeds the 4 MiB safety limit."))]
     TooLarge,
     /// Not UTF-8, which Python's `decode('utf-8')` refuses.
-    #[error("The settings file is not valid UTF-8 text.")]
+    #[error("{}", crate::i18n::gettext("The settings file is not valid UTF-8 text."))]
     NotText,
 }
 

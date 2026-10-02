@@ -23,6 +23,7 @@ use crate::places::{self, PlaceSources, Places};
 use crate::volumes;
 
 use super::landing;
+use super::session::PaneSide;
 use super::sidebar;
 use super::BrowserWindow;
 
@@ -93,6 +94,13 @@ impl BrowserWindow {
     fn places_changed(&self) {
         self.imp().locations.borrow_mut().network_mounts = self.network_mount_points();
         self.render_places();
+        // The settings may have changed too.
+        self.apply_view_options();
+        // Settings may have changed how items are shown.
+        self.follow_item_preferences();
+        if self.current_uri().as_deref() == Some(ox_core::location::RECENT_LOCATIONS_URI) {
+            self.refresh();
+        }
     }
 
     /// The mount points of the kernel's CIFS and SMB3 mounts, as last read:
@@ -153,7 +161,20 @@ impl BrowserWindow {
         let places = self.places();
         let searches = self.context().saved_searches();
         let mut entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
-        entries.extend(sidebar::recent_and_bin_entries(self.imp().trash_items.get()));
+        // Recent files hides while the desktop remembers no history
+        // (SAFE-022), as in Nautilus.
+        let remembers = self.context().recent_policy().remember;
+        let fixed = sidebar::recent_and_bin_entries(self.imp().trash_items.get());
+        entries.extend(fixed.into_iter().filter(|entry| {
+            remembers
+                || !matches!(
+                    entry.menu,
+                    Some(
+                        super::place_menus::PlaceMenu::RecentFiles
+                            | super::place_menus::PlaceMenu::RecentLocations
+                    )
+                )
+        }));
         let (rows, anything_hidden) = self.shown_sidebar_rows(entries);
         self.sidebar().set_rows(rows, anything_hidden);
         if let Some(uri) = self.current_uri() {
@@ -167,16 +188,24 @@ impl BrowserWindow {
         self.update_index_candidates(&places.quick_access);
     }
 
-    /// Redraws the landing page when the active tab shows one.
+    /// Redraws the landing page of each pane on screen that shows one.
     pub(super) fn render_landing(&self) {
         self.render_landing_with(&self.places());
     }
 
     fn render_landing_with(&self, places: &Places) {
-        let Some(page) = self.current_uri().as_deref().and_then(Page::from_uri) else {
+        for (side, uri) in self.shown_panes() {
+            self.render_landing_in(side, &uri, places);
+        }
+    }
+
+    /// Draws the landing page at `uri` in the folder pane on `side`, when
+    /// `uri` is one.
+    pub(super) fn render_landing_in(&self, side: PaneSide, uri: &str, places: &Places) {
+        let Some(page) = Page::from_uri(uri) else {
             return;
         };
-        let body = self.folder_pane().landing();
+        let body = self.pane_on(side).landing();
         let locations = self.imp().locations.borrow();
         let discovery = self.network().discovery().state();
         landing::render(body, page, places, &locations, &discovery);

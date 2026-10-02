@@ -114,6 +114,10 @@ pub(in crate::window) struct MenuItem {
     /// ([`ox_core::integration::ApplicationInfo::icon`]), which replaces
     /// the glyph.
     pub application_icon: Option<String>,
+    /// The entries it opens in place of the menu's, such as a Templates
+    /// subfolder's in the New menu (OPS-003); empty for an item that runs
+    /// its action.
+    pub submenu: Vec<MenuEntry>,
 }
 
 impl MenuItem {
@@ -130,6 +134,21 @@ impl MenuItem {
             emphasised: false,
             disabled_reason: None,
             application_icon: None,
+            submenu: Vec::new(),
+        }
+    }
+
+    /// An item that opens `entries` in place of the menu's. It is enabled
+    /// while `action` is, which its entries share.
+    pub(in crate::window) fn submenu(
+        label: &str,
+        glyph: Icon,
+        action: impl Into<MenuAction>,
+        entries: Vec<MenuEntry>,
+    ) -> Self {
+        Self {
+            submenu: entries,
+            ..Self::new(label, glyph, action)
         }
     }
 
@@ -259,10 +278,10 @@ impl MenuStyle {
     }
 
     /// The menu's accessible name, as `openMenu` sets `aria-label`.
-    pub(super) const fn accessible_name(self) -> &'static str {
+    pub(super) fn accessible_name(self) -> &'static str {
         match self {
-            MenuStyle::Classic => "Windows 10 style menu",
-            MenuStyle::Compact => "Windows 11 style menu",
+            MenuStyle::Classic => ox_core::i18n::gettext_static("Windows 10 style menu"),
+            MenuStyle::Compact => ox_core::i18n::gettext_static("Windows 11 style menu"),
         }
     }
 }

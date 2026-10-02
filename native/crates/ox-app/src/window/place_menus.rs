@@ -19,7 +19,10 @@
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{is_device_location, is_remote_location, is_smb_location, is_smb_server, TRASH_URI};
+use ox_core::location::{
+    is_device_location, is_remote_location, is_smb_location, is_smb_server, RECENT_LOCATIONS_URI, RECENT_URI,
+    TRASH_URI,
+};
 use ox_core::places::{NetworkKind, NetworkLocation};
 use ox_core::search::Caching;
 
@@ -72,6 +75,10 @@ pub(super) enum PlaceMenu {
         /// Whether anything is in it; Empty Recycle Bin is disabled if not.
         has_items: bool,
     },
+    /// The sidebar's Recent files.
+    RecentFiles,
+    /// The Recent locations row (SIDE-026).
+    RecentLocations,
 }
 
 /// An item that runs `action` with the place `target`.
@@ -110,8 +117,18 @@ fn removal_items(uri: &str, kind: VolumeKind, controls: MountControls) -> Vec<Me
 /// GNOME Disks handles (DEV-012), as Dolphin offers its partition manager.
 fn disks_items(uri: &str) -> [MenuEntry; 2] {
     [
-        item("Open in Disks", Icon::Settings, WindowAction::OpenInDisks, uri),
-        item("Format…", Icon::HardDrive, WindowAction::FormatDrive, uri),
+        item(
+            ox_core::i18n::gettext_static("Open in Disks"),
+            Icon::Settings,
+            WindowAction::OpenInDisks,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Format…"),
+            Icon::HardDrive,
+            WindowAction::FormatDrive,
+            uri,
+        ),
     ]
 }
 
@@ -122,7 +139,7 @@ fn terminal_item(uri: &str) -> MenuEntry {
     let is_share = (is_smb_location(uri) || is_remote_location(uri)) && !is_smb_server(uri);
     let can_open = uri.starts_with("file:") || is_share;
     let terminal = MenuItem::with_text_target(
-        "Open in Terminal",
+        &ox_core::i18n::gettext("Open in Terminal"),
         Icon::WindowConsole,
         WindowAction::OpenInTerminalOf,
         uri,
@@ -148,8 +165,18 @@ fn drive_entries(
     caching: Option<Caching>,
 ) -> Vec<MenuEntry> {
     let mut entries = vec![
-        item("Open", Icon::HardDrive, WindowAction::GoTo, uri),
-        item("Open in new window", Icon::Add, WindowAction::OpenWindow, uri),
+        item(
+            ox_core::i18n::gettext_static("Open"),
+            Icon::HardDrive,
+            WindowAction::GoTo,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
+            Icon::Add,
+            WindowAction::OpenWindow,
+            uri,
+        ),
         terminal_item(uri),
     ];
     if !is_device_location(uri) {
@@ -164,7 +191,12 @@ fn drive_entries(
         entries.extend(drive_tools);
     }
     entries.push(MenuEntry::Divider);
-    entries.push(item("Properties", Icon::Info, WindowAction::PropertiesOf, uri));
+    entries.push(item(
+        ox_core::i18n::gettext_static("Properties"),
+        Icon::Info,
+        WindowAction::PropertiesOf,
+        uri,
+    ));
     entries
 }
 
@@ -175,9 +207,24 @@ fn drive_entries(
 fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<MenuEntry> {
     let uri = location.uri.as_str();
     let mut entries = vec![
-        item("Open", Icon::Folder, WindowAction::GoTo, uri),
-        item("Open in new tab", Icon::Add, WindowAction::OpenTab, uri),
-        item("Open in new window", Icon::Share, WindowAction::OpenWindow, uri),
+        item(
+            ox_core::i18n::gettext_static("Open"),
+            Icon::Folder,
+            WindowAction::GoTo,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
+            Icon::Share,
+            WindowAction::OpenWindow,
+            uri,
+        ),
         terminal_item(uri),
     ];
     entries.extend(cache_entries(uri, caching));
@@ -186,14 +233,14 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     let is_share = (is_smb || is_remote) && !is_smb_server(uri) && location.kind != NetworkKind::Server;
     if is_share && location.is_saved {
         entries.push(item(
-            "Remove saved location",
+            ox_core::i18n::gettext_static("Remove saved location"),
             Icon::Pin,
             WindowAction::RemoveSavedLocation,
             uri,
         ));
     } else if is_share {
         entries.push(item(
-            "Keep in Network",
+            ox_core::i18n::gettext_static("Keep in Network"),
             Icon::Pin,
             WindowAction::KeepInNetwork,
             uri,
@@ -201,7 +248,7 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     }
     if is_smb {
         entries.push(item(
-            "Sign out of server…",
+            ox_core::i18n::gettext_static("Sign out of server…"),
             Icon::ArrowEject,
             WindowAction::SignOut,
             uri,
@@ -211,7 +258,7 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     // their connection is ended as a mount, as Dolphin and Files do.
     if is_remote && location.is_connected {
         entries.push(item(
-            "Disconnect",
+            ox_core::i18n::gettext_static("Disconnect"),
             Icon::ArrowEject,
             WindowAction::Disconnect,
             uri,
@@ -219,26 +266,109 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     }
     let is_readable = location.kind == NetworkKind::Mount || (is_share && location.is_connected);
     if is_readable {
-        entries.push(item("Properties", Icon::Info, WindowAction::PropertiesOf, uri));
+        entries.push(item(
+            ox_core::i18n::gettext_static("Properties"),
+            Icon::Info,
+            WindowAction::PropertiesOf,
+            uri,
+        ));
     }
     entries
+}
+
+/// Recent files' menu: the Open items, then Clear recent files, which
+/// empties the recent files of the app and the desktop (SAFE-022).
+fn recent_files_entries() -> Vec<MenuEntry> {
+    vec![
+        item(
+            ox_core::i18n::gettext_static("Open"),
+            Icon::History,
+            WindowAction::GoTo,
+            RECENT_URI,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            RECENT_URI,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
+            Icon::WindowNew,
+            WindowAction::OpenWindow,
+            RECENT_URI,
+        ),
+        MenuEntry::Divider,
+        MenuItem::new(
+            &ox_core::i18n::gettext("Clear recent files"),
+            Icon::Delete,
+            WindowAction::ClearRecentFiles,
+        )
+        .into(),
+    ]
 }
 
 /// The Recycle Bin's menu: the Open items, then Empty Recycle Bin,
 /// disabled while it is empty (Dolphin's "Empty Trash").
 fn recycle_bin_entries(has_items: bool) -> Vec<MenuEntry> {
-    let empty = MenuItem::new("Empty Recycle Bin", Icon::Delete, WindowAction::EmptyTrash);
+    let empty = MenuItem::new(
+        &ox_core::i18n::gettext("Empty Recycle Bin"),
+        Icon::Delete,
+        WindowAction::EmptyTrash,
+    );
     vec![
-        item("Open", Icon::Delete, WindowAction::GoTo, TRASH_URI),
-        item("Open in new tab", Icon::Add, WindowAction::OpenTab, TRASH_URI),
         item(
-            "Open in new window",
+            ox_core::i18n::gettext_static("Open"),
+            Icon::Delete,
+            WindowAction::GoTo,
+            TRASH_URI,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            TRASH_URI,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
             Icon::WindowNew,
             WindowAction::OpenWindow,
             TRASH_URI,
         ),
         MenuEntry::Divider,
         empty.disabled_when(!has_items).into(),
+    ]
+}
+
+/// The Recent locations row's menu: open it, or forget the folders.
+fn recent_locations_entries() -> Vec<MenuEntry> {
+    let uri = RECENT_LOCATIONS_URI;
+    vec![
+        item(
+            ox_core::i18n::gettext_static("Open"),
+            Icon::Clock,
+            WindowAction::GoTo,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            uri,
+        ),
+        item(
+            ox_core::i18n::gettext_static("Open in new window"),
+            Icon::WindowNew,
+            WindowAction::OpenWindow,
+            uri,
+        ),
+        MenuEntry::Divider,
+        MenuItem::new(
+            &ox_core::i18n::gettext("Clear recent locations"),
+            Icon::DeleteDismiss,
+            WindowAction::ClearRecentLocations,
+        )
+        .into(),
     ]
 }
 
@@ -250,7 +380,10 @@ impl PlaceMenu {
             | PlaceMenu::DriveCard { uri, .. }
             | PlaceMenu::SavedShare { uri } => Some(uri),
             PlaceMenu::Network(location) => Some(&location.uri),
-            PlaceMenu::Volume { .. } | PlaceMenu::RecycleBin { .. } => None,
+            PlaceMenu::Volume { .. }
+            | PlaceMenu::RecycleBin { .. }
+            | PlaceMenu::RecentFiles
+            | PlaceMenu::RecentLocations => None,
         }
     }
 
@@ -260,7 +393,7 @@ impl PlaceMenu {
         match self {
             PlaceMenu::Drive { uri, kind, controls } => drive_entries(uri, *kind, *controls, caching),
             PlaceMenu::Volume { id } => vec![item(
-                "Mount volume",
+                ox_core::i18n::gettext_static("Mount volume"),
                 Icon::HardDrive,
                 WindowAction::MountVolume,
                 id,
@@ -268,20 +401,32 @@ impl PlaceMenu {
             PlaceMenu::DriveCard { uri, kind, controls } => removal_items(uri, *kind, *controls),
             PlaceMenu::Network(location) => network_entries(location, caching),
             PlaceMenu::RecycleBin { has_items } => recycle_bin_entries(*has_items),
+            PlaceMenu::RecentFiles => recent_files_entries(),
+            PlaceMenu::RecentLocations => recent_locations_entries(),
             PlaceMenu::SavedShare { uri } => {
                 let mut entries = vec![
-                    item("Open", Icon::Folder, WindowAction::GoTo, uri),
-                    item("Open in new tab", Icon::Add, WindowAction::OpenTab, uri),
+                    item(
+                        ox_core::i18n::gettext_static("Open"),
+                        Icon::Folder,
+                        WindowAction::GoTo,
+                        uri,
+                    ),
+                    item(
+                        ox_core::i18n::gettext_static("Open in new tab"),
+                        Icon::Add,
+                        WindowAction::OpenTab,
+                        uri,
+                    ),
                 ];
                 entries.extend(cache_entries(uri, caching));
                 entries.push(item(
-                    "Remove saved location",
+                    ox_core::i18n::gettext_static("Remove saved location"),
                     Icon::Pin,
                     WindowAction::RemoveSavedLocation,
                     uri,
                 ));
                 entries.push(item(
-                    "Sign out of server…",
+                    ox_core::i18n::gettext_static("Sign out of server…"),
                     Icon::ArrowEject,
                     WindowAction::SignOut,
                     uri,

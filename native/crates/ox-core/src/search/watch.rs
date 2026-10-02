@@ -44,17 +44,22 @@ const READ_BUFFER_BYTES: usize = 256 * 1024;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum WatchError {
     /// [`WATCH_LIMIT`] directories are watched already.
-    #[error("Live watch limit reached (8192 directories). Unwatched directories use timed checks.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "Live watch limit reached (8192 directories). Unwatched directories use timed checks."
+        )
+    )]
     LimitReached,
     /// The location is not a local directory.
-    #[error("Only local folders can be watched.")]
+    #[error("{}", crate::i18n::gettext("Only local folders can be watched."))]
     NotLocal,
     /// The kernel refused the watch, for example because the user's inotify
     /// limit is used up.
-    #[error("Could not watch a directory: {0}")]
+    #[error("{}", crate::i18n::format_message("Could not watch a directory: {error}", &[("error", &.0.to_string())]))]
     Refused(Errno),
     /// inotify could not be started at all, so nothing is watched.
-    #[error("inotify unavailable; using incremental checks.")]
+    #[error("{}", crate::i18n::gettext("inotify unavailable; using incremental checks."))]
     Unavailable,
 }
 

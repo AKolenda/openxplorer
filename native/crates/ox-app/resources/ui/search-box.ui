@@ -18,13 +18,13 @@
         <!-- queueSearch: the search runs once typing pauses for 120
              milliseconds. -->
         <property name="search-delay">120</property>
-        <property name="tooltip-text">Search cached filenames and paths. Enable folders in Settings → Search &amp; indexing.</property>
+        <property name="tooltip-text" translatable="yes">Search cached filenames and paths. Enable folders in Settings → Search &amp; indexing.</property>
         <!-- The box has a fixed width (.search-wrap{width:235px}), so the
              entry asks for no more than one character. -->
         <property name="width-chars">1</property>
         <property name="max-width-chars">1</property>
         <accessibility>
-          <property name="label">Search filenames and paths</property>
+          <property name="label" translatable="yes">Search filenames and paths</property>
         </accessibility>
       </object>
     </child>

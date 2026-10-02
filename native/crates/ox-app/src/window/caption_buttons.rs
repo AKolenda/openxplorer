@@ -106,12 +106,12 @@ impl Caption {
 
     /// The tooltip and accessible name (index.html's `title`) while the
     /// window is in `state`.
-    const fn tooltip(self, state: WindowState) -> &'static str {
+    fn tooltip(self, state: WindowState) -> &'static str {
         match (self, state) {
-            (Caption::Minimize, _) => "Minimize",
-            (Caption::Maximize, WindowState::Normal) => "Maximize",
-            (Caption::Maximize, WindowState::Maximized) => "Restore",
-            (Caption::Close, _) => "Close window",
+            (Caption::Minimize, _) => ox_core::i18n::gettext_static("Minimize"),
+            (Caption::Maximize, WindowState::Normal) => ox_core::i18n::gettext_static("Maximize"),
+            (Caption::Maximize, WindowState::Maximized) => ox_core::i18n::gettext_static("Restore"),
+            (Caption::Close, _) => ox_core::i18n::gettext_static("Close window"),
         }
     }
 

@@ -26,10 +26,10 @@ use super::BrowserWindow;
 use crate::icons::Icon;
 
 /// Shown when a drive has no block device for Disks.
-const NO_BLOCK_DEVICE: &str = "Disks cannot open this drive.";
+const NO_BLOCK_DEVICE: &str = crate::i18n::message_id("Disks cannot open this drive.");
 
 /// Shown for a location without a local path.
-const NO_LOCAL_PATH: &str = "This tool needs a location on this computer.";
+const NO_LOCAL_PATH: &str = crate::i18n::message_id("This tool needs a location on this computer.");
 
 /// Whether the program for `tool` is installed, on the host inside
 /// Flatpak.
@@ -79,6 +79,26 @@ impl BrowserWindow {
             }
         ));
         self.status_bar().add_controller(click);
+        // Dolphin's space indicator offers the tools on a click too.
+        let free_space = self.status_bar().free_space_widget();
+        let primary = gtk::GestureClick::new();
+        primary.connect_released(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            free_space,
+            move |_, _, x, y| {
+                #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+                let point = free_space.compute_point(
+                    window.status_bar(),
+                    &gtk::graphene::Point::new(x as f32, y as f32),
+                );
+                if let Some(point) = point {
+                    window.show_status_bar_menu(f64::from(point.x()), f64::from(point.y()));
+                }
+            }
+        ));
+        free_space.add_controller(primary);
     }
 
     /// The status bar's menu at (`x`, `y`), when it has something to
@@ -105,7 +125,7 @@ impl BrowserWindow {
     fn open_drive_in_disks(&self, uri: &str, tool: DiskTool) {
         match block_device_of(&self.volume_monitor().mounts(), uri) {
             Some(device) => self.run_disk_tool(tool, PathBuf::from(device)),
-            None => self.show_message(NO_BLOCK_DEVICE),
+            None => self.show_message(ox_core::i18n::gettext_static(NO_BLOCK_DEVICE)),
         }
     }
 
@@ -113,7 +133,7 @@ impl BrowserWindow {
     fn run_disk_tool_at(&self, tool: DiskTool, uri: &str) {
         match gio::File::for_uri(uri).path() {
             Some(path) => self.run_disk_tool(tool, path),
-            None => self.show_message(NO_LOCAL_PATH),
+            None => self.show_message(ox_core::i18n::gettext_static(NO_LOCAL_PATH)),
         }
     }
 
@@ -148,7 +168,7 @@ fn status_bar_entries(folder: &str, has_analyser: bool) -> Vec<MenuEntry> {
         return Vec::new();
     }
     let analyse = MenuItem::with_text_target(
-        "Analyse disk usage",
+        &ox_core::i18n::gettext("Analyse disk usage"),
         Icon::HardDrive,
         WindowAction::AnalyseDiskUsage,
         folder,
@@ -160,9 +180,17 @@ fn status_bar_entries(folder: &str, has_analyser: bool) -> Vec<MenuEntry> {
 /// cannot.
 fn start(tool: DiskTool, target: &Path) -> Result<(), String> {
     let sandbox = Sandbox::detect();
-    let program = installed_program(tool).ok_or_else(|| "The tool is not installed.".to_owned())?;
-    tool.launch(&program, target, sandbox)
-        .map_err(|error| format!("Could not start {}: {error}", program.display()))
+    let program =
+        installed_program(tool).ok_or_else(|| ox_core::i18n::gettext("The tool is not installed."))?;
+    tool.launch(&program, target, sandbox).map_err(|error| {
+        ox_core::i18n::format_message(
+            "Could not start {display}: {error}",
+            &[
+                ("display", &program.display().to_string()),
+                ("error", &error.to_string()),
+            ],
+        )
+    })
 }
 
 #[cfg(test)]

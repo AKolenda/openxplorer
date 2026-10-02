@@ -48,18 +48,18 @@
                   </object>
                 </child>
                 <child>
-                  <object class="GtkLabel">
-                    <property name="label">OpenXplorer Security</property>
+                  <object class="GtkLabel" id="i18n_1">
+                    <property name="label" translatable="yes">OpenXplorer Security</property>
                     <property name="hexpand">true</property>
                     <property name="xalign">0</property>
                   </object>
                 </child>
                 <child>
                   <object class="GtkButton" id="close_button">
-                    <property name="tooltip-text">Cancel sign-in</property>
+                    <property name="tooltip-text" translatable="yes">Cancel sign-in</property>
                     <property name="focus-on-click">false</property>
                     <accessibility>
-                      <property name="label">Cancel sign-in</property>
+                      <property name="label" translatable="yes">Cancel sign-in</property>
                     </accessibility>
                     <style>
                       <class name="sign-in-close"/>
@@ -120,8 +120,8 @@
                                     <property name="valign">center</property>
                                     <property name="spacing">5</property>
                                     <child>
-                                      <object class="GtkLabel">
-                                        <property name="label">Enter network credentials</property>
+                                      <object class="GtkLabel" id="i18n_2">
+                                        <property name="label" translatable="yes">Enter network credentials</property>
                                         <property name="xalign">0</property>
                                         <property name="wrap">true</property>
                                         <style>
@@ -172,8 +172,8 @@
                               </object>
                             </child>
                             <child>
-                              <object class="GtkLabel">
-                                <property name="label">Username</property>
+                              <object class="GtkLabel" id="i18n_3">
+                                <property name="label" translatable="yes">Username</property>
                                 <property name="xalign">0</property>
                                 <property name="mnemonic-widget">username_entry</property>
                                 <style>
@@ -183,18 +183,18 @@
                             </child>
                             <child>
                               <object class="GtkEntry" id="username_entry">
-                                <property name="placeholder-text">Your network username</property>
+                                <property name="placeholder-text" translatable="yes">Your network username</property>
                                 <property name="max-length">512</property>
                                 <property name="activates-default">true</property>
                                 <property name="input-hints">no-spellcheck</property>
                                 <accessibility>
-                                  <property name="label">Username</property>
+                                  <property name="label" translatable="yes">Username</property>
                                 </accessibility>
                               </object>
                             </child>
                             <child>
-                              <object class="GtkLabel">
-                                <property name="label">Password</property>
+                              <object class="GtkLabel" id="i18n_4">
+                                <property name="label" translatable="yes">Password</property>
                                 <property name="xalign">0</property>
                                 <property name="mnemonic-widget">password_entry</property>
                                 <style>
@@ -206,7 +206,7 @@
                               <object class="GtkOverlay">
                                 <property name="child">
                                   <object class="GtkEntry" id="password_entry">
-                                    <property name="placeholder-text">Password</property>
+                                    <property name="placeholder-text" translatable="yes">Password</property>
                                     <property name="max-length">16384</property>
                                     <property name="visibility">false</property>
                                     <property name="input-purpose">password</property>
@@ -218,7 +218,7 @@
                                       <object class="GtkPasswordEntryBuffer"/>
                                     </property>
                                     <accessibility>
-                                      <property name="label">Password</property>
+                                      <property name="label" translatable="yes">Password</property>
                                     </accessibility>
                                     <style>
                                       <class name="sign-in-password"/>
@@ -229,10 +229,10 @@
                                   <object class="GtkToggleButton" id="reveal_button">
                                     <property name="halign">end</property>
                                     <property name="valign">center</property>
-                                    <property name="tooltip-text">Show password</property>
+                                    <property name="tooltip-text" translatable="yes">Show password</property>
                                     <property name="focus-on-click">false</property>
                                     <accessibility>
-                                      <property name="label">Show or hide password</property>
+                                      <property name="label" translatable="yes">Show or hide password</property>
                                     </accessibility>
                                     <style>
                                       <class name="sign-in-eye"/>
@@ -246,7 +246,7 @@
                             </child>
                             <child>
                               <object class="GtkCheckButton" id="remember_check">
-                                <property name="label">Remember my credentials</property>
+                                <property name="label" translatable="yes">Remember my credentials</property>
                                 <style>
                                   <class name="sign-in-remember"/>
                                 </style>
@@ -274,7 +274,7 @@
                             </child>
                             <child>
                               <object class="GtkButton" id="guest_button">
-                                <property name="label">Connect as guest</property>
+                                <property name="label" translatable="yes">Connect as guest</property>
                                 <property name="halign">start</property>
                                 <property name="visible">false</property>
                                 <style>
@@ -308,8 +308,8 @@
                               <class name="sign-in-body"/>
                             </style>
                             <child>
-                              <object class="GtkLabel">
-                                <property name="label">Network connection</property>
+                              <object class="GtkLabel" id="i18n_5">
+                                <property name="label" translatable="yes">Network connection</property>
                                 <property name="xalign">0</property>
                                 <style>
                                   <class name="dialog-title"/>
@@ -360,7 +360,7 @@
                 </style>
                 <child>
                   <object class="GtkButton" id="cancel_button">
-                    <property name="label">Cancel</property>
+                    <property name="label" translatable="yes">Cancel</property>
                     <property name="hexpand">true</property>
                     <property name="halign">end</property>
                     <style>
@@ -370,7 +370,7 @@
                 </child>
                 <child>
                   <object class="GtkButton" id="connect_button">
-                    <property name="label">Connect</property>
+                    <property name="label" translatable="yes">Connect</property>
                     <style>
                       <class name="accent"/>
                     </style>

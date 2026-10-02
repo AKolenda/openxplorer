@@ -37,17 +37,17 @@
                   <class name="detail-header"/>
                 </style>
                 <child>
-                  <object class="GtkLabel">
-                    <property name="label">Details</property>
+                  <object class="GtkLabel" id="i18n_1">
+                    <property name="label" translatable="yes">Details</property>
                     <property name="xalign">0</property>
                     <property name="hexpand">true</property>
                   </object>
                 </child>
                 <child>
                   <object class="GtkButton" id="close_button">
-                    <property name="tooltip-text">Close details pane</property>
+                    <property name="tooltip-text" translatable="yes">Close details pane</property>
                     <accessibility>
-                      <property name="label">Close details pane</property>
+                      <property name="label" translatable="yes">Close details pane</property>
                     </accessibility>
                     <style>
                       <class name="detail-close"/>
@@ -112,8 +112,8 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">Open</property>
+                      <object class="GtkLabel" id="i18n_2">
+                        <property name="label" translatable="yes">Open</property>
                       </object>
                     </child>
                   </object>
@@ -142,8 +142,8 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">Pin to Quick access</property>
+                      <object class="GtkLabel" id="i18n_3">
+                        <property name="label" translatable="yes">Pin to Quick access</property>
                       </object>
                     </child>
                   </object>
@@ -172,8 +172,8 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">Pin to Quick access</property>
+                      <object class="GtkLabel" id="i18n_4">
+                        <property name="label" translatable="yes">Pin to Quick access</property>
                       </object>
                     </child>
                   </object>
@@ -181,8 +181,8 @@
               </object>
             </child>
             <child>
-              <object class="GtkLabel">
-                <property name="label">Properties</property>
+              <object class="GtkLabel" id="i18n_5">
+                <property name="label" translatable="yes">Properties</property>
                 <property name="xalign">0</property>
                 <property name="wrap">true</property>
                 <property name="wrap-mode">word-char</property>

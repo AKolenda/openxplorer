@@ -26,12 +26,12 @@ impl BrowserWindow {
     pub(super) fn install_sidebar_toggle(&self) {
         let button = gtk::MenuButton::builder()
             .child(&icons::image(Icon::Folder, PLACES_GLYPH))
-            .tooltip_text("Places (F9 shows the navigation pane)")
+            .tooltip_text(ox_core::i18n::gettext("Places (F9 shows the navigation pane)"))
             .valign(gtk::Align::Center)
             .css_classes(["nav-places"])
             .visible(false)
             .build();
-        name_menu_button(&button, "Places");
+        name_menu_button(&button, &ox_core::i18n::gettext("Places"));
         let popover = MenuPopover::new(Vec::new());
         button.set_popover(Some(&popover));
         // Built as it opens, so it lists the places shown now.

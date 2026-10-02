@@ -110,6 +110,11 @@ pub(crate) enum WindowAction {
     /// Copies the path of the selection, or of the folder.
     CopyPath,
     /// Shows what this build is.
+    /// Opens the offline user manual at the topic of what the window
+    /// shows (F1, CMD-033).
+    Help,
+    /// Opens the keyboard shortcuts window (Ctrl+?, CMD-032).
+    KeyboardShortcuts,
     About,
     /// Opens the folder view's context menu from the keyboard.
     ContextMenu,
@@ -122,8 +127,21 @@ pub(crate) enum WindowAction {
     /// Switches the details pane option or field named by the string
     /// target (the pane's menu).
     DetailsPaneOption,
+    /// Shows or hides the details column whose key is the string target
+    /// (the column titles' menu, VIEW-033).
+    DetailsColumn,
+    /// Stops the listing of the folder shown (VIEW-049).
+    Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
     Sidebar,
+    /// Splits the tab into two panes, or closes its active pane (F3,
+    /// VIEW-059).
+    SplitView,
+    /// Shows or hides the folder tree (F7, SIDE-028).
+    FolderTree,
+    /// Switches the folder tree option named by the string target (its
+    /// menu).
+    FolderTreeOption,
     /// The sidebar's icon size: `0` (automatic), `16`, `22`, `32` or `48`.
     SidebarIconSize,
     /// Lists the hidden sidebar rows, dimmed (SIDE-010).
@@ -137,10 +155,16 @@ pub(crate) enum WindowAction {
     /// Shows the hidden place in the string target again: a standard
     /// folder or a place hidden with Hide.
     ShowPlace,
-    /// The column the details view sorts by.
+    /// The key the listing sorts by: a details column or a further key.
     Sort,
     /// Whether the details view sorts ascending or descending.
     Direction,
+    /// Shows the items in groups by the sort key (VIEW-022).
+    Groups,
+    /// Lists folders before files.
+    FoldersFirst,
+    /// Opens the Adjust View Display Style dialog (VIEW-021).
+    ViewProperties,
     /// The light, dark or system appearance.
     Theme,
     /// Makes text larger, smaller or its default size (Ctrl+plus, minus
@@ -165,6 +189,10 @@ pub(crate) enum WindowAction {
     NewHtmlDocument,
     /// New ▸ From template….
     NewFromTemplate,
+    /// Opens the New from template dialog with the template whose id is
+    /// the string target chosen: a user template listed in the New menu
+    /// (OPS-003).
+    NewFromUserTemplate,
     /// New ▸ Link to file or folder… (OPS-004).
     NewLink,
     /// Cut (Ctrl+X).
@@ -173,6 +201,9 @@ pub(crate) enum WindowAction {
     Copy,
     /// Paste (Ctrl+V).
     Paste,
+    /// Pastes into the folder in the string target, the one selected
+    /// folder (CMD-019).
+    PasteInto,
     /// Rename (F2): asks for a new name for the one selected item.
     Rename,
     /// Delete: Move to Trash, or Delete permanently where the folder has
@@ -182,6 +213,18 @@ pub(crate) enum WindowAction {
     DeletePermanently,
     /// Copies each selected item next to itself.
     Duplicate,
+    /// Cut of the folder in the string target (the folder tree's menu).
+    CutFolder,
+    /// Copy of the folder in the string target.
+    CopyFolder,
+    /// Pastes into the folder tree destination in the string target.
+    PasteIntoFolder,
+    /// Asks for a new name for the folder in the string target.
+    RenameFolder,
+    /// Moves the folder in the string target to the Trash, after asking.
+    TrashFolder,
+    /// Deletes the folder in the string target permanently, after asking.
+    DeleteFolder,
     /// Reverses the newest file operation (Ctrl+Z).
     Undo,
     /// Takes the newest Undo back (Ctrl+Shift+Z, Ctrl+Y).
@@ -194,12 +237,23 @@ pub(crate) enum WindowAction {
     EmptyRecycleBin,
     /// The same from the sidebar's Recycle Bin, wherever the window is.
     EmptyTrash,
+    /// Empties the recent files of the app and the desktop, from the
+    /// sidebar's Recent files (SAFE-022).
+    ClearRecentFiles,
+    /// Forgets the recently visited folders (SIDE-026).
+    ClearRecentLocations,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
     /// Opens the classic context menu where the compact one was ("Show
     /// more options").
     ShowMoreOptions,
+    /// Opens the Sort menu where the folder's context menu was (its
+    /// "Sort by", CMD-012).
+    ShowSortMenu,
+    /// Opens the View menu where the folder's context menu was (its
+    /// "View", CMD-012).
+    ShowViewMenu,
     /// Removes the Quick access pin of the location in the string target.
     Unpin,
     /// Asks for a label and a location and pins them (SIDE-031).
@@ -260,6 +314,15 @@ pub(crate) enum WindowAction {
     /// Opens the folder of the one selected search result, with the
     /// result selected.
     OpenFileLocation,
+    /// Opens the folder of the selected symbolic link's target with the
+    /// target selected (CMD-030).
+    ShowTarget,
+    /// Explicit `GVfs` administrator access; never runs the app as root.
+    OpenAsAdministrator,
+    /// Enable installed service actions, each initially disabled.
+    ManageServiceActions,
+    /// Run an enabled service action on the current selection.
+    RunServiceAction,
     /// Opens the folder of the one selected search result in a new tab
     /// behind, with the result selected there.
     OpenFileLocationInTab,
@@ -405,12 +468,19 @@ impl WindowAction {
             WindowAction::PinFolder => "pin-folder",
             WindowAction::CopyPath => "copy-path",
             WindowAction::About => "about",
+            WindowAction::Help => "help",
+            WindowAction::KeyboardShortcuts => "keyboard-shortcuts",
             WindowAction::ContextMenu => "context-menu",
             WindowAction::View => "view",
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
             WindowAction::DetailsPaneOption => "details-pane-option",
+            WindowAction::DetailsColumn => "details-column",
+            WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
+            WindowAction::SplitView => "split-view",
+            WindowAction::FolderTree => "folder-tree",
+            WindowAction::FolderTreeOption => "folder-tree-option",
             WindowAction::SidebarIconSize => "sidebar-icon-size",
             WindowAction::SidebarShowAll => "sidebar-show-all",
             WindowAction::HideSection => "hide-section",
@@ -419,6 +489,9 @@ impl WindowAction {
             WindowAction::ShowPlace => "show-place",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
+            WindowAction::Groups => "groups",
+            WindowAction::FoldersFirst => "folders-first",
+            WindowAction::ViewProperties => "view-properties",
             WindowAction::Theme => "theme",
             WindowAction::TextSize(step) => step.action_name(),
             WindowAction::ResetLayout => "reset-layout",
@@ -430,22 +503,34 @@ impl WindowAction {
             WindowAction::NewJsonFile => "new-json-file",
             WindowAction::NewHtmlDocument => "new-html-document",
             WindowAction::NewFromTemplate => "new-from-template",
+            WindowAction::NewFromUserTemplate => "new-from-user-template",
             WindowAction::NewLink => "new-link",
             WindowAction::Cut => "cut",
             WindowAction::Copy => "copy",
             WindowAction::Paste => "paste",
+            WindowAction::PasteInto => "paste-into",
             WindowAction::Rename => "rename",
             WindowAction::Trash => "trash",
             WindowAction::DeletePermanently => "delete-permanently",
             WindowAction::Duplicate => "duplicate",
+            WindowAction::CutFolder => "cut-folder",
+            WindowAction::CopyFolder => "copy-folder",
+            WindowAction::PasteIntoFolder => "paste-into-folder",
+            WindowAction::RenameFolder => "rename-folder",
+            WindowAction::TrashFolder => "trash-folder",
+            WindowAction::DeleteFolder => "delete-folder",
             WindowAction::Undo => "undo",
             WindowAction::Redo => "redo",
             WindowAction::CancelOperation => "cancel-operation",
             WindowAction::Restore => "restore",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
             WindowAction::EmptyTrash => "empty-trash",
+            WindowAction::ClearRecentFiles => "clear-recent-files",
+            WindowAction::ClearRecentLocations => "clear-recent-locations",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
+            WindowAction::ShowSortMenu => "show-sort-menu",
+            WindowAction::ShowViewMenu => "show-view-menu",
             WindowAction::Unpin => "unpin",
             WindowAction::AddPlace => "add-place",
             WindowAction::EditPin => "edit-pin",
@@ -470,6 +555,10 @@ impl WindowAction {
             WindowAction::CacheFolder => "cache-folder",
             WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",
+            WindowAction::ShowTarget => "show-target",
+            WindowAction::OpenAsAdministrator => "open-as-administrator",
+            WindowAction::ManageServiceActions => "manage-service-actions",
+            WindowAction::RunServiceAction => "run-service-action",
             WindowAction::OpenFileLocationInTab => "open-file-location-in-tab",
             WindowAction::OpenFileLocationInWindow => "open-file-location-in-window",
             WindowAction::SaveSearch => "save-search",

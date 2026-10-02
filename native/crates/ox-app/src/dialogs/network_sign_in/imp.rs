@@ -121,6 +121,7 @@ impl ObjectSubclass for SignInDialog {
 impl ObjectImpl for SignInDialog {
     fn constructed(&self) {
         self.parent_constructed();
+        crate::i18n::translate_template(&*self.obj(), "network-sign-in.ui");
         let dialog = self.obj();
         dialog.show_icons();
         dialog.connect_controls();

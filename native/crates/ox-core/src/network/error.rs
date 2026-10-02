@@ -19,55 +19,73 @@ pub enum NetworkError {
     #[error(transparent)]
     Gio(#[from] glib::Error),
     /// The operation was cancelled or timed out; not an error to show.
-    #[error("Operation cancelled.")]
+    #[error("{}", crate::i18n::gettext("Operation cancelled."))]
     Cancelled,
     /// A connected share turned out not to be a folder.
-    #[error("This location is not a folder.")]
+    #[error("{}", crate::i18n::gettext("This location is not a folder."))]
     NotAFolder,
     /// The volume to mount was removed meanwhile.
-    #[error("This volume is no longer available.")]
+    #[error("{}", crate::i18n::gettext("This volume is no longer available."))]
     VolumeUnavailable,
     /// The volume mounted, but GIO reports no mount for it.
-    #[error("The system did not return a mount for this volume.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The system did not return a mount for this volume.")
+    )]
     NoMountReturned,
     /// Disconnect was chosen while this window writes files.
-    #[error("Finish the active file operation first.")]
+    #[error("{}", crate::i18n::gettext("Finish the active file operation first."))]
     WriteInProgress,
     /// Disconnect was chosen for a location outside any user mount.
-    #[error("This location has no active user-session mount.")]
+    #[error("{}", crate::i18n::gettext("This location has no active user-session mount."))]
     NoUserMount,
     /// The mount cannot be unmounted by the user.
-    #[error("The system does not permit unmounting this location.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The system does not permit unmounting this location.")
+    )]
     UnmountNotPermitted,
     /// Eject was chosen for a drive whose medium cannot be ejected.
-    #[error("This device cannot be ejected.")]
+    #[error("{}", crate::i18n::gettext("This device cannot be ejected."))]
     CannotEject,
     /// Safely remove was chosen for a drive that cannot be powered off.
-    #[error("This drive cannot be safely removed.")]
+    #[error("{}", crate::i18n::gettext("This drive cannot be safely removed."))]
     CannotSafelyRemove,
     /// Sign out was chosen while a window writes files.
-    #[error("Finish active file operations in every OpenXplorer window before signing out.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "Finish active file operations in every OpenXplorer window before signing out."
+        )
+    )]
     SignOutDuringWrites,
     /// Sign out was chosen for a location that is not on an SMB server.
-    #[error("Select an SMB location to sign out.")]
+    #[error("{}", crate::i18n::gettext("Select an SMB location to sign out."))]
     NotAnSmbLocation,
     /// Sign out was chosen twice for one server.
-    #[error("Sign-out is already in progress for this server.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Sign-out is already in progress for this server.")
+    )]
     SignOutAlreadyRunning,
     /// A server being signed out was opened.
-    #[error("This server is being signed out. Reopen it after sign-out finishes.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("This server is being signed out. Reopen it after sign-out finishes.")
+    )]
     ServerSigningOut,
     /// A share on a server being signed out was connected.
-    #[error("Sign-out is in progress. Reconnect after it finishes.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Sign-out is in progress. Reconnect after it finishes.")
+    )]
     ReconnectAfterSignOut,
     /// One of the server's mounts cannot be unmounted.
-    #[error(
-        "The system cannot disconnect one of this server’s mounts. Close other applications using it and \
-         try again."
-    )]
+    #[error("{}", crate::i18n::gettext("The system cannot disconnect one of this server’s mounts. Close other applications using it and \
+         try again."))]
     MountCannotBeDisconnected,
     /// The server was disconnected, but its saved credentials remain.
-    #[error("Disconnected, but saved credentials could not be removed. {}", removal_advice(.0))]
+    #[error("{}", crate::i18n::format_message("Disconnected, but saved credentials could not be removed. {advice}", &[("advice", &removal_advice(.0))]))]
     CredentialsNotRemoved(#[source] KeyringError),
 }
 
@@ -77,7 +95,7 @@ pub enum NetworkError {
 fn removal_advice(error: &KeyringError) -> String {
     match error {
         KeyringError::Unavailable => {
-            "Make sure the system keyring is running and try Sign out again.".to_owned()
+            crate::i18n::gettext("Make sure the system keyring is running and try Sign out again.")
         }
         KeyringError::TimedOut | KeyringError::UnlockDismissed | KeyringError::Failed { .. } => {
             error.to_string()

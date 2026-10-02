@@ -22,7 +22,8 @@ use super::applications::{LaunchTarget, PreparedLaunch};
 const HOLD_SCRIPT_NAME: &str = "openxplorer-command";
 
 /// Why a command needs a path the item does not have.
-const NO_LOCAL_PATH: &str = "This item has no local path for %f. Use %u, or mount its share first.";
+const NO_LOCAL_PATH: &str =
+    crate::i18n::message_id("This item has no local path for %f. Use %u, or mount its share first.");
 
 /// A command typed into Open with, and how to run it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,11 +45,11 @@ pub(crate) struct CustomCommand {
 pub(crate) fn command_arguments(text: &str, target: &LaunchTarget) -> Result<Vec<OsString>, String> {
     let words = glib::shell_parse_argv(text).map_err(|error| error.message().to_owned())?;
     if words.is_empty() {
-        return Err("Type a command to run.".to_owned());
+        return Err(ox_core::i18n::gettext("Type a command to run."));
     }
     let path = || match target {
         LaunchTarget::Path(path) => Ok(path.clone().into_os_string()),
-        LaunchTarget::Uri(_) => Err(NO_LOCAL_PATH.to_owned()),
+        LaunchTarget::Uri(_) => Err(ox_core::i18n::gettext_static(NO_LOCAL_PATH).to_owned()),
     };
     let uri = || match target {
         LaunchTarget::Path(path) => OsString::from(glib::filename_to_uri(path, None).unwrap_or_default()),
@@ -99,8 +100,12 @@ pub(crate) fn run_custom_command(command: &CustomCommand, prepared: &PreparedLau
         LaunchTarget::Path(path) => path.parent().unwrap_or(Path::new("/")).to_path_buf(),
         LaunchTarget::Uri(_) => glib::home_dir(),
     };
-    spawn_program(&arguments, &folder, sandbox)
-        .map_err(|error| format!("The command could not be started: {error}"))
+    spawn_program(&arguments, &folder, sandbox).map_err(|error| {
+        ox_core::i18n::format_message(
+            "The command could not be started: {error}",
+            &[("error", &error.to_string())],
+        )
+    })
 }
 
 #[cfg(test)]

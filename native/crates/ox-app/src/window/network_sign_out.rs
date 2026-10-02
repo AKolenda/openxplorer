@@ -37,7 +37,7 @@ use crate::locations::Page;
 use super::BrowserWindow;
 
 /// The heading of the message when signing out failed.
-const SIGN_OUT_FAILED: &str = "Sign-out did not fully finish";
+const SIGN_OUT_FAILED: &str = crate::i18n::message_id("Sign-out did not fully finish");
 
 /// The lower-case host of an SMB location, as Sign out compares servers
 /// (`new URL(uri).hostname`); `None` for any other location.
@@ -48,8 +48,12 @@ fn smb_host_of(uri: &str) -> Option<String> {
 /// What the window says once the server is signed out.
 fn signed_out_message(report: &SignOutReport) -> &'static str {
     match report.forget {
-        ForgetScope::AllScopes => "Signed out. Matching saved credentials were cleared or none were present.",
-        ForgetScope::SessionOnly => "Disconnected. Saved credentials are retained.",
+        ForgetScope::AllScopes => ox_core::i18n::gettext_static(
+            "Signed out. Matching saved credentials were cleared or none were present.",
+        ),
+        ForgetScope::SessionOnly => {
+            ox_core::i18n::gettext_static("Disconnected. Saved credentials are retained.")
+        }
     }
 }
 
@@ -58,7 +62,9 @@ impl BrowserWindow {
     /// server of `uri`.
     pub(super) fn sign_out_of_server(&self, uri: &str) {
         if self.write_activity() == WriteActivity::Writing {
-            self.show_message("Finish the current file operation before signing out.");
+            self.show_message(&ox_core::i18n::gettext(
+                "Finish the current file operation before signing out.",
+            ));
             return;
         }
         let Some(host) = smb_host_of(uri) else {
@@ -147,14 +153,11 @@ impl BrowserWindow {
 
     /// Stops the listings and folder watches of the tabs on `host`.
     fn stop_reading_host(&self, host: &str) {
-        let mut session = self.imp().session.borrow_mut();
-        let on_host = session
-            .tabs_mut()
-            .iter_mut()
-            .filter(|tab| smb_host_of(tab.uri()).as_deref() == Some(host));
-        for tab in on_host {
-            tab.stop_reading();
-        }
+        self.imp().session.borrow_mut().change_panes(|tab| {
+            if smb_host_of(tab.uri()).as_deref() == Some(host) {
+                tab.stop_reading();
+            }
+        });
     }
 
     /// Shows what Sign out did: on success the tabs on the server are
@@ -166,7 +169,7 @@ impl BrowserWindow {
             Ok(report) => report,
             Err(error) => {
                 self.render_places();
-                self.show_failure(SIGN_OUT_FAILED, &error.to_string());
+                self.show_failure(ox_core::i18n::gettext_static(SIGN_OUT_FAILED), &error.to_string());
                 return;
             }
         };

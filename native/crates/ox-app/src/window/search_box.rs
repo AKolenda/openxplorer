@@ -67,6 +67,7 @@ mod imp {
     impl ObjectImpl for SearchBox {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "search-box.ui");
             self.obj().finish_template();
         }
     }
@@ -169,7 +170,7 @@ impl SearchBox {
 
     /// Names the folder the box searches: "Search Documents".
     pub(super) fn set_folder_title(&self, title: &str) {
-        let placeholder = format!("Search {title}");
+        let placeholder = ox_core::i18n::format_message("Search {title}", &[("title", title)]);
         self.imp().entry.set_placeholder_text(Some(&placeholder));
     }
 

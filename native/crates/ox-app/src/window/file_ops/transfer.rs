@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use gtk::subclass::prelude::*;
-use ox_core::clipboard::ClipboardMode;
+use ox_core::clipboard::{ClipboardFiles, ClipboardMode};
 use ox_core::ops::{
     find_conflicts, run_chosen_transfer, starting_label, ChosenTransfer, ItemChoice, OpsError,
     TransferOutcome, TransferRequest,
@@ -25,12 +25,12 @@ use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 use super::conflict_dialog::ConflictAnswer;
 use super::running::FinishedOperation;
 use super::unfinished::mark_unfinished;
+use crate::dialog;
 use crate::search::changed_folders;
-use crate::window::dialog;
 use crate::window::BrowserWindow;
 
 /// The title of the dialog shown when the destination cannot be checked.
-const CHECK_FAILED_TITLE: &str = "Could not check destination";
+const CHECK_FAILED_TITLE: &str = crate::i18n::message_id("Could not check destination");
 
 /// A copy or move of some items into one folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,17 +103,33 @@ impl TransferPlan {
 
 impl BrowserWindow {
     /// Paste: reads the clipboard, then copies or moves its items into
-    /// the folder shown (`paste`).
-    pub(crate) async fn paste(&self) {
+    /// `into`, a selected folder (Dolphin's "Paste into folder", CMD-019),
+    /// or without one into the folder shown (`paste`).
+    pub(crate) async fn paste(&self, into: Option<String>) {
         let clipboard = self.refresh_file_clipboard().await;
-        if self.is_searching() {
-            self.show_message("Open the destination folder before pasting.");
+        if into.is_none() && self.is_searching() {
+            self.show_message(ox_core::i18n::gettext_static(
+                "Open the destination folder before pasting.",
+            ));
             return;
         }
-        let Some(files) = clipboard else {
+        let Some(destination_folder) = into.or_else(|| self.current_uri()) else {
             return;
         };
-        let Some(destination_folder) = self.current_uri() else {
+        self.paste_files(clipboard, destination_folder).await;
+    }
+
+    /// Paste into the folder at `uri`, from the folder tree's menu
+    /// (SIDE-028), as Dolphin's "Paste" on a folder pastes into it.
+    pub(crate) async fn paste_into(&self, uri: &str) {
+        let clipboard = self.refresh_file_clipboard().await;
+        self.paste_files(clipboard, uri.to_owned()).await;
+    }
+
+    /// Copies or moves the clipboard's `files` into `destination_folder`
+    /// where it is writable.
+    async fn paste_files(&self, clipboard: Option<ClipboardFiles>, destination_folder: String) {
+        let Some(files) = clipboard else {
             return;
         };
         if !self
@@ -122,6 +138,7 @@ impl BrowserWindow {
             .borrow()
             .is_writable_location(&destination_folder)
         {
+            self.show_message(ox_core::i18n::gettext_static("This folder is read-only."));
             return;
         }
         let mode = match files.mode() {
@@ -146,6 +163,7 @@ impl BrowserWindow {
     /// outcome of a run that finished; `None` when another operation runs,
     /// the check failed or the user cancelled.
     pub(crate) async fn transfer_with_conflicts(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
+        let origin = self.current_uri();
         let answers = self.plan_transfer(&incoming).await?;
         let mode = incoming.mode;
         let plan = TransferPlan::new(incoming, &answers);
@@ -153,7 +171,7 @@ impl BrowserWindow {
         let finished = outcome
             .clone()
             .map(|outcome| FinishedOperation::of_transfer(mode, outcome));
-        self.conclude_operation(finished).await;
+        self.conclude_operation_in(finished, origin.as_deref()).await;
         outcome.ok()
     }
 
@@ -163,7 +181,7 @@ impl BrowserWindow {
     async fn plan_transfer(&self, incoming: &IncomingItems) -> Option<Vec<ConflictAnswer>> {
         {
             let mut operations = self.imp().file_operations.borrow_mut();
-            if operations.is_busy() {
+            if operations.is_busy() || operations.jobs.len() >= super::jobs::MAX_JOBS {
                 return None;
             }
             operations.planning = true;
@@ -183,7 +201,12 @@ impl BrowserWindow {
         let conflicts = match checked {
             Ok(conflicts) => conflicts,
             Err(error) => {
-                dialog::show_message(self, CHECK_FAILED_TITLE, &error.to_string()).await;
+                dialog::show_message(
+                    self,
+                    ox_core::i18n::gettext_static(CHECK_FAILED_TITLE),
+                    &error.to_string(),
+                )
+                .await;
                 return None;
             }
         };
@@ -199,17 +222,23 @@ impl BrowserWindow {
             .await
     }
 
-    /// Runs `plan` as the window's one operation; `None` when another runs.
+    /// Runs `plan` as a transfer job with independent progress and cancellation.
+    /// Returns `None` when `begin_transfer` cannot admit the job.
     async fn run_plan(&self, plan: &TransferPlan) -> Option<Result<TransferOutcome, OpsError>> {
         match plan {
             TransferPlan::Uniform(request) => self.run_request(request).await,
             TransferPlan::PerItem(chosen) => {
-                let context = self.begin_operation(starting_label(chosen.mode))?;
+                let uris: Vec<String> = chosen.items.iter().map(|item| item.uri.clone()).collect();
+                let context = self.begin_transfer(
+                    starting_label(chosen.mode),
+                    &uris,
+                    Some(&chosen.destination_folder),
+                )?;
                 let progress = self.progress_reporter(&context.cancel);
                 let mark = mark_unfinished(Some(&chosen.destination_folder));
                 let outcome = run_chosen_transfer(chosen, &context, progress).await;
                 drop(mark);
-                self.end_operation();
+                self.end_transfer(&context.cancel);
                 let items = chosen.items.iter().map(|item| item.uri.as_str());
                 let changed = changed_folders([chosen.destination_folder.as_str()], items);
                 self.context().search_cache().folders_written(changed);

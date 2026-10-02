@@ -19,9 +19,9 @@ use super::file_ops_support::{
     dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
     select_names, text_field, wait_for_no_dialog,
 };
+use crate::dialog::Dialog;
 use crate::locations::Page;
 use crate::test_support::harness::{application, descendants, wait_until, Fixture, TestWindow};
-use crate::window::dialog::Dialog;
 use crate::window::file_drop::DropAction;
 use crate::window::transfer_panel::TransferKind;
 
@@ -35,7 +35,10 @@ fn new_folder_asks_for_a_name_then_creates_and_selects_the_folder() {
     let dialog = open_dialog(&test);
 
     assert_eq!(dialog.title_text(), "New folder");
-    assert_eq!(dialog.message_text(), "Names must not contain slashes.");
+    assert_eq!(
+        dialog.message_text(),
+        "A slash makes a folder inside the one before it."
+    );
     assert_eq!(dialog.button_labels(), ["Cancel", "Save"]);
     let field = text_field(&dialog);
     assert_eq!(field.text(), "New folder");
@@ -66,7 +69,7 @@ fn a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten() {
     dialog.press("Save");
     wait_until("the refusal", || dialog.error_text().is_some());
     let taken = dialog.error_text();
-    field.set_text("a/b");
+    field.set_text("a\\b");
     dialog.press("Save");
     wait_until("the name check", || dialog.error_text() != taken);
     let invalid = dialog.error_text();
@@ -79,13 +82,13 @@ fn a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten() {
     );
     assert_eq!(
         invalid.as_deref(),
-        Some("Use a name without slashes or control characters.")
+        Some("Use names without backslashes or control characters, one slash between folders.")
     );
     assert!(
         fixture.path("Documents/keep.txt").is_file(),
         "the folder was not replaced"
     );
-    assert!(!fixture.path("a").exists());
+    assert!(!fixture.path("a\\b").exists());
 }
 
 /// parity: OPS-002
@@ -361,7 +364,7 @@ fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
 /// on, closing a window with two tabs asks first, once however often it
 /// is asked, and "Close all tabs" closes it.
 ///
-/// parity: SET-010
+/// parity: SET-010, TAB-051
 #[gtk::test]
 fn the_confirmation_settings_decide_what_asks() {
     require_private_trash();
@@ -520,6 +523,7 @@ fn a_full_file_bar_is_never_shown_as_the_batch_finishing() {
         label: label.to_owned(),
         fraction,
         scope,
+        bytes: None,
     };
     let _context = test.window.begin_operation("Preparing copy…");
 

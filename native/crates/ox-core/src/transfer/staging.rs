@@ -74,13 +74,17 @@ impl StagingPlace {
 /// XFER-003: the message for staging that could not be removed, with its
 /// exact location, as `v2.0.0:desktop/operations.py` reports it.
 pub(crate) fn leftover_report(stage: &dyn Node, place: StagingPlace, problem: &TransferError) -> String {
-    let what = match place {
-        StagingPlace::LocalOrNetwork => "folder",
-        StagingPlace::Device => "item",
+    let message = match place {
+        StagingPlace::LocalOrNetwork => crate::i18n::message_id(
+            "Incomplete staging folder left at {uri}. Inspect it before removing it. {problem}",
+        ),
+        StagingPlace::Device => crate::i18n::message_id(
+            "Incomplete staging item left at {uri}. Inspect it before removing it. {problem}",
+        ),
     };
-    format!(
-        "Incomplete staging {what} left at {}. Inspect it before removing it. {problem}",
-        stage.uri()
+    crate::i18n::format_message(
+        message,
+        &[("uri", &stage.uri()), ("problem", &problem.to_string())],
     )
 }
 
@@ -135,7 +139,7 @@ pub(crate) fn discard_stage(
     place: StagingPlace,
     sleep: &dyn Fn(Duration),
 ) -> Result<(), TransferError> {
-    let mut problem = TransferError::failed("The staging was not removed.");
+    let mut problem = TransferError::failed(crate::i18n::gettext("The staging was not removed."));
     for delay in place.cleanup_delays() {
         if !delay.is_zero() {
             sleep(*delay);

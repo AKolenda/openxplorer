@@ -19,6 +19,8 @@ pub(crate) struct LeftView {
     pub scroll: f64,
     /// The URI of the current item: the first selected one, if any.
     pub current: Option<String>,
+    /// The folders expanded in place, outermost first (VIEW-035).
+    pub expanded: Vec<String>,
 }
 
 /// The [`LeftView`] of each history position a tab left.
@@ -64,6 +66,16 @@ impl History {
             position: 0,
             moves: 0,
         }
+    }
+
+    /// A history of `entries` at `position`, as a saved session kept it;
+    /// `None` when there are no entries or `position` is past them.
+    pub(crate) fn restored(entries: Vec<String>, position: usize) -> Option<Self> {
+        (position < entries.len()).then_some(Self {
+            entries,
+            position,
+            moves: 0,
+        })
     }
 
     /// The location currently shown.

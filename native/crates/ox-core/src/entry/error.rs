@@ -30,14 +30,17 @@ pub enum EntryError {
     #[error("{0}")]
     NotSupported(String),
     /// The work was cancelled; not an error to show.
-    #[error("Operation cancelled.")]
+    #[error("{}", crate::i18n::gettext("Operation cancelled."))]
     Cancelled,
     /// An address that is not a supported location, refused by the
     /// `location` module before GIO was asked.
     #[error(transparent)]
     Location(#[from] LocationError),
     /// A file was offered for Quick access (`verify_pin` in Python).
-    #[error("Only folders and network shares can be pinned to Quick access.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Only folders and network shares can be pinned to Quick access.")
+    )]
     NotPinnable,
     /// Any other failure.
     #[error("{0}")]

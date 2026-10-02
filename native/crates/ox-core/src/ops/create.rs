@@ -54,6 +54,80 @@ pub async fn create_item(
     on_worker(move || create_item_blocking(&folder_uri, &name, kind, &context)).await
 }
 
+/// What [`create_folder_path`] made.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatedFolderPath {
+    /// The outermost folder it created, which Undo moves to the Trash.
+    pub created: CreatedItem,
+    /// The item of the first name in the folder it started from, new or
+    /// not, to select there.
+    pub first: String,
+}
+
+/// Creates the folders `names` name, each inside the one before, in the
+/// folder at `folder_uri`, as Dolphin's New folder does with a name that
+/// holds slashes (`a/b/c`, OPS-007). A folder of an earlier name that
+/// exists already is entered; the last name must be free, so nothing is
+/// overwritten (OPS-008).
+///
+/// # Errors
+///
+/// As [`create_item`]: no names, an invalid name, a taken last name, or an
+/// earlier name taken by something that is not a folder.
+pub async fn create_folder_path(
+    folder_uri: &str,
+    names: &[&str],
+    context: &OperationContext,
+) -> Result<CreatedFolderPath, OpsError> {
+    let folder_uri = folder_uri.to_owned();
+    let names: Vec<String> = names.iter().map(|name| (*name).to_owned()).collect();
+    let context = context.clone();
+    on_worker(move || create_folder_path_blocking(&folder_uri, &names, &context)).await
+}
+
+/// [`create_folder_path`] on the calling thread.
+fn create_folder_path_blocking(
+    folder_uri: &str,
+    names: &[String],
+    context: &OperationContext,
+) -> Result<CreatedFolderPath, OpsError> {
+    let (last, earlier) = names
+        .split_last()
+        .ok_or_else(|| OpsError::failed(crate::i18n::gettext("Type a name for the new folder.")))?;
+    let mut parent = folder_uri.to_owned();
+    let mut first = None;
+    let mut created = None;
+    for name in earlier {
+        let entered = match create_item_blocking(&parent, name, ItemKind::Folder, context) {
+            Ok(item) => {
+                let uri = item.uri.clone();
+                created.get_or_insert(item);
+                uri
+            }
+            Err(OpsError::Exists(message)) => {
+                existing_folder(&parent, name).ok_or(OpsError::Exists(message))?
+            }
+            Err(error) => return Err(error),
+        };
+        first.get_or_insert_with(|| entered.clone());
+        parent = entered;
+    }
+    let item = create_item_blocking(&parent, last, ItemKind::Folder, context)?;
+    let first = first.unwrap_or_else(|| item.uri.clone());
+    Ok(CreatedFolderPath {
+        created: created.unwrap_or(item),
+        first,
+    })
+}
+
+/// The URI of the folder `name` in the folder at `parent_uri`, when it is
+/// a folder and not a link to one.
+fn existing_folder(parent_uri: &str, name: &str) -> Option<String> {
+    let item = gio::File::for_uri(parent_uri).child(name);
+    let file_type = item.query_file_type(gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS, gio::Cancellable::NONE);
+    (file_type == gio::FileType::Directory).then(|| item.uri().to_string())
+}
+
 /// The most numbered names New folder tries before it gives up.
 const MAX_NUMBERED_NAMES: u32 = 10_000;
 
@@ -94,8 +168,9 @@ fn create_numbered_folder_blocking(
             outcome => return outcome,
         }
     }
-    Err(OpsError::failed(format!(
-        "Too many folders are called “{base_name}”. Rename some of them, then try again."
+    Err(OpsError::failed(crate::i18n::format_message(
+        "Too many folders are called “{base_name}”. Rename some of them, then try again.",
+        &[("base_name", base_name)],
     )))
 }
 
@@ -118,9 +193,9 @@ fn create_item_blocking(
     validate_name(name)?;
     // A server listing holds shares, not files; nothing can be created there.
     if is_smb_server(folder_uri) {
-        return Err(OpsError::failed(
+        return Err(OpsError::failed(crate::i18n::gettext(
             "Open a network share before creating files or folders.",
-        ));
+        )));
     }
     let folder_uri = normalise(folder_uri)?;
     context.protection.check(&folder_uri)?;
@@ -151,8 +226,9 @@ fn create_exclusively(item: &gio::File, kind: ItemKind, context: &OperationConte
 /// keep their message.
 pub(crate) fn name_taken_or(error: OpsError, name: &str) -> OpsError {
     match error {
-        OpsError::Exists(_) => OpsError::Exists(format!(
-            "An item named “{name}” already exists. Nothing was overwritten."
+        OpsError::Exists(_) => OpsError::Exists(crate::i18n::format_message(
+            "An item named “{name}” already exists. Nothing was overwritten.",
+            &[("name", name)],
         )),
         other => other,
     }
@@ -170,6 +246,34 @@ mod tests {
     fn numbered_names_follow_windows() {
         assert_eq!(numbered_name("New folder", 1), "New folder");
         assert_eq!(numbered_name("New folder", 2), "New folder (2)");
+    }
+
+    /// A name with slashes makes folders inside folders, entering one that
+    /// exists; Undo takes the outermost new one.
+    ///
+    /// parity: OPS-007
+    #[test]
+    fn a_folder_path_creates_each_folder_inside_the_one_before() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        std::fs::create_dir(temp.path().join("Photos")).expect("an existing folder");
+        let context = OperationContext::default();
+
+        let created = glib::MainContext::new().block_on(create_folder_path(
+            &folder_uri(temp.path()),
+            &["Photos", "2026", "Summer"],
+            &context,
+        ));
+
+        let created = created.expect("the folders are made");
+        assert!(temp.path().join("Photos/2026/Summer").is_dir());
+        assert_eq!(created.created.uri, folder_uri(&temp.path().join("Photos/2026")));
+        assert_eq!(created.first, folder_uri(&temp.path().join("Photos")));
+        let again = glib::MainContext::new().block_on(create_folder_path(
+            &folder_uri(temp.path()),
+            &["Photos", "2026", "Summer"],
+            &context,
+        ));
+        assert!(matches!(again, Err(OpsError::Exists(_))), "{again:?}");
     }
 
     /// parity: OPS-001, OPS-008

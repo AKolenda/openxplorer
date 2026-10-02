@@ -27,13 +27,14 @@ const PASSES: usize = 3;
 const PAUSE_BETWEEN_PASSES: Duration = Duration::from_millis(2500);
 
 /// The banner's hint while discovery runs.
-const LISTENING: &str = "Listening for advertised SMB servers…";
+const LISTENING: &str = crate::i18n::message_id("Listening for advertised SMB servers…");
 /// The banner's hint otherwise.
-const IDLE_HINT: &str = "Discover devices without scanning their files.";
+const IDLE_HINT: &str = crate::i18n::message_id("Discover devices without scanning their files.");
 /// The notice while discovery runs and has found nothing yet.
-const STILL_LOOKING: &str = "Discovery can take a few seconds.";
+const STILL_LOOKING: &str = crate::i18n::message_id("Discovery can take a few seconds.");
 /// The notice when discovery found nothing.
-const NOTHING_FOUND: &str = "No advertised SMB servers found yet. Discover again or enter an address above.";
+const NOTHING_FOUND: &str =
+    crate::i18n::message_id("No advertised SMB servers found yet. Discover again or enter an address above.");
 
 /// One reading of the network browser.
 type DiscoveryPass = Pin<Box<dyn Future<Output = Result<Discovery, NetworkError>>>>;
@@ -100,18 +101,18 @@ impl DiscoveryState {
     /// The line under the banner's title.
     pub(crate) fn banner_hint(&self) -> &'static str {
         if self.is_busy {
-            LISTENING
+            ox_core::i18n::gettext_static(LISTENING)
         } else {
-            IDLE_HINT
+            ox_core::i18n::gettext_static(IDLE_HINT)
         }
     }
 
     /// The notice shown while no server is listed.
     pub(crate) fn empty_notice(&self) -> &str {
         if self.is_busy {
-            STILL_LOOKING
+            ox_core::i18n::gettext_static(STILL_LOOKING)
         } else if self.problem.is_empty() {
-            NOTHING_FOUND
+            ox_core::i18n::gettext_static(NOTHING_FOUND)
         } else {
             &self.problem
         }

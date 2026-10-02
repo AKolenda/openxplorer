@@ -11,30 +11,43 @@ use std::path::PathBuf;
 pub enum DefaultAppsError {
     /// `xdg-mime` is not installed (INT-010); inside Flatpak, not on the
     /// host.
-    #[error("Install xdg-utils to manage the default file explorer.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Install xdg-utils to manage the default file explorer.")
+    )]
     XdgUtilsMissing,
     /// `xdg-mime` exited unsuccessfully.
-    #[error("The desktop did not accept the file-association change.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The desktop did not accept the file-association change.")
+    )]
     NotAccepted,
     /// `xdg-mime` did not finish within 8 seconds and was stopped.
-    #[error("The desktop took too long to update the default. Try again.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The desktop took too long to update the default. Try again.")
+    )]
     TimedOut,
     /// `xdg-mime` could not be started or waited for; the operating
     /// system's reason follows the program's name.
-    #[error("xdg-mime could not be run: {0}")]
+    #[error("{}", crate::i18n::format_message("xdg-mime could not be run: {error}", &[("error", &.0.to_string())]))]
     CommandFailed(io::Error),
     /// The handler the app would replace is not a plain desktop ID, so
     /// it cannot be put back later (INT-008).
-    #[error("The current desktop handler cannot be safely recorded.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The current desktop handler cannot be safely recorded.")
+    )]
     UnrecordableHandler,
     /// After the change, `xdg-mime` does not report the app for every
     /// requested type (INT-008).
-    #[error(
-        "The desktop did not confirm all requested defaults. Check your system’s Default Applications settings."
-    )]
+    #[error("{}", crate::i18n::gettext("The desktop did not confirm all requested defaults. Check your system’s Default Applications settings."))]
     NotConfirmed,
     /// Restore found no recorded handler to put back (INT-011).
-    #[error("No previous handler was recorded. Choose one in your desktop settings.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("No previous handler was recorded. Choose one in your desktop settings.")
+    )]
     NoPreviousHandler,
     /// The record of the previous handlers could not be written, so no
     /// default was changed.

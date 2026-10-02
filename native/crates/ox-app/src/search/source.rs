@@ -29,10 +29,10 @@ impl SearchScope {
     pub(crate) const ALL: [SearchScope; 2] = [SearchScope::ThisFolder, SearchScope::AllCachedFolders];
 
     /// What the strip's scope list shows.
-    pub(crate) const fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
-            SearchScope::ThisFolder => "This folder + subfolders",
-            SearchScope::AllCachedFolders => "All cached folders",
+            SearchScope::ThisFolder => ox_core::i18n::gettext_static("This folder + subfolders"),
+            SearchScope::AllCachedFolders => ox_core::i18n::gettext_static("All cached folders"),
         }
     }
 }
@@ -83,12 +83,14 @@ impl SearchSource {
     }
 
     /// What the search strip says it searched.
-    pub(crate) const fn caption(self) -> &'static str {
+    pub(crate) fn caption(self) -> &'static str {
         match self {
-            SearchSource::CurrentFolder => "Current folder + subfolders",
-            SearchSource::CurrentFolderOnly => "Current folder only",
-            SearchSource::CurrentFolderAndCachedSubfolders => "Current folder + cached subfolders",
-            SearchSource::Cache => "Cached names & paths",
+            SearchSource::CurrentFolder => ox_core::i18n::gettext_static("Current folder + subfolders"),
+            SearchSource::CurrentFolderOnly => ox_core::i18n::gettext_static("Current folder only"),
+            SearchSource::CurrentFolderAndCachedSubfolders => {
+                ox_core::i18n::gettext_static("Current folder + cached subfolders")
+            }
+            SearchSource::Cache => ox_core::i18n::gettext_static("Cached names & paths"),
         }
     }
 }

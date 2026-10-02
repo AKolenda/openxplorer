@@ -155,9 +155,11 @@ impl BrowserWindow {
         search.set_enabled(!on_page && !is_device_location(uri));
         self.update_cache_folder_action();
         self.render_tabs();
+        self.show_pane_captions();
         self.show_snapshot_banner();
         self.update_properties_actions();
         self.sidebar().select(uri);
+        self.follow_with_folder_tree();
         self.render_landing();
         self.show_surface_for(uri);
         self.picker_selection_changed();
@@ -182,7 +184,10 @@ impl BrowserWindow {
         } else {
             locations.title_for(&uri)
         };
-        self.set_title(Some(&format!("{place} — OpenXplorer")));
+        self.set_title(Some(&ox_core::i18n::format_message(
+            "{place} — OpenXplorer",
+            &[("place", &place)],
+        )));
     }
 
     fn active_location(&self) -> Option<ActiveLocation> {

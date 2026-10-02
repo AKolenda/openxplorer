@@ -28,20 +28,27 @@ impl BrowserWindow {
         }
         let on_page = self.current_uri().as_deref().and_then(Page::from_uri).is_some();
         match action {
-            WindowAction::PinFolder => Some("Only a folder can be pinned to Quick access."),
-            WindowAction::CacheFolder => Some("Only a folder on a drive or share can be cached for search."),
-            WindowAction::Properties | WindowAction::PreviousVersions if on_page => {
-                Some("Pages such as This PC have no properties.")
-            }
+            WindowAction::PinFolder => Some(ox_core::i18n::gettext_static(
+                "Only a folder can be pinned to Quick access.",
+            )),
+            WindowAction::CacheFolder => Some(ox_core::i18n::gettext_static(
+                "Only a folder on a drive or share can be cached for search.",
+            )),
+            WindowAction::Properties | WindowAction::PreviousVersions if on_page => Some(
+                ox_core::i18n::gettext_static("Pages such as This PC have no properties."),
+            ),
             WindowAction::Open
             | WindowAction::PinSelected
             | WindowAction::Properties
-            | WindowAction::PreviousVersions => Some("Select exactly one item."),
-            WindowAction::CopyPath
-            | WindowAction::OpenWith
-            | WindowAction::OpenInTerminal
-            | WindowAction::OpenInEditor => Some("Select one item at a time."),
-            WindowAction::OpenFileLocation => Some("Only a search result has a file location to open."),
+            | WindowAction::PreviousVersions => {
+                Some(ox_core::i18n::gettext_static("Select exactly one item."))
+            }
+            WindowAction::OpenWith | WindowAction::OpenInTerminal | WindowAction::OpenInEditor => {
+                Some(ox_core::i18n::gettext_static("Select one item at a time."))
+            }
+            WindowAction::OpenFileLocation => Some(ox_core::i18n::gettext_static(
+                "Only a search result has a file location to open.",
+            )),
             _ => None,
         }
     }

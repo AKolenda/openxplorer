@@ -74,7 +74,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
 
 /// The build's name and description, with "About this build".
 fn build_card() -> StatusCard {
-    let about_build = parts::button("About this build", ButtonStyle::Bordered);
+    let about_build = parts::button(&ox_core::i18n::gettext("About this build"), ButtonStyle::Bordered);
     WindowAction::About.assign_to(&about_build);
     let status = StatusText {
         glyph: Icon::Info,

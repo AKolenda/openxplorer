@@ -32,9 +32,9 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// Shown when a request names no folder that can be measured.
-const NO_FOLDER: &str = "Select a folder or share to calculate its size.";
+const NO_FOLDER: &str = crate::i18n::message_id("Select a folder or share to calculate its size.");
 /// Shown when a scan is asked for while one runs.
-const SCAN_RUNNING: &str = "Cancel or finish the current folder-size scan first.";
+const SCAN_RUNNING: &str = crate::i18n::message_id("Cancel or finish the current folder-size scan first.");
 
 /// The run in progress.
 #[derive(Debug)]
@@ -131,10 +131,12 @@ impl BrowserWindow {
     pub(super) fn size_refusal(&self, action: WindowAction) -> Option<&'static str> {
         let is_running = self.size_scans().run.borrow().is_some();
         match action {
-            WindowAction::CalculateFolderSize | WindowAction::CalculateFolderSizes if is_running => {
-                Some("A folder size calculation is already running.")
+            WindowAction::CalculateFolderSize | WindowAction::CalculateFolderSizes if is_running => Some(
+                ox_core::i18n::gettext_static("A folder size calculation is already running."),
+            ),
+            WindowAction::CalculateFolderSize => {
+                Some(ox_core::i18n::gettext_static("Select a folder first."))
             }
-            WindowAction::CalculateFolderSize => Some("Select a folder first."),
             _ => None,
         }
     }
@@ -171,12 +173,12 @@ impl BrowserWindow {
     /// once, never a whole server (`scanFolderSizes`).
     fn start_size_run(&self, uris: Vec<String>) {
         if self.size_scans().run.borrow().is_some() {
-            self.show_message(SCAN_RUNNING);
+            self.show_message(ox_core::i18n::gettext_static(SCAN_RUNNING));
             return;
         }
         let folders = measurable_folders(uris);
         if folders.is_empty() {
-            self.show_message(NO_FOLDER);
+            self.show_message(ox_core::i18n::gettext_static(NO_FOLDER));
             return;
         }
         let number = self.size_scans().runs.get().wrapping_add(1);
@@ -348,7 +350,7 @@ impl BrowserWindow {
         self.size_scans().measured.borrow_mut().set(uri, state.clone());
         let stores: Vec<gtk::gio::ListStore> = {
             let session = self.imp().session.borrow();
-            session.tabs().iter().map(|tab| tab.store.clone()).collect()
+            session.panes().map(|tab| tab.store.clone()).collect()
         };
         for store in stores {
             update_rows_of(&store, uri, state);

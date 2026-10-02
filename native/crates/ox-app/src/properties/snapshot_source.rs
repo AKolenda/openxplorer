@@ -14,13 +14,15 @@ use gtk::{gio, glib};
 use ox_core::location::{parent_location, split_location, LocationContext, LocationKind};
 use ox_core::versions::{PreviousVersions, SnapshotLayout};
 
-use crate::dialog_layer::{labelled_entry, quiet_text};
+use crate::dialog::{labelled_entry, quiet_text};
 use crate::window::ButtonStyle;
 
 /// What the form is for.
-const SOURCE_INTRO: &str = "Map the current live folder to a directory containing dated snapshots. Each \
+const SOURCE_INTRO: &str = crate::i18n::message_id(
+    "Map the current live folder to a directory containing dated snapshots. Each \
                             snapshot must contain the same relative paths. These may also be existing \
-                            backup folders; OpenXplorer does not certify them as immutable.";
+                            backup folders; OpenXplorer does not certify them as immutable.",
+);
 
 /// The layouts the form offers, with their labels.
 const LAYOUTS: [(SnapshotLayout, &str); 2] = [
@@ -89,17 +91,19 @@ pub(super) fn fill_source_form(
     locations: &LocationContext,
     finished: impl Fn() + Clone + 'static,
 ) {
-    panel.append(&quiet_text(SOURCE_INTRO));
+    panel.append(&quiet_text(ox_core::i18n::gettext_static(SOURCE_INTRO)));
     let shown_live = locations.display_location(&item.live_folder());
-    let live = labelled_entry(panel, "Live folder", &shown_live);
+    let live = labelled_entry(panel, &ox_core::i18n::gettext("Live folder"), &shown_live);
     let collection = labelled_entry(
         panel,
-        "Snapshot collection folder",
+        &ox_core::i18n::gettext("Snapshot collection folder"),
         &suggested_collection(&shown_live),
     );
     let labels: Vec<&str> = LAYOUTS.iter().map(|(_, label)| *label).collect();
     let layout = gtk::DropDown::from_strings(&labels);
-    layout.update_property(&[gtk::accessible::Property::Label("Snapshot layout")]);
+    layout.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "Snapshot layout",
+    ))]);
     panel.append(&layout);
     let error = gtk::Label::builder()
         .xalign(0.0)
@@ -133,7 +137,7 @@ impl SourceForm {
         let row = gtk::Box::builder()
             .css_classes(["snapshot-source-actions"])
             .build();
-        let back = gtk::Button::with_label("Back");
+        let back = gtk::Button::with_label(&ox_core::i18n::gettext("Back"));
         back.add_css_class(ButtonStyle::Bordered.css_class());
         back.connect_clicked({
             let finished = finished.clone();

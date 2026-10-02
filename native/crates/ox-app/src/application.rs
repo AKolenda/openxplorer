@@ -103,7 +103,7 @@ fn focus_window(app: &gtk::Application, id: u32) {
         return;
     }
     if let Some(window) = active_window(app) {
-        window.show_message("That window is no longer open.");
+        window.show_message(&ox_core::i18n::gettext("That window is no longer open."));
     }
 }
 
@@ -478,10 +478,10 @@ fn renderer_for(arguments: &[String], is_chosen: bool) -> Option<&'static str> {
 /// instance (`is_remote`) that draws with `renderer` rather than Cairo:
 /// the option applies from a restart, which `--restart` offers.
 fn software_rendering_notice(asks: bool, is_remote: bool, renderer: Option<&str>) -> Option<&'static str> {
-    (asks && is_remote && renderer != Some(SOFTWARE_RENDERER)).then_some(
+    (asks && is_remote && renderer != Some(SOFTWARE_RENDERER)).then_some(ox_core::i18n::gettext_static(
         "OpenXplorer is already running with hardware rendering. To use software rendering, \
          run: openxplorer --restart --software-rendering",
-    )
+    ))
 }
 
 /// Runs the app under the build's application ID (`APP_ID` in
@@ -489,7 +489,10 @@ fn software_rendering_notice(asks: bool, is_remote: bool, renderer: Option<&str>
 /// defaults and the Python app's D-Bus name untouched. With
 /// `OPENXPLORER_SNAPSHOT` set it saves a picture of one window and quits
 /// instead (see `snapshot.rs`); otherwise the launch guard runs first.
+/// The interface's translations are loaded before any text is made
+/// (INT-031).
 pub fn run() -> glib::ExitCode {
+    ox_core::i18n::install();
     let arguments: Vec<String> = std::env::args().collect();
     let launch = match SnapshotRequest::from_environment() {
         Ok(Some(request)) => Launch::Snapshot(request),

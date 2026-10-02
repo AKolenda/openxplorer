@@ -53,11 +53,13 @@ const CLICKS_PAUSE_AFTER_END: Duration = Duration::from_millis(400);
 const DRAG_ICON_SIZE: i32 = 48;
 
 /// Shown when some dragged items have no local path.
-const REMOTE_ONLY_MESSAGE: &str = "This network item needs an app that supports SMB addresses. For a \
-                                   local-only editor, open it through an existing local mount.";
+const REMOTE_ONLY_MESSAGE: &str = crate::i18n::message_id(
+    "This network item needs an app that supports SMB addresses. For a \
+                                   local-only editor, open it through an existing local mount.",
+);
 
 /// Said to screen readers when a drag ends, dropped or cancelled.
-const DRAG_ENDED: &str = "Drag ended";
+const DRAG_ENDED: &str = crate::i18n::message_id("Drag ended");
 
 /// What screen readers hear as a drag of `uris` starts: the item's name,
 /// or how many items move.
@@ -67,9 +69,9 @@ fn drag_announcement(uris: &[String]) -> String {
             let name = gio::File::for_uri(uri)
                 .basename()
                 .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
-            format!("Dragging {name}")
+            ox_core::i18n::format_message("Dragging {name}", &[("name", &name)])
         }
-        _ => format!("Dragging {} items", uris.len()),
+        _ => ox_core::i18n::format_message("Dragging {len} items", &[("len", &uris.len().to_string())]),
     }
 }
 
@@ -95,22 +97,6 @@ fn offered_actions(modifiers: gdk::ModifierType) -> gdk::DragAction {
         (false, _) => gdk::DragAction::empty(),
     };
     gdk::DragAction::COPY | gdk::DragAction::ASK | chosen
-}
-
-/// Turns the rubber band of `view`, a column or grid view, on or off.
-///
-/// The rubber band starts only from blank space: a press on an item turns
-/// it off until the next press (see `input.rs`, `blank_space_press`), so
-/// dragging an item always drags it. GTK's rubber band takes a drag that
-/// moves past the threshold at once, while a drag source waits 100 ms, so
-/// a quick drag of an item would otherwise select rows instead (seen in a
-/// real drag in GNOME Shell).
-pub(super) fn allow_rubber_band(view: &gtk::Widget, allowed: bool) {
-    if let Some(columns) = view.downcast_ref::<gtk::ColumnView>() {
-        columns.set_enable_rubberband(allowed);
-    } else if let Some(grid) = view.downcast_ref::<gtk::GridView>() {
-        grid.set_enable_rubberband(allowed);
-    }
 }
 
 /// The icon that follows the pointer: the first item's art, with the
@@ -263,6 +249,7 @@ impl BrowserWindow {
     /// The drag started: its icon follows the pointer, and the window
     /// shows the drag's feedback.
     fn begin_file_drag(&self, drag: &gdk::Drag) {
+        self.cancel_slow_click_rename();
         let Some(outgoing) = self.show_file_drag_feedback() else {
             return;
         };
@@ -280,7 +267,7 @@ impl BrowserWindow {
         let dragged: HashSet<String> = outgoing.payload.uris.iter().cloned().collect();
         self.folder_pane().owners().show_dragged_items(dragged);
         if outgoing.payload.remote_only > 0 {
-            self.show_message(REMOTE_ONLY_MESSAGE);
+            self.show_message(ox_core::i18n::gettext_static(REMOTE_ONLY_MESSAGE));
         }
         let announcement = drag_announcement(&outgoing.payload.uris);
         announce(self, &announcement, gtk::AccessibleAnnouncementPriority::Medium);
@@ -293,9 +280,15 @@ impl BrowserWindow {
     /// (DND-008), whatever the receiver answered.
     pub(super) fn end_file_drag(&self) {
         if self.imp().outgoing_drag.replace(None).is_some() {
-            announce(self, DRAG_ENDED, gtk::AccessibleAnnouncementPriority::Medium);
+            announce(
+                self,
+                ox_core::i18n::gettext_static(DRAG_ENDED),
+                gtk::AccessibleAnnouncementPriority::Medium,
+            );
         }
-        self.folder_pane().owners().show_dragged_items(HashSet::new());
+        for pane in self.folder_panes() {
+            pane.owners().show_dragged_items(HashSet::new());
+        }
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_END);
     }
 

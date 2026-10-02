@@ -64,13 +64,19 @@ pub struct AutostartRequest {
 pub enum BackgroundError {
     /// The desktop has no Background portal, or the call failed; the
     /// D-Bus error is the source, kept out of the message.
-    #[error("The desktop cannot start OpenXplorer at login.")]
+    #[error("{}", crate::i18n::gettext("The desktop cannot start OpenXplorer at login."))]
     Unavailable(#[source] glib::Error),
     /// The user or the desktop refused.
-    #[error("The desktop did not allow OpenXplorer to start at login.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The desktop did not allow OpenXplorer to start at login.")
+    )]
     Refused,
     /// The portal did not answer in time.
-    #[error("The desktop did not answer whether OpenXplorer may start at login.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("The desktop did not answer whether OpenXplorer may start at login.")
+    )]
     Unanswered,
 }
 

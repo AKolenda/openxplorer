@@ -442,7 +442,7 @@ fn open_terminal_here_opens_one_per_folder_and_asks_for_many() {
     }
     let test = TestWindow::open(&fixture.uri());
     let keys = |action: &str| application().accels_for_action(&format!("win.{action}"));
-    assert_eq!(keys("open-terminal"), ["<Shift>F4"]);
+    assert_eq!(keys("open-terminal"), ["<Shift>F4", "<Shift><Control>F4"]);
     assert_eq!(keys("open-terminal-here"), ["<Shift><Alt>F4"]);
 
     select_names(&test, &["Notes 2.txt", "Résumé.txt", "Documents"]);
@@ -640,4 +640,34 @@ impl Drop for FakeSoftware {
             gio::bus_unown_name(owner);
         }
     }
+}
+
+/// "Show target" on a link opens the folder of its relative target with
+/// the target selected; on a dangling link it says the target is missing.
+///
+/// parity: CMD-030
+#[gtk::test]
+fn show_target_selects_a_links_target_and_explains_a_missing_one() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/plan.txt"), b"x").expect("fixture file");
+    std::os::unix::fs::symlink("Documents/plan.txt", fixture.path("plan link")).expect("fixture link");
+    std::os::unix::fs::symlink("gone.txt", fixture.path("broken link")).expect("fixture link");
+    let test = TestWindow::open(&fixture.uri());
+
+    select_names(&test, &["broken link"]);
+    test.activate("show-target", None);
+    wait_until("the missing target message", || {
+        test.window
+            .shown_message()
+            .starts_with("The target of “broken link” does not exist")
+    });
+    select_names(&test, &["plan link"]);
+    test.activate("show-target", None);
+
+    wait_until("the target's folder", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents")) && !test.window.is_loading()
+    });
+    wait_until("the target to be selected", || {
+        test.selected_names() == ["plan.txt"]
+    });
 }

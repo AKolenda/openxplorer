@@ -63,7 +63,7 @@ fn choice(label: &str, glyph: Icon, name: &str, is_on: bool) -> MenuEntry {
 fn entries(options: &DetailsPaneOptions) -> Vec<MenuEntry> {
     let mut entries = vec![
         choice(
-            "Show the item under the pointer",
+            ox_core::i18n::gettext_static("Show the item under the pointer"),
             Icon::Eye,
             FOLLOW_HOVER,
             options.follow_hover,
@@ -75,13 +75,13 @@ fn entries(options: &DetailsPaneOptions) -> Vec<MenuEntry> {
     }
     entries.push(MenuEntry::Divider);
     entries.push(choice(
-        "Condensed dates",
+        ox_core::i18n::gettext_static("Condensed dates"),
         Icon::Clock,
         CONDENSED_DATES,
         options.condensed_dates,
     ));
     entries.push(choice(
-        "Play audio and video automatically",
+        ox_core::i18n::gettext_static("Play audio and video automatically"),
         Icon::MusicNote,
         AUTO_PLAY,
         options.auto_play,

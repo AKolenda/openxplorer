@@ -317,6 +317,7 @@ impl ZipExtractor {
             label,
             fraction,
             scope: ProgressScope::Batch,
+            bytes: None,
         });
     }
 }

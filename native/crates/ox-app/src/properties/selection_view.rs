@@ -22,12 +22,14 @@ use super::permissions_editor::{permissions_editor, EditedItems};
 use super::tabs::PropertiesTabs;
 use super::view::{can_edit_permissions, PropertiesContext};
 use super::{PropertiesTab, CALCULATING, READING};
-use crate::dialog_layer::{note, quiet_text, PropertyGrid};
+use crate::dialog::{note, quiet_text, PropertyGrid};
 use crate::icons::{Art, ArtImage};
 
 /// The Permissions tab when some item cannot be changed here.
-const NOT_EDITABLE: &str = "Permissions can be changed together only for items you own, outside previous \
-                            versions and shares.";
+const NOT_EDITABLE: &str = crate::i18n::message_id(
+    "Permissions can be changed together only for items you own, outside previous \
+                            versions and shares.",
+);
 
 /// The General and Permissions tabs of a multiple selection.
 #[derive(Debug, Clone)]
@@ -54,14 +56,14 @@ impl SelectionProperties {
         let cancel = Cancellation::new();
         let size = fill_general(&general, &entries, context);
         measure(&entries, &size, &cancel);
-        permissions.append(&quiet_text(READING));
+        permissions.append(&quiet_text(ox_core::i18n::gettext_static(READING)));
         read_permissions(&permissions, entries, context.clone());
         Self { root, cancel }
     }
 
     /// The dialog's title: `<count> items Properties`.
     pub(crate) fn dialog_title(count: usize) -> String {
-        format!("{count} items Properties")
+        ox_core::i18n::format_message("{count} items Properties", &[("count", &count.to_string())])
     }
 
     /// The widget, for the dialog's body.
@@ -102,15 +104,18 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
     header.append(&heading);
     panel.append(&header);
     let grid = PropertyGrid::new();
-    grid.add_row("Type", &common_type(entries));
-    grid.add_row("Location", &common_location(entries, context));
+    grid.add_row(&ox_core::i18n::gettext("Type"), &common_type(entries));
+    grid.add_row(
+        &ox_core::i18n::gettext("Location"),
+        &common_location(entries, context),
+    );
     let bytes: u64 = entries
         .iter()
         .filter_map(|entry| entry.size.filter(|_| !entry.is_dir))
         .sum();
     let has_folders = folders > 0;
     let size = grid.add_row(
-        "Size",
+        &ox_core::i18n::gettext("Size"),
         &if has_folders {
             CALCULATING.to_owned()
         } else {
@@ -118,7 +123,7 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
         },
     );
     let contains = grid.add_row(
-        "Contains",
+        &ox_core::i18n::gettext("Contains"),
         &if has_folders {
             CALCULATING.to_owned()
         } else {
@@ -136,9 +141,9 @@ fn common_type(entries: &[Entry]) -> String {
         .map(|entry| entry.type_label.as_str())
         .unwrap_or_default();
     if entries.iter().all(|entry| entry.type_label == first) {
-        format!("All of type {first}")
+        ox_core::i18n::format_message("All of type {first}", &[("first", first)])
     } else {
-        "Multiple types".to_owned()
+        ox_core::i18n::gettext_static("Multiple types").to_owned()
     }
 }
 
@@ -148,8 +153,11 @@ fn common_location(entries: &[Entry], context: &PropertiesContext) -> String {
     let first = entries.first().and_then(|entry| parent_location(&entry.uri));
     let shared = entries.iter().all(|entry| parent_location(&entry.uri) == first);
     match first.filter(|_| shared) {
-        Some(folder) => format!("All in {}", context.locations.display_location(&folder)),
-        None => "Multiple locations".to_owned(),
+        Some(folder) => ox_core::i18n::format_message(
+            "All in {display_location}",
+            &[("display_location", &context.locations.display_location(&folder))],
+        ),
+        None => ox_core::i18n::gettext_static("Multiple locations").to_owned(),
     }
 }
 
@@ -218,7 +226,7 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
             panel.remove(&child);
         }
         let Some(first) = items.first() else {
-            panel.append(&note(NOT_EDITABLE));
+            panel.append(&note(ox_core::i18n::gettext_static(NOT_EDITABLE)));
             return;
         };
         let grid = PropertyGrid::new();
@@ -227,14 +235,20 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
             if items.iter().all(|item| value(item) == first) {
                 first.unwrap_or_default().to_owned()
             } else {
-                "Multiple".to_owned()
+                ox_core::i18n::gettext("Multiple")
             }
         };
-        grid.add_row("Owner", &same(|item| item.owner.as_deref()));
-        grid.add_row("Group", &same(|item| item.group.as_deref()));
+        grid.add_row(
+            &ox_core::i18n::gettext("Owner"),
+            &same(|item| item.owner.as_deref()),
+        );
+        grid.add_row(
+            &ox_core::i18n::gettext("Group"),
+            &same(|item| item.group.as_deref()),
+        );
         panel.append(grid.widget());
         if !items.iter().all(|item| can_edit_permissions(item, &context)) {
-            panel.append(&note(NOT_EDITABLE));
+            panel.append(&note(ox_core::i18n::gettext_static(NOT_EDITABLE)));
             return;
         }
         let shared = |account: fn(&ItemProperties) -> Option<Account>| {

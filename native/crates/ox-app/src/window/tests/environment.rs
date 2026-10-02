@@ -96,8 +96,15 @@ fn the_status_bar_says_ready_on_a_page_and_counts_a_folder() {
     test.wait_for_listing("the fixture folder");
     test.window.folder_model().select_only(0);
     let (count, selection) = test.window.status_bar().texts();
-    assert_eq!(count, "4 items");
-    assert_eq!(selection, "1 selected");
+    assert!(
+        count.starts_with("4 items  "),
+        "the files' size follows the count: {count:?}"
+    );
+    let first = test.window.folder_model().name_at(0).expect("a first item");
+    assert!(
+        selection.starts_with(&first),
+        "the one selected item is described: {selection:?}"
+    );
 }
 
 /// parity: SIDE-005, SIDE-007

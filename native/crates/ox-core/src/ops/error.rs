@@ -15,7 +15,7 @@ use crate::transfer::TransferError;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum OpsError {
     /// The user cancelled; not an error to show.
-    #[error("Operation cancelled.")]
+    #[error("{}", crate::i18n::gettext("Operation cancelled."))]
     Cancelled,
     /// The share or device is not mounted. Mount it and ask again once, as
     /// the Python bridge does for its read-only requests.

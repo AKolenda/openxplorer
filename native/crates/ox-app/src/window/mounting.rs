@@ -23,12 +23,12 @@ use crate::devices::Removal;
 use crate::locations::Page;
 use crate::window::{ButtonStyle, Dialog};
 
-use super::session::Tab;
 use super::BrowserWindow;
 
 /// The note of "Disconnect this mount?", under the location.
-const DISCONNECT_NOTE: &str =
-    "Close files using this mount first. This disconnects the session mount for other applications too.";
+const DISCONNECT_NOTE: &str = crate::i18n::message_id(
+    "Close files using this mount first. This disconnects the session mount for other applications too.",
+);
 
 /// True when `uri` is the mount root `root` or a location inside it, as
 /// GIO compares files.
@@ -55,7 +55,10 @@ impl BrowserWindow {
             match mounted {
                 Ok(root) => window.navigate_or_report(&root),
                 Err(error) if error.is_cancelled() => {}
-                Err(error) => window.show_failure("Could not mount device", &error.to_string()),
+                Err(error) => window.show_failure(
+                    ox_core::i18n::gettext_static("Could not mount device"),
+                    &error.to_string(),
+                ),
             }
         });
     }
@@ -79,7 +82,10 @@ impl BrowserWindow {
             Ok(root) => Some(root),
             Err(error) if error.is_cancelled() => None,
             Err(error) => {
-                self.show_failure("Could not mount device", &error.to_string());
+                self.show_failure(
+                    ox_core::i18n::gettext_static("Could not mount device"),
+                    &error.to_string(),
+                );
                 None
             }
         }
@@ -90,7 +96,9 @@ impl BrowserWindow {
     /// this window writes.
     pub(super) fn remove_drive(&self, uri: &str, removal: Removal) {
         if self.write_activity() == WriteActivity::Writing {
-            self.show_message("Finish the current operation before disconnecting.");
+            self.show_message(&ox_core::i18n::gettext(
+                "Finish the current operation before disconnecting.",
+            ));
             return;
         }
         match removal {
@@ -103,9 +111,9 @@ impl BrowserWindow {
     fn confirm_disconnect(&self, uri: &str) {
         let address = self.imp().locations.borrow().display_location(uri);
         let message = format!("{address}\n\n{DISCONNECT_NOTE}");
-        let dialog = Dialog::new(self, "Disconnect this mount?", &message);
+        let dialog = Dialog::new(self, &ox_core::i18n::gettext("Disconnect this mount?"), &message);
         dialog.add_cancel_button();
-        dialog.add_button("Disconnect", ButtonStyle::Accent);
+        dialog.add_button(&ox_core::i18n::gettext("Disconnect"), ButtonStyle::Accent);
         let uri = uri.to_owned();
         dialog.connect_confirmed(glib::clone!(
             #[weak(rename_to = window)]
@@ -180,17 +188,14 @@ impl BrowserWindow {
             let mut session = self.imp().session.borrow_mut();
             let active = session.active_id();
             let is_active_inside = session.active().is_some_and(|tab| is_inside(tab.uri(), root));
-            let behind = session
-                .tabs_mut()
-                .iter_mut()
-                .filter(|tab| Some(tab.id) != active && is_inside(tab.uri(), root));
-            let stale = behind
-                .map(|tab| {
+            let mut stale = Vec::new();
+            session.change_panes(|tab| {
+                if Some(tab.id) != active && is_inside(tab.uri(), root) {
                     tab.history.push(&home);
                     tab.forget_location_state();
-                    tab.mark_stale()
-                })
-                .collect();
+                    stale.push(tab.mark_stale());
+                }
+            });
             (stale, is_active_inside)
         };
         self.change_model(|| {
@@ -214,13 +219,12 @@ impl BrowserWindow {
     /// dropped after the session is released, because dropping the active
     /// tab's items runs the view's handlers, which read the session.
     pub(super) fn mark_tabs_stale(&self, is_stale: impl Fn(&str) -> bool) {
-        let stale: Vec<gio::ListStore> = {
-            let mut session = self.imp().session.borrow_mut();
-            let tabs = session.tabs_mut().iter_mut();
-            tabs.filter(|tab| is_stale(tab.uri()))
-                .map(Tab::mark_stale)
-                .collect()
-        };
+        let mut stale: Vec<gio::ListStore> = Vec::new();
+        self.imp().session.borrow_mut().change_panes(|tab| {
+            if is_stale(tab.uri()) {
+                stale.push(tab.mark_stale());
+            }
+        });
         self.change_model(|| {
             for items in &stale {
                 items.remove_all();

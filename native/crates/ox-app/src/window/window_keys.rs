@@ -66,9 +66,10 @@ impl KeyCommand {
 /// Ctrl+Page Up are the tab keys of GNOME apps and browsers, and Ctrl+]
 /// and Ctrl+[ Dolphin's, added to app.js's Ctrl+Tab; Alt+digit and
 /// Ctrl+Shift+T are Dolphin's too.
-const WINDOW_KEYS: [(KeyCommand, &str); 21] = [
+const WINDOW_KEYS: [(KeyCommand, &str); 22] = [
     (KeyCommand::Window(WindowAction::Hidden), "<Primary>h"),
     (KeyCommand::Window(WindowAction::Sidebar), "F9"),
+    (KeyCommand::Window(WindowAction::FolderTree), "F7"),
     (KeyCommand::NewWindow, "<Primary>n"),
     (KeyCommand::Window(WindowAction::NewTab), "<Primary>t"),
     (KeyCommand::Window(WindowAction::CloseTab), "<Primary>w"),
@@ -98,6 +99,19 @@ const WINDOW_KEYS: [(KeyCommand, &str); 21] = [
     (KeyCommand::Window(WindowAction::Forward), "<Alt>Right"),
     (KeyCommand::Window(WindowAction::Up), "<Alt>Up"),
 ];
+
+/// Each of these keys and the action it runs, by its detailed name; a
+/// tab number's as `win.show-tab-number::<n>` (the keyboard shortcuts
+/// window, CMD-032).
+pub(super) fn window_key_bindings() -> impl Iterator<Item = (String, &'static str)> {
+    WINDOW_KEYS.into_iter().map(|(command, keys)| {
+        let name = match command {
+            KeyCommand::TabNumber(number) => format!("{}::{number}", command.detailed_name()),
+            KeyCommand::Window(_) | KeyCommand::NewWindow => command.detailed_name(),
+        };
+        (name, keys)
+    })
+}
 
 impl BrowserWindow {
     /// Adds the tab, window and history keys to the window.

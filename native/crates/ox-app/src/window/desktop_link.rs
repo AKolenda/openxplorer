@@ -21,7 +21,8 @@ pub(super) enum LinkTarget {
 }
 
 /// Why a link file was not followed.
-pub(super) const UNSUPPORTED_LINK: &str = "This link points to an address OpenXplorer cannot open.";
+pub(super) const UNSUPPORTED_LINK: &str =
+    crate::i18n::message_id("This link points to an address OpenXplorer cannot open.");
 
 /// The target of the desktop entry at `path`, or `None` when it is not a
 /// `Type=Link` entry with a URL. An address of another kind is
@@ -48,7 +49,7 @@ fn link_target(text: &str) -> Option<Result<LinkTarget, &'static str>> {
     Some(match scheme.as_deref() {
         Some("file" | "smb") => Ok(LinkTarget::Location(url)),
         Some("http" | "https" | "mailto") => Ok(LinkTarget::Web(url)),
-        _ => Err(UNSUPPORTED_LINK),
+        _ => Err(ox_core::i18n::gettext_static(UNSUPPORTED_LINK)),
     })
 }
 

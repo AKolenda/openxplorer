@@ -36,8 +36,8 @@ use ox_core::integration::{
     checked_name, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest,
 };
 
-use super::dialog::Dialog;
 use super::{BrowserWindow, ButtonStyle, WindowAction};
+use crate::dialog::Dialog;
 use crate::folder_view::filter::ChooserListing;
 use crate::locations::Page;
 

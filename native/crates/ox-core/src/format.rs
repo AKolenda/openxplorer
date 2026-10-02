@@ -31,6 +31,7 @@
 //! data from ICU.
 
 mod locale_pattern;
+mod relative_date;
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -38,6 +39,7 @@ use glib::DateTime;
 
 pub use locale_pattern::ClockFormat;
 use locale_pattern::LocalePatterns;
+pub use relative_date::DateStyle;
 
 /// The [`ClockFormat`] times are shown on, as its position in
 /// [`CLOCK_FORMATS`]; set by [`set_clock_format`].
@@ -70,7 +72,7 @@ pub fn clock_format() -> ClockFormat {
 const UNKNOWN_DATE: &str = "—";
 
 /// Shown in the Properties dialog when a time is unknown.
-const UNKNOWN_TIMESTAMP: &str = "Not provided";
+const UNKNOWN_TIMESTAMP: &str = crate::i18n::message_id("Not provided");
 
 /// A size unit after bytes and the number of bytes in one of it.
 #[derive(Debug, Clone, Copy)]
@@ -85,19 +87,19 @@ struct SizeUnit {
 /// as in the web UI.
 const SIZE_UNITS: [SizeUnit; 4] = [
     SizeUnit {
-        symbol: "KB",
+        symbol: crate::i18n::message_id("KB"),
         bytes: 1 << 10,
     },
     SizeUnit {
-        symbol: "MB",
+        symbol: crate::i18n::message_id("MB"),
         bytes: 1 << 20,
     },
     SizeUnit {
-        symbol: "GB",
+        symbol: crate::i18n::message_id("GB"),
         bytes: 1 << 30,
     },
     SizeUnit {
-        symbol: "TB",
+        symbol: crate::i18n::message_id("TB"),
         bytes: 1 << 40,
     },
 ];
@@ -116,18 +118,28 @@ pub fn size_text(bytes: Option<u64>) -> String {
 /// web interface.
 pub fn pretty_bytes(bytes: u64) -> String {
     let Some(unit) = largest_unit(bytes) else {
-        return format!("{bytes} bytes");
+        return crate::i18n::format_message("{bytes} bytes", &[("bytes", &bytes.to_string())]);
     };
-    let symbol = unit.symbol;
+    let symbol = crate::i18n::gettext_static(unit.symbol);
     // Integer arithmetic wide enough for ten times `u64::MAX`.
     let bytes = u128::from(bytes);
     let unit_bytes = u128::from(unit.bytes);
     if bytes >= 100 * unit_bytes {
         let whole = round_half_up(bytes, unit_bytes);
-        return format!("{whole} {symbol}");
+        return crate::i18n::format_message(
+            "{value} {unit}",
+            &[("value", &whole.to_string()), ("unit", symbol)],
+        );
     }
     let tenths = round_half_up(bytes * 10, unit_bytes);
-    format!("{}.{} {symbol}", tenths / 10, tenths % 10)
+    crate::i18n::format_message(
+        "{whole}.{fraction} {unit}",
+        &[
+            ("whole", &(tenths / 10).to_string()),
+            ("fraction", &(tenths % 10).to_string()),
+            ("unit", symbol),
+        ],
+    )
 }
 
 /// The largest of [`SIZE_UNITS`] that `bytes` fills at least once, or
@@ -161,7 +173,7 @@ pub fn date_time_text(unix_seconds: Option<u64>) -> String {
     unix_seconds
         .and_then(local_time)
         .and_then(|time| format_date_time(&time))
-        .unwrap_or_else(|| UNKNOWN_TIMESTAMP.to_owned())
+        .unwrap_or_else(|| crate::i18n::gettext(UNKNOWN_TIMESTAMP))
 }
 
 /// Local date and short clock time for the Date modified column, as
@@ -173,6 +185,22 @@ pub fn date_short_time_text(unix_seconds: Option<u64>) -> String {
         .and_then(local_time)
         .and_then(|time| format_date_short_time_with(&time, locale_pattern::current(), clock_format()))
         .unwrap_or_else(|| UNKNOWN_DATE.to_owned())
+}
+
+/// The Date modified column's text in `style`: "Today at 7:35 PM" or
+/// "Yesterday at 7:35 PM" for recent dates in [`DateStyle::Relative`],
+/// else [`date_short_time_text`] (VIEW-004).
+pub fn column_date_text(unix_seconds: Option<u64>, style: DateStyle) -> String {
+    let relative = || {
+        let time = local_time(unix_seconds?)?;
+        let now = DateTime::now_local().ok()?;
+        relative_date::relative_text(&time, &now, locale_pattern::current(), clock_format())
+    };
+    let text = match style {
+        DateStyle::Relative => relative(),
+        DateStyle::Absolute => None,
+    };
+    text.unwrap_or_else(|| date_short_time_text(unix_seconds))
 }
 
 /// [`date_text`] for a time GIO already returned as a [`DateTime`], in the

@@ -71,6 +71,36 @@ fn copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy() {
     assert_eq!(test.window.shown_message(), "1 item(s) copied.");
 }
 
+/// The menu of one selected folder pastes into that folder, not into
+/// the folder shown.
+///
+/// parity: CMD-019
+#[gtk::test]
+fn paste_into_folder_pastes_into_the_selected_folder() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    select_names(&test, &["Documents"]);
+    wait_until("Paste into folder to be enabled", || {
+        is_enabled(&test, "paste-into")
+    });
+    test.window
+        .right_click(Some(super::context_menus::position_of(&test, "Documents")));
+    let menu = test.window.context_menu();
+
+    menu.row("Paste into folder").emit_activate();
+
+    wait_until("the copy in Documents", || {
+        fixture.path("Documents/Notes 2.txt").is_file()
+    });
+    assert_eq!(
+        test.window.current_uri(),
+        Some(fixture.uri()),
+        "the folder shown stays"
+    );
+}
+
 /// parity: CLIP-002, CLIP-006, CLIP-008
 #[gtk::test]
 fn cut_then_paste_moves_the_items_and_empties_the_cut() {

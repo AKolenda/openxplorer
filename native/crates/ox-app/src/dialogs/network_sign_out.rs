@@ -10,14 +10,16 @@ use ox_core::network::ForgetScope;
 use crate::window::{ButtonStyle, Dialog};
 
 /// What the dialog says under its heading.
-const MESSAGE: &str =
+const MESSAGE: &str = crate::i18n::message_id(
     "This disconnects all SMB mounts for this server in your desktop session, including other \
-applications. Close files on this server first.";
+applications. Close files on this server first.",
+);
 
 /// The note under the check boxes.
-const NOTE: &str =
+const NOTE: &str = crate::i18n::message_id(
     "Pinned shortcuts remain. With saved credentials removed, opening a share will ask you to sign in \
-again. This does not delete files on the server. Hostname aliases may have separate saved credentials.";
+again. This does not delete files on the server. Hostname aliases may have separate saved credentials.",
+);
 
 /// Whether Sign out also clears the server's cached file names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,13 +48,19 @@ pub(crate) fn sign_out_dialog(
     host: &str,
     on_sign_out: impl Fn(&Dialog, SignOutChoice) + 'static,
 ) -> Dialog {
-    let title = format!("Sign out of {host}?");
-    let dialog = Dialog::new(parent, &title, MESSAGE);
-    let forget = dialog.add_check_button("Forget saved credentials for this server", true);
-    let clear_cache = dialog.add_check_button("Also clear cached filenames for this server", false);
-    dialog.add_note(NOTE);
+    let title = ox_core::i18n::format_message("Sign out of {host}?", &[("host", host)]);
+    let dialog = Dialog::new(parent, &title, ox_core::i18n::gettext_static(MESSAGE));
+    let forget = dialog.add_check_button(
+        &ox_core::i18n::gettext("Forget saved credentials for this server"),
+        true,
+    );
+    let clear_cache = dialog.add_check_button(
+        &ox_core::i18n::gettext("Also clear cached filenames for this server"),
+        false,
+    );
+    dialog.add_note(ox_core::i18n::gettext_static(NOTE));
     dialog.add_cancel_button();
-    dialog.add_button("Sign out", ButtonStyle::Accent);
+    dialog.add_button(&ox_core::i18n::gettext("Sign out"), ButtonStyle::Accent);
     dialog.connect_confirmed(move |dialog| {
         let forget = if forget.is_active() {
             ForgetScope::AllScopes

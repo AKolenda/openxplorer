@@ -129,28 +129,28 @@ impl UndoRecord {
     /// to Trash`, ...).
     pub fn title(&self) -> &'static str {
         match self {
-            UndoRecord::Rename { .. } => "Rename",
-            UndoRecord::BatchRename { .. } => "Batch rename",
-            UndoRecord::Link { .. } => "Link",
+            UndoRecord::Rename { .. } => crate::i18n::gettext_static("Rename"),
+            UndoRecord::BatchRename { .. } => crate::i18n::gettext_static("Batch rename"),
+            UndoRecord::Link { .. } => crate::i18n::gettext_static("Link"),
             UndoRecord::Create {
                 kind: ItemKind::Folder,
                 ..
-            } => "New folder",
+            } => crate::i18n::gettext_static("New folder"),
             UndoRecord::Create {
                 kind: ItemKind::File, ..
-            } => "New file",
-            UndoRecord::Copy { .. } => "Copy",
-            UndoRecord::Duplicate { .. } => "Duplicate",
-            UndoRecord::Move { .. } => "Move",
-            UndoRecord::Trash { .. } => "Move to Trash",
-            UndoRecord::Restore { .. } => "Restore",
+            } => crate::i18n::gettext_static("New file"),
+            UndoRecord::Copy { .. } => crate::i18n::gettext_static("Copy"),
+            UndoRecord::Duplicate { .. } => crate::i18n::gettext_static("Duplicate"),
+            UndoRecord::Move { .. } => crate::i18n::gettext_static("Move"),
+            UndoRecord::Trash { .. } => crate::i18n::gettext_static("Move to Trash"),
+            UndoRecord::Restore { .. } => crate::i18n::gettext_static("Restore"),
         }
     }
 
     /// The label of the Undo command for this operation, for example
     /// `Undo: Rename`.
     pub fn undo_label(&self) -> String {
-        format!("Undo: {}", self.title())
+        crate::i18n::format_message("Undo: {title}", &[("title", self.title())])
     }
 
     /// The record that reverses what reversing this record did, given the

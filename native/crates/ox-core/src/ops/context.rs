@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use super::error::OpsError;
 use crate::transfer::{
-    check_write_tree, Cancellation, MoveByCopyingItem, Node, SourceChange, TransferEngine, TransferError,
-    UnstorableAnswer, UnstorableItem, WriteGuard,
+    check_write_tree, Cancellation, FailedItem, FailureAnswer, MoveByCopyingItem, Node, SourceChange,
+    TransferEngine, TransferError, UnstorableAnswer, UnstorableItem, WriteGuard,
 };
 
 /// Locations that must never change, such as previous versions
@@ -131,6 +131,29 @@ impl fmt::Debug for UnstorableAsker {
     }
 }
 
+/// Asks the user, from the operation's worker thread, what to do about an
+/// item that failed (OPS-047), and waits for the answer.
+#[derive(Clone)]
+pub struct FailureAsker(Arc<dyn Fn(&FailedItem) -> FailureAnswer + Send + Sync>);
+
+impl FailureAsker {
+    /// An asker that answers with `ask`.
+    pub fn new(ask: impl Fn(&FailedItem) -> FailureAnswer + Send + Sync + 'static) -> Self {
+        Self(Arc::new(ask))
+    }
+
+    /// Asks about `item` and waits for the answer.
+    pub fn ask(&self, item: &FailedItem) -> FailureAnswer {
+        (self.0)(item)
+    }
+}
+
+impl fmt::Debug for FailureAsker {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.debug_struct("FailureAsker").finish_non_exhaustive()
+    }
+}
+
 /// Asks the user, from the operation's worker thread, whether moves the
 /// backend cannot do natively are finished by copying and then removing the
 /// originals (XFER-011, XFER-013), and waits for the answer.
@@ -172,6 +195,9 @@ pub struct OperationContext {
     /// Asks whether moves the backend cannot do natively are finished by
     /// copying; without it they are refused and the source kept.
     pub move_by_copying: Option<MoveByCopyingAsker>,
+    /// Asks what to do about an item that failed; without it the error is
+    /// recorded and the next item runs.
+    pub item_failure: Option<FailureAsker>,
 }
 
 impl OperationContext {
@@ -182,6 +208,7 @@ impl OperationContext {
             protection,
             unstorable: None,
             move_by_copying: None,
+            item_failure: None,
         }
     }
 
@@ -195,6 +222,9 @@ impl OperationContext {
         if let Some(asker) = self.move_by_copying.clone() {
             engine = engine.with_move_by_copying_question(move |item: &MoveByCopyingItem| asker.ask(item));
         }
+        if let Some(asker) = self.item_failure.clone() {
+            engine = engine.with_failure_question(move |item: &FailedItem| asker.ask(item));
+        }
         engine
     }
 
@@ -207,7 +237,8 @@ impl OperationContext {
 
 /// Shown when blocking work ended without a result: a bug, never a user
 /// error, reported instead of taking the window down.
-const WORKER_STOPPED: &str = "The file operation stopped unexpectedly. Check the folder before trying again.";
+const WORKER_STOPPED: &str =
+    crate::i18n::message_id("The file operation stopped unexpectedly. Check the folder before trying again.");
 
 /// Runs `work` on GIO's pool of blocking-I/O threads and waits for it
 /// without blocking the caller's main loop.
@@ -222,7 +253,7 @@ where
 {
     match gio::spawn_blocking(work).await {
         Ok(outcome) => outcome,
-        Err(_panic) => Err(OpsError::failed(WORKER_STOPPED)),
+        Err(_panic) => Err(OpsError::failed(crate::i18n::gettext(WORKER_STOPPED))),
     }
 }
 

@@ -54,12 +54,15 @@ const OPENXPLORER_LABEL: &str = "OpenXplorer";
 /// The app could not carry out a request. Returned to the caller as
 /// `org.freedesktop.DBus.Error.Failed`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("OpenXplorer could not open the requested location.")]
+#[error(
+    "{}",
+    crate::i18n::gettext("OpenXplorer could not open the requested location.")
+)]
 pub struct RequestNotOpened;
 
 /// The service could not be registered on the bus.
 #[derive(Debug, thiserror::Error)]
-#[error("Show in folder could not be registered: {0}")]
+#[error("{}", crate::i18n::format_message("Show in folder could not be registered: {error}", &[("error", &.0.to_string())]))]
 pub struct RegistrationFailed(#[from] glib::Error);
 
 /// Who owns `org.freedesktop.FileManager1` (INT-016).

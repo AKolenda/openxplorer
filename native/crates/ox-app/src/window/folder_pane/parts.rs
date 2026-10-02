@@ -5,6 +5,7 @@
 //! views in a stack of their own, the empty page and the landing page, all
 //! in the stack of pages [`super::PanePage`] names.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -42,6 +43,10 @@ pub(super) struct PaneParts {
     /// The note over the pane that says what a drag would do there, such
     /// as "Open with convert".
     pub(super) drag_hint: gtk::Label,
+    /// The rubber band over the views while one is drawn (SEL-012).
+    pub(super) rubber_band: gtk::Box,
+    /// The requested preview visibility before remote-file policy is applied.
+    pub(super) previews_enabled: Cell<bool>,
 }
 
 impl PaneParts {
@@ -66,6 +71,8 @@ impl PaneParts {
             landing,
             loading_line: LoadingLine::new(),
             drag_hint: drag_hint(),
+            rubber_band: rubber_band(),
+            previews_enabled: Cell::new(true),
         }
     }
 }
@@ -83,11 +90,23 @@ fn drag_hint() -> gtk::Label {
         .build()
 }
 
+/// The rectangle a rubber band draws, hidden until one is drawn. It never
+/// takes the pointer.
+fn rubber_band() -> gtk::Box {
+    gtk::Box::builder()
+        .halign(gtk::Align::Start)
+        .valign(gtk::Align::Start)
+        .can_target(false)
+        .visible(false)
+        .css_classes(["rubber-band"])
+        .build()
+}
+
 /// The details and icon views, one of them shown.
 fn view_stack(details: &DetailsView, icon_view: &IconView) -> gtk::Stack {
     let views = gtk::Stack::new();
     views.add_named(details, Some(FolderView::Details.stack_name()));
-    let icons = FolderView::Icons(IconSize::Large);
+    let icons = FolderView::Icons(IconSize::LARGE);
     views.add_named(icon_view, Some(icons.stack_name()));
     views
 }

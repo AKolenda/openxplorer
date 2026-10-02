@@ -73,11 +73,11 @@ impl Access {
     pub const ALL: [Self; 3] = [Self::None, Self::View, Self::ViewAndModify];
 
     /// The words the tab shows, as Dolphin names them.
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            Self::None => "No Access",
-            Self::View => "Can Only View",
-            Self::ViewAndModify => "Can View & Modify",
+            Self::None => crate::i18n::gettext_static("No Access"),
+            Self::View => crate::i18n::gettext_static("Can Only View"),
+            Self::ViewAndModify => crate::i18n::gettext_static("Can View & Modify"),
         }
     }
 

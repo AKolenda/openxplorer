@@ -93,7 +93,7 @@ fn row_content(entry: &SidebarEntry, icon_size: u32) -> gtk::Box {
     let icon = row_icon(entry.icon, icon_size);
     if matches!(entry.icon, Art::Network(_)) {
         // The network pipe says what it means (`.side-icon.shared`).
-        icon.set_tooltip_text(Some("Network share"));
+        icon.set_tooltip_text(Some(&ox_core::i18n::gettext("Network share")));
     }
     content.append(&icon);
     content.append(&name_and_capacity(entry));

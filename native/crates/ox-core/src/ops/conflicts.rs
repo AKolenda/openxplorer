@@ -42,7 +42,9 @@ fn find_conflicts_blocking(
     cancel: &Cancellation,
 ) -> Result<Vec<String>, OpsError> {
     if uris.is_empty() || uris.len() > MAX_ITEMS {
-        return Err(OpsError::failed("Select between 1 and 100,000 items."));
+        return Err(OpsError::failed(crate::i18n::gettext(
+            "Select between 1 and 100,000 items.",
+        )));
     }
     let items = uris
         .iter()
@@ -51,7 +53,9 @@ fn find_conflicts_blocking(
     let folder = GioNode::new(&normalise(destination_folder)?);
     // Inspected without following a link, as the Python bridge does.
     if folder.info(Some(cancel))?.kind != NodeKind::Directory {
-        return Err(OpsError::failed("Open a destination folder before pasting."));
+        return Err(OpsError::failed(crate::i18n::gettext(
+            "Open a destination folder before pasting.",
+        )));
     }
     let mut conflicts = Vec::new();
     for uri in items {

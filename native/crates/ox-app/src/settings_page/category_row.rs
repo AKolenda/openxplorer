@@ -61,7 +61,12 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for CategoryRow {}
+    impl ObjectImpl for CategoryRow {
+        fn constructed(&self) {
+            self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "category-row.ui");
+        }
+    }
     impl WidgetImpl for CategoryRow {}
     impl ListBoxRowImpl for CategoryRow {}
 }
@@ -80,8 +85,10 @@ impl CategoryRow {
         let imp = row.imp();
         icons::set_icon(&imp.glyph, category.icon(), CATEGORY_GLYPH);
         imp.glyph.add_css_class(category.css_class());
-        imp.title.set_text(category.title());
-        row.update_property(&[gtk::accessible::Property::Label(category.title())]);
+        imp.title.set_text(&ox_core::i18n::gettext(category.title()));
+        row.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            category.title(),
+        ))]);
         imp.category.set(category).expect("a new row has no category yet");
         row
     }

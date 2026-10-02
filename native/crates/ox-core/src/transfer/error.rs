@@ -14,7 +14,7 @@ pub enum TransferError {
     /// reports a cancelled item as `cancelled`, not as an error.
     ///
     /// [`Cancellation::check`]: super::Cancellation::check
-    #[error("Operation cancelled.")]
+    #[error("{}", crate::i18n::gettext("Operation cancelled."))]
     Cancelled,
     /// A definite "does not exist" (`G_IO_ERROR_NOT_FOUND`, `ENOENT`).
     #[error("{0}")]

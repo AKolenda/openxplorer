@@ -6,14 +6,24 @@
 //! so cancelling it both stops the engine between steps and aborts a copy
 //! between blocks (OPS-022).
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+
 use gio::prelude::*;
 
 use super::error::TransferError;
 
-/// Cooperative cancellation shared with in-flight GIO calls.
+/// How often a paused operation looks whether it may go on.
+const PAUSE_POLL: Duration = Duration::from_millis(50);
+
+/// Cooperative cancellation shared with in-flight GIO calls, and the
+/// pause of the operation it belongs to (OPS-021).
 #[derive(Debug, Clone, Default)]
 pub struct Cancellation {
     cancellable: gio::Cancellable,
+    paused: Arc<AtomicBool>,
 }
 
 impl Cancellation {
@@ -42,6 +52,30 @@ impl Cancellation {
             Err(TransferError::Cancelled)
         } else {
             Ok(())
+        }
+    }
+
+    /// Pauses the operation: its worker waits at the next block or item
+    /// until [`Cancellation::resume`] or [`Cancellation::cancel`].
+    pub fn pause(&self) {
+        self.paused.store(true, Ordering::SeqCst);
+    }
+
+    /// Lets a paused operation go on.
+    pub fn resume(&self) {
+        self.paused.store(false, Ordering::SeqCst);
+    }
+
+    /// True while the operation is paused.
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst)
+    }
+
+    /// Blocks the calling worker thread while the operation is paused and
+    /// not cancelled. Never call it on the main thread.
+    pub fn wait_while_paused(&self) {
+        while self.is_paused() && !self.is_cancelled() {
+            thread::sleep(PAUSE_POLL);
         }
     }
 
@@ -83,5 +117,31 @@ mod tests {
         assert_eq!(cancel.check(), Err(TransferError::Cancelled));
         assert_eq!(check_cancelled(Some(&cancel)), Err(TransferError::Cancelled));
         assert_eq!(check_cancelled(None), Ok(()));
+    }
+    /// parity: OPS-021
+    #[test]
+    fn paused_workers_resume_and_cancellation_wakes_them_without_resuming_other_jobs() {
+        let cancel = Cancellation::new();
+        cancel.pause();
+        let worker_cancel = cancel.clone();
+        let worker = std::thread::spawn(move || {
+            worker_cancel.wait_while_paused();
+            worker_cancel.check()
+        });
+        assert!(cancel.is_paused());
+        cancel.resume();
+        assert_eq!(worker.join().unwrap(), Ok(()));
+        let other = Cancellation::new();
+        other.pause();
+        cancel.pause();
+        let worker_cancel = cancel.clone();
+        let worker = std::thread::spawn(move || {
+            worker_cancel.wait_while_paused();
+            worker_cancel.check()
+        });
+        cancel.cancel();
+        assert_eq!(worker.join().unwrap(), Err(TransferError::Cancelled));
+        assert!(other.is_paused() && !other.is_cancelled());
+        other.resume();
     }
 }

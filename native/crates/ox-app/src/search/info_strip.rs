@@ -34,12 +34,15 @@ const CLEAR_REQUESTED: &str = "clear-requested";
 
 /// What a search matches, in the order the list shows them.
 const SEARCH_IN: [(SearchIn, &str); 2] = [
-    (SearchIn::Names, "File names"),
-    (SearchIn::NamesAndContents, "Names and contents"),
+    (SearchIn::Names, crate::i18n::message_id("File names")),
+    (
+        SearchIn::NamesAndContents,
+        crate::i18n::message_id("Names and contents"),
+    ),
 ];
 
 /// Why the contents cannot be searched in every cached folder.
-const NAMES_ONLY_TOOLTIP: &str = "The search cache holds names only";
+const NAMES_ONLY_TOOLTIP: &str = crate::i18n::message_id("The search cache holds names only");
 
 /// The strip's search glyph (`icon('search',15)`).
 const SEARCH_GLYPH: i32 = 15;
@@ -139,6 +142,7 @@ mod imp {
 
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "search-info-strip.ui");
             self.obj().finish_template();
         }
     }
@@ -174,7 +178,8 @@ impl SearchInfoStrip {
         icons::set_icon(&imp.cache_glyph, Icon::Add, BUTTON_GLYPH);
         icons::set_icon(&imp.keep_glyph, Icon::Pin, BUTTON_GLYPH);
         icons::set_icon(&imp.clear_glyph, Icon::Dismiss16, BUTTON_GLYPH);
-        imp.freshness.set_tooltip_text(Some(FRESHNESS_TOOLTIP));
+        imp.freshness
+            .set_tooltip_text(Some(ox_core::i18n::gettext_static(FRESHNESS_TOOLTIP)));
         WindowAction::CacheFolder.assign_to(&*imp.cache_button);
         WindowAction::SaveSearch.assign_to(&*imp.save_button);
         imp.clear_button.connect_clicked(glib::clone!(
@@ -189,13 +194,21 @@ impl SearchInfoStrip {
     /// The search options, which report the user's choices.
     fn add_options(&self) {
         let imp = self.imp();
-        let search_in = SEARCH_IN.map(|(_, label)| label);
+        let search_in = SEARCH_IN.map(|(_, label)| ox_core::i18n::gettext_static(label));
         let kinds = KindFacet::ALL.map(KindFacet::label);
         let dates = DateFacet::ALL.map(DateFacet::label);
         let lists = [
-            (&imp.search_in, &search_in[..], "Search in"),
-            (&imp.kind, &kinds[..], "Kind"),
-            (&imp.date, &dates[..], "Date modified"),
+            (
+                &imp.search_in,
+                &search_in[..],
+                ox_core::i18n::gettext_static("Search in"),
+            ),
+            (&imp.kind, &kinds[..], ox_core::i18n::gettext_static("Kind")),
+            (
+                &imp.date,
+                &dates[..],
+                ox_core::i18n::gettext_static("Date modified"),
+            ),
         ];
         for (slot, labels, name) in lists {
             let labels: Vec<String> = labels.iter().map(|label| (*label).to_owned()).collect();
@@ -283,9 +296,9 @@ impl SearchInfoStrip {
         let search_in_button = &Self::option_list(&imp.search_in).button;
         search_in_button.set_sensitive(!names_only);
         search_in_button.set_tooltip_text(Some(if names_only {
-            NAMES_ONLY_TOOLTIP
+            ox_core::i18n::gettext_static(NAMES_ONLY_TOOLTIP)
         } else {
-            "Search in"
+            ox_core::i18n::gettext_static("Search in")
         }));
     }
 
@@ -298,7 +311,9 @@ impl SearchInfoStrip {
         let scope = ChoiceButton::new(&labels);
         scope
             .button
-            .update_property(&[gtk::accessible::Property::Label("Search scope")]);
+            .update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+                "Search scope",
+            ))]);
         scope.choices.connect_selected_notify(glib::clone!(
             #[weak(rename_to = strip)]
             self,
