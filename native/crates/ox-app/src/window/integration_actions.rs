@@ -457,7 +457,8 @@ impl BrowserWindow {
     /// Whether any tab of this window is being listed.
     fn is_listing_any_tab(&self) -> bool {
         let session = self.imp().session.borrow();
-        session.tabs().iter().any(|tab| tab.listing_state.is_listing())
+        let is_listing = session.panes().any(|tab| tab.listing_state.is_listing());
+        is_listing
     }
 }
 

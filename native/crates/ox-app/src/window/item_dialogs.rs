@@ -432,10 +432,12 @@ impl BrowserWindow {
     /// Shows the new icon of the item at `uri` in the folder view
     /// (PROP-016).
     pub(crate) fn refresh_item_icon(&self, uri: &str) {
-        self.folder_pane().owners().refresh_custom_icon(uri);
+        for pane in self.folder_panes() {
+            pane.owners().refresh_custom_icon(uri);
+        }
     }
 
-    /// Lists again every tab showing `folder`, keeping their selection,
+    /// Lists again every tab and split pane showing `folder`, keeping their selection,
     /// after something was written there; the search cache reads it
     /// again too (SRCH-033).
     pub(super) fn reload_tabs_showing(&self, folder: &str) {
@@ -443,10 +445,7 @@ impl BrowserWindow {
         self.context().search_cache().folders_written(changed);
         let tabs: Vec<TabId> = {
             let session = self.imp().session.borrow();
-            let showing = session
-                .tabs()
-                .iter()
-                .filter(|tab| same_location(tab.uri(), folder));
+            let showing = session.panes().filter(|tab| same_location(tab.uri(), folder));
             showing.map(|tab| tab.id).collect()
         };
         for id in tabs {

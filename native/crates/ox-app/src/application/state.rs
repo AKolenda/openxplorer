@@ -15,6 +15,7 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::{file_uri, location_kind, LocationKind, VirtualPlace};
+use ox_core::session::SavedSession;
 use ox_core::settings::{Appearance, Settings};
 
 use super::clock_format::ClockSetting;
@@ -113,12 +114,12 @@ impl AppState {
         &self.context
     }
 
-    /// Opens a window whose first tab shows `start`, or the home folder.
+    /// Opens a window whose first tab shows `start`, or the startup folder.
     fn open_window(&self, app: &gtk::Application, start: Option<&str>) -> BrowserWindow {
         open_window(app, &self.context, start)
     }
 
-    /// A window whose first tab shows `start`, or the home folder, not
+    /// A window whose first tab shows `start`, or the startup folder, not
     /// shown yet.
     fn build_window(&self, app: &gtk::Application, start: Option<&str>) -> BrowserWindow {
         build_window(app, &self.context, start)
@@ -156,10 +157,11 @@ impl AppState {
     }
 
     /// Presents the open window, lists the windows when several are open,
-    /// or opens the first one (`activate_app`).
+    /// or opens the first one (`activate_app`), with the tabs of the last
+    /// session when the settings ask for them (TAB-053).
     pub(super) fn activate(&self, app: &gtk::Application) {
         let Some(window) = active_window(app) else {
-            self.open_window(app, None);
+            self.open_first_window(app);
             return;
         };
         if browser_windows_of(app).count() > 1 {
@@ -167,6 +169,66 @@ impl AppState {
         } else {
             window.present();
         }
+    }
+
+    /// Opens the first window of a start without locations: the tabs the
+    /// last window had when the settings ask to restore them and they were
+    /// saved, else a window at the startup folder.
+    fn open_first_window(&self, app: &gtk::Application) {
+        let preferences = self.context.settings_data().preferences;
+        let saved = preferences
+            .restore_session
+            .then(|| SavedSession::load(&self.context.settings_directory()))
+            .flatten();
+        let Some(saved) = saved else {
+            self.open_window(app, None);
+            return;
+        };
+        let window = BrowserWindow::new(app, &self.context);
+        window.restore_session(&saved);
+        if window.tab_count() == 0 {
+            // A window never opens empty.
+            window.destroy();
+            self.open_window(app, None);
+            return;
+        }
+        if let Some(warning) = self.context.settings_warning() {
+            window.show_message(&warning);
+        }
+        window.present_as_new_window();
+    }
+
+    /// `--split`: the locations paired into split tabs, in a new window
+    /// when `new_window` asks for one or none is open, else as new tabs of
+    /// the active window (INT-005). Without locations, the startup folder
+    /// beside itself.
+    pub(super) fn open_split(&self, app: &gtk::Application, locations: Vec<String>, new_window: bool) {
+        let locations = if locations.is_empty() {
+            vec![startup_location(&self.context)]
+        } else {
+            locations
+        };
+        let in_new_window = new_window
+            || self
+                .context
+                .settings_data()
+                .preferences
+                .external_folders_in_new_window;
+        if let Some(window) = active_window(app).filter(|_| !in_new_window) {
+            window.present();
+            window.open_split_tabs(&locations, false);
+            return;
+        }
+        if let Some(refusal) = self.context.updates().new_window_refusal() {
+            if let Some(window) = active_window(app) {
+                window.show_message(&refusal);
+            }
+            return;
+        }
+        let first = locations.first().map(String::as_str);
+        let window = window_with_first_tab(app, &self.context, first);
+        window.open_split_tabs(&locations, true);
+        window.present_as_new_window();
     }
 
     /// Opens `files` from `GApplication` open (xdg-open) as the command
@@ -216,7 +278,7 @@ pub(super) fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item =
         .filter_map(|window| window.downcast::<BrowserWindow>().ok())
 }
 
-/// Opens a window of `app` whose first tab shows `start`, or the home
+/// Opens a window of `app` whose first tab shows `start`, or the startup
 /// folder (`create_window`).
 pub(super) fn open_window(
     app: &gtk::Application,
@@ -228,12 +290,41 @@ pub(super) fn open_window(
     window
 }
 
-/// A window whose first tab shows `start`, or the home folder, not shown
-/// yet.
+/// Where a new window opens without a location: the startup folder of the
+/// settings while it is a folder that exists, else the home folder
+/// (TAB-055).
+fn startup_location(context: &AppContext) -> String {
+    let chosen = context.settings_data().preferences.startup_folder;
+    let exists = |uri: &String| {
+        let file = gio::File::for_uri(uri);
+        // Only a local folder is checked: a share may need a sign-in, which
+        // its listing asks for.
+        file.path().is_none_or(|path| path.is_dir())
+    };
+    chosen
+        .filter(exists)
+        .unwrap_or_else(|| file_uri(&glib::home_dir()))
+}
+
+/// A window whose first tab shows `start`, or the startup folder, not
+/// shown yet; split when the settings ask new windows to begin split
+/// (VIEW-059).
 fn build_window(app: &gtk::Application, context: &AppContext, start: Option<&str>) -> BrowserWindow {
+    let window = window_with_first_tab(app, context, start);
+    if context.settings_data().preferences.begin_in_split_view {
+        if let Err(error) = window.split_tab(None) {
+            window.show_message(&error.to_string());
+        }
+    }
+    window
+}
+
+/// A window whose one tab shows `start`, or the startup folder, not shown
+/// yet.
+fn window_with_first_tab(app: &gtk::Application, context: &AppContext, start: Option<&str>) -> BrowserWindow {
     let window = BrowserWindow::new(app, context);
-    let home = file_uri(&glib::home_dir());
-    let start = start.unwrap_or(home.as_str());
+    let startup = startup_location(context);
+    let start = start.unwrap_or(startup.as_str());
     if let Err(error) = window.add_tab(start) {
         window.show_message(&error.to_string());
         // A window never opens empty. The home page name resolves
@@ -581,6 +672,42 @@ mod tests {
             .expect("the new window shows the locations");
         wait_until("both locations to open", || opened.tab_count() == 2);
         assert_eq!(opened.current_uri(), Some(fixture.uri_of("Documents")));
+    }
+
+    /// `--split` with two locations opens a window split between them,
+    /// the second pane in front; a window opened without a location opens
+    /// at the startup folder of the settings.
+    ///
+    /// parity: INT-005, TAB-055
+    #[gtk::test]
+    fn split_pairs_its_locations_and_new_windows_open_at_the_startup_folder() {
+        let fixture = Fixture::standard();
+        let settings = tempfile::tempdir().expect("the test home has room for settings");
+        let documents = fixture.uri_of("Documents");
+        let contents = format!(r#"{{"preferences": {{"startupFolder": "{documents}"}}}}"#);
+        fs::write(settings.path().join(Settings::FILE_NAME), contents)
+            .expect("the test settings folder is writable");
+        let app = TestApp::with_settings_folder(settings);
+        let locations = vec![fixture.uri(), documents.clone()];
+
+        let split = CommandRequest::Split {
+            locations,
+            new_window: false,
+        };
+        app.state.run_command(&application(), split);
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+        let shown = (window.tab_count(), window.current_uri(), window.beside_uri());
+        app.state
+            .run_command(&application(), CommandRequest::NewWindow(Vec::new()));
+
+        assert_eq!(shown, (1, Some(documents.clone()), Some(fixture.uri())));
+        let opened = browser_windows()
+            .into_iter()
+            .find(|other| other != window)
+            .expect("a second window opens");
+        assert_eq!(opened.current_uri(), Some(documents));
     }
 
     /// With no window open, the command line's locations open in the first

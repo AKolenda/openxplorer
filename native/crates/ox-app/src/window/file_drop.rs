@@ -39,8 +39,10 @@ use ox_core::location::{parent_location, require_item_uri, same_location, Locati
 use ox_core::ops::{is_recycle_bin_item, LinkRequest};
 use ox_core::transfer::TransferMode;
 
+use super::activation::query_entry;
 use super::file_drag::{has_open_popover, DraggedItems};
 use super::file_ops::IncomingItems;
+use super::session::{TabPlacement, TabPosition};
 use super::BrowserWindow;
 
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
@@ -79,6 +81,10 @@ pub(crate) enum DropDestination {
     Program(ProgramTarget),
     /// Moved to the Trash: a drop on the Recycle Bin (OPS-045).
     RecycleBin,
+    /// Each folder opened in a new tab at the end, behind the active one:
+    /// a drop on the tab strip beside the tabs (TAB-018). Files are left
+    /// alone, as in Dolphin.
+    NewTabs,
 }
 
 impl DropDestination {
@@ -384,6 +390,15 @@ impl BrowserWindow {
                 self.open_with_program(program, items);
                 Ok(())
             }
+            DropDestination::NewTabs => {
+                let items = dropped_uris(uris)?;
+                glib::spawn_future_local(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    async move { window.open_dropped_folders(items).await }
+                ));
+                Ok(())
+            }
             DropDestination::RecycleBin => {
                 if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
                     return Err(DropRefusal::InRecycleBin);
@@ -460,6 +475,20 @@ impl BrowserWindow {
             async move { window.move_out_of_recycle_bin(uris, folder).await }
         ));
         Ok(())
+    }
+
+    /// Opens each of `items` that is a folder in a new tab at the end,
+    /// behind the active one, in their order (`tabDropEvent` in Dolphin).
+    pub(super) async fn open_dropped_folders(&self, items: Vec<String>) {
+        for uri in items {
+            let is_folder = query_entry(&uri).await.is_ok_and(|entry| entry.is_dir);
+            if !is_folder {
+                continue;
+            }
+            if let Err(error) = self.open_tab_at(&uri, TabPlacement::Background, TabPosition::End) {
+                self.show_message(&error.to_string());
+            }
+        }
     }
 
     /// Runs `incoming` through the conflict check and the transfer engine

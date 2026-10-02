@@ -53,19 +53,33 @@ impl BrowserWindow {
     }
 
     /// Updates the status bar and the details pane whenever the selection
-    /// or the shown items change.
+    /// or the shown items of the active pane change.
     pub(super) fn follow_selection(&self) {
-        let model = self.folder_pane().model();
-        model.selection().connect_selection_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _, _| window.selection_changed()
-        ));
-        model.sorted().connect_items_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _, _, _| window.update_status()
-        ));
+        for pane in self.folder_panes() {
+            let model = pane.model();
+            model.selection().connect_selection_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                pane,
+                move |_, _, _| {
+                    if window.is_active_pane(&pane) {
+                        window.selection_changed();
+                    }
+                }
+            ));
+            model.sorted().connect_items_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                pane,
+                move |_, _, _, _| {
+                    if window.is_active_pane(&pane) {
+                        window.update_status();
+                    }
+                }
+            ));
+        }
     }
 
     fn selection_changed(&self) {

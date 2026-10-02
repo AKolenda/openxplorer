@@ -41,8 +41,6 @@ use crate::folder_view::item::FileItem;
 use crate::folder_view::{loader, reconcile, watch};
 use crate::locations::Page;
 
-use super::empty_page::EmptyState;
-use super::folder_pane::PanePage;
 use super::listing_state::{ListingEnd, ListingState, ReloadTiming};
 use super::session::TabId;
 use super::BrowserWindow;
@@ -120,14 +118,12 @@ impl BrowserWindow {
             return;
         }
         self.keep_watching(id, &start.uri);
-        if is_active {
-            if mode == LoadMode::Navigate {
-                // The previous folder's free space is wrong here while a
-                // slow folder lists; the end of the listing reads it again.
-                self.refresh_free_space();
-            }
-            self.update_content();
+        if is_active && mode == LoadMode::Navigate {
+            // The previous folder's free space is wrong here while a slow
+            // folder lists; the end of the listing reads it again.
+            self.refresh_free_space();
         }
+        self.redraw_pane(id);
         let listing = self.start_listing(id, &start, mode, MountRetry::Allowed);
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.listing = Some(listing);
@@ -141,8 +137,8 @@ impl BrowserWindow {
             self.fail_load(id, mode, error);
         }
         let end = self.imp().session.borrow_mut().end_listing(id);
-        if end != ListingEnd::TabClosed && self.imp().session.borrow().is_active(id) {
-            self.update_content();
+        if end != ListingEnd::TabClosed {
+            self.redraw_pane(id);
         }
     }
 
@@ -169,6 +165,7 @@ impl BrowserWindow {
             tab.watch = None;
         }
         if !self.imp().session.borrow().is_active(id) {
+            self.redraw_pane(id);
             return;
         }
         if page == Page::Network {
@@ -282,9 +279,7 @@ impl BrowserWindow {
         if let Some(store) = self.tab_store(run.tab) {
             store.splice(store.n_items(), 0, &items);
         }
-        if self.imp().session.borrow().is_active(run.tab) {
-            self.update_content();
-        }
+        self.redraw_pane(run.tab);
     }
 
     fn finish_load(&self, run: &LoadRun, result: Result<(), EntryError>) {
@@ -335,6 +330,8 @@ impl BrowserWindow {
             self.focus_new_file_list();
             self.restore_scroll_after_listing(id);
             self.reveal_located_item(id);
+        } else {
+            self.finish_beside_listing(id);
         }
         if end == ListingEnd::ListAgain {
             self.folder_changed(id);
@@ -430,48 +427,6 @@ impl BrowserWindow {
         if mode == LoadMode::Navigate {
             self.open_file_location(id, &file);
         }
-    }
-
-    /// Shows the folder pane state that fits the active tab.
-    pub(super) fn update_content(&self) {
-        let (uri, page, loading, reloading, error) = {
-            let session = self.imp().session.borrow();
-            let Some(tab) = session.active() else { return };
-            let page = Page::from_uri(tab.uri());
-            let loading = tab.listing_state.is_listing();
-            let error = tab.error.as_ref().map(ToString::to_string);
-            (tab.uri().to_owned(), page, loading, tab.reloading, error)
-        };
-        let pane = self.folder_pane();
-        pane.details().show_listing(self.details_listing(&uri));
-        pane.set_loading(loading && page.is_none());
-        if page.is_some() {
-            pane.show_page(PanePage::Landing);
-        } else if loading && reloading && pane.model().n_items() == 0 && pane.page() == Some(PanePage::Empty)
-        {
-            // Listing an empty or unavailable location again keeps its
-            // page until the listing ends, as a reload keeps its rows. A
-            // tab with rows never keeps the page another tab left.
-        } else if pane.model().n_items() > 0 || (loading && error.is_none()) {
-            // A folder being listed keeps the blank list, with its column
-            // titles, until items come: no "Loading" text, no page swap.
-            pane.show_page(PanePage::Listing);
-            if let Some(error) = error {
-                self.show_message(&error);
-            }
-        } else {
-            let state = match error {
-                Some(error) => EmptyState::Unavailable(error),
-                None => self
-                    .search_empty_state()
-                    .unwrap_or_else(|| EmptyState::empty_listing(&uri)),
-            };
-            pane.show_empty(&state);
-        }
-        self.apply_view_options();
-        self.update_status();
-        self.update_file_commands();
-        self.learn_trash_support();
     }
 }
 

@@ -27,7 +27,7 @@
 //! [`file_drop`]), moving tabs ([`tab_moves`]), the context menus
 //! ([`context_menu`], [`tab_menu`]), searching ([`folder_search`],
 //! [`cache_folder`]), Properties and previous versions ([`item_dialogs`],
-//! [`snapshot_tabs`], [`version_restore`]), folder sizes
+//! [`snapshot_tabs`], [`version_restore`]), split tabs ([`split_view`]), folder sizes
 //! ([`folder_size_scan`]), moving a relocated standard folder's files
 //! ([`relocated_files`]), ZIP archives ([`archive_actions`]), requests
 //! from other applications and the command line ([`external_requests`]),
@@ -104,6 +104,7 @@ mod network_page;
 mod network_session;
 mod network_sign_out;
 mod open_several;
+mod pane_content;
 mod place_editor;
 mod place_menus;
 mod preferences;
@@ -119,6 +120,7 @@ mod select_matching;
 mod selection;
 mod selection_keys;
 mod session;
+mod session_restore;
 mod settings_tab;
 mod sidebar;
 mod sidebar_hiding;
@@ -127,6 +129,7 @@ mod sidebar_toggle;
 mod slow_click_rename;
 mod snapshot_tabs;
 mod software_search;
+mod split_view;
 mod status_bar;
 mod stop_listing;
 mod tab_commands;
@@ -199,6 +202,7 @@ impl BrowserWindow {
             .expect("a new window has no context yet");
         window.start_network();
         window.install_actions();
+        window.install_split_view();
         window.install_size_scans();
         window.install_item_dialogs();
         window.install_archive_actions();
@@ -262,9 +266,10 @@ impl BrowserWindow {
         &self.imp().sidebar
     }
 
-    /// The folder pane.
+    /// The folder pane that shows the active pane of the tab in front:
+    /// the left one, or the right one of a split tab ([`split_view`]).
     fn folder_pane(&self) -> &FolderPane {
-        &self.imp().folder_pane
+        self.pane_on(self.imp().active_side.get())
     }
 
     /// The details pane.

@@ -49,6 +49,7 @@ mod selection;
 mod settings;
 mod sidebar;
 mod sidebar_layout;
+mod split_view;
 mod stopping;
 mod support;
 mod tab_commands;

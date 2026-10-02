@@ -23,6 +23,7 @@ use crate::places::{self, PlaceSources, Places};
 use crate::volumes;
 
 use super::landing;
+use super::session::PaneSide;
 use super::sidebar;
 use super::BrowserWindow;
 
@@ -177,16 +178,24 @@ impl BrowserWindow {
         self.update_index_candidates(&places.quick_access);
     }
 
-    /// Redraws the landing page when the active tab shows one.
+    /// Redraws the landing page of each pane on screen that shows one.
     pub(super) fn render_landing(&self) {
         self.render_landing_with(&self.places());
     }
 
     fn render_landing_with(&self, places: &Places) {
-        let Some(page) = self.current_uri().as_deref().and_then(Page::from_uri) else {
+        for (side, uri) in self.shown_panes() {
+            self.render_landing_in(side, &uri, places);
+        }
+    }
+
+    /// Draws the landing page at `uri` in the folder pane on `side`, when
+    /// `uri` is one.
+    pub(super) fn render_landing_in(&self, side: PaneSide, uri: &str, places: &Places) {
+        let Some(page) = Page::from_uri(uri) else {
             return;
         };
-        let body = self.folder_pane().landing();
+        let body = self.pane_on(side).landing();
         let locations = self.imp().locations.borrow();
         let discovery = self.network().discovery().state();
         landing::render(body, page, places, &locations, &discovery);

@@ -54,14 +54,16 @@ impl BrowserWindow {
         self.connect_tab_drag_and_drop();
         self.follow_skin();
         self.install_view_zoom();
-        self.folder_pane().connect_loading_line_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move || {
-                window.update_status();
-                window.show_stop_or_refresh();
-            }
-        ));
+        for pane in self.folder_panes() {
+            pane.connect_loading_line_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move || {
+                    window.update_status();
+                    window.show_stop_or_refresh();
+                }
+            ));
+        }
         gestures::connect_history_buttons(
             self,
             glib::clone!(

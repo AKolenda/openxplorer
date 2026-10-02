@@ -129,6 +129,9 @@ pub(crate) enum WindowAction {
     Stop,
     /// Shows or hides the navigation pane (F9, SIDE-024).
     Sidebar,
+    /// Splits the tab into two panes, or closes its active pane (F3,
+    /// VIEW-059).
+    SplitView,
     /// The sidebar's icon size: `0` (automatic), `16`, `22`, `32` or `48`.
     SidebarIconSize,
     /// Lists the hidden sidebar rows, dimmed (SIDE-010).
@@ -421,6 +424,7 @@ impl WindowAction {
             WindowAction::DetailsColumn => "details-column",
             WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
+            WindowAction::SplitView => "split-view",
             WindowAction::SidebarIconSize => "sidebar-icon-size",
             WindowAction::SidebarShowAll => "sidebar-show-all",
             WindowAction::HideSection => "hide-section",

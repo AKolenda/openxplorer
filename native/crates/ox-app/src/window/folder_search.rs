@@ -371,7 +371,7 @@ impl BrowserWindow {
 
     /// Ends the search as leaving the folder does: empties the box and
     /// forgets the scope.
-    fn end_search(&self) {
+    pub(super) fn end_search(&self) {
         self.imp().search.borrow_mut().end();
         self.search_box().clear();
         self.show_searched_items();

@@ -40,6 +40,10 @@ impl BrowserWindow {
     /// bar describes the item under it (VIEW-052), and so does the details
     /// pane while it follows the pointer.
     pub(super) fn pointer_over_items(&self, view: &gtk::Widget, point: Option<(f64, f64)>) {
+        // Hover descriptions belong to the active pane only.
+        if self.side_holding(view) != Some(self.active_side()) {
+            return;
+        }
         let pane_model = self.folder_pane();
         let item = point
             .and_then(|(x, y)| pane_model.owners().position_at(view, x, y))
