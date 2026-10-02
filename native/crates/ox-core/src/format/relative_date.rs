@@ -29,15 +29,15 @@ pub(super) fn relative_text(
     clock: ClockFormat,
 ) -> Option<String> {
     let yesterday = now.add_days(-1).ok()?;
-    let word = if time.ymd() == now.ymd() {
-        "Today"
+    let message = if time.ymd() == now.ymd() {
+        crate::i18n::message_id("Today at {clock}")
     } else if time.ymd() == yesterday.ymd() {
-        "Yesterday"
+        crate::i18n::message_id("Yesterday at {clock}")
     } else {
         return None;
     };
     let clock = time.format(&without_seconds(&patterns.time_on(clock))).ok()?;
-    Some(format!("{word} at {clock}"))
+    Some(crate::i18n::format_message(message, &[("clock", &clock)]))
 }
 
 #[cfg(test)]

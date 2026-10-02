@@ -86,12 +86,12 @@ impl BuiltinTemplate {
     /// The name New shows, for example `Text document`.
     pub fn label(self) -> &'static str {
         match self {
-            BuiltinTemplate::Text => "Text document",
-            BuiltinTemplate::Markdown => "Markdown document",
-            BuiltinTemplate::Csv => "CSV file",
-            BuiltinTemplate::Json => "JSON file",
-            BuiltinTemplate::Html => "HTML document",
-            BuiltinTemplate::Empty => "Empty file",
+            BuiltinTemplate::Text => crate::i18n::gettext_static("Text document"),
+            BuiltinTemplate::Markdown => crate::i18n::gettext_static("Markdown document"),
+            BuiltinTemplate::Csv => crate::i18n::gettext_static("CSV file"),
+            BuiltinTemplate::Json => crate::i18n::gettext_static("JSON file"),
+            BuiltinTemplate::Html => crate::i18n::gettext_static("HTML document"),
+            BuiltinTemplate::Empty => crate::i18n::gettext_static("Empty file"),
         }
     }
 
@@ -144,7 +144,11 @@ impl FromStr for TemplateId {
             .into_iter()
             .find(|template| template.id() == id)
             .map(TemplateId::Builtin)
-            .ok_or_else(|| OpsError::failed("Choose an available template or Empty file."))
+            .ok_or_else(|| {
+                OpsError::failed(crate::i18n::gettext(
+                    "Choose an available template or Empty file.",
+                ))
+            })
     }
 }
 

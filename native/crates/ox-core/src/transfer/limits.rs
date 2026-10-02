@@ -92,9 +92,9 @@ impl StorageRules {
     /// to be stored here.
     pub(crate) fn check_file_size(&self, name: &str, size: u64) -> Result<(), TransferError> {
         match self.max_file_size {
-            Some(limit) if size > limit => Err(TransferError::failed(format!(
-                "{name} is too large for the destination file system, which only supports files \
-                 up to 4 GiB."
+            Some(limit) if size > limit => Err(TransferError::failed(crate::i18n::format_message(
+                "{name} is too large for the destination file system, which only supports files up to 4 GiB.",
+                &[("name", name)],
             ))),
             _ => Ok(()),
         }
@@ -168,11 +168,13 @@ impl Incoming<'_> {
             }
             needed = needed.saturating_add(tree_size(source.as_ref(), cancel, 0, on_folder)?);
             if needed > free {
-                return Err(TransferError::failed(format!(
-                    "Not enough free space on {}: {} needed, {} free.",
-                    self.folder.display_name(),
-                    pretty_bytes(needed),
-                    pretty_bytes(free)
+                return Err(TransferError::failed(crate::i18n::format_message(
+                    "Not enough free space on {destination}: {needed} needed, {free} free.",
+                    &[
+                        ("destination", &self.folder.display_name()),
+                        ("needed", &pretty_bytes(needed)),
+                        ("free", &pretty_bytes(free)),
+                    ],
                 )));
             }
         }

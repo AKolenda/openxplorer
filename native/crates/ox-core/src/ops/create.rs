@@ -93,7 +93,7 @@ fn create_folder_path_blocking(
 ) -> Result<CreatedFolderPath, OpsError> {
     let (last, earlier) = names
         .split_last()
-        .ok_or_else(|| OpsError::failed("Type a name for the new folder."))?;
+        .ok_or_else(|| OpsError::failed(crate::i18n::gettext("Type a name for the new folder.")))?;
     let mut parent = folder_uri.to_owned();
     let mut first = None;
     let mut created = None;
@@ -168,8 +168,9 @@ fn create_numbered_folder_blocking(
             outcome => return outcome,
         }
     }
-    Err(OpsError::failed(format!(
-        "Too many folders are called “{base_name}”. Rename some of them, then try again."
+    Err(OpsError::failed(crate::i18n::format_message(
+        "Too many folders are called “{base_name}”. Rename some of them, then try again.",
+        &[("base_name", base_name)],
     )))
 }
 
@@ -192,9 +193,9 @@ fn create_item_blocking(
     validate_name(name)?;
     // A server listing holds shares, not files; nothing can be created there.
     if is_smb_server(folder_uri) {
-        return Err(OpsError::failed(
+        return Err(OpsError::failed(crate::i18n::gettext(
             "Open a network share before creating files or folders.",
-        ));
+        )));
     }
     let folder_uri = normalise(folder_uri)?;
     context.protection.check(&folder_uri)?;
@@ -225,8 +226,9 @@ fn create_exclusively(item: &gio::File, kind: ItemKind, context: &OperationConte
 /// keep their message.
 pub(crate) fn name_taken_or(error: OpsError, name: &str) -> OpsError {
     match error {
-        OpsError::Exists(_) => OpsError::Exists(format!(
-            "An item named “{name}” already exists. Nothing was overwritten."
+        OpsError::Exists(_) => OpsError::Exists(crate::i18n::format_message(
+            "An item named “{name}” already exists. Nothing was overwritten.",
+            &[("name", name)],
         )),
         other => other,
     }

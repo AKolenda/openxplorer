@@ -55,8 +55,9 @@ pub(crate) fn backup_name() -> Result<String, TransferError> {
 /// The error when no staging name could be generated. The copy has not
 /// created anything yet, so the message can say that nothing changed.
 fn staging_name_failure(error: &io::Error) -> TransferError {
-    TransferError::failed(format!(
-        "Could not reserve a private staging name. Nothing was changed. {error}"
+    TransferError::failed(crate::i18n::format_message(
+        "Could not reserve a private staging name. Nothing was changed. {error}",
+        &[("error", &(error).to_string())],
     ))
 }
 
@@ -65,7 +66,10 @@ fn staging_name_failure(error: &io::Error) -> TransferError {
 /// earlier changes: during a folder merge, other items may already have
 /// been replaced.
 fn backup_name_failure(error: &io::Error) -> TransferError {
-    TransferError::failed(format!("Could not reserve a temporary replacement name. {error}"))
+    TransferError::failed(crate::i18n::format_message(
+        "Could not reserve a temporary replacement name. {error}",
+        &[("error", &(error).to_string())],
+    ))
 }
 
 /// True only for names exactly of the form this engine generates for
@@ -114,7 +118,7 @@ fn is_generated_digits(digits: &str) -> bool {
 pub(crate) fn child_node(folder: &dyn Node, name: impl AsRef<OsStr>) -> Result<Box<dyn Node>, TransferError> {
     let name = name.as_ref();
     if !is_single_component(name) {
-        return Err(TransferError::failed("Invalid child name."));
+        return Err(TransferError::failed(crate::i18n::gettext("Invalid child name.")));
     }
     Ok(folder.child(name))
 }

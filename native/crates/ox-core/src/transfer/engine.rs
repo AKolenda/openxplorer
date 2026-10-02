@@ -244,7 +244,9 @@ impl TransferEngine {
         cancel: &Cancellation,
     ) -> Result<TransferResult, TransferError> {
         if !matches!(mode, TransferMode::Copy | TransferMode::Move) {
-            return Err(TransferError::failed("Only copies and moves can rename an item."));
+            return Err(TransferError::failed(crate::i18n::gettext(
+                "Only copies and moves can rename an item.",
+            )));
         }
         let uris = [uri.to_owned()];
         let uris = distinct_items(&uris)?;
@@ -288,7 +290,7 @@ impl TransferEngine {
         let mut on_folder = || {
             if !std::mem::replace(&mut announced, true) {
                 emit(Progress {
-                    label: CHECKING_SPACE_LABEL.to_owned(),
+                    label: crate::i18n::gettext(CHECKING_SPACE_LABEL),
                     fraction: 0.0,
                     scope: ProgressScope::Batch,
                     bytes: None,
@@ -418,9 +420,9 @@ impl TransferEngine {
         let node = (self.factory)(uri)?;
         // XFER-019: a root has no name to copy, move or trash it under.
         if node.parent().is_none() {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "Filesystem roots cannot be copied, moved or trashed as items.",
-            ));
+            )));
         }
         let info = node.info(Some(batch.cancel))?;
         (self.emit)(Progress {
@@ -569,19 +571,14 @@ impl TransferEngine {
             Some(&mut copied),
         )?;
         if self.unstorable.take_skipped() > 0 {
-            return Err(TransferError::RecoveryRequired(format!(
-                "The copy at {} leaves out items the destination cannot store, so the original \
-                 was kept.",
-                destination.uri()
+            return Err(TransferError::RecoveryRequired(crate::i18n::format_message(
+                "The copy at {uri} leaves out items the destination cannot store, so the original was kept.",
+                &[("uri", &destination.uri())],
             )));
         }
         let source = selected.node.as_ref();
         let kept = remove_copied_source(source, &selected.info, &copied, self.guard()).map_err(|error| {
-            TransferError::RecoveryRequired(format!(
-                "The item was copied to {}, but the original could not be removed. \
-                 Check the copy, then delete the original. {error}",
-                destination.uri()
-            ))
+            TransferError::RecoveryRequired(crate::i18n::format_message("The item was copied to {uri}, but the original could not be removed. Check the copy, then delete the original. {error}", &[("uri", &destination.uri()), ("error", &(error).to_string())]))
         })?;
         Ok(kept.notice(&source.uri()))
     }

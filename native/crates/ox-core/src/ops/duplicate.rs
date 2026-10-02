@@ -51,7 +51,9 @@ fn duplicate_items_blocking(
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<TransferOutcome, OpsError> {
     if uris.is_empty() || uris.len() > MAX_ITEMS {
-        return Err(OpsError::failed("Select between 1 and 100,000 items."));
+        return Err(OpsError::failed(crate::i18n::gettext(
+            "Select between 1 and 100,000 items.",
+        )));
     }
     let groups = group_by_folder(uris)?;
     for group in &groups {
@@ -107,9 +109,9 @@ fn group_by_folder(uris: &[String]) -> Result<Vec<FolderGroup>, OpsError> {
         // OPS-035: a whole share or device is not an item to copy.
         let item = require_item_uri(uri)?;
         let Some(folder) = GioNode::new(&item).parent() else {
-            return Err(OpsError::failed(
+            return Err(OpsError::failed(crate::i18n::gettext(
                 "Filesystem roots cannot be copied, moved or trashed as items.",
-            ));
+            )));
         };
         groups.add(folder.uri(), item);
     }

@@ -102,9 +102,9 @@ impl<'a> Copier<'a> {
         // alias of a folder inside the source that `guard_destination`
         // could not prove.
         if source.name() == self.own_stage_name {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "The destination resolves inside the source through an alias. Copy stopped.",
-            ));
+            )));
         }
         Ok(())
     }
@@ -127,9 +127,9 @@ impl<'a> Copier<'a> {
             }
             NodeKind::Symlink => self.copy_file(source, target)?,
             NodeKind::Special => {
-                return Err(TransferError::failed(
+                return Err(TransferError::failed(crate::i18n::gettext(
                     "Sockets, devices and other special files are not copied.",
-                ));
+                )));
             }
         }
         Ok(())

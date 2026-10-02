@@ -149,6 +149,12 @@ pub fn gettext(msgid: &str) -> String {
         .map_or_else(|| msgid.to_owned(), |catalog| catalog.gettext(msgid))
 }
 
+/// Marks a constant message for catalogue extraction without translating it
+/// during constant evaluation. Translate it at the point where it is shown.
+pub const fn message_id(message: &'static str) -> &'static str {
+    message
+}
+
 /// Looks up a static message without allocating. Installed catalogues live
 /// for the process lifetime, so labels can retain their static return types.
 pub fn gettext_static(msgid: &'static str) -> &'static str {

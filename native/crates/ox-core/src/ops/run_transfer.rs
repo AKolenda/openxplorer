@@ -129,7 +129,9 @@ pub(super) fn run_renamed_on_engine(
         policy: ConflictPolicy::Skip,
     };
     let Some(folder) = checked_destination(&request, &context.protection)? else {
-        return Err(OpsError::failed("Choose a destination folder."));
+        return Err(OpsError::failed(crate::i18n::gettext(
+            "Choose a destination folder.",
+        )));
     };
     if changes_sources(mode) {
         context.protection.check(&item)?;
@@ -171,7 +173,9 @@ fn checked_destination(
     // OPS-036: a server listing holds shares, which are not folders to
     // paste into.
     if is_smb_server(&folder) {
-        return Err(OpsError::failed("Open a network share before pasting files."));
+        return Err(OpsError::failed(crate::i18n::gettext(
+            "Open a network share before pasting files.",
+        )));
     }
     Ok(Some(folder))
 }

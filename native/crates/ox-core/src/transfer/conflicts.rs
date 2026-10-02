@@ -63,13 +63,15 @@ impl Placement<'_> {
         // The user chose this name because the item's own was taken; it
         // was free then, so a clash now is reported, never resolved.
         if self.name.is_some() {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "The new name is taken too. Choose another name.",
-            ));
+            )));
         }
         // OPS-028: Dolphin refuses to overwrite an item with itself.
         if self.policy == ConflictPolicy::Replace && destination.uri() == source.uri() {
-            return Err(TransferError::failed("An item cannot replace itself."));
+            return Err(TransferError::failed(crate::i18n::gettext(
+                "An item cannot replace itself.",
+            )));
         }
         match self.policy {
             // XFER-006: Skip never touches the existing item.
@@ -90,10 +92,10 @@ impl Placement<'_> {
         // Duplicate names are text. A name that is not UTF-8 is refused
         // rather than given a lossily converted "(copy N)" name.
         let Some(source_name) = source_name.to_str() else {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "This item's name is not valid UTF-8, so no duplicate name can be made. \
                  Rename it before choosing Keep both.",
-            ));
+            )));
         };
         let item_kind = if kind == NodeKind::Directory {
             ItemKind::Folder
@@ -108,8 +110,8 @@ impl Placement<'_> {
                 return Ok(candidate);
             }
         }
-        Err(TransferError::failed(
+        Err(TransferError::failed(crate::i18n::gettext(
             "Too many duplicate names. Rename the item before copying.",
-        ))
+        )))
     }
 }

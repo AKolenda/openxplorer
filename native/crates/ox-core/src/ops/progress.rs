@@ -20,10 +20,10 @@ pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(80);
 /// progress report arrives.
 pub fn starting_label(mode: TransferMode) -> &'static str {
     match mode {
-        TransferMode::Trash => "Moving to Trash…",
-        TransferMode::Delete => "Deleting items…",
-        TransferMode::Move => "Moving items…",
-        TransferMode::Copy => "Preparing copy…",
+        TransferMode::Trash => crate::i18n::gettext_static("Moving to Trash…"),
+        TransferMode::Delete => crate::i18n::gettext_static("Deleting items…"),
+        TransferMode::Move => crate::i18n::gettext_static("Moving items…"),
+        TransferMode::Copy => crate::i18n::gettext_static("Preparing copy…"),
     }
 }
 

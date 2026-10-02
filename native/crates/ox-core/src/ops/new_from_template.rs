@@ -47,7 +47,8 @@ const STAGE_PREFIX: &str = ".winspace-new-";
 /// The refusal of a taken name, in `create_from_template`'s wording in
 /// `v2.0.0:desktop/file_services.py`, whether the name was taken before the file
 /// was made or while it was published.
-const NAME_TAKEN: &str = "An item with that name already exists. Nothing was overwritten.";
+const NAME_TAKEN: &str =
+    crate::i18n::message_id("An item with that name already exists. Nothing was overwritten.");
 
 /// What New from template creates.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,13 +90,15 @@ fn create_from_template_blocking(
     validate_name(&request.name)?;
     let folder_uri = normalise(&request.folder_uri)?;
     if is_smb_server(&folder_uri) {
-        return Err(OpsError::failed("Open a share before creating a file."));
+        return Err(OpsError::failed(crate::i18n::gettext(
+            "Open a share before creating a file.",
+        )));
     }
     context.protection.check(&folder_uri)?;
     let folder = gio::File::for_uri(&folder_uri);
     let target = GioNode::from_file(folder.child(&request.name));
     if unless_cancelled(&context.cancel, || target.exists(Some(&context.cancel)))? {
-        return Err(OpsError::Exists(NAME_TAKEN.into()));
+        return Err(OpsError::Exists(crate::i18n::gettext(NAME_TAKEN)));
     }
     let contents = template_contents(request, &context.cancel)?;
     publish_new_file(&folder, &target, &contents, context)?;
@@ -127,9 +130,9 @@ fn read_user_template(
     }
     let id = TemplateId::User(path.to_owned());
     if !list_templates_blocking(templates_folder, cancel)?.contains(&id) {
-        return Err(OpsError::failed(
+        return Err(OpsError::failed(crate::i18n::gettext(
             "This template is unavailable, too large, or not a regular template file.",
-        ));
+        )));
     }
     let template = open_template(templates_folder, path)?;
     read_bounded(template, cancel)
@@ -174,7 +177,9 @@ fn io_error(errno: Errno) -> OpsError {
 
 /// The refusal of a template that is a link, FIFO or device.
 fn not_regular() -> OpsError {
-    OpsError::failed("Templates must be regular files, not links or devices.")
+    OpsError::failed(crate::i18n::gettext(
+        "Templates must be regular files, not links or devices.",
+    ))
 }
 
 /// OPS-048: the whole of `template`, read in [`READ_BLOCK_BYTES`] blocks
@@ -193,7 +198,7 @@ fn read_bounded(mut template: File, cancel: &Cancellation) -> Result<Vec<u8>, Op
         };
         contents.extend_from_slice(&block[..count]);
         if contents.len() as u64 > MAX_TEMPLATE_BYTES {
-            return Err(OpsError::failed("Template exceeds 16 MiB."));
+            return Err(OpsError::failed(crate::i18n::gettext("Template exceeds 16 MiB.")));
         }
     }
 }
@@ -214,8 +219,9 @@ fn publish_new_file(
     context: &OperationContext,
 ) -> Result<(), OpsError> {
     let digits = random_hex(NAME_BYTES).map_err(|error| {
-        OpsError::failed(format!(
-            "Could not reserve a private staging name. Nothing was changed. {error}"
+        OpsError::failed(crate::i18n::format_message(
+            "Could not reserve a private staging name. Nothing was changed. {error}",
+            &[("error", &(error).to_string())],
         ))
     })?;
     let stage = folder.child(format!("{STAGE_PREFIX}{digits}"));
@@ -228,7 +234,7 @@ fn publish_new_file(
         discard_stage(&stage);
     }
     published.map_err(|error| match OpsError::from(error) {
-        OpsError::Exists(_) => OpsError::Exists(NAME_TAKEN.into()),
+        OpsError::Exists(_) => OpsError::Exists(crate::i18n::gettext(NAME_TAKEN)),
         other => other,
     })
 }

@@ -237,7 +237,8 @@ impl OperationContext {
 
 /// Shown when blocking work ended without a result: a bug, never a user
 /// error, reported instead of taking the window down.
-const WORKER_STOPPED: &str = "The file operation stopped unexpectedly. Check the folder before trying again.";
+const WORKER_STOPPED: &str =
+    crate::i18n::message_id("The file operation stopped unexpectedly. Check the folder before trying again.");
 
 /// Runs `work` on GIO's pool of blocking-I/O threads and waits for it
 /// without blocking the caller's main loop.
@@ -252,7 +253,7 @@ where
 {
     match gio::spawn_blocking(work).await {
         Ok(outcome) => outcome,
-        Err(_panic) => Err(OpsError::failed(WORKER_STOPPED)),
+        Err(_panic) => Err(OpsError::failed(crate::i18n::gettext(WORKER_STOPPED))),
     }
 }
 

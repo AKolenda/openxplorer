@@ -52,7 +52,7 @@ impl FromStr for TransferMode {
         Self::ALL
             .into_iter()
             .find(|mode| mode.as_str() == value)
-            .ok_or_else(|| TransferError::failed("Unknown operation."))
+            .ok_or_else(|| TransferError::failed(crate::i18n::gettext("Unknown operation.")))
     }
 }
 
@@ -95,7 +95,11 @@ impl FromStr for ConflictPolicy {
         Self::ALL
             .into_iter()
             .find(|policy| policy.as_str() == value)
-            .ok_or_else(|| TransferError::failed("Choose Skip duplicates, Keep both, or Replace existing."))
+            .ok_or_else(|| {
+                TransferError::failed(crate::i18n::gettext(
+                    "Choose Skip duplicates, Keep both, or Replace existing.",
+                ))
+            })
     }
 }
 

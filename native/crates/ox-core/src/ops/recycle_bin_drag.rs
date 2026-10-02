@@ -83,8 +83,9 @@ fn move_item(uri: &str, folder: &gio::File, context: &OperationContext) -> Resul
     let name = entry_from_info(&item, &info).name;
     let target = folder.child(&name);
     let taken = || {
-        OpsError::Exists(format!(
-            "An item named “{name}” already exists here. It was left in the Recycle Bin."
+        OpsError::Exists(crate::i18n::format_message(
+            "An item named “{name}” already exists here. It was left in the Recycle Bin.",
+            &[("name", &name)],
         ))
     };
     move_out(&item, &target, context, taken, |_| Ok(()))

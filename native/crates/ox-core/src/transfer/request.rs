@@ -51,7 +51,7 @@ impl<'a> Operation<'a> {
 
 /// The refusal of a copy or move that names no destination folder.
 fn missing_destination() -> TransferError {
-    TransferError::failed("Choose a destination folder.")
+    TransferError::failed(crate::i18n::gettext("Choose a destination folder."))
 }
 
 /// The selected URIs in their original order, each once.
@@ -61,7 +61,9 @@ fn missing_destination() -> TransferError {
 /// No items, or more than [`MAX_ITEMS`].
 pub(crate) fn distinct_items(uris: &[String]) -> Result<Vec<&str>, TransferError> {
     if uris.is_empty() || uris.len() > MAX_ITEMS {
-        return Err(TransferError::failed("Select between 1 and 100,000 items."));
+        return Err(TransferError::failed(crate::i18n::gettext(
+            "Select between 1 and 100,000 items.",
+        )));
     }
     let mut seen = HashSet::new();
     let distinct = uris
@@ -89,7 +91,9 @@ pub(crate) fn destination_folder(
     }
     let folder = factory(uri)?;
     if !folder.is_directory(Some(cancel))? {
-        return Err(TransferError::failed("The destination is not a folder."));
+        return Err(TransferError::failed(crate::i18n::gettext(
+            "The destination is not a folder.",
+        )));
     }
     Ok(folder)
 }

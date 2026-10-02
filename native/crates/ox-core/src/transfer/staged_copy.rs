@@ -164,10 +164,11 @@ impl StagedCopy<'_> {
         self.cancel.check()?;
         // Building succeeded, so the stage is recorded; this keeps that
         // invariant without a panic.
-        let stage = staging
-            .stage
-            .as_ref()
-            .ok_or_else(|| TransferError::failed("The copy was not staged. Nothing was published."))?;
+        let stage = staging.stage.as_ref().ok_or_else(|| {
+            TransferError::failed(crate::i18n::gettext(
+                "The copy was not staged. Nothing was published.",
+            ))
+        })?;
         self.publish(stage, &mut modes)
             .map_err(|error| explain_publish_error(error, layout))?;
         if staging.place == StagingPlace::Device {
@@ -208,9 +209,9 @@ impl StagedCopy<'_> {
         // Nothing can exist under a fresh random name unless another program
         // created it, and then it is not ours to use or remove.
         if staged_item.exists(Some(self.cancel)) {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "Could not reserve a private staging name. Nothing was changed.",
-            ));
+            )));
         }
         let mut copier = Copier::new(
             self.cancel,
@@ -288,10 +289,10 @@ impl StagedCopy<'_> {
         // XFER-023: a device's success report is not proof that the copy
         // exists where the private folder expects it.
         if !item.exists(Some(self.cancel)) {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "The device did not place the copy in its private staging folder. \
                  Nothing was published.",
-            ));
+            )));
         }
         let final_name = self.destination.name();
         if final_name != self.source.name() {
@@ -331,12 +332,11 @@ fn explain_publish_error(error: TransferError, layout: Layout) -> TransferError 
     if !is_move_object_refusal {
         return error;
     }
-    TransferError::NotSupported(
+    TransferError::NotSupported(crate::i18n::gettext(
         "This device cannot move items between folders, so a copy within the device \
          cannot be finished. Nothing was published. Copy the item to this computer \
-         first, then copy it back to the device."
-            .into(),
-    )
+         first, then copy it back to the device.",
+    ))
 }
 
 /// Never trusts a device's success report for the final name.
@@ -346,9 +346,9 @@ fn explain_publish_error(error: TransferError, layout: Layout) -> TransferError 
 /// failure is never mistaken for absence of the staged item.
 fn verify_device_publication(stage: &Stage, destination: &dyn Node) -> Result<(), TransferError> {
     verify_installation(stage.item(), destination).map_err(|error| {
-        TransferError::failed(format!(
-            "The device reported success, but the copy could not be verified at {}. {error}",
-            destination.uri()
+        TransferError::failed(crate::i18n::format_message(
+            "The device reported success, but the copy could not be verified at {uri}. {error}",
+            &[("uri", &destination.uri()), ("error", &(error).to_string())],
         ))
     })
 }
