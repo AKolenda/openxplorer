@@ -205,7 +205,7 @@ impl BrowserWindow {
         let moved = match items {
             Ok(uris) if uris.is_empty() => Some(()),
             Ok(uris) => self
-                .transfer_with_conflicts(IncomingItems {
+                .transfer_without_undo(IncomingItems {
                     mode: TransferMode::Move,
                     uris,
                     destination_folder: target.clone(),

@@ -268,6 +268,11 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
         })
         .collect();
     assert!(leftovers.is_empty(), "the private folder is removed");
+    let undo = test.window.lookup_action("undo").expect("the Undo action");
+    assert!(
+        !undo.is_enabled(),
+        "Undo cannot move the files back into the removed private folder"
+    );
     assert!(
         !fixture.path("Bundle").exists(),
         "no folder named after the archive"
