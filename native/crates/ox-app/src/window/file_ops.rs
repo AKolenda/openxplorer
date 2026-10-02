@@ -9,8 +9,10 @@
 //! `updateToolbar` and the trash-support cache) on ox-core's
 //! [`ops`](ox_core::ops) service, whose operations run their blocking I/O
 //! on GIO's worker threads. The window awaits them on the main loop, so
-//! browsing never freezes while one runs, and it runs one at a time
-//! (OPS-024), with the transfer panel and Cancel.
+//! browsing stays responsive. `begin_operation` reserves the window for
+//! an exclusive write; `begin_transfer` admits bounded concurrent jobs
+//! when their source and destination paths do not overlap. Each job has
+//! its own transfer panel and cancellation token (OPS-024, OPS-025).
 //!
 //! Gains over the Python app, from Windows 11 and the Dolphin baseline:
 //! Rename edits the name in place with the name before its extension
@@ -21,7 +23,8 @@
 //!
 //! | Module | Responsibility |
 //! |---|---|
-//! | `running` | One operation at a time: the transfer panel, Cancel and the report at the end |
+//! | `running` | Exclusive operations, transfer progress, cancellation and completion reports |
+//! | `jobs` | Bounded concurrent transfers, independent panels and overlapping-path refusal |
 //! | `unfinished` | Marks of running copies, and what a crashed run left behind |
 //! | `availability` | When each file command is enabled (`updateToolbar`) |
 //! | `trash_support` | Whether each folder has a Trash, which labels Delete |
@@ -118,13 +121,13 @@ pub(crate) struct FileOperations {
 }
 
 impl FileOperations {
-    /// True while an operation runs.
+    /// True while an exclusive operation runs.
     fn is_running(&self) -> bool {
         self.running.is_some()
     }
 
-    /// True while an operation runs or a paste is being planned: no other
-    /// file operation may start.
+    /// True while an exclusive operation runs or a paste is being planned:
+    /// no new file operation may start.
     fn is_busy(&self) -> bool {
         self.is_running() || self.planning
     }

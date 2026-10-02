@@ -280,7 +280,17 @@ pub enum ArchiveError {
 
     /// ARC-013: the extraction failed and its staging folder could not be
     /// removed either.
-    #[error("{}", crate::i18n::format_message("{cause}\nIncomplete extraction remains at {staging_uri}. Inspect it before removing it. {cleanup}", &[("cause", &cause.to_string()), ("staging_uri", staging_uri), ("cleanup", &cleanup.to_string())]))]
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "{cause}\nIncomplete extraction remains at {staging_uri}. Inspect it before removing it. {cleanup}",
+            &[
+                ("cause", &cause.to_string()),
+                ("staging_uri", staging_uri),
+                ("cleanup", &cleanup.to_string()),
+            ]
+        )
+    )]
     StagingLeftBehind {
         /// Why the extraction stopped.
         cause: Box<ArchiveError>,

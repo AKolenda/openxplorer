@@ -45,7 +45,13 @@ pub enum ZipFormatError {
     #[error("{}", crate::i18n::gettext("Corrupt zip64 end of central directory record"))]
     CorruptZip64Record,
     /// An extra field is longer than the space left for it.
-    #[error("{}", crate::i18n::format_message("Corrupt extra field {field_id} (size={size})", &[("field_id", &format!("{field_id:04x}")), ("size", &size.to_string())]))]
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "Corrupt extra field {field_id} (size={size})",
+            &[("field_id", &format!("{field_id:04x}")), ("size", &size.to_string())]
+        )
+    )]
     CorruptExtraField {
         /// The field's header id.
         field_id: u16,
@@ -81,7 +87,14 @@ pub enum ZipFormatError {
     BadHeaderSignature,
     /// The local header names another file than the central directory.
     #[error(
-        "{}", crate::i18n::format_message("File name in directory {directory} and header {header} differ.", &[("directory", &PythonRepr(.directory).to_string()), ("header", &PythonBytesRepr(.header).to_string())])
+        "{}",
+        crate::i18n::format_message(
+            "File name in directory {directory} and header {header} differ.",
+            &[
+                ("directory", &PythonRepr(.directory).to_string()),
+                ("header", &PythonBytesRepr(.header).to_string()),
+            ]
+        )
     )]
     NameMismatch {
         /// The name in the central directory.

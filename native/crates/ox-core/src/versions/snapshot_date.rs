@@ -113,7 +113,7 @@ impl SnapshotDate {
         } else {
             crate::i18n::gettext_static(
                 "Date encoded in the snapshot name. Timezone was not supplied by the server; no conversion \
-             has been applied.",
+                 has been applied.",
             )
         }
     }

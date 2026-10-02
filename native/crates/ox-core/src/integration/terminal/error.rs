@@ -76,7 +76,13 @@ pub enum TerminalError {
     )]
     NeedsLocalMount,
     /// The terminal exited at once with a failure (OPEN-020).
-    #[error("{}", crate::i18n::format_message("{terminal} could not start (exit {code}). Check your terminal installation and desktop session.", &[("terminal", terminal), ("code", &code.to_string())]))]
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "{terminal} could not start (exit {code}). Check your terminal installation and desktop session.",
+            &[("terminal", terminal), ("code", &code.to_string())]
+        )
+    )]
     CouldNotStart {
         /// The terminal's name, for example "GNOME Terminal".
         terminal: &'static str,

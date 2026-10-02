@@ -222,7 +222,8 @@ impl BrowserWindow {
             .await
     }
 
-    /// Runs `plan` as the window's one operation; `None` when another runs.
+    /// Runs `plan` as a transfer job with independent progress and cancellation.
+    /// Returns `None` when `begin_transfer` cannot admit the job.
     async fn run_plan(&self, plan: &TransferPlan) -> Option<Result<TransferOutcome, OpsError>> {
         match plan {
             TransferPlan::Uniform(request) => self.run_request(request).await,

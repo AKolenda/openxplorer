@@ -3,9 +3,11 @@
 //! is, and Cancel (OPS-019, ARC-011).
 //!
 //! Ports `#transfer` in `v2.0.0:desktop/ui/index.html`, `.transfer` in
-//! `style.css` and `updateTransfer` in `v2.0.0:desktop/ui/app.js`. One panel
-//! shows every write the window runs, one at a time: a file operation,
-//! an extraction, a compression or a restored copy of a previous version.
+//! `style.css` and `updateTransfer` in `v2.0.0:desktop/ui/app.js`. Each panel
+//! shows one write: a file transfer, an extraction, a compression or a
+//! restored copy of a previous version. Concurrent transfer jobs each
+//! have their own panel and Cancel button; exclusive writes use the
+//! window's primary panel.
 //! The label starts as the operation's starting text ("Moving to Trash…",
 //! "Preparing extraction…") and then follows the worker's reports
 //! ("Copy: a.txt (1/3)", "Copying a.txt · 8,192 / 35,000 bytes"). The

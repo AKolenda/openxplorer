@@ -32,8 +32,8 @@ pub const PROVIDER_NAME: &str = "Exposed snapshot folders";
 /// The explanation shown when a lookup finds no version.
 pub const NO_VERSIONS_FOUND: &str = crate::i18n::message_id(
     "No matching previous versions were found in readable snapshot \
-                                     folders. This does not prove that your server has no snapshots \
-                                     or backups.",
+     folders. This does not prove that your server has no snapshots \
+     or backups.",
 );
 
 /// The collection folders looked for at the root of an SMB share. `#` is

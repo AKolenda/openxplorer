@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! One file operation at a time: its start, its progress in the transfer
-//! panel, Cancel, and what the user is told when it ends (OPS-019,
+//! Starting exclusive operations and reporting each transfer job
+//! through its panel, cancellation and completion message (OPS-019,
 //! OPS-022, OPS-023, OPS-024).
 //!
 //! Ports `runOperation`, `updateTransfer` and the `cancel` request of
@@ -57,15 +57,17 @@ impl FinishedOperation {
 }
 
 impl BrowserWindow {
-    /// The panel of the running operation.
+    /// The primary panel, used by an exclusive operation or one transfer job.
+    /// Concurrent jobs use additional panels managed by `jobs`.
     pub(in crate::window) fn transfer_panel(&self) -> &TransferPanel {
         &self.imp().transfer_panel
     }
 
     /// Whether this window writes files now: a file operation runs or is
     /// being planned, or an extraction, compression or restored copy
-    /// runs. Data safety (OPS-024): no other write starts meanwhile, and
-    /// Sign out, Disconnect, moving a tab and an update's restart wait.
+    /// runs. Exclusive writes, Sign out, Disconnect, moving a tab and an
+    /// update's restart wait (OPS-024). Additional transfers must pass
+    /// `begin_transfer`'s job limit and overlapping-path checks.
     pub(crate) fn is_writing_files(&self) -> bool {
         let is_operating = !self.imp().file_operations.borrow().is_idle();
         is_operating || self.transfer_panel().is_busy()
@@ -84,7 +86,7 @@ impl BrowserWindow {
         true
     }
 
-    /// Starts an operation whose panel reads `label` until the first
+    /// Starts an exclusive operation whose panel reads `label` until the first
     /// progress report. Returns its context, or `None` while another
     /// operation runs (OPS-024: `if(state.operation)return` in app.js),
     /// an archive operation included, or once an application update
@@ -151,9 +153,8 @@ impl BrowserWindow {
         }
     }
 
-    /// Cancel operation: stops the running file operation between steps,
-    /// as the transfer panel's Cancel does; what is finished stays
-    /// finished (OPS-022).
+    /// Stops every running operation between steps; each panel's Cancel
+    /// button stops only its own job. Finished work remains (OPS-022).
     pub(in crate::window) fn cancel_operation(&self) {
         self.transfer_panel().cancel();
         for job in &self.imp().file_operations.borrow().jobs {
@@ -161,9 +162,10 @@ impl BrowserWindow {
         }
     }
 
-    /// Runs `request` on the transfer engine as the window's one
-    /// operation (`runOperation`); `None` when another one runs. The panel
-    /// has hidden when this returns; conclude with
+    /// Runs `request` as a transfer job with its own panel and cancellation
+    /// token. Returns `None` when `begin_transfer` refuses the job because
+    /// of an exclusive write, an update, the job limit or overlapping paths.
+    /// Its panel is hidden before returning; conclude with
     /// [`Self::conclude_operation`].
     pub(super) async fn run_request(
         &self,

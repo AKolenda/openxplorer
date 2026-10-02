@@ -24,6 +24,9 @@ fn overlaps(left: &str, right: &str) -> bool {
 }
 
 impl BrowserWindow {
+    /// Admits a transfer with its own panel and cancellation token, up to
+    /// `MAX_JOBS`. Exclusive writes, update locks and overlapping source or
+    /// destination paths refuse new jobs.
     pub(super) fn begin_transfer(
         &self,
         label: &str,

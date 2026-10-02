@@ -137,7 +137,13 @@ pub enum UpdateError {
     ///
     /// The message does not say whether anything was installed:
     /// `dpkg-query` runs after APT, which may have changed the system.
-    #[error("{}", crate::i18n::format_message("The package tool {program} failed (exit status {status}).", &[("program", program), ("status", &status.to_string())]))]
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "The package tool {program} failed (exit status {status}).",
+            &[("program", program), ("status", &status.to_string())]
+        )
+    )]
     PackageToolFailed {
         /// The tool's path.
         program: &'static str,
@@ -147,7 +153,13 @@ pub enum UpdateError {
     },
     /// `dpkg-deb` or `dpkg-query` did not finish in time and was stopped.
     /// Python showed `subprocess`'s own message.
-    #[error("{}", crate::i18n::format_message("The package tool {program} did not finish within {seconds} seconds.", &[("program", program), ("seconds", &limit.as_secs().to_string())]))]
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "The package tool {program} did not finish within {seconds} seconds.",
+            &[("program", program), ("seconds", &limit.as_secs().to_string())]
+        )
+    )]
     PackageToolTimedOut {
         /// The tool's path.
         program: &'static str,
