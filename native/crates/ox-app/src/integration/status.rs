@@ -114,6 +114,8 @@ pub(crate) struct IntegrationStatus {
     pub(crate) defaults: Result<DefaultsReport, String>,
     /// Who answers Show in folder.
     pub(crate) show_in_folder: ShowInFolderStatus,
+    /// Where Open and Save dialogs go (INT-032).
+    pub(crate) file_dialogs: super::FileDialogsStatus,
 }
 
 impl DesktopIntegration {
@@ -138,6 +140,7 @@ impl DesktopIntegration {
         IntegrationStatus {
             defaults,
             show_in_folder,
+            file_dialogs: self.file_dialogs_status().await,
         }
     }
 }

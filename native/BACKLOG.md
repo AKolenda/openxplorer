@@ -55,6 +55,14 @@ is missing.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
   desktop's Background portal starts it at login (native/packaging/README.md,
   "Differences inside the Flatpak"). Flathub publication needs the owner.
+- **Open and Save dialogs (INT-032):** the picker window is not yet made
+  transient for the calling application's window (the portal's
+  `parent_window`, `x11:` or `wayland:`), so on some desktops it can open
+  behind the caller; the Flatpak cannot offer the feature. GTK's own
+  startup still creates its inhibit-portal proxy synchronously on desktops
+  without a GNOME or Xfce session manager; the backend answers from its
+  dispatch thread so this no longer stalls the portal, but a D-Bus-activated
+  instance's first window waits until the portal is up.
 
 ## Hardware acceptance still owed
 

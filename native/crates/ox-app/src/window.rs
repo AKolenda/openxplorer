@@ -110,6 +110,7 @@ mod network_session;
 mod network_sign_out;
 mod open_several;
 mod pane_content;
+mod picker;
 mod place_editor;
 mod place_menus;
 mod preferences;

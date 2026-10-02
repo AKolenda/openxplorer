@@ -144,6 +144,14 @@ impl BrowserWindow {
         position: TabPosition,
     ) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
+        // A file dialog keeps one tab and no Settings (INT-032): a new tab
+        // goes to the location in the one there is.
+        if self.is_picking() && self.tab_count() >= 1 {
+            if Page::from_uri(&uri) == Some(Page::Settings) {
+                return Ok(());
+            }
+            return self.navigate(&uri);
+        }
         self.save_tab_view();
         let id = self.imp().session.borrow_mut().add_at(&uri, placement, position);
         if self.imp().session.borrow().is_active(id) {

@@ -264,18 +264,31 @@ fn can_start_a_new_window_in(uri: &str) -> bool {
     )
 }
 
-/// The focused browser window, else the most recent one.
+/// The focused browser window, else the most recent one. A window that
+/// is another application's file dialog is never one (INT-032).
 pub(super) fn active_window(app: &gtk::Application) -> Option<BrowserWindow> {
-    let focused = app.active_window().and_downcast::<BrowserWindow>();
+    let focused = app
+        .active_window()
+        .and_downcast::<BrowserWindow>()
+        .filter(|window| !window.is_picking());
     focused.or_else(|| browser_windows_of(app).next())
 }
 
-/// The browser windows of `app`, most recent first.
+/// The browser windows of `app`, most recent first, without the file
+/// dialogs it shows for other applications.
 pub(super) fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
     let windows = app.windows();
     windows
         .into_iter()
         .filter_map(|window| window.downcast::<BrowserWindow>().ok())
+        .filter(|window| !window.is_picking())
+}
+
+/// Shows another application's Open or Save dialog in a new window
+/// (INT-032).
+fn open_picker_window(app: &gtk::Application, context: &AppContext, call: ox_core::integration::ChooserCall) {
+    let window = BrowserWindow::new(app, context);
+    window.begin_picking(call);
 }
 
 /// Opens a window of `app` whose first tab shows `start`, or the startup
@@ -357,6 +370,21 @@ fn attach_desktop_integration(app: &gtk::Application, context: &AppContext) {
         }
     );
     context.desktop_integration().attach(app, show);
+    let pick = glib::clone!(
+        #[weak]
+        app,
+        #[weak]
+        context,
+        #[upgrade_or]
+        Err(ox_core::integration::ChooserNotShown),
+        move |call| {
+            open_picker_window(&app, &context, call);
+            Ok(())
+        }
+    );
+    if let Some(app) = app.downcast_ref::<super::Application>() {
+        app.route_file_dialogs(pick);
+    }
 }
 
 /// Applies the desktop's light or dark scheme to `skin` now and on every

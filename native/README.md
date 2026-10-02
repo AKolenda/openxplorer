@@ -207,4 +207,6 @@ Do not rename the `winspace` settings directory, the keyring schema
 `io.winspace.SmbCredentials`, the MIME handlers or the final application ID
 `io.winspace.Development` (see `AGENTS.md`). Keep every desktop integration
 opt-in: installing or running the app must not change file-manager defaults,
-browser profiles, folder locations or mounts.
+browser profiles, folder locations, mounts or which backend serves the
+desktop portal's Open and Save dialogs (the `.portal` file names no desktop;
+only the Settings opt-in prefers it).

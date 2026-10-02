@@ -276,6 +276,15 @@
         <child>
           <object class="OxStatusBar" id="status_bar"/>
         </child>
+        <child>
+          <object class="GtkBox" id="picker_bar">
+            <property name="visible">False</property>
+            <property name="spacing">24</property>
+            <style>
+              <class name="picker-bar"/>
+            </style>
+          </object>
+        </child>
       </object>
     </property>
   </template>

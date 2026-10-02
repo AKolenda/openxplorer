@@ -2001,6 +2001,10 @@ msgid "Also open ZIP files"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Apps' Open and Save dialogs"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Brave and other apps"
 msgstr ""
 
@@ -2033,6 +2037,10 @@ msgid "Gives ZIP files back to the app that opened them before."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Gives other apps' Open and Save dialogs back to the desktop."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Include Show in folder"
 msgstr ""
 
@@ -2053,7 +2061,15 @@ msgid "OpenXplorer stops answering Show in folder requests."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Other apps choose and save files in an OpenXplorer window."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Refresh status"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Restore Open and Save dialogs"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -2121,6 +2137,10 @@ msgid "default network links share"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "file picker file chooser open save save as upload download dialog portal xdg-desktop-portal filechooser chrome firefox use openxplorer for open and save dialogs apply now restart portal"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "include brave / other apps’ show in folder integration (per-user, starts at login) make default option"
 msgstr ""
 
@@ -2138,6 +2158,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
 msgid "undo default file explorer"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "undo file picker file chooser portal save dialog"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs

@@ -27,6 +27,10 @@ impl BrowserWindow {
             self.activate_item(*position);
             return;
         }
+        // A file dialog takes several files as its choice (INT-032).
+        if self.pick_selection() {
+            return;
+        }
         let entries: Vec<Entry> = positions
             .into_iter()
             .filter_map(|position| model.item(position))

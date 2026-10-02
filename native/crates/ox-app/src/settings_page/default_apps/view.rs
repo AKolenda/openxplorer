@@ -47,6 +47,10 @@ pub(super) struct DefaultAppsView {
     show_in_folder_row: glib::WeakRef<SettingRow>,
     restore_previous: glib::WeakRef<gtk::Button>,
     restore_zip: glib::WeakRef<gtk::Button>,
+    file_dialogs_row: glib::WeakRef<SettingRow>,
+    enable_file_dialogs: glib::WeakRef<gtk::Button>,
+    apply_file_dialogs: glib::WeakRef<gtk::Button>,
+    restore_file_dialogs: glib::WeakRef<gtk::Button>,
 }
 
 impl DefaultAppsView {
@@ -66,9 +70,14 @@ impl DefaultAppsView {
             show_in_folder_row: controls.show_in_folder_row.downgrade(),
             restore_previous: controls.restore_previous.downgrade(),
             restore_zip: controls.restore_zip.downgrade(),
+            file_dialogs_row: controls.file_dialogs_row.downgrade(),
+            enable_file_dialogs: controls.enable_file_dialogs.downgrade(),
+            apply_file_dialogs: controls.apply_file_dialogs.downgrade(),
+            restore_file_dialogs: controls.restore_file_dialogs.downgrade(),
         };
         view.connect_changes(controls);
         view.connect_show_in_folder(controls);
+        view.connect_file_dialogs(controls);
         view
     }
 
@@ -140,6 +149,22 @@ impl DefaultAppsView {
             view.run_change(
                 |integration| async move { integration.disable_show_in_folder().await.map(|_| None) },
             );
+        });
+    }
+
+    /// Enable, Apply now and Restore for Open and Save dialogs (INT-032).
+    fn connect_file_dialogs(&self, controls: &Controls) {
+        let view = self.clone();
+        controls.enable_file_dialogs.connect_clicked(move |_| {
+            view.run_change(|integration| async move { integration.enable_file_dialogs().await.map(Some) });
+        });
+        let view = self.clone();
+        controls.apply_file_dialogs.connect_clicked(move |_| {
+            view.run_change(|integration| async move { integration.apply_file_dialogs().await.map(Some) });
+        });
+        let view = self.clone();
+        controls.restore_file_dialogs.connect_clicked(move |_| {
+            view.run_change(|integration| async move { integration.disable_file_dialogs().await.map(Some) });
         });
     }
 
@@ -215,6 +240,16 @@ impl DefaultAppsView {
         if let Some(row) = self.show_in_folder_row.upgrade() {
             row.set_description(&status.show_in_folder.text());
         }
+        let dialogs = &status.file_dialogs;
+        if let Some(row) = self.file_dialogs_row.upgrade() {
+            row.set_description(&dialogs.text());
+        }
+        set_sensitive(
+            &self.enable_file_dialogs,
+            dialogs.is_available && !dialogs.is_enabled,
+        );
+        set_sensitive(&self.apply_file_dialogs, dialogs.is_available);
+        set_sensitive(&self.restore_file_dialogs, dialogs.is_enabled);
         if let Some(button) = self.make_default.upgrade() {
             button.set_sensitive(true);
         }

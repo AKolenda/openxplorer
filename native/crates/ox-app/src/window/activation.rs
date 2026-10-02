@@ -247,6 +247,11 @@ impl BrowserWindow {
             queried = query_entry(uri).await;
         }
         let fresh = queried.map_err(|error| error.to_string())?;
+        // In a file dialog, activating a file chooses it (INT-032).
+        if self.is_picking() && matches!(activation_for(&fresh), Activation::File | Activation::Archive) {
+            self.pick_activated(&fresh);
+            return Ok(Resolved::Opened);
+        }
         match activation_for(&fresh) {
             Activation::Folder(uri) => Ok(Resolved::Folder(uri)),
             Activation::Archive => Ok(Resolved::Archive(Box::new(fresh))),

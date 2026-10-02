@@ -15474,6 +15474,26 @@ native = "partial"
 native_note = "The gettext catalogue loader follows the desktop language, supports contexts and plural rules, and falls back to English. The integrated translation pass covers menus, dialogs, Settings, view labels, transfer/recovery messages, backend errors and shared file labels; interpolation preserves inserted paths as data. Explicitly marked GtkBuilder text and accessible properties are translated after construction, without translating entry contents. The offline manual and static message tables enter the same generated template. Package tooling compiles installed PO catalogues and adds translated display fields to desktop files and AppStream metadata while preserving commands, identifiers, licences and English fallback. Evidence: native/crates/ox-core/src/i18n.rs (the_catalogue_of_the_desktop_language_is_picked_up_with_its_plurals, translated_messages_reorder_values_without_interpreting_their_contents); native/crates/ox-core/tests/i18n_errors.rs (backend_errors_use_the_desktop_catalogue_and_preserve_inserted_paths); native/crates/ox-app/src/window/command_bar.rs (marked_template_text_uses_the_selected_catalogue); native/tools/test_i18n.py and test_package_i18n.py. Stable operation error codes are not translated. Still partial: no reviewed language catalogue ships, complete coverage of every visible string and plural is not established (for example, extraction summaries still compose English file/files and folder/folders fragments), and right-to-left layout, navigation artwork and mixed-direction file names have not been validated. The existing owner decision on mirroring the Windows 11 layout remains open."
 
 [[feature]]
+id = "INT-032"
+area = "INT"
+title = "Other applications' Open and Save dialogs in OpenXplorer (opt-in)"
+behaviour = "Settings > Default apps > 'Apps' Open and Save dialogs' > Enable makes the desktop portal (xdg-desktop-portal) send other applications' file dialogs to OpenXplorer: it writes the user's $XDG_CONFIG_HOME/xdg-desktop-portal/<desktop>-portals.conf as the desktop's system file (or the user's existing file) with org.freedesktop.impl.portal.FileChooser set to the packaged <app id>.portal backend, keeping every other preference, and records what the file held. Apply now restarts the user's portal service (systemctl --user try-restart); otherwise the change applies at the next login. Restore Open and Save dialogs puts the file back byte for byte, or removes only the app's line when the user edited it since; a symlinked file is never replaced. The backend is exported on the application's bus name and answers only the owner of org.freedesktop.portal.Desktop. Each OpenFile, SaveFile or SaveFiles call opens a window in picker mode: the normal explorer with one tab, no Settings, the caller's title, and a bottom bar with the file name (Save, stem preselected), the type list (filters narrow the listed files; folder dialogs list only folders), the caller's extra choices, and the accept and Cancel buttons. Activating a file chooses it; a typed folder name opens that folder; saving over an existing file asks first; only locations with a local path (including GVfs mounts) are accepted. Cancel, Escape and closing answer Cancelled; the portal's Close answers 'other' and closes the window. Unavailable inside the Flatpak, which cannot register a host backend."
+origin = ["dolphin", "gnome"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "xdg-desktop-portal:data/org.freedesktop.impl.portal.FileChooser.xml",
+  "xdg-desktop-portal:desktop-portal/xdp-portal-config.c (portals.conf lookup order)",
+  "xdg-desktop-portal-kde:src/filechooser.cpp",
+]
+python_tests = []
+bridge = []
+dolphin = "Plasma's xdg-desktop-portal-kde serves FileChooser with the KIO file dialog (KFileWidget), the same widgets Dolphin uses; the backend is chosen in kde-portals.conf"
+gnome = "xdg-desktop-portal-gnome / -gtk serve FileChooser with GtkFileChooserDialog; portals.conf(5) chooses the backend per interface"
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_file_chooser.rs (request checks, the portals.conf opt-in, the backend on a private bus), ox-app folder_view/filter.rs and window/picker tests, tools/test_package_data.py (the .portal file). Not done: making the window transient for the caller's window (parent_window is read but not used)."
+
+[[feature]]
 id = "UPD-001"
 area = "UPD"
 title = "Manual update check dialog"

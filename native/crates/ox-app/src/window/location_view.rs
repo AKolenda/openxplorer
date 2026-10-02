@@ -162,12 +162,18 @@ impl BrowserWindow {
         self.follow_with_folder_tree();
         self.render_landing();
         self.show_surface_for(uri);
+        self.picker_selection_changed();
     }
 
     /// Titles the window after the active tab's location: its name, or
     /// its full path when the settings ask for it (Dolphin's "Show full
     /// path in title bar", SET-011); a page keeps its title.
     pub(super) fn render_title(&self) {
+        // A file dialog keeps the caller's title (INT-032).
+        if let Some(title) = self.picker_title() {
+            self.set_title(Some(&title));
+            return;
+        }
         let Some(uri) = self.current_uri() else {
             return;
         };
