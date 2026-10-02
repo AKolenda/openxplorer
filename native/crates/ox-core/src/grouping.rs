@@ -208,28 +208,31 @@ impl WeekStart {
     pub const MONDAY: WeekStart = WeekStart(0);
     /// Saturday.
     pub const SATURDAY: WeekStart = WeekStart(5);
+    /// Friday, as in the Maldives.
+    pub const FRIDAY: WeekStart = WeekStart(4);
     /// Sunday.
     pub const SUNDAY: WeekStart = WeekStart(6);
 }
 
 /// The regions whose week starts on Sunday, from CLDR's
 /// `supplementalData.xml` (`weekData`, `firstDay day="sun"`).
-const SUNDAY_REGIONS: [&str; 43] = [
+const SUNDAY_REGIONS: [&str; 56] = [
     "AG", "AS", "BD", "BR", "BS", "BT", "BW", "BZ", "CA", "CO", "DM", "DO", "ET", "GT", "GU", "HK", "HN",
-    "ID", "IL", "IN", "JM", "JP", "KE", "KH", "KR", "LA", "MH", "MM", "MO", "MT", "MX", "MZ", "NI", "NP",
-    "PA", "PE", "PH", "PK", "PR", "PT", "PY", "SA", "US",
+    "ID", "IL", "IN", "IS", "JM", "JP", "KE", "KH", "KR", "LA", "MH", "MM", "MO", "MT", "MX", "MZ", "NI",
+    "NP", "PA", "PE", "PH", "PK", "PR", "PT", "PY", "SA", "SG", "SV", "TH", "TT", "TW", "UM", "US", "VE",
+    "VI", "WS", "YE", "ZA", "ZW",
 ];
-
-/// More Sunday regions from the same CLDR list.
-const MORE_SUNDAY_REGIONS: [&str; 10] = ["SG", "SV", "TH", "TT", "TW", "UM", "VE", "VI", "WS", "ZA"];
 
 /// The regions whose week starts on Saturday (CLDR `firstDay day="sat"`).
 const SATURDAY_REGIONS: [&str; 14] = [
-    "AE", "AF", "BH", "DJ", "DZ", "EG", "IQ", "IR", "JO", "KW", "LY", "OM", "QA", "SY",
+    "AF", "BH", "DJ", "DZ", "EG", "IQ", "IR", "JO", "KW", "LY", "OM", "QA", "SD", "SY",
 ];
 
+/// The regions whose week starts on Friday (CLDR `firstDay day="fri"`).
+const FRIDAY_REGIONS: [&str; 1] = ["MV"];
+
 /// The first day of the week for a locale name such as `en_US.UTF-8`:
-/// Sunday or Saturday for the regions CLDR lists, Monday otherwise
+/// Sunday, Saturday or Friday for the regions CLDR lists, Monday otherwise
 /// (including `C` and `POSIX`).
 ///
 /// `GLib` has no first-weekday call, and `nl_langinfo(_NL_TIME_FIRST_WEEKDAY)`
@@ -239,10 +242,12 @@ pub fn week_start_for_locale(locale: &str) -> WeekStart {
     let Some((_, region)) = name.split_once('_') else {
         return WeekStart::MONDAY;
     };
-    if SUNDAY_REGIONS.contains(&region) || MORE_SUNDAY_REGIONS.contains(&region) {
+    if SUNDAY_REGIONS.contains(&region) {
         WeekStart::SUNDAY
     } else if SATURDAY_REGIONS.contains(&region) {
         WeekStart::SATURDAY
+    } else if FRIDAY_REGIONS.contains(&region) {
+        WeekStart::FRIDAY
     } else {
         WeekStart::MONDAY
     }
@@ -653,7 +658,12 @@ mod tests {
             date(2026, 12, 31),
             date(2028, 2, 29),
         ] {
-            for week_start in [WeekStart::MONDAY, WeekStart::SATURDAY, WeekStart::SUNDAY] {
+            for week_start in [
+                WeekStart::MONDAY,
+                WeekStart::FRIDAY,
+                WeekStart::SATURDAY,
+                WeekStart::SUNDAY,
+            ] {
                 let calendar = Calendar { today, week_start };
                 let boundaries = calendar.boundary_days();
                 let first = boundaries[0];
@@ -795,6 +805,16 @@ mod tests {
         assert_eq!(week_start_for_locale("en_GB"), WeekStart::MONDAY);
         assert_eq!(week_start_for_locale("C.UTF-8"), WeekStart::MONDAY);
         assert_eq!(week_start_for_locale("sr_RS@latin"), WeekStart::MONDAY);
+        // CLDR as of 2026: Australia, China and the UAE start on Monday;
+        // Zimbabwe and Iceland on Sunday, Sudan on Saturday, the Maldives
+        // on Friday.
+        for monday in ["en_AU.UTF-8", "zh_CN.UTF-8", "ar_AE.UTF-8"] {
+            assert_eq!(week_start_for_locale(monday), WeekStart::MONDAY, "{monday}");
+        }
+        assert_eq!(week_start_for_locale("en_ZW.UTF-8"), WeekStart::SUNDAY);
+        assert_eq!(week_start_for_locale("is_IS.UTF-8"), WeekStart::SUNDAY);
+        assert_eq!(week_start_for_locale("ar_SD.UTF-8"), WeekStart::SATURDAY);
+        assert_eq!(week_start_for_locale("dv_MV.UTF-8"), WeekStart::FRIDAY);
         // Monday 28 September 2026, seen from Thursday 1 October.
         let monday = date(2026, 9, 28);
         assert_eq!(us_calendar().group_of(monday), DateGroup::EarlierThisWeek);

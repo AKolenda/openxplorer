@@ -270,6 +270,13 @@ fn folder_group_by_is_remembered_per_folder() {
     second
         .set_folder_group_by("file:///home/ana/Pictures", None)
         .expect("forgotten");
+    let too_long = format!("file:///{}", "a".repeat(5000));
+    for unsavable in ["", "file:///a\nb", too_long.as_str()] {
+        assert!(
+            first.set_folder_group_by(unsavable, Some(GroupBy::Name)).is_err(),
+            "a location that cannot be stored is an error, not a silent no-op"
+        );
+    }
     let merged = Settings::open(root.path()).snapshot().preferences;
     let saved: Vec<(&str, &str)> = merged
         .folder_group_by

@@ -266,8 +266,32 @@ impl DetailsView {
             .headings
             .set(model.heading_factory())
             .expect("a new view has no headings yet");
+        view.start_new_lists_at_the_top(model);
         view.sort_by(SortOrder::DEFAULT);
         view
+    }
+
+    /// Shows a list filled from empty (a folder's first items) from its
+    /// top. GTK keeps the first row at
+    /// the top edge, which would leave the first group's heading above it,
+    /// scrolled out of sight. A scroll position restored afterwards (Back,
+    /// a tab switch) still wins: it is set later.
+    fn start_new_lists_at_the_top(&self, model: &FolderModel) {
+        model.selection().connect_items_changed(glib::clone!(
+            #[weak(rename_to = view)]
+            self,
+            move |list, position, removed, added| {
+                if position != 0 || removed != 0 || added == 0 || list.n_items() != added {
+                    return;
+                }
+                let adjustment = view.vadjustment();
+                glib::idle_add_local_once(move || {
+                    if adjustment.value() > 0.0 {
+                        adjustment.set_value(0.0);
+                    }
+                });
+            }
+        ));
     }
 
     /// Shows or hides the group headings (VIEW-022). Without groups the

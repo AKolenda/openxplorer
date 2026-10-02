@@ -65,7 +65,13 @@ impl BrowserWindow {
     /// The Sort menu's Group by choice: groups the active folder by
     /// `group_by` and remembers it for that folder.
     pub(super) fn choose_group_by(&self, group_by: GroupBy) {
-        self.folder_pane().set_group_by(group_by);
+        let pane = self.folder_pane();
+        if pane.set_group_by(group_by) {
+            // The items all move; show the regrouped list from its top,
+            // as Explorer does, rather than wherever GTK's scroll anchor
+            // went (often the end).
+            pane.restore_scroll_position(0.0);
+        }
         self.update_content();
         let Some(uri) = self.current_uri() else {
             return;

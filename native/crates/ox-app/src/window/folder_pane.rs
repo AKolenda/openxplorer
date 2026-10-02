@@ -28,6 +28,10 @@ use crate::text_size::TextSize;
 use super::empty_page::EmptyState;
 
 use parts::PaneParts;
+
+/// How long after a scroll position is restored a relayout may still
+/// move it; see [`FolderPane::restore_scroll_position`].
+const RELAYOUT_WINDOW: std::time::Duration = std::time::Duration::from_millis(250);
 pub(crate) use view::FolderView;
 
 /// What the folder pane shows.
@@ -259,6 +263,12 @@ impl FolderPane {
     pub(super) fn set_group_by(&self, group_by: GroupBy) -> bool {
         let parts = self.parts();
         let changed = parts.model.set_group_by(group_by);
+        if changed {
+            // A heading updates itself when its section's first item or
+            // count changes, but not when only its label does (Today
+            // becoming Yesterday after midnight): rebuild them all.
+            parts.details.show_group_headings(false);
+        }
         parts.details.show_group_headings(group_by != GroupBy::None);
         changed
     }
@@ -279,10 +289,19 @@ impl FolderPane {
     /// Scrolls the visible view to `position` once the view has measured
     /// its new items; set straight after a model change, the position
     /// would be clamped to the old, shorter list.
+    ///
+    /// When the items were regrouped (VIEW-022) or the group headings
+    /// appeared, GTK lays the rows out again a moment later and would move
+    /// the view to wherever its scroll anchor went; so the position is
+    /// also set again each time the view's size changes in the next
+    /// [`RELAYOUT_WINDOW`].
     pub(super) fn restore_scroll_position(&self, position: f64) {
         let adjustment = self.visible_vadjustment();
         adjustment.set_value(position);
-        glib::idle_add_local_once(move || adjustment.set_value(position));
+        let again = adjustment.clone();
+        glib::idle_add_local_once(move || again.set_value(position));
+        let relayout = adjustment.connect_changed(move |adjustment| adjustment.set_value(position));
+        glib::timeout_add_local_once(RELAYOUT_WINDOW, move || adjustment.disconnect(relayout));
     }
 
     /// The visible view, as a widget.

@@ -254,12 +254,18 @@ impl Settings {
     ///
     /// # Errors
     ///
-    /// Every error of [`update_preferences`](Self::update_preferences).
+    /// [`SettingsError::Invalid`] for a location that cannot be stored
+    /// (empty, over 4096 bytes, or with a control character), which
+    /// changes nothing, and every error of
+    /// [`update_preferences`](Self::update_preferences).
     pub fn set_folder_group_by(
         &mut self,
         uri: &str,
         group_by: Option<GroupBy>,
     ) -> Result<Preferences, SettingsError> {
+        if !preferences::is_storable_location(uri) {
+            return Err(SettingsError::invalid("This folder's location cannot be saved."));
+        }
         self.mutate(|data| {
             let mut groups = data.preferences.folder_group_by.clone();
             groups.retain(|folder, _| !same_location(folder, uri));

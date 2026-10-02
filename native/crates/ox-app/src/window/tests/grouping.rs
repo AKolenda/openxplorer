@@ -176,3 +176,35 @@ fn a_folder_remembers_the_group_chosen_in_the_sort_menu() {
     assert_eq!(beside.action_state("group-by").as_deref(), Some("size"));
     assert_eq!(headings(&beside).len(), 2);
 }
+
+/// The first group's heading stays in sight: a folder opened from another
+/// one, and a folder just regrouped, both show their list from the top,
+/// where GTK's scroll anchor would keep the first row at the top edge
+/// with the heading above it, or follow an item to the end.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn the_first_heading_is_shown_when_a_folder_opens_or_is_regrouped() {
+    let home = TestHome::new();
+    for number in 0..40 {
+        fs::write(
+            home.home.join("Downloads").join(format!("file {number}.txt")),
+            "x",
+        )
+        .expect("a file");
+    }
+    let scroll = |test: &TestWindow| {
+        wait_for_frames(&test.window, 5);
+        test.window.folder_pane().details().vadjustment().value()
+    };
+    let test = TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
+    test.window.navigate(&home.downloads()).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert!(scroll(&test) < 0.5, "Downloads opens at its first heading");
+    assert_eq!(headings(&test).first().map(String::as_str), Some("Today (42)"));
+
+    test.activate("group-by", Some("none"));
+    test.activate("group-by", Some("name"));
+    assert!(scroll(&test) < 0.5, "a regrouped folder is shown from the top");
+    assert_eq!(headings(&test).first().map(String::as_str), Some("A – H (40)"));
+}

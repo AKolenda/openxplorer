@@ -309,6 +309,12 @@ const MAX_SECTION_KEY: usize = 32;
 const MAX_HIDDEN_PLACES: usize = 64;
 const MAX_PLACE_LOCATION: usize = 4096;
 
+/// Whether `uri` may be stored as a sidebar place or a grouped folder:
+/// not empty, at most 4096 bytes, and without control characters.
+pub(crate) fn is_storable_location(uri: &str) -> bool {
+    !uri.is_empty() && uri.len() <= MAX_PLACE_LOCATION && !uri.contains(char::is_control)
+}
+
 /// The most folders whose Group by is remembered.
 pub const MAX_GROUPED_FOLDERS: usize = 512;
 
@@ -411,22 +417,16 @@ impl Preferences {
             self.hidden_sidebar_sections.clone_from(sections);
         }
         let places = update.hidden_sidebar_places.as_ref().filter(|places| {
-            places.len() <= MAX_HIDDEN_PLACES
-                && places.iter().all(|uri| {
-                    !uri.is_empty() && uri.len() <= MAX_PLACE_LOCATION && !uri.contains(char::is_control)
-                })
+            places.len() <= MAX_HIDDEN_PLACES && places.iter().all(|uri| is_storable_location(uri))
         });
         if let Some(places) = places {
             self.hidden_sidebar_places.clone_from(places);
         }
         let groups = update.folder_group_by.as_ref().filter(|groups| {
             groups.len() <= MAX_GROUPED_FOLDERS
-                && groups.iter().all(|(uri, key)| {
-                    !uri.is_empty()
-                        && uri.len() <= MAX_PLACE_LOCATION
-                        && !uri.contains(char::is_control)
-                        && GroupBy::from_key(key).is_some()
-                })
+                && groups
+                    .iter()
+                    .all(|(uri, key)| is_storable_location(uri) && GroupBy::from_key(key).is_some())
         });
         if let Some(groups) = groups {
             self.folder_group_by.clone_from(groups);
