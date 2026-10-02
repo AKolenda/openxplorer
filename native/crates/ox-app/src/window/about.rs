@@ -142,9 +142,8 @@ mod tests {
     use super::*;
     use crate::test_support::harness::{Fixture, TestWindow};
 
-    /// About names the version, the native stack and what is not
-    /// implemented, without the Python box's stale "no permanent-delete
-    /// fallback".
+    /// About names the version, native stack and supported previews, without
+    /// the Python box's stale "no permanent-delete fallback".
     ///
     /// parity: UPD-015
     #[gtk::test]
@@ -161,7 +160,11 @@ mod tests {
         };
         assert!(text.contains(channel), "{text}");
         assert!(text.contains("Desktop: Rust + GTK 4 + GIO/GVfs."), "{text}");
-        assert!(text.contains("Thumbnails are not implemented."), "{text}");
+        assert!(
+            text.contains("Images and supported media show previews."),
+            "{text}"
+        );
+        assert!(!text.contains("Thumbnails are not implemented."), "{text}");
         assert!(!text.contains("no permanent-delete fallback"), "{text}");
         assert_eq!(dialog.button_labels(), [REPORT_ISSUE, "Website", "OK"]);
         dialog.finish();
