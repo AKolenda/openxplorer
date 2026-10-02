@@ -80,6 +80,12 @@ impl Catalog {
         self.lookup(msgid, 0).unwrap_or(msgid).to_owned()
     }
 
+    /// Translates a message, then substitutes named `{placeholders}` once.
+    /// Inserted values remain literal, including braces or other placeholders.
+    pub fn format_message(&self, message: &str, values: &[(&str, &str)]) -> String {
+        substitute(&self.gettext(message), values)
+    }
+
     /// The translation of `msgid` in `context`, or `msgid` itself.
     pub fn pgettext(&self, context: &str, msgid: &str) -> String {
         let key = format!("{context}{CONTEXT_SEPARATOR}{msgid}");
@@ -143,6 +149,41 @@ pub fn gettext(msgid: &str) -> String {
         .map_or_else(|| msgid.to_owned(), |catalog| catalog.gettext(msgid))
 }
 
+/// Looks up a static message without allocating. Installed catalogues live
+/// for the process lifetime, so labels can retain their static return types.
+pub fn gettext_static(msgid: &'static str) -> &'static str {
+    INSTALLED
+        .get()
+        .and_then(|catalog| catalog.lookup(msgid, 0))
+        .unwrap_or(msgid)
+}
+
+/// Translates a message, then substitutes named `{placeholders}` once.
+/// Names omitted from `values` remain visible; inserted filenames and other
+/// values are never translated or interpreted as another placeholder.
+pub fn format_message(message: &str, values: &[(&str, &str)]) -> String {
+    substitute(&gettext(message), values)
+}
+
+fn substitute(message: &str, values: &[(&str, &str)]) -> String {
+    let mut result = String::with_capacity(message.len());
+    let mut rest = message;
+    while let Some(start) = rest.find('{') {
+        result.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let Some(end) = rest.find('}') else { break };
+        let name = &rest[1..end];
+        if let Some((_, value)) = values.iter().find(|(key, _)| *key == name) {
+            result.push_str(value);
+        } else {
+            result.push_str(&rest[..=end]);
+        }
+        rest = &rest[end + 1..];
+    }
+    result.push_str(rest);
+    result
+}
+
 /// The translation of `msgid` in `context`, for an id that needs telling
 /// apart from the same English text elsewhere.
 pub fn pgettext(context: &str, msgid: &str) -> String {
@@ -178,6 +219,29 @@ mod tests {
         );
         entries.sort();
         mo::write(&entries)
+    }
+
+    #[test]
+    fn translated_messages_reorder_values_without_interpreting_their_contents() {
+        let bytes = mo_file(
+            "nplurals=2; plural=(n != 1);",
+            &[("Copy {name} to {folder}", &["Do {folder}: {name}"])],
+        );
+        let catalog = Catalog::from_mo(&bytes).unwrap();
+        let values = [("name", "{folder}.txt"), ("folder", "Example files")];
+        assert_eq!(gettext_static("No catalogue label"), "No catalogue label");
+        assert_eq!(
+            catalog.format_message("Copy {name} to {folder}", &values),
+            "Do Example files: {folder}.txt"
+        );
+        assert_eq!(
+            format_message("Copy {name} to {folder}", &values),
+            "Copy {folder}.txt to Example files"
+        );
+        assert_eq!(
+            format_message("{missing} {name} {name} {unfinished", &values),
+            "{missing} {folder}.txt {folder}.txt {unfinished"
+        );
     }
 
     /// parity: INT-031
