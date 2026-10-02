@@ -447,7 +447,7 @@ impl BrowserWindow {
     }
 
     /// Cancel and Escape.
-    fn cancel_picking(&self) {
+    pub(super) fn cancel_picking(&self) {
         if let Some(picker) = self.picker() {
             picker.reply.send(&ChooserAnswer::Cancelled);
         }
@@ -668,6 +668,7 @@ mod tests {
     use std::process::{Child, Command, Stdio};
     use std::rc::Rc;
 
+    use gtk::glib::translate::IntoGlib;
     use gtk::prelude::*;
     use gtk::{gio, glib};
     use ox_core::integration::{
@@ -959,6 +960,49 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("Exports")]);
+    }
+
+    /// Escape in the file list cancels the dialog, as in Windows, even
+    /// with a file selected (where it would otherwise clear the
+    /// selection).
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn escape_in_the_file_list_cancels() {
+        let fixture = Fixture::empty();
+        fixture.write("letter.odt");
+        let portal = Portal::new();
+        let answer = portal.call(
+            "OpenFile",
+            &[(
+                "current_folder",
+                path_variant(&fixture.root().display().to_string()),
+            )],
+        );
+        let window = &portal.test.window;
+        portal.test.select_named("letter.odt");
+        // The details view's own key handling, as a key press there runs.
+        let view = window.folder_pane().details().column_view();
+        let keys = view
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+            .find(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
+            .expect("the details view handles keys");
+        let handled = keys.emit_by_name::<bool>(
+            "key-pressed",
+            &[
+                &gtk::gdk::Key::Escape.into_glib(),
+                &0_u32,
+                &gtk::gdk::ModifierType::empty(),
+            ],
+        );
+        assert!(handled);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_CANCELLED);
+        assert!(uris.is_empty());
+        wait_until("the picker to close", || !window.is_visible());
     }
 
     /// Closing the window answers Cancelled, once.

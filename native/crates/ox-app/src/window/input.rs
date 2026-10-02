@@ -336,6 +336,9 @@ impl BrowserWindow {
                 self.reset_typeahead();
             }
             gdk::Key::Escape if self.close_quick_look() => {}
+            // In an Open or Save dialog Escape cancels, as in Windows,
+            // even with items selected.
+            gdk::Key::Escape if self.is_picking() => self.cancel_picking(),
             gdk::Key::Escape => self.clear_selection(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
             gdk::Key::BackSpace => {

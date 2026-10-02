@@ -1,5 +1,7 @@
 # Unreleased
 
+- Escape closes an Open or Save dialog again while a file is selected in
+  the list, as in Windows, instead of only clearing the selection.
 - Optional: other applications' Open and Save dialogs in OpenXplorer.
   Settings > Default apps > "Apps' Open and Save dialogs" > Enable makes
   applications that use the desktop portal (Chrome, Firefox, Flatpak apps)
