@@ -34,6 +34,24 @@ Your Templates folder supplies entries directly in New, with its subfolders as s
 
 More options → Keyboard shortcuts (Ctrl+?) lists the available keys. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
 
+## Follow file operations
+
+Copy, move and delete jobs have their own progress panels. Pause, Resume and Cancel apply to the chosen job. Speed is shown while transferring bytes; estimated time remaining appears when the total is known.
+
+Up to four independent jobs can run while you browse. A job that overlaps an active source or destination must wait for that job to finish. Rename, archive operations, restore and Undo run on their own. If an item fails, Retry, Skip and Skip all let you choose how to continue.
+
+## Add installed service actions
+
+Choose Configure service actions from a folder or item menu, enable the installed actions you trust, then Save. Matching enabled actions appear under Service actions. Edited definitions must be enabled again.
+
+OpenXplorer reads supported KDE service-menu definitions and executable Nautilus scripts from XDG data folders. Selected paths are passed as separate arguments. Terminal launchers, interpreter commands and embedded field substitutions are unsupported.
+
+## Open a protected folder
+
+Open as administrator on a local folder’s menu asks for confirmation before opening an admin:/// location. GVfs requests desktop authentication through polkit; OpenXplorer itself keeps running as your user. The feature needs your distribution’s GVfs administrator backend.
+
+Administrator access does not remove OpenXplorer’s protection of snapshot folders. Restoring a session reopens administrator locations with ordinary permissions.
+
 ## Choose your context menu
 
 Windows 10-style classic menus are the default; Settings can switch to the Windows 11-style compact option. Open with uses registered applications; identical editor names are deduplicated.
