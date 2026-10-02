@@ -80,6 +80,7 @@ mod focus_regions;
 mod folder_pane;
 mod folder_search;
 mod folder_size_scan;
+mod folder_tree;
 mod free_space;
 mod gestures;
 mod grid_keys;

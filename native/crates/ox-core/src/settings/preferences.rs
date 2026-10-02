@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use super::choices::{ContextMenu, Theme, View};
 use super::pane_options::DetailsPaneOptions;
+use super::tree_options::FolderTreeOptions;
 use super::view_options::ViewOptions;
 use super::SettingsError;
 use crate::location;
@@ -354,6 +355,9 @@ pub struct Preferences {
     /// (Dolphin's `SwitchBetweenSplitViewsWithTabKey`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tab_switches_split_panes: bool,
+    /// The folder tree's options (SIDE-028); saved only once changed.
+    #[serde(skip_serializing_if = "FolderTreeOptions::is_default")]
+    pub folder_tree: FolderTreeOptions,
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
@@ -413,6 +417,7 @@ impl Default for Preferences {
             startup_folder: None,
             begin_in_split_view: false,
             tab_switches_split_panes: false,
+            folder_tree: FolderTreeOptions::default(),
         }
     }
 }
@@ -507,6 +512,7 @@ impl Preferences {
                 self.startup_folder = Some(uri);
             }
         }
+        replace_if_some(&mut self.folder_tree, update.folder_tree);
     }
 }
 
@@ -583,6 +589,8 @@ pub struct PreferencesUpdate {
     pub begin_in_split_view: Option<bool>,
     /// Let Tab move between the panes of a split tab.
     pub tab_switches_split_panes: Option<bool>,
+    /// Replaces the folder tree's options.
+    pub folder_tree: Option<FolderTreeOptions>,
 }
 
 impl PreferencesUpdate {
@@ -639,6 +647,7 @@ impl PreferencesUpdate {
             startup_folder: text("startupFolder").map(str::to_owned),
             begin_in_split_view: flag("beginInSplitView"),
             tab_switches_split_panes: flag("tabSwitchesSplitPanes"),
+            folder_tree: values.get("folderTree").and_then(FolderTreeOptions::from_json),
         })
     }
 }

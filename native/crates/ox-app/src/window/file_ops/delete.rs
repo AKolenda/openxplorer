@@ -28,6 +28,18 @@ use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
+/// `uris` with the names their confirmations show.
+fn named_items(uris: Vec<String>) -> Vec<DeleteItem> {
+    uris.into_iter()
+        .map(|uri| {
+            let name = gio::File::for_uri(&uri)
+                .basename()
+                .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
+            DeleteItem { uri, name }
+        })
+        .collect()
+}
+
 /// A Trash or delete request for `uris`.
 fn removal(mode: TransferMode, uris: Vec<String>) -> TransferRequest {
     TransferRequest {
@@ -65,19 +77,21 @@ impl BrowserWindow {
         self.trash_items(&self.items_to_delete(), next.as_deref()).await;
     }
 
-    /// Items dropped on the Recycle Bin: moved to the Trash with Delete's
-    /// confirmation (OPS-045).
+    /// Items dropped on the Recycle Bin, or a folder of the folder tree:
+    /// moved to the Trash with Delete's confirmation (OPS-045, SIDE-028).
     pub(crate) async fn trash_dropped(&self, uris: Vec<String>) {
-        let items: Vec<DeleteItem> = uris
-            .into_iter()
-            .map(|uri| {
-                let name = gio::File::for_uri(&uri)
-                    .basename()
-                    .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
-                DeleteItem { uri, name }
-            })
-            .collect();
-        self.trash_items(&items, None).await;
+        self.trash_items(&named_items(uris), None).await;
+    }
+
+    /// Deletes the folder tree's folder at `uri` permanently, after
+    /// Shift+Delete's confirmation (SIDE-028).
+    pub(crate) async fn delete_permanently_at(&self, uri: &str) {
+        let items = named_items(vec![uri.to_owned()]);
+        if !self.confirms_permanent_delete(&items).await {
+            return;
+        }
+        self.run_deletion(&removal(TransferMode::Delete, vec![uri.to_owned()]), None)
+            .await;
     }
 
     /// Asks, then moves each of `items` to its folder's Trash, or deletes

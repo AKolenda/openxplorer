@@ -17,8 +17,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::settings::{
-    ColumnWidth, DetailsPaneOptions, PreferencesUpdate, SettingsError, Theme, ViewOptions, WindowSize,
-    SIDEBAR_WIDTHS,
+    ColumnWidth, DetailsPaneOptions, FolderTreeOptions, PreferencesUpdate, SettingsError, Theme, ViewOptions,
+    WindowSize, SIDEBAR_WIDTHS,
 };
 
 use super::folder_pane::FolderView;
@@ -66,6 +66,8 @@ pub(super) enum Preference {
     /// The folder views' options: previews, item counts and the details
     /// columns (VIEW-033, VIEW-058).
     ViewOptions(ViewOptions),
+    /// The folder tree's options (SIDE-028).
+    FolderTree(FolderTreeOptions),
 }
 
 impl Preference {
@@ -86,6 +88,7 @@ impl Preference {
             Preference::Sidebar(shown) => update.hide_sidebar = Some(!shown),
             Preference::SidebarIconSize(size) => update.sidebar_icon_size = Some(size),
             Preference::ViewOptions(options) => update.view_options = Some(options),
+            Preference::FolderTree(options) => update.folder_tree = Some(options),
             Preference::DefaultLayout => {
                 update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
                 // An empty list clears every saved column width.
@@ -176,6 +179,7 @@ impl BrowserWindow {
         self.reset_sidebar_on_double_click();
         self.install_sidebar_resizer();
         self.install_sidebar_toggle();
+        self.install_folder_tree();
         self.follow_layout_reset();
     }
 

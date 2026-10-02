@@ -19,6 +19,7 @@
 //! | [`folder_locations`] | Moving a standard folder safely | `folder_locations.py` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
+//! | [`i18n`] | The interface's translations: gettext catalogues in the desktop's language | (new, after Dolphin) |
 //! | [`search`] | The metadata-only filename search cache and its index service | `search_index.py`, `index_service.py`, `local_watch.py` |
 //! | [`archive`] | ZIP browsing, opening a member as a private copy, extraction and compression | `archives.py`, `zip_extraction.py`, `native_opening.py`, `winspace.py` |
 //! | [`versions`] | Previous versions and the read-only rule for snapshots | `previous_versions.py`, `file_services.py`, `ui/snapshot-meta.js` |
@@ -37,6 +38,7 @@ pub mod entry;
 pub mod folder_locations;
 pub mod format;
 pub mod gio_node;
+pub mod i18n;
 pub mod integration;
 pub mod location;
 pub mod network;

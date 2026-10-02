@@ -5741,8 +5741,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "show_folders_panel: F7"
-native = "todo"
-native_note = "Porting notes: This corresponds to Explorer's navigation-pane tree, where Ctrl+Shift+E expands to the current folder. OpenXplorer's 'This PC' and 'Network' rows show a chevron but do not expand."
+native = "done"
+native_note = "View > Folder tree and F7 (Dolphin's key) show a tree of folders in the navigation pane below the places, split from them by a draggable divider; the choice and the tree's options are saved for every window (folderTree). It starts at the home folder while the folder shown is inside it (Limit to home folder, on by default), else at the top of the folder's file system or server; it follows the active tab, opening the folders on the way, selecting the folder shown and scrolling to it (Scroll to the folder shown). A folder's subfolders are read only when its row is expanded, through a monitored GtkDirectoryList, so the tree updates itself. Click opens a folder, Ctrl+click or middle-click opens it in a tab (Shift: in front), Enter opens the focused one, Right and Left open and close a folder or move to its first subfolder or its parent, and the chevron opens and closes it. The context menu has Open in new tab, Open in new window, Cut, Copy, Paste (into the folder), Rename…, Move to Trash, Delete permanently, Open in Terminal, Properties and the three options with check marks (Show hidden folders off by default); the file commands act on the folder clicked with the usual confirmations and Undo (renaming the folder shown, or one it is in, moves the tab with it); Cut, Rename…, Move to Trash and Delete permanently are off for the tree's top, and every file command but Paste is off for share roots and virtual places. Explorer's Ctrl+Shift+E (expand to the current folder) is what the tree always does. Test: window/tests/folder_tree.rs."
 
 [[feature]]
 id = "SIDE-029"
@@ -12076,8 +12076,8 @@ python_tests = []
 bridge = ["openTerminal"]
 dolphin = "show_terminal_panel: F4; focus_terminal_panel: Ctrl+Shift+F4; Dolphin Terminal panel (F4, Konsole KPart)"
 gnome = "VTE for GTK4 (vte-2.91-gtk4) VteTerminal spawn_async with a working directory"
-native = "todo"
-native_note = "Porting notes: Shortcut conflict, Explorer wins: F4 opens the address-bar list in Explorer. Same directory validation as Open in Terminal; never type filename-derived commands into the shell."
+native = "partial"
+native_note = "Not embedded: Dolphin's panel hosts Konsole, and the GTK 4 equivalent is VTE (vte-2.91-gtk4), which this app cannot link on every supported target: the CI and package containers (native/packaging/ci/prepare-container.sh for Fedora, openSUSE, Arch, Debian and Ubuntu 24.04) do not install it, the development machine has only the GTK 3 libvte, and inside the Flatpak a VTE shell would run in the sandbox instead of the host (it would need flatpak-spawn --host and a host-side directory tracker). Adding it is an owner decision on a new system dependency for every package. What exists: View > Terminal and Ctrl+Shift+F4 (Dolphin's Terminal panel key) open the desktop's configured terminal in the folder shown, with Open in Terminal's directory validation (OPEN-021); F4 stays Explorer's address-bar list. Missing: the embedded panel, cd in it moving the view, and the close confirmation while a program runs there. Test: window/tests/command_bar.rs."
 
 [[feature]]
 id = "OPEN-023"
@@ -15463,8 +15463,8 @@ python_tests = []
 bridge = []
 dolphin = "KI18n throughout, with translations for about 89 languages in po/; Configure › Switch Application Language"
 gnome = "gettext (bindtextdomain, ngettext) with installed .mo files for Rust and GtkBuilder strings; GTK text direction from the locale (gtk_widget_get_default_direction); msgfmt --desktop and --xml for the .desktop file and metainfo"
-native = "todo"
-native_note = "Porting notes: The Python app is English-only, and features.toml quotes English source strings; keep them as msgids so the inventory stays testable. Translatable strings are cheap from the first native commit and expensive to retrofit. Decide whether the Windows 11 layout mirrors for right-to-left languages. Dates already follow the locale (VIEW-001, LOOK-026)."
+native = "partial"
+native_note = "The infrastructure is in place: ox_core::i18n reads gettext .mo catalogues itself (no FFI; plural rules from the Plural-Forms expression, message contexts) and, at start-up, installs the catalogue of the first language g_get_language_names gives (LANGUAGE, LC_ALL, LC_MESSAGES, LANG) found as <XDG data dir>/locale/<lang>/LC_MESSAGES/openxplorer.mo, so /usr/share, /usr/local/share and the Flatpak's /app/share all work; English, the msgid, is the fallback. native/tools/i18n.py extracts every gettext, ngettext and pgettext call into the English template native/po/openxplorer.pot (check.py fails when it is stale) and compiles native/po/<lang>.po; package_data.py installs each compiled catalogue for every package format. No translation is committed (no machine translations). Strings through it so far: the command bar's New, Sort, View, More options and appearance menus, the folder tree's menu, and the status bar's counts with plural forms ('{count} item'). Still to do: the remaining hard-coded strings (about 2,800 literals in some 360 files, best done as one mechanical pass after the parallel tracks merge, to avoid conflicts), the GtkBuilder templates' strings (translatable=\"yes\" and a lookup after the template is built, since GtkBuilder's own translation needs bindtextdomain through FFI), the .desktop and metainfo translations (msgfmt --desktop/--xml), and an owner decision on right-to-left languages: GTK mirrors boxes, arrows and the caption buttons by itself from its own translations; whether the Windows 11 layout should mirror is not decided. Stable error codes (OPS-037) never go through the catalogue. Tests: crates/ox-core/src/i18n.rs, tools/test_i18n.py."
 
 [[feature]]
 id = "UPD-001"

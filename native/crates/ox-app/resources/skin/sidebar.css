@@ -77,6 +77,32 @@ window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
 /* The 17px glyph is centred on a half pixel as above. */
 .sidebar-bottom image { color: @ox_accent; margin-top: 1px; }
 
+/* ---- Folder tree (SIDE-028) ----
+   Explorer's navigation-pane tree: 30px rows with the places' hover,
+   selection and focus, a 16px chevron that turns down when open, and
+   a line like the footer's between the places and the tree. */
+.sidebar paned > separator { min-height: 1px; margin: 0 7px; background-color: @ox_border; }
+.folder-tree listview { background: none; padding: 6px 7px 0 7px; color: @ox_text; }
+.folder-tree listview > row {
+  min-height: 30px;
+  border-radius: 4px;
+  padding: 0 6px;
+  background: none;
+  outline: none;
+  transition: background-color 83ms linear;
+}
+.folder-tree listview > row:hover { background-color: @ox_hover; }
+.folder-tree listview > row:selected { background-color: @ox_selected; color: @ox_text; }
+.folder-tree listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+.folder-tree treeexpander expander {
+  min-width: 16px;
+  min-height: 16px;
+  margin-right: 4px;
+  color: @ox_muted;
+  -gtk-icon-source: -gtk-icontheme("ox-chevron-right-16-symbolic");
+}
+.folder-tree treeexpander expander:checked { -gtk-icon-source: -gtk-icontheme("ox-chevron-down-16-symbolic"); }
+
 /* A hidden place or section listed by "Show all entries" (SIDE-010), half
    see-through as in Dolphin's Places panel. */
 .sidebar list > row.hidden-place .side-entry { opacity: 0.5; }
