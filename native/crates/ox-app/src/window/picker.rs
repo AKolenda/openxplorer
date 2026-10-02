@@ -656,12 +656,16 @@ pub(super) type PickerSlot = RefCell<Option<Rc<Picker>>>;
 
 #[cfg(test)]
 mod tests {
-    //! The picker as the portal drives it: a real backend on the test's
-    //! private session bus, a second connection that owns
+    //! The picker as the portal drives it: a real backend on a
+    //! `dbus-daemon` of the test's own, a second connection that owns
     //! `org.freedesktop.portal.Desktop`, and a test window that receives
-    //! the call.
+    //! the call. The bus is not check.py's session bus, where GTK may
+    //! already have started a real portal that owns that name.
 
     use std::cell::RefCell;
+    use std::fs;
+    use std::io::{BufRead, BufReader};
+    use std::process::{Child, Command, Stdio};
     use std::rc::Rc;
 
     use gtk::prelude::*;
@@ -673,14 +677,61 @@ mod tests {
 
     use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow};
 
-    /// A fresh connection to the test's session bus.
-    fn connect() -> gio::DBusConnection {
-        let address = gio::dbus_address_get_for_bus_sync(gio::BusType::Session, gio::Cancellable::NONE)
-            .expect("check.py gives the tests a session bus");
-        let flags = gio::DBusConnectionFlags::AUTHENTICATION_CLIENT
-            | gio::DBusConnectionFlags::MESSAGE_BUS_CONNECTION;
-        gio::DBusConnection::for_address_sync(&address, flags, None, gio::Cancellable::NONE)
-            .expect("connect to the session bus")
+    /// A `dbus-daemon` of the test's own, stopped when dropped.
+    struct PrivateBus {
+        daemon: Child,
+        address: String,
+        _directory: tempfile::TempDir,
+    }
+
+    impl PrivateBus {
+        fn start() -> Self {
+            let directory = tempfile::tempdir().expect("a folder for the bus");
+            let config = directory.path().join("bus.conf");
+            let listen = format!("unix:dir={}", directory.path().display());
+            fs::write(
+                &config,
+                format!(
+                    "<!DOCTYPE busconfig PUBLIC \"-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN\"\n \
+                     \"http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd\">\n<busconfig><type>session</type>\
+                     <listen>{listen}</listen><auth>EXTERNAL</auth><policy context=\"default\">\
+                     <allow send_destination=\"*\" eavesdrop=\"true\"/><allow eavesdrop=\"true\"/><allow own=\"*\"/>\
+                     </policy></busconfig>\n"
+                ),
+            )
+            .expect("the bus configuration is written");
+            let mut daemon = Command::new("dbus-daemon")
+                .arg(format!("--config-file={}", config.display()))
+                .args(["--nofork", "--print-address=1"])
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("dbus-daemon is installed with dbus-run-session");
+            let stdout = daemon.stdout.take().expect("standard output is piped");
+            let mut address = String::new();
+            BufReader::new(stdout)
+                .read_line(&mut address)
+                .expect("the daemon prints its address");
+            Self {
+                daemon,
+                address: address.trim().to_owned(),
+                _directory: directory,
+            }
+        }
+
+        /// A fresh connection to this bus.
+        fn connect(&self) -> gio::DBusConnection {
+            let flags = gio::DBusConnectionFlags::AUTHENTICATION_CLIENT
+                | gio::DBusConnectionFlags::MESSAGE_BUS_CONNECTION;
+            gio::DBusConnection::for_address_sync(&self.address, flags, None, gio::Cancellable::NONE)
+                .expect("connect to the private bus")
+        }
+    }
+
+    impl Drop for PrivateBus {
+        fn drop(&mut self) {
+            let _ = self.daemon.kill();
+            let _ = self.daemon.wait();
+        }
     }
 
     /// Runs `future` on the main loop until it finishes.
@@ -701,12 +752,14 @@ mod tests {
         _backend: FileChooserBus,
         backend_name: String,
         frontend: gio::DBusConnection,
+        _bus: PrivateBus,
     }
 
     impl Portal {
         fn new() -> Self {
+            let bus = PrivateBus::start();
             let test = TestWindow::without_tabs();
-            let connection = connect();
+            let connection = bus.connect();
             let backend_name = connection.unique_name().expect("a bus name").to_string();
             let window = test.window.downgrade();
             let mut backend = FileChooserBus::new(connection, move |call| {
@@ -715,7 +768,7 @@ mod tests {
                 Ok(())
             });
             backend.export().expect("export the backend");
-            let frontend = connect();
+            let frontend = bus.connect();
             let owning = frontend.clone();
             let reply = wait_for("the portal's name", async move {
                 owning
@@ -741,6 +794,7 @@ mod tests {
                 _backend: backend,
                 backend_name,
                 frontend,
+                _bus: bus,
             }
         }
 
