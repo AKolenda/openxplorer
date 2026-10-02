@@ -200,6 +200,32 @@ class VerifierTests(StagingTestCase):
         with self.assertRaisesRegex(VerificationError, 'newest release'):
             verify_layout.check_metainfo(Report(), newer)
 
+    # parity: INT-032
+    def test_host_packages_install_an_opt_in_file_dialog_portal(self) -> None:
+        for layout in (Layout.DEBIAN, Layout.FHS):
+            tree = self.install(Channel.STABLE, layout)
+            app_id = Channel.STABLE.app_id
+            portal = tree.path_of(tree.paths.share / 'xdg-desktop-portal/portals' / f'{app_id}.portal')
+            section = verify_layout.key_file(portal)['portal']
+            self.assertEqual(section.get('DBusName'), app_id)
+            self.assertEqual(section.get('Interfaces'), 'org.freedesktop.impl.portal.FileChooser;')
+            self.assertNotIn('UseIn', section, 'the backend must never volunteer for a desktop')
+            verify_layout.check_portal_file(Report(), tree)
+
+    # parity: INT-032
+    def test_the_flatpak_installs_no_portal_file(self) -> None:
+        tree = self.install(Channel.STABLE, Layout.FLATPAK)
+        self.assertIsNone(package_data.portal_file_path(tree.paths, Channel.STABLE.app_id))
+        self.assertFalse(tree.path_of(PurePosixPath('/app/share/xdg-desktop-portal')).exists())
+
+    # parity: INT-032
+    def test_a_portal_file_that_volunteers_is_refused(self) -> None:
+        tree = self.install(Channel.STABLE, Layout.FHS)
+        portal = tree.path_of(package_data.portal_file_path(tree.paths, Channel.STABLE.app_id))
+        portal.write_text(portal.read_text(encoding='utf-8') + 'UseIn=KDE\n', encoding='utf-8')
+        with self.assertRaisesRegex(VerificationError, 'portal file'):
+            verify_layout.check_portal_file(Report(), tree)
+
     def test_a_python_program_is_refused(self) -> None:
         tree = self.install(Channel.STABLE, Layout.DEBIAN)
         script = tree.path_of(tree.paths.commands / 'openxplorer-helper')

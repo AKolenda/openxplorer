@@ -16,7 +16,7 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::search::SearchFacets;
 
-use crate::folder_view::filter::FilterState;
+use crate::folder_view::filter::{ChooserListing, FilterState};
 use crate::folder_view::item::FileItem;
 use crate::folder_view::sorting::{self, SortColumn};
 
@@ -98,7 +98,9 @@ impl FolderModel {
         let filter = gtk::CustomFilter::new(move |object| {
             let item = as_item(object);
             let state = state.borrow();
-            state.accepts(item.lowercase_name(), item.visibility()) && state.passes_facets(item.entry())
+            state.accepts(item.lowercase_name(), item.visibility())
+                && state.passes_facets(item.entry())
+                && state.passes_chooser(item.entry())
         });
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
@@ -151,7 +153,7 @@ impl FolderModel {
         let listed = store
             .iter::<FileItem>()
             .filter_map(Result::ok)
-            .filter(|item| filter.lists(item.visibility()))
+            .filter(|item| filter.lists(item.visibility()) && filter.passes_chooser(item.entry()))
             .count();
         u32::try_from(listed).unwrap_or(u32::MAX)
     }
@@ -185,6 +187,12 @@ impl FolderModel {
     /// Shows or hides hidden items; returns true when that changed.
     pub(crate) fn set_show_hidden(&self, show: bool) -> bool {
         self.update_filter(|state| state.set_show_hidden(show))
+    }
+
+    /// Narrows the items as a file dialog asks (INT-032); returns true
+    /// when the shown items changed.
+    pub(crate) fn set_chooser_listing(&self, listing: ChooserListing) -> bool {
+        self.update_filter(|state| state.set_chooser(listing))
     }
 
     /// Applies `update` to the filter state and, when it reports a change,

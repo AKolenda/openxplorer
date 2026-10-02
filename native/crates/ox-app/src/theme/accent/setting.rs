@@ -172,6 +172,7 @@ async fn follow_session_portal(source: Weak<Source>) {
     let Ok(connection) = gio::bus_get_future(gio::BusType::Session).await else {
         return;
     };
+    super::super::system::portal_ready(&connection).await;
     follow_portal(source, &connection, DESKTOP_PORTAL_NAME).await;
 }
 

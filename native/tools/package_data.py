@@ -35,6 +35,8 @@ APP_ICON = NATIVE / 'crates/ox-app/resources/icons/hicolor/scalable/places/ox-fi
 
 # The D-Bus activation file; build_service_file fills in its placeholders.
 DBUS_SERVICE_TEMPLATE = PACKAGING_DATA / 'dbus-service.in'
+# The desktop portal's backend file for Open and Save dialogs (INT-032).
+PORTAL_TEMPLATE = PACKAGING_DATA / 'file-chooser.portal.in'
 
 # The administrator's persistent SMB mount helper, a second Rust program
 # (crates/ox-core/src/bin/openxplorer-mount-share.rs). The mount assistant
@@ -240,6 +242,26 @@ def install_desktop_data(staging: Staging, channel: Channel, paths: InstalledPat
     staging.copy(APP_ICON, share / 'icons/hicolor/scalable/apps' / f'{app_id}.svg', DATA_MODE)
     service = build_service_file(app_id, paths.command)
     staging.write(service, share / 'dbus-1/services' / f'{app_id}.service', DATA_MODE)
+    portal = portal_file_path(paths, app_id)
+    if portal is not None:
+        staging.write(build_portal_file(app_id), portal, DATA_MODE)
+
+
+def portal_file_path(paths: InstalledPaths, app_id: str) -> PurePosixPath | None:
+    """Return where the Open and Save dialog backend's portal file goes.
+
+    The host's desktop portal reads only the host's data folders, so a
+    Flatpak (whose share folder is /app/share) installs none.
+    """
+    if paths.share == PurePosixPath('/app/share'):
+        return None
+    return paths.share / 'xdg-desktop-portal/portals' / f'{app_id}.portal'
+
+
+def build_portal_file(app_id: str) -> str:
+    """Return the portal backend file naming app_id's bus name."""
+    template = PORTAL_TEMPLATE.read_text(encoding='utf-8')
+    return template.replace('@APP_ID@', app_id)
 
 
 def build_service_file(app_id: str, command: PurePosixPath) -> str:

@@ -90,6 +90,7 @@ def verify_tree(report: Report, tree: InstalledTree) -> None:
     check_no_python(report, tree)
     check_desktop_entry(report, tree)
     check_service_file(report, tree)
+    check_portal_file(report, tree)
     check_metainfo(report, tree)
     check_with_desktop_validators(report, tree)
     helper = tree.paths.mount_helper
@@ -108,6 +109,9 @@ def promised_files(tree: InstalledTree) -> list[PurePosixPath]:
              share / 'icons/hicolor/scalable/apps' / f'{app_id}.svg',
              share / 'dbus-1/services' / f'{app_id}.service',
              paths.licences / 'LICENSE', paths.licences / 'rust-crates/INDEX.txt']
+    portal = package_data.portal_file_path(paths, app_id)
+    if portal is not None:
+        files.append(portal)
     if paths.mount_helper is not None:
         legacy = (package_data.LEGACY_COMMAND, package_data.MOUNT_HELPER_COMMAND,
                   package_data.LEGACY_MOUNT_HELPER_COMMAND)
@@ -202,6 +206,19 @@ def check_service_file(report: Report, tree: InstalledTree) -> None:
     report.check('The D-Bus service starts the app as a GApplication service',
                  section.get('Name') == app_id
                  and section.get('Exec') == f'{command} --gapplication-service')
+
+
+def check_portal_file(report: Report, tree: InstalledTree) -> None:
+    """Check that the portal backend file serves only FileChooser and claims no desktop."""
+    app_id = tree.channel.app_id
+    installed = package_data.portal_file_path(tree.paths, app_id)
+    if installed is None:
+        return
+    section = key_file(tree.path_of(installed))['portal']
+    report.check('The portal file offers only Open and Save dialogs, opt-in',
+                 section.get('DBusName') == app_id
+                 and section.get('Interfaces') == 'org.freedesktop.impl.portal.FileChooser;'
+                 and 'UseIn' not in section)
 
 
 def check_metainfo(report: Report, tree: InstalledTree) -> None:

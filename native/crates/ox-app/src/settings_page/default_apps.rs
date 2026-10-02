@@ -87,6 +87,14 @@ const BRAVE_AND_OTHER_APPS: RowText = RowText {
                do not control every browser route test checks filemanager1 not brave",
 };
 
+const FILE_DIALOGS: RowText = RowText {
+    title: "Apps' Open and Save dialogs",
+    description: "Other apps choose and save files in an OpenXplorer window.",
+    keywords: "file picker file chooser open save save as upload download dialog portal \
+               xdg-desktop-portal filechooser chrome firefox use openxplorer for open and save \
+               dialogs apply now restart portal",
+};
+
 const TROUBLESHOOTING: RowText = RowText {
     title: "Troubleshooting",
     description: "Zorin and Brave setup steps, and how to undo each change.",
@@ -104,6 +112,12 @@ const RESTORE_ZIP_HANDLER: RowText = RowText {
     title: "Restore ZIP handler",
     description: "Gives ZIP files back to the app that opened them before.",
     keywords: "undo zip archive",
+};
+
+const RESTORE_FILE_DIALOGS: RowText = RowText {
+    title: "Restore Open and Save dialogs",
+    description: "Gives other apps' Open and Save dialogs back to the desktop.",
+    keywords: "undo file picker file chooser portal save dialog",
 };
 
 const DISABLE_SHOW_IN_FOLDER: RowText = RowText {
@@ -131,6 +145,10 @@ struct Controls {
     restore_previous: gtk::Button,
     restore_zip: gtk::Button,
     disable_show_in_folder: gtk::Button,
+    file_dialogs_row: SettingRow,
+    enable_file_dialogs: gtk::Button,
+    apply_file_dialogs: gtk::Button,
+    restore_file_dialogs: gtk::Button,
 }
 
 impl Controls {
@@ -164,6 +182,10 @@ impl Controls {
             restore_previous: parts::button(RESTORE_PREVIOUS.title, ButtonStyle::Bordered),
             restore_zip: parts::button(RESTORE_ZIP_HANDLER.title, ButtonStyle::Bordered),
             disable_show_in_folder: parts::button(DISABLE_SHOW_IN_FOLDER.title, ButtonStyle::Bordered),
+            file_dialogs_row: SettingRow::new(FILE_DIALOGS),
+            enable_file_dialogs: parts::button("Enable", ButtonStyle::Accent),
+            apply_file_dialogs: parts::button("Apply now", ButtonStyle::Bordered),
+            restore_file_dialogs: parts::button(RESTORE_FILE_DIALOGS.title, ButtonStyle::Bordered),
         }
     }
 }
@@ -185,6 +207,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let routes = routes_group(&controls);
     section.append_group(&routes);
     section.append_group(&show_in_folder_group(&controls));
+    section.append_group(&file_dialogs_group(&controls));
     section.append_group(&troubleshooting_group(page));
     section.append_group(&advanced_group(&controls));
     let view = DefaultAppsView::new(page, &controls);
@@ -256,6 +279,17 @@ fn show_in_folder_group(controls: &Controls) -> SettingsGroup {
     group
 }
 
+/// "Apps' Open and Save dialogs", with Apply now and Enable (INT-032);
+/// its description becomes the status line.
+fn file_dialogs_group(controls: &Controls) -> SettingsGroup {
+    let group = SettingsGroup::new("Open and Save dialogs");
+    let row = &controls.file_dialogs_row;
+    row.add_control(&controls.apply_file_dialogs, ControlName::OwnLabel);
+    row.add_control(&controls.enable_file_dialogs, ControlName::OwnLabel);
+    group.add_row(row);
+    group
+}
+
 /// The row whose chevron opens the Zorin and Brave guide.
 fn troubleshooting_group(page: &SettingsPage) -> SettingsGroup {
     // The row names itself, as in the mockup.
@@ -279,6 +313,7 @@ fn advanced_group(controls: &Controls) -> SettingsGroup {
         (RESTORE_PREVIOUS, &controls.restore_previous),
         (RESTORE_ZIP_HANDLER, &controls.restore_zip),
         (DISABLE_SHOW_IN_FOLDER, &controls.disable_show_in_folder),
+        (RESTORE_FILE_DIALOGS, &controls.restore_file_dialogs),
     ] {
         let row = SettingRow::new(text);
         row.add_control(button, ControlName::OwnLabel);

@@ -36,6 +36,7 @@ mod brave_dialog;
 mod changes;
 mod custom_command;
 mod editors;
+mod file_dialog_service;
 mod file_manager_service;
 mod mime_backend;
 mod open_with_dialog;
@@ -52,7 +53,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{
-    BraveIntegration, BravePaths, DefaultApps, RevealPaths, RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
+    BraveIntegration, BravePaths, DefaultApps, FileDialogPaths, FileDialogRegistration, RevealPaths,
+    RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
 };
 
 #[cfg(test)]
@@ -64,6 +66,7 @@ pub(crate) use applications::{
 pub(crate) use brave_dialog::BraveDialog;
 pub(crate) use changes::{IntegrationError, MakeDefaultChoice};
 pub(crate) use editors::{editor_shortcuts_in_background, EditorShortcut};
+pub(crate) use file_dialog_service::FileDialogsStatus;
 pub(crate) use mime_backend::MimeBackend;
 pub(crate) use open_with_dialog::{Launcher, OpenWithDialog, OpenWithSubject};
 pub(crate) use status::{DefaultsReport, IntegrationStatus};
@@ -90,6 +93,11 @@ pub(crate) struct IntegrationFolders {
     pub(crate) data_home: PathBuf,
     /// The home folder, where sandboxed Brave installs live.
     pub(crate) home: PathBuf,
+    /// The system folders whose desktop-portal configuration the user's
+    /// file starts from, and the current desktops (INT-032).
+    pub(crate) portal_system_dirs: Vec<PathBuf>,
+    /// The current desktops, lowercase.
+    pub(crate) desktops: Vec<String>,
 }
 
 impl IntegrationFolders {
@@ -100,6 +108,8 @@ impl IntegrationFolders {
             config_home: glib::user_config_dir(),
             data_home: glib::user_data_dir(),
             home: glib::home_dir(),
+            portal_system_dirs: FileDialogPaths::for_user(settings).system_dirs,
+            desktops: FileDialogPaths::for_user(settings).desktops,
         }
     }
 
@@ -112,6 +122,8 @@ impl IntegrationFolders {
             config_home: root.join("config"),
             data_home: root.join("data"),
             home: root.to_owned(),
+            portal_system_dirs: vec![root.join("system")],
+            desktops: vec!["kde".to_owned()],
         }
     }
 }
@@ -127,6 +139,8 @@ struct Services {
     reveal: RevealRegistration,
     /// Brave's download folder.
     brave: BraveIntegration,
+    /// The opt-in that sends Open and Save dialogs to the app.
+    file_dialogs: FileDialogRegistration,
     /// The settings folder, which keeps the records and backups.
     settings_directory: PathBuf,
     /// The bus name of the desktop portal that starts the Flatpak at login.
@@ -246,6 +260,16 @@ impl DesktopIntegration {
             defaults: DefaultApps::with_mime_defaults(&folders.settings, mime_backend),
             reveal: RevealRegistration::new(&reveal_paths, sandbox),
             brave: BraveIntegration::new(&brave_paths, sandbox),
+            file_dialogs: FileDialogRegistration::new(
+                FileDialogPaths {
+                    settings: folders.settings.clone(),
+                    config_home: folders.config_home.clone(),
+                    system_dirs: folders.portal_system_dirs.clone(),
+                    desktops: folders.desktops.clone(),
+                },
+                crate::config::APP_ID,
+                sandbox,
+            ),
             settings_directory: folders.settings.clone(),
             background_portal: background_portal.to_owned(),
         };
