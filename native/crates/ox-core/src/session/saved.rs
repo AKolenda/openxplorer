@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use super::{TabSnapshot, WindowStateError};
+use crate::location::without_user;
 use crate::private_storage::{
     private_file_if_present, read_limited_text, replace_file_atomically, PrivateFileOptions, StorageError,
 };
@@ -50,13 +51,20 @@ pub struct SavedSession {
 }
 
 impl SavedSession {
-    /// The session in its JSON form.
+    /// The session in its persistent JSON form. Account names stay in the
+    /// current session only, just as they do for saved places.
     pub fn to_json(&self) -> Value {
         let tabs: Vec<Value> = self
             .tabs
             .iter()
             .map(|tab| {
-                let panes: Vec<Value> = tab.panes.iter().map(TabSnapshot::to_json).collect();
+                let panes: Vec<Value> = tab
+                    .panes
+                    .iter()
+                    .cloned()
+                    .map(without_accounts)
+                    .map(|pane| pane.to_json())
+                    .collect();
                 json!({ "panes": panes, "activePane": tab.active_pane })
             })
             .collect();
@@ -116,10 +124,21 @@ fn saved_tab(value: &Value) -> Result<SavedTab, WindowStateError> {
         .ok_or(WindowStateError::InvalidTab)?;
     let panes = panes
         .iter()
-        .map(TabSnapshot::from_json)
+        .map(|pane| TabSnapshot::from_json(pane).map(without_accounts))
         .collect::<Result<Vec<_>, _>>()?;
     let active_pane = index_in(value.get("activePane"), panes.len());
     Ok(SavedTab { panes, active_pane })
+}
+
+/// Removes account names only at the persistent-session boundary.
+/// In-process tab transfers keep their original addresses so they reach
+/// the mounted account; reopening a saved tab asks for that account again.
+fn without_accounts(mut pane: TabSnapshot) -> TabSnapshot {
+    pane.uri = without_user(&pane.uri);
+    for uri in pane.history.iter_mut().chain(pane.selection.iter_mut()) {
+        *uri = without_user(uri);
+    }
+    pane
 }
 
 /// An index into a list of `length` items, the first when it is missing
@@ -166,5 +185,44 @@ mod tests {
 
         assert_eq!(loaded, Some(session));
         assert_eq!(SavedSession::load(directory.path()), None);
+    }
+
+    /// Saving and reading session files strips account names from every
+    /// address, without changing a tab's in-memory handoff state.
+    ///
+    /// parity: SAFE-010, TAB-053
+    #[test]
+    fn saved_sessions_do_not_keep_remote_accounts() {
+        let directory = tempfile::tempdir().expect("a temporary directory");
+        let raw = json!({
+            "uri": "sftp://demo@server/two",
+            "history": ["sftp://demo@server/one", "sftp://demo@server/two"],
+            "index": 1,
+            "selection": ["sftp://demo@server/two/notes.txt"]
+        });
+        let pane = TabSnapshot::from_json(&raw).expect("a session account is valid");
+        let session = SavedSession {
+            tabs: vec![SavedTab {
+                panes: vec![pane.clone()],
+                active_pane: 0,
+            }],
+            active_tab: 0,
+        };
+
+        session.save(directory.path()).expect("the session is saved");
+        let text = std::fs::read_to_string(session_file(directory.path())).expect("the saved session");
+        assert!(!text.contains("demo@"), "no location field persists an account");
+        assert_eq!(session.tabs[0].panes[0], pane, "the live tab is unchanged");
+        assert_eq!(pane.to_json()["uri"], raw["uri"], "tab handoffs keep the account");
+
+        // An earlier version may already have saved account-bearing URIs.
+        let earlier = json!({"tabs": [{"panes": [raw], "activePane": 0}], "activeTab": 0});
+        std::fs::write(session_file(directory.path()), earlier.to_string()).expect("an older session");
+        let restored = SavedSession::load(directory.path()).expect("the older session is valid");
+        let restored = &restored.tabs[0].panes[0];
+        assert_eq!(restored.uri, "sftp://server/two");
+        assert_eq!(restored.history, ["sftp://server/one", "sftp://server/two"]);
+        assert_eq!(restored.selection, ["sftp://server/two/notes.txt"]);
+        assert_eq!(restored.index, 1);
     }
 }

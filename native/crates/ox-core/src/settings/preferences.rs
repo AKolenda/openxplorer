@@ -539,7 +539,7 @@ impl Preferences {
             if folder.is_empty() {
                 self.startup_folder = None;
             } else if let Ok(uri) = location::normalise_navigation(folder, None, &glib::home_dir()) {
-                self.startup_folder = Some(uri);
+                self.startup_folder = Some(location::without_user(&uri));
             }
         }
         replace_if_some(&mut self.folder_tree, update.folder_tree);
@@ -832,6 +832,22 @@ mod tests {
             "autoIndex": true, "contextMenu": "win10", "networkInterval": 60, "textSize": 100
         });
         assert_eq!(stored, python);
+    }
+
+    /// The same validation handles both changed preferences and older
+    /// settings files that already contain an account in the startup path.
+    ///
+    /// parity: SAFE-010, TAB-055
+    #[test]
+    fn the_startup_folder_does_not_keep_a_remote_account() {
+        for address in ["sftp://demo@server/docs", "davs://demo@server/docs"] {
+            let update =
+                PreferencesUpdate::from_json(&json!({"startupFolder": address})).expect("a valid preference");
+            let mut preferences = Preferences::default();
+            preferences.apply(&update);
+            let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+            assert_eq!(stored["startupFolder"], location::without_user(address));
+        }
     }
 
     /// parity: SET-016, VIEW-045
