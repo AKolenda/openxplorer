@@ -205,8 +205,10 @@ impl DefaultAppsView {
         });
     }
 
-    /// Runs `change` with Make default and Restore previous disabled,
-    /// toasts its outcome and reads the status again (`changeDefault`).
+    /// Runs `change` with Make default, Restore previous and the Open and
+    /// Save dialogs' Enable, Apply now and Restore disabled, toasts its
+    /// outcome and reads the status again (`changeDefault`), which enables
+    /// what applies then.
     fn run_change<F, Change>(&self, change: F)
     where
         F: FnOnce(DesktopIntegration) -> Change + 'static,
@@ -228,7 +230,13 @@ impl DefaultAppsView {
     }
 
     fn set_requests_enabled(&self, enabled: bool) {
-        for button in [&self.make_default, &self.restore_previous] {
+        for button in [
+            &self.make_default,
+            &self.restore_previous,
+            &self.enable_file_dialogs,
+            &self.apply_file_dialogs,
+            &self.restore_file_dialogs,
+        ] {
             if let Some(button) = button.upgrade() {
                 button.set_sensitive(enabled);
             }

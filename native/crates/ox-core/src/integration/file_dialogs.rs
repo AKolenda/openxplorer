@@ -41,6 +41,7 @@ use std::fs;
 use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use super::private_file::write_private_file;
 use super::sandbox::Sandbox;
@@ -410,14 +411,18 @@ impl FileDialogRegistration {
     }
 
     /// Runs `operation` on a GIO worker thread, as the other integrations'
-    /// file work does.
+    /// file work does, after any other operation of this opt-in finished:
+    /// Enable, Apply now and Restore each read and write the portal file,
+    /// the record and KDE's login script in several steps, so two at once
+    /// (Enable clicked, then Restore before it finished) could leave the
+    /// script behind with the record gone.
     pub fn run_in_background<T, F>(&self, operation: F) -> impl Future<Output = T> + 'static
     where
         T: Send + 'static,
         F: FnOnce(&Self) -> T + Send + 'static,
     {
         let registration = self.clone();
-        on_worker(move || operation(&registration))
+        on_worker(move || one_at_a_time(|| operation(&registration)))
     }
 
     /// Whether `contents` prefers this backend for file dialogs.
@@ -480,6 +485,17 @@ impl FileDialogRegistration {
 }
 
 /// [`FileDialogRegistration::restart_portal`] with `program` as `systemctl`.
+/// Serialises the opt-in's file changes across the app's windows.
+static CHANGES: Mutex<()> = Mutex::new(());
+
+/// Runs `operation` while no other change of the opt-in runs.
+fn one_at_a_time<T>(operation: impl FnOnce() -> T) -> T {
+    // A change that panicked leaves nothing locked that matters: each one
+    // reads the files afresh.
+    let _turn = CHANGES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    operation()
+}
+
 fn restart_portal_with(program: &Path) -> Result<PortalRestart, FileDialogError> {
     if !run_systemctl(program, "is-active")? {
         return Ok(PortalRestart::NotRunning);
@@ -673,6 +689,37 @@ mod tests {
 
     use super::*;
     use crate::test_support::temporary_folder;
+
+    /// Two changes never overlap: the second waits for the first.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn changes_run_one_at_a_time() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::{mpsc, Arc};
+
+        let first_done = Arc::new(AtomicBool::new(false));
+        let (started, wait_started) = mpsc::channel();
+        let (release, held) = mpsc::channel::<()>();
+        let done = Arc::clone(&first_done);
+        let first = std::thread::spawn(move || {
+            one_at_a_time(|| {
+                started.send(()).expect("the test waits");
+                held.recv().expect("the test releases");
+                done.store(true, Ordering::SeqCst);
+            });
+        });
+        wait_started.recv().expect("the first change started");
+        let seen = Arc::clone(&first_done);
+        let second = std::thread::spawn(move || one_at_a_time(|| seen.load(Ordering::SeqCst)));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        release.send(()).expect("the first change waits");
+        first.join().expect("the first change");
+        assert!(
+            second.join().expect("the second change"),
+            "the second change ran after the first finished"
+        );
+    }
 
     /// A stand-in `systemctl` in `folder` that logs its verbs and answers
     /// `is-active` from the file `active` (present: running).
