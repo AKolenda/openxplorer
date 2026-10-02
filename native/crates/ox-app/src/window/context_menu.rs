@@ -143,7 +143,18 @@ impl BrowserWindow {
         let Some(popover) = context_menu_of(view) else {
             return;
         };
-        let menu = self.menu_for_selection(style);
+        let mut menu = self.menu_for_selection(style);
+        self.append_service_actions(&mut menu.entries);
+        if self.administrator_target().is_some() {
+            menu.entries.push(
+                super::menu_popover::MenuItem::new(
+                    "Open as administrator…",
+                    crate::icons::Icon::ShieldLock,
+                    WindowAction::OpenAsAdministrator,
+                )
+                .into(),
+            );
+        }
         popover.set_entries(menu.entries);
         popover.set_style_and_strip(style, menu.strip);
         popover.set_pointing_to(Some(point));

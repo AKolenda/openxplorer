@@ -44,6 +44,7 @@ pub mod ops;
 pub mod permissions;
 pub mod places;
 pub mod search;
+pub mod service_actions;
 pub mod session;
 pub mod settings;
 pub mod sizes;

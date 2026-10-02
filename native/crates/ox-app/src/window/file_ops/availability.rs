@@ -285,20 +285,35 @@ impl BrowserWindow {
 
     /// Whether `command` is enabled now.
     pub(crate) fn allows(&self, command: FileCommand) -> bool {
-        self.command_facts().allows(command)
+        self.facts_for_command(command).allows(command)
+    }
+
+    fn facts_for_command(&self, command: FileCommand) -> CommandFacts {
+        let mut facts = self.command_facts();
+        let jobs = self.imp().file_operations.borrow().jobs.len();
+        if jobs > 0 {
+            facts.is_busy |= match command {
+                FileCommand::Copy | FileCommand::Cut => false,
+                FileCommand::Paste
+                | FileCommand::PasteInto
+                | FileCommand::Delete
+                | FileCommand::DeletePermanently => jobs >= super::jobs::MAX_JOBS,
+                _ => true,
+            };
+        }
+        facts
     }
 
     /// Enables and disables every file command, and labels Delete for the
     /// selection's folder (`updateToolbar`).
     pub(crate) fn update_file_commands(&self) {
-        let facts = self.command_facts();
         for command in FileCommand::ALL {
-            let enabled = facts.allows(command);
+            let enabled = self.allows(command);
             for &action in command.actions() {
                 self.set_action_enabled(action, enabled);
             }
         }
-        self.command_bar().set_new_enabled(facts.allows(FileCommand::New));
+        self.command_bar().set_new_enabled(self.allows(FileCommand::New));
         self.command_bar().show_delete_label(self.delete_label());
     }
 }

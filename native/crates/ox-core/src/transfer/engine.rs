@@ -260,9 +260,7 @@ impl TransferEngine {
             }
         };
         let batch_size = incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)?;
-        if batch_size.is_some() {
-            self.report_batch_size(batch_size);
-        }
+        self.report_batch_size(batch_size);
         let placement = Placement {
             mode,
             policy,
@@ -276,8 +274,16 @@ impl TransferEngine {
     /// `batch_size` bytes, for the panel's time left (OPS-021).
     fn report_batch_size(&mut self, batch_size: Option<u64>) {
         let mut emit = std::mem::replace(&mut self.emit, Box::new(|_| {}));
+        let mut previous = 0;
+        let mut processed = 0_u64;
         self.emit = Box::new(move |mut progress: Progress| {
             if let Some(bytes) = progress.bytes.as_mut() {
+                if bytes.file_written == 0 {
+                    previous = 0;
+                }
+                processed = processed.saturating_add(bytes.file_written.saturating_sub(previous));
+                previous = bytes.file_written;
+                bytes.batch_written = processed;
                 bytes.batch_size = batch_size;
             }
             emit(progress);

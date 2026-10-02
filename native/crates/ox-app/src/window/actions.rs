@@ -142,6 +142,8 @@ impl BrowserWindow {
         self.install_disk_tool_actions();
         self.install_search_actions();
         self.install_link_target_action();
+        self.install_administrator_action();
+        self.install_service_actions();
         self.install_saved_search_actions();
         self.install_details_pane_actions();
         self.install_integration_actions();

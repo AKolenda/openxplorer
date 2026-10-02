@@ -90,7 +90,7 @@ impl BrowserWindow {
     /// an archive operation included, or once an application update
     /// waits for its restart, which the message line says (UPD-006).
     pub(crate) fn begin_operation(&self, label: &str) -> Option<OperationContext> {
-        if self.transfer_panel().is_busy() {
+        if self.is_writing_files() {
             return None;
         }
         if self.refuses_writes_during_update() {
@@ -128,7 +128,7 @@ impl BrowserWindow {
     /// the user cancels; after that the panel keeps saying "Cancelling…".
     pub(super) fn progress_reporter(&self, cancel: &Cancellation) -> impl FnMut(Progress) + Send + 'static {
         let (reports, report_queue) = async_channel::unbounded::<Progress>();
-        let panel = self.transfer_panel().clone();
+        let panel = self.panel_for_operation(cancel);
         let cancel = cancel.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak]
@@ -152,8 +152,9 @@ impl BrowserWindow {
     /// as the transfer panel's Cancel does; what is finished stays
     /// finished (OPS-022).
     pub(in crate::window) fn cancel_operation(&self) {
-        if self.imp().file_operations.borrow().running.is_some() {
-            self.transfer_panel().cancel();
+        self.transfer_panel().cancel();
+        for job in &self.imp().file_operations.borrow().jobs {
+            job.panel.cancel();
         }
     }
 
@@ -165,12 +166,16 @@ impl BrowserWindow {
         &self,
         request: &TransferRequest,
     ) -> Option<Result<TransferOutcome, OpsError>> {
-        let context = self.begin_operation(starting_label(request.mode))?;
+        let context = self.begin_transfer(
+            starting_label(request.mode),
+            &request.uris,
+            request.destination_folder.as_deref(),
+        )?;
         let progress = self.progress_reporter(&context.cancel);
         let mark = mark_unfinished(request.destination_folder.as_deref());
         let outcome = run_transfer(request, &context, progress).await;
         drop(mark);
-        self.end_operation();
+        self.end_transfer(&context.cancel);
         let destination = request.destination_folder.as_deref();
         let changed = changed_folders(destination, request.uris.iter().map(String::as_str));
         self.context().search_cache().folders_written(changed);

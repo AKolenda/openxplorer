@@ -239,7 +239,9 @@ fn expand_home(address: &str, home: &Path) -> String {
 /// True when relative paths should be appended to `base` as a URL: SMB
 /// and connected-device folders.
 fn is_remote_base(base: &str) -> bool {
-    split_location(base).is_ok_and(|parts| parts.is_smb() || parts.is_remote() || parts.is_device())
+    split_location(base).is_ok_and(|parts| {
+        parts.is_smb() || parts.is_remote() || parts.is_device() || parts.scheme == "admin"
+    })
 }
 
 /// `os.path.join(base, path)`: an absolute `path` replaces `base`.
@@ -271,7 +273,7 @@ fn local_path_uri(path: &str) -> Result<String, LocationError> {
 /// A `file:` or `smb:` URL; any other scheme is rejected.
 fn normalise_url(address: &str) -> Result<String, LocationError> {
     let parts = split_url(address)?;
-    if !parts.is_local() && !parts.is_smb() {
+    if !parts.is_local() && !parts.is_smb() && parts.scheme != "admin" {
         return Err(LocationError::new(
             "Only local paths, smb:// locations and connected devices are supported in this build.",
         ));
@@ -288,6 +290,15 @@ fn normalise_url(address: &str) -> Result<String, LocationError> {
         return Err(LocationError::query_or_fragment());
     }
     let decoded = unquote_without_controls(&parts.path)?;
+    if parts.scheme == "admin" {
+        if !parts.authority.is_empty() {
+            return Err(LocationError::new(
+                "Administrator access accepts only local paths without a host or credentials.",
+            ));
+        }
+        let local = normalise_file_url("", &decoded)?;
+        return Ok(local.replacen("file:", "admin:", 1));
+    }
     if parts.is_smb() {
         normalise_smb_url(&parts, &decoded)
     } else {
@@ -679,5 +690,26 @@ mod tests {
         assert!(!is_smb_server("smb://nas/work"));
         assert!(!is_smb_server("file:///"));
         assert!(!is_smb_server("http://nas/"));
+    }
+    /// parity: OPS-039
+    #[test]
+    fn administrator_uris_are_explicit_local_paths_without_authority_or_credentials() {
+        assert_eq!(
+            canonical("admin:///etc/../etc/private%20folder").unwrap(),
+            "admin:///etc/private%20folder"
+        );
+        assert_eq!(
+            normalise_location("child", Some("admin:///etc"), Path::new("/tmp")).unwrap(),
+            "admin:///etc/child"
+        );
+        for bad in [
+            "admin://server/etc",
+            "admin://root@localhost/etc",
+            "admin:etc",
+            "admin:///etc?x",
+            "admin:///etc%00",
+        ] {
+            assert!(canonical(bad).is_err(), "{bad}");
+        }
     }
 }

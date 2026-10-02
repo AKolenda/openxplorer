@@ -24,6 +24,8 @@
 //! `resources/ui/transfer-panel.ui`. It floats over the folder pane, so
 //! browsing goes on around it.
 
+mod rate;
+
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -83,6 +85,13 @@ mod imp {
         /// How far the file being copied is; hidden between files.
         #[template_child]
         pub(super) file_bar: TemplateChild<gtk::ProgressBar>,
+        /// Processed size, speed and estimated remaining time.
+        #[template_child]
+        pub(super) rate_label: TemplateChild<gtk::Label>,
+        /// Pauses or resumes the copy worker.
+        #[template_child]
+        pub(super) pause_button: TemplateChild<gtk::Button>,
+        pub(super) rate: RefCell<super::rate::Rate>,
         /// Stops the operation.
         #[template_child]
         pub(super) cancel_button: TemplateChild<gtk::Button>,
@@ -111,6 +120,11 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let panel = self.obj();
+            self.pause_button.connect_clicked(glib::clone!(
+                #[weak]
+                panel,
+                move |_| panel.toggle_pause()
+            ));
             self.cancel_button.connect_clicked(glib::clone!(
                 #[weak]
                 panel,
@@ -137,6 +151,11 @@ impl TransferPanel {
         icons::set_icon(&imp.glyph, kind.glyph(), GLYPH_SIZE);
         imp.cancel.replace(Some(cancel));
         imp.cancel_button.set_sensitive(true);
+        imp.pause_button.set_visible(kind == TransferKind::Files);
+        imp.pause_button.set_sensitive(true);
+        imp.pause_button.set_label("Pause");
+        imp.rate.replace(rate::Rate::default());
+        imp.rate_label.set_visible(false);
         imp.session.replace(Some(OperationSession::start(self)));
         self.show_progress(&Progress {
             label: label.to_owned(),
@@ -158,6 +177,10 @@ impl TransferPanel {
     pub(crate) fn show_progress(&self, progress: &Progress) {
         let imp = self.imp();
         let label = progress.label.as_str();
+        if let Some(bytes) = progress.bytes {
+            imp.rate_label.set_text(&imp.rate.borrow_mut().report(bytes));
+            imp.rate_label.set_visible(true);
+        }
         if !self.is_cancelling() {
             imp.status_label.set_text(label);
         }
@@ -185,6 +208,27 @@ impl TransferPanel {
         cancel.cancel();
         imp.status_label.set_text(CANCELLING);
         imp.cancel_button.set_sensitive(false);
+        imp.pause_button.set_sensitive(false);
+    }
+
+    /// Pause and resume are per job; cancellation always wakes a paused worker.
+    pub(crate) fn toggle_pause(&self) {
+        let imp = self.imp();
+        let Some(cancel) = imp.cancel.borrow().clone() else {
+            return;
+        };
+        if cancel.is_cancelled() {
+            return;
+        }
+        if cancel.is_paused() {
+            cancel.resume();
+            imp.rate.borrow_mut().resume();
+            imp.pause_button.set_label("Pause");
+        } else {
+            cancel.pause();
+            imp.rate.borrow_mut().pause();
+            imp.pause_button.set_label("Resume");
+        }
     }
 
     /// Hides the panel when the operation has ended.

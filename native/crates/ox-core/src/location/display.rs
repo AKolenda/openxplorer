@@ -196,6 +196,7 @@ impl LocationContext {
             LocationKind::Local => Some(Crumb::new("/", "file:///")),
             LocationKind::Smb | LocationKind::Remote => Some(Crumb::new(&parts.authority, root_uri(parts))),
             LocationKind::Device => Some(Crumb::new(self.device_name(uri), root_uri(parts))),
+            LocationKind::Other if parts.scheme == "admin" => Some(Crumb::new("Administrator", "admin:///")),
             LocationKind::Other => None,
         }
     }

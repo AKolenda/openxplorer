@@ -217,9 +217,13 @@ impl<'a> Copier<'a> {
                     file_size: total,
                     // The engine fills in what the batch writes.
                     batch_size: None,
+                    batch_written: 0,
                 }),
             });
         };
+        // An explicit boundary lets the engine accumulate bytes even when
+        // adjacent files have the same size. It is throttled after accounting.
+        progress(0, 0);
         source.copy_file(target, cancel, &mut progress)
     }
 }

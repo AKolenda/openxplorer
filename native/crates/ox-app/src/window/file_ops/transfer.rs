@@ -165,7 +165,7 @@ impl BrowserWindow {
     async fn plan_transfer(&self, incoming: &IncomingItems) -> Option<Vec<ConflictAnswer>> {
         {
             let mut operations = self.imp().file_operations.borrow_mut();
-            if operations.is_busy() {
+            if operations.is_busy() || operations.jobs.len() >= super::jobs::MAX_JOBS {
                 return None;
             }
             operations.planning = true;
@@ -206,12 +206,17 @@ impl BrowserWindow {
         match plan {
             TransferPlan::Uniform(request) => self.run_request(request).await,
             TransferPlan::PerItem(chosen) => {
-                let context = self.begin_operation(starting_label(chosen.mode))?;
+                let uris: Vec<String> = chosen.items.iter().map(|item| item.uri.clone()).collect();
+                let context = self.begin_transfer(
+                    starting_label(chosen.mode),
+                    &uris,
+                    Some(&chosen.destination_folder),
+                )?;
                 let progress = self.progress_reporter(&context.cancel);
                 let mark = mark_unfinished(Some(&chosen.destination_folder));
                 let outcome = run_chosen_transfer(chosen, &context, progress).await;
                 drop(mark);
-                self.end_operation();
+                self.end_transfer(&context.cancel);
                 let items = chosen.items.iter().map(|item| item.uri.as_str());
                 let changed = changed_folders([chosen.destination_folder.as_str()], items);
                 self.context().search_cache().folders_written(changed);

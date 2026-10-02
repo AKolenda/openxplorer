@@ -283,6 +283,12 @@ pub(crate) enum WindowAction {
     /// Opens the folder of the selected symbolic link's target with the
     /// target selected (CMD-030).
     ShowTarget,
+    /// Explicit GVfs administrator access; never runs the app as root.
+    OpenAsAdministrator,
+    /// Enable installed service actions, each initially disabled.
+    ManageServiceActions,
+    /// Run an enabled service action on the current selection.
+    RunServiceAction,
     /// Opens the folder of the one selected search result in a new tab
     /// behind, with the result selected there.
     OpenFileLocationInTab,
@@ -501,6 +507,9 @@ impl WindowAction {
             WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",
             WindowAction::ShowTarget => "show-target",
+            WindowAction::OpenAsAdministrator => "open-as-administrator",
+            WindowAction::ManageServiceActions => "manage-service-actions",
+            WindowAction::RunServiceAction => "run-service-action",
             WindowAction::OpenFileLocationInTab => "open-file-location-in-tab",
             WindowAction::OpenFileLocationInWindow => "open-file-location-in-window",
             WindowAction::SaveSearch => "save-search",

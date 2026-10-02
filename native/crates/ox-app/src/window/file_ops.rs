@@ -59,6 +59,7 @@ mod delete;
 mod duplicate;
 mod hide_confirm;
 mod inline_rename;
+mod jobs;
 mod journal;
 mod links;
 mod move_by_copying_dialog;
@@ -92,6 +93,8 @@ pub(crate) struct FileOperations {
     /// The cancellation of the operation that runs now; `None` while none
     /// runs (`state.operation` in app.js, OPS-024).
     running: Option<Cancellation>,
+    /// Independent copy, move and delete jobs, with their own panels.
+    jobs: Vec<jobs::Job>,
     /// Set while a paste checks its destination and asks about name
     /// conflicts (`state.transferPlanning`), so a second paste cannot
     /// start meanwhile.
@@ -128,6 +131,6 @@ impl FileOperations {
     /// True while no operation runs or is being planned, so a drag or a
     /// drop may start.
     pub(crate) fn is_idle(&self) -> bool {
-        !self.is_busy()
+        !self.is_busy() && self.jobs.is_empty()
     }
 }
