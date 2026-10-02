@@ -183,7 +183,7 @@ fn open_windows_button() -> gtk::MenuButton {
 }
 
 fn windows_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Windows");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Windows"));
     let listing = SettingRow::new(OPEN_WINDOWS);
     listing.add_control(&open_windows_button(), ControlName::OwnLabel);
     group.add_row(&listing);
@@ -231,7 +231,7 @@ fn windows_group(page: &SettingsPage) -> SettingsGroup {
 /// Split view's options (VIEW-059, Dolphin's "Begin in split view mode"
 /// and "Switch between split views with tab key").
 fn split_view_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Split view");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Split view"));
     let bindings = [
         (
             BEGIN_SPLIT,
@@ -266,7 +266,7 @@ fn split_view_group(page: &SettingsPage) -> SettingsGroup {
 /// opened runs (OPEN-008) and before a window with several tabs closes
 /// (Dolphin's Confirmations page, SET-010).
 fn confirmations_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Confirmations");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Confirmations"));
     let bindings = [
         (
             CONFIRM_TRASH,
@@ -329,7 +329,7 @@ fn confirmations_group(page: &SettingsPage) -> SettingsGroup {
 
 /// The address bar's options (NAV-024, NAV-029).
 fn address_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Address bar");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Address bar"));
     let full_path = SettingRow::new(FULL_PATH);
     let show_full_path = PreferenceBinding {
         read: |preferences| preferences.show_full_path,
@@ -356,7 +356,7 @@ fn address_group(page: &SettingsPage) -> SettingsGroup {
 /// Whether archives open as folders (ARC-022), as Dolphin's Navigation
 /// setting "Open archives as folder".
 fn archives_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Archives");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Archives"));
     let row = SettingRow::new(BROWSE_ARCHIVES);
     let binding = PreferenceBinding {
         read: |preferences| preferences.browse_archives,
@@ -372,7 +372,7 @@ fn archives_group(page: &SettingsPage) -> SettingsGroup {
 
 /// Dragging tabs and files.
 fn dragging_group() -> SettingsGroup {
-    let group = SettingsGroup::new("Tabs and files");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Tabs and files"));
     for text in [MOVE_TABS, DRAG_TO_APPS, DROP_ON_FOLDERS] {
         group.add_row(&SettingRow::new(text));
     }

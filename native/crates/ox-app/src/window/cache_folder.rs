@@ -141,7 +141,7 @@ impl BrowserWindow {
 /// "Stop caching this folder".
 pub(super) fn cache_item(uri: &str, caching: Caching) -> MenuItem {
     let item = MenuItem::with_text_target(
-        "Cache this folder for search",
+        &ox_core::i18n::gettext("Cache this folder for search"),
         Icon::Search,
         WindowAction::CacheFolderOf,
         uri,

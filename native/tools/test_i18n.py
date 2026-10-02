@@ -42,6 +42,14 @@ msgstr "Terminal?"
 
 
 class I18nTest(unittest.TestCase):
+    def test_template_messages_are_explicit_and_xml_entities_are_decoded(self) -> None:
+        source = '''<interface><object class="GtkLabel" id="label">
+                    <property name="label" translatable="yes">Windows &amp; tabs</property>
+                    <property name="text">A user's Settings filename</property>
+                    </object></interface>'''
+        properties = list(i18n.template_properties(source))
+        self.assertEqual(properties, [('label', 'label', False, 'Windows & tabs')])
+
     def test_messages_are_extracted_and_a_compiled_catalogue_reads_as_gettext_reads_it(self) -> None:
         messages = list(i18n.messages_in(SOURCE, 'example.rs'))
         self.assertEqual(

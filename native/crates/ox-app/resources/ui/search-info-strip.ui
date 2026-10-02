@@ -12,7 +12,7 @@
     <property name="visible">false</property>
     <property name="spacing">10</property>
     <accessibility>
-      <property name="label">Search information</property>
+      <property name="label" translatable="yes">Search information</property>
     </accessibility>
     <style>
       <class name="search-info"/>
@@ -55,7 +55,7 @@
         <property name="valign">center</property>
         <property name="halign">end</property>
         <property name="hexpand">true</property>
-        <property name="tooltip-text">Cache this folder for search</property>
+        <property name="tooltip-text" translatable="yes">Cache this folder for search</property>
         <property name="child">
           <object class="GtkBox">
             <property name="spacing">6</property>
@@ -68,14 +68,14 @@
               </object>
             </child>
             <child>
-              <object class="GtkLabel">
-                <property name="label">Cache this folder</property>
+              <object class="GtkLabel" id="i18n_1">
+                <property name="label" translatable="yes">Cache this folder</property>
               </object>
             </child>
           </object>
         </property>
         <accessibility>
-          <property name="label">Cache this folder</property>
+          <property name="label" translatable="yes">Cache this folder</property>
         </accessibility>
         <style>
           <class name="cache-link"/>
@@ -97,8 +97,8 @@
            (SRCH-038). -->
       <object class="GtkButton" id="save_button">
         <property name="valign">center</property>
-        <property name="label">Save search</property>
-        <property name="tooltip-text">Save this search to the navigation pane</property>
+        <property name="label" translatable="yes">Save search</property>
+        <property name="tooltip-text" translatable="yes">Save this search to the navigation pane</property>
         <style>
           <class name="cache-link"/>
         </style>
@@ -108,7 +108,7 @@
       <!-- Dolphin's "Keep Filter When Changing Folders" lock (SRCH-005). -->
       <object class="GtkToggleButton" id="keep_button">
         <property name="valign">center</property>
-        <property name="tooltip-text">Keep search when changing folders</property>
+        <property name="tooltip-text" translatable="yes">Keep search when changing folders</property>
         <property name="child">
           <object class="GtkImage" id="keep_glyph">
             <property name="accessible-role">presentation</property>
@@ -118,7 +118,7 @@
           </object>
         </property>
         <accessibility>
-          <property name="label">Keep search when changing folders</property>
+          <property name="label" translatable="yes">Keep search when changing folders</property>
         </accessibility>
         <style>
           <class name="search-clear"/>
@@ -129,7 +129,7 @@
     <child>
       <object class="GtkButton" id="clear_button">
         <property name="valign">center</property>
-        <property name="tooltip-text">Clear search</property>
+        <property name="tooltip-text" translatable="yes">Clear search</property>
         <property name="child">
           <object class="GtkImage" id="clear_glyph">
             <property name="accessible-role">presentation</property>
@@ -139,7 +139,7 @@
           </object>
         </property>
         <accessibility>
-          <property name="label">Clear search</property>
+          <property name="label" translatable="yes">Clear search</property>
         </accessibility>
         <style>
           <class name="search-clear"/>

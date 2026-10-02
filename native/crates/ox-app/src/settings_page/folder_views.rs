@@ -90,7 +90,7 @@ struct ViewOptionBinding {
 
 /// The "Files and folders" group.
 pub(super) fn group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Files and folders");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Files and folders"));
     add_preview_rows(page, &group);
     let rows = [
         (

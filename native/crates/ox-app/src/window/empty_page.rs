@@ -98,7 +98,7 @@ impl EmptyPage {
         message.set_max_width_chars(MESSAGE_WIDTH_CHARS);
         message.set_selectable(true);
         let retry = gtk::Button::builder()
-            .label("Try again")
+            .label(&ox_core::i18n::gettext("Try again"))
             .action_name(WindowAction::Refresh.detailed_name())
             .halign(gtk::Align::Center)
             .css_classes([ButtonStyle::Bordered.css_class()])

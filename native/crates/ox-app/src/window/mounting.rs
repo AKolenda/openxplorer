@@ -89,7 +89,9 @@ impl BrowserWindow {
     /// this window writes.
     pub(super) fn remove_drive(&self, uri: &str, removal: Removal) {
         if self.write_activity() == WriteActivity::Writing {
-            self.show_message("Finish the current operation before disconnecting.");
+            self.show_message(&ox_core::i18n::gettext(
+                "Finish the current operation before disconnecting.",
+            ));
             return;
         }
         match removal {
@@ -102,9 +104,9 @@ impl BrowserWindow {
     fn confirm_disconnect(&self, uri: &str) {
         let address = self.imp().locations.borrow().display_location(uri);
         let message = format!("{address}\n\n{DISCONNECT_NOTE}");
-        let dialog = Dialog::new(self, "Disconnect this mount?", &message);
+        let dialog = Dialog::new(self, &ox_core::i18n::gettext("Disconnect this mount?"), &message);
         dialog.add_cancel_button();
-        dialog.add_button("Disconnect", ButtonStyle::Accent);
+        dialog.add_button(&ox_core::i18n::gettext("Disconnect"), ButtonStyle::Accent);
         let uri = uri.to_owned();
         dialog.connect_confirmed(glib::clone!(
             #[weak(rename_to = window)]

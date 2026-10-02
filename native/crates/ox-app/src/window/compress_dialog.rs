@@ -32,15 +32,15 @@ impl BrowserWindow {
             .unwrap_or_default()
             .trim_end_matches(".zip")
             .to_owned();
-        let frame = DialogFrame::new("Compress", DialogWidth::Standard);
-        let name = labelled_entry(&frame.body(), "Archive name", &suggested);
+        let frame = DialogFrame::new(&ox_core::i18n::gettext("Compress"), DialogWidth::Standard);
+        let name = labelled_entry(&frame.body(), &ox_core::i18n::gettext("Archive name"), &suggested);
         let formats: Vec<&str> = FORMATS.iter().map(|(label, _)| *label).collect();
         let format = gtk::DropDown::from_strings(&formats);
         format.set_halign(gtk::Align::Start);
         format.update_property(&[gtk::accessible::Property::Label("Format")]);
         frame.body().append(&format);
-        let compress = frame.add_button("Compress", ButtonStyle::Accent);
-        frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
+        let compress = frame.add_button(&ox_core::i18n::gettext("Compress"), ButtonStyle::Accent);
+        frame.add_closing_button(&ox_core::i18n::gettext("Cancel"), ButtonStyle::Bordered, || {});
         compress.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,

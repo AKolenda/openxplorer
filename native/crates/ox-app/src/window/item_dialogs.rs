@@ -262,7 +262,7 @@ impl BrowserWindow {
         };
         self.discard_dialog_of_tab(owner);
         frame.add_css_class("properties-dialog");
-        frame.add_closing_button("Close", ButtonStyle::Accent, || {});
+        frame.add_closing_button(&ox_core::i18n::gettext("Close"), ButtonStyle::Accent, || {});
         frame.connect_closed(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -425,7 +425,7 @@ impl BrowserWindow {
     pub(super) fn show_result_dialog(&self, title: &str, text: &str) {
         let frame = DialogFrame::new(title, DialogWidth::Standard);
         frame.body().append(&quiet_text(text));
-        frame.add_closing_button("OK", ButtonStyle::Accent, || {});
+        frame.add_closing_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent, || {});
         self.present_window_dialog(&frame);
     }
 

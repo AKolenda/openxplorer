@@ -50,7 +50,7 @@ impl AdvancedBits {
         content.append(&grid);
         content.append(&special);
         let expander = gtk::Expander::builder()
-            .label("Advanced Permissions")
+            .label(&ox_core::i18n::gettext("Advanced Permissions"))
             .child(&content)
             .build();
         Self { expander, checks }

@@ -61,7 +61,12 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for CategoryRow {}
+    impl ObjectImpl for CategoryRow {
+        fn constructed(&self) {
+            self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "category-row.ui");
+        }
+    }
     impl WidgetImpl for CategoryRow {}
     impl ListBoxRowImpl for CategoryRow {}
 }

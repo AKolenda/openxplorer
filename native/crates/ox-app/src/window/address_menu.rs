@@ -35,8 +35,18 @@ pub(super) struct PointedCrumb {
 /// is over one.
 pub(super) fn location_menu(crumb: Option<&PointedCrumb>) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = vec![
-        MenuItem::new("Copy address", Icon::Copy, WindowAction::CopyAddress).into(),
-        MenuItem::new("Paste and go", Icon::ClipboardPaste, WindowAction::PasteAddress).into(),
+        MenuItem::new(
+            &ox_core::i18n::gettext("Copy address"),
+            Icon::Copy,
+            WindowAction::CopyAddress,
+        )
+        .into(),
+        MenuItem::new(
+            &ox_core::i18n::gettext("Paste and go"),
+            Icon::ClipboardPaste,
+            WindowAction::PasteAddress,
+        )
+        .into(),
     ];
     if let Some(crumb) = crumb {
         let label = &crumb.label;
@@ -49,16 +59,30 @@ pub(super) fn location_menu(crumb: Option<&PointedCrumb>) -> Vec<MenuEntry> {
             .push(MenuItem::with_text_target(&window, Icon::WindowNew, WindowAction::OpenWindow, uri).into());
     }
     entries.push(MenuEntry::Divider);
-    entries.push(MenuItem::new("Edit address", Icon::Rename, WindowAction::Location).into());
+    entries.push(
+        MenuItem::new(
+            &ox_core::i18n::gettext("Edit address"),
+            Icon::Rename,
+            WindowAction::Location,
+        )
+        .into(),
+    );
     entries.push(
         MenuItem::toggle(
-            "Keep address editable",
+            &ox_core::i18n::gettext("Keep address editable"),
             Icon::Code,
             WindowAction::EditableLocation,
         )
         .into(),
     );
-    entries.push(MenuItem::toggle("Show full path", Icon::FileFolder, WindowAction::ShowFullPath).into());
+    entries.push(
+        MenuItem::toggle(
+            &ox_core::i18n::gettext("Show full path"),
+            Icon::FileFolder,
+            WindowAction::ShowFullPath,
+        )
+        .into(),
+    );
     entries
 }
 
@@ -136,7 +160,7 @@ impl BrowserWindow {
         let Some(uri) = self.current_uri() else { return };
         let address = self.imp().locations.borrow().copied_location(&uri);
         self.clipboard().set_text(&address);
-        self.show_message("Address copied.");
+        self.show_message(&ox_core::i18n::gettext("Address copied."));
     }
 
     /// Opens the clipboard's text as a typed address.
@@ -148,7 +172,7 @@ impl BrowserWindow {
             async move {
                 match clipboard.read_text_future().await {
                     Ok(Some(text)) if !text.trim().is_empty() => window.go_to_pasted_address(&text),
-                    _ => window.show_message("The clipboard holds no address."),
+                    _ => window.show_message(&ox_core::i18n::gettext("The clipboard holds no address.")),
                 }
             }
         ));

@@ -110,6 +110,7 @@ mod imp {
     impl ObjectImpl for TransferPanel {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "transfer-panel.ui");
             let panel = self.obj();
             self.cancel_button.connect_clicked(glib::clone!(
                 #[weak]

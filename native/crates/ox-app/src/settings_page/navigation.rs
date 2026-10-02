@@ -35,7 +35,7 @@ impl SettingsPage {
             imp.category_list.append(&CategoryRow::new(category));
         }
         let no_matches = gtk::Label::builder()
-            .label("No settings match your search.")
+            .label(&ox_core::i18n::gettext("No settings match your search."))
             .valign(gtk::Align::Start)
             .css_classes(["settings-no-matches"])
             .build();

@@ -65,7 +65,7 @@ impl BrowserWindow {
         handle.update_state(&[gtk::accessible::State::Hidden(true)]);
         let resizer = self.sidebar_resizer();
         resizer.set_tooltip_text(Some(TOOLTIP));
-        resizer.set_label("Resize sidebar");
+        resizer.set_label(&ox_core::i18n::gettext("Resize sidebar"));
         resizer.connect_value_requested(glib::clone!(
             #[weak(rename_to = window)]
             self,

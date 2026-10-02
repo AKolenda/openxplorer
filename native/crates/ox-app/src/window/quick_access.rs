@@ -124,7 +124,7 @@ impl BrowserWindow {
     fn pin(&self, uri: String, label: String) {
         let quick_access = self.places().quick_access;
         if quick_access.iter().any(|place| same_location(&place.uri, &uri)) {
-            self.show_message("Already pinned to Quick access.");
+            self.show_message(&ox_core::i18n::gettext("Already pinned to Quick access."));
             return;
         }
         if !self.start_pinning() {

@@ -48,13 +48,16 @@ pub(crate) fn map_network_dialog(
     parent: &impl IsA<gtk::Window>,
     on_connect: impl Fn(&Dialog, MapRequest) + 'static,
 ) -> Dialog {
-    let dialog = Dialog::new(parent, "Map network location", MESSAGE);
+    let dialog = Dialog::new(parent, &ox_core::i18n::gettext("Map network location"), MESSAGE);
     let fields = ServerFields::add_to(&dialog);
     let label = address_field(&dialog, "Display name (optional)", "Projects (Z:)");
-    let save = dialog.add_check_button("Save in the sidebar · reconnect when opened", true);
+    let save = dialog.add_check_button(
+        &ox_core::i18n::gettext("Save in the sidebar · reconnect when opened"),
+        true,
+    );
     dialog.add_note(NOTE);
     dialog.add_cancel_button();
-    dialog.add_button("Connect", ButtonStyle::Accent);
+    dialog.add_button(&ox_core::i18n::gettext("Connect"), ButtonStyle::Accent);
     dialog.connect_confirmed(move |dialog| {
         let keeping = if save.is_active() {
             ShareKeeping::SaveInSidebar

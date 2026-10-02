@@ -123,6 +123,7 @@ mod imp {
     impl ObjectImpl for Dialog {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "dialog.ui");
             // Escape closes the dialog, which cancels it (`closeModal` in
             // app.js).
             self.obj().add_controller(crate::modal::escape_closes());
@@ -459,7 +460,7 @@ impl Dialog {
 /// and returns once it is dismissed.
 pub(crate) async fn show_message(parent: &impl IsA<gtk::Window>, title: &str, text: &str) {
     let dialog = Dialog::new(parent, title, text);
-    dialog.add_button("OK", ButtonStyle::Accent);
+    dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
     dialog.open();
     dialog.next_response().await;
     dialog.finish();

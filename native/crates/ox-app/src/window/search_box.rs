@@ -67,6 +67,7 @@ mod imp {
     impl ObjectImpl for SearchBox {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "search-box.ui");
             self.obj().finish_template();
         }
     }

@@ -117,7 +117,7 @@ impl IndexSuggestions {
         imp.selection_label.set_hexpand(true);
         footer.append(&imp.selection_label);
         let clear = gtk::Button::builder()
-            .label("Clear")
+            .label(&ox_core::i18n::gettext("Clear"))
             .valign(gtk::Align::Center)
             .css_classes(["link-button"])
             .build();
@@ -127,7 +127,8 @@ impl IndexSuggestions {
             move |_| table.clear_selection()
         ));
         footer.append(&clear);
-        imp.index_selected.set_label("Index selected");
+        imp.index_selected
+            .set_label(&ox_core::i18n::gettext("Index selected"));
         imp.index_selected.add_css_class(ButtonStyle::Accent.css_class());
         imp.index_selected.connect_clicked(glib::clone!(
             #[weak(rename_to = table)]

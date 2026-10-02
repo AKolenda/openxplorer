@@ -12,6 +12,7 @@
 //! mean.
 
 use gtk::prelude::*;
+use ox_core::i18n::{gettext, ngettext};
 
 use crate::window::children;
 
@@ -35,7 +36,9 @@ pub(crate) struct RowText {
 impl RowText {
     /// The row's own words: its title, description and keywords.
     pub(crate) fn words(&self) -> String {
-        [self.title, self.description, self.keywords].join(" ")
+        [self.title, self.description, self.keywords]
+            .map(gettext)
+            .join(" ")
     }
 }
 
@@ -138,10 +141,15 @@ fn collect_label_texts(widget: &gtk::Widget, texts: &mut Vec<String>) {
 /// The line under the search box: "1 matching setting", "3 matching
 /// settings" or "No matching settings", as `settingsSearch` words it.
 pub(crate) fn match_count_text(count: usize) -> String {
-    match count {
-        0 => "No matching settings".to_owned(),
-        1 => "1 matching setting".to_owned(),
-        _ => format!("{count} matching settings"),
+    if count == 0 {
+        gettext("No matching settings")
+    } else {
+        ngettext(
+            "{count} matching setting",
+            "{count} matching settings",
+            count as u64,
+        )
+        .replace("{count}", &count.to_string())
     }
 }
 

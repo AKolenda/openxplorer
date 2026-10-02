@@ -96,7 +96,7 @@ impl SignInDialog {
         imp.error_label.set_text(message);
         imp.error_label.set_visible(true);
         imp.connect_button.set_sensitive(true);
-        imp.connect_button.set_label("Connect");
+        imp.connect_button.set_label(&ox_core::i18n::gettext("Connect"));
     }
 
     /// Shows "Connecting…" on a disabled Connect while the answer is
@@ -230,7 +230,7 @@ impl SignInDialog {
             self.append_choice(&choice);
         }
         let cancel = gtk::Button::builder()
-            .label("Cancel")
+            .label(&ox_core::i18n::gettext("Cancel"))
             .css_classes(["bordered"])
             .build();
         cancel.connect_clicked(glib::clone!(
@@ -285,7 +285,7 @@ impl SignInDialog {
         let imp = self.imp();
         let username = imp.username_entry.text();
         if imp.needs_username.get() && username.trim().is_empty() {
-            self.show_error("Enter your username.");
+            self.show_error(&ox_core::i18n::gettext("Enter your username."));
             imp.username_entry.grab_focus();
             return;
         }

@@ -91,10 +91,16 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     panel.append(&header(properties, facts.can_rename));
     let grid = PropertyGrid::new();
     let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
-    grid.add_row("Type", &entry.type_label);
-    grid.add_row("Location", &facts.locations.display_location(container));
-    grid.add_row("Full path", &facts.locations.display_location(&entry.uri));
-    let size_value = grid.add_row("Size", &size_text(facts));
+    grid.add_row(&ox_core::i18n::gettext("Type"), &entry.type_label);
+    grid.add_row(
+        &ox_core::i18n::gettext("Location"),
+        &facts.locations.display_location(container),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("Full path"),
+        &facts.locations.display_location(&entry.uri),
+    );
+    let size_value = grid.add_row(&ox_core::i18n::gettext("Size"), &size_text(facts));
     if let Some(state) = facts.folder_size.filter(|_| entry.is_dir) {
         size_value.set_tooltip_text(Some(&state.summary_tooltip()));
     }
@@ -102,21 +108,33 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
         let text = facts
             .folder_size
             .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::contains_text);
-        grid.add_row("Contains", &text)
+        grid.add_row(&ox_core::i18n::gettext("Contains"), &text)
     });
     if let Some(target) = &properties.link_target {
-        grid.add_row("Points to", target);
+        grid.add_row(&ox_core::i18n::gettext("Points to"), target);
     }
     if let Some((width, height)) = properties.dimensions {
-        grid.add_row("Dimensions", &format!("{width} × {height} pixels"));
+        grid.add_row(
+            &ox_core::i18n::gettext("Dimensions"),
+            &format!("{width} × {height} pixels"),
+        );
     }
     if !entry.is_dir {
         let app = properties.default_app.as_deref().unwrap_or(NO_DEFAULT_APP);
-        grid.add_row("Opens with", app);
+        grid.add_row(&ox_core::i18n::gettext("Opens with"), app);
     }
-    grid.add_row("Created", &format::date_time_text(properties.created));
-    grid.add_row("Modified", &format::date_time_text(entry.modified));
-    grid.add_row("Accessed", &format::date_time_text(properties.accessed));
+    grid.add_row(
+        &ox_core::i18n::gettext("Created"),
+        &format::date_time_text(properties.created),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("Modified"),
+        &format::date_time_text(entry.modified),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("Accessed"),
+        &format::date_time_text(properties.accessed),
+    );
     if let Some(mount) = &properties.mount {
         add_mount_rows(&grid, mount);
     }
@@ -135,9 +153,9 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
 /// for a mount point (PROP-004, as Dolphin's General tab). They come last,
 /// so the bar under the free space ends the grid.
 fn add_mount_rows(grid: &PropertyGrid, mount: &MountFacts) {
-    grid.add_row("Mounted on", &mount.mounted_on);
-    grid.add_row("Mounted from", &mount.mounted_from);
-    grid.add_row("File system", &mount.filesystem);
+    grid.add_row(&ox_core::i18n::gettext("Mounted on"), &mount.mounted_on);
+    grid.add_row(&ox_core::i18n::gettext("Mounted from"), &mount.mounted_from);
+    grid.add_row(&ox_core::i18n::gettext("File system"), &mount.filesystem);
     let Some((free, total)) = mount.space.filter(|(_, total)| *total > 0) else {
         return;
     };
@@ -146,7 +164,7 @@ fn add_mount_rows(grid: &PropertyGrid, mount: &MountFacts) {
         format::pretty_bytes(free),
         format::pretty_bytes(total)
     );
-    let value = grid.add_row("Free space", &text);
+    let value = grid.add_row(&ox_core::i18n::gettext("Free space"), &text);
     let bar = gtk::LevelBar::builder()
         .min_value(0.0)
         .max_value(1.0)
@@ -321,13 +339,25 @@ fn calculate_size_button(uri: &str) -> gtk::Button {
 pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties, editor: Option<gtk::Box>) {
     clear(panel);
     let grid = PropertyGrid::new();
-    grid.add_row("Owner", properties.owner.as_deref().unwrap_or_default());
-    grid.add_row("Group", properties.group.as_deref().unwrap_or_default());
-    grid.add_row("POSIX mode", &properties.mode_text().unwrap_or_default());
+    grid.add_row(
+        &ox_core::i18n::gettext("Owner"),
+        properties.owner.as_deref().unwrap_or_default(),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("Group"),
+        properties.group.as_deref().unwrap_or_default(),
+    );
+    grid.add_row(
+        &ox_core::i18n::gettext("POSIX mode"),
+        &properties.mode_text().unwrap_or_default(),
+    );
     let access = properties.access;
-    grid.add_row("Readable", access_text(access.readable));
-    grid.add_row("Writable", access_text(access.writable));
-    grid.add_row("Executable", access_text(access.executable));
+    grid.add_row(&ox_core::i18n::gettext("Readable"), access_text(access.readable));
+    grid.add_row(&ox_core::i18n::gettext("Writable"), access_text(access.writable));
+    grid.add_row(
+        &ox_core::i18n::gettext("Executable"),
+        access_text(access.executable),
+    );
     panel.append(grid.widget());
     if let Some(editor) = editor {
         panel.append(&editor);

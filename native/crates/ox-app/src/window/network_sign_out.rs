@@ -58,7 +58,9 @@ impl BrowserWindow {
     /// server of `uri`.
     pub(super) fn sign_out_of_server(&self, uri: &str) {
         if self.write_activity() == WriteActivity::Writing {
-            self.show_message("Finish the current file operation before signing out.");
+            self.show_message(&ox_core::i18n::gettext(
+                "Finish the current file operation before signing out.",
+            ));
             return;
         }
         let Some(host) = smb_host_of(uri) else {

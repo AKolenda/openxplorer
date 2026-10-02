@@ -44,11 +44,11 @@ impl BrowserWindow {
             "“{}” is a program or script. Run it, or open it in its application?",
             program.name
         );
-        let dialog = Dialog::new(self, "Run this program?", &message);
+        let dialog = Dialog::new(self, &ox_core::i18n::gettext("Run this program?"), &message);
         dialog.add_cancel_button();
         // Open is first and primary, so Enter never runs it by accident.
-        let open = dialog.add_button("Open", ButtonStyle::Accent);
-        let run = dialog.add_button("Run", ButtonStyle::Bordered);
+        let open = dialog.add_button(&ox_core::i18n::gettext("Open"), ButtonStyle::Accent);
+        let run = dialog.add_button(&ox_core::i18n::gettext("Run"), ButtonStyle::Bordered);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();

@@ -271,9 +271,9 @@ impl BrowserWindow {
             "“{}” is on a network share or a removable drive. Run it only if you trust where it came from.",
             program.name
         );
-        let dialog = Dialog::new(self, "Run this program?", &message);
+        let dialog = Dialog::new(self, &ox_core::i18n::gettext("Run this program?"), &message);
         dialog.add_cancel_button();
-        dialog.add_button("Run", ButtonStyle::Accent);
+        dialog.add_button(&ox_core::i18n::gettext("Run"), ButtonStyle::Accent);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();

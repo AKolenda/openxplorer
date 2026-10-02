@@ -129,7 +129,7 @@ fn terminal_item(uri: &str) -> MenuEntry {
     let is_share = (is_smb_location(uri) || is_remote_location(uri)) && !is_smb_server(uri);
     let can_open = uri.starts_with("file:") || is_share;
     let terminal = MenuItem::with_text_target(
-        "Open in Terminal",
+        &ox_core::i18n::gettext("Open in Terminal"),
         Icon::WindowConsole,
         WindowAction::OpenInTerminalOf,
         uri,
@@ -244,14 +244,23 @@ fn recent_files_entries() -> Vec<MenuEntry> {
             RECENT_URI,
         ),
         MenuEntry::Divider,
-        MenuItem::new("Clear recent files", Icon::Delete, WindowAction::ClearRecentFiles).into(),
+        MenuItem::new(
+            &ox_core::i18n::gettext("Clear recent files"),
+            Icon::Delete,
+            WindowAction::ClearRecentFiles,
+        )
+        .into(),
     ]
 }
 
 /// The Recycle Bin's menu: the Open items, then Empty Recycle Bin,
 /// disabled while it is empty (Dolphin's "Empty Trash").
 fn recycle_bin_entries(has_items: bool) -> Vec<MenuEntry> {
-    let empty = MenuItem::new("Empty Recycle Bin", Icon::Delete, WindowAction::EmptyTrash);
+    let empty = MenuItem::new(
+        &ox_core::i18n::gettext("Empty Recycle Bin"),
+        Icon::Delete,
+        WindowAction::EmptyTrash,
+    );
     vec![
         item("Open", Icon::Delete, WindowAction::GoTo, TRASH_URI),
         item("Open in new tab", Icon::Add, WindowAction::OpenTab, TRASH_URI),
@@ -280,7 +289,7 @@ fn recent_locations_entries() -> Vec<MenuEntry> {
         ),
         MenuEntry::Divider,
         MenuItem::new(
-            "Clear recent locations",
+            &ox_core::i18n::gettext("Clear recent locations"),
             Icon::DeleteDismiss,
             WindowAction::ClearRecentLocations,
         )

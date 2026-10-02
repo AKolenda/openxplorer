@@ -126,6 +126,7 @@ mod imp {
     impl ObjectImpl for OpenWithDialog {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "open-with-dialog.ui");
             self.obj().connect_controls();
         }
     }
@@ -486,7 +487,9 @@ fn application_row(choice: &ApplicationChoice) -> gtk::ListBoxRow {
 
 /// The row shown when the filter matches nothing.
 fn empty_row() -> gtk::ListBoxRow {
-    let label = gtk::Label::new(Some("No matching installed applications."));
+    let label = gtk::Label::new(Some(&ox_core::i18n::gettext(
+        "No matching installed applications.",
+    )));
     label.add_css_class("apps-empty");
     gtk::ListBoxRow::builder()
         .child(&label)

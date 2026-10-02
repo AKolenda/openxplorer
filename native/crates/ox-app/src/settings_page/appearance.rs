@@ -224,7 +224,7 @@ fn theme_preview() -> gtk::Box {
 }
 
 fn text_and_menus_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Text and menus");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Text and menus"));
     let text_size = SettingRow::new(TEXT_SIZE);
     text_size.add_control(&text_size_choice(page), ControlName::RowTitle);
     group.add_row(&text_size);
@@ -320,7 +320,7 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
 }
 
 fn layout_group() -> SettingsGroup {
-    let group = SettingsGroup::new("Layout");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Layout"));
     let row = SettingRow::new(PANE_WIDTHS);
     let reset = parts::button_with_glyph("Reset", Icon::ArrowClockwise);
     WindowAction::ResetLayout.assign_to(&reset);

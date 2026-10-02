@@ -260,7 +260,7 @@ impl VersionsPanel {
         }
         if !found.warnings.is_empty() {
             let details = gtk::Expander::builder()
-                .label("Availability details")
+                .label(&ox_core::i18n::gettext("Availability details"))
                 .css_classes(["snapshot-warnings"])
                 .child(&quiet_text(&found.warnings.join("\n")))
                 .build();

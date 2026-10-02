@@ -47,7 +47,7 @@ fn choose_icon(button: &gtk::Button, uri: &str) {
     let filters = gio::ListStore::new::<gtk::FileFilter>();
     filters.append(&images);
     let dialog = gtk::FileDialog::builder()
-        .title("Choose an icon")
+        .title(&ox_core::i18n::gettext("Choose an icon"))
         .modal(true)
         .filters(&filters)
         .build();

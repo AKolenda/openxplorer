@@ -40,7 +40,7 @@
         <child>
           <object class="GtkProgressBar" id="progress_bar">
             <accessibility>
-              <property name="label">Operation progress</property>
+              <property name="label" translatable="yes">Operation progress</property>
             </accessibility>
           </object>
         </child>
@@ -48,7 +48,7 @@
           <object class="GtkProgressBar" id="file_bar">
             <property name="visible">false</property>
             <accessibility>
-              <property name="label">Current file progress</property>
+              <property name="label" translatable="yes">Current file progress</property>
             </accessibility>
             <style>
               <class name="transfer-file"/>
@@ -59,7 +59,7 @@
     </child>
     <child>
       <object class="GtkButton" id="cancel_button">
-        <property name="label">Cancel</property>
+        <property name="label" translatable="yes">Cancel</property>
         <property name="valign">center</property>
         <style>
           <class name="bordered"/>

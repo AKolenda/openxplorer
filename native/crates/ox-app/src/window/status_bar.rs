@@ -209,6 +209,7 @@ mod imp {
     impl ObjectImpl for StatusBar {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "status-bar.ui");
             self.obj().finish_template();
         }
     }

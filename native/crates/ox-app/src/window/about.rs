@@ -105,8 +105,8 @@ impl BrowserWindow {
     fn about_dialog(&self) -> (Dialog, [DialogButton; 2]) {
         let dialog = Dialog::new(self, BUILD_NAME, &about_text());
         let report = dialog.add_button(REPORT_ISSUE, ButtonStyle::Bordered);
-        let website = dialog.add_button("Website", ButtonStyle::Bordered);
-        dialog.add_button("OK", ButtonStyle::Accent);
+        let website = dialog.add_button(&ox_core::i18n::gettext("Website"), ButtonStyle::Bordered);
+        dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
         (dialog, [report, website])
     }
 
@@ -114,7 +114,7 @@ impl BrowserWindow {
         let dialog = Dialog::new(self, LICENSE_TITLE, &license_text());
         let notices = format!("{AGPL}\n\nOriginal notice:\n\n{WINSPACE_NOTICE}");
         dialog.add_scrolled_text(&notices, LICENSE_TEXT_HEIGHT);
-        dialog.add_button("OK", ButtonStyle::Accent);
+        dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
         dialog
     }
 }

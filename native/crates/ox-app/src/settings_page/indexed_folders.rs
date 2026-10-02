@@ -145,11 +145,11 @@ fn candidate_of(root: &IndexRoot, candidates: &[IndexCandidate]) -> IndexCandida
 /// The Indexed folders page and its lists.
 pub(super) fn build(page: &SettingsPage) -> (SettingsSection, IndexedFolders) {
     let section = SettingsSection::new("Indexed folders", LEAD, PageKind::Subpage);
-    let indexed = SettingsGroup::new("Indexed folders");
+    let indexed = SettingsGroup::new(&ox_core::i18n::gettext("Indexed folders"));
     // The list starts empty, so it says so until the index reports.
     show_nothing_indexed(&indexed);
     section.append_group(&indexed);
-    let add_group = SettingsGroup::new("Add folders to the index");
+    let add_group = SettingsGroup::new(&ox_core::i18n::gettext("Add folders to the index"));
     let add_field = add_folder_field();
     add_group.add_row(&add_folder_row(&add_field, page));
     section.append_group(&add_group);
@@ -175,7 +175,9 @@ fn show_nothing_indexed(group: &SettingsGroup) {
 /// off what was typed.
 fn add_folder_field() -> gtk::Entry {
     let field = gtk::Entry::builder()
-        .placeholder_text("Add a folder: /home/you/Projects or \\\\nas\\share")
+        .placeholder_text(&ox_core::i18n::gettext(
+            "Add a folder: /home/you/Projects or \\\\nas\\share",
+        ))
         .hexpand(true)
         .width_chars(36)
         .build();

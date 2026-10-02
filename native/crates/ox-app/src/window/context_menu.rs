@@ -298,7 +298,7 @@ impl BrowserWindow {
         if self.current_uri().as_deref() == Some(RECENT_LOCATIONS_URI) {
             WindowAction::Refresh.activate_from(self, None);
         }
-        self.show_message("Recent locations cleared.");
+        self.show_message(&ox_core::i18n::gettext("Recent locations cleared."));
     }
 
     /// The context menu of the view shown, for tests.

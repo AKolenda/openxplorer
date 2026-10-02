@@ -139,6 +139,7 @@ mod imp {
 
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "search-info-strip.ui");
             self.obj().finish_template();
         }
     }

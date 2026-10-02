@@ -268,9 +268,9 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                let dialog = Dialog::new(&window, "Open Terminal Here", &question);
+                let dialog = Dialog::new(&window, &ox_core::i18n::gettext("Open Terminal Here"), &question);
                 dialog.add_cancel_button();
-                let open = dialog.add_button("Open terminals", ButtonStyle::Accent);
+                let open = dialog.add_button(&ox_core::i18n::gettext("Open terminals"), ButtonStyle::Accent);
                 dialog.open();
                 let answer = dialog.next_response().await;
                 dialog.finish();

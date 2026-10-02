@@ -87,7 +87,12 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for StatusCard {}
+    impl ObjectImpl for StatusCard {
+        fn constructed(&self) {
+            self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "status-card.ui");
+        }
+    }
     impl WidgetImpl for StatusCard {}
     impl BoxImpl for StatusCard {}
 }

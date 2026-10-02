@@ -23,6 +23,7 @@ mod dialog;
 mod dialogs;
 mod folder_view;
 mod history;
+mod i18n;
 mod icons;
 mod integration;
 mod launcher_progress;

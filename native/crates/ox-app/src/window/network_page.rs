@@ -70,7 +70,7 @@ fn banner(discovery: &DiscoveryState) -> gtk::Box {
     words.set_hexpand(true);
     words.append(
         &gtk::Label::builder()
-            .label("Computers & network storage")
+            .label(&ox_core::i18n::gettext("Computers & network storage"))
             .xalign(0.0)
             .build(),
     );
@@ -106,13 +106,13 @@ fn banner(discovery: &DiscoveryState) -> gtk::Box {
 /// (`.network-manual`).
 fn server_address_field() -> gtk::Box {
     let address = gtk::Entry::builder()
-        .placeholder_text("\\\\server or \\\\archive-nas")
+        .placeholder_text(&ox_core::i18n::gettext("\\\\server or \\\\archive-nas"))
         .hexpand(true)
         .build();
     address.update_property(&[gtk::accessible::Property::Label("SMB server address")]);
     address.connect_activate(open_typed_address);
     let open = gtk::Button::builder()
-        .label("Open address")
+        .label(&ox_core::i18n::gettext("Open address"))
         .valign(gtk::Align::Center)
         .css_classes([ButtonStyle::Bordered.css_class()])
         .build();
@@ -123,7 +123,7 @@ fn server_address_field() -> gtk::Box {
     ));
     let map_content = gtk::Box::new(gtk::Orientation::Horizontal, MAP_GLYPH_GAP);
     map_content.append(&icons::image(Icon::Add, MAP_GLYPH));
-    map_content.append(&gtk::Label::new(Some("Map location")));
+    map_content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Map location"))));
     // Opens the connect dialog (`connectDialog`).
     let map = command_button(
         "Map location",
@@ -247,7 +247,9 @@ impl BrowserWindow {
     pub(super) fn open_server_address(&self, typed: &str) {
         match location::normalise_location(typed, None, &glib::home_dir()) {
             Ok(uri) if is_server_location(&uri) => self.navigate_or_report(&uri),
-            Ok(_) => self.show_message("Enter a network server or shared folder."),
+            Ok(_) => self.show_message(&ox_core::i18n::gettext(
+                "Enter a network server or shared folder.",
+            )),
             Err(error) => self.show_message(&error.to_string()),
         }
     }

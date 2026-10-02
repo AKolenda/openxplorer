@@ -283,6 +283,7 @@ impl ObjectSubclass for BrowserWindow {
 impl ObjectImpl for BrowserWindow {
     fn constructed(&self) {
         self.parent_constructed();
+        crate::i18n::translate_template(&*self.obj(), "window.ui");
         let window = self.obj();
         window.finish_title_bar();
         window.add_navigation_buttons();

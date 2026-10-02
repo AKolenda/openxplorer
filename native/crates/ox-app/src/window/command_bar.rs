@@ -167,6 +167,7 @@ mod imp {
     impl ObjectImpl for CommandBar {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "command-bar.ui");
             let bar = self.obj();
             bar.add_file_commands();
             bar.finish_right_commands();
@@ -355,11 +356,87 @@ fn text_menu_button(label: &str, glyph: Icon, css_class: &str, entries: Vec<Menu
 fn more_button() -> gtk::MenuButton {
     let button = gtk::MenuButton::builder()
         .child(&icons::image(Icon::MoreHorizontal, ICON_COMMAND_GLYPH))
-        .tooltip_text("More options")
+        .tooltip_text(&ox_core::i18n::gettext("More options"))
         .popover(&MenuPopover::new(more_menu()))
         .valign(gtk::Align::Center)
         .css_classes(["command", "more-command"])
         .build();
     name_menu_button(&button, "More options");
     button
+}
+
+#[cfg(test)]
+mod translation_tests {
+    use ox_core::i18n::{Catalog, DOMAIN};
+
+    use super::*;
+    use crate::i18n::translate_properties;
+
+    /// A real composite-template widget uses the selected catalogue for
+    /// static text. Metacharacters stay literal, and entry data stays intact.
+    ///
+    /// parity: INT-031
+    #[gtk::test]
+    fn marked_template_text_uses_the_selected_catalogue() {
+        let temporary = tempfile::tempdir().expect("a private locale folder");
+        let locale = temporary.path().join("test/LC_MESSAGES");
+        std::fs::create_dir_all(&locale).expect("the test locale");
+        let message = "Details";
+        let translated = "Locale <&> details";
+        let bytes = one_message_catalogue(message, translated);
+        std::fs::write(locale.join(format!("{DOMAIN}.mo")), bytes).expect("the test catalogue");
+        let catalog = Catalog::find(DOMAIN, &[temporary.path().to_owned()], &["test".to_owned()])
+            .expect("the requested locale is found");
+        let bar: CommandBar = glib::Object::new();
+        let entry = gtk::Entry::new();
+        entry.set_text(message);
+        bar.append(&entry);
+        translate_properties(bar.upcast_ref(), "command-bar.ui", &|message| {
+            catalog.gettext(message)
+        });
+        fn label(widget: &gtk::Widget) -> Option<gtk::Label> {
+            if widget.buildable_id().as_deref() == Some("i18n_1") {
+                return widget.clone().downcast().ok();
+            }
+            let mut child = widget.first_child();
+            while let Some(current) = child {
+                child = current.next_sibling();
+                if let Some(found) = label(&current) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        let label = label(bar.upcast_ref()).expect("the actual template label");
+        assert_eq!(label.text(), translated);
+        assert_eq!(entry.text(), message, "entry contents are never translated");
+    }
+
+    /// A one-message GNU MO fixture, with an obvious sentinel rather
+    /// than an invented translation committed as a real language.
+    fn one_message_catalogue(message: &str, translated: &str) -> Vec<u8> {
+        let length = |text: &str| u32::try_from(text.len()).expect("a tiny test message");
+        let mut bytes = Vec::new();
+        let header = [
+            0x9504_12de,
+            0,
+            1,
+            28,
+            36,
+            0,
+            0,
+            length(message),
+            44,
+            length(translated),
+            45 + length(message),
+        ];
+        for word in header {
+            bytes.extend(word.to_le_bytes());
+        }
+        bytes.extend(message.as_bytes());
+        bytes.push(0);
+        bytes.extend(translated.as_bytes());
+        bytes.push(0);
+        bytes
+    }
 }

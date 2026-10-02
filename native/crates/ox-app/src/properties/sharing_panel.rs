@@ -58,23 +58,23 @@ struct SharingControls {
 /// The Sharing tab of the local folder `folder`, using `usershares`.
 pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> gtk::Box {
     let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let state = quiet_text("Checking whether this folder is shared…");
+    let state = quiet_text(&ox_core::i18n::gettext("Checking whether this folder is shared…"));
     panel.append(&state);
-    let share = check_row("Share this folder", false);
+    let share = check_row(&ox_core::i18n::gettext("Share this folder"), false);
     panel.append(&share);
     let folder_name = folder
         .file_name()
         .unwrap_or_default()
         .to_string_lossy()
         .into_owned();
-    let name = labelled_entry(&panel, "Share name", &folder_name);
-    let comment = labelled_entry(&panel, "Comment", "");
-    let guests = check_row("Allow guests (no account needed)", false);
-    let read_only = check_row("Others can only read", true);
+    let name = labelled_entry(&panel, &ox_core::i18n::gettext("Share name"), &folder_name);
+    let comment = labelled_entry(&panel, &ox_core::i18n::gettext("Comment"), "");
+    let guests = check_row(&ox_core::i18n::gettext("Allow guests (no account needed)"), false);
+    let read_only = check_row(&ox_core::i18n::gettext("Others can only read"), true);
     panel.append(&guests);
     panel.append(&read_only);
     let apply = gtk::Button::builder()
-        .label("Apply")
+        .label(&ox_core::i18n::gettext("Apply"))
         .halign(gtk::Align::Start)
         .css_classes([ButtonStyle::Bordered.css_class()])
         .build();

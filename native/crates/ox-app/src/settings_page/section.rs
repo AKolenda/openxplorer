@@ -314,7 +314,7 @@ impl SearchTarget {
 fn back_button() -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::image(Icon::ArrowLeft, BACK_GLYPH))
-        .tooltip_text("Back")
+        .tooltip_text(&ox_core::i18n::gettext("Back"))
         .valign(gtk::Align::Center)
         .css_classes(["page-back"])
         .build();

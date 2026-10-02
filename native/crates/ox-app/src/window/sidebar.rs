@@ -509,11 +509,13 @@ fn section_separator() -> gtk::Separator {
 fn map_network_button() -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 11);
     content.append(&icons::image(Icon::Add, MAP_NETWORK_GLYPH));
-    content.append(&gtk::Label::new(Some("Map network location")));
+    content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext(
+        "Map network location",
+    ))));
     let button = gtk::Button::builder()
         .child(&content)
         .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text("Map network location")
+        .tooltip_text(&ox_core::i18n::gettext("Map network location"))
         .build();
     let footer = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)

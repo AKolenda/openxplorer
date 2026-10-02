@@ -69,8 +69,8 @@ impl BrowserWindow {
             None => (ADD_TITLE, ADD_MESSAGE, "Add"),
         };
         let dialog = Dialog::new(self, title, message);
-        let label_field = dialog.add_text_field("Label", &label);
-        label_field.set_placeholder_text(Some("The folder's name"));
+        let label_field = dialog.add_text_field(&ox_core::i18n::gettext("Label"), &label);
+        label_field.set_placeholder_text(Some(&ox_core::i18n::gettext("The folder's name")));
         let shown_location = self.imp().locations.borrow().display_location(&location);
         let location_field = self.add_location_field(&dialog, &shown_location);
         dialog.add_cancel_button();
@@ -90,7 +90,9 @@ impl BrowserWindow {
             };
             // One pin request at a time (SIDE-007), as pinning does.
             if !self.start_pinning() {
-                dialog.show_error("Another folder is being pinned. Try again in a moment.");
+                dialog.show_error(&ox_core::i18n::gettext(
+                    "Another folder is being pinned. Try again in a moment.",
+                ));
                 continue;
             }
             let running = Cancellation::new();
@@ -114,11 +116,13 @@ impl BrowserWindow {
     fn add_location_field(&self, dialog: &Dialog, location: &str) -> gtk::Entry {
         let entry = gtk::Entry::builder()
             .text(location)
-            .placeholder_text("For example ~/Projects or smb://server/share")
+            .placeholder_text(&ox_core::i18n::gettext(
+                "For example ~/Projects or smb://server/share",
+            ))
             .activates_default(true)
             .hexpand(true)
             .build();
-        let browse = gtk::Button::with_label("Browse…");
+        let browse = gtk::Button::with_label(&ox_core::i18n::gettext("Browse…"));
         browse.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -137,7 +141,7 @@ impl BrowserWindow {
     /// Lets the user choose a folder and writes its path into `entry`.
     fn pick_folder_into(&self, entry: &gtk::Entry) {
         let picker = gtk::FileDialog::builder()
-            .title("Choose a folder")
+            .title(&ox_core::i18n::gettext("Choose a folder"))
             .modal(true)
             .build();
         picker.select_folder(

@@ -34,7 +34,7 @@ pub(super) fn saved_search_menu(search: &SavedSearch) -> Vec<MenuEntry> {
     let target = saved_search_target(search);
     vec![
         MenuItem::with_target(
-            "Open",
+            &ox_core::i18n::gettext("Open"),
             Icon::Search,
             WindowAction::OpenSavedSearch,
             target.clone(),
@@ -42,7 +42,7 @@ pub(super) fn saved_search_menu(search: &SavedSearch) -> Vec<MenuEntry> {
         .into(),
         MenuEntry::Divider,
         MenuItem::with_target(
-            "Remove from navigation pane",
+            &ox_core::i18n::gettext("Remove from navigation pane"),
             Icon::Dismiss,
             WindowAction::ForgetSavedSearch,
             target,

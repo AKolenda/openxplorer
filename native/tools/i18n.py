@@ -25,12 +25,17 @@ from pathlib import Path
 import re
 import struct
 import sys
+import xml.etree.ElementTree as ET
+
+import package_i18n
 
 NATIVE = Path(__file__).resolve().parents[1]
 CRATES = NATIVE / 'crates'
 PO_FOLDER = NATIVE / 'po'
 TEMPLATE = PO_FOLDER / 'openxplorer.pot'
 DOMAIN = 'openxplorer'
+UI_FOLDER = CRATES / 'ox-app/resources/ui'
+UI_MESSAGES = CRATES / 'ox-app/src/i18n/template_messages.rs'
 
 # A Rust string literal, without raw strings, which the interface does not use
 # for messages.
@@ -98,11 +103,67 @@ def source_files() -> Iterator[Path]:
 
 def messages_in(text: str, place: str) -> Iterator[Message]:
     """Yield the messages of one source file's text."""
+    # Inline unit-test fixtures are not application messages.
+    text = re.split(r'#\[cfg\(test\)\]\s*mod tests\s*\{', text, maxsplit=1)[0]
     for pattern, context, msgid, plural in CALLS:
         for match in pattern.finditer(text):
             values = [None if index is None else unescape_rust(match.group(index))
                       for index in (context, msgid, plural)]
             yield Message(values[0], values[1] or '', values[2], [place])
+    # SettingRow is the one constructor for these static descriptions;
+    # it translates the display and search text without changing IDs.
+    for row in re.finditer(r'\bRowText\s*\{(?P<fields>.*?)\n\s*\}', text, re.DOTALL):
+        for value in re.finditer(r'\b(?:title|description|keywords):\s*' + _STRING, row['fields']):
+            message = unescape_rust(value.group(1))
+            if message:
+                yield Message(None, message, None, [place])
+
+
+def template_properties(text: str) -> Iterator[tuple[str, str, bool, str]]:
+    """Yield only marked object properties, with exact builder IDs.
+
+    Runtime entry values, file labels and action identifiers are never marked.
+    XML parsing decodes message entities before catalogue lookup.
+    """
+    root = ET.fromstring(text)
+    for owner in root.iter():
+        if owner.tag not in ('object', 'template'):
+            continue
+        for container, accessible in [(owner, False), *[(a, True) for a in owner.findall('accessibility')]]:
+            for prop in container.findall('property'):
+                if prop.get('translatable') != 'yes':
+                    continue
+                if list(prop) or not prop.text or prop.get('context'):
+                    raise ValueError('Marked template properties must be plain text without context')
+                identifier = '.' if owner.tag == 'template' else owner.get('id')
+                if not identifier:
+                    raise ValueError('Objects with marked template text need an explicit ID')
+                yield identifier, prop.attrib['name'], accessible, prop.text
+
+
+def ui_properties() -> Iterator[tuple[str, str, str, bool, str]]:
+    """Yield template messages together with their source paths."""
+    for path in sorted(UI_FOLDER.glob('*.ui')):
+        for identifier, prop, accessible, message in template_properties(path.read_text(encoding='utf-8')):
+            yield path.relative_to(NATIVE).as_posix(), identifier, prop, accessible, message
+
+
+def template_messages_source() -> str:
+    """Generate the exact properties translated when a template is constructed."""
+    rows = sorted({(Path(place).name, identifier, prop, accessible, message)
+                   for place, identifier, prop, accessible, message in ui_properties()})
+    lines = [
+        '// SPDX-License-Identifier: AGPL-3.0-only',
+        '// Written by native/tools/i18n.py extract; do not edit by hand.',
+        '// (template file, builder object ID, property, accessibility property, message id).',
+        '#[rustfmt::skip]',
+        'pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[',
+    ]
+    for template, identifier, prop, accessible, message in rows:
+        values = [po_string(template), po_string(identifier), po_string(prop),
+                  str(accessible).lower(), po_string(message)]
+        lines.append('    (' + ', '.join(values) + '),')
+    return '\n'.join([*lines, '];', ''])
 
 
 def extract() -> list[Message]:
@@ -117,6 +178,24 @@ def extract() -> list[Message]:
                     merged[key].places.append(place)
             else:
                 merged[key] = message
+    for place, _, _, _, message in ui_properties():
+        key = (None, message)
+        if key in merged:
+            if place not in merged[key].places:
+                merged[key].places.append(place)
+        else:
+            merged[key] = Message(None, message, None, [place])
+    for path in sorted((NATIVE / 'packaging/data').glob('*')):
+        if path.suffix != '.desktop' and not path.name.endswith('.metainfo.xml'):
+            continue
+        place = path.relative_to(NATIVE).as_posix()
+        for message in package_i18n.messages(path):
+            key = (None, message)
+            if key in merged:
+                if place not in merged[key].places:
+                    merged[key].places.append(place)
+            else:
+                merged[key] = Message(None, message, None, [place])
     return sorted(merged.values(), key=lambda message: (message.places[0], message.msgid))
 
 
@@ -227,11 +306,13 @@ def check() -> bool:
     """Return whether the template matches the sources; say what to run if not."""
     expected = template_text(extract())
     current = TEMPLATE.read_text(encoding='utf-8') if TEMPLATE.exists() else ''
-    if current == expected:
-        return True
-    print(f'{TEMPLATE.relative_to(NATIVE.parent)} is out of date: run python3 native/tools/i18n.py extract',
-          file=sys.stderr)
-    return False
+    sources = UI_MESSAGES.read_text(encoding='utf-8') if UI_MESSAGES.exists() else ''
+    stale = [path for path, matches in ((TEMPLATE, current == expected),
+                                      (UI_MESSAGES, sources == template_messages_source())) if not matches]
+    for path in stale:
+        print(f'{path.relative_to(NATIVE.parent)} is out of date: run python3 native/tools/i18n.py extract',
+              file=sys.stderr)
+    return not stale
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -247,6 +328,8 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command == 'extract':
         PO_FOLDER.mkdir(exist_ok=True)
         TEMPLATE.write_text(template_text(extract()), encoding='utf-8')
+        UI_MESSAGES.parent.mkdir(exist_ok=True)
+        UI_MESSAGES.write_text(template_messages_source(), encoding='utf-8')
         return 0
     if arguments.command == 'check':
         return 0 if check() else 1

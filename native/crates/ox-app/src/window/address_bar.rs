@@ -142,6 +142,7 @@ mod imp {
     impl ObjectImpl for AddressBar {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "address-bar.ui");
             self.obj().finish_template();
         }
 

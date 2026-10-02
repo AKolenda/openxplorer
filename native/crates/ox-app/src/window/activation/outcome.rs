@@ -105,7 +105,7 @@ impl BrowserWindow {
                 let find = unhandled
                     .as_ref()
                     .map(|_| dialog.add_button(FIND_IN_SOFTWARE, ButtonStyle::Bordered));
-                dialog.add_button("OK", ButtonStyle::Accent);
+                dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
                 dialog.open();
                 let answer = dialog.next_response().await;
                 dialog.finish();

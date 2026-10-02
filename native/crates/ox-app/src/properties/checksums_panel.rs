@@ -76,7 +76,7 @@ impl ChecksumsPanel {
         }
         widget.append(grid.widget());
         let expected = gtk::Entry::builder()
-            .placeholder_text("Expected checksum")
+            .placeholder_text(&ox_core::i18n::gettext("Expected checksum"))
             .build();
         expected.update_property(&[gtk::accessible::Property::Label("Expected checksum")]);
         let verdict = quiet_text("");

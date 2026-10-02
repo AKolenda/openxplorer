@@ -150,6 +150,7 @@ mod imp {
     impl ObjectImpl for BraveDialog {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "brave-dialog.ui");
             self.obj().connect_buttons();
         }
     }

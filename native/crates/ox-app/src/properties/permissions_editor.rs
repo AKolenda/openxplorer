@@ -217,8 +217,12 @@ pub(super) fn permissions_editor(items: EditedItems, versions: Arc<PreviousVersi
     for check in executable.iter().chain(&owners_only_delete) {
         editor.append(&check.check);
     }
-    let recursive =
-        has_folders.then(|| check_row("Apply changes to all subfolders and their contents", false));
+    let recursive = has_folders.then(|| {
+        check_row(
+            &ox_core::i18n::gettext("Apply changes to all subfolders and their contents"),
+            false,
+        )
+    });
     let advanced = items.common_mode().map(|mode| {
         let advanced = AdvancedBits::new(mode);
         editor.append(advanced.widget());

@@ -130,6 +130,7 @@ mod imp {
     impl ObjectImpl for TabStrip {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "tab-strip.ui");
             gestures::scroll_sideways_with_wheel(&self.scroller);
             self.obj().add_controller(super::copy_on_double_click());
             let menu = MenuPopover::new(Vec::new());
@@ -344,7 +345,9 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
         .css_classes(["snapshot-tab-badge"])
         .build();
     badge.append(&icons::image(Icon::Clock, SNAPSHOT_BADGE_GLYPH));
-    badge.append(&gtk::Label::new(Some("Previous version")));
+    badge.append(&gtk::Label::new(Some(&ox_core::i18n::gettext(
+        "Previous version",
+    ))));
     widget.append(&badge);
     let name = format!("{title} — Previous version — {snapshot}");
     widget.update_property(&[gtk::accessible::Property::Label(&name)]);
@@ -501,7 +504,7 @@ fn title(text: &str) -> gtk::Label {
 fn close_button(tab: &TabView) -> gtk::Button {
     let close = gtk::Button::builder()
         .child(&icons::image(Icon::Dismiss16, CLOSE_GLYPH))
-        .tooltip_text("Close tab")
+        .tooltip_text(&ox_core::i18n::gettext("Close tab"))
         .action_name(WindowAction::CloseTabById.detailed_name())
         .action_target(&tab.id.to_variant())
         .focus_on_click(false)

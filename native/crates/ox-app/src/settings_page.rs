@@ -207,6 +207,7 @@ mod imp {
 
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "settings-page.ui");
             self.obj().finish_template();
         }
 

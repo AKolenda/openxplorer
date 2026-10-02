@@ -149,7 +149,7 @@ fn pinned_tag() -> gtk::Box {
         .css_classes(["pinned-tag"])
         .build();
     tag.append(&icons::image(Icon::Pin, TAG_GLYPH));
-    tag.append(&gtk::Label::new(Some("Pinned")));
+    tag.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Pinned"))));
     tag
 }
 

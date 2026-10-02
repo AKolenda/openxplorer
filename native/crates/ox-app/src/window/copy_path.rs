@@ -64,10 +64,12 @@ impl BrowserWindow {
     /// Copies the path and says so, as app.js does.
     pub(super) fn copy_path(&self) {
         match self.path_to_copy() {
-            CopiedPath::NoFolder => self.show_message("Open a folder first."),
+            CopiedPath::NoFolder => self.show_message(&ox_core::i18n::gettext("Open a folder first.")),
             CopiedPath::Address(address) => {
                 self.clipboard().set_text(&address);
-                self.show_message("Path copied. Sharing permissions are unchanged.");
+                self.show_message(&ox_core::i18n::gettext(
+                    "Path copied. Sharing permissions are unchanged.",
+                ));
             }
         }
     }

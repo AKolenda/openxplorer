@@ -43,7 +43,7 @@ const MANUAL_NOTE: &str = "Flatpak/Snap, custom profiles, or managed browsers: o
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::BraveAndDownloads;
     let brave = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
-    let group = SettingsGroup::new("Download folder");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Download folder"));
     let row = SettingRow::new(USE_LINUX_DOWNLOADS);
     let sync = parts::button("Use Linux Downloads in Brave…", ButtonStyle::Accent);
     sync.connect_clicked(glib::clone!(

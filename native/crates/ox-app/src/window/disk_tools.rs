@@ -168,7 +168,7 @@ fn status_bar_entries(folder: &str, has_analyser: bool) -> Vec<MenuEntry> {
         return Vec::new();
     }
     let analyse = MenuItem::with_text_target(
-        "Analyse disk usage",
+        &ox_core::i18n::gettext("Analyse disk usage"),
         Icon::HardDrive,
         WindowAction::AnalyseDiskUsage,
         folder,

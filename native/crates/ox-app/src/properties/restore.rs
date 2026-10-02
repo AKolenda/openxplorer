@@ -68,14 +68,14 @@ impl RestoreRequest {
         home: &str,
         restore: impl Fn(String) + 'static,
     ) -> DialogFrame {
-        let frame = DialogFrame::new("Restore a copy", DialogWidth::Standard);
+        let frame = DialogFrame::new(&ox_core::i18n::gettext("Restore a copy"), DialogWidth::Standard);
         frame.set_message(&format!("{} · {}", self.label, self.name));
         let body = frame.body();
         body.append(&note(RESTORE_NOTE));
         let shown_home = glib::filename_from_uri(home)
             .map_or_else(|_| home.to_owned(), |(path, _)| path.display().to_string());
-        let destination = labelled_entry(&body, "Destination folder", &shown_home);
-        frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
+        let destination = labelled_entry(&body, &ox_core::i18n::gettext("Destination folder"), &shown_home);
+        frame.add_closing_button(&ox_core::i18n::gettext("Cancel"), ButtonStyle::Bordered, || {});
         // Copy version and Enter in the field both confirm.
         let confirm = Rc::new(glib::clone!(
             #[weak]
@@ -90,7 +90,7 @@ impl RestoreRequest {
                 }
             }
         ));
-        let copy = frame.add_button("Copy version", ButtonStyle::Accent);
+        let copy = frame.add_button(&ox_core::i18n::gettext("Copy version"), ButtonStyle::Accent);
         copy.connect_clicked(glib::clone!(
             #[strong]
             confirm,

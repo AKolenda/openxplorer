@@ -102,7 +102,7 @@ fn focus_window(app: &gtk::Application, id: u32) {
         return;
     }
     if let Some(window) = active_window(app) {
-        window.show_message("That window is no longer open.");
+        window.show_message(&ox_core::i18n::gettext("That window is no longer open."));
     }
 }
 

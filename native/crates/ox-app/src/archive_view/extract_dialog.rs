@@ -74,19 +74,29 @@ pub(crate) fn extract_dialog(
     extract: impl Fn(ExtractionChoice) + 'static,
     open_externally: impl Fn() + 'static,
 ) -> DialogFrame {
-    let frame = DialogFrame::new("Extract compressed folder", DialogWidth::Standard);
+    let frame = DialogFrame::new(
+        &ox_core::i18n::gettext("Extract compressed folder"),
+        DialogWidth::Standard,
+    );
     frame.set_message(EXTRACT_MESSAGE);
     let body = frame.body();
     body.append(&source_heading(&archive.name));
-    let destination = labelled_entry(&body, "Destination folder", &setup.shown_destination);
+    let destination = labelled_entry(
+        &body,
+        &ox_core::i18n::gettext("Destination folder"),
+        &setup.shown_destination,
+    );
     let suggested = suggested_folder_name(&archive.name).unwrap_or_default();
-    let name = labelled_entry(&body, "New folder name", &suggested);
+    let name = labelled_entry(&body, &ox_core::i18n::gettext("New folder name"), &suggested);
     body.append(&target_line(&destination, &name));
     let summary = quiet_text(CHECKING);
     summary.add_css_class("extract-summary");
     summary.set_accessible_role(gtk::AccessibleRole::Status);
     body.append(&summary);
-    let show = check_row("Show extracted files when finished", true);
+    let show = check_row(
+        &ox_core::i18n::gettext("Show extracted files when finished"),
+        true,
+    );
     body.append(&show);
     body.append(&quiet_text(EXTRACT_HINT));
     let check = Rc::new(ArchiveCheck::default());
@@ -246,9 +256,13 @@ fn add_buttons(
     extract: impl Fn(ExtractionChoice) + 'static,
     open_externally: impl Fn() + 'static,
 ) {
-    frame.add_closing_button("Open in archive manager", ButtonStyle::Bordered, open_externally);
-    frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
-    let confirm = frame.add_button("Extract", ButtonStyle::Accent);
+    frame.add_closing_button(
+        &ox_core::i18n::gettext("Open in archive manager"),
+        ButtonStyle::Bordered,
+        open_externally,
+    );
+    frame.add_closing_button(&ox_core::i18n::gettext("Cancel"), ButtonStyle::Bordered, || {});
+    let confirm = frame.add_button(&ox_core::i18n::gettext("Extract"), ButtonStyle::Accent);
     confirm.connect_clicked(glib::clone!(
         #[weak]
         frame,

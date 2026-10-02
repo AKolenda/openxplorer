@@ -91,10 +91,10 @@ pub(super) fn fill_source_form(
 ) {
     panel.append(&quiet_text(SOURCE_INTRO));
     let shown_live = locations.display_location(&item.live_folder());
-    let live = labelled_entry(panel, "Live folder", &shown_live);
+    let live = labelled_entry(panel, &ox_core::i18n::gettext("Live folder"), &shown_live);
     let collection = labelled_entry(
         panel,
-        "Snapshot collection folder",
+        &ox_core::i18n::gettext("Snapshot collection folder"),
         &suggested_collection(&shown_live),
     );
     let labels: Vec<&str> = LAYOUTS.iter().map(|(_, label)| *label).collect();
@@ -133,7 +133,7 @@ impl SourceForm {
         let row = gtk::Box::builder()
             .css_classes(["snapshot-source-actions"])
             .build();
-        let back = gtk::Button::with_label("Back");
+        let back = gtk::Button::with_label(&ox_core::i18n::gettext("Back"));
         back.add_css_class(ButtonStyle::Bordered.css_class());
         back.connect_clicked({
             let finished = finished.clone();

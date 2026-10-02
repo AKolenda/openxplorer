@@ -159,7 +159,7 @@ impl SizeScanStrip {
     /// Shows the bar for a new run, with Cancel scan.
     pub(crate) fn start(&self) {
         let button = &self.imp().button;
-        button.set_label("Cancel scan");
+        button.set_label(&ox_core::i18n::gettext("Cancel scan"));
         button.set_sensitive(true);
         self.set_visible(true);
     }
@@ -179,7 +179,7 @@ impl SizeScanStrip {
     pub(crate) fn show_end(&self, end: RunEnd) {
         let imp = self.imp();
         imp.label.set_text(&end_text(end));
-        imp.button.set_label("Dismiss");
+        imp.button.set_label(&ox_core::i18n::gettext("Dismiss"));
         imp.button.set_sensitive(true);
     }
 

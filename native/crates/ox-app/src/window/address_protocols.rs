@@ -151,7 +151,7 @@ fn fill_recent_servers(recent: &gtk::Box, entry: &gtk::Entry, popover: &gtk::Pop
             return;
         }
         let heading = gtk::Label::builder()
-            .label("Recent servers")
+            .label(&ox_core::i18n::gettext("Recent servers"))
             .xalign(0.0)
             .css_classes(["dim-label", "caption"])
             .build();

@@ -73,8 +73,8 @@ impl BrowserWindow {
         dialog.add_hint(&format!("Old location: {}", previous.display()));
         dialog.add_hint(&format!("New location: {}", destination.display()));
         dialog.add_note(CONFLICTS);
-        dialog.add_button("Don't move", ButtonStyle::Bordered);
-        let move_files = dialog.add_button("Move files", ButtonStyle::Accent);
+        dialog.add_button(&ox_core::i18n::gettext("Don't move"), ButtonStyle::Bordered);
+        let move_files = dialog.add_button(&ox_core::i18n::gettext("Move files"), ButtonStyle::Accent);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();

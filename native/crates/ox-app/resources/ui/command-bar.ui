@@ -11,7 +11,7 @@
       <class name="commandbar"/>
     </style>
     <accessibility>
-      <property name="label">File commands</property>
+      <property name="label" translatable="yes">File commands</property>
     </accessibility>
     <child>
       <!-- New, Cut to Move to Trash, Sort, View and More options, added
@@ -42,7 +42,7 @@
           <class name="theme-toggle"/>
         </style>
         <accessibility>
-          <property name="label">Appearance</property>
+          <property name="label" translatable="yes">Appearance</property>
         </accessibility>
         <property name="child">
           <object class="GtkBox">
@@ -72,7 +72,7 @@
           <class name="settings-button"/>
         </style>
         <accessibility>
-          <property name="label">Settings</property>
+          <property name="label" translatable="yes">Settings</property>
         </accessibility>
       </object>
     </child>
@@ -100,8 +100,8 @@
               </object>
             </child>
             <child>
-              <object class="GtkLabel">
-                <property name="label">Details</property>
+              <object class="GtkLabel" id="i18n_1">
+                <property name="label" translatable="yes">Details</property>
               </object>
             </child>
           </object>

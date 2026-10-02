@@ -209,7 +209,7 @@ fn follow_integration(page: &SettingsPage, view: &DefaultAppsView) {
 
 /// The options sent with Make `OpenXplorer` default.
 fn options_group(controls: &Controls) -> SettingsGroup {
-    let group = SettingsGroup::new("When making OpenXplorer default");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("When making OpenXplorer default"));
     for (text, switch) in [
         (INCLUDE_SHOW_IN_FOLDER, &controls.include_show_in_folder),
         (ALSO_ZIP_FILES, &controls.include_zip),
@@ -223,7 +223,7 @@ fn options_group(controls: &Controls) -> SettingsGroup {
 
 /// Which app opens each route now.
 fn routes_group(controls: &Controls) -> SettingsGroup {
-    let group = SettingsGroup::new("What opens where");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("What opens where"));
     for (text, value) in [(FOLDERS, &controls.folders), (SMB_LINKS, &controls.smb_links)] {
         let row = SettingRow::new(text);
         row.add_control(value, ControlName::RowTitle);
@@ -248,7 +248,7 @@ fn refresh_button(view: &DefaultAppsView) -> gtk::Button {
 /// `revealEnable`); its description becomes the Show in folder status
 /// line.
 fn show_in_folder_group(controls: &Controls) -> SettingsGroup {
-    let group = SettingsGroup::new("Show in folder from browsers");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Show in folder from browsers"));
     let row = &controls.show_in_folder_row;
     row.add_control(&controls.test_show_in_folder, ControlName::OwnLabel);
     row.add_control(&controls.enable_show_in_folder, ControlName::OwnLabel);
@@ -274,7 +274,7 @@ fn troubleshooting_group(page: &SettingsPage) -> SettingsGroup {
 
 /// The undo actions, rarely needed, at the bottom.
 fn advanced_group(controls: &Controls) -> SettingsGroup {
-    let group = SettingsGroup::new("Advanced");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Advanced"));
     for (text, button) in [
         (RESTORE_PREVIOUS, &controls.restore_previous),
         (RESTORE_ZIP_HANDLER, &controls.restore_zip),

@@ -177,7 +177,7 @@ impl LocationPanel {
              use this location."
         );
         self.append(&quiet_text(&intro));
-        let field = labelled_entry(self.upcast_ref(), "Folder location", "");
+        let field = labelled_entry(self.upcast_ref(), &ox_core::i18n::gettext("Folder location"), "");
         field.connect_changed(glib::clone!(
             #[weak(rename_to = panel)]
             self,

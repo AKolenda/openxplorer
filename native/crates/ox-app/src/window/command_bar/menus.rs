@@ -107,8 +107,18 @@ pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
         direction_item(&gettext("Ascending"), Icon::ArrowUp, SortDirection::Ascending),
         direction_item(&gettext("Descending"), Icon::ArrowDown, SortDirection::Descending),
         MenuEntry::Divider,
-        MenuItem::toggle("Show in groups", Icon::TextBulletList, WindowAction::Groups).into(),
-        MenuItem::toggle("Folders first", Icon::Folder, WindowAction::FoldersFirst).into(),
+        MenuItem::toggle(
+            &ox_core::i18n::gettext("Show in groups"),
+            Icon::TextBulletList,
+            WindowAction::Groups,
+        )
+        .into(),
+        MenuItem::toggle(
+            &ox_core::i18n::gettext("Folders first"),
+            Icon::Folder,
+            WindowAction::FoldersFirst,
+        )
+        .into(),
     ]);
     entries
 }
@@ -156,9 +166,13 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
         MenuItem::toggle(&gettext("Navigation pane"), Icon::Folder, WindowAction::Sidebar)
             .with_shortcut("F9")
             .into(),
-        MenuItem::toggle("Split view", Icon::PanelRight, WindowAction::SplitView)
-            .with_shortcut("F3")
-            .into(),
+        MenuItem::toggle(
+            &ox_core::i18n::gettext("Split view"),
+            Icon::PanelRight,
+            WindowAction::SplitView,
+        )
+        .with_shortcut("F3")
+        .into(),
         MenuItem::toggle(
             &gettext("Folder tree"),
             Icon::Organization,
@@ -261,12 +275,20 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
         MenuEntry::Divider,
         // app.js asked for a `code` glyph it did not have and drew a
         // document; the native app has the code glyph.
-        MenuItem::new("Keyboard shortcuts", Icon::Table, WindowAction::KeyboardShortcuts)
-            .with_shortcut("Ctrl+?")
-            .into(),
-        MenuItem::new("Help", Icon::DocumentText, WindowAction::Help)
-            .with_shortcut("F1")
-            .into(),
+        MenuItem::new(
+            &ox_core::i18n::gettext("Keyboard shortcuts"),
+            Icon::Table,
+            WindowAction::KeyboardShortcuts,
+        )
+        .with_shortcut("Ctrl+?")
+        .into(),
+        MenuItem::new(
+            &ox_core::i18n::gettext("Help"),
+            Icon::DocumentText,
+            WindowAction::Help,
+        )
+        .with_shortcut("F1")
+        .into(),
         item(&gettext("License & source"), Icon::Code, WindowAction::License),
         item(&gettext("About this build"), Icon::Info, WindowAction::About),
     ]);

@@ -9,6 +9,1257 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
+#: crates/ox-app/resources/ui/address-bar.ui
+msgid "Edit location"
+msgstr ""
+
+#: crates/ox-app/resources/ui/address-bar.ui
+msgid "Edit location (Ctrl+L)"
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Apply to Brave"
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Back up and update the selected Brave profiles."
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Checking native Brave profiles…"
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "One-time sync. Quit Brave before applying. Your browser’s other settings are left alone."
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Only detected native profiles are changed. Passwords and account data are not shown here. Backups remain private in your OpenXplorer configuration directory."
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Recheck profiles"
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Use this Downloads folder in Brave"
+msgstr ""
+
+#: crates/ox-app/resources/ui/command-bar.ui
+msgid "Appearance"
+msgstr ""
+
+#: crates/ox-app/resources/ui/command-bar.ui
+msgid "File commands"
+msgstr ""
+
+#: crates/ox-app/resources/ui/details-pane.ui
+msgid "Close details pane"
+msgstr ""
+
+#: crates/ox-app/resources/ui/details-pane.ui
+msgid "Pin to Quick access"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Cancel sign-in"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Connect as guest"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Enter network credentials"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Network connection"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "OpenXplorer Security"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Password"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Remember my credentials"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Show or hide password"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Show password"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Username"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui
+msgid "Your network username"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Always use this app for this file type"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Find an application"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Installed applications"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Keep the terminal open when the command ends"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Open with"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Or run a command"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Run in terminal"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Search installed applications"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Show all installed applications"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui
+msgid "Such as gimp %f (%f is the file, %u its address)"
+msgstr ""
+
+#: crates/ox-app/resources/ui/search-box.ui
+msgid "Search cached filenames and paths. Enable folders in Settings → Search & indexing."
+msgstr ""
+
+#: crates/ox-app/resources/ui/search-box.ui
+msgid "Search filenames and paths"
+msgstr ""
+
+#: crates/ox-app/resources/ui/search-info-strip.ui
+msgid "Cache this folder"
+msgstr ""
+
+#: crates/ox-app/resources/ui/search-info-strip.ui
+msgid "Clear search"
+msgstr ""
+
+#: crates/ox-app/resources/ui/search-info-strip.ui
+msgid "Keep search when changing folders"
+msgstr ""
+
+#: crates/ox-app/resources/ui/search-info-strip.ui
+msgid "Save search"
+msgstr ""
+
+#: crates/ox-app/resources/ui/search-info-strip.ui
+msgid "Save this search to the navigation pane"
+msgstr ""
+
+#: crates/ox-app/resources/ui/search-info-strip.ui
+msgid "Search information"
+msgstr ""
+
+#: crates/ox-app/resources/ui/settings-page.ui
+msgid "Back to files"
+msgstr ""
+
+#: crates/ox-app/resources/ui/settings-page.ui
+msgid "Close Settings and return to your folders"
+msgstr ""
+
+#: crates/ox-app/resources/ui/settings-page.ui
+msgid "Search settings"
+msgstr ""
+
+#: crates/ox-app/resources/ui/settings-page.ui
+msgid "Settings categories"
+msgstr ""
+
+#: crates/ox-app/resources/ui/status-bar.ui
+msgid "Details view"
+msgstr ""
+
+#: crates/ox-app/resources/ui/status-bar.ui
+msgid "Icon size"
+msgstr ""
+
+#: crates/ox-app/resources/ui/status-bar.ui
+msgid "Large icons"
+msgstr ""
+
+#: crates/ox-app/resources/ui/status-bar.ui
+msgid "Not updated live"
+msgstr ""
+
+#: crates/ox-app/resources/ui/tab-strip.ui
+msgid "Folder tabs"
+msgstr ""
+
+#: crates/ox-app/resources/ui/transfer-panel.ui
+msgid "Current file progress"
+msgstr ""
+
+#: crates/ox-app/resources/ui/transfer-panel.ui
+msgid "Operation progress"
+msgstr ""
+
+#: crates/ox-app/resources/ui/update-dialog.ui
+msgid "Check again"
+msgstr ""
+
+#: crates/ox-app/resources/ui/update-dialog.ui
+msgid "Install update…"
+msgstr ""
+
+#: crates/ox-app/resources/ui/update-dialog.ui
+msgid "Restart now"
+msgstr ""
+
+#: crates/ox-app/resources/ui/update-dialog.ui
+msgid "Software updates"
+msgstr ""
+
+#: crates/ox-app/resources/ui/window.ui
+msgid "Navigation"
+msgstr ""
+
+#: crates/ox-app/resources/ui/window.ui
+msgid "New tab"
+msgstr ""
+
+#: crates/ox-app/resources/ui/window.ui
+msgid "New tab (Ctrl+T)"
+msgstr ""
+
+#: crates/ox-app/resources/ui/window.ui packaging/data/io.winspace.Development.desktop packaging/data/io.winspace.Development.metainfo.xml
+msgid "OpenXplorer"
+msgstr ""
+
+#: crates/ox-app/src/application.rs
+msgid "That window is no longer open."
+msgstr ""
+
+#: crates/ox-app/resources/ui/update-dialog.ui crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/help.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/type_applications.rs
+msgid "Close"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "Extract all…"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Open in archive manager"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
+msgid "Up"
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/window/compress_dialog.rs
+msgid "Cancel"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/properties/restore.rs
+msgid "Destination folder"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Extract"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Extract compressed folder"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "New folder name"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Show extracted files when finished"
+msgstr ""
+
+#: crates/ox-app/src/dialog/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/item_dialogs.rs
+msgid "OK"
+msgstr ""
+
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/dialogs/network_sign_in.rs
+msgid "Connect"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
+msgid "Map network location"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Save in the sidebar · reconnect when opened"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_sign_in.rs
+msgid "Enter your username."
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_sign_out.rs
+msgid "Also clear cached filenames for this server"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_sign_out.rs
+msgid "Forget saved credentials for this server"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/network_sign_out.rs
+msgid "Sign out"
+msgstr ""
+
+#: crates/ox-app/src/integration/open_with_dialog.rs
+msgid "No matching installed applications."
+msgstr ""
+
+#: crates/ox-app/src/properties/checksums_panel.rs
+msgid "Expected checksum"
+msgstr ""
+
+#: crates/ox-app/src/properties/custom_icon.rs
+msgid "Choose an icon"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Accessed"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs
+msgid "Contains"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Created"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Dimensions"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Executable"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "File system"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Free space"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Full path"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs
+msgid "Group"
+msgstr ""
+
+#: crates/ox-app/resources/ui/address-bar.ui crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs
+msgid "Location"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Modified"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Mounted from"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Mounted on"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Opens with"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs
+msgid "Owner"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "POSIX mode"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Points to"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Readable"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs
+msgid "Size"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs
+msgid "Type"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Writable"
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel.rs
+msgid "Folder location"
+msgstr ""
+
+#: crates/ox-app/src/properties/mount_assistant.rs
+msgid "Network folder"
+msgstr ""
+
+#: crates/ox-app/src/properties/mount_assistant.rs
+msgid "Removal command (after restoring folder locations)"
+msgstr ""
+
+#: crates/ox-app/src/properties/mount_assistant.rs
+msgid "Set up network mount (SMB)"
+msgstr ""
+
+#: crates/ox-app/src/properties/mount_assistant.rs
+msgid "\\\\archive-nas\\Shared"
+msgstr ""
+
+#: crates/ox-app/src/properties/permissions_editor.rs
+msgid "Apply changes to all subfolders and their contents"
+msgstr ""
+
+#: crates/ox-app/src/properties/permissions_editor/advanced.rs
+msgid "Advanced Permissions"
+msgstr ""
+
+#: crates/ox-app/src/properties/restore.rs
+msgid "Copy version"
+msgstr ""
+
+#: crates/ox-app/src/properties/restore.rs
+msgid "Restore a copy"
+msgstr ""
+
+#: crates/ox-app/src/properties/sharing_panel.rs
+msgid "Allow guests (no account needed)"
+msgstr ""
+
+#: crates/ox-app/src/properties/sharing_panel.rs
+msgid "Apply"
+msgstr ""
+
+#: crates/ox-app/src/properties/sharing_panel.rs
+msgid "Checking whether this folder is shared…"
+msgstr ""
+
+#: crates/ox-app/src/properties/sharing_panel.rs
+msgid "Comment"
+msgstr ""
+
+#: crates/ox-app/src/properties/sharing_panel.rs
+msgid "Others can only read"
+msgstr ""
+
+#: crates/ox-app/src/properties/sharing_panel.rs
+msgid "Share name"
+msgstr ""
+
+#: crates/ox-app/src/properties/sharing_panel.rs
+msgid "Share this folder"
+msgstr ""
+
+#: crates/ox-app/src/properties/size_scan_strip.rs
+msgid "Cancel scan"
+msgstr ""
+
+#: crates/ox-app/src/properties/size_scan_strip.rs
+msgid "Dismiss"
+msgstr ""
+
+#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs
+msgid "Back"
+msgstr ""
+
+#: crates/ox-app/src/properties/snapshot_source.rs
+msgid "Live folder"
+msgstr ""
+
+#: crates/ox-app/src/properties/snapshot_source.rs
+msgid "Snapshot collection folder"
+msgstr ""
+
+#: crates/ox-app/src/properties/versions_panel.rs
+msgid "Availability details"
+msgstr ""
+
+#: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/settings_page/about.rs
+msgid "Check for updates"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Look for a newer OpenXplorer release."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "OpenXplorer · License & source"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "update version release upgrade software updates install restart flatpak"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Ctrl + and Ctrl − change it anywhere; Ctrl 0 resets. Desktop scaling is unchanged."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Layout"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Restore the default widths in every window."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Right-click menu"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Sidebar and column widths"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Text and menus"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Text size"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Text uses your desktop's interface font and size instead of Segoe UI."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "The app, menus, and network sign-in use the same theme."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Theme"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Use the desktop font"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Windows 10 is compact and shows familiar text commands."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "appearance dark light system colour color mode"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "context menu style windows 10 11 classic compact"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "font typeface family desktop system interface noto segoe size accessibility"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "reset layout widths sidebar resize columns"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/brave.rs
+msgid "Download folder"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/brave.rs
+msgid "Selected native Brave profiles save to your Linux Downloads folder."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/brave.rs
+msgid "Use Linux Downloads in Brave"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "\"Show in folder\" opens OpenXplorer. Runs for your user at login."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Advanced"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Also open ZIP files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Brave and other apps"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Brave's and other apps' Show in folder opens OpenXplorer. Per-user, starts at login."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Disable Show in folder"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Double-clicking a folder in other apps."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Gives ZIP files back to the app that opened them before."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Include Show in folder"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Make default also opens ZIP archives in OpenXplorer (changes the archive association)."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Open ZIP archives in OpenXplorer instead of the archive manager."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "OpenXplorer stops answering Show in folder requests."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Restore ZIP handler"
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/src/settings_page/default_apps.rs
+msgid "Restore previous"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "SMB links"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Show in folder from browsers"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Troubleshooting"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "What opens where"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "When making OpenXplorer default"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "ZIP files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Zorin and Brave setup steps, and how to undo each change."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "also open zip files in openxplorer (changes the archive association) make default option"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "default file explorer manager nautilus dolphin zorin"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "default network links share"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "smb:// links from browsers and chat apps."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "undo brave reveal filemanager1"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "undo default file explorer"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "undo zip archive"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "zorin + brave setup and troubleshooting help guide portal flatpak snap"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "A frame of each video, made by the desktop's thumbnailer."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Each folder keeps its own layout, sorting and grouping; off, every folder shares one."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Expandable folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Files and folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Files larger than 50 MB keep their icon."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Hovering an item shows a button that adds it to the selection or takes it out."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "In the details view, a folder's arrow lists its contents beneath it."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "PDFs, office documents, fonts and every other type the desktop can preview."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Photos, drawings and other images."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Pictures, videos and documents show their contents instead of an icon."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Preview documents and other files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Preview pictures"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Preview videos"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Relative dates"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Remember each folder's view"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Selection marker"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Show previews"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Show previews in network folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Show the number of items in folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Show “Today” and “Yesterday” with the time; off, every date is shown in full."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Skip previews of large files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "The Size column says how many items a folder on this computer holds."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "check box checkbox select toggle hover marker plus minus item"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "date modified time today yesterday absolute short format column"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "details folder size count items contents"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "thumbnails remote network smb nas sftp slow"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "thumbnails size limit big files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "thumbnails thumbnail image photo preview icons cache"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "thumbnails types plugins jpeg png images"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "thumbnails types plugins movies films"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "thumbnails types plugins pdf office fonts"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "tree expand collapse arrow chevron details subfolders nested"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "view properties per folder display style layout sort group remember global"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders.rs
+msgid "A path relative to the folder you came from, or a share such as \\\\nas\\share."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders.rs
+msgid "Add a folder"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders.rs
+msgid "Add a folder: /home/you/Projects or \\\\nas\\share"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders.rs
+msgid "Add folders to the index"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders.rs crates/ox-app/src/settings_page/indexing.rs
+msgid "Indexed folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders.rs
+msgid "custom directory path local disk smb nas"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
+msgid "Pinned"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
+msgid "Clear"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
+msgid "Index selected"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Calculate folder sizes"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Folder sizes"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Folders to index"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "How sizes are counted"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Index pinned folders automatically"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Logical file bytes, what a scan skips, and its limits."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Network / fallback checks"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Options"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Right-click a folder → Calculate folder size. Results last for this session."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "SMB and unwatched folders are checked for changes this often."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Watch enabled local folders for changes while OpenXplorer is open."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Watch folders for live changes"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "inotify automatic file updates index"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "quick access pin search cache"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/navigation.rs
+msgid "No settings match your search."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/search.rs
+msgid "No matching settings"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/search.rs
+msgid "{count} matching setting"
+msgid_plural "{count} matching settings"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "Home"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "Open new windows at"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "Restore previous tabs at startup"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "Startup"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "The folder a new window shows first. Leave it empty for Home."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "session remember reopen restore tabs last time startup logon"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "startup start home folder location default show on startup open explorer to"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Address bar"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Archives"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Ask before closing a window with several tabs"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Ask before deleting permanently"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Ask before emptying the Recycle Bin"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Ask before moving items to the Recycle Bin"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Ask whether to run programs and scripts"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Closing the window closes all of its tabs."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Confirmations"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Drag files into other apps"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Drag selected files or folders into another app to open or attach them."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Drop files on folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Every OpenXplorer window by title; choose one to bring it to the front."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Everything in it is deleted permanently."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Make the address bar editable in new windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Move tabs between windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/title_bar.rs packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.desktop
+msgid "New window"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "New windows show two folders side by side. F3 splits or unsplits a tab."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Off: Delete moves the selection to the Recycle Bin at once; Undo brings it back."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Off: Tab moves keyboard focus through the window as usual."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Off: inside your home folder the address starts at Home, as in Home / Documents."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Off: opening one shows it in its viewer or editor, and nothing runs."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Off: the title is the folder's name, as in File Explorer."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Open archives as folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Open folders from other apps in a new window"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Open new tabs"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Open new windows in split view"
+msgstr ""
+
+#: crates/ox-app/resources/ui/window.ui crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Open windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Opens another window (Ctrl+N)."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Shift+Delete, and items on drives without a Recycle Bin."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Show full path in the address bar"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Show full path in the title bar"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs crates/ox-app/src/window/command_bar/menus.rs
+msgid "Split view"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Switch between split panes with Tab"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Tabs and files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Where a folder opened in a new tab goes. Ctrl+T always adds a tab at the end."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "breadcrumbs crumbs location bar path root"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "breadcrumbs location bar type text"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "confirm confirmation close window tabs quit question warning"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "confirm confirmation empty trash recycle bin question warning"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "confirm confirmation permanent delete shift question warning"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "confirm confirmation trash delete recycle bin question warning"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "confirm execute run program script executable launcher open"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "detach drag separate window merge move tab to window"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "drag drop attach"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "drag drop copy move link pin program run"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "new tab position after current end tab bar order middle click"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "separate window"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "split view dual pane two panes side by side f3 commander"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "split view tab key switch pane focus keyboard"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "taskbar panel list switch focus quit"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "window title taskbar caption path"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "xdg-open command line external new tab window"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "zip tar gz archive compressed browse extract"
+msgstr ""
+
+#: crates/ox-app/src/window/about.rs
+msgid "Website"
+msgstr ""
+
+#: crates/ox-app/src/window/address_menu.rs
+msgid "Address copied."
+msgstr ""
+
+#: crates/ox-app/src/window/address_menu.rs
+msgid "Copy address"
+msgstr ""
+
+#: crates/ox-app/src/window/address_menu.rs
+msgid "Edit address"
+msgstr ""
+
+#: crates/ox-app/src/window/address_menu.rs
+msgid "Keep address editable"
+msgstr ""
+
+#: crates/ox-app/src/window/address_menu.rs
+msgid "Paste and go"
+msgstr ""
+
+#: crates/ox-app/src/window/address_menu.rs
+msgid "Show full path"
+msgstr ""
+
+#: crates/ox-app/src/window/address_menu.rs
+msgid "The clipboard holds no address."
+msgstr ""
+
+#: crates/ox-app/src/window/address_protocols.rs
+msgid "Recent servers"
+msgstr ""
+
+#: crates/ox-app/resources/ui/search-info-strip.ui crates/ox-app/src/window/cache_folder.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs
+msgid "Cache this folder for search"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "More options"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "About this build"
 msgstr ""
@@ -19,10 +1270,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "CSV file"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Cache this folder for search"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -37,7 +1284,7 @@ msgstr ""
 msgid "Descending"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs
 msgid "Details"
 msgstr ""
 
@@ -58,6 +1305,10 @@ msgid "Folder tree"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Folders first"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "From template…"
 msgstr ""
 
@@ -66,11 +1317,19 @@ msgid "HTML document"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Help"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Invert selection"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "JSON file"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Keyboard shortcuts"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -90,7 +1349,7 @@ msgid "Link to file or folder…"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Map network location"
+msgid "List"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -99,10 +1358,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Navigation pane"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "New window"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -125,12 +1380,16 @@ msgstr ""
 msgid "Select none"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/settings-page.ui crates/ox-app/src/window/command_bar/menus.rs packaging/data/io.winspace.Development.desktop
 msgid "Settings"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Show hidden files"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Show in groups"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -147,6 +1406,70 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Use system appearance"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Archive name"
+msgstr ""
+
+#: crates/ox-app/src/window/compress_dialog.rs
+msgid "Compress"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu.rs
+msgid "Recent locations cleared."
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/disk_tools.rs
+msgid "Analyse disk usage"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Mount disk image"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Open in new tab"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Open in new window"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Paste into folder"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Sign out of server…"
+msgstr ""
+
+#: crates/ox-app/src/window/copy_path.rs
+msgid "Open a folder first."
+msgstr ""
+
+#: crates/ox-app/src/window/copy_path.rs
+msgid "Path copied. Sharing permissions are unchanged."
+msgstr ""
+
+#: crates/ox-app/src/window/crumb_menus.rs
+msgid "More"
+msgstr ""
+
+#: crates/ox-app/src/window/crumb_menus.rs
+msgid "Show subfolders"
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
+msgid "Try again"
+msgstr ""
+
+#: crates/ox-app/src/window/file_drop/program.rs crates/ox-app/src/window/run_on_open.rs
+msgid "Run"
+msgstr ""
+
+#: crates/ox-app/src/window/file_drop/program.rs crates/ox-app/src/window/run_on_open.rs
+msgid "Run this program?"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_tree/menu.rs
@@ -169,23 +1492,15 @@ msgstr ""
 msgid "Move to Trash"
 msgstr ""
 
-#: crates/ox-app/src/window/folder_tree/menu.rs
+#: crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Open in Terminal"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_tree/menu.rs
-msgid "Open in new tab"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_tree/menu.rs
-msgid "Open in new window"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_tree/menu.rs
 msgid "Paste"
 msgstr ""
 
-#: crates/ox-app/src/window/folder_tree/menu.rs
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Properties"
 msgstr ""
 
@@ -201,11 +1516,183 @@ msgstr ""
 msgid "Show hidden folders"
 msgstr ""
 
-#: crates/ox-app/src/window/status_bar.rs
+#: crates/ox-app/src/window/help.rs
+msgid ""
+msgstr ""
+
+#: crates/ox-app/src/window/help.rs
+msgid "OpenXplorer Help"
+msgstr ""
+
+#: crates/ox-app/src/window/integration_actions.rs
+msgid "Open Terminal Here"
+msgstr ""
+
+#: crates/ox-app/src/window/integration_actions.rs
+msgid "Open terminals"
+msgstr ""
+
+#: crates/ox-app/src/window/mounting.rs
+msgid "Disconnect"
+msgstr ""
+
+#: crates/ox-app/src/window/mounting.rs
+msgid "Disconnect this mount?"
+msgstr ""
+
+#: crates/ox-app/src/window/mounting.rs
+msgid "Finish the current operation before disconnecting."
+msgstr ""
+
+#: crates/ox-app/src/window/network_page.rs
+msgid "Computers & network storage"
+msgstr ""
+
+#: crates/ox-app/src/window/network_page.rs
+msgid "Enter a network server or shared folder."
+msgstr ""
+
+#: crates/ox-app/src/window/network_page.rs
+msgid "Map location"
+msgstr ""
+
+#: crates/ox-app/src/window/network_page.rs
+msgid "Open address"
+msgstr ""
+
+#: crates/ox-app/src/window/network_page.rs
+msgid "\\\\server or \\\\archive-nas"
+msgstr ""
+
+#: crates/ox-app/src/window/network_sign_out.rs
+msgid "Finish the current file operation before signing out."
+msgstr ""
+
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Open"
+msgstr ""
+
+#: crates/ox-app/src/window/open_several.rs
+msgid "Open all"
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
+msgid "Another folder is being pinned. Try again in a moment."
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
+msgid "Browse…"
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
+msgid "Choose a folder"
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
+msgid "For example ~/Projects or smb://server/share"
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
+msgid "Label"
+msgstr ""
+
+#: crates/ox-app/src/window/place_editor.rs
+msgid "The folder's name"
+msgstr ""
+
+#: crates/ox-app/src/window/place_menus.rs
+msgid "Clear recent files"
+msgstr ""
+
+#: crates/ox-app/src/window/place_menus.rs
+msgid "Clear recent locations"
+msgstr ""
+
+#: crates/ox-app/src/window/place_menus.rs
+msgid "Empty Recycle Bin"
+msgstr ""
+
+#: crates/ox-app/src/window/quick_access.rs
+msgid "Already pinned to Quick access."
+msgstr ""
+
+#: crates/ox-app/src/window/relocated_files.rs
+msgid "Don't move"
+msgstr ""
+
+#: crates/ox-app/src/window/relocated_files.rs
+msgid "Move files"
+msgstr ""
+
+#: crates/ox-app/src/window/saved_search.rs
+msgid "Remove from navigation pane"
+msgstr ""
+
+#: crates/ox-app/src/window/select_matching.rs
+msgid "Pattern"
+msgstr ""
+
+#: crates/ox-app/src/window/select_matching.rs
+msgid "Select"
+msgstr ""
+
+#: crates/ox-app/src/window/select_matching.rs
+msgid "Select items matching"
+msgstr ""
+
+#: crates/ox-app/src/window/select_matching.rs
+msgid "Use * for any characters and ? for one character, such as *.pdf."
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Add entry…"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Edit…"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Hide"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Open folder with…"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Previous versions"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Show"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Show all entries"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Unpin from Quick access"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/row.rs
+msgid "Network share"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar_resizer.rs
+msgid "Resize sidebar"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar_toggle.rs
+msgid "Places (F9 shows the navigation pane)"
+msgstr ""
+
+#: crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/src/window/status_bar.rs
 msgid "Loading…"
 msgstr ""
 
-#: crates/ox-app/src/window/status_bar.rs
+#: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/window/status_bar.rs
 msgid "Ready"
 msgstr ""
 
@@ -222,3 +1709,175 @@ msgid "{count} selected"
 msgid_plural "{count} selected"
 msgstr[0] ""
 msgstr[1] ""
+
+#: crates/ox-app/src/window/tab_menu.rs
+msgid "Close other tabs"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_menu.rs crates/ox-app/src/window/tab_strip.rs
+msgid "Close tab"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_menu.rs
+msgid "Duplicate tab"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_menu.rs crates/ox-app/src/window/tab_moves.rs
+msgid "Move tab to new window"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_menu.rs
+msgid "Move tab to window…"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_menu.rs packaging/data/io.winspace.Development.desktop
+msgid "Open windows…"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_moves.rs
+msgid "No other OpenXplorer windows"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_strip.rs
+msgid "Previous version"
+msgstr ""
+
+#: crates/ox-app/src/window/title_bar.rs
+msgid "Quit OpenXplorer"
+msgstr ""
+
+#: crates/ox-app/src/window/type_applications.rs
+msgid "Add"
+msgstr ""
+
+#: crates/ox-app/src/window/type_applications.rs
+msgid "Apps for this type"
+msgstr ""
+
+#: crates/ox-app/src/window/type_applications.rs
+msgid "Remove"
+msgstr ""
+
+#: crates/ox-app/src/window/type_applications.rs
+msgid "Reset"
+msgstr ""
+
+#: crates/ox-app/src/window/type_applications.rs
+msgid "Reset apps"
+msgstr ""
+
+#: crates/ox-app/src/window/type_applications.rs
+msgid "Set as default"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.desktop packaging/data/io.winspace.Development.metainfo.xml
+msgid "File Explorer"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.desktop
+msgid "File Explorer;file explorer;File Manager;files;folders;SMB;NAS;network;archives;"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.Native.metainfo.xml
+msgid "OpenXplorer Native Preview"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.Native.metainfo.xml
+msgid "Preview of the native OpenXplorer file manager"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml
+msgid "A preview of the next OpenXplorer, drawn with native GTK 4 widgets instead of a web page. It browses local folders, SMB shares and connected phones in the familiar tabbed window styled after Windows 11 File Explorer."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "File Manager"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml
+msgid "First packaged native preview of the GTK 4 interface, for trying it beside the current OpenXplorer."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "NAS"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "OpenXplorer contributors"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml
+msgid "Preview build of OpenXplorer 2.0.0 under its own application ID."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "SMB"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml
+msgid "The preview is incomplete and runs beside the current OpenXplorer without replacing it. It never changes file associations, browser preferences or network mounts."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "ZIP"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "files"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "folders"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "network"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.desktop packaging/data/io.winspace.Development.metainfo.xml
+msgid "Explorer-style local and SMB file manager"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Add explicit Replace or Skip conflict handling and fix transfers to connected phones that do not support Unix permission changes."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Add opt-in in-app updates and fix folder permission preservation, backup protection, keyboard activation, tab navigation, cached search and device ZIP extraction."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Browse local folders, SMB shares and connected phones in a tabbed window styled after Windows 11 File Explorer, with light and dark appearances, a resizable sidebar, indexed filename search and ZIP browsing."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Display the native app layout immediately during startup instead of a centered message and spinner, while preserving startup recovery."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "First stable release. Middle-click folders to open tabs in the background, tear tabs out onto the desktop and merge them back across windows, extract ZIP archives and open terminals in the current folder. Existing defaults remain unchanged until requested."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Fix dragging filenames containing parentheses and simplify the Software updates dialog."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Installation does not change file associations, browser preferences or network mounts. Making OpenXplorer the default file manager, handling Show in folder requests and the other desktop integrations stay off until you turn them on in Settings."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Keep in-app updates working after the repository moves to the openxplorer GitHub organization."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "OpenXplorer is now a native GTK 4 application with the same Windows 11 look. It adds Fluent icons, a categorised Settings page, undo, dropping files onto programs, tearing tabs out into new windows, and Flatpak and distribution packages. Pinned folders are indexed for search by default."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Place the update action beside the bottom-right view controls and remove the stable-release status indicator."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Show connected Android, camera/PTP and iPhone devices in the sidebar and This PC, with native GIO browsing and hot-plug refresh."
+msgstr ""

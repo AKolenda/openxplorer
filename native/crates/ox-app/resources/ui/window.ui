@@ -15,7 +15,7 @@
 <interface>
   <requires lib="gtk" version="4.14"/>
   <template class="OxBrowserWindow" parent="GtkApplicationWindow">
-    <property name="title">OpenXplorer</property>
+    <property name="title" translatable="yes">OpenXplorer</property>
     <!-- set_default_size(1320, 810) in v2.0.0:desktop/winspace.py. -->
     <property name="default-width">1320</property>
     <property name="default-height">810</property>
@@ -49,13 +49,13 @@
             </child>
             <child>
               <object class="GtkButton" id="new_tab_button">
-                <property name="tooltip-text">New tab (Ctrl+T)</property>
+                <property name="tooltip-text" translatable="yes">New tab (Ctrl+T)</property>
                 <property name="valign">end</property>
                 <style>
                   <class name="newtab"/>
                 </style>
                 <accessibility>
-                  <property name="label">New tab</property>
+                  <property name="label" translatable="yes">New tab</property>
                 </accessibility>
               </object>
             </child>
@@ -72,13 +72,13 @@
             <child>
               <!-- #windows-button: the open windows, New window and Quit. -->
               <object class="GtkMenuButton" id="open_windows_button">
-                <property name="tooltip-text">Open windows</property>
+                <property name="tooltip-text" translatable="yes">Open windows</property>
                 <property name="valign">center</property>
                 <style>
                   <class name="windows-button"/>
                 </style>
                 <accessibility>
-                  <property name="label">Open windows</property>
+                  <property name="label" translatable="yes">Open windows</property>
                 </accessibility>
               </object>
             </child>
@@ -103,7 +103,7 @@
               <class name="navigation"/>
             </style>
             <accessibility>
-              <property name="label">Navigation</property>
+              <property name="label" translatable="yes">Navigation</property>
             </accessibility>
             <child>
               <!-- .nav-buttons: Back, Forward, Up and Refresh, added from

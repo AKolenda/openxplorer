@@ -89,7 +89,7 @@ fn move_tab_menu(id: TabId, windows: &[OtherWindow]) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = windows.iter().map(|window| window.menu_item(id).into()).collect();
     if entries.is_empty() {
         let none = MenuItem::new(
-            "No other OpenXplorer windows",
+            &ox_core::i18n::gettext("No other OpenXplorer windows"),
             Icon::Desktop,
             WindowAction::MoveTabIntoWindow,
         );
@@ -97,7 +97,7 @@ fn move_tab_menu(id: TabId, windows: &[OtherWindow]) -> Vec<MenuEntry> {
     }
     entries.push(MenuEntry::Divider);
     let new_window = MenuItem::with_target(
-        "Move tab to new window",
+        &ox_core::i18n::gettext("Move tab to new window"),
         Icon::Share,
         WindowAction::MoveTabToNewWindow,
         id.to_variant(),

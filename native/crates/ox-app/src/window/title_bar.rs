@@ -73,11 +73,20 @@ pub(super) fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
         .map(|window| window_item(&window, &this_window))
         .collect();
     entries.extend(closed_tab_items(&this_window));
-    let new_window =
-        MenuItem::new("New window", Icon::WindowNew, AppAction::NewWindow).with_shortcut("Ctrl+N");
+    let new_window = MenuItem::new(
+        &ox_core::i18n::gettext("New window"),
+        Icon::WindowNew,
+        AppAction::NewWindow,
+    )
+    .with_shortcut("Ctrl+N");
     entries.push(MenuEntry::Divider);
     entries.push(new_window.into());
-    let quit = MenuItem::new("Quit OpenXplorer", Icon::Dismiss, AppAction::Quit).with_shortcut("Ctrl+Q");
+    let quit = MenuItem::new(
+        &ox_core::i18n::gettext("Quit OpenXplorer"),
+        Icon::Dismiss,
+        AppAction::Quit,
+    )
+    .with_shortcut("Ctrl+Q");
     entries.push(quit.into());
     entries
 }

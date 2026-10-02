@@ -102,15 +102,18 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
     header.append(&heading);
     panel.append(&header);
     let grid = PropertyGrid::new();
-    grid.add_row("Type", &common_type(entries));
-    grid.add_row("Location", &common_location(entries, context));
+    grid.add_row(&ox_core::i18n::gettext("Type"), &common_type(entries));
+    grid.add_row(
+        &ox_core::i18n::gettext("Location"),
+        &common_location(entries, context),
+    );
     let bytes: u64 = entries
         .iter()
         .filter_map(|entry| entry.size.filter(|_| !entry.is_dir))
         .sum();
     let has_folders = folders > 0;
     let size = grid.add_row(
-        "Size",
+        &ox_core::i18n::gettext("Size"),
         &if has_folders {
             CALCULATING.to_owned()
         } else {
@@ -118,7 +121,7 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
         },
     );
     let contains = grid.add_row(
-        "Contains",
+        &ox_core::i18n::gettext("Contains"),
         &if has_folders {
             CALCULATING.to_owned()
         } else {
@@ -230,8 +233,14 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
                 "Multiple".to_owned()
             }
         };
-        grid.add_row("Owner", &same(|item| item.owner.as_deref()));
-        grid.add_row("Group", &same(|item| item.group.as_deref()));
+        grid.add_row(
+            &ox_core::i18n::gettext("Owner"),
+            &same(|item| item.owner.as_deref()),
+        );
+        grid.add_row(
+            &ox_core::i18n::gettext("Group"),
+            &same(|item| item.group.as_deref()),
+        );
         panel.append(grid.widget());
         if !items.iter().all(|item| can_edit_permissions(item, &context)) {
             panel.append(&note(NOT_EDITABLE));

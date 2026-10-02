@@ -219,7 +219,7 @@ impl CacheSummary {
 
 /// "Folders to index", which opens the Indexed folders page.
 fn folders_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Indexed folders");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Indexed folders"));
     let row = SettingRow::new(FOLDERS_TO_INDEX);
     let manage = parts::page_button("Manage…");
     manage.connect_clicked(glib::clone!(
@@ -233,7 +233,7 @@ fn folders_group(page: &SettingsPage) -> SettingsGroup {
 }
 
 fn options_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Options");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Options"));
     group.add_row(&pinned_folders_row(page));
     let watch = SettingRow::new(WATCH_FOLDERS);
     let auto_index = PreferenceBinding {
@@ -327,7 +327,7 @@ impl SettingsPage {
 /// "Calculate folder sizes", a command of the folder's context menu, and
 /// the row that opens how sizes are counted.
 fn folder_sizes_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Folder sizes");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Folder sizes"));
     group.add_row(&SettingRow::new(FOLDER_SIZES));
     let details = SettingRow::new(HOW_SIZES_ARE_COUNTED);
     let open = parts::chevron_button(HOW_SIZES_ARE_COUNTED.title);

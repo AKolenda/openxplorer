@@ -48,11 +48,17 @@ pub(crate) fn sign_out_dialog(
 ) -> Dialog {
     let title = format!("Sign out of {host}?");
     let dialog = Dialog::new(parent, &title, MESSAGE);
-    let forget = dialog.add_check_button("Forget saved credentials for this server", true);
-    let clear_cache = dialog.add_check_button("Also clear cached filenames for this server", false);
+    let forget = dialog.add_check_button(
+        &ox_core::i18n::gettext("Forget saved credentials for this server"),
+        true,
+    );
+    let clear_cache = dialog.add_check_button(
+        &ox_core::i18n::gettext("Also clear cached filenames for this server"),
+        false,
+    );
     dialog.add_note(NOTE);
     dialog.add_cancel_button();
-    dialog.add_button("Sign out", ButtonStyle::Accent);
+    dialog.add_button(&ox_core::i18n::gettext("Sign out"), ButtonStyle::Accent);
     dialog.connect_confirmed(move |dialog| {
         let forget = if forget.is_active() {
             ForgetScope::AllScopes

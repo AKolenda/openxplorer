@@ -69,13 +69,17 @@ pub(crate) fn archive_dialog(
     frame.set_message(BROWSE_MESSAGE);
     let view = ArchiveBrowserView::new(archive.clone(), browser, shown_path, actions.open_copy);
     frame.body().append(&view);
-    frame.add_closing_button("Extract all…", ButtonStyle::Bordered, actions.extract_all);
     frame.add_closing_button(
-        "Open in archive manager",
+        &ox_core::i18n::gettext("Extract all…"),
+        ButtonStyle::Bordered,
+        actions.extract_all,
+    );
+    frame.add_closing_button(
+        &ox_core::i18n::gettext("Open in archive manager"),
         ButtonStyle::Bordered,
         actions.open_externally,
     );
-    frame.add_closing_button("Close", ButtonStyle::Accent, || {});
+    frame.add_closing_button(&ox_core::i18n::gettext("Close"), ButtonStyle::Accent, || {});
     frame.connect_closed(glib::clone!(
         #[weak]
         view,
@@ -433,7 +437,7 @@ fn parent_prefix(prefix: &str) -> String {
 fn up_button() -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     content.append(&icons::image(Icon::ArrowUp, 16));
-    content.append(&gtk::Label::new(Some("Up")));
+    content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Up"))));
     let button = gtk::Button::builder().child(&content).build();
     button.add_css_class(ButtonStyle::Bordered.css_class());
     button.update_property(&[gtk::accessible::Property::Label("Up")]);

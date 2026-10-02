@@ -76,7 +76,7 @@ fn shown_folder(uri: Option<&str>) -> String {
 
 /// The Startup group.
 pub(super) fn startup_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Startup");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Startup"));
     group.add_row(&startup_folder_row(page));
     let restore = SettingRow::new(RESTORE_SESSION);
     let binding = PreferenceBinding {
@@ -96,7 +96,7 @@ pub(super) fn startup_group(page: &SettingsPage) -> SettingsGroup {
 fn startup_folder_row(page: &SettingsPage) -> SettingRow {
     let row = SettingRow::new(STARTUP_FOLDER);
     let field = gtk::Entry::builder()
-        .placeholder_text("Home")
+        .placeholder_text(&ox_core::i18n::gettext("Home"))
         .hexpand(true)
         .width_chars(36)
         .build();

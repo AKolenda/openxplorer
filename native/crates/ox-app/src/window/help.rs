@@ -85,7 +85,11 @@ impl BrowserWindow {
     /// button.
     pub(super) fn help_dialog(&self, topic: &str) -> (Dialog, DialogButton) {
         let topics = topics();
-        let dialog = Dialog::new(self, "OpenXplorer Help", "");
+        let dialog = Dialog::new(
+            self,
+            &ox_core::i18n::gettext("OpenXplorer Help"),
+            &ox_core::i18n::gettext(""),
+        );
         let headings: Vec<&str> = topics.iter().map(|(heading, _)| *heading).collect();
         let chooser = gtk::DropDown::from_strings(&headings);
         dialog.add_labelled("Topic", &chooser);
@@ -104,7 +108,7 @@ impl BrowserWindow {
         chooser.set_selected(u32::try_from(position).unwrap_or_default());
         show(&chooser);
         let report_button = dialog.add_button(REPORT_ISSUE, ButtonStyle::Bordered);
-        dialog.add_button("Close", ButtonStyle::Accent);
+        dialog.add_button(&ox_core::i18n::gettext("Close"), ButtonStyle::Accent);
         (dialog, report_button)
     }
 

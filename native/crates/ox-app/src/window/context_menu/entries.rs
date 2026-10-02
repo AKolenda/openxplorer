@@ -136,7 +136,7 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     entries.extend(application_items(facts));
     if facts.disk_tool == Some(DiskTool::MountImage) {
         let mount = MenuItem::with_text_target(
-            "Mount disk image",
+            &ox_core::i18n::gettext("Mount disk image"),
             Icon::HardDrive,
             WindowAction::MountDiskImage,
             &facts.navigation_uri,
@@ -146,7 +146,7 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     if is_folder {
         let new_tab = if facts.is_single {
             MenuItem::with_text_target(
-                "Open in new tab",
+                &ox_core::i18n::gettext("Open in new tab"),
                 Icon::Add,
                 WindowAction::OpenTab,
                 &facts.navigation_uri,
@@ -155,7 +155,7 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
             item("Open in new tabs", Icon::Add, WindowAction::OpenSelectionInTabs)
         };
         let new_window = MenuItem::with_text_target(
-            "Open in new window",
+            &ox_core::i18n::gettext("Open in new window"),
             Icon::WindowNew,
             WindowAction::OpenWindow,
             &facts.navigation_uri,
@@ -241,7 +241,7 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
 fn edit_items(facts: &ItemFacts) -> [MenuItem; 5] {
     let paste = if facts.shape == ItemShape::Folder && facts.is_single {
         MenuItem::with_text_target(
-            "Paste into folder",
+            &ox_core::i18n::gettext("Paste into folder"),
             Icon::ClipboardPaste,
             WindowAction::PasteInto,
             &facts.navigation_uri,
@@ -297,7 +297,7 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     }
     if facts.disk_tool == Some(DiskTool::AnalyseUsage) {
         let analyse = MenuItem::with_text_target(
-            "Analyse disk usage",
+            &ox_core::i18n::gettext("Analyse disk usage"),
             Icon::HardDrive,
             WindowAction::AnalyseDiskUsage,
             &facts.navigation_uri,
@@ -362,7 +362,7 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     }
     if facts.location != ItemLocation::Local {
         let sign_out = MenuItem::with_text_target(
-            "Sign out of server…",
+            &ox_core::i18n::gettext("Sign out of server…"),
             Icon::ArrowEject,
             WindowAction::SignOut,
             &facts.navigation_uri,
@@ -422,7 +422,7 @@ pub(crate) fn background_menu(
         MenuEntry::Divider,
         item("Pin this folder", Icon::Pin, WindowAction::PinFolder).into(),
         MenuItem::toggle(
-            "Cache this folder for search",
+            &ox_core::i18n::gettext("Cache this folder for search"),
             Icon::Search,
             WindowAction::CacheFolder,
         )

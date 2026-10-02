@@ -104,6 +104,7 @@ mod imp {
     impl ObjectImpl for UpdateDialog {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "update-dialog.ui");
             self.obj().connect_buttons();
         }
 

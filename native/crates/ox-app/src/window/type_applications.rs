@@ -39,9 +39,9 @@ async fn confirm_reset(parent: &Dialog, description: &str) -> bool {
         "Reset the apps for {description} files to the system defaults? Your default app and the apps \
          you added are forgotten."
     );
-    let question = Dialog::new(parent, "Reset apps", &message);
+    let question = Dialog::new(parent, &ox_core::i18n::gettext("Reset apps"), &message);
     question.add_cancel_button();
-    let reset = question.add_button("Reset", ButtonStyle::Accent);
+    let reset = question.add_button(&ox_core::i18n::gettext("Reset"), ButtonStyle::Accent);
     question.open();
     let answer = question.next_response().await;
     question.finish();
@@ -64,16 +64,16 @@ impl BrowserWindow {
         let description = gio::content_type_get_description(content_type);
         let message =
             format!("What opens {description} files ({content_type}). Changes apply to your account only.");
-        let dialog = Dialog::new(self, "Apps for this type", &message);
+        let dialog = Dialog::new(self, &ox_core::i18n::gettext("Apps for this type"), &message);
         let associated = gtk::DropDown::from_strings(&[]);
         dialog.add_labelled("Associated apps", &associated);
         let others = gtk::DropDown::from_strings(&[]);
         dialog.add_labelled("Another app", &others);
-        let reset = dialog.add_button("Reset", ButtonStyle::Bordered);
-        let remove = dialog.add_button("Remove", ButtonStyle::Bordered);
-        let add = dialog.add_button("Add", ButtonStyle::Bordered);
-        let make_default = dialog.add_button("Set as default", ButtonStyle::Accent);
-        let close = dialog.add_button("Close", ButtonStyle::Bordered);
+        let reset = dialog.add_button(&ox_core::i18n::gettext("Reset"), ButtonStyle::Bordered);
+        let remove = dialog.add_button(&ox_core::i18n::gettext("Remove"), ButtonStyle::Bordered);
+        let add = dialog.add_button(&ox_core::i18n::gettext("Add"), ButtonStyle::Bordered);
+        let make_default = dialog.add_button(&ox_core::i18n::gettext("Set as default"), ButtonStyle::Accent);
+        let close = dialog.add_button(&ox_core::i18n::gettext("Close"), ButtonStyle::Bordered);
         let mut is_open = false;
         loop {
             let shown = type_applications(content_type);

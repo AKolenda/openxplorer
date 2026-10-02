@@ -37,8 +37,8 @@ pub(super) const COMMAND_COPIED: &str = "Setup command copied. Review it before 
 pub(super) fn mount_assistant(use_path: impl Fn(&str) + 'static) -> gtk::Expander {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     content.append(&quiet_text(INTRO));
-    let address = labelled_entry(&content, "Network folder", "");
-    address.set_placeholder_text(Some("\\\\archive-nas\\Shared"));
+    let address = labelled_entry(&content, &ox_core::i18n::gettext("Network folder"), "");
+    address.set_placeholder_text(Some(&ox_core::i18n::gettext("\\\\archive-nas\\Shared")));
     let result = gtk::Box::new(gtk::Orientation::Vertical, 0);
     result.add_css_class("mount-plan");
     let prepare = glyph_button("Prepare setup command", Icon::Organization);
@@ -54,7 +54,7 @@ pub(super) fn mount_assistant(use_path: impl Fn(&str) + 'static) -> gtk::Expande
     content.append(&prepare);
     content.append(&result);
     gtk::Expander::builder()
-        .label("Set up network mount (SMB)")
+        .label(&ox_core::i18n::gettext("Set up network mount (SMB)"))
         .child(&content)
         .css_classes(["network-mount-assistant"])
         .build()
@@ -101,7 +101,9 @@ fn fill_plan(result: &gtk::Box, plan: &MountPlan, use_path: Rc<dyn Fn(&str)>) {
     removal.set_selectable(true);
     removal.add_css_class("monospace");
     let removal_section = gtk::Expander::builder()
-        .label("Removal command (after restoring folder locations)")
+        .label(&ox_core::i18n::gettext(
+            "Removal command (after restoring folder locations)",
+        ))
         .child(&removal)
         .build();
     result.append(&removal_section);
