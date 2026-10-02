@@ -100,7 +100,7 @@ impl DesktopIntegration {
     pub(crate) async fn enable_file_dialogs(&self) -> Result<String, IntegrationError> {
         let kde = self
             .file_dialogs()
-            .run_in_background(|registration| registration.enable().map(|()| registration.is_kde_session()))
+            .run_in_background(|registration| registration.enable().map(|()| registration.covers_kde_apps()))
             .await?;
         self.notify_changed();
         Ok(if kde {

@@ -329,12 +329,15 @@ impl FileDialogRegistration {
     }
 
     /// Gives file dialogs back: restores the file if it still holds what
-    /// the app wrote, otherwise removes only the app's line.
+    /// the app wrote, otherwise removes only the app's line. KDE's login
+    /// script goes first, so if it cannot be removed nothing has changed
+    /// and Restore can be tried again.
     ///
     /// # Errors
     ///
     /// [`FileDialogError::Symlink`] or [`FileDialogError::Io`].
     pub fn disable(&self) -> Result<DisabledFileDialogs, FileDialogError> {
+        self.disable_for_kde_apps()?;
         let record = self.read_record()?;
         let file = record
             .as_ref()
@@ -356,7 +359,6 @@ impl FileDialogRegistration {
             _ => DisabledFileDialogs::NotEnabled,
         };
         remove_file(&self.record_path())?;
-        self.disable_for_kde_apps()?;
         Ok(outcome)
     }
 

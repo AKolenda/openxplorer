@@ -522,6 +522,18 @@ fn kde_apps_are_covered_by_a_login_script() {
         "export SOMETHING_ELSE=1\n"
     );
 
+    // A script that cannot be removed fails Restore before anything else
+    // changes, so the opt-in stays on and Restore can be tried again.
+    fs::remove_file(&script).expect("cleared");
+    registration.enable().expect("enable");
+    fs::remove_file(&script).expect("replaced below");
+    symlink(fixture.user_file(), &script).expect("a symlink");
+    assert!(registration.disable().is_err());
+    assert!(registration.is_enabled());
+    fs::remove_file(&script).expect("the symlink");
+    registration.disable().expect("disable");
+    assert!(!registration.is_enabled());
+
     let gnome = FileDialogRegistration::new(
         FileDialogPaths {
             desktops: vec!["gnome".to_owned()],
@@ -530,7 +542,6 @@ fn kde_apps_are_covered_by_a_login_script() {
         "io.winspace.Development",
         Sandbox::Host,
     );
-    fs::remove_file(&script).expect("cleared");
     gnome.enable().expect("enable on GNOME");
     assert!(!script.exists(), "GNOME apps already ask the portal");
 }
