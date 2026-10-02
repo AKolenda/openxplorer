@@ -56,6 +56,7 @@ never takes over the Python app's name. Every package build sets it.
 | AppStream metainfo | `/usr/share/metainfo/<id>.metainfo.xml` | same | under `/app/share` |
 | Launcher icon | `/usr/share/icons/hicolor/scalable/apps/<id>.svg` | same | under `/app/share` |
 | D-Bus service file | `/usr/share/dbus-1/services/<id>.service` | same | under `/app/share` |
+| Portal backend file | `/usr/share/xdg-desktop-portal/portals/<id>.portal` | same | none |
 | Licences | `/usr/share/doc/<command>/` | `/usr/share/licenses/<command>/` | `/app/share/licenses/<id>/` |
 | Mount helper (stable) | `/opt/openxplorer/bin/openxplorer-mount-share`, linked from `/usr/bin` | `/usr/bin/openxplorer-mount-share` | none |
 
@@ -105,6 +106,15 @@ never takes over the Python app's name. Every package build sets it.
   `--gapplication-service` when something calls that name, such as
   `gapplication launch` or a notification action; the app then opens a window
   only when asked. Flatpak exports it with a `flatpak run` command.
+- **Portal backend file** ([`data/file-chooser.portal.in`](data/file-chooser.portal.in)).
+  It registers the app's own bus name as a desktop-portal backend for
+  `org.freedesktop.impl.portal.FileChooser` only, with no `UseIn`, so the
+  portal never picks it by itself: it is used only after the user enables
+  "Apps' Open and Save dialogs" in Settings, which writes the preference into
+  their own `~/.config/xdg-desktop-portal/<desktop>-portals.conf` (INT-032).
+  The existing D-Bus service file starts the app for the first call. The
+  Flatpak installs none, since the host's portal reads only the host's data
+  folders.
 - **No FileManager1 service.** No package installs
   `org.freedesktop.FileManager1.service`: a system-wide file would take
   "Show in folder" requests from every user without asking. The opt-in
@@ -298,6 +308,9 @@ style, so none of them needs a permission. A test
   `crates/ox-core/src/integration/background_portal.rs`).
 - Updates come from Flatpak (GNOME Software or `flatpak update`); the app
   never installs one itself.
+- "Apps' Open and Save dialogs" is unavailable: choosing a portal backend
+  means writing the host's portal configuration and installing a host
+  `.portal` file, which a sandbox cannot do.
 - The System theme follows the desktop's light or dark style through the
   Settings portal (`org.freedesktop.appearance` `color-scheme`), not GNOME's
   `org.gnome.desktop.interface` keys: the runtime ships that schema too, but

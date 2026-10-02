@@ -85,6 +85,7 @@ impl BrowserWindow {
         self.update_properties_actions();
         self.update_size_actions();
         self.update_archive_actions();
+        self.picker_selection_changed();
     }
 
     /// Runs `change`, which swaps, reloads or clears the folder model,

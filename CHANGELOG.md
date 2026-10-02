@@ -1,5 +1,14 @@
 # Unreleased
 
+- Optional: other applications' Open and Save dialogs in OpenXplorer.
+  Settings > Default apps > "Apps' Open and Save dialogs" > Enable makes
+  applications that use the desktop portal (Chrome, Firefox, Flatpak apps)
+  choose and save files in an OpenXplorer window, with File name, the type
+  list and Save or Open at the bottom. It is off until enabled, keeps every
+  other portal backend, and Restore Open and Save dialogs undoes it. Host
+  packages install `/usr/share/xdg-desktop-portal/portals/<id>.portal`;
+  the Flatpak cannot offer it.
+
 - Group by, as in Windows Explorer: Sort > Group by name, date modified,
   type or size splits the folder into titled groups with their counts.
   Dates use calendar periods in local time (Today, Yesterday, Earlier

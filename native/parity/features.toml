@@ -15463,6 +15463,26 @@ native = "todo"
 native_note = "Porting notes: The Python app is English-only, and features.toml quotes English source strings; keep them as msgids so the inventory stays testable. Translatable strings are cheap from the first native commit and expensive to retrofit. Decide whether the Windows 11 layout mirrors for right-to-left languages. Dates already follow the locale (VIEW-001, LOOK-026)."
 
 [[feature]]
+id = "INT-032"
+area = "INT"
+title = "Other applications' Open and Save dialogs in OpenXplorer (opt-in)"
+behaviour = "Settings > Default apps > 'Apps' Open and Save dialogs' > Enable makes the desktop portal (xdg-desktop-portal) send other applications' file dialogs to OpenXplorer: it writes the user's $XDG_CONFIG_HOME/xdg-desktop-portal/<desktop>-portals.conf as the desktop's system file (or the user's existing file) with org.freedesktop.impl.portal.FileChooser set to the packaged <app id>.portal backend, keeping every other preference, and records what the file held. Apply now restarts the user's portal service (systemctl --user try-restart); otherwise the change applies at the next login. Restore Open and Save dialogs puts the file back byte for byte, or removes only the app's line when the user edited it since; a symlinked file is never replaced. The backend is exported on the application's bus name and answers only the owner of org.freedesktop.portal.Desktop. Each OpenFile, SaveFile or SaveFiles call opens a window in picker mode: the normal explorer with one tab, no Settings, the caller's title, and a bottom bar with the file name (Save, stem preselected), the type list (filters narrow the listed files; folder dialogs list only folders), the caller's extra choices, and the accept and Cancel buttons. Activating a file chooses it; a typed folder name opens that folder; saving over an existing file asks first; only locations with a local path (including GVfs mounts) are accepted. Cancel, Escape and closing answer Cancelled; the portal's Close answers 'other' and closes the window. Unavailable inside the Flatpak, which cannot register a host backend."
+origin = ["dolphin", "gnome"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "xdg-desktop-portal:data/org.freedesktop.impl.portal.FileChooser.xml",
+  "xdg-desktop-portal:desktop-portal/xdp-portal-config.c (portals.conf lookup order)",
+  "xdg-desktop-portal-kde:src/filechooser.cpp",
+]
+python_tests = []
+bridge = []
+dolphin = "Plasma's xdg-desktop-portal-kde serves FileChooser with the KIO file dialog (KFileWidget), the same widgets Dolphin uses; the backend is chosen in kde-portals.conf"
+gnome = "xdg-desktop-portal-gnome / -gtk serve FileChooser with GtkFileChooserDialog; portals.conf(5) chooses the backend per interface"
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_file_chooser.rs (request checks, the portals.conf opt-in, the backend on a private bus), ox-app folder_view/filter.rs and window/picker tests, tools/test_package_data.py (the .portal file). Not done: making the window transient for the caller's window (parent_window is read but not used)."
+
+[[feature]]
 id = "UPD-001"
 area = "UPD"
 title = "Manual update check dialog"

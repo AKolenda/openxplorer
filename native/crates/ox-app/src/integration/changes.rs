@@ -44,6 +44,9 @@ pub(crate) enum IntegrationError {
     /// Writing or removing the Show in folder files failed.
     #[error(transparent)]
     Reveal(#[from] RevealError),
+    /// Changing where Open and Save dialogs go failed (INT-032).
+    #[error(transparent)]
+    FileDialogs(#[from] ox_core::integration::FileDialogError),
     /// The `FileManager1` object could not be exported.
     #[error(transparent)]
     Registration(#[from] RegistrationFailed),

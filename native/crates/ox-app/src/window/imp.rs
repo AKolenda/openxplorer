@@ -115,6 +115,12 @@ pub(crate) struct BrowserWindow {
     /// Counts, the type-to-select hint and the view buttons.
     #[template_child]
     pub(super) status_bar: TemplateChild<StatusBar>,
+    /// The file name, type list and buttons of a window that chooses
+    /// files for another application; hidden otherwise (INT-032).
+    #[template_child]
+    pub(super) picker_bar: TemplateChild<gtk::Box>,
+    /// The file dialog this window shows, if it is one.
+    pub(super) picker: super::picker::PickerSlot,
     /// The Settings page, shown on the Settings tab.
     #[template_child]
     pub(super) settings_page: TemplateChild<SettingsPage>,
@@ -297,6 +303,9 @@ impl WindowImpl for BrowserWindow {
         for tab in self.session.borrow_mut().tabs_mut() {
             tab.stop_reading();
         }
+        // A file dialog closed without a choice answers Cancelled
+        // (INT-032).
+        self.obj().end_picking_on_close();
         self.parent_close_request()
     }
 }

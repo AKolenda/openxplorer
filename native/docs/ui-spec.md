@@ -969,6 +969,7 @@ Rule 2 asks for GNOME's own mechanisms. These change what appears on screen:
 | `org.gnome.desktop.interface font-name`, `text-scaling-factor` | Optional desktop font; default text size seeded from the scaling factor when the user has never set one | gain |
 | Freedesktop thumbnail cache, GNOME thumbnailers | Thumbnails in tiles and the details preview (§4.6, §4.8) | gain (Dolphin parity) |
 | `GAppInfo` icons | Real application icons in "Open with" | gain |
+| xdg-desktop-portal `org.freedesktop.impl.portal.FileChooser` backend | Other applications' Open and Save dialogs drawn as this window in picker mode: the caller's title in place of the tabs, and a bar under the status bar on `@ox_chrome` with right-aligned labels ("File name:", "Save as type:"), 30 px fields, and 80 px accent and bordered buttons at the bottom right, as Windows' common file dialog (`skin/picker.css`) | done, opt-in (INT-032) |
 
 Dolphin features the app does not have yet must still fit the skin. When they
 are built, use these rules:

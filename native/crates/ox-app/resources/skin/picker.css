@@ -1,0 +1,39 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The bar of a window that chooses files for another application
+   (INT-032): Windows' common file dialog puts the file name, the type list
+   and the buttons under the folder view, on the chrome fill. */
+
+/* The caller's title in place of the tabs, as a dialog's caption. */
+.ox-titlebar .picker-title { margin-left: 8px; color: @ox_text; }
+
+.picker-bar {
+  background-color: @ox_chrome;
+  border-top: 1px solid @ox_border;
+  padding: 14px 16px 16px 19px;
+}
+.picker-bar .picker-label { color: @ox_text; }
+.picker-bar entry {
+  min-height: 30px;
+  border-radius: 4px;
+  background-color: @ox_field_bg;
+  border: 1px solid @ox_border;
+  border-bottom-color: @ox_input_bottom;
+  box-shadow: none;
+  outline: none;
+}
+.picker-bar entry:focus-within {
+  border-bottom-color: @ox_accent;
+  box-shadow: inset 0 -1px @ox_accent;
+}
+/* Windows' 80px-wide dialog buttons, 32px high. */
+window.ox .picker-bar button.picker-button {
+  min-width: 80px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 4px;
+}
+window.ox .picker-bar button.picker-button.accent:disabled {
+  background-color: @ox_control_fill;
+  border-color: transparent;
+  color: @ox_text_disabled;
+}

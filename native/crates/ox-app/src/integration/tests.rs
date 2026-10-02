@@ -542,3 +542,50 @@ fn the_brave_dialogs_restore_needs_consent_and_a_record() {
     assert_eq!(unchanged, preferences);
     dialog.close();
 }
+
+/// Enabling Open and Save dialogs writes the user's portal configuration
+/// and the status says so; restoring removes it again.
+///
+/// parity: INT-032
+#[gtk::test]
+fn open_and_save_dialogs_are_opt_in_and_reversible() {
+    let attached = AttachedIntegration::new();
+    let integration = attached.integration.clone();
+    let system = attached.folders.portal_system_dirs[0].join("xdg-desktop-portal");
+    std::fs::create_dir_all(&system).expect("a system folder");
+    std::fs::write(system.join("kde-portals.conf"), "[preferred]\ndefault=kde\n").expect("the system file");
+    let user_file = attached
+        .folders
+        .config_home
+        .join("xdg-desktop-portal/kde-portals.conf");
+
+    let reading = integration.clone();
+    let status = wait_for("the status", async move { reading.status().await });
+    assert!(!status.file_dialogs.is_enabled);
+    assert_eq!(
+        status.file_dialogs.text(),
+        "Open and Save dialogs: the desktop's (kde)."
+    );
+
+    let enabling = integration.clone();
+    wait_for("enabling", async move { enabling.enable_file_dialogs().await }).expect("enabled");
+    let written = std::fs::read_to_string(&user_file).expect("the user file");
+    assert!(written.contains("default=kde"), "other backends are kept");
+    assert!(written.contains(&format!(
+        "org.freedesktop.impl.portal.FileChooser={}",
+        crate::config::APP_ID
+    )));
+    let reading = integration.clone();
+    let status = wait_for("the status", async move { reading.status().await });
+    assert!(status.file_dialogs.is_enabled);
+    assert!(status
+        .file_dialogs
+        .text()
+        .starts_with("Open and Save dialogs: OpenXplorer."));
+
+    let restoring = integration.clone();
+    let message =
+        wait_for("restoring", async move { restoring.disable_file_dialogs().await }).expect("restored");
+    assert!(message.starts_with("Open and Save dialogs are back"), "{message}");
+    assert!(!user_file.exists(), "the user file the app created is removed");
+}
