@@ -16,6 +16,7 @@ use percent_encoding::percent_encode;
 mod remote;
 
 use remote::normalise_remote_url;
+pub use remote::without_user;
 
 use super::device_uri::DeviceUriMatch;
 use super::parts::{split_location, split_scheme, split_url, LocationKind, LocationParts};

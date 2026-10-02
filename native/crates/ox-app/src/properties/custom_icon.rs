@@ -9,7 +9,7 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 
 use super::general_panel::glyph_button;
-use crate::dialog_layer::DialogFrame;
+use crate::dialog::DialogFrame;
 use crate::folder_view::CUSTOM_ICON;
 use crate::icons::Icon;
 

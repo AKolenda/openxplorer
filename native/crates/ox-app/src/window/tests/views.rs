@@ -292,7 +292,7 @@ fn changed_view_preferences_are_saved_for_new_windows() {
     });
     let second = test.open_beside(&fixture.uri());
     let pane = second.window.folder_pane();
-    assert_eq!(pane.view(), FolderView::Icons(IconSize::Large));
+    assert_eq!(pane.view(), FolderView::Icons(IconSize::LARGE));
     assert_eq!(second.action_state("view").as_deref(), Some("large"));
     assert!(second.names().contains(&".private".to_owned()));
 }
@@ -437,7 +437,7 @@ fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
 fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     let fixture = Fixture::with_files(12);
     let test = TestWindow::without_tabs();
-    test.window.show_view(FolderView::Icons(IconSize::Large));
+    test.window.show_view(FolderView::Icons(IconSize::LARGE));
     test.show(&fixture.uri());
     wait_for_frames(&test.window, 4);
     let (width, tiles) = tile_bounds(&test);
@@ -562,7 +562,7 @@ fn text_size_keys_work_inside_dialogs() {
     let test = TestWindow::open(&fixture.uri());
     let _theme = ThemeGuard::keep();
     let before = test.window.skin().text_size();
-    let rename = crate::window::dialog::Dialog::new(&test.window, "Rename", "");
+    let rename = crate::dialog::Dialog::new(&test.window, "Rename", "");
     let map = crate::dialogs::map_network_dialog(&test.window, |_, _| {});
     let dialogs: [&gtk::Window; 2] = [rename.upcast_ref(), map.upcast_ref()];
     let plus = gtk::ShortcutTrigger::parse_string("<Control>plus").expect("a trigger");
@@ -592,22 +592,27 @@ fn text_size_keys_work_inside_dialogs() {
 }
 
 /// Ctrl+wheel zooming changes the view, its menu state and the saved
-/// preference, as choosing the view does.
+/// preference, as choosing the view does: past Details and List it steps
+/// through every icon size, which the status bar's slider shows and sets.
 ///
-/// parity: VIEW-011
+/// parity: VIEW-010, VIEW-011
 #[gtk::test]
 fn zooming_changes_and_saves_the_view() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.window.folder_pane().model().select_only(3);
-    test.window.zoom_view(2);
+    test.window.zoom_view(6);
     assert_eq!(
         test.window.folder_pane().view(),
-        FolderView::Icons(IconSize::Medium)
+        FolderView::Icons(IconSize::MEDIUM)
     );
     assert_eq!(test.action_state("view").as_deref(), Some("medium"));
     wait_until("the icon view to be saved", || {
         test.context.settings_data().preferences.view == View::Grid
     });
     assert_eq!(test.selected_names().len(), 1, "zooming keeps the selection");
+    let slider = test.window.status_bar().zoom_slider();
+    assert!(slider.is_visible());
+    slider.set_value(slider.value() + 1.0);
+    assert_eq!(test.window.folder_pane().view().as_str(), "icons-48");
 }

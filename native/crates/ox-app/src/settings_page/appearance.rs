@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Appearance: the theme, the text size, the right-click menu and the
-//! pane widths.
+//! Appearance: the theme, the text size, the right-click menu, how files
+//! and folders are shown, and the pane widths.
 //!
 //! Ports the "Appearance & layout" section of `renderSettingsPage`,
 //! `textSizeControls` and `menuPreferenceControls` in
@@ -107,6 +107,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let appearance = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     appearance.append_group(&theme_group());
     appearance.append_group(&text_and_menus_group(page));
+    appearance.append_group(&super::folder_views::group(page));
     appearance.append_group(&layout_group());
     appearance
 }

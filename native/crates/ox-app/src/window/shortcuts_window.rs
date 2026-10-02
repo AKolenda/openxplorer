@@ -15,7 +15,6 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use super::context_menu::CONTEXT_MENU_KEYS;
-use super::dialog::Dialog;
 use super::file_ops::file_key_bindings;
 use super::focus_regions::region_key_bindings;
 use super::navigation_buttons::navigation_key_bindings;
@@ -23,6 +22,7 @@ use super::selection_keys::selection_key_bindings;
 use super::window_keys::window_key_bindings;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 use crate::folder_view::grid::IconSize;
 
 /// The tasks the window groups shortcuts by, in its order.

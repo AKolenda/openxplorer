@@ -27,10 +27,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::actions::plain_action;
-use super::dialog::Dialog;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 
 /// The caption's refusal while an update installs (`askClose`).
 const WAIT_FOR_UPDATE: &str = "Wait for the update to finish before closing OpenXplorer.";

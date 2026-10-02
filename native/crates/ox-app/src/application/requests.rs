@@ -36,6 +36,10 @@ impl AppState {
             CommandRequest::Select(files) => self.select(&files),
             CommandRequest::Windows => self.show_windows(app),
             CommandRequest::Settings => self.open_settings(app),
+            CommandRequest::Split {
+                locations,
+                new_window,
+            } => self.open_split(app, locations, new_window),
             CommandRequest::NewWindow(locations) => self.new_window_at(app, locations),
             CommandRequest::Open(locations) => self.open_in_active_window(app, locations),
             CommandRequest::Activate => self.activate(app),

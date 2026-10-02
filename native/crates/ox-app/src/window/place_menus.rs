@@ -20,7 +20,8 @@
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::location::{
-    is_device_location, is_remote_location, is_smb_location, is_smb_server, RECENT_LOCATIONS_URI, TRASH_URI,
+    is_device_location, is_remote_location, is_smb_location, is_smb_server, RECENT_LOCATIONS_URI, RECENT_URI,
+    TRASH_URI,
 };
 use ox_core::places::{NetworkKind, NetworkLocation};
 use ox_core::search::Caching;
@@ -74,6 +75,8 @@ pub(super) enum PlaceMenu {
         /// Whether anything is in it; Empty Recycle Bin is disabled if not.
         has_items: bool,
     },
+    /// The sidebar's Recent files.
+    RecentFiles,
     /// The Recent locations row (SIDE-026).
     RecentLocations,
 }
@@ -228,6 +231,23 @@ fn network_entries(location: &NetworkLocation, caching: Option<Caching>) -> Vec<
     entries
 }
 
+/// Recent files' menu: the Open items, then Clear recent files, which
+/// empties the recent files of the app and the desktop (SAFE-022).
+fn recent_files_entries() -> Vec<MenuEntry> {
+    vec![
+        item("Open", Icon::History, WindowAction::GoTo, RECENT_URI),
+        item("Open in new tab", Icon::Add, WindowAction::OpenTab, RECENT_URI),
+        item(
+            "Open in new window",
+            Icon::WindowNew,
+            WindowAction::OpenWindow,
+            RECENT_URI,
+        ),
+        MenuEntry::Divider,
+        MenuItem::new("Clear recent files", Icon::Delete, WindowAction::ClearRecentFiles).into(),
+    ]
+}
+
 /// The Recycle Bin's menu: the Open items, then Empty Recycle Bin,
 /// disabled while it is empty (Dolphin's "Empty Trash").
 fn recycle_bin_entries(has_items: bool) -> Vec<MenuEntry> {
@@ -276,7 +296,10 @@ impl PlaceMenu {
             | PlaceMenu::DriveCard { uri, .. }
             | PlaceMenu::SavedShare { uri } => Some(uri),
             PlaceMenu::Network(location) => Some(&location.uri),
-            PlaceMenu::Volume { .. } | PlaceMenu::RecycleBin { .. } | PlaceMenu::RecentLocations => None,
+            PlaceMenu::Volume { .. }
+            | PlaceMenu::RecycleBin { .. }
+            | PlaceMenu::RecentFiles
+            | PlaceMenu::RecentLocations => None,
         }
     }
 
@@ -294,6 +317,7 @@ impl PlaceMenu {
             PlaceMenu::DriveCard { uri, kind, controls } => removal_items(uri, *kind, *controls),
             PlaceMenu::Network(location) => network_entries(location, caching),
             PlaceMenu::RecycleBin { has_items } => recycle_bin_entries(*has_items),
+            PlaceMenu::RecentFiles => recent_files_entries(),
             PlaceMenu::RecentLocations => recent_locations_entries(),
             PlaceMenu::SavedShare { uri } => {
                 let mut entries = vec![

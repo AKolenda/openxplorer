@@ -14,7 +14,7 @@ use gtk::{gio, glib};
 use ox_core::location::{parent_location, split_location, LocationContext, LocationKind};
 use ox_core::versions::{PreviousVersions, SnapshotLayout};
 
-use crate::dialog_layer::{labelled_entry, quiet_text};
+use crate::dialog::{labelled_entry, quiet_text};
 use crate::window::ButtonStyle;
 
 /// What the form is for.

@@ -29,6 +29,7 @@ use gtk::prelude::*;
 use super::row_tooltip::RowTooltip;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
+use crate::thumbnails::PreviewPolicy;
 
 /// The CSS class of a cell whose item a cut put on the clipboard. The
 /// stylesheet draws such cells at half opacity (`.file-row.cut{opacity:.5}`
@@ -125,6 +126,12 @@ pub(crate) struct CellOwners {
     drop_row: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
     /// What the rows' tooltips name.
     row_tooltip: Cell<RowTooltip>,
+    /// Which items show previews in the folder shown.
+    previews: Cell<PreviewPolicy>,
+    /// Folders in the Size column say how many items they hold.
+    counts_items: Cell<bool>,
+    /// Hovering an item shows no selection marker (SEL-014).
+    hides_selection_markers: Cell<bool>,
 }
 
 impl CellOwners {
@@ -184,19 +191,49 @@ impl CellOwners {
         }
     }
 
+    /// Whether folders in the Size column say how many items they hold.
+    pub(crate) fn counts_items(&self) -> bool {
+        self.counts_items.get()
+    }
+
+    /// Makes folders in the Size column count their items, or not.
+    pub(crate) fn set_counts_items(&self, counts: bool) {
+        self.counts_items.set(counts);
+    }
+
+    /// Which items show previews now.
+    pub(crate) fn previews(&self) -> PreviewPolicy {
+        self.previews.get()
+    }
+
+    /// Makes the items `previews` allows show previews, and looks the
+    /// pictures up again in every cell on screen when that changed.
+    pub(crate) fn set_previews(&self, previews: PreviewPolicy) {
+        if self.previews.replace(previews) != previews {
+            self.look_up_pictures(|_| true);
+        }
+    }
+
     /// Looks up the custom icon of the item at `uri` again in every cell
     /// that shows it (PROP-016).
     pub(crate) fn refresh_custom_icon(&self, uri: &str) {
+        self.look_up_pictures(|item| item.entry().uri == uri);
+    }
+
+    /// Looks up the custom icon or preview again in every cell on screen
+    /// whose item `matches`.
+    fn look_up_pictures(&self, matches: impl Fn(&FileItem) -> bool) {
         let showing: Vec<(gtk::Widget, FileItem)> = self
             .owners
             .borrow()
             .iter()
             .filter_map(CellOwner::bound_cell)
-            .filter(|(_, item)| item.entry().uri == uri)
+            .filter(|(_, item)| matches(item))
             .collect();
+        let previews = self.previews();
         for (cell, item) in showing {
             if let Some(cell) = cell.downcast_ref::<FileCell>() {
-                cell.look_up_custom_icon(&item);
+                cell.look_up_picture(&item, previews);
             }
         }
     }
@@ -331,6 +368,36 @@ impl CellOwners {
             .filter_map(|owner| owner.cell_showing(position))
             .filter(|cell| cell.is_ancestor(view))
             .find_map(|cell| cell.downcast::<FileCell>().ok())
+    }
+
+    /// The rows or tiles on screen inside `view`, each once, with the
+    /// position each shows, for a rubber band to test against.
+    pub(crate) fn shown_items(&self, view: &impl IsA<gtk::Widget>) -> Vec<(u32, gtk::Widget)> {
+        let view = view.as_ref();
+        let mut shown: Vec<(u32, gtk::Widget)> = Vec::new();
+        for owner in self.owners.borrow().iter() {
+            let Some(list_item) = owner.list_item.upgrade() else {
+                continue;
+            };
+            let (Some(position), Some(cell)) = (bound_position(&list_item), owner.cell.upgrade()) else {
+                continue;
+            };
+            let row = item_widget(&cell).filter(|row| row.is_ancestor(view));
+            if let Some(row) = row.filter(|_| !shown.iter().any(|(seen, _)| *seen == position)) {
+                shown.push((position, row));
+            }
+        }
+        shown
+    }
+
+    /// Whether hovering an item shows its selection marker.
+    pub(crate) fn shows_selection_markers(&self) -> bool {
+        !self.hides_selection_markers.get()
+    }
+
+    /// Shows selection markers on hovered items, or never.
+    pub(crate) fn set_selection_markers(&self, shown: bool) {
+        self.hides_selection_markers.set(!shown);
     }
 
     /// The list item whose content widget is `widget`.

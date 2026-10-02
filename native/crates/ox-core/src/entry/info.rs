@@ -11,7 +11,7 @@ use gio::prelude::*;
 use super::attributes::{optional_boolean, path_attribute, string_attribute, time_attribute};
 use super::classify::{classify_entry, Classification, ItemMetadata};
 use super::type_label::type_label;
-use super::{Entry, EntryKind};
+use super::{Entry, EntryKind, EntryMeta};
 
 /// Builds an entry for `file` from its queried `info`.
 ///
@@ -60,6 +60,7 @@ pub(super) fn build_entry(
         can_delete: optional_boolean(info, "access::can-delete"),
         can_write: optional_boolean(info, "access::can-write"),
         serialized_icon: serialized_icon(info),
+        meta: Box::new(EntryMeta::from_info(info)),
     }
 }
 

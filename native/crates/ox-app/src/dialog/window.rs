@@ -39,7 +39,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::transfer::Cancellation;
 
-use super::ButtonStyle;
+use super::fields::{check_box, field_caption, wrapped_label};
+use crate::window::{BrowserWindow, ButtonStyle};
 
 /// A button of one dialog, as [`Dialog::next_response`] reports it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +48,9 @@ pub(crate) struct DialogButton(usize);
 
 /// The answer a button, Escape or closing the window gives.
 type Answer = Option<DialogButton>;
+
+#[cfg(test)]
+mod probes;
 
 mod imp {
     use std::cell::RefCell;
@@ -57,7 +61,7 @@ mod imp {
     use ox_core::transfer::Cancellation;
 
     use super::Answer;
-    use crate::dialog_layer::DialogFrame;
+    use crate::dialog::DialogFrame;
 
     /// Private state of [`super::Dialog`].
     #[derive(Debug, gtk::CompositeTemplate)]
@@ -172,7 +176,7 @@ impl Dialog {
             .property("transient-for", parent)
             .property("title", title)
             .build();
-        super::actions::follow_text_size_keys(&dialog);
+        crate::window::follow_text_size_keys(&dialog);
         let frame = &dialog.imp().frame;
         frame.set_title(title);
         frame.set_message(message);
@@ -207,15 +211,7 @@ impl Dialog {
     /// Adds `control` under a field label, which names it for screen
     /// readers too (`label.field-label`).
     pub(crate) fn add_labelled(&self, label: &str, control: &impl IsA<gtk::Widget>) {
-        let caption = gtk::Label::builder()
-            .label(label)
-            .xalign(0.0)
-            .css_classes(["field-label"])
-            .mnemonic_widget(control)
-            .build();
-        let control = control.upcast_ref::<gtk::Widget>();
-        control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
-        self.append_field(&caption);
+        self.append_field(&field_caption(label, control));
         self.append_field(control);
     }
 
@@ -232,15 +228,9 @@ impl Dialog {
     }
 
     fn add_text_line(&self, text: &str, css_class: &str) -> gtk::Label {
-        let line = gtk::Label::builder()
-            .label(text)
-            .xalign(0.0)
-            .wrap(true)
-            .wrap_mode(gtk::pango::WrapMode::WordChar)
-            .max_width_chars(60)
-            .selectable(true)
-            .css_classes([css_class])
-            .build();
+        let line = wrapped_label(text, css_class);
+        line.set_max_width_chars(60);
+        line.set_selectable(true);
         // Selectable with the pointer, but no stop for the keyboard.
         line.set_focusable(false);
         self.append_field(&line);
@@ -265,18 +255,6 @@ impl Dialog {
         self.append_field(&scrolled);
     }
 
-    /// The text of the scrolled box, for tests.
-    #[cfg(test)]
-    pub(crate) fn scrolled_text(&self) -> String {
-        let scrolled = super::widget_tree::children(&self.fields())
-            .find_map(|child| child.downcast::<gtk::ScrolledWindow>().ok());
-        let label = scrolled
-            .and_then(|scrolled| scrolled.child())
-            .and_then(|child| child.downcast::<gtk::Viewport>().ok()?.child())
-            .and_then(|child| child.downcast::<gtk::Label>().ok());
-        label.map(|label| label.text().to_string()).unwrap_or_default()
-    }
-
     /// Shows or hides `field`, added with [`Self::add_labelled`] or
     /// [`Self::add_text_field`], together with its label.
     pub(crate) fn set_field_visible(field: &impl IsA<gtk::Widget>, visible: bool) {
@@ -291,8 +269,7 @@ impl Dialog {
 
     /// Adds a check box (`.checkbox-row`).
     pub(crate) fn add_check_button(&self, label: &str, active: bool) -> gtk::CheckButton {
-        let check = gtk::CheckButton::builder().label(label).active(active).build();
-        check.add_css_class("dialog-check");
+        let check = check_box(label, active, "dialog-check");
         self.append_field(&check);
         check
     }
@@ -343,8 +320,8 @@ impl Dialog {
     /// Shows the dialog, focusing its first text field with the text
     /// selected, or else its first button.
     pub(crate) fn open(&self) {
-        let first_field = super::widget_tree::children(&self.fields())
-            .find_map(|child| child.downcast::<gtk::Entry>().ok());
+        let first_field =
+            crate::window::children(&self.fields()).find_map(|child| child.downcast::<gtk::Entry>().ok());
         let first_button = self.imp().buttons.borrow().first().cloned();
         // Set before the window shows, so GTK's initial focus lands there.
         let initial_focus: Option<gtk::Widget> = match (&first_field, first_button) {
@@ -352,7 +329,7 @@ impl Dialog {
             (None, button) => button.map(Cast::upcast),
         };
         GtkWindowExt::set_focus(self, initial_focus.as_ref());
-        if let Some(parent) = self.transient_for().and_downcast::<super::BrowserWindow>() {
+        if let Some(parent) = self.transient_for().and_downcast::<BrowserWindow>() {
             parent.quiet_for_dialog();
         }
         self.present();
@@ -376,9 +353,9 @@ impl Dialog {
 
     /// Shows the dialog with `widget` focused, for a dialog whose first
     /// button must not be the one a reflexive Enter presses.
-    pub(super) fn open_focusing(&self, widget: &impl IsA<gtk::Widget>) {
+    pub(crate) fn open_focusing(&self, widget: &impl IsA<gtk::Widget>) {
         GtkWindowExt::set_focus(self, Some(widget));
-        if let Some(parent) = self.transient_for().and_downcast::<super::BrowserWindow>() {
+        if let Some(parent) = self.transient_for().and_downcast::<BrowserWindow>() {
             parent.quiet_for_dialog();
         }
         self.present();
@@ -455,7 +432,7 @@ impl Dialog {
     }
 
     /// Hides the line that said why the last try failed.
-    pub(super) fn hide_error(&self) {
+    pub(crate) fn hide_error(&self) {
         self.imp().frame.show_error("");
     }
 
@@ -476,85 +453,11 @@ impl Dialog {
         self.imp().work.take();
         self.destroy();
     }
-
-    /// The heading, for tests.
-    #[cfg(test)]
-    pub(crate) fn title_text(&self) -> String {
-        self.imp().frame.title().to_string()
-    }
-
-    /// The message, for tests.
-    #[cfg(test)]
-    pub(crate) fn message_text(&self) -> String {
-        self.imp().frame.message().to_string()
-    }
-
-    /// The error line while shown, for tests.
-    #[cfg(test)]
-    pub(crate) fn error_text(&self) -> Option<String> {
-        let error = self.imp().frame.error_text();
-        (!error.is_empty()).then(|| error.to_string())
-    }
-
-    /// The button labels in order, for tests.
-    #[cfg(test)]
-    pub(crate) fn button_labels(&self) -> Vec<String> {
-        let buttons = self.imp().buttons.borrow();
-        buttons
-            .iter()
-            .filter_map(gtk::Button::label)
-            .map(String::from)
-            .collect()
-    }
-
-    /// Whether the button labelled `label` can be pressed, for tests.
-    #[cfg(test)]
-    pub(crate) fn can_press(&self, label: &str) -> bool {
-        self.button_labelled(label).is_sensitive()
-    }
-
-    /// Every text the dialog holds, shown or not, in order, for tests.
-    #[cfg(test)]
-    pub(crate) fn texts(&self) -> Vec<String> {
-        let labels = crate::test_support::harness::descendants::<gtk::Label>(self);
-        labels.iter().map(|label| label.text().to_string()).collect()
-    }
-
-    /// Whether an answer is being carried out, for tests.
-    #[cfg(test)]
-    pub(crate) fn is_busy(&self) -> bool {
-        self.imp().running.borrow().is_some()
-    }
-
-    /// Presses the button labelled `label`, as a click does, for tests.
-    #[cfg(test)]
-    pub(crate) fn press(&self, label: &str) {
-        self.button_labelled(label).emit_clicked();
-    }
-
-    /// Presses the primary button, the one Enter presses, for tests.
-    #[cfg(test)]
-    pub(crate) fn press_primary(&self) {
-        let primary = self.default_widget().and_downcast::<gtk::Button>();
-        primary.expect("the dialog has a primary button").emit_clicked();
-    }
-
-    /// The button labelled `label`, for tests.
-    #[cfg(test)]
-    fn button_labelled(&self, label: &str) -> gtk::Button {
-        self.imp()
-            .buttons
-            .borrow()
-            .iter()
-            .find(|button| button.label().as_deref() == Some(label))
-            .cloned()
-            .unwrap_or_else(|| panic!("the dialog has a {label} button"))
-    }
 }
 
 /// Shows `text` under `title` with one OK button, as `showMessage` does,
 /// and returns once it is dismissed.
-pub(super) async fn show_message(parent: &impl IsA<gtk::Window>, title: &str, text: &str) {
+pub(crate) async fn show_message(parent: &impl IsA<gtk::Window>, title: &str, text: &str) {
     let dialog = Dialog::new(parent, title, text);
     dialog.add_button("OK", ButtonStyle::Accent);
     dialog.open();

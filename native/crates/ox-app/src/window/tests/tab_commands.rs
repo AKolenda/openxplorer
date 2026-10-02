@@ -93,8 +93,8 @@ fn double_clicking_a_tab_opens_a_copy_in_front() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     assert_eq!(
         test.active_tab(),
-        tab_ids(&test).last().copied(),
-        "the copy is in front"
+        tab_ids(&test).get(1).copied(),
+        "the copy is in front, next to its tab (TAB-017)"
     );
 }
 

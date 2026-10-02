@@ -13,7 +13,6 @@ use gtk::{gio, glib};
 use ox_core::settings::{Theme, SIDEBAR_ICON_SIZES};
 
 use crate::application::AppAction;
-use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::text_size::Step;
 
 use super::folder_pane::FolderView;
@@ -64,7 +63,7 @@ pub(super) fn tab_action(
 
 /// A radio action: `apply` returns false for a value it does not accept,
 /// and the state changes only when it accepts it.
-fn choice_action(
+pub(super) fn choice_action(
     window_action: WindowAction,
     initial: &str,
     apply: impl Fn(&BrowserWindow, &str) -> bool + 'static,
@@ -146,6 +145,8 @@ impl BrowserWindow {
         self.install_service_actions();
         self.install_saved_search_actions();
         self.install_details_pane_actions();
+        self.install_view_option_actions();
+        self.install_stop_action();
         self.install_integration_actions();
         self.install_context_menu_actions();
         let [journal, clipboard] = self.install_file_actions();
@@ -158,7 +159,9 @@ impl BrowserWindow {
         self.add_action_entries([
             plain_action(WindowAction::NewTab, |window| {
                 let home = window.imp().locations.borrow().home_uri();
-                window.open_tab_or_report(&home, TabPlacement::Foreground);
+                if let Err(error) = window.add_tab(&home) {
+                    window.show_message(&error.to_string());
+                }
             }),
             plain_action(WindowAction::CloseTab, |window| {
                 let active = window.imp().session.borrow().active_id();
@@ -302,73 +305,18 @@ impl BrowserWindow {
         ]);
     }
 
-    /// The Sort menu's column and direction choices, which follow sorting
-    /// by a column header too.
-    fn install_sort_actions(&self) {
-        self.add_action_entries([
-            choice_action(WindowAction::Sort, SortColumn::Name.as_str(), |window, key| {
-                let Some(column) = SortColumn::from_key(key) else {
-                    return false;
-                };
-                window.sort_by_column(column);
-                true
-            }),
-            choice_action(
-                WindowAction::Direction,
-                SortDirection::Ascending.as_str(),
-                |window, key| {
-                    let Some(direction) = SortDirection::from_key(key) else {
-                        return false;
-                    };
-                    window.sort_in_direction(direction);
-                    true
-                },
-            ),
-        ]);
-        self.follow_header_sorting();
-    }
-
-    /// Sorts the details view by `column`, keeping the direction.
-    fn sort_by_column(&self, column: SortColumn) {
-        let details = self.folder_pane().details();
-        details.sort_by(SortOrder {
-            column,
-            ..details.sort_order()
-        });
-    }
-
-    /// Sorts the details view in `direction`, keeping the column.
-    fn sort_in_direction(&self, direction: SortDirection) {
-        let details = self.folder_pane().details();
-        details.sort_by(SortOrder {
-            direction,
-            ..details.sort_order()
-        });
-    }
-
     /// Show hidden files: lists or hides them, and saves the choice.
     fn set_hidden_files_shown(&self, shown: bool) {
+        self.show_hidden_files(shown);
+        self.remember_style();
+    }
+
+    /// Lists or hides hidden files, without saving the choice.
+    pub(super) fn show_hidden_files(&self, shown: bool) {
         self.folder_pane().model().set_show_hidden(shown);
         self.update_content();
         // The folder's item count changes with it.
         self.update_details_pane();
-        self.save_preference(Preference::ShowHidden(shown));
-    }
-
-    /// Keeps the Sort menu in step with sorting by a column header.
-    fn follow_header_sorting(&self) {
-        let Some(sorter) = self.folder_pane().details().column_view().sorter() else {
-            return;
-        };
-        sorter.connect_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _| {
-                let order = window.folder_pane().details().sort_order();
-                window.set_action_state(WindowAction::Sort, &order.column.as_str().to_variant());
-                window.set_action_state(WindowAction::Direction, &order.direction.as_str().to_variant());
-            }
-        ));
     }
 
     fn install_appearance_actions(&self) {
@@ -409,11 +357,12 @@ impl BrowserWindow {
     }
 
     /// The user chose `view`: shows it from the top and saves it as the
-    /// view of every tab and new window (`changeView` in app.js).
+    /// view of every tab and new window (`changeView` in app.js), or of
+    /// the folder when each folder keeps its own (VIEW-020).
     fn change_view(&self, view: FolderView) {
         self.show_view(view);
         self.folder_pane().restore_scroll_position(0.0);
-        self.save_preference(Preference::View(view));
+        self.remember_style();
     }
 
     /// Shows `view` in the folder pane and the status bar, without saving
@@ -422,6 +371,7 @@ impl BrowserWindow {
         self.reset_typeahead();
         self.folder_pane().show_view(view);
         self.status_bar().show_view(view);
+        self.update_expandability();
     }
 }
 
@@ -429,18 +379,22 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 11] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 12] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
     (WindowAction::Search, &["<Primary>f"]),
     (WindowAction::DetailsPane, &["<Alt><Shift>p"]),
     (WindowAction::Settings, &["<Primary>comma"]),
-    // Dolphin's Open Terminal and Open Terminal Here (OPEN-021).
-    (WindowAction::OpenTerminal, &["<Shift>F4"]),
+    // Dolphin's Open Terminal and Open Terminal Here (OPEN-021); Ctrl+Shift+F4
+    // is its Terminal panel key, which opens the terminal here (OPEN-022).
+    (WindowAction::OpenTerminal, &["<Shift>F4", "<Primary><Shift>F4"]),
     (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
     // Dolphin's Open Preferred Search Tool (OPEN-024).
     (WindowAction::SearchTool, &["<Primary><Shift>f"]),
+    // Dolphin's Split (VIEW-059); Explorer leaves F3 to its search box,
+    // which Ctrl+F reaches here.
+    (WindowAction::SplitView, &["F3"]),
     // Dolphin's Handbook and GNOME's Keyboard Shortcuts (CMD-033, CMD-032).
     (WindowAction::Help, &["F1"]),
     (WindowAction::KeyboardShortcuts, &["<Primary>question"]),
@@ -497,8 +451,9 @@ pub(crate) fn install_accelerators(app: &gtk::Application) {
         app.set_accels_for_action(&WindowAction::TextSize(step).detailed_name(), &keys);
     }
     let action = WindowAction::View.detailed_name();
-    for view in FolderView::ZOOM_ORDER {
-        let (accelerator, _) = view.shortcut();
-        app.set_accels_for_action(&format!("{action}::{}", view.as_str()), &[accelerator]);
+    for view in FolderView::NAMED {
+        if let Some((accelerator, _)) = view.shortcut() {
+            app.set_accels_for_action(&format!("{action}::{}", view.as_str()), &[accelerator]);
+        }
     }
 }

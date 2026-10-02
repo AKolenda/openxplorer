@@ -15,7 +15,7 @@ use ox_core::ops::UnstorableAsker;
 use ox_core::transfer::{UnstorableAnswer, UnstorableItem, UnstorableReason};
 
 use super::worker_question::worker_question;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

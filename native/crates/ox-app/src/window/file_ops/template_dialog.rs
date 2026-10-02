@@ -23,7 +23,7 @@ use ox_core::transfer::Cancellation;
 use super::names::check_typed_name;
 use super::new_items::NewFileKind;
 use super::FileCommand;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

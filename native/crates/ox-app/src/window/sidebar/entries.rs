@@ -339,6 +339,7 @@ pub(in crate::window) fn sidebar_entries(
 pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEntry; 3] {
     let recent = SidebarEntry {
         tooltip: "Recently used files".to_owned(),
+        menu: Some(PlaceMenu::RecentFiles),
         ..fixed_entry(
             Section::RecentAndBin,
             "Recent files",

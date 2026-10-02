@@ -74,7 +74,8 @@ impl BrowserWindow {
                     DropDestination::Folder(_)
                     | DropDestination::Volume(_)
                     | DropDestination::QuickAccess { .. }
-                    | DropDestination::RecycleBin => None,
+                    | DropDestination::RecycleBin
+                    | DropDestination::NewTabs => None,
                 };
                 (*row, row.is_none(), program)
             }

@@ -9,7 +9,7 @@ use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
 
 use super::Resolved;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::session::TabId;
 use crate::window::software_search::{self, FIND_IN_SOFTWARE};
 use crate::window::{BrowserWindow, ButtonStyle};

@@ -33,6 +33,20 @@ where
     })
 }
 
+/// An action on the location in its string target that runs `task` on
+/// the main loop.
+fn location_task_action<Task>(
+    window_action: WindowAction,
+    task: impl Fn(BrowserWindow, String) -> Task + 'static,
+) -> gio::ActionEntry<BrowserWindow>
+where
+    Task: Future<Output = ()> + 'static,
+{
+    text_action(window_action, move |window, uri| {
+        glib::spawn_future_local(task(window.clone(), uri.to_owned()));
+    })
+}
+
 /// A New menu item that opens the template dialog for `kind`.
 fn new_file_action(window_action: WindowAction, kind: NewFileKind) -> gio::ActionEntry<BrowserWindow> {
     task_action(window_action, move |window| {
@@ -50,6 +64,7 @@ impl BrowserWindow {
     pub(crate) fn install_file_actions(&self) -> [glib::SignalHandlerId; 2] {
         self.install_new_actions();
         self.install_edit_actions();
+        self.install_folder_edit_actions();
         self.install_operation_actions();
         self.install_file_shortcuts();
         let journal = self.context().connect_journal_changed(glib::clone!(
@@ -143,6 +158,32 @@ impl BrowserWindow {
         ]);
     }
 
+    /// Cut, Copy, Paste, Rename…, Move to Trash and Delete permanently of
+    /// the folder in the target, which the folder tree's menu runs
+    /// (SIDE-028).
+    fn install_folder_edit_actions(&self) {
+        self.add_action_entries([
+            text_action(WindowAction::CutFolder, |window, uri| {
+                window.copy_folder_at(ClipboardMode::Cut, uri);
+            }),
+            text_action(WindowAction::CopyFolder, |window, uri| {
+                window.copy_folder_at(ClipboardMode::Copy, uri);
+            }),
+            location_task_action(WindowAction::PasteIntoFolder, |window, uri| async move {
+                window.paste_into(&uri).await;
+            }),
+            location_task_action(WindowAction::RenameFolder, |window, uri| async move {
+                window.rename_folder_at(&uri).await;
+            }),
+            location_task_action(WindowAction::TrashFolder, |window, uri| async move {
+                window.trash_dropped(vec![uri]).await;
+            }),
+            location_task_action(WindowAction::DeleteFolder, |window, uri| async move {
+                window.delete_permanently_at(&uri).await;
+            }),
+        ]);
+    }
+
     /// Undo, Redo, Cancel and the Recycle Bin's commands.
     fn install_operation_actions(&self) {
         self.add_action_entries([
@@ -161,6 +202,9 @@ impl BrowserWindow {
             }),
             task_action(WindowAction::EmptyTrash, |window| async move {
                 window.empty_trash().await;
+            }),
+            plain_action(WindowAction::ClearRecentFiles, |window| {
+                window.context().clear_recent_files();
             }),
         ]);
     }

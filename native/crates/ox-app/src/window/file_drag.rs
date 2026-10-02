@@ -97,22 +97,6 @@ fn offered_actions(modifiers: gdk::ModifierType) -> gdk::DragAction {
     gdk::DragAction::COPY | gdk::DragAction::ASK | chosen
 }
 
-/// Turns the rubber band of `view`, a column or grid view, on or off.
-///
-/// The rubber band starts only from blank space: a press on an item turns
-/// it off until the next press (see `input.rs`, `blank_space_press`), so
-/// dragging an item always drags it. GTK's rubber band takes a drag that
-/// moves past the threshold at once, while a drag source waits 100 ms, so
-/// a quick drag of an item would otherwise select rows instead (seen in a
-/// real drag in GNOME Shell).
-pub(super) fn allow_rubber_band(view: &gtk::Widget, allowed: bool) {
-    if let Some(columns) = view.downcast_ref::<gtk::ColumnView>() {
-        columns.set_enable_rubberband(allowed);
-    } else if let Some(grid) = view.downcast_ref::<gtk::GridView>() {
-        grid.set_enable_rubberband(allowed);
-    }
-}
-
 /// The icon that follows the pointer: the first item's art, with the
 /// number of items beside it when there are several.
 fn drag_icon(art: Art, count: usize) -> gtk::Widget {
@@ -263,6 +247,7 @@ impl BrowserWindow {
     /// The drag started: its icon follows the pointer, and the window
     /// shows the drag's feedback.
     fn begin_file_drag(&self, drag: &gdk::Drag) {
+        self.cancel_slow_click_rename();
         let Some(outgoing) = self.show_file_drag_feedback() else {
             return;
         };
@@ -295,7 +280,9 @@ impl BrowserWindow {
         if self.imp().outgoing_drag.replace(None).is_some() {
             announce(self, DRAG_ENDED, gtk::AccessibleAnnouncementPriority::Medium);
         }
-        self.folder_pane().owners().show_dragged_items(HashSet::new());
+        for pane in self.folder_panes() {
+            pane.owners().show_dragged_items(HashSet::new());
+        }
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_END);
     }
 

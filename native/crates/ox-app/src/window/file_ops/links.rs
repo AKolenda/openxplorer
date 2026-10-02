@@ -19,7 +19,7 @@ use ox_core::transfer::TransferMode;
 
 use super::running::FinishedOperation;
 use super::FileCommand;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 

@@ -34,6 +34,7 @@ use ox_core::location::same_location;
 
 use crate::icons::{self, Icon};
 
+use super::folder_tree::FolderTree;
 use super::menu_popover::MenuPopover;
 use super::window_action::WindowAction;
 use super::{gestures, preferences};
@@ -68,13 +69,15 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{HiddenRow, MenuPopover, SidebarEntry};
+    use super::{FolderTree, HiddenRow, MenuPopover, SidebarEntry};
 
     /// Private state of [`super::Sidebar`].
     #[derive(Debug, Default)]
     pub(crate) struct Sidebar {
         /// The rows, built by `constructed`.
         pub(super) list: OnceCell<gtk::ListBox>,
+        /// The folder tree below them (SIDE-028).
+        pub(super) folder_tree: OnceCell<FolderTree>,
         /// What each row shows and does, in row order.
         pub(super) entries: RefCell<Vec<SidebarEntry>>,
         /// The rows' context menu, built by `constructed`.
@@ -124,6 +127,14 @@ impl Sidebar {
         self.imp().list.get().expect("constructed builds the list")
     }
 
+    /// The folder tree below the places.
+    pub(super) fn folder_tree(&self) -> &FolderTree {
+        self.imp()
+            .folder_tree
+            .get()
+            .expect("constructed builds the folder tree")
+    }
+
     /// Builds the list and, below it, the footer into the pane.
     fn build_pane(&self) {
         self.set_orientation(gtk::Orientation::Vertical);
@@ -145,11 +156,22 @@ impl Sidebar {
             .vexpand(true)
             .child(&list)
             .build();
-        self.append(&scroller);
+        // The folder tree, while shown, takes the lower part (SIDE-028).
+        let folder_tree = FolderTree::default();
+        let panes = gtk::Paned::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .start_child(&scroller)
+            .end_child(&folder_tree)
+            .shrink_start_child(false)
+            .shrink_end_child(false)
+            .vexpand(true)
+            .build();
+        self.append(&panes);
         self.append(&map_network_button());
-        self.imp()
-            .list
-            .set(list)
+        let imp = self.imp();
+        imp.list.set(list).expect("constructed runs once per object");
+        imp.folder_tree
+            .set(folder_tree)
             .expect("constructed runs once per object");
     }
 

@@ -4,6 +4,8 @@
 //! hides an item (OPS-013) and the warnings under a name field while the
 //! user types (OPS-007), as Dolphin has them.
 
+use std::time::Duration;
+
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
@@ -11,7 +13,8 @@ use gtk::{gdk, glib};
 use super::file_ops_support::{
     is_renaming_in_place, name_editor, open_dialog, select_names, text_field, wait_for_no_dialog,
 };
-use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
+use crate::window::slow_click_rename::NamePress;
 
 /// The name the in-place field of `test`'s view shows, if one is open.
 fn edited_name(test: &TestWindow) -> Option<String> {
@@ -33,6 +36,34 @@ fn press_in(editor: &gtk::Entry, key: gdk::Key, modifiers: gdk::ModifierType) {
         .expect("the field has its own keys");
     let handled: bool = keys.emit_by_name("key-pressed", &[&key.into_glib(), &0_u32, &modifiers]);
     assert!(handled, "the field handled {key:?}");
+}
+
+/// A slow second click on the name of the only selected item renames it
+/// in place once a double-click interval has passed; the second press of
+/// a double-click cancels it.
+///
+/// parity: OPS-011
+#[gtk::test]
+fn a_slow_second_click_on_the_selected_name_renames_it_in_place() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    let position = test.window.folder_model().first_selected();
+    let press = |clicks| NamePress {
+        on_name_of: position,
+        clicks,
+        modifiers: gdk::ModifierType::empty(),
+    };
+
+    test.window.name_pressed(press(1));
+    test.window.name_pressed(press(2));
+    wait_for(Duration::from_millis(600));
+    let after_double_click = edited_name(&test);
+    test.window.name_pressed(press(1));
+    wait_until("the rename in place", || edited_name(&test).is_some());
+
+    assert_eq!(after_double_click, None, "a double-click does not rename");
+    assert_eq!(edited_name(&test).as_deref(), Some("Notes 2.txt"));
 }
 
 /// parity: OPS-012
@@ -123,6 +154,11 @@ fn the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
         warning().is_some_and(|text| text.contains("dot"))
     });
     let hidden = warning();
+    field.set_text("Plans/2026");
+    wait_until("the nested-folders preview", || {
+        warning().is_some_and(|text| text.contains("inside"))
+    });
+    let nested = warning();
     field.set_text("Plans");
     wait_until("no warning for a plain free name", || warning().is_none());
     dialog.press("Cancel");
@@ -135,5 +171,9 @@ fn the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
     assert_eq!(
         hidden.as_deref(),
         Some("A name starting with a dot hides the item.")
+    );
+    assert_eq!(
+        nested.as_deref(),
+        Some("Creates “Plans” › “2026”, each inside the one before.")
     );
 }

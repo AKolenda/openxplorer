@@ -99,9 +99,37 @@ pub(crate) struct BrowserWindow {
     /// What a search looked at, above the columns while searching.
     #[template_child]
     pub(super) search_strip: TemplateChild<SearchInfoStrip>,
-    /// The folder pane.
+    /// The folder pane, on the left of a split tab.
     #[template_child]
     pub(super) folder_pane: TemplateChild<FolderPane>,
+    /// The folder pane on the right of a split tab (VIEW-059).
+    #[template_child]
+    pub(super) split_pane: TemplateChild<FolderPane>,
+    /// The two folder panes side by side.
+    #[template_child]
+    pub(super) pane_split: TemplateChild<gtk::Paned>,
+    /// The left folder pane and its caption.
+    #[template_child]
+    pub(super) start_pane_column: TemplateChild<gtk::Box>,
+    /// The right folder pane and its caption, shown while the tab is
+    /// split.
+    #[template_child]
+    pub(super) end_pane_column: TemplateChild<gtk::Box>,
+    /// Where the left pane is, while the tab is split.
+    #[template_child]
+    pub(super) start_pane_caption: TemplateChild<gtk::Label>,
+    /// Where the right pane is.
+    #[template_child]
+    pub(super) end_pane_caption: TemplateChild<gtk::Label>,
+    /// Which folder pane shows the active pane of the tab in front.
+    pub(super) active_side: Cell<super::session::PaneSide>,
+    /// The window opened as a browsing window of its own, so the last one
+    /// to close saves its tabs for the next start (TAB-053); snapshot
+    /// windows do not.
+    pub(super) remembers_session: Cell<bool>,
+    /// The modifiers held at the last key press or click in a folder view,
+    /// which decide how an activated folder opens (TAB-026).
+    pub(super) view_modifiers: Cell<Option<gtk::gdk::ModifierType>>,
     /// The details pane beside the folder pane.
     #[template_child]
     pub(super) details_pane: TemplateChild<DetailsPane>,
@@ -161,6 +189,11 @@ pub(crate) struct BrowserWindow {
     /// Set while the window swaps or reloads the model, so the
     /// selection it restores is not saved over the tab's selection.
     pub(super) changing_model: Cell<bool>,
+    /// Set while the window shows a folder's saved display style, so
+    /// showing it is not saved as the user's change.
+    pub(super) applying_style: Cell<bool>,
+    /// The rubber band being drawn, while one is (SEL-012).
+    pub(super) rubber_band: super::rubber_band::BandState,
     /// Set until the file list takes keyboard focus in a new window or
     /// after Settings hides; see
     /// [`super::BrowserWindow::focus_new_file_list`].
@@ -216,6 +249,8 @@ pub(crate) struct BrowserWindow {
     /// The in-window dialogs, Properties by tab, and the tabs that
     /// browse snapshots.
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
+    /// The rename a slow second click on a name scheduled (OPS-011).
+    pub(super) slow_click_rename: super::slow_click_rename::SlowClickRename,
     /// Measured folder sizes and the running folder-size scan.
     pub(super) size_scans: super::folder_size_scan::SizeScans,
 }
@@ -295,13 +330,14 @@ impl WindowImpl for BrowserWindow {
         // destroyed widget for its cursor position (a Gtk-CRITICAL).
         GtkWindowExt::set_focus(&*self.obj(), None::<&gtk::Widget>);
         self.obj().save_pending_size();
+        self.obj().save_session_if_last();
         // A closed window's sign-ins, listings and folder watches end with
         // it, even while something still holds the window (SAFE-011,
         // TAB-050).
         self.obj().close_network();
-        for tab in self.session.borrow_mut().tabs_mut() {
-            tab.stop_reading();
-        }
+        self.session
+            .borrow_mut()
+            .change_panes(super::session::Tab::stop_reading);
         self.parent_close_request()
     }
 }

@@ -39,7 +39,7 @@ impl DetailsView {
     /// widths within the columns' limits.
     pub(super) fn install_column_fit(&self) {
         let Some(header) = self.header() else { return };
-        for (column, title) in Self::titles(&header) {
+        for (column, title) in self.titles(&header) {
             title.set_focusable(true);
             title.set_tooltip_text(Some(TITLE_TOOLTIP));
             describe_resizing(&title, column);
@@ -69,7 +69,7 @@ impl DetailsView {
             }
         ));
         header.add_controller(double_click);
-        let titles = Self::titles(&header);
+        let titles = self.titles(&header);
         for ((column, view_column), (_, title)) in self.view_columns().zip(titles) {
             // The title holds its column, so the column holds it weakly.
             if let Some(start) = column_widths::saved_width(column, view_column.fixed_width()) {
@@ -103,15 +103,15 @@ impl DetailsView {
     }
 
     /// Each column with its title, in column order.
-    fn titles(header: &gtk::Widget) -> Vec<(SortColumn, gtk::Widget)> {
+    fn titles(&self, header: &gtk::Widget) -> Vec<(SortColumn, gtk::Widget)> {
         let titles = std::iter::successors(header.first_child(), WidgetExt::next_sibling);
-        SortColumn::ALL.into_iter().zip(titles).collect()
+        self.column_order().into_iter().zip(titles).collect()
     }
 
     /// The shown column whose title ends within [`RESIZE_EDGE`] of `x`,
     /// a position in `header`.
-    fn column_at_edge(header: &gtk::Widget, x: f64) -> Option<SortColumn> {
-        let titles = Self::titles(header);
+    fn column_at_edge(&self, header: &gtk::Widget, x: f64) -> Option<SortColumn> {
+        let titles = self.titles(header);
         let shown = titles.iter().filter(|(_, title)| title.is_visible());
         shown
             .filter_map(|(column, title)| Some((*column, title.compute_bounds(header)?)))
@@ -123,7 +123,7 @@ impl DetailsView {
     /// as a double-click on its resize edge does; `false` when no title
     /// ends there.
     fn fit_column_at_edge(&self, header: &gtk::Widget, x: f64) -> bool {
-        let Some(column) = Self::column_at_edge(header, x) else {
+        let Some(column) = self.column_at_edge(header, x) else {
             return false;
         };
         self.fit_column(column);
@@ -153,7 +153,7 @@ impl DetailsView {
         } else {
             self.header()
                 .and_then(|header| {
-                    let titles = Self::titles(&header);
+                    let titles = self.titles(&header);
                     let title = titles.into_iter().find(|(shown, _)| *shown == column)?.1;
                     Some(title.width())
                 })
@@ -184,7 +184,7 @@ impl DetailsView {
         let widths = (0..shown)
             .filter_map(|position| model.item(position).and_downcast::<FileItem>())
             .map(|item| {
-                let layout = view.create_pango_layout(Some(&cell_text(column, &item)));
+                let layout = view.create_pango_layout(Some(&cell_text(column, &item, self.date_style())));
                 layout.pixel_size().0
             });
         f64::from(widths.max().unwrap_or_default())
@@ -268,7 +268,7 @@ mod tests {
         let long_name = "A rather long file name that needs a wide column.txt";
         let (view, _model) = view_of(&["a.txt", long_name]);
         let header = view.header().expect("column titles");
-        let titles = DetailsView::titles(&header);
+        let titles = view.titles(&header);
         assert!(titles.iter().all(|(_, title)| title.is_focusable()));
         let name = view.column(SortColumn::Name).expect("a Name column");
         assert_eq!(
@@ -313,7 +313,7 @@ mod tests {
             .build();
         window.present();
         let header = view.header().expect("column titles");
-        let titles = DetailsView::titles(&header);
+        let titles = view.titles(&header);
         let name_title = &titles[0].1;
         wait_until("the titles to be laid out", || name_title.width() > 0);
         let reported = Rc::new(RefCell::new(None));

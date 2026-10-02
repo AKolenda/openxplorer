@@ -442,7 +442,7 @@ fn open_terminal_here_opens_one_per_folder_and_asks_for_many() {
     }
     let test = TestWindow::open(&fixture.uri());
     let keys = |action: &str| application().accels_for_action(&format!("win.{action}"));
-    assert_eq!(keys("open-terminal"), ["<Shift>F4"]);
+    assert_eq!(keys("open-terminal"), ["<Shift>F4", "<Shift><Control>F4"]);
     assert_eq!(keys("open-terminal-here"), ["<Shift><Alt>F4"]);
 
     select_names(&test, &["Notes 2.txt", "Résumé.txt", "Documents"]);

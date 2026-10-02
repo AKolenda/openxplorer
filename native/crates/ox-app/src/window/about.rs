@@ -15,11 +15,11 @@
 use gtk::glib;
 use ox_core::update::REPOSITORY;
 
-use super::dialog::{Dialog, DialogButton};
 use super::help::REPORT_ISSUE;
 use super::BrowserWindow;
 use super::ButtonStyle;
 use crate::config::{BUILD_NAME, IS_PREVIEW};
+use crate::dialog::{Dialog, DialogButton};
 
 /// What About this build says above the channel: the description and the
 /// platform line, as the Python box had them.

@@ -10,7 +10,9 @@
 //! as Windows and Dolphin do (OPS-010); the Python app selected all of it.
 //! While the user types, a line under the field warns, as Dolphin's New
 //! folder dialog does, about a taken name, a leading dot that hides the
-//! item, and a leading space or tilde (OPS-007).
+//! item, and a leading space or tilde (OPS-007). New folder takes slashes,
+//! as Dolphin's does: `Photos/2026` makes a folder inside a folder, and
+//! the line names the folders it will make before Save.
 
 use std::future::Future;
 
@@ -18,13 +20,16 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::transfer::Cancellation;
 
-use super::names::{check_typed_name, name_warning};
-use crate::window::dialog::Dialog;
+use super::names::{check_folder_path, check_typed_name, folder_path_preview, name_warning};
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
 /// The line under the title (`nameDialog`).
 const NAME_HINT: &str = "Names must not contain slashes.";
+
+/// The line under New folder's title, which takes slashes (OPS-007).
+const FOLDER_PATH_HINT: &str = "A slash makes a folder inside the one before it.";
 
 /// How much of the name the field selects when the dialog opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +52,26 @@ pub(super) struct NameRequest<'a> {
     /// The folder the name is for, which the dialog checks each typed
     /// name against while the user types.
     pub(super) folder: &'a str,
+    /// Whether slashes make folders inside folders (New folder).
+    pub(super) takes_folder_path: bool,
+}
+
+/// Why a dialog that takes slashes refuses a name.
+const INVALID_FOLDER_PATH: &str =
+    "Use names without backslashes or control characters, one slash between folders.";
+
+/// Whether a name dialog takes `typed`, or why not: with
+/// `takes_folder_path`, slashes make folders inside folders.
+fn check_name(typed: &str, takes_folder_path: bool) -> Result<(), String> {
+    if takes_folder_path {
+        check_folder_path(typed)
+            .map(drop)
+            .map_err(|_| INVALID_FOLDER_PATH.to_owned())
+    } else {
+        check_typed_name(typed)
+            .map(drop)
+            .map_err(|invalid| invalid.to_string())
+    }
 }
 
 /// The number of characters of `name` before its extension: up to its last
@@ -66,13 +91,14 @@ fn warn_while_typing(dialog: &Dialog, field: &gtk::Entry, request: &NameRequest<
     warning.set_visible(false);
     let folder = gio::File::for_uri(request.folder);
     let initial_name = request.initial_name.to_owned();
+    let takes_folder_path = request.takes_folder_path;
     field.connect_changed(move |field| {
         let typed = field.text().to_string();
-        if typed == initial_name || check_typed_name(&typed).is_err() {
+        if typed == initial_name || check_name(&typed, takes_folder_path).is_err() {
             warning.set_visible(false);
             return;
         }
-        let child = folder.child(&typed);
+        let child = folder.resolve_relative_path(&typed);
         glib::spawn_future_local(glib::clone!(
             #[weak]
             field,
@@ -91,7 +117,13 @@ fn warn_while_typing(dialog: &Dialog, field: &gtk::Entry, request: &NameRequest<
                 if field.text() != typed {
                     return;
                 }
-                let text = name_warning(&typed, taken);
+                let path_preview = takes_folder_path && !taken;
+                let preview = check_folder_path(&typed)
+                    .ok()
+                    .and_then(|names| folder_path_preview(&names));
+                let text = preview
+                    .filter(|_| path_preview)
+                    .or_else(|| name_warning(&typed, taken));
                 warning.set_text(text.as_deref().unwrap_or_default());
                 warning.set_visible(text.is_some());
             }
@@ -111,7 +143,12 @@ where
     Attempt: FnMut(String, Cancellation) -> Outcome,
     Outcome: Future<Output = Result<T, String>>,
 {
-    let dialog = Dialog::new(window, request.title, NAME_HINT);
+    let hint = if request.takes_folder_path {
+        FOLDER_PATH_HINT
+    } else {
+        NAME_HINT
+    };
+    let dialog = Dialog::new(window, request.title, hint);
     let field = dialog.add_text_field("Name", request.initial_name);
     warn_while_typing(&dialog, &field, &request);
     dialog.add_cancel_button();
@@ -124,13 +161,11 @@ where
     loop {
         dialog.next_response().await?;
         let typed = field.text().to_string();
-        let name = match check_typed_name(&typed) {
-            Ok(name) => name.to_owned(),
-            Err(invalid) => {
-                dialog.show_error(&invalid.to_string());
-                continue;
-            }
-        };
+        if let Err(message) = check_name(&typed, request.takes_folder_path) {
+            dialog.show_error(&message);
+            continue;
+        }
+        let name = typed;
         let running = Cancellation::new();
         dialog.set_busy(Some(&running));
         let outcome = attempt(name, running).await;

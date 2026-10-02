@@ -449,7 +449,10 @@ fn software_rendering_notice(asks: bool, is_remote: bool, renderer: Option<&str>
 /// defaults and the Python app's D-Bus name untouched. With
 /// `OPENXPLORER_SNAPSHOT` set it saves a picture of one window and quits
 /// instead (see `snapshot.rs`); otherwise the launch guard runs first.
+/// The interface's translations are loaded before any text is made
+/// (INT-031).
 pub fn run() -> glib::ExitCode {
+    ox_core::i18n::install();
     let arguments: Vec<String> = std::env::args().collect();
     let launch = match SnapshotRequest::from_environment() {
         Ok(Some(request)) => Launch::Snapshot(request),

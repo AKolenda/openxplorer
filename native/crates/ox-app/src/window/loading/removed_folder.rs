@@ -88,8 +88,6 @@ impl BrowserWindow {
     /// Shows why tab `id`'s folder could not be listed again.
     fn show_load_error(&self, id: TabId, error: EntryError) {
         self.fail_load(id, LoadMode::Reload, error);
-        if self.imp().session.borrow().is_active(id) {
-            self.update_content();
-        }
+        self.redraw_pane(id);
     }
 }

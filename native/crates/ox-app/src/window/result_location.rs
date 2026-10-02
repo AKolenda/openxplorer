@@ -65,8 +65,9 @@ impl BrowserWindow {
     fn open_located_tab(&self, folder: &str, uri: String) -> Result<(), LocationError> {
         let folder = self.resolve_address(folder)?;
         self.save_tab_view();
+        let position = self.opened_tab_position();
         let mut session = self.imp().session.borrow_mut();
-        let id = session.add(&folder, TabPlacement::Background);
+        let id = session.add_at(&folder, TabPlacement::Background, position);
         if let Some(tab) = session.tab_mut(id) {
             tab.selected = vec![uri.clone()];
             tab.revealed_item = Some(uri);

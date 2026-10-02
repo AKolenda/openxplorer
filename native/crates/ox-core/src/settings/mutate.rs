@@ -10,8 +10,9 @@
 
 use super::labels::{bookmark_fallback_label, pin_fallback_label};
 use super::model::{Bookmark, RecentEntry, SettingsData, MAX_BOOKMARKS, MAX_ORDER, MAX_RECENT};
+use super::stored_location::{normalise, require_share};
 use super::SettingsError;
-use crate::location::{normalise, require_share, safe_label};
+use crate::location::safe_label;
 
 /// Whether [`Settings::bookmark`](super::Settings::bookmark) adds or
 /// removes the location.
@@ -263,6 +264,15 @@ pub(super) fn remember_open(settings: &mut SettingsData, entry: RecentEntry) -> 
     Ok(())
 }
 
+/// Forgets the recent files opened before `opened_before`, and those
+/// with no time of opening; `None` forgets them all (SAFE-022). True when
+/// any were forgotten.
+pub(super) fn forget_recent(settings: &mut SettingsData, opened_before: Option<u64>) -> bool {
+    let before = settings.recent.len();
+    settings.recent.retain(|recent| recent.is_kept_by(opened_before));
+    settings.recent.len() != before
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -458,6 +468,7 @@ mod tests {
                 is_dir: true,
                 size: i,
                 modified: 1,
+                opened: None,
             };
             remember_open(&mut settings, entry).unwrap();
         }

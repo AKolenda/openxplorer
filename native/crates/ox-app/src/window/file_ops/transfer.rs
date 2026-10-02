@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use gtk::subclass::prelude::*;
-use ox_core::clipboard::ClipboardMode;
+use ox_core::clipboard::{ClipboardFiles, ClipboardMode};
 use ox_core::ops::{
     find_conflicts, run_chosen_transfer, starting_label, ChosenTransfer, ItemChoice, OpsError,
     TransferOutcome, TransferRequest,
@@ -25,8 +25,8 @@ use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 use super::conflict_dialog::ConflictAnswer;
 use super::running::FinishedOperation;
 use super::unfinished::mark_unfinished;
+use crate::dialog;
 use crate::search::changed_folders;
-use crate::window::dialog;
 use crate::window::BrowserWindow;
 
 /// The title of the dialog shown when the destination cannot be checked.
@@ -111,10 +111,23 @@ impl BrowserWindow {
             self.show_message("Open the destination folder before pasting.");
             return;
         }
-        let Some(files) = clipboard else {
+        let Some(destination_folder) = into.or_else(|| self.current_uri()) else {
             return;
         };
-        let Some(destination_folder) = into.or_else(|| self.current_uri()) else {
+        self.paste_files(clipboard, destination_folder).await;
+    }
+
+    /// Paste into the folder at `uri`, from the folder tree's menu
+    /// (SIDE-028), as Dolphin's "Paste" on a folder pastes into it.
+    pub(crate) async fn paste_into(&self, uri: &str) {
+        let clipboard = self.refresh_file_clipboard().await;
+        self.paste_files(clipboard, uri.to_owned()).await;
+    }
+
+    /// Copies or moves the clipboard's `files` into `destination_folder`
+    /// where it is writable.
+    async fn paste_files(&self, clipboard: Option<ClipboardFiles>, destination_folder: String) {
+        let Some(files) = clipboard else {
             return;
         };
         if !self

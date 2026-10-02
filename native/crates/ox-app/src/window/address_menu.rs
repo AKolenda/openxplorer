@@ -134,7 +134,7 @@ impl BrowserWindow {
     /// Copies the current location as the address bar shows it.
     pub(super) fn copy_address(&self) {
         let Some(uri) = self.current_uri() else { return };
-        let address = self.imp().locations.borrow().display_location(&uri);
+        let address = self.imp().locations.borrow().copied_location(&uri);
         self.clipboard().set_text(&address);
         self.show_message("Address copied.");
     }

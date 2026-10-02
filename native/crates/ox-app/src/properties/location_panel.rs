@@ -32,7 +32,7 @@ use ox_core::places::KnownFolder;
 
 use super::general_panel::glyph_button;
 use super::mount_assistant::mount_assistant;
-use crate::dialog_layer::{check_row, labelled_entry, quiet_text};
+use crate::dialog::{check_row, labelled_entry, quiet_text};
 use crate::icons::{self, Icon};
 use crate::window::ButtonStyle;
 

@@ -14,9 +14,9 @@ use gtk::prelude::*;
 use ox_core::location::is_smb_location;
 use ox_core::update::REPOSITORY;
 
-use super::dialog::{Dialog, DialogButton};
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::{Dialog, DialogButton};
 use crate::locations::Page;
 
 /// The manual, with an HTML comment before its first topic.

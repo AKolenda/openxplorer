@@ -1607,8 +1607,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "OpenNewTabAfterLastTab (default false = after current)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer always appends new tabs at the end. Existing OpenXplorer part is protected by TAB-001, TAB-020 and OPEN-016."
+native = "done"
+native_note = "Tabs opened from a folder (Open in new tab, middle-click, Open in new tabs, a place's or crumb's Open in new tab, Open file location in tab, Ctrl+opened folders) go right after the current tab, and several opened from it keep their order after it; Ctrl+T, Settings and locations from other apps go at the end. Settings ▸ Windows & tabs ▸ 'Open new tabs: After the current tab / At the end of the tab bar' (preferences.openTabsAtEnd) (native/crates/ox-app/src/window/session.rs add_at, navigation.rs open_tab). Tests: native/crates/ox-app/src/window/session.rs (tabs_opened_from_a_tab_follow_it_in_order_and_new_tabs_go_last)."
 
 [[feature]]
 id = "TAB-018"
@@ -1626,8 +1626,8 @@ sources = [
 python_tests = []
 bridge = ["operate", "transferConflicts", "fileDragLayout"]
 dolphin = "DolphinTabBar drag/drop + auto-activation timer (800 ms)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab): items dropped on a tab go into its folder and an 800 ms hover shows the tab. Missing: folders dropped on the empty tab-bar area opening as new tabs."
+native = "done"
+native_note = "Items dropped on a tab go into its folder and an 800 ms hover shows the tab; folders dropped on the tab strip beside the tabs open as background tabs at the end, files among them are left alone (DropDestination::NewTabs, Dolphin's tabDropEvent) (native/crates/ox-app/src/window/file_drop.rs, file_drop/targets/spot.rs). Tests: native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab), window/tests/split_view.rs (folders_dropped_beside_the_tabs_open_as_new_tabs)."
 
 [[feature]]
 id = "TAB-019"
@@ -1804,8 +1804,8 @@ sources = [
 python_tests = []
 bridge = ["list", "newWindow"]
 dolphin = "DolphinViewContainer::slotItemActivated modifiers"
-native = "todo"
-native_note = "Porting notes: Conflict, Explorer wins: in Explorer, Ctrl+double-click opens the folder in a new window."
+native = "done"
+native_note = "Enter or a double-click on a folder with Ctrl opens it in a new tab behind, with Ctrl+Shift in a new tab in front and with Shift in a new window, whatever else is selected; without a modifier it opens in place. Dolphin's mapping is kept over Explorer's Ctrl+double-click new window, as the owner asked (native/crates/ox-app/src/window/input.rs activate_from_view, open_folder_action). Tests: native/crates/ox-app/src/window/tests/split_view.rs (ctrl_opens_a_folder_in_a_new_tab_behind)."
 
 [[feature]]
 id = "TAB-027"
@@ -2651,8 +2651,8 @@ python_tests = ["v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_tab_roundt
 bridge = ["preferences", "environment", "uiReady"]
 dolphin = "RememberOpenedTabs (default true); General → Startup “Show on startup: folders, tabs and window state from last time” (RememberOpenedTabs)"
 gnome = "App-managed state (GNOME 46 has no XSMP restore): persist under $XDG_STATE_HOME; GtkApplication query-end at logout"
-native = "todo"
-native_note = "Porting notes: Explorer has 'Restore previous folder windows at logon', off by default. Provide it as an option. Test HandoffTests::test_tab_roundtrip covers only the reusable snapshot validation."
+native = "done"
+native_note = "Settings ▸ Windows & tabs ▸ Startup ▸ 'Restore previous tabs at startup' (off by default, as Explorer's 'Restore previous folder windows'). While on, the last browsing window to close saves its tabs, split panes, histories, selections and scroll positions to session.json in the settings directory (private, replaced atomically, read back as untrusted TabSnapshots with bounded lists); a start without locations reopens them with the same tab and pane in front, a start with locations shows only those. The window size comes from TAB-054. Settings tabs are not saved; GNOME has no XSMP restore, so the app keeps the state itself (native/crates/ox-core/src/session/saved.rs, native/crates/ox-app/src/window/session_restore.rs, application/state.rs open_first_window). Tests: native/crates/ox-core/src/session/saved.rs (a_saved_session_comes_back_as_it_was_saved), native/crates/ox-app/src/window/session_restore.rs (a_saved_window_reopens_its_tabs_and_split_panes)."
 
 [[feature]]
 id = "TAB-054"
@@ -2686,8 +2686,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "HomeUrl"
-native = "todo"
-native_note = "Porting notes: Explorer's equivalent is 'Open File Explorer to: Home / This PC'."
+native = "done"
+native_note = "Settings ▸ Windows & tabs ▸ Startup ▸ 'Open new windows at': a folder field with 'Use current location' (the folder shown before Settings) and 'Use Home'; a location the app cannot open or a local folder that does not exist is refused with a message, empty means Home (preferences.startupFolder). New windows without a location (first start, --new-window, Ctrl+N from a landing page) open there, or at Home once the folder is gone (native/crates/ox-app/src/settings_page/startup.rs, application/state.rs startup_location). Tests: native/crates/ox-app/src/settings_page/startup.rs (only_a_folder_that_exists_becomes_the_startup_folder), application/state.rs (split_pairs_its_locations_and_new_windows_open_at_the_startup_folder)."
 
 [[feature]]
 id = "TAB-056"
@@ -2831,8 +2831,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "UseShortRelativeDates (default true)"
-native = "partial"
-native_note = "Date modified shows the locale's numeric date and its clock time without seconds, as Windows Explorer does ('09/06/2026 7:05 PM'; native/crates/ox-core/src/format.rs, column_dates_show_the_time_without_seconds). Missing: Dolphin's relative dates ('Today at 3:00 PM') and the option that switches between relative and absolute; Windows 11 shows absolute dates only."
+native = "done"
+native_note = "Date modified shows the date and the clock time without seconds; by default today's and yesterday's dates read 'Today at 3:00 PM' and 'Yesterday at 3:00 PM', as Dolphin's UseShortRelativeDates does, and Settings > Appearance > Files and folders > Relative dates (preference absoluteDates) switches every window to absolute dates at once. native/crates/ox-core/src/format/relative_date.rs, native/crates/ox-app/src/folder_view/details.rs (set_date_style); tests today_and_yesterday_read_as_words_with_the_time and recent_dates_read_today_until_settings_turn_that_off."
 
 [[feature]]
 id = "VIEW-005"
@@ -2929,8 +2929,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "compact: Ctrl+2"
-native = "todo"
-native_note = "Porting notes: This corresponds to Explorer's 'List' layout."
+native = "done"
+native_note = "View > List (Ctrl+Shift+5), Explorer's name for Dolphin's Compact view: the icon view's grid turned on its side, 16-pixel icons with one-line names in columns as wide as their widest name (cut at 36 characters), filled top to bottom and scrolled sideways; Ctrl+wheel steps Details > List > icons. native/crates/ox-app/src/folder_view/grid.rs (GridLayout::Compact); test the_compact_layout_fills_columns_and_scrolls_sideways."
 
 [[feature]]
 id = "VIEW-009"
@@ -2975,8 +2975,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "view_zoom_in Ctrl++/Ctrl+=, view_zoom_out Ctrl+-, view_zoom_reset Ctrl+0"
-native = "todo"
-native_note = "Porting notes: In OpenXplorer these keys change text size (80-200%), not icon size, and there is only one grid icon size. Keep text size; add icon sizes through the View menu and Ctrl+wheel. Explorer's Ctrl+numpad-Plus auto-sizes columns in Details. Existing OpenXplorer part is protected by VIEW-005, VIEW-043 and VIEW-044."
+native = "done"
+native_note = "The icon view zooms through 14 levels from 16 to 256 pixels (folder_view/icon_size.rs), with Explorer's four named sizes on Ctrl+Shift+1..4. Ctrl+wheel steps through them (stopping at Details and at 256), and a slider in the status bar, shown in the icon view as Dolphin's is, sets the size; the level is saved with the view style. Ctrl+plus/minus/0 keep changing the text size (VIEW-043), so zoom has no keys of its own. Test zooming_changes_and_saves_the_view."
 
 [[feature]]
 id = "VIEW-011"
@@ -2994,7 +2994,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "DolphinView::wheelEvent"
 native = "done"
-native_note = "Ctrl+wheel over the folder pane steps Details, Small, Medium, Large and Extra large icons, one step per wheel notch, and stops at the ends. Smooth-scroll fractions add up, and touchpad deltas in pixels (Wayland's surface unit) count 50 pixels as a notch, so one swipe does not jump several views (native/crates/ox-app/src/window/view_zoom.rs, wheel_and_touchpad_deltas_add_up_to_whole_steps; native/crates/ox-app/src/window/folder_pane/view.rs, the_wheel_steps_through_the_views_and_stops_at_the_ends). The zoomed view is saved and the View menu follows it; unlike a menu choice, zooming keeps the selected item in sight instead of scrolling to the top (native/crates/ox-app/src/window/tests/views.rs, zooming_changes_and_saves_the_view)."
+native_note = "Ctrl+wheel over the folder pane steps Details, List and then every icon size from 16 to 256 pixels (VIEW-010), one step per wheel notch, and stops at the ends. Smooth-scroll fractions add up, and touchpad deltas in pixels (Wayland's surface unit) count 50 pixels as a notch, so one swipe does not jump several views (native/crates/ox-app/src/window/view_zoom.rs, wheel_and_touchpad_deltas_add_up_to_whole_steps; native/crates/ox-app/src/window/folder_pane/view.rs, the_wheel_steps_through_the_views_and_stops_at_the_ends). The zoomed view is saved and the View menu follows it; unlike a menu choice, zooming keeps the selected item in sight instead of scrolling to the top (native/crates/ox-app/src/window/tests/views.rs, zooming_changes_and_saves_the_view)."
 
 [[feature]]
 id = "VIEW-012"
@@ -3031,7 +3031,7 @@ python_tests = ["v2.0.0:desktop/tests/ui_v07.py::Transferred tab restores select
 bridge = []
 dolphin = "sort menu (sort_by_*)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/views.rs (the_sort_menu_leaves_one_arrow_on_the_sorted_column, sorting_by_a_header_updates_the_sort_menu): Name, Date modified, Type and Size, the current one checked, a divider, then the direction. The direction has two checked items, Ascending and Descending, as Windows 11's Sort menu has, where app.js had one item that flipped it."
+native_note = "native/crates/ox-app/src/window/tests/views.rs (the_sort_menu_leaves_one_arrow_on_the_sorted_column, sorting_by_a_header_updates_the_sort_menu): Name, Date modified, Type and Size, the current one checked, a divider, the further keys of VIEW-019, a divider, then the direction, then Show in groups and Folders first. The direction has two checked items, Ascending and Descending, as Windows 11's Sort menu has, where app.js had one item that flipped it."
 
 [[feature]]
 id = "VIEW-014"
@@ -3145,7 +3145,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "sort_by_* for every KFileItemModel role"
-native = "todo"
+native = "done"
+native_note = "Besides the four columns, the Sort menu sorts by Date created, Date accessed, File extension, Permissions, Owner, User group and Link destination (read with each listing as EntryMeta; native/crates/ox-app/src/folder_view/sort_roles.rs); the column titles then show no arrow, as Dolphin's header does for a role it does not show, and a title click returns to that column. Deletion time is the Recycle Bin's Date deleted column (dialogs track). Rating, Tags, Comment and media metadata need Baloo or a metadata extractor the app does not link. Test further_sort_keys_compare_their_values."
 
 [[feature]]
 id = "VIEW-020"
@@ -3170,8 +3171,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "GlobalViewProps (default true) + ViewProperties"
-native = "todo"
-native_note = "Porting notes: OpenXplorer persists view mode, hidden-file visibility and column widths globally. Sort key and order are neither persisted nor tracked per folder. Existing OpenXplorer part is protected by VIEW-007, VIEW-024 and VIEW-028."
+native = "done"
+native_note = "View mode, icon size, sort key and order, groups, folders first and hidden files are saved as one style for all folders (viewDefaults, with the Python app's view and showHidden kept in step) or, with Settings > Appearance > Files and folders > Remember each folder's view (perFolderViews, Dolphin's GlobalViewProps off), for each folder (folderViews, at most 500, no user names): a folder opened or a tab shown later appears in its own style, a style saved for sub-folders reaches below. Column widths stay global (VIEW-028). native/crates/ox-core/src/settings/view_properties.rs, native/crates/ox-app/src/window/view_style.rs; tests folders_keep_their_own_style_and_the_rest_share_the_default and each_folder_keeps_its_own_style_when_asked."
 
 [[feature]]
 id = "VIEW-021"
@@ -3191,8 +3192,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "view_properties"
-native = "todo"
-native_note = "Porting notes: Explorer's equivalent is Folder Options › View › 'Apply to Folders'."
+native = "done"
+native_note = "View > Adjust view display style… opens the app's dialog with View mode, Sort by, Order, Show in groups, Show folders first and Show hidden files; while each folder keeps its own style it applies to this folder, this folder and its subfolders, or all folders (the last two after a confirmation) and can become the default, as Dolphin's dialog does; with one style for all folders it applies everywhere. native/crates/ox-app/src/window/view_properties_dialog.rs; test the_display_style_dialog_applies_its_choices."
 
 [[feature]]
 id = "VIEW-022"
@@ -3210,8 +3211,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "show_in_groups"
-native = "todo"
-native_note = "Porting notes: Explorer offers the same through 'Group by'."
+native = "done"
+native_note = "Sort > Show in groups groups the listing by its sort key, in the sort's order: names by first letter ('0 – 9', '#'), sizes by Explorer's buckets (Tiny … Gigantic, unmeasured Folders first), dates by Today, Yesterday, Earlier this week, Last week, Earlier this month, Last month, Earlier this year, then the year, and types, permissions, owners and the other keys by their text. The details view heads each group with its title, item count and a line (folder_view/details/group_headers.rs); GTK 4.14's grid view has no section headers, so the List and icon views show the grouped order without titles. Tests items_group_by_letter_size_and_period and show_in_groups_heads_each_group."
 
 [[feature]]
 id = "VIEW-023"
@@ -3470,8 +3471,8 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/test_v06.py::PrefTests::test_columns_whitelist"]
 bridge = ["preferences", "list"]
 dolphin = "additional_info / header context menu"
-native = "todo"
-native_note = "Porting notes: Explorer also picks columns from the header menu. OpenXplorer has a fixed set: Name, Date modified, Type, Size, plus Folder path in search results."
+native = "done"
+native_note = "A secondary click on the column titles opens the app's menu with every column but Name as check items: Date modified, Date created, Type, Size, File extension, Owner and Permissions; Folder path shows in searches. The choice is saved as viewOptions.detailsColumns and every window follows (native/crates/ox-app/src/window/view_options.rs the_titles_menu_shows_and_hides_columns, folder_view/details/column_choice.rs, column_text.rs). Columns that need metadata the listing does not read (rating, tags, comments, media metadata, Downloaded From) are not offered."
 
 [[feature]]
 id = "VIEW-034"
@@ -3488,7 +3489,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "DetailsModeSettings::ColumnPositions"
-native = "todo"
+native = "done"
+native_note = "Column titles are dragged to move their columns (GtkColumnView reordering); Name stays first and Folder path follows it in a search, and the new order of the shown columns is saved with them (native/crates/ox-app/src/folder_view/details/column_choice.rs, dragged_columns_keep_their_order_behind_name; window/view_options.rs)."
 
 [[feature]]
 id = "VIEW-035"
@@ -3506,7 +3508,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "ExpandableFolders (Details)"
-native = "todo"
+native = "done"
+native_note = "In the details view of a folder (not while searching or grouped) a chevron before each folder expands it in place: its contents are listed beneath it, indented 16 pixels a level, filtered and sorted as the folder's own items, through a GTK tree list model that passes the items through (folder_view/tree.rs, folder_view/cells/expander.rs). Right expands the current and selected folders, Left collapses them or goes to the containing folder; Back and Forward return with the same folders expanded. Settings > Appearance > Files and folders > Expandable folders turns it off. Expanded folders are listed once and not watched. Test a_folder_expands_in_place_and_back_keeps_it_open."
 
 [[feature]]
 id = "VIEW-036"
@@ -3541,8 +3544,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DirectorySizeCount=true (Number of items)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer leaves the folder Size empty unless an explicit folder-size scan was run."
+native = "done"
+native_note = "A folder's Size in the Details view says 'N items' until it is measured, counted off the main thread two folders at a time for folders on this computer only (hidden names left out), skipped for rows scrolled away before their turn, and kept with the item (native/crates/ox-app/src/folder_view/details/column_text.rs, a_folder_size_counts_its_items). Settings > Appearance > 'Show the number of items in folders' turns it off. The status bar's description of a folder uses the count too."
 
 [[feature]]
 id = "VIEW-038"
@@ -3853,8 +3856,8 @@ sources = [
 python_tests = []
 bridge = ["list", "cancel"]
 dolphin = "stop action + status bar progress"
-native = "todo"
-native_note = "Porting notes: OpenXplorer shows an indeterminate loading line. A listing is cancelled only by navigating away or closing the tab. Existing OpenXplorer part is protected by VIEW-047 and NAV-016. Owner decision (2026-09-29): no 'Loading' text while switching folders; a slow listing shows only the thin line after 300 ms (VIEW-047), so a status-bar percentage or Stop button must not bring the text back."
+native = "done"
+native_note = "While the loading line shows (after 300 ms, VIEW-047), the Refresh button before the address bar turns into Stop, as in Windows Explorer; win.stop ends the listing, keeps the items that arrived and says 'Stopped. Some items may be missing; press F5 to list the folder again.' in the message line (native/crates/ox-app/src/window/stop_listing.rs, window/tests/stopping.rs stop_ends_a_slow_listing). Per the owner's decision of 2026-09-29 no 'Loading' text or percentage is added; GIO's enumerator gives no total to show a percentage of."
 
 [[feature]]
 id = "VIEW-050"
@@ -3888,8 +3891,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinView::requestStatusBarText"
-native = "partial"
-native_note = "The selection shows its count and the selected files' total size, as Windows does (native/crates/ox-app/src/window/status_bar.rs, the_selection_shows_its_count_and_file_size). Missing: the folder's own total size beside its item count; Windows 11 shows only the count there."
+native = "done"
+native_note = "The status bar adds the total size of the files shown to the item count ('12 items  4.2 MB', summed once per change of the items shown) and the selection keeps its count and files' size, as Windows does (native/crates/ox-app/src/window/status_bar.rs, the_count_adds_the_files_size_and_one_item_is_described; folder_view/model.rs shown_file_bytes). Folder sizes are never measured by themselves: Calculate folder size(s) measures on request, with Cancel scan (PROP-026, PROP-029), so remote folders are only measured when the user asks."
 
 [[feature]]
 id = "VIEW-052"
@@ -3906,7 +3909,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KFileItem::getStatusBarInfo"
-native = "todo"
+native = "done"
+native_note = "One selected item is described in the status bar by name, type and size (or item count, or measured size), and the item under the pointer is described the same way until the pointer leaves the items, then the selection again (native/crates/ox-app/src/window/status_bar.rs item_text and show_hovered, window/details_hover.rs; the_count_adds_the_files_size_and_one_item_is_described)."
 
 [[feature]]
 id = "VIEW-053"
@@ -3927,8 +3931,8 @@ python_tests = []
 bridge = ["properties", "list"]
 dolphin = "ShowSpaceInfo (default true); Status bar space info (ShowSpaceInfo, on by default)"
 gnome = "g_file_query_filesystem_info_async(filesystem::free)"
-native = "partial"
-native_note = "The status bar shows '<X> free' for the current folder's volume, with the tooltip '<X> free out of <Y> (<Z>% used)', read again when a listing ends or a tab is shown and hidden on landing pages (native/crates/ox-app/src/window/free_space.rs, the_status_bar_says_how_much_room_is_left). Missing: the capacity bar and the disk-usage tools on click."
+native = "done"
+native_note = "The status bar shows '<X> free' with a 3-pixel capacity bar (red from 90% used) and the tooltip '<X> free out of <Y> (<Z>% used)', read again when a listing ends or a tab is shown, hidden on landing pages (native/crates/ox-app/src/window/free_space.rs the_status_bar_says_how_much_room_is_left, status_bar.rs). A click on it, or a secondary click on the status bar, offers Analyse disk usage when an analyser is installed (window/disk_tools.rs, the_status_bar_offers_the_analyser_for_a_local_folder)."
 
 [[feature]]
 id = "VIEW-054"
@@ -3989,7 +3993,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "A folder whose monitor cannot be created (a backend without change notifications, such as an SMB share through GVfs) is reported by its watch, listed again every network refresh interval of Settings (30 s, 1 min, 5 min), and the status bar says 'Not updated live' with a tooltip naming the interval and F5 (native/crates/ox-app/src/folder_view/watch.rs an_unwatchable_folder_is_reported_and_checked_again, window/watch_state.rs). Background tabs on shares keep their changes until shown (TAB-056). There is no monitor cap in the native app."
 
 [[feature]]
 id = "VIEW-057"
@@ -4013,8 +4018,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "show_preview (PreviewsShown default true); View → Show Previews (F12), KIO thumbnail plugins, shared freedesktop cache"
 gnome = "freedesktop Thumbnail Managing Standard (~/.cache/thumbnails) via GnomeDesktopThumbnailFactory / the GIO 'thumbnail::path' and 'thumbnail::is-valid' attributes, as Nautilus does; freedesktop thumbnail cache (~/.cache/thumbnails) / GnomeDesktopThumbnailFactory; GIO thumbnail::path / thumbnail::is-valid / thumbnail::failed, GnomeDesktopThumbnailFactory (libgnome-desktop-4) or org.freedesktop.thumbnails.Thumbnailer1 (tumbler installed); /usr/share/thumbnailers/*.thumbnailer (evince, totem, gdk-pixbuf, heif, webp, font-viewer, xapp)"
-native = "todo"
-native_note = "native/crates/ox-core/src/entry/info.rs keeps valid thumbnail paths (valid_thumbnail_path_is_kept_byte_for_byte), but no view shows thumbnails. Porting notes: The OpenXplorer About text states that thumbnails are not implemented."
+native = "done"
+native_note = "Files show previews in the details and icon views from the shared freedesktop cache (GIO thumbnail::path / is-valid / failed), looked up at low priority when a row or tile is bound and dropped when GTK unbinds it (native/crates/ox-app/src/thumbnails.rs, folder_view/cells/custom_icon.rs). A missing thumbnail is made by org.freedesktop.thumbnails.Thumbnailer1 when the session has it and it supports the type (Queue, with Dequeue for requests no longer needed; thumbnails/service.rs), else for the picture types gdk-pixbuf reads by the app itself, written per the Thumbnail Managing Standard: normal or large, Thumb::URI and Thumb::MTime, 0600 file renamed into place in 0700 folders (thumbnails/writer.rs, a_picture_gets_a_standard_thumbnail; thumbnails_are_named_by_the_hash_of_their_uri). Decoding and making run off the main thread, a few at a time; failures keep the icon for the session. A custom icon (PROP-016) takes precedence."
 
 [[feature]]
 id = "VIEW-058"
@@ -4034,7 +4039,8 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "Settings › General › Previews; Settings → Interface → Previews (plugins, “Skip previews for remote files above N MiB”)"
 gnome = "org.gnome.nautilus.preferences show-image-thumbnails ('local-only') and thumbnail-limit; Reference: org.gnome.nautilus.preferences show-image-thumbnails / thumbnail-limit; org.gnome.desktop.thumbnailers disable-all"
-native = "todo"
+native = "partial"
+native_note = "Settings > Appearance > Files and folders: Show previews (on), Show previews in network folders (off: SMB, servers, phones and kernel CIFS mounts keep icons), Skip previews of large files (on, 50 MB), and Preview pictures / videos / documents and other files, saved as viewOptions and followed by every window (native/crates/ox-core/src/settings/view_options.rs view_options_round_trip_and_ignore_odd_values; ox-app thumbnails.rs previews_follow_the_settings; settings_page/folder_views.rs). Dolphin's free size limits (MiB spin boxes) became one on/off limit. Missing, needs an owner decision because it changes the Windows 11 folder art: previews of a folder's contents inside its folder icon."
 
 [[feature]]
 id = "VIEW-059"
@@ -4057,8 +4063,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "split_view: F3"
-native = "todo"
-native_note = "Porting notes: Shortcut conflict, Explorer wins: F3 focuses the search box in Explorer, so split view needs another key. Explorer itself has no split view."
+native = "done"
+native_note = "Split view (F3, View ▸ Split view): the tab shows two folder panes side by side, each a tab of the session of its own with its own location, history, selection and listing; the active pane stands in the strip for its tab, so the address bar, history buttons, status bar, details pane, commands and Sort/View menus follow it. A click, keyboard focus, Ctrl+wheel or a drag entering the other pane makes it active; the active pane's caption has the accent underline and the other pane is dimmed. F3 again closes the active pane (Dolphin's default). Settings ▸ Windows & tabs ▸ Split view: 'Open new windows in split view' and 'Switch between split panes with Tab'. Split tabs are saved with the session (TAB-053). F3 was free: Explorer's F3 search is Ctrl+F here. Moving a split tab to another window or reopening a closed one takes its active pane only. (native/crates/ox-app/src/window/split_view.rs, window/session/split.rs, window/pane_content.rs). Tests: native/crates/ox-app/src/window/tests/split_view.rs (each_pane_keeps_its_folder_and_the_window_follows_the_active_one), window/session/split.rs (each_pane_of_a_split_tab_keeps_its_own_history)."
 
 [[feature]]
 id = "VIEW-060"
@@ -4116,8 +4122,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Trash view default columns: Name, “Path” (original location) and “Deletion Time”"
 gnome = "trash::orig-path, trash::deletion-date"
-native = "todo"
-native_note = "native/crates/ox-core/src/entry/info.rs reads trash::orig-path and deletion dates (trash_items_keep_their_origin_and_deletion_date); no Trash view exists."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted). In trash:/// the details view shows Original location (the folder of trash::orig-path; its tooltip is the full original path) and Date deleted (trash::deletion-date) where a folder shows Date modified, as Windows File Explorer and Dolphin do; both titles sort, by natural path order and by time (folder_view/details.rs, DetailsListing::RecycleBin). The two columns share their saved width with Folder path and Date modified, so the settings file keeps the Python app's columnWidths keys. Date deleted hides in a compact window, as Date modified does. native/crates/ox-core/src/entry/info.rs reads the attributes (trash_items_keep_their_origin_and_deletion_date)."
 
 [[feature]]
 id = "VIEW-063"
@@ -4442,8 +4448,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KItemListRubberBand; Rubber-band selection"
-native = "partial"
-native_note = "GTK's rubber band on both views, allowed only from blank space by the press in native/crates/ox-app/src/window/input.rs (blank_space_press), so dragging an item still drags it; it replaces the selection without modifiers, autoscrolls at the edges and spans full rows in the details view. native/crates/ox-app/src/window/tests/selection.rs (a_rubber_band_starts_on_blank_space_only). Missing: GTK 4.14 applies the band only when it ends, with Ctrl adding the touched items to the selection and Shift (and Ctrl+Shift) removing them; Dolphin toggles with Ctrl and adds with Shift. GTK has no public way to learn the band's items, so matching Dolphin needs our own band."
+native = "done"
+native_note = "The window draws its own rubber band (window/rubber_band.rs), as GTK 4.14's applies only when it ends: a drag from blank space selects the touched items while it moves, Ctrl toggles them and Shift adds them to the selection it started from, as in Dolphin; the view scrolls near its edges, the details view takes whole rows, and a press on an item still drags it. Tests a_band_replaces_adds_or_toggles_what_it_touches and a_rubber_band_selects_the_rows_it_crosses_as_it_moves."
 
 [[feature]]
 id = "SEL-013"
@@ -4476,8 +4482,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "ShowSelectionToggle (default true)"
-native = "todo"
-native_note = "Porting notes: Explorer offers the same through its 'Item check boxes' option. Not done; it shares the preference and cell work of SEL-013."
+native = "done"
+native_note = "Hovering an item shows a small marker on its icon's corner: a plus, or a minus once the item is selected; clicking it toggles that item alone through the list's own Ctrl+click action and keeps the rest of the selection, as Dolphin's selection toggle and Explorer's item check boxes do. Settings > Appearance > Files and folders > Selection marker turns it off. native/crates/ox-app/src/folder_view/cells/selection_marker.rs; test the_selection_marker_toggles_its_item_alone."
 
 [[feature]]
 id = "SEL-015"
@@ -5737,8 +5743,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "show_folders_panel: F7"
-native = "todo"
-native_note = "Porting notes: This corresponds to Explorer's navigation-pane tree, where Ctrl+Shift+E expands to the current folder. OpenXplorer's 'This PC' and 'Network' rows show a chevron but do not expand."
+native = "done"
+native_note = "View > Folder tree and F7 (Dolphin's key) show a tree of folders in the navigation pane below the places, split from them by a draggable divider; the choice and the tree's options are saved for every window (folderTree). It starts at the home folder while the folder shown is inside it (Limit to home folder, on by default), else at the top of the folder's file system or server; it follows the active tab, opening the folders on the way, selecting the folder shown and scrolling to it (Scroll to the folder shown). A folder's subfolders are read only when its row is expanded, through a monitored GtkDirectoryList, so the tree updates itself. Click opens a folder, Ctrl+click or middle-click opens it in a tab (Shift: in front), Enter opens the focused one, Right and Left open and close a folder or move to its first subfolder or its parent, and the chevron opens and closes it. The context menu has Open in new tab, Open in new window, Cut, Copy, Paste (into the folder), Rename…, Move to Trash, Delete permanently, Open in Terminal, Properties and the three options with check marks (Show hidden folders off by default); the file commands act on the folder clicked with the usual confirmations and Undo (renaming the folder shown, or one it is in, moves the tab with it); Cut, Rename…, Move to Trash and Delete permanently are off for the tree's top, and every file command but Paste is off for share roots and virtual places. Explorer's Ctrl+Shift+E (expand to the current folder) is what the tree always does. Test: window/tests/folder_tree.rs."
 
 [[feature]]
 id = "SIDE-029"
@@ -6636,7 +6642,7 @@ python_tests = [
 ]
 bridge = ["create", "rename", "createTemplate", "archiveExtract"]
 native = "done"
-native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open) does the same for the Extract dialog's folder name."
+native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open) does the same for the Extract dialog's folder name. Differs: New folder takes slashes for folders inside folders (OPS-007, Dolphin), so it refuses only backslashes, control characters and empty parts, with 'Use names without backslashes or control characters, one slash between folders.'"
 
 [[feature]]
 id = "OPS-007"
@@ -6654,8 +6660,8 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/test_core.py::CoreTests::test_names"]
 bridge = ["create"]
 dolphin = "KNewFileMenu name validation"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/renaming.rs (the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing); native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-app/src/window/file_ops/name_dialog.rs checks each typed name against the folder. While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. Missing: a slash is still refused (\"Names must not contain slashes.\", the current app's rule) instead of creating nested folders with a preview."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing); native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-core/src/ops/create.rs (a_folder_path_creates_each_folder_inside_the_one_before). While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. New folder takes slashes, as Dolphin's does: its description reads 'A slash makes a folder inside the one before it.', the line previews 'Creates “Plans” › “2026”, each inside the one before.', and Save makes each folder inside the one before (an existing folder on the way is entered, the last name must be free), selects the first one in the current folder, and Undo moves the outermost new folder to the Trash. Rename and Extract still refuse slashes (OPS-006)."
 
 [[feature]]
 id = "OPS-008"
@@ -6756,8 +6762,8 @@ sources = [
 python_tests = []
 bridge = ["rename"]
 dolphin = "two-clicks renaming (RenameInline)"
-native = "todo"
-native_note = "Porting notes: Explorer has the same slow-click rename."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (a_slow_second_click_on_the_selected_name_renames_it_in_place); native/crates/ox-app/src/window/slow_click_rename.rs. A plain primary press on the name text (not the icon or the space beside it) of the item that is already the only one selected schedules a rename in place, which starts after the desktop's double-click interval (gtk-double-click-time) unless the second press of a double-click, a drag, another press, a changed selection or the window losing focus cancels it; nothing starts where Rename is not allowed. Explorer has the same slow-click rename."
 
 [[feature]]
 id = "OPS-012"
@@ -7386,8 +7392,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "trash:/ context menus; Trash place, Restore"
 gnome = "GVfs trash:/// with the 'trash::orig-path' and 'trash::deletion-date' attributes; trash:/// GVfs backend"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs: the Recycle Bin opens as a folder (address \"trash:///\" or \"Recycle Bin\") with its own item and background menus (Restore, Delete permanently, Properties; Empty Recycle Bin), and an empty Recycle Bin says \"Recycle Bin is empty\" (empty_recycle_bin_asks_then_deletes_everything_in_it). Missing: the Original location and Date deleted columns of the details view, and a sidebar entry."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs: the Recycle Bin opens as a folder (address \"trash:///\" or \"Recycle Bin\") with its own item and background menus (Restore, Delete permanently, Properties; Empty Recycle Bin), and an empty Recycle Bin says \"Recycle Bin is empty\" (empty_recycle_bin_asks_then_deletes_everything_in_it); its details view shows each item's Original location and Date deleted in place of Date modified, both sortable (the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted); the sidebar has a Recycle Bin entry (the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere)."
 
 [[feature]]
 id = "OPS-041"
@@ -7428,8 +7434,8 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "Trash::empty; Places “Empty Trash” (KIO::emptyTrash)"
 gnome = "Delete the children of trash:/// (as Nautilus 'Empty Trash'); Delete each top-level child of trash:/// (Nautilus EmptyTrash)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_then_deletes_everything_in_it); native/crates/ox-app/src/window/file_ops/availability.rs disables it while the Recycle Bin is empty. Missing: the sidebar entry."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_then_deletes_everything_in_it: from the Recycle Bin's background menu; the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere: from the sidebar entry's menu, from any folder); native/crates/ox-app/src/window/file_ops/availability.rs disables it while the Recycle Bin is empty. Both ask \"Empty Recycle Bin?\" first unless the setting says not to (SET-010)."
 
 [[feature]]
 id = "OPS-043"
@@ -7515,8 +7521,8 @@ python_tests = []
 bridge = ["operate", "cancel"]
 dolphin = "KIO::SkipDialog through AskUserActionInterface::askUserSkip (Retry, Skip, Skip All, Cancel)"
 gnome = "Nautilus file-operation error dialogs (Skip, Skip All, Retry, Cancel)"
-native = "todo"
-native_note = "Existing OpenXplorer part (record the error, continue and list it at the end) is protected by OPS-023. Porting notes: 'Skip all' must end in the OPS-023 report. OPS-028 covers name conflicts only."
+native = "done"
+native_note = "native/crates/ox-core/tests/transfer_cases/gio_engine.rs (a_failed_item_is_retried_or_skipped_as_answered); native/crates/ox-core/src/transfer/item_failure.rs; native/crates/ox-app/src/window/file_ops/failure_dialog.rs (window/tests/worker_questions.rs, the_failed_item_dialog_answers_retry_skip_all_or_cancel_to_the_worker). When an item of a copy, move, Trash or delete fails for a reason other than a name conflict, a cancellation or a problem that needs recovery by hand, the engine asks from its worker thread: the dialog 'Error while copying “name”' shows the error and offers Cancel, 'Skip all' (with more items to come), Skip and Retry. Retry removes the item's staging and runs it again; Skip and 'Skip all' record '<name>: <error>' as before, 'Skip all' for the rest of the operation without asking; Cancel records it and stops, keeping what is done. Every failure still appears in the result (OPS-023), and a skipped item's staging is removed. Without an asker (background and non-interactive runs) or when the window cannot show the dialog, the error is recorded and the next item runs."
 
 [[feature]]
 id = "OPS-048"
@@ -12073,8 +12079,8 @@ python_tests = []
 bridge = ["openTerminal"]
 dolphin = "show_terminal_panel: F4; focus_terminal_panel: Ctrl+Shift+F4; Dolphin Terminal panel (F4, Konsole KPart)"
 gnome = "VTE for GTK4 (vte-2.91-gtk4) VteTerminal spawn_async with a working directory"
-native = "todo"
-native_note = "Porting notes: Shortcut conflict, Explorer wins: F4 opens the address-bar list in Explorer. Same directory validation as Open in Terminal; never type filename-derived commands into the shell."
+native = "partial"
+native_note = "Not embedded: Dolphin's panel hosts Konsole, and the GTK 4 equivalent is VTE (vte-2.91-gtk4), which this app cannot link on every supported target: the CI and package containers (native/packaging/ci/prepare-container.sh for Fedora, openSUSE, Arch, Debian and Ubuntu 24.04) do not install it, the development machine has only the GTK 3 libvte, and inside the Flatpak a VTE shell would run in the sandbox instead of the host (it would need flatpak-spawn --host and a host-side directory tracker). Adding it is an owner decision on a new system dependency for every package. What exists: View > Terminal and Ctrl+Shift+F4 (Dolphin's Terminal panel key) open the desktop's configured terminal in the folder shown, with Open in Terminal's directory validation (OPEN-021); F4 stays Explorer's address-bar list. Missing: the embedded panel, cd in it moving the view, and the close confirmation while a program runs there. Test: window/tests/command_bar.rs."
 
 [[feature]]
 id = "OPEN-023"
@@ -14478,7 +14484,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/look.rs (a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance): 510 px, content colour of each appearance, accent Save button. Refined to WinUI ContentDialog (8 px radius, 24 px padding, footer on the chrome colour, 32 px buttons, @ox_critical_fill danger button); in-window dialogs (dialog_layer) cap the width at the window less 30 px."
+native_note = "native/crates/ox-app/src/window/tests/look.rs (a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance): 510 px, content colour of each appearance, accent Save button. Refined to WinUI ContentDialog (8 px radius, 24 px padding, footer on the chrome colour, 32 px buttons, @ox_critical_fill danger button); in-window dialogs (dialog/layer.rs) cap the width at the window less 30 px."
 
 [[feature]]
 id = "LOOK-021"
@@ -14771,8 +14777,8 @@ python_tests = [
 ]
 bridge = ["newWindow"]
 dolphin = "dolphin --select / --split / --new-window / --daemon"
-native = "todo"
-native_note = "Not done: the native app has no split view yet (tracked with VIEW), so --split has nothing to open. Add the option together with split view."
+native = "done"
+native_note = "--split [locations] pairs the locations into split tabs (a lone one is split with itself; none splits the startup folder): in a new window when none is open, --new-window is given or Settings opens folders from other apps in a new window, else as new tabs of the active window (native/crates/ox-app/src/application/command_line.rs, state.rs open_split, window/split_view.rs open_split_tabs). Tests: native/crates/ox-app/src/application/state.rs (split_pairs_its_locations_and_new_windows_open_at_the_startup_folder), command_line.rs (each_option_asks_for_its_own_action)."
 
 [[feature]]
 id = "INT-006"
@@ -15460,8 +15466,8 @@ python_tests = []
 bridge = []
 dolphin = "KI18n throughout, with translations for about 89 languages in po/; Configure › Switch Application Language"
 gnome = "gettext (bindtextdomain, ngettext) with installed .mo files for Rust and GtkBuilder strings; GTK text direction from the locale (gtk_widget_get_default_direction); msgfmt --desktop and --xml for the .desktop file and metainfo"
-native = "todo"
-native_note = "Porting notes: The Python app is English-only, and features.toml quotes English source strings; keep them as msgids so the inventory stays testable. Translatable strings are cheap from the first native commit and expensive to retrofit. Decide whether the Windows 11 layout mirrors for right-to-left languages. Dates already follow the locale (VIEW-001, LOOK-026)."
+native = "partial"
+native_note = "The infrastructure is in place: ox_core::i18n reads gettext .mo catalogues itself (no FFI; plural rules from the Plural-Forms expression, message contexts) and, at start-up, installs the catalogue of the first language g_get_language_names gives (LANGUAGE, LC_ALL, LC_MESSAGES, LANG) found as <XDG data dir>/locale/<lang>/LC_MESSAGES/openxplorer.mo, so /usr/share, /usr/local/share and the Flatpak's /app/share all work; English, the msgid, is the fallback. native/tools/i18n.py extracts every gettext, ngettext and pgettext call into the English template native/po/openxplorer.pot (check.py fails when it is stale) and compiles native/po/<lang>.po; package_data.py installs each compiled catalogue for every package format. No translation is committed (no machine translations). Strings through it so far: the command bar's New, Sort, View, More options and appearance menus, the folder tree's menu, and the status bar's counts with plural forms ('{count} item'). Still to do: the remaining hard-coded strings (about 2,800 literals in some 360 files, best done as one mechanical pass after the parallel tracks merge, to avoid conflicts), the GtkBuilder templates' strings (translatable=\"yes\" and a lookup after the template is built, since GtkBuilder's own translation needs bindtextdomain through FFI), the .desktop and metainfo translations (msgfmt --desktop/--xml), and an owner decision on right-to-left languages: GTK mirrors boxes, arrows and the caption buttons by itself from its own translations; whether the Windows 11 layout should mirror is not decided. Stable error codes (OPS-037) never go through the catalogue. Tests: crates/ox-core/src/i18n.rs, tools/test_i18n.py."
 
 [[feature]]
 id = "UPD-001"
@@ -16157,7 +16163,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (closing_a_dialog_gives_focus_back_to_the_control_that_had_it, a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button); native/crates/ox-app/src/dialog_layer.rs (in-window dialogs make the content under them take neither focus nor clicks). A dialog is a modal window over the browser window, so the covered content is inert, every focusable widget (text areas and links included) is in its Tab cycle, and closing it gives focus back to the control that had it, which GTK keeps as the window's focus widget."
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (closing_a_dialog_gives_focus_back_to_the_control_that_had_it, a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button); native/crates/ox-app/src/dialog/layer.rs (in-window dialogs make the content under them take neither focus nor clicks). A dialog is a modal window over the browser window, so the covered content is inert, every focusable widget (text areas and links included) is in its Tab cycle, and closing it gives focus back to the control that had it, which GTK keeps as the window's focus widget."
 
 [[feature]]
 id = "ACC-006"
@@ -16782,8 +16788,8 @@ python_tests = [
   "v2.0.0:desktop/tests/test_entry_model.py::EntryModelTests::test_virtual_bad_scheme_is_not_followed",
 ]
 bridge = ["normalise", "authReply", "connect", "bookmark", "pin"]
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); address rejection compared with Python in native/crates/ox-core/tests/location_python.rs; native/crates/ox-app/src/network/sign_in_queue/tests.rs (connect_hands_gvfs_the_account_and_empties_the_password: the password field is emptied before the answer leaves the dialog and neither field is spell-checked); native/crates/ox-app/src/dialogs/network_map.rs (the Map dialog note says no passwords are saved in settings). The sign-in dialog empties the password on dismiss and keeps it in non-pageable memory. SMB addresses still refuse any user name. SFTP, FTP and WebDAV addresses accept a plain user name (sftp://anna@host/), as Dolphin, Files and GVfs expect, since an SSH account is not a secret; a password, an escaped or empty user, and any user on NFS are refused (native/crates/ox-core/src/location/normalise/remote.rs, sftp_ftp_webdav_and_nfs_urls_are_canonical). Such a user name can reach settings.json, tab titles, the clipboard and GTK's recent-servers list."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/stored_location.rs (settings_keep_remote_addresses_without_the_user_name); native/crates/ox-core/src/settings/mutate.rs (a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); address rejection compared with Python in native/crates/ox-core/tests/location_python.rs; native/crates/ox-core/src/location/display.rs (remote_addresses_show_their_path_decoded: Copy path and Copy address leave the user out, and a tab titles a server root by its host); native/crates/ox-app/src/network/sign_in_queue/tests.rs (connect_hands_gvfs_the_account_and_empties_the_password: the password field is emptied before the answer leaves the dialog and neither field is spell-checked); native/crates/ox-app/src/dialogs/network_map.rs (the Map dialog note says no passwords are saved in settings). The sign-in dialog empties the password on dismiss and keeps it in non-pageable memory. SMB addresses refuse any user name. SFTP, FTP and WebDAV addresses accept a plain user name for the session (sftp://anna@host/), as Dolphin, Files and GVfs need it to reach that account; a password, an escaped or empty user, and any user on NFS are refused (native/crates/ox-core/src/location/normalise/remote.rs). As for SMB, the user name never leaves the session: settings.json stores pins, saved shares, the Quick access order and recent files without it (location::without_user, also when reading an older file), GTK's recent-servers list gets the address without it (network/recent_servers.rs), Copy path, Copy address and Properties' Copy full path copy it without it, and a tab or window titled by the server root shows the host only. The address bar still shows it, so editing the address keeps the account; the file clipboard (Copy/Cut of items) keeps GIO's URIs so a paste reaches the same mount."
 
 [[feature]]
 id = "SAFE-011"
@@ -16853,7 +16859,7 @@ sources = [
 python_tests = ["v2.0.0:desktop/tests/ui_regressions.cjs::Navigation supersedes a delayed activation"]
 bridge = ["cancel"]
 native = "done"
-native_note = "Every late reply is dropped. Listings: load generations per tab (window/session.rs, old_results_cannot_repopulate_a_navigated_or_closed_tab). Typed addresses and file locations: each tab keeps its own newest lookup (window/tests/opening.rs, navigating_drops_a_typed_address_that_answers_late, a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it). Searches: search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results). Archive listings: a generation (archive_view/browser.rs; window/tests/archives.rs, a_late_archive_listing_never_replaces_a_newer_one, which delivers the older Docs listing after the newer top listing and fails without the check). Extraction preflight: closing the Extract dialog cancels the check and an answer after that is ignored (archive_view/extract_dialog.rs; window/tests/archives.rs, closing_the_extract_dialog_drops_its_check). Discovery: Stop aborts the passes (network/discovery.rs, a_pass_that_answers_after_stop_is_ignored). Map network location: closing the dialog aborts the connection (window/dialog.rs, Dialog::run; dialogs/network_map.rs, a_connection_that_answers_after_cancel_is_ignored). Properties: a read that answers after the dialog closed is ignored (properties/view.rs) and a Previous versions lookup overtaken by Refresh is dropped by its generation (properties/versions_panel.rs); window/tests/late_replies.rs, a_properties_read_after_close_changes_nothing, a_versions_lookup_overtaken_by_refresh_is_dropped."
+native_note = "Every late reply is dropped. Listings: load generations per tab (window/session.rs, old_results_cannot_repopulate_a_navigated_or_closed_tab). Typed addresses and file locations: each tab keeps its own newest lookup (window/tests/opening.rs, navigating_drops_a_typed_address_that_answers_late, a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it). Searches: search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results). Archive listings: a generation (archive_view/browser.rs; window/tests/archives.rs, a_late_archive_listing_never_replaces_a_newer_one, which delivers the older Docs listing after the newer top listing and fails without the check). Extraction preflight: closing the Extract dialog cancels the check and an answer after that is ignored (archive_view/extract_dialog.rs; window/tests/archives.rs, closing_the_extract_dialog_drops_its_check). Discovery: Stop aborts the passes (network/discovery.rs, a_pass_that_answers_after_stop_is_ignored). Map network location: closing the dialog aborts the connection (dialog/window.rs, Dialog::run; dialogs/network_map.rs, a_connection_that_answers_after_cancel_is_ignored). Properties: a read that answers after the dialog closed is ignored (properties/view.rs) and a Previous versions lookup overtaken by Refresh is dropped by its generation (properties/versions_panel.rs); window/tests/late_replies.rs, a_properties_read_after_close_changes_nothing, a_versions_lookup_overtaken_by_refresh_is_dropped."
 
 [[feature]]
 id = "SAFE-014"
@@ -17034,4 +17040,5 @@ python_tests = []
 bridge = ["environment", "open", "openWith"]
 dolphin = "KDE Activities privacy “Remember opened documents”"
 gnome = "GSettings org.gnome.desktop.privacy remember-recent-files and recent-files-max-age (GtkRecentManager honours them automatically)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (recent_files_follow_the_desktop_history_setting); native/crates/ox-app/src/app_context/recent_privacy.rs. The app follows GNOME's org.gnome.desktop.privacy, as Nautilus does: while remember-recent-files is off (or recent-files-max-age is 0) an opened file or visited folder is added neither to the desktop's recently used list nor to settings.json, the recent files settings.json holds are forgotten, and the sidebar hides Recent files; with a recent-files-max-age of N days, files opened longer ago are forgotten (settings.json now keeps an \"opened\" time per entry; entries the Python app wrote have none and count as old). The sidebar's Recent files has a menu with \"Clear recent files\", which empties the app's list and the desktop's (GtkRecentManager::purge_items). Without the GNOME schema everything is remembered, as before. GtkRecentManager prunes the desktop's own list by the same settings."

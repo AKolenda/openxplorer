@@ -1,0 +1,224 @@
+# OpenXplorer interface messages.
+# SPDX-License-Identifier: AGPL-3.0-only
+# Written by native/tools/i18n.py extract; do not edit by hand.
+msgid ""
+msgstr ""
+"Project-Id-Version: OpenXplorer\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "About this build"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Ascending"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "CSV file"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Cache this folder for search"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Dark appearance"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Default file explorer…"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Descending"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Details"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Details pane"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "File…"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Folder"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Folder tree"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "From template…"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "HTML document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Invert selection"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "JSON file"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Larger text"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "License & source"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Light appearance"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Link to file or folder…"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Map network location"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Markdown document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Navigation pane"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "New window"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Pin current folder"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Reset text size"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Select all"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Select items matching…"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Select none"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Settings"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Show hidden files"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Smaller text"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Terminal"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Text document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Use system appearance"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Copy"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Cut"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Delete permanently"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Limit to home folder"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Move to Trash"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Open in Terminal"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Open in new tab"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Open in new window"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Paste"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Properties"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Rename…"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Scroll to the folder shown"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Show hidden folders"
+msgstr ""
+
+#: crates/ox-app/src/window/status_bar.rs
+msgid "Loading…"
+msgstr ""
+
+#: crates/ox-app/src/window/status_bar.rs
+msgid "Ready"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/status_bar.rs
+msgid "{count} item"
+msgid_plural "{count} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/status_bar.rs
+msgid "{count} selected"
+msgid_plural "{count} selected"
+msgstr[0] ""
+msgstr[1] ""

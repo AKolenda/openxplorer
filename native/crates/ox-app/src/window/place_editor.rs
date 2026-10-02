@@ -21,9 +21,9 @@ use ox_core::transfer::Cancellation;
 
 use crate::settings_store::Change;
 
-use super::dialog::Dialog;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 
 /// The add dialog's heading and note.
 const ADD_TITLE: &str = "Add entry";

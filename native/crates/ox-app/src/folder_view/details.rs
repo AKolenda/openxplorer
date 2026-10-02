@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The details view: Name, Date modified, Type and Size columns, with
-//! Folder path in place of Date modified while searching.
+//! Folder path in place of Date modified while searching, and the columns
+//! the user adds from the header's menu ([`column_choice`]).
 //!
 //! Matches the `.column-head` / `.file-row` grid in `v2.0.0:desktop/ui/style.css`
 //! and `renderRows` / `applyColumnLayout` in `v2.0.0:desktop/ui/app.js`. Columns
@@ -8,27 +9,37 @@
 //! their headers; sizes and the Size title are right-aligned.
 //! [`DetailsView`] is the widget; it keeps its titles' sort arrows in step
 //! with the sort order and reports the column widths once a resize
-//! settles. [`column_fit`] fits and nudges columns from their titles.
+//! settles. [`column_fit`] fits and nudges columns from their titles;
+//! [`column_text`] says what each column shows.
 
+mod column_choice;
 mod column_fit;
+pub(crate) mod column_text;
+mod group_headers;
 
+pub(crate) use group_headers::GroupTitle;
+
+use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::format;
-use ox_core::search::display_path;
+use ox_core::format::DateStyle;
 use ox_core::settings::{ColumnWidth, ColumnWidths};
 
-use crate::folder_view::cells::{self, CellLayout, CellOwners, CellTooltip};
+pub(crate) use column_choice::chosen_from_keys;
+pub(crate) use column_text::cell_text;
+
+use crate::folder_view::cells::{self, CellLayout, CellOwners};
 use crate::folder_view::column_keys;
 use crate::folder_view::column_titles;
 use crate::folder_view::column_widths;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::model::{self, FolderModel};
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
+use crate::folder_view::tree::FolderTree;
 
 /// Icon edge in details rows (`.name-cell svg{height:21px}`).
 const ROW_ICON_SIZE: i32 = 21;
@@ -41,45 +52,27 @@ const RESIZE_SETTLE: Duration = Duration::from_millis(500);
 /// unchanged for [`RESIZE_SETTLE`].
 const COLUMNS_RESIZED: &str = "columns-resized";
 
-/// The text `column` shows for `item`. A folder shows its measured size
-/// once measured, and an empty Size cell before; a file of unknown size
-/// shows `—` (`prettyBytes` in app.js).
-pub(crate) fn cell_text(column: SortColumn, item: &FileItem) -> String {
-    let entry = item.entry();
-    match column {
-        SortColumn::Name => entry.name.clone(),
-        SortColumn::Modified => format::date_short_time_text(entry.modified),
-        SortColumn::FolderPath => item.folder_path().text.clone(),
-        SortColumn::Type => entry.type_label.clone(),
-        SortColumn::Size => match item.folder_size() {
-            Some(measured) => measured.size_text(),
-            None if entry.is_dir => String::new(),
-            None => format::size_text(item.file_size()),
-        },
-    }
-}
+/// The signal a [`DetailsView`] emits once the user dragged a column to
+/// another place.
+const COLUMNS_CHOSEN: &str = "columns-chosen";
 
-/// The tooltip of `column`'s cell for `item` in place of the row's
-/// (`renderRows` in app.js): a search result's full path in Folder path,
-/// how a measured folder size was counted in Size, else none.
-fn cell_tooltip(column: SortColumn) -> CellTooltip {
-    match column {
-        SortColumn::FolderPath => |item| Some(display_path(&item.entry().uri)),
-        SortColumn::Size => |item| item.folder_size().map(|measured| measured.cell_tooltip()),
-        SortColumn::Name | SortColumn::Modified | SortColumn::Type => |_| None,
-    }
-}
-
-/// The Name column's cells: the item's icon beside its name.
-fn name_factory(owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
+/// The Name column's cells: the item's icon beside its name, after the
+/// arrow of a folder that expands in `tree`.
+fn name_factory(owners: &Rc<CellOwners>, tree: &FolderTree) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     cells::connect_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON_SIZE, owners);
+    cells::connect_expanders(&factory, tree);
     factory
 }
 
 /// The cells of the Date modified, Folder path, Type or Size column: one
 /// dim label, registered in `owners`, which dims the cells of cut items.
-fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
+/// Dates are written in the style `dates` holds when a cell is bound.
+fn text_factory(
+    column: SortColumn,
+    owners: &Rc<CellOwners>,
+    dates: &Rc<Cell<DateStyle>>,
+) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let setup_owners = Rc::clone(owners);
     factory.connect_setup(move |_, object| {
@@ -91,28 +84,46 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
         let list_item = cells::as_list_item(object);
         list_item.set_child(Some(&label));
         setup_owners.register(&label, list_item);
-        cells::show_row_tooltip(&label, &setup_owners, cell_tooltip(column));
+        cells::show_row_tooltip(&label, &setup_owners, column_text::cell_tooltip(column));
     });
     let bind_owners = Rc::clone(owners);
+    let dates = Rc::clone(dates);
     factory.connect_bind(move |_, object| {
         let list_item = cells::as_list_item(object);
         let label = list_item.child().and_downcast::<gtk::Label>();
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
-            label.set_text(&cell_text(column, &item));
+            label.set_text(&cell_text(column, &item, dates.get()));
             bind_owners.style_cell(&label, &item);
+            if column == SortColumn::Size {
+                column_text::request_item_count(&label, &item, &bind_owners);
+            }
         }
     });
     factory
 }
 
-/// A resizable column showing `column`, sorted by its header.
-fn new_view_column(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::ColumnViewColumn {
-    let factory = match column {
-        SortColumn::Name => name_factory(owners),
-        SortColumn::Modified | SortColumn::FolderPath | SortColumn::Type | SortColumn::Size => {
-            text_factory(column, owners)
+/// What the columns' cells share: the registry they are kept in, how dates
+/// are written, and the folders that expand.
+#[derive(Debug)]
+struct CellContext {
+    owners: Rc<CellOwners>,
+    dates: Rc<Cell<DateStyle>>,
+    tree: FolderTree,
+}
+
+impl CellContext {
+    /// The factory of `column`'s cells.
+    fn factory(&self, column: SortColumn) -> gtk::SignalListItemFactory {
+        match column {
+            SortColumn::Name => name_factory(&self.owners, &self.tree),
+            _ => text_factory(column, &self.owners, &self.dates),
         }
-    };
+    }
+}
+
+/// A resizable column showing `column`, sorted by its header.
+fn new_view_column(column: SortColumn, cells: &CellContext) -> gtk::ColumnViewColumn {
+    let factory = cells.factory(column);
     let view_column = gtk::ColumnViewColumn::new(Some(column.label()), Some(factory));
     view_column.set_id(Some(column.as_str()));
     view_column.set_resizable(true);
@@ -141,20 +152,56 @@ pub(crate) enum DetailsListing {
     /// The results of a search, which show Folder path in place of Date
     /// modified (`columnFields` in app.js, VIEW-042).
     SearchResults,
+    /// The Recycle Bin's items, which show Original location and Date
+    /// deleted in place of Date modified (VIEW-062).
+    RecycleBin,
+}
+
+/// Whether `listing` has `column` at all, whatever the room.
+const fn lists_column(listing: DetailsListing, column: SortColumn) -> bool {
+    match column {
+        SortColumn::Modified => matches!(listing, DetailsListing::Folder),
+        SortColumn::FolderPath => matches!(listing, DetailsListing::SearchResults),
+        SortColumn::OriginalLocation | SortColumn::Deleted => matches!(listing, DetailsListing::RecycleBin),
+        _ => true,
+    }
+}
+
+/// Whether settings save `column`'s width while the view lists
+/// `listing`: of the columns sharing a saved width, the one the listing
+/// has, else the first.
+fn saves_width(column: SortColumn, listing: DetailsListing) -> bool {
+    let shared = column_widths::settings_column(column);
+    let sharing = || {
+        SortColumn::ALL
+            .into_iter()
+            .filter(move |other| column_widths::settings_column(*other) == shared)
+    };
+    let owner = sharing()
+        .find(|other| lists_column(listing, *other))
+        .or_else(|| sharing().next());
+    owner == Some(column)
 }
 
 /// Whether `column` is shown in a window with room for `columns` while it
-/// lists `listing` (the `.searching` rules of `style.css` included).
-const fn is_column_shown(column: SortColumn, columns: DetailsColumns, listing: DetailsListing) -> bool {
+/// lists `listing` (the `.searching` rules of `style.css` included), when
+/// the user chose to show the columns in `chosen`.
+fn is_column_shown(
+    column: SortColumn,
+    columns: DetailsColumns,
+    listing: DetailsListing,
+    chosen: &[SortColumn],
+) -> bool {
     let is_roomy = matches!(columns, DetailsColumns::All);
-    let is_folder = matches!(listing, DetailsListing::Folder);
-    match column {
-        SortColumn::Name => true,
-        SortColumn::Modified => is_folder && is_roomy,
-        SortColumn::FolderPath => !is_folder,
-        SortColumn::Type => is_roomy,
-        SortColumn::Size => is_roomy || is_folder,
-    }
+    let is_search = matches!(listing, DetailsListing::SearchResults);
+    lists_column(listing, column)
+        && match column {
+            SortColumn::Name | SortColumn::FolderPath | SortColumn::OriginalLocation => true,
+            SortColumn::Deleted => is_roomy,
+            _ if !chosen.contains(&column) => false,
+            SortColumn::Size => is_roomy || !is_search,
+            _ => is_roomy,
+        }
 }
 
 mod imp {
@@ -166,7 +213,8 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{DetailsColumns, DetailsListing, COLUMNS_RESIZED};
+    use super::{DetailsColumns, DetailsListing, COLUMNS_CHOSEN, COLUMNS_RESIZED};
+    use crate::folder_view::sorting::SortColumn;
 
     /// Private state of [`super::DetailsView`].
     #[derive(Debug, Default)]
@@ -188,6 +236,13 @@ mod imp {
         pub(super) columns: Cell<DetailsColumns>,
         /// Whether the view lists a folder or search results.
         pub(super) listing: Cell<DetailsListing>,
+        /// The columns the user chose to show after Name, in their order.
+        pub(super) chosen: RefCell<Vec<SortColumn>>,
+        /// Set while the view puts its own columns in order, which is not
+        /// the user reordering them.
+        pub(super) arranging: Cell<bool>,
+        /// What the cells share, set by [`super::DetailsView::new`].
+        pub(super) cells: OnceCell<super::CellContext>,
     }
 
     #[glib::object_subclass]
@@ -206,17 +261,22 @@ mod imp {
     impl ObjectImpl for DetailsView {
         fn signals() -> &'static [Signal] {
             static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
-            SIGNALS.get_or_init(|| vec![Signal::builder(COLUMNS_RESIZED).build()])
+            SIGNALS.get_or_init(|| {
+                vec![
+                    Signal::builder(COLUMNS_RESIZED).build(),
+                    Signal::builder(COLUMNS_CHOSEN).build(),
+                ]
+            })
         }
 
         fn constructed(&self) {
             self.parent_constructed();
             let column_view = &self.column_view;
             column_view.add_css_class("files");
-            column_view.set_enable_rubberband(true);
             column_view.set_show_row_separators(false);
             column_view.set_show_column_separators(false);
-            column_view.set_reorderable(false);
+            // Titles are dragged to reorder the columns (VIEW-034).
+            column_view.set_reorderable(true);
             column_view.set_tab_behavior(gtk::ListTabBehavior::Item);
             self.scroller.set_child(Some(column_view));
             self.scroller.set_parent(&*self.obj());
@@ -247,9 +307,19 @@ impl DetailsView {
     pub(crate) fn new(model: &FolderModel, owners: &Rc<CellOwners>) -> Self {
         let view: Self = glib::Object::new();
         let column_view = view.column_view();
+        let cells = CellContext {
+            owners: Rc::clone(owners),
+            dates: Rc::default(),
+            tree: model.tree().clone(),
+        };
         for column in SortColumn::ALL {
-            column_view.append_column(&new_view_column(column, owners));
+            column_view.append_column(&new_view_column(column, &cells));
         }
+        view.imp().chosen.replace(column_choice::default_chosen());
+        view.imp()
+            .cells
+            .set(cells)
+            .expect("DetailsView::new sets the cells' context once");
         view.apply_column_widths(None);
         view.show_fitting_columns();
         view.watch_column_widths();
@@ -258,6 +328,7 @@ impl DetailsView {
         }
         view.add_sort_carets();
         view.install_column_fit();
+        view.follow_column_drags();
         column_keys::make_titles_keyboard_operable(&view);
         view.describe_rows(model);
         view.sort_by(SortOrder::DEFAULT);
@@ -316,8 +387,36 @@ impl DetailsView {
         };
         (0..items.n_items().min(limit))
             .filter_map(|position| items.item(position).and_downcast::<FileItem>())
-            .map(|item| cell_text(column, &item))
+            .map(|item| cell_text(column, &item, self.date_style()))
             .collect()
+    }
+
+    /// The cells' shared context, which `new` sets.
+    fn cells(&self) -> &CellContext {
+        self.imp()
+            .cells
+            .get()
+            .expect("DetailsView::new sets the cells' context")
+    }
+
+    /// How dates are written.
+    pub(crate) fn date_style(&self) -> DateStyle {
+        self.cells().dates.get()
+    }
+
+    /// Writes dates in `style` (VIEW-004), redrawing the date cells
+    /// shown.
+    pub(crate) fn set_date_style(&self, style: DateStyle) {
+        if self.cells().dates.replace(style) != style {
+            self.redraw_column(SortColumn::Modified);
+        }
+    }
+
+    /// Binds every shown cell of `column` again, through a new factory.
+    pub(crate) fn redraw_column(&self, column: SortColumn) {
+        if let Some(view_column) = self.column(column) {
+            view_column.set_factory(Some(&self.cells().factory(column)));
+        }
     }
 
     /// The column view's column for `column`.
@@ -342,14 +441,39 @@ impl DetailsView {
     }
 
     /// Shows the columns of `listing`: Folder path in place of Date
-    /// modified for search results. A folder has no Folder path to sort
-    /// by, so a view sorted by it goes back to sorting by name.
+    /// modified for search results, Original location and Date deleted in
+    /// the Recycle Bin. A view sorted by a column only another listing
+    /// has, such as Folder path in a folder, goes back to sorting by name;
+    /// the Sort menu's columns sort every listing.
     pub(crate) fn show_listing(&self, listing: DetailsListing) {
-        self.imp().listing.set(listing);
+        let earlier = self.imp().listing.replace(listing);
+        if earlier != listing {
+            self.carry_shared_widths(earlier, listing);
+        }
         self.show_fitting_columns();
-        let sorts_by_folder_path = self.sort_order().column == SortColumn::FolderPath;
-        if listing == DetailsListing::Folder && sorts_by_folder_path {
+        let column = self.sort_order().column;
+        if !lists_column(listing, column) && !SortColumn::IN_SORT_MENU.contains(&column) {
             self.sort_by(SortOrder::DEFAULT);
+        }
+    }
+
+    /// Gives each column `listing` brings in the width of the column it
+    /// shares a saved width with in `earlier`, so a width the user set in
+    /// one listing holds in the other (Date deleted and Date modified).
+    fn carry_shared_widths(&self, earlier: DetailsListing, listing: DetailsListing) {
+        for (column, view_column) in self.view_columns() {
+            if !lists_column(listing, column) || lists_column(earlier, column) {
+                continue;
+            }
+            let shared = column_widths::settings_column(column);
+            let partner = SortColumn::ALL.into_iter().find(|other| {
+                *other != column
+                    && lists_column(earlier, *other)
+                    && column_widths::settings_column(*other) == shared
+            });
+            if let Some(partner) = partner.and_then(|partner| self.column(partner)) {
+                view_column.set_fixed_width(partner.fixed_width());
+            }
         }
     }
 
@@ -358,8 +482,9 @@ impl DetailsView {
     fn show_fitting_columns(&self) {
         let columns = self.imp().columns.get();
         let listing = self.imp().listing.get();
+        let chosen = self.imp().chosen.borrow().clone();
         for (column, view_column) in self.view_columns() {
-            view_column.set_visible(is_column_shown(column, columns, listing));
+            view_column.set_visible(is_column_shown(column, columns, listing, &chosen));
         }
     }
 
@@ -379,7 +504,11 @@ impl DetailsView {
     /// The widths the user set, in the form settings save them. Name
     /// counts only once it has a width of its own.
     fn widths_to_save(&self) -> Vec<ColumnWidth> {
-        let widths = self.view_columns().filter_map(|(column, view_column)| {
+        let listing = self.imp().listing.get();
+        let saved = self
+            .view_columns()
+            .filter(|(column, _)| saves_width(*column, listing));
+        let widths = saved.filter_map(|(column, view_column)| {
             let pixels = column_widths::saved_width(column, view_column.fixed_width())?;
             let column = column_widths::settings_column(column);
             Some(ColumnWidth { column, pixels })
@@ -461,7 +590,7 @@ impl DetailsView {
 
     /// The column and direction the view sorts by, or `None` while
     /// unsorted.
-    fn primary_sort(&self) -> Option<SortOrder> {
+    pub(crate) fn primary_sort(&self) -> Option<SortOrder> {
         let sorter = self.column_view().sorter();
         let sorter = sorter.and_downcast::<gtk::ColumnViewSorter>()?;
         let id = sorter.primary_sort_column()?.id()?;
@@ -529,9 +658,10 @@ mod tests {
 
     /// The columns shown with room for `columns` while listing `listing`.
     fn shown_columns(columns: DetailsColumns, listing: DetailsListing) -> Vec<SortColumn> {
+        let chosen = column_choice::default_chosen();
         let shown = SortColumn::ALL
             .into_iter()
-            .filter(|column| is_column_shown(*column, columns, listing));
+            .filter(|column| is_column_shown(*column, columns, listing, &chosen));
         shown.collect()
     }
 
@@ -613,6 +743,22 @@ mod tests {
             ColumnWidth {
                 column: Column::Size,
                 pixels: 90.0,
+            },
+            ColumnWidth {
+                column: Column::Created,
+                pixels: 176.0,
+            },
+            ColumnWidth {
+                column: Column::Extension,
+                pixels: 90.0,
+            },
+            ColumnWidth {
+                column: Column::Owner,
+                pixels: 110.0,
+            },
+            ColumnWidth {
+                column: Column::Permissions,
+                pixels: 110.0,
             },
         ];
         assert_eq!(

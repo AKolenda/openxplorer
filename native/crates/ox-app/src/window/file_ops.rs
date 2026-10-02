@@ -57,6 +57,7 @@ mod conflict_dialog;
 mod conflict_rename;
 mod delete;
 mod duplicate;
+mod failure_dialog;
 mod hide_confirm;
 mod inline_rename;
 mod jobs;

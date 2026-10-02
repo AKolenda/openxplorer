@@ -10,9 +10,9 @@
 use gtk::glib;
 use gtk::prelude::*;
 
-use super::dialog::Dialog;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 
 /// Whether `name` matches `pattern`, with `*` for any run of characters
 /// and `?` for exactly one, ignoring case.

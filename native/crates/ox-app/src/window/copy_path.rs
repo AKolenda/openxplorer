@@ -43,7 +43,7 @@ fn copied_path(selected: &[String], folder_uri: Option<&str>, locations: &Locati
     let addresses: Vec<String> = uris
         .into_iter()
         .filter(|uri| Page::from_uri(uri).is_none())
-        .map(|uri| locations.display_location(uri))
+        .map(|uri| locations.copied_location(uri))
         .collect();
     if addresses.is_empty() {
         return CopiedPath::NoFolder;

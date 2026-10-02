@@ -25,7 +25,7 @@ use crate::locations::Page;
 use crate::settings_page::{index_candidates, CandidateSources, Category, SettingsView};
 
 use super::actions::plain_action;
-use super::session::{TabId, TabPlacement};
+use super::session::TabId;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -114,7 +114,7 @@ impl BrowserWindow {
             self.switch_tab(id);
             return;
         }
-        if let Err(error) = self.open_tab(Page::Settings.uri(), TabPlacement::Foreground) {
+        if let Err(error) = self.add_tab(Page::Settings.uri()) {
             self.show_message(&error.to_string());
         }
     }

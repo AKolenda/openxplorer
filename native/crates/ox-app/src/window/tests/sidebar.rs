@@ -565,6 +565,62 @@ fn hidden_sections_and_places_are_listed_dimmed_and_shown_again() {
     assert!(preferences.hidden_sidebar_places.is_empty());
 }
 
+/// With the desktop's file history off, Recent files leaves the sidebar
+/// and the app forgets the files it recorded; it comes back with the
+/// history. Runs only on the in-memory settings backend of the test
+/// session, never on the user's.
+///
+/// parity: SAFE-022
+#[gtk::test]
+fn recent_files_follow_the_desktop_history_setting() {
+    if std::env::var("GSETTINGS_BACKEND").as_deref() != Ok("memory") {
+        return;
+    }
+    let Some(privacy) = gtk::gio::SettingsSchemaSource::default()
+        .and_then(|source| source.lookup("org.gnome.desktop.privacy", true))
+        .map(|_| gtk::gio::Settings::new("org.gnome.desktop.privacy"))
+    else {
+        return;
+    };
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let opened = ox_core::settings::RecentEntry {
+        uri: fixture.uri_of("Notes 2.txt"),
+        name: "Notes 2.txt".to_owned(),
+        type_label: "Text".to_owned(),
+        is_dir: false,
+        size: 20,
+        modified: 1,
+        opened: Some(1),
+    };
+    Settings::open(test.settings_directory())
+        .remember_open(opened)
+        .expect("the test settings take it");
+    test.context.reload_settings();
+    let recent_files = || test.context.settings_data().recent.len();
+    wait_until("the recent file to be read", || recent_files() == 1);
+    let shows_recent = || {
+        test.window
+            .sidebar()
+            .labels()
+            .contains(&"Recent files".to_owned())
+    };
+    wait_for_frames(&test.window, 3);
+    let menu = test.window.sidebar().right_click_row("Recent files");
+    let labels = menu.row_labels();
+    menu.popdown();
+
+    privacy
+        .set_boolean("remember-recent-files", false)
+        .expect("the memory backend takes it");
+    wait_until("Recent files to leave the sidebar", || !shows_recent());
+    wait_until("the recent file to be forgotten", || recent_files() == 0);
+    privacy.reset("remember-recent-files");
+    wait_until("Recent files to come back", shows_recent);
+
+    assert!(labels.contains(&"Clear recent files".to_owned()), "{labels:?}");
+}
+
 /// Recent locations lists the folders of the desktop's recently used list
 /// that still exist, honours the desktop's "remember recent files"
 /// setting, and its Clear forgets them.
