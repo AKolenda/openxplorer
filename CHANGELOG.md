@@ -17,7 +17,11 @@
   (`tidewater/tidewater`).
 - Open in archive manager no longer reopens the archive in OpenXplorer when
   OpenXplorer is the default application for ZIPs.
-- The ZIP's name in the Extract dialog no longer wraps mid-word.
+- The Extract dialog is as short as Explorer's: the folder field, Browse…,
+  "Show extracted files when finished", Cancel and Extract. The counts,
+  notes and Open in archive manager are behind the (i) button. A
+  password-protected ZIP now says so straight away and offers the archive
+  manager, instead of "Wait for the ZIP check to finish".
 - ZIPs can open like folders, as in Windows Explorer: Settings > Windows &
   tabs > Open ZIP files > Like a folder (Windows). The ZIP opens in the tab,
   with the address bar, crumbs, Back and Up working through it, Extract all

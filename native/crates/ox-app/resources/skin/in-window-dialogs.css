@@ -141,8 +141,6 @@ window.ox .version-actions button { min-height: 29px; padding: 0 7px; }
 .archive-row { border-spacing: 12px; }
 .archive-size { color: @ox_muted; }
 .archive-status { color: @ox_muted; padding-top: 10px; }
-.extract-source { border-spacing: 14px; margin-bottom: 15px; }
-.extract-source-name { font-weight: 600; }
 /* Browse… beside the folder field, as tall as the field. */
 window.ox ox-dialog-layer .ox-dialog button.extract-browse {
   min-height: 32px;
@@ -150,8 +148,16 @@ window.ox ox-dialog-layer .ox-dialog button.extract-browse {
   padding: 0 12px;
   border-radius: 4px;
 }
-.extract-summary { margin: 14px 0; }
-.extract-summary.error { color: @ox_error; }
+/* The round (i) button at the left of the Extract dialog's footer, and
+   the bubble it opens with what the dialog does not need to show. */
+window.ox ox-dialog-layer .ox-dialog .dialog-actions menubutton.extract-info > button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 16px;
+}
+.extract-info-text { border-spacing: 8px; padding: 6px; }
+.extract-info-text label { margin: 0; }
 
 /* The banner of a tab inside a snapshot (C35). */
 .snapshot-banner {

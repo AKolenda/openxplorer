@@ -133,7 +133,6 @@ const FONT_SIZES: &[FontSize] = &[
     font(".ox-dialog", 12.0),
     font(".properties-dialog .dialog-title", 18.0),
     font(".ox-dialog .property-name-heading", 14.0),
-    font(".ox-dialog .extract-source-name", 15.0),
     font(".ox-dialog .versions-empty-heading", 13.0),
     font(".snapshot-banner", 12.0),
     font(".snapshot-tab-badge", 12.0),
