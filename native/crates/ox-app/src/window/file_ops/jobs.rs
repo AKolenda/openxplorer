@@ -57,12 +57,13 @@ impl BrowserWindow {
         let mut context = OperationContext::new(self.context().write_protection());
         context.unstorable = Some(self.unstorable_asker());
         context.move_by_copying = Some(self.move_by_copying_asker());
-        let panel = if !self.transfer_panel().is_busy() {
-            self.transfer_panel().clone()
-        } else {
+        context.item_failure = Some(self.failure_asker());
+        let panel = if self.transfer_panel().is_busy() {
             let panel: TransferPanel = glib::Object::new();
             self.imp().transfer_panels.append(&panel);
             panel
+        } else {
+            self.transfer_panel().clone()
         };
         panel.start(TransferKind::Files, label, context.cancel.clone());
         operations.jobs.push(Job {
@@ -125,6 +126,20 @@ mod tests {
         test.window.panel_for_operation(&first.cancel).cancel();
         assert!(first.cancel.is_cancelled());
         assert!(!second.cancel.is_cancelled());
+        let third = test
+            .window
+            .begin_transfer("Copying", &["file:///tmp/three".into()], None)
+            .unwrap();
+        let fourth = test
+            .window
+            .begin_transfer("Copying", &["file:///tmp/four".into()], None)
+            .unwrap();
+        assert!(test
+            .window
+            .begin_transfer("Copying", &["file:///tmp/five".into()], None)
+            .is_none());
+        test.window.end_transfer(&third.cancel);
+        test.window.end_transfer(&fourth.cancel);
         test.window.end_transfer(&first.cancel);
         assert!(test.window.is_writing_files());
         assert!(test.window.begin_operation("Exclusive archive").is_none());

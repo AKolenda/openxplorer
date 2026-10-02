@@ -19,29 +19,22 @@ use ox_core::integration::FOLDER_CONTENT_TYPE;
 /// The most folders the list shows.
 const MAX_RECENT_LOCATIONS: usize = 50;
 
-/// Whether the desktop lets applications remember recently used items,
-/// and for how many days; a negative age keeps them for ever.
-fn recent_history_policy() -> (bool, i32) {
-    gtk::Settings::default().map_or((true, -1), |settings| {
-        (
-            settings.is_gtk_recent_files_enabled(),
-            settings.gtk_recent_files_max_age(),
-        )
-    })
-}
-
 /// The folders of the desktop's recently used list, newest visit first,
 /// within the desktop's privacy settings.
 pub(crate) fn recent_folder_uris() -> Vec<String> {
-    let (enabled, max_age) = recent_history_policy();
-    if !enabled {
+    let policy = crate::app_context::desktop_recent_policy();
+    if !policy.remember {
         return Vec::new();
     }
     let mut folders: Vec<gtk::RecentInfo> = gtk::RecentManager::default()
         .items()
         .into_iter()
         .filter(|info| info.mime_type() == FOLDER_CONTENT_TYPE)
-        .filter(|info| max_age < 0 || info.age() <= max_age)
+        .filter(|info| {
+            policy
+                .max_age_days
+                .is_none_or(|days| u64::try_from(info.age()).is_ok_and(|age| age <= days))
+        })
         .collect();
     folders.sort_by_key(|info| std::cmp::Reverse(info.visited().to_unix()));
     folders
@@ -73,6 +66,10 @@ pub(crate) async fn list_recent_locations(on_batch: impl Fn(Vec<Entry>)) -> Resu
         // A folder that was removed, or a share that is not connected now,
         // is left out rather than listed broken.
         entries.extend(folder_entry(&uri).await);
+        if !crate::app_context::desktop_recent_policy().remember {
+            entries.clear();
+            break;
+        }
     }
     on_batch(entries);
     Ok(())

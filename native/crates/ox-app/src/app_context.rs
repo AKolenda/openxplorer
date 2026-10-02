@@ -30,6 +30,7 @@ mod saved_searches;
 mod search_cache;
 
 pub(crate) use default_open::add_to_desktop_history;
+pub(crate) use recent_privacy::desktop_recent_policy;
 
 use std::path::PathBuf;
 use std::rc::Rc;

@@ -457,6 +457,17 @@ impl Default for Preferences {
 }
 
 impl Preferences {
+    fn apply_service_actions(&mut self, keys: Option<&Vec<String>>) {
+        if let Some(keys) = keys.filter(|keys| {
+            keys.len() <= 256
+                && keys
+                    .iter()
+                    .all(|key| key.len() <= 4096 && !key.chars().any(char::is_control))
+        }) {
+            self.enabled_service_actions.clone_from(keys);
+        }
+    }
+
     /// Applies every valid value in `update` and silently ignores the rest,
     /// exactly like `update_preferences` in the Python app. A present
     /// `column_widths` replaces all saved column widths.
@@ -490,15 +501,7 @@ impl Preferences {
         replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
         replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
         replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
-        if let Some(keys) = &update.enabled_service_actions {
-            if keys.len() <= 256
-                && keys
-                    .iter()
-                    .all(|key| key.len() <= 4096 && !key.chars().any(char::is_control))
-            {
-                self.enabled_service_actions.clone_from(keys);
-            }
-        }
+        self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         let icon_size = update

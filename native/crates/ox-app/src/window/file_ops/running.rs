@@ -139,7 +139,7 @@ impl BrowserWindow {
             async move {
                 // The loop ends when the worker drops its sender.
                 while let Ok(progress) = report_queue.recv().await {
-                    if !cancel.is_cancelled() {
+                    if !cancel.is_cancelled() && panel.tracks(&cancel) {
                         panel.show_progress(&progress);
                     }
                 }
@@ -189,6 +189,7 @@ impl BrowserWindow {
     /// [`Self::run_request`], then [`Self::conclude_operation`], which
     /// selects `next`, the item that followed the removed ones (SEL-017).
     pub(super) async fn run_deletion(&self, request: &TransferRequest, next: Option<&str>) {
+        let origin = self.current_uri();
         let Some(outcome) = self.run_request(request).await else {
             return;
         };
@@ -196,7 +197,7 @@ impl BrowserWindow {
             select_after: next.map(str::to_owned).into_iter().collect(),
             ..FinishedOperation::of_transfer(request.mode, outcome)
         });
-        self.conclude_operation(finished).await;
+        self.conclude_operation_in(finished, origin.as_deref()).await;
     }
 
     /// Concludes an ended operation: Undo remembers it, the folder is
@@ -205,6 +206,17 @@ impl BrowserWindow {
     /// started). The toast of an operation Undo can reverse has an Undo
     /// button (OPS-032).
     pub(super) async fn conclude_operation(&self, outcome: Result<FinishedOperation, OpsError>) {
+        let origin = self.current_uri();
+        self.conclude_operation_in(outcome, origin.as_deref()).await;
+    }
+
+    /// Completion must not replace a selection made while browsing another folder.
+    pub(super) async fn conclude_operation_in(
+        &self,
+        outcome: Result<FinishedOperation, OpsError>,
+        origin: Option<&str>,
+    ) {
+        let still_here = self.current_uri().as_deref() == origin;
         match outcome {
             Ok(finished) => {
                 let is_undoable = finished.undo.is_some();
@@ -212,7 +224,9 @@ impl BrowserWindow {
                     self.context().record_operation(record);
                 }
                 let destination = Destination::items(finished.select_after.clone());
-                self.reload_selecting(finished.select_after);
+                if still_here {
+                    self.reload_selecting(finished.select_after);
+                }
                 match finished.summary {
                     OperationSummary::Toast(text) if is_undoable => {
                         // The toast has Undo; the desktop hears it too while
@@ -224,7 +238,9 @@ impl BrowserWindow {
                 }
             }
             Err(error) => {
-                self.reload_selecting(Vec::new());
+                if still_here {
+                    self.reload_selecting(Vec::new());
+                }
                 dialog::show_message(self, STOPPED_TITLE, &error.to_string()).await;
             }
         }

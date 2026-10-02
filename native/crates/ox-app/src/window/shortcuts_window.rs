@@ -76,7 +76,8 @@ fn describe(name: &str) -> Option<(Group, String)> {
     if let Some(view) = name.strip_prefix("win.view::") {
         let label = match view {
             "details" => "Details",
-            key => IconSize::from_key(key)?.label(),
+            "compact" => "Compact list",
+            key => IconSize::from_key(key)?.label()?,
         };
         return Some((Group::View, label.to_owned()));
     }
@@ -86,6 +87,8 @@ fn describe(name: &str) -> Option<(Group, String)> {
         "win.up" => (Group::Navigation, "Up to the containing folder"),
         "win.home" => (Group::Navigation, "Home folder"),
         "win.refresh" => (Group::Navigation, "Refresh"),
+        "win.split-view" => (Group::View, "Split view"),
+        "win.folder-tree" => (Group::View, "Folder tree"),
         "win.location" => (Group::Navigation, "Type an address"),
         "win.address-history" => (Group::Navigation, "Address history"),
         "region-next" => (Group::Navigation, "Next part of the window"),
@@ -177,19 +180,18 @@ fn shortcut_rows(app: &gtk::Application) -> (Vec<ShortcutRow>, Vec<String>) {
             unknown.push(name);
             continue;
         };
-        let index = match rows
+        let index = if let Some(index) = rows
             .iter()
             .position(|row| row.label == label && row.group == group)
         {
-            Some(index) => index,
-            None => {
-                rows.push(ShortcutRow {
-                    group,
-                    label,
-                    keys: Vec::new(),
-                });
-                rows.len() - 1
-            }
+            index
+        } else {
+            rows.push(ShortcutRow {
+                group,
+                label,
+                keys: Vec::new(),
+            });
+            rows.len() - 1
         };
         for key in key_labels(&keys) {
             if !rows[index].keys.contains(&key) {

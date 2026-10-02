@@ -118,4 +118,30 @@ mod tests {
         assert_eq!(check_cancelled(Some(&cancel)), Err(TransferError::Cancelled));
         assert_eq!(check_cancelled(None), Ok(()));
     }
+    /// parity: OPS-021
+    #[test]
+    fn paused_workers_resume_and_cancellation_wakes_them_without_resuming_other_jobs() {
+        let cancel = Cancellation::new();
+        cancel.pause();
+        let worker_cancel = cancel.clone();
+        let worker = std::thread::spawn(move || {
+            worker_cancel.wait_while_paused();
+            worker_cancel.check()
+        });
+        assert!(cancel.is_paused());
+        cancel.resume();
+        assert_eq!(worker.join().unwrap(), Ok(()));
+        let other = Cancellation::new();
+        other.pause();
+        cancel.pause();
+        let worker_cancel = cancel.clone();
+        let worker = std::thread::spawn(move || {
+            worker_cancel.wait_while_paused();
+            worker_cancel.check()
+        });
+        cancel.cancel();
+        assert_eq!(worker.join().unwrap(), Err(TransferError::Cancelled));
+        assert!(other.is_paused() && !other.is_cancelled());
+        other.resume();
+    }
 }

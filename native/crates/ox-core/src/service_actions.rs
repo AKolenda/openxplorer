@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Opt-in KDE ServiceMenus and Nautilus scripts. Definitions are data until
+//! Opt-in KDE `ServiceMenus` and Nautilus scripts. Definitions are data until
 //! explicitly enabled. File names become argv values, never shell source.
-//! Reference: https://develop.kde.org/docs/apps/dolphin/service-menus/
+//! Reference: <https://develop.kde.org/docs/apps/dolphin/service-menus/>
 mod command;
 pub use command::Command;
 use gio::prelude::*;
 use std::fs;
+use std::io::Read;
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -87,7 +89,7 @@ fn discover_in(data: &[PathBuf], scripts: &Path) -> Vec<ServiceAction> {
     }
     for path in files(scripts, 3, &mut remaining) {
         if fs::symlink_metadata(&path).is_ok_and(|m| m.permissions().mode() & 0o111 != 0) {
-            if let Some(id) = identity(&path) {
+            if let Some(id) = definition(&path).and_then(|bytes| identity(&path, &bytes)) {
                 let name = path.strip_prefix(scripts).unwrap_or(&path).display().to_string();
                 actions.push(ServiceAction {
                     id,
@@ -137,12 +139,24 @@ fn files(folder: &Path, depth: usize, remaining: &mut usize) -> Vec<PathBuf> {
     result
 }
 
-fn identity(path: &Path) -> Option<String> {
-    let bytes = fs::read(path).ok()?;
-    if bytes.len() > usize::try_from(MAX_BYTES).ok()? {
+fn definition(path: &Path) -> Option<Vec<u8>> {
+    let flags = i32::try_from(rustix::fs::OFlags::NOFOLLOW.bits()).ok()?;
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(flags)
+        .open(path)
+        .ok()?;
+    let metadata = file.metadata().ok()?;
+    if !metadata.is_file() || metadata.len() > MAX_BYTES || metadata.permissions().mode() & 0o022 != 0 {
         return None;
     }
-    let digest = glib::compute_checksum_for_data(glib::ChecksumType::Sha256, &bytes)?;
+    let mut bytes = Vec::new();
+    file.take(MAX_BYTES + 1).read_to_end(&mut bytes).ok()?;
+    (bytes.len() <= usize::try_from(MAX_BYTES).ok()?).then_some(bytes)
+}
+
+fn identity(path: &Path, bytes: &[u8]) -> Option<String> {
+    let digest = glib::compute_checksum_for_data(glib::ChecksumType::Sha256, bytes)?;
     Some(format!("{}#{digest}", path.display()))
 }
 
@@ -159,11 +173,17 @@ fn list(key: &glib::KeyFile, field: &str) -> Vec<String> {
 }
 
 fn desktop_actions(path: &Path) -> Vec<ServiceAction> {
-    let Some(id) = identity(path) else {
+    let Some(bytes) = definition(path) else {
+        return Vec::new();
+    };
+    let Ok(data) = std::str::from_utf8(&bytes) else {
+        return Vec::new();
+    };
+    let Some(id) = identity(path, &bytes) else {
         return Vec::new();
     };
     let key = glib::KeyFile::new();
-    if key.load_from_file(path, glib::KeyFileFlags::NONE).is_err()
+    if key.load_from_data(data, glib::KeyFileFlags::NONE).is_err()
         || key.boolean(GROUP, "Hidden").unwrap_or(false)
     {
         return Vec::new();
@@ -207,9 +227,12 @@ fn desktop_actions(path: &Path) -> Vec<ServiceAction> {
             let group = format!("Desktop Action {action}");
             let name = key.locale_string(&group, "Name", None).ok()?;
             let exec = key.string(&group, "Exec").ok()?.to_string();
-            if command::validate(&exec).is_err() {
-                return None;
-            }
+            let words = command::validate(&exec).ok()?;
+            let maximum = if words.iter().any(|word| word == "%f" || word == "%u") {
+                maximum.min(1)
+            } else {
+                maximum
+            };
             Some(ServiceAction {
                 id: format!("{id}:{action}"),
                 name: if prefix.is_empty() {
@@ -240,6 +263,7 @@ mod tests {
         let path = services.join("test.desktop");
         let definition = "[Desktop Entry]\nType=Service\nMimeType=text/plain;\nActions=view;\n[Desktop Action view]\nName=View safely\nExec=/usr/bin/cat %F\n";
         fs::write(&path, definition).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
         let actions = discover_in(&[temp.path().into()], &temp.path().join("scripts"));
         assert_eq!(actions.len(), 1);
         assert!(actions[0].accepts(&[("file:///tmp/notes".into(), "text/plain".into())]));
@@ -254,5 +278,31 @@ mod tests {
             actions[0].id,
             discover_in(&[temp.path().into()], &temp.path().join("scripts"))[0].id
         );
+    }
+    #[test]
+    fn nautilus_scripts_receive_separate_paths_and_expected_environment() {
+        let temp = tempfile::tempdir().unwrap();
+        let script = temp.path().join("Inspect files");
+        fs::write(&script, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+        let actions = discover_in(&[], temp.path());
+        assert_eq!(actions.len(), 1);
+        let command = actions[0]
+            .command(
+                &[
+                    "file:///tmp/one%20file".into(),
+                    "file:///tmp/%24%28example%29".into(),
+                ],
+                "file:///tmp",
+            )
+            .unwrap();
+        assert_eq!(command.argv[1..], ["/tmp/one file", "/tmp/$(example)"]);
+        assert!(command.environment.contains(&(
+            "NAUTILUS_SCRIPT_SELECTED_FILE_PATHS".into(),
+            "/tmp/one file\n/tmp/$(example)\n".into()
+        )));
+        assert!(actions[0]
+            .command(&["smb://server/share/file".into()], "file:///tmp")
+            .is_err());
     }
 }

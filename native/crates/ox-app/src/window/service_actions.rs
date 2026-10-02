@@ -2,11 +2,11 @@
 //! Installed service actions appear only after explicit per-action opt-in.
 use super::{
     actions::{plain_action, text_action},
-    dialog::{self, Dialog},
     menu_popover::{MenuEntry, MenuItem},
     window_action::WindowAction,
     BrowserWindow, ButtonStyle,
 };
+use crate::dialog::{self, Dialog};
 use crate::icons::Icon;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -52,6 +52,19 @@ impl BrowserWindow {
     }
 
     fn service_selection(&self) -> Vec<(String, String)> {
+        let locations = self.imp().locations.borrow();
+        if self
+            .current_uri()
+            .is_some_and(|uri| locations.is_snapshot_location(&uri))
+            || self
+                .folder_pane()
+                .model()
+                .selected_items()
+                .iter()
+                .any(|item| locations.is_snapshot_location(&item.entry().uri))
+        {
+            return Vec::new();
+        }
         self.folder_pane()
             .model()
             .selected_items()
@@ -177,6 +190,13 @@ impl BrowserWindow {
         {
             return;
         }
+        if self.imp().locations.borrow().is_snapshot_location(folder)
+            || selection
+                .iter()
+                .any(|(uri, _)| self.imp().locations.borrow().is_snapshot_location(uri))
+        {
+            return;
+        }
         // Discover again: replacing or editing an enabled definition revokes its opt-in.
         let actions = service_actions::discover().await;
         let Some(action) = actions
@@ -206,5 +226,25 @@ impl BrowserWindow {
         if let Err(error) = result {
             dialog::show_message(self, "Service action failed", &error).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_support::harness::{Fixture, TestWindow};
+    /// parity: CMD-024
+    #[gtk::test]
+    fn service_actions_never_receive_read_only_snapshot_selections() {
+        let fixture = Fixture::standard();
+        let normal = TestWindow::open(&fixture.uri());
+        normal.select_named("Notes 2.txt");
+        assert_eq!(normal.window.service_selection().len(), 1);
+        let folder = fixture.path(".zfs/snapshot/previous");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("example.txt"), "example").unwrap();
+        let snapshot = TestWindow::open(&ox_core::location::file_uri(&folder));
+        snapshot.select_named("example.txt");
+        assert!(snapshot.window.service_selection().is_empty());
+        assert!(snapshot.window.administrator_target().is_none());
     }
 }

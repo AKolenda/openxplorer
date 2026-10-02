@@ -98,6 +98,9 @@ impl BrowserWindow {
         self.apply_view_options();
         // Settings may have changed how items are shown.
         self.follow_item_preferences();
+        if self.current_uri().as_deref() == Some(ox_core::location::RECENT_LOCATIONS_URI) {
+            self.refresh();
+        }
     }
 
     /// The mount points of the kernel's CIFS and SMB3 mounts, as last read:
@@ -162,11 +165,16 @@ impl BrowserWindow {
         // (SAFE-022), as in Nautilus.
         let remembers = self.context().recent_policy().remember;
         let fixed = sidebar::recent_and_bin_entries(self.imp().trash_items.get());
-        entries.extend(
-            fixed
-                .into_iter()
-                .filter(|entry| remembers || entry.menu != Some(super::place_menus::PlaceMenu::RecentFiles)),
-        );
+        entries.extend(fixed.into_iter().filter(|entry| {
+            remembers
+                || !matches!(
+                    entry.menu,
+                    Some(
+                        super::place_menus::PlaceMenu::RecentFiles
+                            | super::place_menus::PlaceMenu::RecentLocations
+                    )
+                )
+        }));
         let (rows, anything_hidden) = self.shown_sidebar_rows(entries);
         self.sidebar().set_rows(rows, anything_hidden);
         if let Some(uri) = self.current_uri() {

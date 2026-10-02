@@ -6310,8 +6310,8 @@ python_tests = []
 bridge = []
 dolphin = "KFileItemActions service menus; KIO service menus (KFileItemActions, ~/.local/share/kio/servicemenus)"
 gnome = "Nautilus scripts in ~/.local/share/nautilus/scripts or nautilus-python extensions; Nautilus scripts directory and environment variables. Nautilus C/Python extensions (e.g. the installed nautilus-zorin-connect.py, libnautilus-fileroller) cannot be loaded by another app, so their functions need native equivalents"
-native = "todo"
-native_note = "Porting notes: Must stay opt-in (AGENTS.md: native actions opt-in) and keep the rule that filename-derived code never runs."
+native = "done"
+native_note = "Installed KDE ServiceMenus and executable Nautilus scripts are discovered on a worker from XDG data paths. Configure service actions enables each action explicitly; the opt-in key includes its definition digest, so edits revoke it. Matching MIME/protocol/selection-count actions appear in item menus. Arguments are expanded without a shell; embedded substitutions and interpreter commands are refused. Snapshot selections and folders never launch services. No downloader or third-party extension host is installed. Tests: native/crates/ox-core/src/service_actions.rs (installed_actions_are_filtered_and_changed_definitions_lose_their_opt_in_identity, nautilus_scripts_receive_separate_paths_and_expected_environment); service_actions/command.rs (filenames_cannot_become_shell_source); native/crates/ox-app/src/window/service_actions.rs (service_actions_never_receive_read_only_snapshot_selections)."
 
 [[feature]]
 id = "CMD-025"
@@ -6991,8 +6991,8 @@ python_tests = [
 ]
 bridge = ["operate", "cancel"]
 dolphin = "KJobTrackerInterface / KUiServer progress"
-native = "todo"
-native_note = "Porting notes: OpenXplorer shows a label, a progress bar and Cancel in the window. It has no speed, time remaining or pause. GNOME has no system job tracker; Nautilus shows progress in the window. Existing OpenXplorer part is protected by OPS-019 and OPS-020."
+native = "done"
+native_note = "Per-job Pause/Resume and Cancel control cooperative worker tokens, including cancellation while paused. File reports accumulate processed bytes across files before throttling; the panel shows speed excluding paused time and total/remaining only when the destination free-space measurement supplied a usable total. Grouped conflict-policy runs show processed bytes without inventing an overall total. Native moves that complete without copying keep item progress. Tests: native/crates/ox-app/src/window/transfer_panel/rate.rs (progress_reports_batch_bytes_speed_and_remaining_without_inventing_unknown_totals), native/crates/ox-core/src/transfer/cancellation.rs (paused_workers_resume_and_cancellation_wakes_them_without_resuming_other_jobs); transfer cancellation/staging integration tests remain in native/crates/ox-core/tests/transfer_cases/operations.rs."
 
 [[feature]]
 id = "OPS-022"
@@ -7067,7 +7067,7 @@ python_tests = [
 ]
 bridge = ["operate", "archiveExtract"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/file_ops/availability.rs (a_running_operation_or_a_share_root_disables_the_edit_commands); native/crates/ox-app/src/window/tests/network.rs (sign_out_and_disconnect_wait_for_a_running_file_operation); native/crates/ox-app/src/window/tests/archives.rs (nothing_is_extracted_while_a_file_operation_runs); native/crates/ox-app/src/window/version_restore.rs (no_version_is_restored_while_a_file_operation_runs); native/crates/ox-app/src/update/tests.rs (an_update_waits_for_the_file_operations_of_every_window). One rule covers every write of a window (BrowserWindow::is_writing_files): a transfer, and an extraction, compression or restored copy; each refuses to start while another runs, and Sign out, Disconnect, tab moves and an update's installation and restart wait for them."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/file_ops/availability.rs (a_running_operation_or_a_share_root_disables_the_edit_commands); native/crates/ox-app/src/window/tests/network.rs (sign_out_and_disconnect_wait_for_a_running_file_operation); native/crates/ox-app/src/window/tests/archives.rs (nothing_is_extracted_while_a_file_operation_runs); native/crates/ox-app/src/window/version_restore.rs (no_version_is_restored_while_a_file_operation_runs); native/crates/ox-app/src/update/tests.rs (an_update_waits_for_the_file_operations_of_every_window). BrowserWindow::is_writing_files tracks every write so Sign out, Disconnect, tab moves and update installation/restart wait for all of them. OPS-025 extends transfers to four independent jobs; archive, restore, rename and journal operations remain exclusive, and overlapping transfers refuse to start."
 
 [[feature]]
 id = "OPS-025"
@@ -7086,8 +7086,8 @@ sources = [
 python_tests = []
 bridge = ["operate", "cancel"]
 dolphin = "asynchronous KIO jobs"
-native = "todo"
-native_note = "Porting notes: OpenXplorer allows one operation at a time (state.operation) and disables further file commands until it ends. Browsing stays available. Existing OpenXplorer part is protected by OPS-024."
+native = "done"
+native_note = "Up to four independent copy, move or delete jobs run with separate progress, pause and cancellation panels while browsing remains available. Overlapping source/destination URI trees refuse a new run with a message; slots release only when their own job finishes. Archive operations, restore, rename, Undo and update/restart remain exclusive, and closing cancels every job. Late progress cannot overwrite a reused panel; completion does not replace a selection in another folder. Test: native/crates/ox-app/src/window/file_ops/jobs.rs (separate_jobs_have_independent_cancel_and_release_their_slots)."
 
 [[feature]]
 id = "OPS-026"
@@ -7370,7 +7370,8 @@ python_tests = []
 bridge = ["operate", "list", "normalise"]
 dolphin = "KIO privilege execution (KAuth); kio-admin “Act as Administrator” (admin:/)"
 gnome = "GVfs admin:// backend with polkit, as Nautilus uses; GVfs admin backend (admin.mount, polkit)"
-native = "todo"
+native = "done"
+native_note = "Open as administrator on a local folder asks explicitly before navigating to GVfs admin://; the address bar also accepts explicit local-only admin:/// paths. GVfs owns polkit authentication; the app never elevates itself or invokes sudo. Unsupported desktops explain the missing backend. Snapshot protections apply equally through admin aliases, and restored sessions reopen these paths as ordinary file:// locations. Retry is an explicit operation in the reopened folder. Tests: native/crates/ox-core/src/location/normalise.rs (administrator_uris_are_explicit_local_paths_without_authority_or_credentials), native/crates/ox-core/src/session/saved.rs (restored_sessions_reopen_administrator_locations_without_elevation), native/crates/ox-app/src/window/administrator.rs (administrator_action_only_maps_local_folders_without_changing_the_current_location). Real polkit authentication was not exercised in isolated tests."
 
 [[feature]]
 id = "OPS-040"
@@ -17041,4 +17042,4 @@ bridge = ["environment", "open", "openWith"]
 dolphin = "KDE Activities privacy “Remember opened documents”"
 gnome = "GSettings org.gnome.desktop.privacy remember-recent-files and recent-files-max-age (GtkRecentManager honours them automatically)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (recent_files_follow_the_desktop_history_setting); native/crates/ox-app/src/app_context/recent_privacy.rs. The app follows GNOME's org.gnome.desktop.privacy, as Nautilus does: while remember-recent-files is off (or recent-files-max-age is 0) an opened file or visited folder is added neither to the desktop's recently used list nor to settings.json, the recent files settings.json holds are forgotten, and the sidebar hides Recent files; with a recent-files-max-age of N days, files opened longer ago are forgotten (settings.json now keeps an \"opened\" time per entry; entries the Python app wrote have none and count as old). The sidebar's Recent files has a menu with \"Clear recent files\", which empties the app's list and the desktop's (GtkRecentManager::purge_items). Without the GNOME schema everything is remembered, as before. GtkRecentManager prunes the desktop's own list by the same settings."
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (recent_files_follow_the_desktop_history_setting); native/crates/ox-app/src/app_context/recent_privacy.rs. The app applies the stricter of GTK recent-history settings and GNOME org.gnome.desktop.privacy: while remember-recent-files is off (or recent-files-max-age is 0) an opened file or visited folder is added neither to the desktop's recently used list nor to settings.json, the recent files settings.json holds are forgotten, and the sidebar hides Recent files and Recent locations; with a recent-files-max-age of N days, files opened longer ago are forgotten (settings.json now keeps an \"opened\" time per entry; entries the Python app wrote have none and count as old). The sidebar's Recent files has a menu with \"Clear recent files\", which empties the app's list and the desktop's (GtkRecentManager::purge_items). Without the GNOME schema the GTK history policy still applies. GtkRecentManager prunes the desktop's own list by the same settings."

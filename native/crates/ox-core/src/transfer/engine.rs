@@ -8,6 +8,7 @@
 
 use std::ffi::OsStr;
 use std::fmt;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::batch::{Batch, ItemAction, Removal};
@@ -43,6 +44,8 @@ pub struct TransferEngine {
     factory: NodeFactory,
     /// Named after `self.emit` of the Python engine.
     emit: ProgressCallback,
+    /// Accounting is shared with the report closure and reset per engine run.
+    byte_counts: Arc<Mutex<(u64, u64, Option<u64>)>>,
     write_guard: Option<Box<WriteGuard>>,
     sleep: SleepCallback,
     /// What the run's destination cannot store (XFER-028).
@@ -95,6 +98,7 @@ impl TransferEngine {
         Self {
             factory,
             emit: Box::new(|_| {}),
+            byte_counts: Arc::default(),
             write_guard: None,
             sleep: Box::new(std::thread::sleep),
             unstorable: Unstorable::default(),
@@ -105,8 +109,23 @@ impl TransferEngine {
 
     /// Receives progress for the transfer panel.
     #[must_use]
-    pub fn with_progress(mut self, emit: impl FnMut(Progress) + Send + 'static) -> Self {
-        self.emit = Box::new(emit);
+    pub fn with_progress(mut self, mut emit: impl FnMut(Progress) + Send + 'static) -> Self {
+        let counts = Arc::clone(&self.byte_counts);
+        self.emit = Box::new(move |mut progress: Progress| {
+            if let Some(bytes) = progress.bytes.as_mut() {
+                let mut counts = counts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                if bytes.file_written == 0 {
+                    counts.0 = 0;
+                }
+                counts.1 = counts
+                    .1
+                    .saturating_add(bytes.file_written.saturating_sub(counts.0));
+                counts.0 = bytes.file_written;
+                bytes.batch_written = counts.1;
+                bytes.batch_size = counts.2;
+            }
+            emit(progress);
+        });
         self
     }
 
@@ -290,21 +309,11 @@ impl TransferEngine {
     /// Makes every byte report of this run say that the batch writes
     /// `batch_size` bytes, for the panel's time left (OPS-021).
     fn report_batch_size(&mut self, batch_size: Option<u64>) {
-        let mut emit = std::mem::replace(&mut self.emit, Box::new(|_| {}));
-        let mut previous = 0;
-        let mut processed = 0_u64;
-        self.emit = Box::new(move |mut progress: Progress| {
-            if let Some(bytes) = progress.bytes.as_mut() {
-                if bytes.file_written == 0 {
-                    previous = 0;
-                }
-                processed = processed.saturating_add(bytes.file_written.saturating_sub(previous));
-                previous = bytes.file_written;
-                bytes.batch_written = processed;
-                bytes.batch_size = batch_size;
-            }
-            emit(progress);
-        });
+        let mut counts = self
+            .byte_counts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *counts = (0, 0, batch_size);
     }
 
     /// Runs `action` over the distinct `uris` of an accepted request, then

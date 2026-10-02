@@ -317,7 +317,7 @@ pub(crate) enum WindowAction {
     /// Opens the folder of the selected symbolic link's target with the
     /// target selected (CMD-030).
     ShowTarget,
-    /// Explicit GVfs administrator access; never runs the app as root.
+    /// Explicit `GVfs` administrator access; never runs the app as root.
     OpenAsAdministrator,
     /// Enable installed service actions, each initially disabled.
     ManageServiceActions,

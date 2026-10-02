@@ -198,6 +198,15 @@ impl TransferPanel {
         }
     }
 
+    /// Whether this panel still displays the job that owns this token.
+    pub(crate) fn tracks(&self, cancel: &Cancellation) -> bool {
+        self.imp()
+            .cancel
+            .borrow()
+            .as_ref()
+            .is_some_and(|current| current.cancellable() == cancel.cancellable())
+    }
+
     /// Stops the running operation, as its Cancel button does, and says
     /// that it is stopping. Does nothing while none runs.
     pub(crate) fn cancel(&self) {

@@ -161,6 +161,7 @@ impl BrowserWindow {
     /// outcome of a run that finished; `None` when another operation runs,
     /// the check failed or the user cancelled.
     pub(crate) async fn transfer_with_conflicts(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
+        let origin = self.current_uri();
         let answers = self.plan_transfer(&incoming).await?;
         let mode = incoming.mode;
         let plan = TransferPlan::new(incoming, &answers);
@@ -168,7 +169,7 @@ impl BrowserWindow {
         let finished = outcome
             .clone()
             .map(|outcome| FinishedOperation::of_transfer(mode, outcome));
-        self.conclude_operation(finished).await;
+        self.conclude_operation_in(finished, origin.as_deref()).await;
         outcome.ok()
     }
 

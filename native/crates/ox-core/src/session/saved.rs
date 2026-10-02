@@ -56,7 +56,13 @@ impl SavedSession {
             .tabs
             .iter()
             .map(|tab| {
-                let panes: Vec<Value> = tab.panes.iter().map(TabSnapshot::to_json).collect();
+                let panes: Vec<Value> = tab
+                    .panes
+                    .iter()
+                    .cloned()
+                    .map(without_administrator_access)
+                    .map(|pane| pane.to_json())
+                    .collect();
                 json!({ "panes": panes, "activePane": tab.active_pane })
             })
             .collect();
@@ -116,10 +122,22 @@ fn saved_tab(value: &Value) -> Result<SavedTab, WindowStateError> {
         .ok_or(WindowStateError::InvalidTab)?;
     let panes = panes
         .iter()
-        .map(TabSnapshot::from_json)
+        .map(|value| TabSnapshot::from_json(value).map(without_administrator_access))
         .collect::<Result<Vec<_>, _>>()?;
     let active_pane = index_in(value.get("activePane"), panes.len());
     Ok(SavedTab { panes, active_pane })
+}
+
+/// Restoring a session must not request fresh administrator authentication.
+fn without_administrator_access(mut pane: TabSnapshot) -> TabSnapshot {
+    let ordinary = |uri: &str| {
+        uri.strip_prefix("admin:")
+            .map_or_else(|| uri.to_owned(), |path| format!("file:{path}"))
+    };
+    pane.uri = ordinary(&pane.uri);
+    pane.history = pane.history.iter().map(|uri| ordinary(uri)).collect();
+    pane.selection = pane.selection.iter().map(|uri| ordinary(uri)).collect();
+    pane
 }
 
 /// An index into a list of `length` items, the first when it is missing
@@ -166,5 +184,12 @@ mod tests {
 
         assert_eq!(loaded, Some(session));
         assert_eq!(SavedSession::load(directory.path()), None);
+    }
+    /// parity: OPS-039
+    #[test]
+    fn restored_sessions_reopen_administrator_locations_without_elevation() {
+        let saved = SavedSession::from_json(&json!({"tabs": [{"panes": [{"uri": "admin:///etc", "history": ["admin:///etc"], "index": 0}], "activePane": 0}], "activeTab": 0})).unwrap();
+        assert_eq!(saved.tabs[0].panes[0].uri, "file:///etc");
+        assert!(!saved.to_json().to_string().contains("admin:"));
     }
 }

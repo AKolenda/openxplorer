@@ -85,6 +85,29 @@ fn privacy_settings() -> Option<gio::Settings> {
     has_keys.then(|| gio::Settings::new(PRIVACY_SCHEMA))
 }
 
+/// The stricter of GTK and the desktop privacy settings, also used by folder history.
+pub(crate) fn desktop_recent_policy() -> RecentPolicy {
+    let desktop = privacy_settings()
+        .as_ref()
+        .map_or(RecentPolicy::REMEMBER_ALL, RecentPolicy::read);
+    with_gtk_policy(desktop)
+}
+
+fn with_gtk_policy(desktop: RecentPolicy) -> RecentPolicy {
+    let Some(settings) = gtk::Settings::default() else {
+        return desktop;
+    };
+    let gtk_age = settings.gtk_recent_files_max_age();
+    let max_age_days = match (desktop.max_age_days, u64::try_from(gtk_age).ok()) {
+        (Some(left), Some(right)) => Some(left.min(right)),
+        (left, right) => left.or(right),
+    };
+    RecentPolicy {
+        remember: desktop.remember && settings.is_gtk_recent_files_enabled() && gtk_age != 0,
+        max_age_days,
+    }
+}
+
 /// Seconds since the Unix epoch.
 fn now() -> u64 {
     SystemTime::now()
@@ -96,6 +119,21 @@ impl AppContext {
     /// Follows the desktop's privacy settings: a change redraws the
     /// sidebar and forgets what may no longer be remembered.
     pub(super) fn follow_recent_privacy(&self) {
+        if let Some(settings) = gtk::Settings::default() {
+            for property in ["gtk-recent-files-enabled", "gtk-recent-files-max-age"] {
+                settings.connect_notify_local(
+                    Some(property),
+                    glib::clone!(
+                        #[weak(rename_to = context)]
+                        self,
+                        move |_, _| {
+                            context.forget_old_recent_files();
+                            context.notify_places_changed();
+                        }
+                    ),
+                );
+            }
+        }
         let Some(settings) = privacy_settings() else {
             return;
         };
@@ -119,9 +157,11 @@ impl AppContext {
     /// What the desktop allows the app to remember of the files opened.
     pub(crate) fn recent_policy(&self) -> RecentPolicy {
         let privacy = self.imp().privacy.borrow();
-        privacy
-            .as_ref()
-            .map_or(RecentPolicy::REMEMBER_ALL, RecentPolicy::read)
+        with_gtk_policy(
+            privacy
+                .as_ref()
+                .map_or(RecentPolicy::REMEMBER_ALL, RecentPolicy::read),
+        )
     }
 
     /// Records `recent`, just opened, in the recent files of the app and
@@ -171,5 +211,45 @@ impl AppContext {
         }
         let change: Change = Box::new(move |settings| settings.forget_recent(opened_before));
         self.change_settings(change, |_| {});
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    /// parity: SAFE-022, SIDE-026
+    #[gtk::test]
+    fn both_recent_views_honor_desktop_privacy_even_when_gtk_history_is_enabled() {
+        let Some(privacy) = privacy_settings() else {
+            return;
+        };
+        let gtk = gtk::Settings::default().unwrap();
+        let remembered = privacy.boolean(REMEMBER_KEY);
+        let max_age = privacy.int(MAX_AGE_KEY);
+        let gtk_enabled = gtk.is_gtk_recent_files_enabled();
+        let gtk_age = gtk.gtk_recent_files_max_age();
+        gtk.set_gtk_recent_files_enabled(true);
+        gtk.set_gtk_recent_files_max_age(30);
+        privacy.set_boolean(REMEMBER_KEY, true).unwrap();
+        privacy.set_int(MAX_AGE_KEY, 30).unwrap();
+        let fixture = tempfile::tempdir().unwrap();
+        let uri = ox_core::location::file_uri(fixture.path());
+        add_to_desktop_history(&uri, ox_core::integration::FOLDER_CONTENT_TYPE);
+        assert!(gtk::RecentManager::default().has_item(&uri));
+        assert!(crate::folder_view::recent_locations::recent_folder_uris().contains(&uri));
+        privacy.set_boolean(REMEMBER_KEY, false).unwrap();
+        assert!(!desktop_recent_policy().remember);
+        assert!(crate::folder_view::recent_locations::recent_folder_uris().is_empty());
+        privacy.set_boolean(REMEMBER_KEY, true).unwrap();
+        privacy.set_int(MAX_AGE_KEY, 0).unwrap();
+        assert!(!desktop_recent_policy().remember);
+        assert!(crate::folder_view::recent_locations::recent_folder_uris().is_empty());
+        privacy.set_int(MAX_AGE_KEY, 7).unwrap();
+        assert_eq!(desktop_recent_policy().max_age_days, Some(7));
+        gtk::RecentManager::default().remove_item(&uri).unwrap();
+        privacy.set_boolean(REMEMBER_KEY, remembered).unwrap();
+        privacy.set_int(MAX_AGE_KEY, max_age).unwrap();
+        gtk.set_gtk_recent_files_enabled(gtk_enabled);
+        gtk.set_gtk_recent_files_max_age(gtk_age);
     }
 }
