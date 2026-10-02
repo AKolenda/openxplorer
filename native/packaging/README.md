@@ -85,7 +85,10 @@ never takes over the Python app's name. Every package build sets it.
   written by `tools/i18n.py` without GNU gettext; the app looks for it in the
   `locale` folder of every XDG data directory (`crates/ox-core/src/i18n.rs`).
   `native/po/openxplorer.pot` is the English template, which
-  `python3 native/tools/i18n.py extract` updates. No translation ships yet.
+  `python3 native/tools/i18n.py extract` updates. The same catalogue supplies
+  translated desktop-entry labels and AppStream descriptions at staging time;
+  unqualified English text remains the fallback. Commands, icons, application
+  IDs and licence identifiers are not translated. No translation ships yet.
 
 ## Desktop integration data
 
