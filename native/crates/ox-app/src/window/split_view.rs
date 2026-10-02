@@ -186,8 +186,7 @@ impl BrowserWindow {
             return;
         }
         let (from, to) = (self.pane_on(from), self.pane_on(to));
-        to.show_view(from.view());
-        to.details().sort_by(from.details().sort_order());
+        self.apply_style_to(to, &Self::style_of_pane(from));
     }
 
     /// Makes the pane on `side` active, when the tab in front is split and
@@ -273,6 +272,12 @@ impl BrowserWindow {
             model.select_uris(&beside.selected);
         });
         pane.restore_scroll_position(beside.scroll);
+        let preferences = self.context().settings_data().preferences;
+        if preferences.per_folder_views {
+            if let Some(uri) = self.beside_location() {
+                self.apply_style_to(pane, &preferences.view_for(&uri));
+            }
+        }
         self.update_beside_pane();
         if beside.needs_listing {
             self.load_tab(beside.id, LoadMode::Navigate);
@@ -424,6 +429,10 @@ impl BrowserWindow {
     /// The location of the pane beside the active one, for tests.
     #[cfg(test)]
     pub(crate) fn beside_uri(&self) -> Option<String> {
+        self.beside_location()
+    }
+
+    fn beside_location(&self) -> Option<String> {
         let session = self.imp().session.borrow();
         session.active()?.beside().map(|tab| tab.uri().to_owned())
     }
@@ -436,6 +445,10 @@ impl BrowserWindow {
         self.status_bar().show_view(view);
         self.set_action_state(WindowAction::View, &view.as_str().to_variant());
         self.show_sort_state();
+        let model = self.folder_pane().model();
+        self.set_action_state(WindowAction::Groups, &model.grouping().is_some().to_variant());
+        self.set_action_state(WindowAction::FoldersFirst, &model.folders_first().to_variant());
+        self.set_action_state(WindowAction::Hidden, &model.shows_hidden().to_variant());
     }
 }
 

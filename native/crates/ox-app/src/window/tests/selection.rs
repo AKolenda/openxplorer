@@ -215,6 +215,9 @@ fn the_selection_marker_toggles_its_item_alone() {
     assert_eq!(marker.tooltip_text().as_deref(), Some("Deselect"));
     marker.emit_clicked();
     assert_eq!(selected(&test), [1]);
+    marker.set_visible(true);
+    pane.owners().set_selection_markers(false);
+    assert!(!marker.is_visible(), "Settings hides an already hovered marker");
 }
 
 /// parity: SEL-004, SEL-005

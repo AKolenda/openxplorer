@@ -80,6 +80,8 @@ mod imp {
         pub(super) registries: OnceCell<TileRegistries>,
         /// How the items are laid out.
         pub(super) layout: Cell<GridLayout>,
+        /// The last icon size, retained while the compact layout is shown.
+        pub(super) icon_size: Cell<IconSize>,
         /// The text size, which sizes the cells too.
         pub(super) text_size: Cell<TextSize>,
     }
@@ -92,6 +94,7 @@ mod imp {
                 grid: gtk::GridView::default(),
                 registries: OnceCell::new(),
                 layout: Cell::new(GridLayout::Icons(IconSize::LARGE)),
+                icon_size: Cell::new(IconSize::LARGE),
                 text_size: Cell::new(TextSize::DEFAULT),
             }
         }
@@ -178,9 +181,14 @@ impl IconView {
     /// The icon size of the tiles, or of the last tiles shown while the
     /// view is compact.
     pub(crate) fn icon_size(&self) -> IconSize {
-        match self.layout() {
-            GridLayout::Icons(size) => size,
-            GridLayout::Compact => IconSize::LARGE,
+        self.imp().icon_size.get()
+    }
+
+    /// Restores a saved icon size without leaving the compact layout.
+    pub(crate) fn set_icon_size(&self, size: IconSize) {
+        self.imp().icon_size.set(size);
+        if matches!(self.layout(), GridLayout::Icons(_)) {
+            self.set_layout(GridLayout::Icons(size));
         }
     }
 
@@ -225,7 +233,10 @@ impl IconView {
             imp.grid.remove_css_class(class);
         }
         let (class, orientation) = match layout {
-            GridLayout::Icons(size) => (size.css_class(), gtk::Orientation::Vertical),
+            GridLayout::Icons(size) => {
+                imp.icon_size.set(size);
+                (size.css_class(), gtk::Orientation::Vertical)
+            }
             GridLayout::Compact => (COMPACT_CLASS, gtk::Orientation::Horizontal),
         };
         imp.grid.add_css_class(class);
@@ -276,6 +287,15 @@ mod tests {
         assert_eq!(view.icon_size(), IconSize::SMALL);
         assert!(grid.has_css_class(IconSize::SMALL.css_class()));
         assert!(!grid.has_css_class(IconSize::LARGE.css_class()));
+        view.set_layout(GridLayout::Compact);
+        assert_eq!(
+            view.icon_size(),
+            IconSize::SMALL,
+            "List keeps the previous icon size"
+        );
+        view.set_icon_size(IconSize::EXTRA_LARGE);
+        assert_eq!(view.layout(), GridLayout::Compact);
+        assert_eq!(view.icon_size(), IconSize::EXTRA_LARGE);
     }
 
     /// The compact layout fills columns top to bottom and scrolls sideways.

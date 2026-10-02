@@ -12,9 +12,11 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format::DateStyle;
-use ox_core::settings::{may_remember, Preferences, PreferencesUpdate, ViewProperties, ViewScope};
+use ox_core::settings::{
+    may_remember, ColumnWidths, Preferences, PreferencesUpdate, ViewProperties, ViewScope,
+};
 
-use super::folder_pane::FolderView;
+use super::folder_pane::{FolderPane, FolderView};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 use crate::folder_view::details::GroupTitle;
@@ -45,42 +47,14 @@ impl BrowserWindow {
     /// What the listing sorts by: a further key while one is chosen, else
     /// the details view's column.
     pub(super) fn sort_state(&self) -> SortState {
-        let pane = self.folder_pane();
-        if let Some((role, direction)) = pane.model().sort_role() {
-            return SortState {
-                by: SortBy::Role(role),
-                direction,
-            };
-        }
-        let order = pane.details().sort_order();
-        SortState {
-            by: SortBy::Column(order.column),
-            direction: order.direction,
-        }
+        pane_sort_state(self.folder_pane())
     }
 
     /// Sorts by `state`, regroups, and shows it in the Sort menu, without
     /// saving it.
     pub(super) fn show_sort(&self, state: SortState) {
         let applying = self.imp().applying_style.replace(true);
-        let pane = self.folder_pane();
-        let details = pane.details();
-        match state.by {
-            SortBy::Column(column) => {
-                pane.model().set_sort_role(None);
-                details.sort_by(SortOrder {
-                    column,
-                    direction: state.direction,
-                });
-            }
-            SortBy::Role(role) => {
-                pane.model().set_sort_role(Some((role, state.direction)));
-                // The titles show no arrow for a key that is not a column.
-                details
-                    .column_view()
-                    .sort_by_column(None, state.direction.to_sort_type());
-            }
-        }
+        show_pane_sort(self.folder_pane(), state);
         self.show_sort_state();
         self.imp().applying_style.set(applying);
     }
@@ -133,9 +107,12 @@ impl BrowserWindow {
 
     /// The style the folder is shown in now.
     pub(super) fn current_style(&self) -> ViewProperties {
-        let pane = self.folder_pane();
+        Self::style_of_pane(self.folder_pane())
+    }
+
+    pub(super) fn style_of_pane(pane: &FolderPane) -> ViewProperties {
         let view = pane.view();
-        let sort = self.sort_state();
+        let sort = pane_sort_state(pane);
         let model = pane.model();
         ViewProperties {
             mode: view.style_mode().to_owned(),
@@ -150,28 +127,57 @@ impl BrowserWindow {
             groups: model.grouping().is_some(),
             folders_first: model.folders_first(),
             show_hidden: model.shows_hidden(),
+            hidden_last: model.hidden_last(),
+            show_previews: Some(pane.previews_enabled()),
+            details_columns: Some(
+                pane.details()
+                    .chosen_columns()
+                    .iter()
+                    .map(|column| column.as_str().to_owned())
+                    .collect(),
+            ),
+            column_widths: Some(ColumnWidths::from_values(&pane.details().widths_to_save())),
         }
     }
 
     /// Shows the folder in `style`, without saving it.
     pub(super) fn apply_style(&self, style: &ViewProperties) {
+        self.apply_style_to(self.folder_pane(), style);
+        self.show_pane_view_state();
+        self.update_content();
+        self.update_details_pane();
+    }
+
+    /// Applies a style to its own pane without changing the active pane.
+    pub(super) fn apply_style_to(&self, pane: &FolderPane, style: &ViewProperties) {
         let applying = self.imp().applying_style.replace(true);
         let view = FolderView::from_style(&style.mode, style.icon_size);
-        self.set_action_state(WindowAction::View, &view.as_str().to_variant());
-        self.show_view(view);
-        self.show_folders_first(style.folders_first);
-        let by = SortBy::from_key(&style.sort).unwrap_or(SortBy::Column(SortColumn::Name));
-        let direction = if style.descending {
-            SortDirection::Descending
-        } else {
-            SortDirection::Ascending
+        pane.icon_view()
+            .set_icon_size(crate::folder_view::grid::IconSize::nearest(style.icon_size));
+        pane.show_view(view);
+        let model = pane.model();
+        model.set_folders_first(style.folders_first);
+        model.set_hidden_last(style.hidden_last);
+        let state = SortState {
+            by: SortBy::from_key(&style.sort).unwrap_or(SortBy::Column(SortColumn::Name)),
+            direction: if style.descending {
+                SortDirection::Descending
+            } else {
+                SortDirection::Ascending
+            },
         };
-        self.show_sort(SortState { by, direction });
-        self.show_groups(style.groups);
-        if self.folder_pane().model().shows_hidden() != style.show_hidden {
-            self.set_action_state(WindowAction::Hidden, &style.show_hidden.to_variant());
-            self.show_hidden_files(style.show_hidden);
+        show_pane_sort(pane, state);
+        model.set_grouping(style.groups.then_some(state));
+        pane.details()
+            .show_group_headers(style.groups.then(|| model.group_titles()));
+        model.set_show_hidden(style.show_hidden);
+        pane.set_previews_enabled(style.show_previews.unwrap_or(true));
+        if let Some(columns) = &style.details_columns {
+            pane.details()
+                .show_chosen_columns(crate::folder_view::details::chosen_from_keys(columns));
         }
+        pane.details().apply_column_widths(style.column_widths.as_ref());
+        self.update_expandability_for(pane);
         self.imp().applying_style.set(applying);
     }
 
@@ -190,17 +196,34 @@ impl BrowserWindow {
     /// in this window only), else for every folder. Showing a saved style
     /// saves nothing.
     pub(super) fn remember_style(&self) {
+        self.remember_pane_style(self.folder_pane());
+    }
+
+    /// A delayed header resize belongs to the pane that emitted it, even
+    /// if focus has moved to its neighbour.
+    pub(super) fn remember_pane_style(&self, pane: &FolderPane) {
         if self.imp().applying_style.get() {
             return;
         }
-        let style = self.current_style();
-        if !self.context().settings_data().preferences.per_folder_views {
-            let view = self.folder_pane().view();
-            let reply = self.preference_failure_reply();
+        let style = Self::style_of_pane(pane);
+        let preferences = self.context().settings_data().preferences;
+        if preferences.per_folder_views {
+            let uri = self
+                .shown_panes()
+                .into_iter()
+                .find_map(|(side, uri)| (self.pane_on(side) == pane && may_remember(&uri)).then_some(uri));
+            if let Some(uri) = uri {
+                self.save_style(&uri, style, ViewScope::Folder);
+            }
+        } else {
+            let mut options = preferences.view_options;
+            options.show_previews = pane.previews_enabled();
+            options.details_columns = style.details_columns.clone().unwrap_or_default();
+            let mut update = shared_style_update(style, pane.view());
+            update.view_options = Some(options);
+            update.column_widths = Some(pane.details().widths_to_save());
             self.context()
-                .update_preferences(shared_style_update(style, view), reply);
-        } else if let Some(uri) = self.current_uri().filter(|uri| may_remember(uri)) {
-            self.save_style(&uri, style, ViewScope::Folder);
+                .update_preferences(update, self.preference_failure_reply());
         }
     }
 
@@ -216,10 +239,57 @@ impl BrowserWindow {
     /// and expandable folders (VIEW-035).
     pub(super) fn follow_item_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
-        let pane = self.folder_pane();
-        pane.details().set_date_style(date_style(&preferences));
-        pane.owners().set_selection_markers(preferences.selection_marker);
-        self.update_expandability();
+        for pane in self.folder_panes() {
+            pane.details().set_date_style(date_style(&preferences));
+            pane.owners().set_selection_markers(preferences.selection_marker);
+            self.update_expandability_for(pane);
+        }
+        for (side, uri) in self.shown_panes() {
+            let pane = self.pane_on(side);
+            let style = preferences.view_for(&uri);
+            pane.set_previews_enabled(style.show_previews.unwrap_or(true));
+            if let Some(columns) = &style.details_columns {
+                pane.details()
+                    .show_chosen_columns(crate::folder_view::details::chosen_from_keys(columns));
+            }
+        }
+        self.apply_view_options();
+    }
+}
+
+/// The pane's actual sorter, whether or not it has a visible column.
+fn pane_sort_state(pane: &FolderPane) -> SortState {
+    if let Some((role, direction)) = pane.model().sort_role() {
+        return SortState {
+            by: SortBy::Role(role),
+            direction,
+        };
+    }
+    let order = pane.details().sort_order();
+    SortState {
+        by: SortBy::Column(order.column),
+        direction: order.direction,
+    }
+}
+
+/// Changes one pane's sorting without touching window action state.
+fn show_pane_sort(pane: &FolderPane, state: SortState) {
+    let details = pane.details();
+    match state.by {
+        SortBy::Column(column) => {
+            pane.model().set_sort_role(None);
+            details.sort_by(SortOrder {
+                column,
+                direction: state.direction,
+            });
+        }
+        SortBy::Role(role) => {
+            pane.model().set_sort_role(Some((role, state.direction)));
+            // The titles show no arrow for a key that is not a column.
+            details
+                .column_view()
+                .sort_by_column(None, state.direction.to_sort_type());
+        }
     }
 }
 

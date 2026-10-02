@@ -16,10 +16,8 @@ use ox_core::location::{location_kind, LocationKind};
 
 use super::actions::text_action;
 use super::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
-use super::preferences::Preference;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
-use crate::folder_view::details::chosen_from_keys;
 use crate::folder_view::sorting::SortColumn;
 use crate::icons::Icon;
 use crate::thumbnails::PreviewPolicy;
@@ -73,26 +71,33 @@ impl BrowserWindow {
             }
         });
         self.add_action_entries([toggle]);
-        let details = self.folder_pane().details();
-        details.connect_columns_chosen(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |chosen| window.save_details_columns(&chosen)
-        ));
-        let Some(header) = details.header() else { return };
-        let click = gtk::GestureClick::new();
-        click.set_button(gdk::BUTTON_SECONDARY);
-        click.connect_pressed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            #[weak]
-            header,
-            move |gesture, _, x, y| {
-                gesture.set_state(gtk::EventSequenceState::Claimed);
-                window.show_column_menu(&header, x, y);
-            }
-        ));
-        header.add_controller(click);
+        for pane in self.folder_panes() {
+            let details = pane.details();
+            details.connect_columns_chosen(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                pane,
+                move |_| window.remember_pane_style(&pane)
+            ));
+            let Some(header) = details.header() else { continue };
+            let click = gtk::GestureClick::new();
+            click.set_button(gdk::BUTTON_SECONDARY);
+            click.connect_pressed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                header,
+                move |gesture, _, x, y| {
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                    if let Some(side) = window.side_holding(&header) {
+                        window.activate_pane(side);
+                    }
+                    window.show_column_menu(&header, x, y);
+                }
+            ));
+            header.add_controller(click);
+        }
     }
 
     /// The titles' menu at (`x`, `y`) in `header`.
@@ -115,29 +120,23 @@ impl BrowserWindow {
         let details = self.folder_pane().details();
         let chosen = toggled(details.chosen_columns(), column);
         details.show_chosen_columns(chosen.clone());
-        self.save_details_columns(&chosen);
-    }
-
-    /// Saves `chosen` as the details columns shown after Name.
-    fn save_details_columns(&self, chosen: &[SortColumn]) {
-        let mut options = self.context().settings_data().preferences.view_options;
-        options.details_columns = chosen.iter().map(|column| column.as_str().to_owned()).collect();
-        self.save_preference(Preference::ViewOptions(options));
+        self.remember_style();
     }
 
     /// Applies the shared view options to the folder shown: which items
     /// show previews, whether folders count their items, and the details
     /// columns.
     pub(super) fn apply_view_options(&self) {
-        let options = self.context().settings_data().preferences.view_options;
-        let is_remote = self.current_uri().is_none_or(|uri| self.is_remote_folder(&uri));
-        let pane = self.folder_pane();
-        pane.owners()
-            .set_previews(PreviewPolicy::for_folder(&options, is_remote));
-        pane.owners()
-            .set_counts_items(options.count_folder_items && !is_remote);
-        pane.details()
-            .show_chosen_columns(chosen_from_keys(&options.details_columns));
+        for (side, uri) in self.shown_panes() {
+            let mut options = self.context().settings_data().preferences.view_options;
+            let pane = self.pane_on(side);
+            options.show_previews = pane.previews_enabled();
+            let is_remote = self.is_remote_folder(&uri);
+            pane.owners()
+                .set_previews(PreviewPolicy::for_folder(&options, is_remote));
+            pane.owners()
+                .set_counts_items(options.count_folder_items && !is_remote);
+        }
     }
 
     /// Whether `uri` is reached over a network or a device link: a
@@ -156,6 +155,7 @@ mod tests {
     use ox_core::settings::ViewOptions;
 
     use super::*;
+    use crate::folder_view::details::chosen_from_keys;
 
     /// The titles' menu offers every column but Name, checked while it
     /// shows; choosing one adds it at the end or hides it.

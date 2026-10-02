@@ -56,6 +56,9 @@ struct StyleForm {
     groups: gtk::CheckButton,
     folders_first: gtk::CheckButton,
     hidden: gtk::CheckButton,
+    hidden_last: gtk::CheckButton,
+    previews: gtk::CheckButton,
+    columns: Vec<(SortColumn, gtk::CheckButton)>,
     scopes: Vec<gtk::CheckButton>,
     as_default: gtk::CheckButton,
 }
@@ -77,6 +80,23 @@ impl StyleForm {
         let groups = dialog.add_check_button("Show in groups", style.groups);
         let folders_first = dialog.add_check_button("Show folders first", style.folders_first);
         let hidden = dialog.add_check_button("Show hidden files", style.show_hidden);
+        let hidden_last = dialog.add_check_button("Show hidden items last", style.hidden_last);
+        let previews = dialog.add_check_button("Show previews", style.show_previews.unwrap_or(true));
+        let columns_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        let columns = SortColumn::CHOOSABLE
+            .into_iter()
+            .map(|column| {
+                let shown = style
+                    .details_columns
+                    .as_ref()
+                    .is_some_and(|columns| columns.iter().any(|key| key == column.as_str()));
+                let check = gtk::CheckButton::with_label(column.label());
+                check.set_active(shown);
+                columns_box.append(&check);
+                (column, check)
+            })
+            .collect();
+        dialog.add_labelled("Additional information", &columns_box);
         let mut scopes: Vec<gtk::CheckButton> = Vec::new();
         for (index, (_, label)) in SCOPES.iter().enumerate() {
             let scope = dialog.add_check_button(label, index == 0);
@@ -93,6 +113,9 @@ impl StyleForm {
             groups,
             folders_first,
             hidden,
+            hidden_last,
+            previews,
+            columns,
             scopes,
             as_default,
         }
@@ -105,6 +128,19 @@ impl StyleForm {
         let sort = sort_choices()
             .get(chosen(&self.sort))
             .map_or(SortColumn::Name.as_str(), |(by, _)| by.as_str());
+        let selected: Vec<String> = self
+            .columns
+            .iter()
+            .filter(|(_, check)| check.is_active())
+            .map(|(column, _)| column.as_str().to_owned())
+            .collect();
+        let mut columns = shown.details_columns.clone().unwrap_or_default();
+        columns.retain(|column| selected.contains(column));
+        for column in selected {
+            if !columns.contains(&column) {
+                columns.push(column);
+            }
+        }
         ViewProperties {
             mode: mode.to_owned(),
             icon_size: shown.icon_size,
@@ -113,6 +149,10 @@ impl StyleForm {
             groups: self.groups.is_active(),
             folders_first: self.folders_first.is_active(),
             show_hidden: self.hidden.is_active(),
+            hidden_last: self.hidden_last.is_active(),
+            show_previews: Some(self.previews.is_active()),
+            details_columns: Some(columns),
+            column_widths: shown.column_widths.clone(),
         }
     }
 

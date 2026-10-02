@@ -98,7 +98,7 @@ impl ViewOptions {
 }
 
 /// A list of distinct, short, lower-camel-case column keys.
-fn read_column_keys(value: &Value) -> Option<Vec<String>> {
+pub(super) fn read_column_keys(value: &Value) -> Option<Vec<String>> {
     let keys = value.as_array()?;
     if keys.len() > MAX_COLUMNS {
         return None;

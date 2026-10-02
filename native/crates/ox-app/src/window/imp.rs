@@ -293,6 +293,7 @@ impl ObjectImpl for BrowserWindow {
     }
 
     fn dispose(&self) {
+        self.obj().end_band();
         self.obj().disconnect_external_handlers();
         self.obj().close_network();
         // Dropping the tabs cancels their listings and folder watches.

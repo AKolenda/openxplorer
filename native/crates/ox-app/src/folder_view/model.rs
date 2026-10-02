@@ -130,6 +130,16 @@ impl FolderModel {
         self.sort_options.get().folders_first
     }
 
+    /// Keeps hidden items after visible ones within folders/files.
+    pub(crate) fn set_hidden_last(&self, last: bool) {
+        self.change_sort_options(&self.folders_first, |options| options.hidden_last = last);
+    }
+
+    /// Whether hidden items sort last.
+    pub(crate) fn hidden_last(&self) -> bool {
+        self.sort_options.get().hidden_last
+    }
+
     /// Sorts by a further key and direction, or by the details view's
     /// column again with `None`.
     pub(crate) fn set_sort_role(&self, role: Option<(SortRole, SortDirection)>) {
@@ -148,6 +158,7 @@ impl FolderModel {
         let was_grouped = self.sort_options.get().grouping.is_some();
         self.change_sort_options(&self.group_sorter, |options| options.grouping = grouping);
         if grouping.is_some() != was_grouped {
+            let selected = self.selected_uris();
             let sections = grouping.map(|_| self.group_sorter.clone());
             self.sort_model.set_section_sorter(sections.as_ref());
             // GTK 4.14's tree list passes no groups through, so grouped
@@ -158,6 +169,7 @@ impl FolderModel {
             } else {
                 self.selection.set_model(Some(self.tree.model()));
             }
+            self.select_uris(&selected);
         }
     }
 

@@ -236,6 +236,16 @@ impl FolderPane {
         self.parts().rubber_band.is_visible()
     }
 
+    /// Whether this folder's style requests previews, before safety limits.
+    pub(super) fn previews_enabled(&self) -> bool {
+        self.parts().previews_enabled.get()
+    }
+
+    /// Keeps the folder's preview choice independently of its location policy.
+    pub(super) fn set_previews_enabled(&self, enabled: bool) {
+        self.parts().previews_enabled.set(enabled);
+    }
+
     /// The note over the pane while a drag shows one, for tests.
     #[cfg(test)]
     pub(super) fn drag_hint(&self) -> Option<String> {

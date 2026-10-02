@@ -37,16 +37,10 @@ pub(super) fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> 
         SortColumn::Deleted => a.entry().trash_deletion_date.cmp(&b.entry().trash_deletion_date),
         SortColumn::Type => a.type_sort_key().natural_cmp(b.type_sort_key()),
         SortColumn::Size => a.sort_size().cmp(&b.sort_size()),
-        SortColumn::Created => a.entry().meta.created.cmp(&b.entry().meta.created),
-        SortColumn::Extension => {
-            let (a, b) = (
-                crate::folder_view::details::column_text::extension_of(a),
-                crate::folder_view::details::column_text::extension_of(b),
-            );
-            a.to_lowercase().cmp(&b.to_lowercase())
-        }
-        SortColumn::Owner => a.entry().meta.owner.cmp(&b.entry().meta.owner),
-        SortColumn::Permissions => a.entry().meta.permissions.cmp(&b.entry().meta.permissions),
+        SortColumn::Created => SortRole::Created.compare(a, b),
+        SortColumn::Extension => SortRole::Extension.compare(a, b),
+        SortColumn::Owner => SortRole::Owner.compare(a, b),
+        SortColumn::Permissions => SortRole::Permissions.compare(a, b),
     }
 }
 
@@ -64,6 +58,7 @@ pub(crate) fn column_sorter(column: SortColumn) -> gtk::CustomSorter {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct SortOptions {
     pub(super) folders_first: bool,
+    pub(super) hidden_last: bool,
     pub(super) role: Option<(SortRole, SortDirection)>,
     pub(super) grouping: Option<(SortState, GroupClock)>,
 }
@@ -72,6 +67,7 @@ impl Default for SortOptions {
     fn default() -> Self {
         Self {
             folders_first: true,
+            hidden_last: false,
             role: None,
             grouping: None,
         }
@@ -87,13 +83,19 @@ pub(super) type SharedOptions = Rc<Cell<SortOptions>>;
 pub(super) fn folders_first(options: &SharedOptions) -> gtk::CustomSorter {
     let options = Rc::clone(options);
     gtk::CustomSorter::new(move |a, b| {
-        if !options.get().folders_first {
-            return gtk::Ordering::Equal;
-        }
-        let a_is_folder = as_item(a).entry().is_dir;
-        let b_is_folder = as_item(b).entry().is_dir;
-        // Reversed, so `true` sorts first.
-        b_is_folder.cmp(&a_is_folder).into()
+        let options = options.get();
+        let (a, b) = (as_item(a).entry(), as_item(b).entry());
+        let folders = if options.folders_first {
+            b.is_dir.cmp(&a.is_dir)
+        } else {
+            Ordering::Equal
+        };
+        let hidden = if options.hidden_last {
+            a.is_hidden.cmp(&b.is_hidden)
+        } else {
+            Ordering::Equal
+        };
+        folders.then(hidden).into()
     })
 }
 
@@ -161,5 +163,22 @@ mod tests {
             compare_column(SortColumn::Size, &folder, &unknown),
             Ordering::Equal
         );
+    }
+
+    /// Hidden-last remains independent of the selected sort direction.
+    ///
+    /// parity: VIEW-021
+    #[gtk::test]
+    fn hidden_items_sort_after_visible_items_when_requested() {
+        let options = SharedOptions::new(Cell::new(SortOptions {
+            hidden_last: true,
+            ..SortOptions::default()
+        }));
+        let sorter = folders_first(&options);
+        let mut hidden = file_entry(".hidden");
+        hidden.is_hidden = true;
+        let hidden = FileItem::new(hidden);
+        let visible = FileItem::new(file_entry("visible"));
+        assert_eq!(sorter.compare(&hidden, &visible), gtk::Ordering::Larger);
     }
 }

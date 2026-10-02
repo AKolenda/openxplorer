@@ -98,6 +98,9 @@ impl BrowserWindow {
         if is_active {
             self.reset_typeahead();
             self.hide_message();
+            if mode == LoadMode::Reload {
+                self.folder_pane().model().tree().refresh_expanded();
+            }
         }
         if mode == LoadMode::Navigate {
             self.supersede_activations(id);

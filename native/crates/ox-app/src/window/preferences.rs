@@ -17,8 +17,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::settings::{
-    ColumnWidth, DetailsPaneOptions, FolderTreeOptions, PreferencesUpdate, SettingsError, Theme, ViewOptions,
-    WindowSize, SIDEBAR_WIDTHS,
+    DetailsPaneOptions, FolderTreeOptions, PreferencesUpdate, SettingsError, Theme, WindowSize,
+    SIDEBAR_WIDTHS,
 };
 
 use super::folder_pane::FolderView;
@@ -45,8 +45,6 @@ pub(super) enum Preference {
     TextSize(TextSize),
     /// Sidebar width in pixels.
     SidebarWidth(i32),
-    /// The details columns the user sized, in pixels.
-    ColumnWidths(Vec<ColumnWidth>),
     /// The default sidebar width and column widths (`resetLayout`).
     DefaultLayout,
     /// The size new windows open at (TAB-054).
@@ -59,9 +57,6 @@ pub(super) enum Preference {
     Sidebar(bool),
     /// The sidebar's icon size in pixels, 0 for automatic (SIDE-012).
     SidebarIconSize(u32),
-    /// The folder views' options: previews, item counts and the details
-    /// columns (VIEW-033, VIEW-058).
-    ViewOptions(ViewOptions),
     /// The folder tree's options (SIDE-028).
     FolderTree(FolderTreeOptions),
 }
@@ -75,13 +70,11 @@ impl Preference {
             Preference::Theme(theme) => update.theme = Some(theme),
             Preference::TextSize(size) => update.text_size = Some(size.percent()),
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
-            Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
             Preference::WindowSize(size) => update.window_size = Some(size),
             Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
             Preference::DetailsPaneOptions(options) => update.details_pane_options = Some(options),
             Preference::Sidebar(shown) => update.hide_sidebar = Some(!shown),
             Preference::SidebarIconSize(size) => update.sidebar_icon_size = Some(size),
-            Preference::ViewOptions(options) => update.view_options = Some(options),
             Preference::FolderTree(options) => update.folder_tree = Some(options),
             Preference::DefaultLayout => {
                 update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
@@ -163,7 +156,9 @@ impl BrowserWindow {
             details_view.connect_columns_resized(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |widths| window.save_preference(Preference::ColumnWidths(widths))
+                #[weak]
+                pane,
+                move |_| window.remember_pane_style(&pane)
             ));
         }
         // `win.details-pane` starts from the same preferences.
@@ -172,7 +167,10 @@ impl BrowserWindow {
         self.fit_details_pane();
         // The shared style; a folder with its own is shown in it once it
         // is opened (VIEW-020).
-        self.apply_style(&preferences.view_for(""));
+        for pane in self.folder_panes() {
+            self.apply_style_to(pane, &preferences.view_for(""));
+        }
+        self.show_pane_view_state();
         self.follow_item_preferences();
         let workspace = self.workspace();
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
@@ -188,7 +186,14 @@ impl BrowserWindow {
     /// Settings > "Reset sidebar and column widths": saves the default
     /// widths and has every window show them.
     pub(super) fn reset_layout(&self) {
-        self.save_preference(Preference::DefaultLayout);
+        let mut update = Preference::DefaultLayout.into_update();
+        let mut folders = self.context().settings_data().preferences.folder_views;
+        for folder in &mut folders {
+            folder.properties.column_widths = Some(ox_core::settings::ColumnWidths::default());
+        }
+        update.folder_views = Some(folders);
+        self.context()
+            .update_preferences(update, self.preference_failure_reply());
         self.context().announce_layout_reset();
     }
 

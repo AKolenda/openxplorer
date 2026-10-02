@@ -29,6 +29,11 @@ fn marker_look(selected: bool) -> (Icon, &'static str) {
 }
 
 impl FileCell {
+    /// A Settings change hides an already hovered marker immediately.
+    pub(crate) fn hide_selection_marker(&self) {
+        self.imp().marker.set_visible(false);
+    }
+
     /// Shows the marker while the pointer is over the cell and markers are
     /// on in `owners`; clicking it toggles `list_item`'s item.
     pub(crate) fn follow_selection_marker(&self, list_item: &gtk::ListItem, owners: &Rc<CellOwners>) {

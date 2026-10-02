@@ -398,6 +398,13 @@ impl CellOwners {
     /// Shows selection markers on hovered items, or never.
     pub(crate) fn set_selection_markers(&self, shown: bool) {
         self.hides_selection_markers.set(!shown);
+        if !shown {
+            for (cell, _) in self.owners.borrow().iter().filter_map(CellOwner::bound_cell) {
+                if let Some(cell) = cell.downcast_ref::<FileCell>() {
+                    cell.hide_selection_marker();
+                }
+            }
+        }
     }
 
     /// The list item whose content widget is `widget`.

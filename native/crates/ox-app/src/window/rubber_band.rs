@@ -73,6 +73,8 @@ pub(super) fn banded_selection(
 /// A band being drawn.
 #[derive(Debug)]
 pub(super) struct Band {
+    /// The pane that owns the band, even if focus moves elsewhere.
+    pane: super::folder_pane::FolderPane,
     /// The view it is drawn in.
     view: gtk::Widget,
     /// Where it started, in the view's scrolled content.
@@ -83,9 +85,9 @@ pub(super) struct Band {
     initial: BTreeSet<u32>,
     /// What it does with that selection.
     mode: BandMode,
-    /// Whether each item it has seen is inside it; items scrolled off
-    /// screen keep what they were last seen as.
-    touched: BTreeMap<u32, bool>,
+    /// Content bounds of items seen while dragging. Items scrolled away
+    /// still leave the selection when the rectangle shrinks past them.
+    bounds: BTreeMap<u32, graphene::Rect>,
     /// Scrolls the view while the pointer is at its edge.
     scroll_timer: Option<glib::SourceId>,
 }
@@ -139,6 +141,9 @@ impl BrowserWindow {
                 if dx.hypot(dy) < BAND_THRESHOLD && !window.band_is_shown() {
                     return;
                 }
+                if let Some(band) = window.imp().rubber_band.borrow_mut().as_mut() {
+                    band.mode = BandMode::from_modifiers(drag.current_event_state());
+                }
                 drag.set_state(gtk::EventSequenceState::Claimed);
                 window.move_band((x + dx, y + dy));
             }
@@ -148,6 +153,39 @@ impl BrowserWindow {
             self,
             move |_, _, _| window.end_band()
         ));
+        drag.connect_cancel(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_, _| window.end_band()
+        ));
+        view.connect_unmap(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_| window.end_band()
+        ));
+        for pane in self
+            .folder_panes()
+            .into_iter()
+            .filter(|pane| view.is_ancestor(*pane))
+        {
+            pane.model().selection().connect_items_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                pane,
+                move |_, _, _, _| {
+                    let changed = window
+                        .imp()
+                        .rubber_band
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|band| band.pane == pane);
+                    if changed {
+                        window.end_band();
+                    }
+                }
+            ));
+        }
         view.add_controller(drag);
     }
 
@@ -162,19 +200,24 @@ impl BrowserWindow {
             .into_iter()
             .collect();
         self.imp().rubber_band.replace(Some(Band {
+            pane: self.folder_pane().clone(),
             view: view.clone(),
             start: (point.0 + dx, point.1 + dy),
             pointer: point,
             initial,
             mode,
-            touched: BTreeMap::new(),
+            bounds: BTreeMap::new(),
             scroll_timer: None,
         }));
     }
 
     /// Whether a band is drawn now.
     fn band_is_shown(&self) -> bool {
-        self.folder_pane().rubber_band_shown()
+        self.imp()
+            .rubber_band
+            .borrow()
+            .as_ref()
+            .is_some_and(|band| band.pane.rubber_band_shown())
     }
 
     /// Moves the band's free corner to `pointer` in its view: selects what
@@ -189,29 +232,28 @@ impl BrowserWindow {
 
     /// Selects what the band touches and draws it where it is now.
     fn update_band(&self) {
-        let pane = self.folder_pane();
         let mut state = self.imp().rubber_band.borrow_mut();
         let Some(band) = state.as_mut() else { return };
+        let pane = band.pane.clone();
         let (dx, dy) = scroll_offsets(&band.view);
         let start = (band.start.0 - dx, band.start.1 - dy);
-        let rect = rect_between(start, band.pointer);
+        let mut rect = rect_between(start, band.pointer);
+        let content_rect = rect_between(band.start, (band.pointer.0 + dx, band.pointer.1 + dy));
         let full_rows = band.view.is::<gtk::ColumnView>();
         for (position, row) in pane.owners().shown_items(&band.view) {
-            let Some(bounds) = row.compute_bounds(&band.view) else {
+            let Some(mut bounds) = row.compute_bounds(&band.view) else {
                 continue;
             };
-            let inside = if full_rows {
-                bounds.y() < rect.y() + rect.height() && rect.y() < bounds.y() + bounds.height()
-            } else {
-                bounds.intersection(&rect).is_some()
-            };
-            band.touched.insert(position, inside);
+            #[expect(clippy::cast_possible_truncation, reason = "pixel coordinates")]
+            bounds.offset(dx as f32, dy as f32);
+            band.bounds.insert(position, bounds);
         }
-        let touched: BTreeSet<u32> = band
-            .touched
-            .iter()
-            .filter_map(|(position, inside)| inside.then_some(*position))
-            .collect();
+        let touched = touched_positions(&band.bounds, &content_rect, full_rows);
+        if full_rows {
+            #[expect(clippy::cast_precision_loss, reason = "a widget's pixel width")]
+            let width = band.view.width() as f32;
+            rect = graphene::Rect::new(0.0, rect.y(), width, rect.height());
+        }
         let selected = banded_selection(&band.initial, &touched, band.mode);
         let positions: Vec<u32> = selected.into_iter().collect();
         let shown = band.view.clone();
@@ -263,13 +305,21 @@ impl BrowserWindow {
             let scrollable = band.view.dynamic_cast_ref::<gtk::Scrollable>().cloned();
             (scrollable, step)
         };
-        let (Some(scrollable), (dx, dy)) = step else {
-            return glib::ControlFlow::Continue;
-        };
-        for (adjustment, delta) in [(scrollable.hadjustment(), dx), (scrollable.vadjustment(), dy)] {
-            if let Some(adjustment) = adjustment.filter(|_| delta != 0.0) {
-                adjustment.set_value(adjustment.value() + delta);
+        let mut moved = false;
+        if let (Some(scrollable), (dx, dy)) = step {
+            for (adjustment, delta) in [(scrollable.hadjustment(), dx), (scrollable.vadjustment(), dy)] {
+                if let Some(adjustment) = adjustment.filter(|_| delta != 0.0) {
+                    let before = adjustment.value();
+                    adjustment.set_value(before + delta);
+                    moved |= (adjustment.value() - before).abs() > f64::EPSILON;
+                }
             }
+        }
+        if !moved {
+            if let Some(band) = self.imp().rubber_band.borrow_mut().as_mut() {
+                band.scroll_timer = None;
+            }
+            return glib::ControlFlow::Break;
         }
         self.update_band();
         glib::ControlFlow::Continue
@@ -283,7 +333,7 @@ impl BrowserWindow {
         if let Some(timer) = band.scroll_timer.take() {
             timer.remove();
         }
-        self.folder_pane().show_rubber_band(&band.view, None);
+        band.pane.show_rubber_band(&band.view, None);
     }
 }
 
@@ -307,6 +357,26 @@ fn edge_step(band: &Band) -> (f64, f64) {
 
 /// The band being drawn, kept by the window.
 pub(super) type BandState = RefCell<Option<Band>>;
+
+/// Hit-tests in content coordinates, including cached bounds of rows that
+/// have scrolled outside GTK's realized viewport.
+fn touched_positions(
+    bounds: &BTreeMap<u32, graphene::Rect>,
+    rect: &graphene::Rect,
+    full_rows: bool,
+) -> BTreeSet<u32> {
+    bounds
+        .iter()
+        .filter_map(|(position, bounds)| {
+            let inside = if full_rows {
+                bounds.y() < rect.y() + rect.height() && rect.y() < bounds.y() + bounds.height()
+            } else {
+                bounds.intersection(rect).is_some()
+            };
+            inside.then_some(*position)
+        })
+        .collect()
+}
 
 #[cfg(test)]
 mod tests {
@@ -341,6 +411,18 @@ mod tests {
         assert_eq!(
             BandMode::from_modifiers(gdk::ModifierType::SHIFT_MASK),
             BandMode::Add
+        );
+        let bounds = BTreeMap::from([
+            (1, graphene::Rect::new(0.0, 100.0, 80.0, 30.0)),
+            (2, graphene::Rect::new(0.0, 200.0, 80.0, 30.0)),
+        ]);
+        let wide = graphene::Rect::new(0.0, 0.0, 80.0, 250.0);
+        let short = graphene::Rect::new(0.0, 0.0, 80.0, 150.0);
+        assert_eq!(touched_positions(&bounds, &wide, false), set(&[1, 2]));
+        assert_eq!(
+            touched_positions(&bounds, &short, false),
+            set(&[1]),
+            "scrolled-away rows leave a shrinking band"
         );
     }
 }
