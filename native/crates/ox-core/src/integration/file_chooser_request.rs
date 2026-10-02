@@ -325,10 +325,27 @@ impl ChooserRequest {
             results.insert_value("choices", &chosen.to_variant());
         }
         if let ChooserMode::Open { .. } = self.mode {
-            results.insert_value("writable", &false.to_variant());
+            // Whether the caller may write what was chosen; a sandboxed
+            // caller gets read-only access when this is false.
+            results.insert_value("writable", &all_writable(locations).to_variant());
         }
         (RESPONSE_SUCCESS, results.end())
     }
+}
+
+/// Whether the user may write every one of `locations`, as GIO reports
+/// it (`access::can-write`); false when that cannot be read.
+fn all_writable(locations: &[PathBuf]) -> bool {
+    !locations.is_empty()
+        && locations.iter().all(|location| {
+            gio::File::for_path(location)
+                .query_info(
+                    gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
+                    gio::FileQueryInfoFlags::NONE,
+                    gio::Cancellable::NONE,
+                )
+                .is_ok_and(|info| info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE))
+        })
 }
 
 /// How the dialog ended.

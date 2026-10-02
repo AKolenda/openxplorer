@@ -168,7 +168,8 @@ impl BrowserWindow {
         for action in DISABLED_ACTIONS {
             self.set_action_enabled(action, false);
         }
-        self.set_modal(true);
+        // Not modal: with no parent of its own, a modal window would block
+        // every other OpenXplorer window while the caller waits.
         self.set_default_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1);
         self.folder_pane().model().set_chooser_listing(picker.listing());
         if self.add_tab(&start).is_err() {
@@ -833,6 +834,10 @@ mod tests {
         assert!(
             !window.lookup_action("new-tab").expect("the action").is_enabled(),
             "no new tabs"
+        );
+        assert!(
+            !window.is_modal(),
+            "the picker has no parent, so modal would block every other window"
         );
         capture(window, "picker-save.png");
         name.set_text("summary.txt");

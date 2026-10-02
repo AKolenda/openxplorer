@@ -13,7 +13,7 @@
 //! caller and its options are ox-core's
 //! ([`ox_core::integration::FileChooserBus`]).
 
-use ox_core::integration::{DisabledFileDialogs, FileDialogRegistration};
+use ox_core::integration::{DisabledFileDialogs, FileDialogRegistration, PortalRestart};
 
 use super::changes::IntegrationError;
 use super::DesktopIntegration;
@@ -94,11 +94,21 @@ impl DesktopIntegration {
     /// [`IntegrationError::FileDialogs`] when the portal could not be
     /// restarted.
     pub(crate) async fn apply_file_dialogs(&self) -> Result<String, IntegrationError> {
-        self.file_dialogs()
+        let restart = self
+            .file_dialogs()
             .run_in_background(FileDialogRegistration::restart_portal)
             .await?;
         self.notify_changed();
-        Ok("The desktop portal restarted. Open and Save dialogs follow the new choice.".to_owned())
+        Ok(match restart {
+            PortalRestart::Restarted => {
+                "The desktop portal restarted. Open and Save dialogs follow the new choice."
+            }
+            PortalRestart::NotRunning => {
+                "The desktop portal is not running as a service that can be restarted. The choice applies \
+                 the next time you log in."
+            }
+        }
+        .to_owned())
     }
 
     /// Where Open and Save dialogs go now, read off the main thread.

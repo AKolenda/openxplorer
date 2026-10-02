@@ -108,7 +108,8 @@ pub use file_chooser_request::{
 };
 pub use file_dialogs::{
     desktops_from, preferred_value, with_preference, without_preference, DisabledFileDialogs,
-    FileDialogError, FileDialogPaths, FileDialogRegistration, FILE_CHOOSER_KEY, PORTAL_SERVICE,
+    FileDialogError, FileDialogPaths, FileDialogRegistration, PortalRestart, FILE_CHOOSER_KEY,
+    PORTAL_SERVICE,
 };
 pub use file_manager_bus::{
     BusStatus, FileManagerBus, RegistrationFailed, RequestNotOpened, BUS_NAME, OBJECT_PATH,

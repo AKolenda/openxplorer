@@ -241,6 +241,56 @@ fn replies_carry_uris_filter_and_choices() {
     assert_eq!(request.reply(&ChooserAnswer::Ended).0, RESPONSE_OTHER);
 }
 
+/// An Open reply says whether the user may write what was chosen, so a
+/// sandboxed caller gets write access to a writable file and only then.
+///
+/// parity: INT-032
+#[test]
+fn open_replies_say_whether_the_choice_is_writable() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let writable = folder.path().join("notes.txt");
+    let read_only = folder.path().join("signed.pdf");
+    fs::write(&writable, "x").expect("a file");
+    fs::write(&read_only, "x").expect("a file");
+    fs::set_permissions(&read_only, fs::Permissions::from_mode(0o444)).expect("read-only");
+    let request = request("OpenFile", &[("multiple", true.to_variant())]).expect("a valid call");
+    let writable_flag = |locations: Vec<PathBuf>| -> Option<bool> {
+        let (_, results) = request.reply(&ChooserAnswer::Chosen {
+            locations,
+            filter: None,
+            choices: Vec::new(),
+        });
+        glib::VariantDict::new(Some(&results))
+            .lookup("writable")
+            .expect("typed")
+    };
+    assert_eq!(writable_flag(vec![writable.clone()]), Some(true));
+    assert_eq!(
+        writable_flag(vec![folder.path().to_owned()]),
+        Some(true),
+        "a folder"
+    );
+    // root may write anything, so the read-only cases hold for users only.
+    if !is_root() {
+        assert_eq!(writable_flag(vec![writable, read_only]), Some(false));
+    }
+    assert_eq!(
+        writable_flag(vec![folder.path().join("missing")]),
+        Some(false),
+        "unknown is not writable"
+    );
+}
+
+/// Whether the tests run as root.
+fn is_root() -> bool {
+    fs::metadata("/proc/self").is_ok_and(|metadata| {
+        use std::os::unix::fs::MetadataExt;
+        metadata.uid() == 0
+    })
+}
+
 /// `SaveFiles` answers one URI per name, in the folder the user chose.
 ///
 /// parity: INT-032
@@ -397,6 +447,41 @@ fn an_existing_user_file_is_restored_exactly() {
         fs::read_to_string(fixture.user_file()).expect("user file"),
         original
     );
+}
+
+/// When the user's settings are in another file the portal reads (here
+/// `portals.conf`), that file is changed in one line and put back; no new
+/// desktop file is created to hide it.
+///
+/// parity: INT-032
+#[test]
+fn the_user_file_in_use_is_changed_and_not_hidden() {
+    let fixture = OptInFixture::new();
+    let folder = fixture.root.path().join("config/xdg-desktop-portal");
+    let in_use = folder.join("portals.conf");
+    let original = "[preferred]\ndefault=gtk\norg.freedesktop.impl.portal.Screenshot=gnome\n";
+    fs::create_dir_all(&folder).expect("folder");
+    fs::write(&in_use, original).expect("user file");
+    let registration = fixture.registration();
+    assert_eq!(registration.config_file(), in_use);
+
+    registration.enable().expect("enable");
+    assert!(
+        !fixture.user_file().exists(),
+        "no kde-portals.conf hides portals.conf"
+    );
+    let written = fs::read_to_string(&in_use).expect("user file");
+    assert_eq!(preferred_value(&written, "default").as_deref(), Some("gtk"));
+    assert_eq!(
+        preferred_value(&written, "org.freedesktop.impl.portal.Screenshot").as_deref(),
+        Some("gnome")
+    );
+    assert!(registration.is_enabled());
+    assert_eq!(
+        registration.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert_eq!(fs::read_to_string(&in_use).expect("user file"), original);
 }
 
 /// A later edit by the user wins: disabling then removes only the app's

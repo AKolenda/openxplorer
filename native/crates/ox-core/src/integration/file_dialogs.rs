@@ -5,8 +5,10 @@
 //! New in the native app (INT-032). The desktop portal reads
 //! `$XDG_CONFIG_HOME/xdg-desktop-portal/<desktop>-portals.conf` before the
 //! system's files, and older portals use only the first file they find.
-//! Enabling therefore writes that file as the system file for the desktop,
-//! or as the user's existing file, with one key set under `[preferred]`:
+//! Enabling therefore changes the user's file the portal reads now (a
+//! desktop's file or `portals.conf`), or, when the user has none, creates
+//! the first one as a copy of the system file for the desktop, with one
+//! key set under `[preferred]`:
 //!
 //! ```ini
 //! org.freedesktop.impl.portal.FileChooser=io.winspace.Development
@@ -133,6 +135,17 @@ pub enum DisabledFileDialogs {
     NotEnabled,
 }
 
+/// What asking the portal to read its configuration again did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PortalRestart {
+    /// The portal was running and restarted; the choice applies now.
+    Restarted,
+    /// The portal is not running as a user service, so nothing restarted;
+    /// the choice applies when it next starts (at the latest, the next
+    /// login).
+    NotRunning,
+}
+
 /// The record kept while the opt-in is on.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct Record {
@@ -168,9 +181,16 @@ impl FileDialogRegistration {
         !self.sandbox.is_flatpak()
     }
 
-    /// The user's configuration file the portal reads first for this
-    /// desktop.
+    /// The user's configuration file enabling changes: the one the portal
+    /// reads now, else the first one it would read for this desktop.
     pub fn config_file(&self) -> PathBuf {
+        self.effective_user_file()
+            .unwrap_or_else(|| self.first_config_file())
+    }
+
+    /// The user's configuration file the portal reads first for this
+    /// desktop, whether or not it exists.
+    fn first_config_file(&self) -> PathBuf {
         let name = self.paths.desktops.first().map_or_else(
             || "portals.conf".to_owned(),
             |desktop| format!("{desktop}-portals.conf"),
@@ -184,9 +204,7 @@ impl FileDialogRegistration {
         if !self.is_available() {
             return false;
         }
-        let Ok(contents) =
-            fs::read_to_string(self.effective_user_file().unwrap_or_else(|| self.config_file()))
-        else {
+        let Ok(contents) = fs::read_to_string(self.config_file()) else {
             return false;
         };
         preferred_value(&contents, FILE_CHOOSER_KEY)
@@ -271,37 +289,22 @@ impl FileDialogRegistration {
     }
 
     /// Restarts the user's desktop portal so it reads the configuration
-    /// again: `systemctl --user try-restart xdg-desktop-portal.service`,
-    /// run with an argument list and no shell. `try-restart` never starts
-    /// a portal that was not running.
+    /// again, if it runs as a user service: `systemctl --user is-active`
+    /// first, then `try-restart` (which never starts a portal that was
+    /// not running) and `is-active` again, each run with an argument list
+    /// and no shell. `try-restart` succeeds even when the portal was not
+    /// running, so only an active unit counts as restarted.
     ///
     /// # Errors
     ///
     /// [`FileDialogError::Unsupported`] inside Flatpak, and
-    /// [`FileDialogError::Io`] when `systemctl` cannot run or fails.
-    pub fn restart_portal(&self) -> Result<(), FileDialogError> {
+    /// [`FileDialogError::Io`] when `systemctl` cannot run, the restart
+    /// fails, or the portal is not running after it.
+    pub fn restart_portal(&self) -> Result<PortalRestart, FileDialogError> {
         if !self.is_available() {
             return Err(FileDialogError::Unsupported);
         }
-        let program = PathBuf::from("systemctl");
-        let status = std::process::Command::new(&program)
-            .args(["--user", "try-restart", PORTAL_SERVICE])
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map_err(|error| FileDialogError::Io {
-                path: program.clone(),
-                error,
-            })?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(FileDialogError::Io {
-                path: program,
-                error: io::Error::other(format!("restarting {PORTAL_SERVICE} failed ({status})")),
-            })
-        }
+        restart_portal_with(Path::new("systemctl"))
     }
 
     /// Runs `operation` on a GIO worker thread, as the other integrations'
@@ -372,6 +375,40 @@ impl FileDialogRegistration {
         }
         Ok(())
     }
+}
+
+/// [`FileDialogRegistration::restart_portal`] with `program` as `systemctl`.
+fn restart_portal_with(program: &Path) -> Result<PortalRestart, FileDialogError> {
+    if !run_systemctl(program, "is-active")? {
+        return Ok(PortalRestart::NotRunning);
+    }
+    let failure = |what: &str| FileDialogError::Io {
+        path: program.to_owned(),
+        error: io::Error::other(format!("{PORTAL_SERVICE} {what}")),
+    };
+    if !run_systemctl(program, "try-restart")? {
+        return Err(failure("could not be restarted"));
+    }
+    if !run_systemctl(program, "is-active")? {
+        return Err(failure("did not start again"));
+    }
+    Ok(PortalRestart::Restarted)
+}
+
+/// Runs `program --user <verb> --quiet xdg-desktop-portal.service`;
+/// returns whether it succeeded.
+fn run_systemctl(program: &Path, verb: &str) -> Result<bool, FileDialogError> {
+    let status = std::process::Command::new(program)
+        .args(["--user", verb, "--quiet", PORTAL_SERVICE])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map_err(|error| FileDialogError::Io {
+            path: program.to_owned(),
+            error,
+        })?;
+    Ok(status.success())
 }
 
 /// The first `<desktop>-portals.conf`, then `portals.conf`, in `dir`.
@@ -525,5 +562,69 @@ fn remove_file(path: &Path) -> Result<(), FileDialogError> {
             path: path.to_owned(),
             error,
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+    use crate::test_support::temporary_folder;
+
+    /// A stand-in `systemctl` in `folder` that logs its verbs and answers
+    /// `is-active` from the file `active` (present: running).
+    fn fake_systemctl(folder: &Path) -> PathBuf {
+        let program = folder.join("systemctl");
+        let script = "#!/bin/sh\ndir=$(dirname \"$0\")\necho \"$2\" >> \"$dir/log\"\ncase \"$2\" in\n  \
+                      is-active) [ -e \"$dir/active\" ] ;;\nesac\n";
+        fs::write(&program, script).expect("the stand-in is written");
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).expect("it runs");
+        program
+    }
+
+    fn verbs(folder: &Path) -> Vec<String> {
+        fs::read_to_string(folder.join("log"))
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    }
+
+    /// `try-restart` succeeds when the portal is not running, so Apply now
+    /// asks whether it runs first and reports that nothing restarted.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn apply_now_restarts_only_a_running_portal() {
+        let folder = temporary_folder();
+        let program = fake_systemctl(folder.path());
+
+        let outcome = restart_portal_with(&program).expect("systemctl runs");
+        assert_eq!(outcome, PortalRestart::NotRunning);
+        assert_eq!(verbs(folder.path()), ["is-active"], "nothing is restarted");
+
+        fs::write(folder.path().join("active"), "").expect("the portal runs");
+        fs::remove_file(folder.path().join("log")).expect("the log is cleared");
+        let outcome = restart_portal_with(&program).expect("systemctl runs");
+        assert_eq!(outcome, PortalRestart::Restarted);
+        assert_eq!(verbs(folder.path()), ["is-active", "try-restart", "is-active"]);
+    }
+
+    /// A portal that is gone after the restart is reported as a failure.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn a_portal_that_does_not_come_back_is_a_failure() {
+        let folder = temporary_folder();
+        let program = folder.path().join("systemctl");
+        let script =
+            "#!/bin/sh\ndir=$(dirname \"$0\")\ncase \"$2\" in\n  is-active) [ -e \"$dir/active\" ] ;;\n  \
+                      try-restart) rm -f \"$dir/active\" ;;\nesac\n";
+        fs::write(&program, script).expect("the stand-in is written");
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).expect("it runs");
+        fs::write(folder.path().join("active"), "").expect("the portal runs");
+        let error = restart_portal_with(&program).expect_err("the portal stopped");
+        assert!(error.to_string().contains("did not start again"), "{error}");
     }
 }
