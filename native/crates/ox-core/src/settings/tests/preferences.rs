@@ -242,3 +242,89 @@ fn sections_and_places_hidden_from_two_windows_merge() {
     assert_eq!(merged.hidden_sidebar_sections, ["network"]);
     assert_eq!(merged.hidden_sidebar_places, ["recent:///"]);
 }
+
+/// Each folder's Group by is saved by location, two windows' choices
+/// merge, choosing again for the same folder replaces its choice, and
+/// forgetting it removes only that folder.
+///
+/// parity: VIEW-022
+#[test]
+fn folder_group_by_is_remembered_per_folder() {
+    use crate::grouping::GroupBy;
+
+    let root = temporary_folder();
+    let mut first = Settings::open(root.path());
+    let mut second = Settings::open(root.path());
+    first
+        .set_folder_group_by("file:///home/ana/Downloads", Some(GroupBy::None))
+        .expect("saved");
+    second
+        .set_folder_group_by("file:///home/ana/Music", Some(GroupBy::Type))
+        .expect("saved");
+    first
+        .set_folder_group_by("file:///home/ana/Pictures", Some(GroupBy::Size))
+        .expect("saved");
+    first
+        .set_folder_group_by("file:///home/ana/Music/", Some(GroupBy::Name))
+        .expect("saved");
+    second
+        .set_folder_group_by("file:///home/ana/Pictures", None)
+        .expect("forgotten");
+    let merged = Settings::open(root.path()).snapshot().preferences;
+    let saved: Vec<(&str, &str)> = merged
+        .folder_group_by
+        .iter()
+        .map(|(uri, key)| (uri.as_str(), key.as_str()))
+        .collect();
+    assert_eq!(
+        saved,
+        [
+            ("file:///home/ana/Downloads", "none"),
+            ("file:///home/ana/Music/", "name"),
+        ]
+    );
+}
+
+/// `folderGroupBy` is stored only once a folder's Group by was chosen,
+/// and an update with an unknown key, a bad location or too many folders
+/// changes nothing.
+///
+/// parity: VIEW-022
+#[test]
+fn folder_group_by_is_validated_and_stored_only_when_chosen() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    save_preferences(&mut store, &json!({"theme": "dark"}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
+    assert!(!file.contains("folderGroupBy"));
+
+    save_preferences(
+        &mut store,
+        &json!({"folderGroupBy": {"file:///home/ana/Downloads": "modified"}}),
+    );
+    for invalid in [
+        json!({"folderGroupBy": {"file:///home/ana/Downloads": "colour"}}),
+        json!({"folderGroupBy": {"": "name"}}),
+        json!({"folderGroupBy": {"file:///a\nb": "name"}}),
+        json!({"folderGroupBy": {"file:///home/ana": 3}}),
+        json!({"folderGroupBy": ["file:///home/ana"]}),
+    ] {
+        save_preferences(&mut store, &invalid);
+    }
+    let too_many: serde_json::Map<String, serde_json::Value> = (0..=MAX_GROUPED_FOLDERS)
+        .map(|n| (format!("file:///home/ana/{n}"), json!("type")))
+        .collect();
+    save_preferences(&mut store, &json!({ "folderGroupBy": too_many }));
+
+    let preferences = store.snapshot().preferences;
+    assert_eq!(preferences.folder_group_by.len(), 1);
+    assert_eq!(
+        preferences
+            .folder_group_by
+            .get("file:///home/ana/Downloads")
+            .map(String::as_str),
+        Some("modified")
+    );
+    let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
+    assert!(file.contains("\"folderGroupBy\""));
+}

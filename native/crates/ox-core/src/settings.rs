@@ -52,9 +52,11 @@ pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use pane_options::DetailsPaneOptions;
 pub use preferences::{
     Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, WindowSize, DEFAULT_TEXT_SIZE,
-    NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS, WINDOW_WIDTHS,
+    MAX_GROUPED_FOLDERS, NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS,
+    WINDOW_WIDTHS,
 };
 
+use crate::grouping::GroupBy;
 use crate::location::same_location;
 use save::{replace_private_file, OldFile, SettingsLock};
 
@@ -237,6 +239,38 @@ impl Settings {
             }
             let update = PreferencesUpdate {
                 hidden_sidebar_places: Some(places),
+                ..PreferencesUpdate::default()
+            };
+            data.preferences.apply(&update);
+            Ok(data.preferences.clone())
+        })
+    }
+
+    /// Remembers `group_by` as the Group by of the folder at `uri`,
+    /// changing only that folder of `folderGroupBy` as the file now holds
+    /// it; `None` forgets the folder's choice. When the map is full,
+    /// entries give way in location order. Returns the resulting
+    /// preferences.
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn set_folder_group_by(
+        &mut self,
+        uri: &str,
+        group_by: Option<GroupBy>,
+    ) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let mut groups = data.preferences.folder_group_by.clone();
+            groups.retain(|folder, _| !same_location(folder, uri));
+            if let Some(group_by) = group_by {
+                while groups.len() >= MAX_GROUPED_FOLDERS {
+                    groups.pop_first();
+                }
+                groups.insert(uri.to_owned(), group_by.as_str().to_owned());
+            }
+            let update = PreferencesUpdate {
+                folder_group_by: Some(groups),
                 ..PreferencesUpdate::default()
             };
             data.preferences.apply(&update);

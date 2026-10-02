@@ -188,6 +188,8 @@ mod imp {
         pub(super) columns: Cell<DetailsColumns>,
         /// Whether the view lists a folder or search results.
         pub(super) listing: Cell<DetailsListing>,
+        /// The group headings, shown while the folder is grouped.
+        pub(super) headings: OnceCell<gtk::SignalListItemFactory>,
     }
 
     #[glib::object_subclass]
@@ -260,8 +262,25 @@ impl DetailsView {
         view.install_column_fit();
         column_keys::make_titles_keyboard_operable(&view);
         view.describe_rows(model);
+        view.imp()
+            .headings
+            .set(model.heading_factory())
+            .expect("a new view has no headings yet");
         view.sort_by(SortOrder::DEFAULT);
         view
+    }
+
+    /// Shows or hides the group headings (VIEW-022). Without groups the
+    /// whole list is one section, which must not get a heading.
+    pub(crate) fn show_group_headings(&self, shown: bool) {
+        let headings = self.imp().headings.get().filter(|_| shown);
+        self.column_view().set_header_factory(headings);
+    }
+
+    /// Whether the group headings are shown.
+    #[cfg(test)]
+    pub(crate) fn shows_group_headings(&self) -> bool {
+        self.column_view().header_factory().is_some()
     }
 
     /// Names each row after its item and tells screen readers how many

@@ -7,6 +7,7 @@
 //! order. Each item runs a window or application action; the choices and
 //! toggles show a check mark while their action's state matches.
 
+use ox_core::grouping::GroupBy;
 use ox_core::settings::Theme;
 
 use crate::application::AppAction;
@@ -68,15 +69,30 @@ fn direction_item(label: &str, glyph: Icon, direction: SortDirection) -> MenuEnt
     MenuItem::choice(label, glyph, WindowAction::Direction, direction.as_str()).into()
 }
 
-/// The Sort menu: the columns, then the direction. The direction has an
-/// item each, where app.js had one item that flips it.
+/// The Sort menu's item for grouping by `group_by`.
+fn group_item(group_by: GroupBy) -> MenuEntry {
+    MenuItem::choice(
+        group_by.label(),
+        Icon::TextBulletList,
+        WindowAction::GroupBy,
+        group_by.as_str(),
+    )
+    .into()
+}
+
+/// The Sort menu: the columns, then the direction, then Explorer's Group
+/// by choices (VIEW-022). The direction has an item each, where app.js had
+/// one item that flips it; the menus have no submenus, so Group by's
+/// choices are items of their own.
 pub(super) fn sort_menu() -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = SortColumn::IN_SORT_MENU.into_iter().map(column_item).collect();
     entries.extend([
         MenuEntry::Divider,
         direction_item("Ascending", Icon::ArrowUp, SortDirection::Ascending),
         direction_item("Descending", Icon::ArrowDown, SortDirection::Descending),
+        MenuEntry::Divider,
     ]);
+    entries.extend(GroupBy::ALL.into_iter().map(group_item));
     entries
 }
 

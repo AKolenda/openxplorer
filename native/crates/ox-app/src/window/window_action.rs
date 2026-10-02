@@ -141,6 +141,9 @@ pub(crate) enum WindowAction {
     Sort,
     /// Whether the details view sorts ascending or descending.
     Direction,
+    /// What the folder is grouped by (VIEW-022): a `GroupBy` key target,
+    /// remembered for the folder.
+    GroupBy,
     /// The light, dark or system appearance.
     Theme,
     /// Makes text larger, smaller or its default size (Ctrl+plus, minus
@@ -419,6 +422,7 @@ impl WindowAction {
             WindowAction::ShowPlace => "show-place",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
+            WindowAction::GroupBy => "group-by",
             WindowAction::Theme => "theme",
             WindowAction::TextSize(step) => step.action_name(),
             WindowAction::ResetLayout => "reset-layout",

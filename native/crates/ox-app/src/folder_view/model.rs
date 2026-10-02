@@ -5,7 +5,9 @@
 //! the active tab's store through one filter model (hidden items and the
 //! search box), one sort model (folders first, then the chosen column in
 //! natural order, ties by name ascending, as `filtered()` in app.js) and one
-//! multi-selection shared by the details and icon views.
+//! multi-selection shared by the details and icon views. While the folder
+//! is grouped (VIEW-022), the sort model sorts by group first and each
+//! group is one of its sections.
 
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -14,9 +16,11 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use ox_core::grouping::GroupBy;
 use ox_core::search::SearchFacets;
 
 use crate::folder_view::filter::FilterState;
+use crate::folder_view::groups::{self, Grouping};
 use crate::folder_view::item::FileItem;
 use crate::folder_view::sorting::{self, SortColumn};
 
@@ -88,6 +92,11 @@ pub(crate) struct FolderModel {
     filter_model: gtk::FilterListModel,
     sort_model: gtk::SortListModel,
     selection: gtk::MultiSelection,
+    /// Shared with the section sorter and the details view's headings.
+    grouping: Rc<RefCell<Grouping>>,
+    /// Sorts the items into their groups; set on the sort model only
+    /// while the folder is grouped.
+    section_sorter: gtk::CustomSorter,
 }
 
 impl FolderModel {
@@ -103,12 +112,20 @@ impl FolderModel {
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
         let selection = gtk::MultiSelection::new(Some(sort_model.clone()));
+        let grouping = Rc::new(RefCell::new(Grouping::default()));
+        let groups = Rc::clone(&grouping);
+        let section_sorter = gtk::CustomSorter::new(move |a, b| {
+            let order = groups.borrow().compare(as_item(a), as_item(b));
+            order.into()
+        });
         Self {
             filter_state,
             filter,
             filter_model,
             sort_model,
             selection,
+            grouping,
+            section_sorter,
         }
     }
 
@@ -121,6 +138,61 @@ impl FolderModel {
         sorter.append(column_sorter.clone());
         sorter.append(names_ascending());
         self.sort_model.set_sorter(Some(&sorter));
+    }
+
+    /// Groups the items by `group_by` (VIEW-022), counting dates from
+    /// today; returns true when the grouping changed. Grouping by date
+    /// again on another day refreshes the dates, so a folder left open
+    /// overnight moves yesterday's items out of Today; otherwise the items
+    /// stay as they are, selection included.
+    pub(crate) fn set_group_by(&self, group_by: GroupBy) -> bool {
+        let grouping = Grouping::new(group_by);
+        if grouping.groups_like(&self.grouping.borrow()) {
+            return false;
+        }
+        let grouped = grouping.is_grouped();
+        // Regrouping moves the items, and the selection holds positions.
+        let selected = self.selected_uris();
+        self.grouping.replace(grouping);
+        if !grouped {
+            self.sort_model.set_section_sorter(None::<&gtk::Sorter>);
+        } else if self.sort_model.section_sorter().is_some() {
+            self.section_sorter.changed(gtk::SorterChange::Different);
+        } else {
+            self.sort_model.set_section_sorter(Some(&self.section_sorter));
+        }
+        self.select_uris(&selected);
+        true
+    }
+
+    /// What the items are grouped by.
+    #[cfg(test)]
+    pub(crate) fn group_by(&self) -> GroupBy {
+        self.grouping.borrow().group_by()
+    }
+
+    /// The details view's section headings for this model's groups.
+    pub(crate) fn heading_factory(&self) -> gtk::SignalListItemFactory {
+        groups::heading_factory(Rc::clone(&self.grouping))
+    }
+
+    /// The groups as the list shows them: each heading, without its
+    /// count, and how many items it holds.
+    #[cfg(test)]
+    pub(crate) fn group_sizes(&self) -> Vec<(String, u32)> {
+        let grouping = self.grouping.borrow();
+        let mut groups: Vec<(String, u32)> = Vec::new();
+        for position in 0..self.n_items() {
+            let Some(item) = self.item(position) else {
+                continue;
+            };
+            let label = grouping.label(&item);
+            match groups.last_mut() {
+                Some((last, count)) if *last == label => *count += 1,
+                _ => groups.push((label, 1)),
+            }
+        }
+        groups
     }
 
     /// The selection model both views display.
@@ -429,5 +501,94 @@ mod tests {
         let everything: Vec<String> = names.iter().map(|name| uri(name)).collect();
         model.select_uris(&everything);
         assert_eq!(model.summary().count, 2000);
+    }
+
+    /// Grouped by date, the items are listed newest group first, folders
+    /// first and by the sort column within each group, and ungrouping
+    /// returns to one list.
+    ///
+    /// parity: VIEW-022
+    #[gtk::test]
+    fn grouped_items_are_listed_group_by_group() {
+        let now = glib::DateTime::now_local().expect("the clock is readable");
+        let today = u64::try_from(now.to_unix()).expect("after 1970");
+        let yesterday = u64::try_from(now.add_days(-1).expect("a day ago").to_unix()).expect("after 1970");
+        let long_ago = 86_400 * 365;
+        let store = gio::ListStore::new::<FileItem>();
+        for (name, modified, folder) in [
+            ("old.txt", Some(long_ago), false),
+            ("new.txt", Some(today), false),
+            ("Recent", Some(today), true),
+            ("draft.txt", Some(yesterday), false),
+            ("lost.txt", None, false),
+            ("again.txt", Some(today), false),
+        ] {
+            let mut entry = if folder {
+                crate::test_support::folder_entry(name)
+            } else {
+                file_entry(name)
+            };
+            entry.modified = modified;
+            store.append(&FileItem::new(entry));
+        }
+        let model = FolderModel::new();
+        model.set_store(Some(&store));
+        model.attach_column_sorter(&column_sorter(SortColumn::Name).upcast());
+
+        assert!(model.set_group_by(GroupBy::Modified));
+        let names: Vec<String> = (0..model.n_items()).filter_map(|n| model.name_at(n)).collect();
+        assert_eq!(
+            names,
+            [
+                "Recent",
+                "again.txt",
+                "new.txt",
+                "draft.txt",
+                "old.txt",
+                "lost.txt"
+            ]
+        );
+        let sizes = model.group_sizes();
+        let labels: Vec<(&str, u32)> = sizes
+            .iter()
+            .map(|(label, count)| (label.as_str(), *count))
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                ("Today", 3),
+                ("Yesterday", 1),
+                ("A long time ago", 1),
+                ("Unknown date", 1)
+            ]
+        );
+        let (start, end) = model.sorted().section(4);
+        assert_eq!((start, end), (4, 5), "each group is a section of the list");
+
+        model.select_only(1);
+        assert!(
+            !model.set_group_by(GroupBy::Modified),
+            "the same day groups the same"
+        );
+        assert_eq!(model.selected_positions(), [1], "and keeps the selection");
+        assert!(model.set_group_by(GroupBy::None));
+        assert!(model.sorted().section_sorter().is_none());
+        assert_eq!(
+            model.selected_uris(),
+            [uri("again.txt")],
+            "regrouping keeps the selection"
+        );
+        let names: Vec<String> = (0..model.n_items()).filter_map(|n| model.name_at(n)).collect();
+        assert_eq!(
+            names,
+            [
+                "Recent",
+                "again.txt",
+                "draft.txt",
+                "lost.txt",
+                "new.txt",
+                "old.txt"
+            ]
+        );
     }
 }

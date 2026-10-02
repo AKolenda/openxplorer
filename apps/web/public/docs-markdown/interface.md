@@ -14,6 +14,12 @@ Resize the sidebar and column edges. Double-click an edge to reset or fit it, de
 
 Windows 10-style classic menus are the default; Settings can switch to the Windows 11-style compact option. Open with uses registered applications; identical editor names are deduplicated.
 
+## Group files like Explorer
+
+Sort > Group by name, date modified, type or size splits the folder into titled groups, each with its count, as Windows Explorer does; No grouping returns to one list. Dates use calendar periods in your time zone: Today, Yesterday, Earlier this week, Last week, Earlier this month, Last month, Earlier this year and A long time ago, and Tomorrow through In the future for files dated later, for example ones copied from another time zone. Weeks start on your region's first day.
+
+Each folder remembers how it is grouped. Downloads is grouped by date modified until you choose otherwise. The icon views list the groups in the same order, without headings.
+
 ## Previous versions
 
 Properties → Previous versions can browse existing, exposed snapshot collections. Opening a snapshot in another tab retains the original dialog on its originating tab. Restore a copy writes to a separate destination, not over the live original.

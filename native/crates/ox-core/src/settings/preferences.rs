@@ -6,6 +6,7 @@
 //! checks Python makes (`type(size) is int`, `isinstance(value, bool)`), so
 //! both applications accept and ignore exactly the same values.
 
+use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 
 use serde::Serialize;
@@ -14,6 +15,7 @@ use serde_json::Value;
 use super::choices::{ContextMenu, Theme, View};
 use super::pane_options::DetailsPaneOptions;
 use super::SettingsError;
+use crate::grouping::GroupBy;
 
 /// Text sizes offered in Settings, in percent.
 pub const TEXT_SIZES: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
@@ -290,6 +292,12 @@ pub struct Preferences {
     /// one is hidden.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hidden_sidebar_places: Vec<String>,
+    /// The Group by the user chose for each folder (Explorer's View >
+    /// Group by), by location: a [`GroupBy`] key, `none` included, so a
+    /// folder grouped by default (Downloads) can be ungrouped. Stored only
+    /// once one was chosen; the Python app ignores it.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub folder_group_by: BTreeMap<String, String>,
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
@@ -300,6 +308,9 @@ const MAX_SECTION_KEY: usize = 32;
 /// location.
 const MAX_HIDDEN_PLACES: usize = 64;
 const MAX_PLACE_LOCATION: usize = 4096;
+
+/// The most folders whose Group by is remembered.
+pub const MAX_GROUPED_FOLDERS: usize = 512;
 
 /// The sidebar icon sizes the user may choose, in pixels; 0 is automatic.
 pub const SIDEBAR_ICON_SIZES: [u32; 5] = [0, 16, 22, 32, 48];
@@ -343,6 +354,7 @@ impl Default for Preferences {
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
+            folder_group_by: BTreeMap::new(),
         }
     }
 }
@@ -406,6 +418,18 @@ impl Preferences {
         });
         if let Some(places) = places {
             self.hidden_sidebar_places.clone_from(places);
+        }
+        let groups = update.folder_group_by.as_ref().filter(|groups| {
+            groups.len() <= MAX_GROUPED_FOLDERS
+                && groups.iter().all(|(uri, key)| {
+                    !uri.is_empty()
+                        && uri.len() <= MAX_PLACE_LOCATION
+                        && !uri.contains(char::is_control)
+                        && GroupBy::from_key(key).is_some()
+                })
+        });
+        if let Some(groups) = groups {
+            self.folder_group_by.clone_from(groups);
         }
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
@@ -483,6 +507,9 @@ pub struct PreferencesUpdate {
     /// Replaces the sidebar places hidden one by one; up to 64 locations,
     /// else ignored.
     pub hidden_sidebar_places: Option<Vec<String>>,
+    /// Replaces every folder's Group by; up to 512 locations with known
+    /// keys, else ignored.
+    pub folder_group_by: Option<BTreeMap<String, String>>,
 }
 
 impl PreferencesUpdate {
@@ -533,6 +560,7 @@ impl PreferencesUpdate {
                 .and_then(|size| u32::try_from(size).ok()),
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
+            folder_group_by: values.get("folderGroupBy").and_then(read_string_map),
         })
     }
 }
@@ -543,6 +571,15 @@ fn read_keys(value: &Value) -> Option<Vec<String>> {
         .as_array()?
         .iter()
         .map(|key| key.as_str().map(str::to_owned))
+        .collect()
+}
+
+/// An object of strings, or `None` when `value` is not one.
+fn read_string_map(value: &Value) -> Option<BTreeMap<String, String>> {
+    value
+        .as_object()?
+        .iter()
+        .map(|(key, text)| Some((key.clone(), text.as_str()?.to_owned())))
         .collect()
 }
 

@@ -10,6 +10,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
+use ox_core::grouping::GroupBy;
 use ox_core::settings::{Theme, SIDEBAR_ICON_SIZES};
 
 use crate::application::AppAction;
@@ -295,7 +296,7 @@ impl BrowserWindow {
     }
 
     /// The Sort menu's column and direction choices, which follow sorting
-    /// by a column header too.
+    /// by a column header too, and its Group by choices.
     fn install_sort_actions(&self) {
         self.add_action_entries([
             choice_action(WindowAction::Sort, SortColumn::Name.as_str(), |window, key| {
@@ -316,6 +317,13 @@ impl BrowserWindow {
                     true
                 },
             ),
+            choice_action(WindowAction::GroupBy, GroupBy::None.as_str(), |window, key| {
+                let Some(group_by) = GroupBy::from_key(key) else {
+                    return false;
+                };
+                window.choose_group_by(group_by);
+                true
+            }),
         ]);
         self.follow_header_sorting();
     }

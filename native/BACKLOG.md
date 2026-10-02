@@ -121,7 +121,7 @@ from features.toml.
 | VIEW-019 | todo | should | More sort keys |
 | VIEW-020 | todo | should | View settings are remembered |
 | VIEW-021 | todo | should | 'Adjust View Display Style' dialog |
-| VIEW-022 | todo | should | Group items by the sort key |
+| VIEW-022 | partial | should | Group items by the sort key |
 | VIEW-032 | todo | could | Automatic or custom column widths, and side padding |
 | VIEW-033 | todo | should | Choose details columns from the header |
 | VIEW-034 | todo | should | Reorder details columns by dragging headers |

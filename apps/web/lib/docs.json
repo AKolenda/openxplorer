@@ -361,6 +361,14 @@
         ]
       },
       {
+        "id": "group-by",
+        "title": "Group files like Explorer",
+        "paragraphs": [
+          "Sort > Group by name, date modified, type or size splits the folder into titled groups, each with its count, as Windows Explorer does; No grouping returns to one list. Dates use calendar periods in your time zone: Today, Yesterday, Earlier this week, Last week, Earlier this month, Last month, Earlier this year and A long time ago, and Tomorrow through In the future for files dated later, for example ones copied from another time zone. Weeks start on your region's first day.",
+          "Each folder remembers how it is grouped. Downloads is grouped by date modified until you choose otherwise. The icon views list the groups in the same order, without headings."
+        ]
+      },
+      {
         "id": "snapshots",
         "title": "Previous versions",
         "paragraphs": [

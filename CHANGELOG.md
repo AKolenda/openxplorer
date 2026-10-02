@@ -1,3 +1,13 @@
+# Unreleased
+
+- Group by, as in Windows Explorer: Sort > Group by name, date modified,
+  type or size splits the folder into titled groups with their counts.
+  Dates use calendar periods in local time (Today, Yesterday, Earlier
+  this week, Last week, ... A long time ago, and Tomorrow ... In the
+  future for later dates). Each folder remembers its choice (a new
+  `folderGroupBy` preference, which the Python app ignores), and
+  Downloads is grouped by date modified until changed.
+
 # 2.0.0 — 2026-09-28
 
 OpenXplorer is now a native GTK 4 application written in Rust. It replaces the

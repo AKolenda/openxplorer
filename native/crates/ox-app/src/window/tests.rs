@@ -27,6 +27,7 @@ mod file_ops_captures;
 mod file_ops_support;
 mod folder_location;
 mod geometry;
+mod grouping;
 mod history;
 mod icons;
 mod input;

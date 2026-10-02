@@ -743,7 +743,7 @@ size before judging hairlines.
 | Title bar | `window.ox > .titlebar` (the `WindowHandle`), `.ox-titlebar` (its box) | GTK adds `.titlebar` to the widget given to `set_titlebar()` |
 | Custom tabs | `.ox-titlebar .tabs > .tab`, `.tab.active`, `.tab:hover`, `.tab:focus-visible`, `.tab > button.tab-close`, `.tabs:drop(active)` | A `gtk::Box` gets `:hover` without extra code. Set `gtk::StateFlags::ACTIVE` on press to get `:active`. |
 | Caption buttons | `.ox-titlebar button.caption.minimize`, `.maximize`, `.close` | our own buttons (D-N02) |
-| ColumnView | `columnview.files`, `> header`, `> header > button` (column title), `> header > button sort-indicator.ascending`/`.descending`, `> listview`, `> listview > row`, `row:hover`, `row:selected`, `row:focus-visible`, `row > cell`, `rubberband` | `sort-indicator` is a built-in icon, so `-gtk-icon-source` and `-gtk-icon-size` apply |
+| ColumnView | `columnview.files`, `> header`, `> header > button` (column title), `> header > button sort-indicator.ascending`/`.descending`, `> listview`, `> listview > row`, `row:hover`, `row:selected`, `row:focus-visible`, `row > cell`, `> listview > header` (Group by headings, VIEW-022), `rubberband` | `sort-indicator` is a built-in icon, so `-gtk-icon-source` and `-gtk-icon-size` apply |
 | GridView | `gridview.files`, `> child`, `child:selected`, `rubberband` | tile size via generated `min-width`/`min-height` (`fonts.rs`) |
 | Sidebar (ListBox) | `.sidebar list > row`, `row:selected`, `.current`, `.pill` | the pill is a real child widget (no `::before` in GTK) |
 | Tree expander | `expander` (built-in icon) inside `treeexpander` | set the chevron with `-gtk-icon-source: -gtk-recolor(url("resource:///…/chevron-symbolic.svg"))` |

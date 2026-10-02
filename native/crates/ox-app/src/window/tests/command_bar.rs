@@ -155,7 +155,7 @@ const NEW_MENU: [&str; 12] = [
 ];
 
 /// The Sort menu: the columns, then one item per direction.
-const SORT_MENU: [&str; 7] = [
+const SORT_MENU: [&str; 13] = [
     "Name",
     "Date modified",
     "Type",
@@ -163,6 +163,12 @@ const SORT_MENU: [&str; 7] = [
     "-",
     "Ascending",
     "Descending",
+    "-",
+    "No grouping",
+    "Group by name",
+    "Group by date modified",
+    "Group by type",
+    "Group by size",
 ];
 
 /// The appearance button's menu (`appearanceMenu`).

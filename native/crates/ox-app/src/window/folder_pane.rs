@@ -17,6 +17,7 @@ mod view;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::grouping::GroupBy;
 
 use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
@@ -249,6 +250,17 @@ impl FolderPane {
             }
         }
         parts.views.set_visible_child_name(view.stack_name());
+    }
+
+    /// Groups the items by `group_by` (VIEW-022): the model sorts by
+    /// group, and the details view shows a heading per group. The icon
+    /// view lists the groups in order without headings, as GTK 4.14's
+    /// grid has none. Returns true when the choice changed.
+    pub(super) fn set_group_by(&self, group_by: GroupBy) -> bool {
+        let parts = self.parts();
+        let changed = parts.model.set_group_by(group_by);
+        parts.details.show_group_headings(group_by != GroupBy::None);
+        changed
     }
 
     /// The visible view's vertical scroll adjustment.

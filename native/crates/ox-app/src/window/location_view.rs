@@ -159,6 +159,7 @@ impl BrowserWindow {
         self.update_properties_actions();
         self.sidebar().select(uri);
         self.render_landing();
+        self.apply_folder_grouping(uri);
         self.show_surface_for(uri);
     }
 

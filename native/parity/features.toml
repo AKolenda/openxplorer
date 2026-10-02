@@ -3210,8 +3210,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "show_in_groups"
-native = "todo"
-native_note = "Porting notes: Explorer offers the same through 'Group by'."
+native = "partial"
+native_note = "Explorer's Group by, in the Sort menu: No grouping, Group by name (0 – 9, A – H, I – P, Q – Z, Other), date modified (calendar periods in local time from Today, Yesterday, Earlier this week, Last week, Earlier this month, Last month, Earlier this year to A long time ago, and for later dates Tomorrow, Later this week, Next week, Later this month, Next month, Later this year and In the future; weeks start on the region's first day), type and size (Explorer's buckets, folders Unspecified). The details view shows each group's heading and count; each folder remembers its choice (folderGroupBy) and Downloads is grouped by date until the user chooses otherwise. Tests: native/crates/ox-core/src/grouping.rs, native/crates/ox-core/src/settings/tests/preferences.rs (folder_group_by_is_remembered_per_folder), native/crates/ox-app/src/folder_view/model.rs (grouped_items_are_listed_group_by_group), native/crates/ox-app/src/window/tests/grouping.rs. Missing: headings in the icon view, which GTK 4.14's grid view cannot draw (it lists the groups in order without them), collapsing a group, and Dolphin's permission groups."
 
 [[feature]]
 id = "VIEW-023"

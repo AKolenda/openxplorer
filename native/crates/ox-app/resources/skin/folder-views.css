@@ -85,6 +85,18 @@ columnview.files > listview > row > cell {
 }
 columnview.files > listview > row > cell:first-child { padding-left: 26px; }
 columnview.files > listview > row > cell:last-child { padding-right: 26px; }
+/* Group headings (VIEW-022): the group's name and count, then a line
+   to the end of the row, as Explorer's details view draws them. */
+columnview.files > listview > header {
+  margin: 0 12px;
+  padding: 0;
+  background: none;
+  color: @ox_text;
+}
+columnview.files > listview > header:not(:first-child) { margin-top: 10px; }
+.group-heading { padding: 8px 14px 4px 14px; }
+.group-heading-label { margin-right: 10px; font-weight: 600; }
+.group-heading-line { background-color: @ox_border; min-height: 1px; }
 /* The 21px icon is centred on a half pixel, which Chromium draws one
    pixel down. */
 columnview.files .row-icon { margin-top: 1px; }
