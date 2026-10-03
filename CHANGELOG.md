@@ -1,3 +1,8 @@
+# Unreleased
+
+- The note at the bottom of the Details pane ("Select an item to see its
+  properties…") uses the pane's whole width instead of a narrow column.
+
 # 2.0.1 — 2026-10-02
 
 Most of the gaps left by 2.0.0 are closed: 635 of the tracked behaviours of
