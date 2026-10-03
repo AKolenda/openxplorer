@@ -5,15 +5,17 @@ widgets instead of an HTML page in WebKit. It replaces the Python/WebKit app
 of OpenXplorer 1.x, which is no longer released and has left the tree: its last
 release is tag `v1.1.4`, and its final sources are `desktop/` at tag `v2.0.0`.
 Releases ship the stable channel (`io.winspace.Development`, see
-[packaging/README.md](packaging/README.md)); the parity items still open when
-2.0.0 shipped are in [BACKLOG.md](BACKLOG.md). The preview channel below
+[packaging/README.md](packaging/README.md)); the parity items still open in
+the current source are in [BACKLOG.md](BACKLOG.md). The preview channel below
 remains for trying a development build beside an installed release.
 
 The rewrite removes the HTML-to-Python command bridge and uses GTK's native
-models, selection, menus, fonts and scaling. The toolkit also supplies the
-building blocks for clipboard, drag-and-drop and accessibility; their complete
-application workflows still need implementation and acceptance testing. Startup
-and interaction performance must be measured before claiming an improvement.
+models, selection, menus, fonts and scaling, clipboard, drag-and-drop and
+accessibility. Besides the 1.x app's behaviour it ports much of Dolphin's:
+split panes, a Compact view, a folder tree, per-folder view properties and
+groups, thumbnails, transfer jobs with undo, and SFTP, FTP, WebDAV and NFS
+locations. Hardware acceptance (SMB servers, phones, Orca, mixed-DPI Wayland)
+is still owed; see [BACKLOG.md](BACKLOG.md).
 
 ## Layout
 
@@ -31,7 +33,7 @@ module names the Python file it ports, as `v2.0.0:desktop/<file>` (read it with
 
 ## Install
 
-The preview installs beside the Python app, under its own application ID
+The preview installs beside a release, under its own application ID
 `io.winspace.Development.Native`, and changes no default applications,
 mounts or user data. Download the file for your distribution from the
 release, then:
@@ -64,8 +66,12 @@ cargo build --release --locked --manifest-path native/Cargo.toml
 ```
 
 The preview uses the application ID `io.winspace.Development.Native`, so it
-never talks to a running Python OpenXplorer. It shares
-`~/.config/winspace/settings.json` using the Python app's locking protocol.
+never talks to a running release. It shares
+`~/.config/winspace/settings.json` using the 1.x app's locking protocol.
+
+Interface text goes through gettext. After changing a translatable string,
+run `python3 native/tools/i18n.py extract` to update `po/openxplorer.pot`;
+the check driver fails while the template is out of date.
 
 ## Checks
 

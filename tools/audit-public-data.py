@@ -122,7 +122,7 @@ def audit(paths):
             path=manifest_path.parent/name
             if not path.exists() or digest(path.read_bytes())!=expected:issues.append('Screenshot hash mismatch: '+name)
             else:provenance.append(name)
-        if len(provenance)!=7:issues.append('Expected seven regenerated product screenshots')
+        if len(provenance)!=8:issues.append('Expected eight regenerated product screenshots')
     else:issues.append('Missing screenshot manifest')
     # The tour's pictures, registered with their hashes in scenes.json.
     tour_pictures=[]

@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.0
+Version:        2.0.1
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -116,6 +116,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Fri Oct 02 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.1-1
+- OpenXplorer 2.0.1: split panes, Compact view, folder tree, thumbnails,
+  transfer jobs, more network protocols and optional file dialogs.
+
 * Mon Sep 28 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.0-1
 - OpenXplorer 2.0.0: the native GTK 4 app replaces the Python app.
 
