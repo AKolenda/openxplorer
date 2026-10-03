@@ -7539,6 +7539,10 @@ msgstr ""
 msgid "Preview build of OpenXplorer 2.0.0 under its own application ID."
 msgstr ""
 
+#: packaging/data/io.winspace.Development.Native.metainfo.xml
+msgid "Preview build of OpenXplorer 2.0.1 under its own application ID."
+msgstr ""
+
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "SMB"
 msgstr ""
@@ -7573,6 +7577,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.metainfo.xml
 msgid "Add opt-in in-app updates and fix folder permission preservation, backup protection, keyboard activation, tab navigation, cached search and device ZIP extraction."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "Adds a Compact view, split panes, a folder tree, thumbnail previews, per-folder view properties, grouping, session restore, independent transfer jobs with undo and batch rename, SFTP, FTP, WebDAV and NFS locations, content search and saved searches, and optional Open and Save dialogs for other applications, KDE's own apps included."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.metainfo.xml
