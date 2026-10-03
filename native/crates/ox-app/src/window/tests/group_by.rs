@@ -314,13 +314,69 @@ fn the_sort_menu_has_more_and_group_by_submenus() {
         menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
     });
     capture_popover(&test.window, menu.upcast_ref(), "native-sort-menu.png");
+    // Clicking Group by opens it beside the Sort menu, which stays open.
     menu.row("Group by").emit_activate();
-    wait_until("the Group by submenu", || {
-        menu.is_visible() && menu.row_labels().contains(&"Same as sort".to_owned())
-    });
-    capture_popover(&test.window, menu.upcast_ref(), "native-group-by-menu.png");
-    menu.row("Date modified").emit_activate();
+    let group_by = menu.open_submenu_menu().expect("Group by opens beside the menu");
+    wait_until("the Group by submenu", || group_by.is_visible());
+    assert!(menu.is_visible(), "the Sort menu stays open");
+    assert_eq!(
+        group_by.row_labels(),
+        [
+            "Name",
+            "Date modified",
+            "Type",
+            "Size",
+            "Date created",
+            "Same as sort",
+            "(None)"
+        ]
+    );
+    capture_popover(&test.window, group_by.upcast_ref(), "native-group-by-menu.png");
+
+    // Left closes only the submenu; Right on Group by opens it again.
+    assert!(group_by.press_in_list(gtk::gdk::Key::Left));
+    assert!(menu.open_submenu_menu().is_none());
+    assert!(menu.is_visible());
+    menu.row("Group by").grab_focus();
+    assert!(menu.press_in_list(gtk::gdk::Key::Right));
+    let group_by = menu.open_submenu_menu().expect("Right opens it");
+
+    // Choosing in the submenu closes both menus, then groups.
+    group_by.row("Date modified").emit_activate();
     assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    wait_until("both menus to close", || {
+        !menu.is_visible() && !group_by.is_visible()
+    });
+}
+
+/// Resting the pointer on Group by opens its submenu after a moment, and
+/// resting it on another row closes it again, as Windows' menus do.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn hovering_group_by_opens_its_submenu_beside_the_menu() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    menu.row("Sort by").emit_activate();
+    wait_until("the Sort menu", || {
+        menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
+    });
+    menu.hover_row(Some("Group by"));
+    assert!(menu.open_submenu_menu().is_none(), "not at once");
+    wait_until("the submenu after a moment", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.is_visible())
+    });
+    menu.hover_row(Some("More"));
+    wait_until("More's submenu in its place", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.row_labels().first().map(String::as_str) == Some("Size"))
+    });
+    menu.hover_row(Some("Ascending"));
+    wait_until("the submenu to close", || menu.open_submenu_menu().is_none());
+    assert!(menu.is_visible(), "the Sort menu stays open");
 
     let submenu = |label: &str| -> Vec<String> {
         sort_menu()
