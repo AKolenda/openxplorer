@@ -1,0 +1,344 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! Explorer's Group by in a real window (VIEW-022): grouping apart from
+//! the sort, Explorer's name ranges and date periods, Downloads grouped by
+//! date out of the box, and the Sort menu's More and Group by submenus.
+//!
+//! With `OX_NATIVE_CAPTURE_DIR` set, this also saves
+//! `native-group-by-date.png`.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
+
+use gtk::prelude::*;
+use ox_core::grouping::GroupBy;
+use ox_core::location::file_uri;
+use ox_core::places::FolderLocations;
+use ox_core::settings::PreferencesUpdate;
+
+use crate::test_support::harness::{capture, descendants, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::window::command_bar::menus::sort_menu;
+use crate::window::menu_popover::MenuEntry;
+
+/// The headings the details view draws, top to bottom.
+fn headings(test: &TestWindow) -> Vec<String> {
+    wait_for_frames(&test.window, 3);
+    let column_view = test.window.folder_pane().details().column_view().clone();
+    let mut labels: Vec<(f64, String)> = descendants::<gtk::Label>(&column_view)
+        .into_iter()
+        .filter(|label| label.has_css_class("group-title") && label.is_mapped())
+        .filter_map(|label| {
+            let point = label.compute_point(&column_view, &gtk::graphene::Point::new(0.0, 0.0))?;
+            Some((f64::from(point.y()), label.text().to_string()))
+        })
+        .collect();
+    labels.sort_by(|a, b| a.0.total_cmp(&b.0));
+    labels.into_iter().map(|(_, text)| text).collect()
+}
+
+/// Sets the modification time of `path` to `age` ago.
+fn age(path: &Path, age: Duration) {
+    fs::File::options()
+        .write(true)
+        .open(path)
+        .and_then(|file| file.set_modified(SystemTime::now() - age))
+        .expect("the date is set");
+}
+
+/// Three years, a date that is "A long time ago" on any day.
+const LONG_AGO: Duration = Duration::from_secs(3 * 366 * 86_400);
+
+/// A home with a Downloads folder holding a folder and a file from today
+/// and a file from long ago.
+struct TestHome {
+    _root: tempfile::TempDir,
+    home: PathBuf,
+    config: PathBuf,
+}
+
+impl TestHome {
+    fn new() -> Self {
+        let root = tempfile::tempdir().expect("the test home has room");
+        let base = fs::canonicalize(root.path()).expect("the folder resolves");
+        let home = base.join("home");
+        let config = base.join("config");
+        let downloads = home.join("Downloads");
+        fs::create_dir_all(downloads.join("Installers")).expect("a folder");
+        fs::create_dir_all(&config).expect("a folder");
+        fs::write(downloads.join("today.txt"), "x").expect("a file");
+        let old = downloads.join("old manual.pdf");
+        fs::write(&old, "x").expect("a file");
+        age(&old, LONG_AGO);
+        Self {
+            _root: root,
+            home,
+            config,
+        }
+    }
+
+    fn locations(&self) -> FolderLocations {
+        FolderLocations::new(self.home.clone(), &self.config)
+    }
+
+    fn downloads(&self) -> String {
+        file_uri(&self.home.join("Downloads"))
+    }
+}
+
+/// Grouped by date modified, each period is sorted by name, as Explorer
+/// does: the groups no longer follow the sort.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn grouping_by_date_keeps_the_name_sort_within_each_group() {
+    let fixture = Fixture::empty();
+    for name in ["zeta.txt", "alpha.txt", "beta.txt"] {
+        fixture.write(name);
+    }
+    age(&fixture.path("beta.txt"), LONG_AGO);
+    let test = TestWindow::open(&fixture.uri());
+    assert_eq!(test.action_state("sort").as_deref(), Some("name"));
+
+    test.activate("group-by", Some("modified"));
+
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    assert_eq!(
+        test.action_state("sort").as_deref(),
+        Some("name"),
+        "the sort stays"
+    );
+    assert_eq!(
+        test.names(),
+        ["alpha.txt", "zeta.txt", "beta.txt"],
+        "today's by name, then long ago's"
+    );
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+
+    test.activate("direction", Some("descending"));
+    assert_eq!(
+        test.names(),
+        ["zeta.txt", "alpha.txt", "beta.txt"],
+        "the sort turns within the groups, which keep their order"
+    );
+}
+
+/// Grouped by name, the names fall in Explorer's letter ranges, and the
+/// selection survives regrouping; by size, folders come first.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn names_fall_in_explorers_letter_ranges() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    assert!(test.window.select_named("Notes 2.txt"));
+
+    test.activate("group-by", Some("name"));
+
+    assert_eq!(headings(&test), ["A – H (1)", "I – P (2)", "Q – Z (1)"]);
+    assert_eq!(
+        test.names(),
+        ["Documents", "Notes 2.txt", "Notes 10.txt", "Résumé.txt"]
+    );
+    assert_eq!(
+        test.selected_names(),
+        ["Notes 2.txt"],
+        "regrouping keeps the selection"
+    );
+    test.activate("group-by", Some("size"));
+    assert_eq!(headings(&test), ["Folders (1)", "Tiny (0 – 16 KB) (3)"]);
+    assert_eq!(test.selected_names(), ["Notes 2.txt"], "and regrouping again");
+}
+
+/// Downloads opens grouped by date, as in Explorer, while other folders
+/// share the style without groups; choosing (None) in Downloads is
+/// remembered for Downloads only.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn downloads_is_grouped_by_date_until_the_user_chooses_otherwise() {
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    assert_eq!(
+        test.names(),
+        ["Installers", "today.txt", "old manual.pdf"],
+        "newest group first, folders first within it"
+    );
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+    capture(&test.window, "native-group-by-date.png");
+
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+    assert!(headings(&test).is_empty(), "an ungrouped list has no heading");
+
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+
+    test.activate("group-by", Some("none"));
+    assert!(headings(&test).is_empty());
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.downloads_group_by == Some(GroupBy::None)
+    });
+    let shared = test.context.settings_data().preferences.view_defaults;
+    assert!(
+        shared.is_none_or(|style| style.grouping() == GroupBy::None),
+        "the other folders' style is unchanged"
+    );
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+}
+
+/// With each folder keeping its own style, Downloads is grouped by date
+/// until it has a style of its own, which then keeps its Group by.
+///
+/// parity: VIEW-022, VIEW-020
+#[gtk::test]
+fn downloads_keeps_its_own_group_by_when_each_folder_keeps_a_style() {
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
+    let per_folder = PreferencesUpdate {
+        per_folder_views: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    test.context
+        .update_preferences(per_folder, |result| result.expect("saved"));
+    wait_until("the preference", || {
+        test.context.settings_data().preferences.per_folder_views
+    });
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+
+    test.activate("group-by", Some("type"));
+    wait_until("Downloads' own style", || {
+        let preferences = test.context.settings_data().preferences;
+        preferences.view_in(&downloads, Some(&downloads)).grouping() == GroupBy::Type
+    });
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
+}
+
+/// The first group's heading is in sight when a grouped folder opens: no
+/// row of the list hides it.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn the_first_heading_is_shown_when_a_grouped_folder_opens() {
+    let home = TestHome::new();
+    for number in 0..40 {
+        fs::write(
+            home.home.join("Downloads").join(format!("file {number}.txt")),
+            "x",
+        )
+        .expect("a file");
+    }
+    let test = TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
+    test.window.navigate(&home.downloads()).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    wait_for_frames(&test.window, 5);
+    let scrolled = test.window.folder_pane().details().vadjustment().value();
+    assert!(scrolled < 0.5, "Downloads opens at its first heading: {scrolled}");
+    assert_eq!(headings(&test).first().map(String::as_str), Some("Today (42)"));
+}
+
+/// Back to a grouped folder puts the view where it was: showing a list
+/// from its top must not override a restored position.
+///
+/// parity: VIEW-022, NAV-008
+#[gtk::test]
+fn back_to_a_grouped_folder_keeps_its_scroll_position() {
+    let home = TestHome::new();
+    for number in 0..80 {
+        fs::write(
+            home.home.join("Downloads").join(format!("file {number}.txt")),
+            "x",
+        )
+        .expect("a file");
+    }
+    let test = TestWindow::open_with_standard_folders(&home.downloads(), home.locations(), |_| {});
+    let adjustment = test.window.folder_pane().details().vadjustment();
+    wait_for_frames(&test.window, 5);
+    adjustment.set_value(400.0);
+    wait_for_frames(&test.window, 3);
+    let scrolled = adjustment.value();
+    assert!(scrolled > 300.0, "the list scrolls: {scrolled}");
+
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    test.activate("back", None);
+    test.wait_for_listing("Downloads");
+    wait_for_frames(&test.window, 8);
+
+    let restored = test.window.folder_pane().details().vadjustment().value();
+    assert!(
+        (restored - scrolled).abs() < 1.0,
+        "back to {scrolled}, not {restored}"
+    );
+}
+
+/// The Sort menu's submenus: More holds Size and the further keys, and
+/// Group by Explorer's choices, "Same as sort" and (None).
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn the_sort_menu_has_more_and_group_by_submenus() {
+    let submenu = |label: &str| -> Vec<String> {
+        sort_menu()
+            .into_iter()
+            .find_map(|entry| match entry {
+                MenuEntry::Item(item) if item.label == label => Some(item.submenu),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("the Sort menu has {label}"))
+            .into_iter()
+            .map(|entry| match entry {
+                MenuEntry::Item(item) => item.label,
+                MenuEntry::Divider => "-".to_owned(),
+            })
+            .collect()
+    };
+    assert_eq!(
+        submenu("More"),
+        [
+            "Size",
+            "Date created",
+            "Date accessed",
+            "File extension",
+            "Permissions",
+            "Owner",
+            "User group",
+            "Link destination"
+        ]
+    );
+    assert_eq!(
+        submenu("Group by"),
+        [
+            "Name",
+            "Date modified",
+            "Type",
+            "Size",
+            "Date created",
+            "Same as sort",
+            "(None)"
+        ]
+    );
+}

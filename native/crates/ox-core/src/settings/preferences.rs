@@ -17,6 +17,7 @@ use super::tree_options::FolderTreeOptions;
 use super::view_options::ViewOptions;
 use super::view_properties::{read_folder_views, FolderView, ViewProperties};
 use super::SettingsError;
+use crate::grouping::GroupBy;
 use crate::location;
 
 /// Text sizes offered in Settings, in percent.
@@ -385,6 +386,11 @@ pub struct Preferences {
     /// The folders that keep their own display style, oldest first.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub folder_views: Vec<FolderView>,
+    /// The Group by the user chose in Downloads while folders share one
+    /// style. Downloads is grouped by date modified until then, as in
+    /// Windows Explorer. Stored only once chosen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub downloads_group_by: Option<GroupBy>,
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
@@ -452,6 +458,7 @@ impl Default for Preferences {
             expandable_folders: true,
             view_defaults: None,
             folder_views: Vec::new(),
+            downloads_group_by: None,
         }
     }
 }
@@ -569,6 +576,9 @@ impl Preferences {
         if let Some(folder_views) = &update.folder_views {
             self.folder_views.clone_from(folder_views);
         }
+        if update.downloads_group_by.is_some() {
+            self.downloads_group_by = update.downloads_group_by;
+        }
         self.sync_style_defaults(update);
     }
 
@@ -584,6 +594,23 @@ impl Preferences {
             defaults.show_previews = Some(options.show_previews);
             defaults.details_columns = Some(options.details_columns.clone());
         }
+    }
+
+    /// The display style `uri` is shown in, where `downloads` is the
+    /// Downloads folder: as [`Self::view_for`], except that Downloads is
+    /// grouped by date modified, as in Windows Explorer, until the user
+    /// chooses another Group by there (VIEW-022). That choice is kept in
+    /// Downloads' own style when each folder keeps one, else apart from
+    /// the shared style.
+    pub fn view_in(&self, uri: &str, downloads: Option<&str>) -> ViewProperties {
+        let mut style = self.view_for(uri);
+        let in_downloads = downloads.is_some_and(|downloads| location::same_location(downloads, uri));
+        let own_style = self.per_folder_views
+            && super::view_properties::saved_style_for(&self.folder_views, uri).is_some();
+        if in_downloads && !own_style {
+            style.set_grouping(self.downloads_group_by.unwrap_or(GroupBy::Modified));
+        }
+        style
     }
 
     /// The display style `uri` is shown in: its own when each folder
@@ -706,6 +733,8 @@ pub struct PreferencesUpdate {
     /// windows change one folder at a time with
     /// [`Settings::remember_view`](super::Settings::remember_view).
     pub folder_views: Option<Vec<FolderView>>,
+    /// The Group by chosen in Downloads while folders share one style.
+    pub downloads_group_by: Option<GroupBy>,
 }
 
 impl PreferencesUpdate {
@@ -772,6 +801,10 @@ impl PreferencesUpdate {
             expandable_folders: flag("expandableFolders"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
             folder_views: values.get("folderViews").and_then(read_folder_views),
+            downloads_group_by: values
+                .get("downloadsGroupBy")
+                .and_then(Value::as_str)
+                .and_then(GroupBy::from_key),
         })
     }
 }
@@ -852,6 +885,66 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    /// Downloads is grouped by date modified until the user chooses
+    /// another Group by there, kept apart from the shared style, or in its
+    /// own style when each folder keeps one; other folders are unchanged.
+    ///
+    /// parity: VIEW-022
+    #[test]
+    fn downloads_is_grouped_by_date_until_chosen_otherwise() {
+        const DOWNLOADS: &str = "file:///home/ana/Downloads";
+        const DOCUMENTS: &str = "file:///home/ana/Documents";
+        let mut preferences = Preferences::default();
+        let downloads = Some(DOWNLOADS);
+        assert_eq!(
+            preferences.view_in(DOWNLOADS, downloads).grouping(),
+            GroupBy::Modified
+        );
+        assert_eq!(
+            preferences.view_in(DOCUMENTS, downloads).grouping(),
+            GroupBy::None
+        );
+        assert_eq!(
+            preferences.view_in(DOWNLOADS, None).grouping(),
+            GroupBy::None,
+            "no Downloads"
+        );
+        assert!(serde_json::to_value(&preferences)
+            .expect("preferences")
+            .get("downloadsGroupBy")
+            .is_none());
+
+        preferences.apply(&PreferencesUpdate {
+            downloads_group_by: Some(GroupBy::None),
+            ..PreferencesUpdate::default()
+        });
+        assert_eq!(
+            preferences.view_in(DOWNLOADS, downloads).grouping(),
+            GroupBy::None
+        );
+        let saved = serde_json::to_value(&preferences).expect("preferences");
+        assert_eq!(saved["downloadsGroupBy"], json!("none"));
+        let read = PreferencesUpdate::from_json(&saved).expect("read");
+        assert_eq!(read.downloads_group_by, Some(GroupBy::None));
+
+        let mut own = ViewProperties::default();
+        own.set_grouping(GroupBy::Type);
+        let mut per_folder = Preferences {
+            per_folder_views: true,
+            ..Preferences::default()
+        };
+        assert_eq!(
+            per_folder.view_in(DOWNLOADS, downloads).grouping(),
+            GroupBy::Modified
+        );
+        per_folder.folder_views.push(FolderView {
+            uri: DOWNLOADS.to_owned(),
+            properties: own,
+            subfolders: false,
+        });
+        assert_eq!(per_folder.view_in(DOWNLOADS, downloads).grouping(), GroupBy::Type);
+    }
 
     /// parity: SET-016
     #[test]

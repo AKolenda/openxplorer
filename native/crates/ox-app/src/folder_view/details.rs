@@ -236,6 +236,10 @@ mod imp {
         pub(super) columns: Cell<DetailsColumns>,
         /// Whether the view lists a folder or search results.
         pub(super) listing: Cell<DetailsListing>,
+        /// Counts the scroll positions the window restored, so a grouped
+        /// list filled from empty does not override one restored
+        /// meanwhile.
+        pub(super) scroll_restores: Cell<u64>,
         /// The columns the user chose to show after Name, in their order.
         pub(super) chosen: RefCell<Vec<SortColumn>>,
         /// Set while the view puts its own columns in order, which is not
@@ -331,6 +335,7 @@ impl DetailsView {
         view.follow_column_drags();
         column_keys::make_titles_keyboard_operable(&view);
         view.describe_rows(model);
+        view.start_grouped_lists_at_the_top(model);
         view.sort_by(SortOrder::DEFAULT);
         view
     }

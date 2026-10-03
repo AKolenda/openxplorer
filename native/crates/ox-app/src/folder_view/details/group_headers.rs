@@ -8,10 +8,13 @@
 
 use std::rc::Rc;
 
+use gtk::glib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
 use super::DetailsView;
 use crate::folder_view::item::FileItem;
+use crate::folder_view::model::FolderModel;
 
 /// Names the group an item is in, `None` while the items are not grouped.
 pub(crate) type GroupTitle = Rc<dyn Fn(&FileItem) -> Option<String>>;
@@ -71,6 +74,48 @@ impl DetailsView {
     pub(crate) fn show_group_headers(&self, title: Option<GroupTitle>) {
         let factory = title.map(header_factory);
         self.column_view().set_header_factory(factory.as_ref());
+    }
+
+    /// Whether the groups are headed.
+    pub(crate) fn shows_group_headers(&self) -> bool {
+        self.column_view().header_factory().is_some()
+    }
+
+    /// Notes that the window restores a scroll position now, which a list
+    /// shown from its top must not override.
+    pub(crate) fn note_scroll_restore(&self) {
+        let restores = &self.imp().scroll_restores;
+        restores.set(restores.get().wrapping_add(1));
+    }
+
+    /// Shows a grouped list filled from empty (a folder's first items)
+    /// from its top. GTK keeps the first row at the top edge, which leaves
+    /// the first group's header above it, scrolled out of sight. A scroll
+    /// position the window restores (Back, a tab switch) still wins, even
+    /// one restored before this runs.
+    pub(super) fn start_grouped_lists_at_the_top(&self, model: &FolderModel) {
+        model.selection().connect_items_changed(glib::clone!(
+            #[weak(rename_to = view)]
+            self,
+            move |list, position, removed, added| {
+                let filled = position == 0 && removed == 0 && added > 0 && list.n_items() == added;
+                if !filled || !view.shows_group_headers() {
+                    return;
+                }
+                let adjustment = view.vadjustment();
+                let restores = view.imp().scroll_restores.get();
+                glib::idle_add_local_once(glib::clone!(
+                    #[weak]
+                    view,
+                    move || {
+                        let restored = view.imp().scroll_restores.get() != restores;
+                        if !restored && adjustment.value() > 0.0 {
+                            adjustment.set_value(0.0);
+                        }
+                    }
+                ));
+            }
+        ));
     }
 }
 

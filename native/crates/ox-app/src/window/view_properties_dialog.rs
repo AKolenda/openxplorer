@@ -3,7 +3,7 @@
 //! (VIEW-021).
 //!
 //! Ports `ViewPropertiesDialog` (`src/settings/viewpropertiesdialog.cpp`):
-//! the view mode, the sort key and order, groups, folders first and hidden
+//! the view mode, the sort key and order, Group by, folders first and hidden
 //! files in one place. While each folder keeps its own style (VIEW-020) the
 //! choices apply to the folder shown, to it and its sub-folders, or to all
 //! folders, the last two after a confirmation, and can also become the
@@ -12,6 +12,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
+use ox_core::grouping::GroupBy;
 use ox_core::i18n::{gettext, gettext_static};
 use ox_core::settings::{may_remember, PreferencesUpdate, ViewProperties, ViewScope};
 
@@ -62,7 +63,7 @@ struct StyleForm {
     mode: gtk::DropDown,
     sort: gtk::DropDown,
     descending: gtk::DropDown,
-    groups: gtk::CheckButton,
+    group_by: gtk::DropDown,
     folders_first: gtk::CheckButton,
     hidden: gtk::CheckButton,
     hidden_last: gtk::CheckButton,
@@ -92,7 +93,10 @@ impl StyleForm {
             usize::from(style.descending),
         );
         dialog.add_labelled(&gettext("Order"), &descending);
-        let groups = dialog.add_check_button(&gettext("Show in groups"), style.groups);
+        let group_at = GroupBy::ALL.iter().position(|by| *by == style.grouping());
+        let group_labels: Vec<&str> = GroupBy::ALL.iter().map(|by| gettext_static(by.label())).collect();
+        let group_by = drop_down(&group_labels, group_at.unwrap_or(GroupBy::ALL.len() - 1));
+        dialog.add_labelled(&gettext("Group by"), &group_by);
         let folders_first = dialog.add_check_button(&gettext("Show folders first"), style.folders_first);
         let hidden = dialog.add_check_button(&gettext("Show hidden files"), style.show_hidden);
         let hidden_last = dialog.add_check_button(&gettext("Show hidden items last"), style.hidden_last);
@@ -129,7 +133,7 @@ impl StyleForm {
             mode,
             sort,
             descending,
-            groups,
+            group_by,
             folders_first,
             hidden,
             hidden_last,
@@ -160,19 +164,23 @@ impl StyleForm {
                 columns.push(column);
             }
         }
-        ViewProperties {
+        let mut style = ViewProperties {
             mode: mode.to_owned(),
             icon_size: shown.icon_size,
             sort: sort.to_owned(),
             descending: chosen(&self.descending) == 1,
-            groups: self.groups.is_active(),
+            groups: false,
+            group_by: None,
             folders_first: self.folders_first.is_active(),
             show_hidden: self.hidden.is_active(),
             hidden_last: self.hidden_last.is_active(),
             show_previews: Some(self.previews.is_active()),
             details_columns: Some(columns),
             column_widths: shown.column_widths.clone(),
-        }
+        };
+        let group_by = GroupBy::ALL.get(chosen(&self.group_by)).copied();
+        style.set_grouping(group_by.unwrap_or(GroupBy::None));
+        style
     }
 
     /// The scope chosen.

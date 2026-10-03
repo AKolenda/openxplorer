@@ -17,9 +17,9 @@ use ox_core::search::SearchFacets;
 
 use crate::folder_view::details::GroupTitle;
 use crate::folder_view::filter::{ChooserListing, FilterState};
-use crate::folder_view::groups::{self, GroupClock};
+use crate::folder_view::groups::{self, GroupClocks, Grouping};
 use crate::folder_view::item::FileItem;
-use crate::folder_view::sort_roles::{SortRole, SortState};
+use crate::folder_view::sort_roles::SortRole;
 use crate::folder_view::sorting::SortDirection;
 use crate::folder_view::tree::FolderTree;
 
@@ -153,12 +153,21 @@ impl FolderModel {
         self.sort_options.get().role
     }
 
-    /// Groups the items by the key `state` sorts by, or stops grouping
-    /// them with `None`. Dates are grouped by the periods as of now.
-    pub(crate) fn set_grouping(&self, state: Option<SortState>) {
-        let grouping = state.and_then(|state| Some((state, GroupClock::now()?)));
+    /// Groups the items by `grouping`, or stops grouping them with
+    /// `None`. Dates are grouped by the periods as of now.
+    pub(crate) fn set_grouping(&self, grouping: Option<Grouping>) {
+        let grouping = grouping.and_then(|grouping| Some((grouping, GroupClocks::now()?)));
         let was_grouped = self.sort_options.get().grouping.is_some();
         self.change_sort_options(&self.group_sorter, |options| options.grouping = grouping);
+        if grouping.is_some() && was_grouped {
+            // GTK 4.14 sorts again when the section sorter changes but keeps
+            // the old section boundaries, so one group could show up split
+            // in two; setting the sorter again redraws the sections.
+            let selected = self.selected_uris();
+            self.sort_model.set_section_sorter(None::<&gtk::Sorter>);
+            self.sort_model.set_section_sorter(Some(&self.group_sorter));
+            self.select_uris(&selected);
+        }
         if grouping.is_some() != was_grouped {
             let selected = self.selected_uris();
             let sections = grouping.map(|_| self.group_sorter.clone());
@@ -175,17 +184,17 @@ impl FolderModel {
         }
     }
 
-    /// The key the items are grouped by, if they are grouped.
-    pub(crate) fn grouping(&self) -> Option<SortState> {
-        self.sort_options.get().grouping.map(|(state, _)| state)
+    /// What the items are grouped by, if they are grouped.
+    pub(crate) fn grouping(&self) -> Option<Grouping> {
+        self.sort_options.get().grouping.map(|(grouping, _)| grouping)
     }
 
     /// Names the group an item is in, while the items are grouped.
     pub(crate) fn group_titles(&self) -> GroupTitle {
         let options = Rc::clone(&self.sort_options);
         Rc::new(move |item| {
-            let (state, clock) = options.get().grouping?;
-            Some(groups::group_of(state.by, item, &clock).title)
+            let (grouping, clocks) = options.get().grouping?;
+            Some(groups::group_in(grouping, item, &clocks).title)
         })
     }
 
