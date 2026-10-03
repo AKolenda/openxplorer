@@ -1,3 +1,9 @@
+# Unreleased
+
+- Holding Shift while clicking Delete, in the command bar, the right-click
+  menu or the folder tree's menu, deletes permanently after asking, as in
+  Windows Explorer. Before, only the Shift+Delete key did.
+
 # 2.0.1 — 2026-10-02
 
 Most of the gaps left by 2.0.0 are closed: 635 of the tracked behaviours of

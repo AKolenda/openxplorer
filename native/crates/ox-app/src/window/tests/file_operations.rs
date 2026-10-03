@@ -461,6 +461,102 @@ fn shift_delete_deletes_permanently_after_its_own_confirmation() {
     });
 }
 
+/// The command bar's Delete button, the button that runs Delete.
+fn delete_button(test: &TestWindow) -> gtk::Button {
+    descendants::<gtk::Button>(test.window.command_bar())
+        .into_iter()
+        .find(|button| button.action_name().as_deref() == Some("win.trash"))
+        .expect("the command bar has Delete")
+}
+
+/// Clicking Delete in the command bar with Shift held deletes
+/// permanently, after Shift+Delete's confirmation, as in Windows Explorer.
+///
+/// parity: OPS-016
+#[gtk::test]
+fn shift_clicking_delete_in_the_bar_deletes_permanently_after_asking() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+
+    test.window.hold_shift_for_tests(true);
+    delete_button(&test).emit_clicked();
+    test.window.hold_shift_for_tests(false);
+    let dialog = open_dialog(&test);
+
+    assert_eq!(dialog.title_text(), "Delete permanently?");
+    assert_eq!(dialog.button_labels(), ["Cancel", "Delete permanently"]);
+    dialog.press("Delete permanently");
+    wait_until("the file to be deleted", || !fixture.path("Notes 2.txt").exists());
+    wait_until("the toast", || {
+        test.window.shown_message() == "1 item(s) permanently deleted."
+    });
+}
+
+/// Choosing Delete in the right-click menu with Shift held asks to delete
+/// permanently; Cancel keeps the file.
+///
+/// parity: OPS-016
+#[gtk::test]
+fn shift_choosing_delete_in_the_right_click_menu_asks_to_delete_permanently() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .right_click(Some(super::context_menus::position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    wait_until("the menu", || menu.is_visible());
+
+    test.window.hold_shift_for_tests(true);
+    menu.row("Move to Trash").emit_activate();
+    test.window.hold_shift_for_tests(false);
+    let dialog = open_dialog(&test);
+
+    assert_eq!(dialog.title_text(), "Delete permanently?");
+    dialog.press("Cancel");
+    wait_for_no_dialog(&test);
+    assert!(fixture.path("Notes 2.txt").is_file(), "Cancel keeps the file");
+}
+
+/// The folder tree's Move to Trash with Shift held asks to delete the
+/// folder permanently.
+///
+/// parity: OPS-016, SIDE-028
+#[gtk::test]
+fn shift_with_the_folder_trees_move_to_trash_asks_to_delete_permanently() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let folder = fixture.uri_of("Documents");
+
+    test.window.hold_shift_for_tests(true);
+    test.activate("trash-folder", Some(&folder));
+    test.window.hold_shift_for_tests(false);
+    let dialog = open_dialog(&test);
+
+    assert_eq!(dialog.title_text(), "Delete permanently?");
+    dialog.press("Cancel");
+    wait_for_no_dialog(&test);
+    assert!(fixture.path("Documents").is_dir(), "Cancel keeps the folder");
+}
+
+/// Without Shift, clicking Delete in the command bar still moves to the
+/// Trash.
+///
+/// parity: OPS-015
+#[gtk::test]
+fn clicking_delete_in_the_bar_without_shift_moves_to_the_trash() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+
+    delete_button(&test).emit_clicked();
+    let dialog = open_dialog(&test);
+
+    assert_eq!(dialog.title_text(), "Move to Trash?");
+    dialog.press("Cancel");
+    wait_for_no_dialog(&test);
+}
+
 /// parity: OPS-034, OPS-029
 #[gtk::test]
 fn duplicate_copies_next_to_the_item_and_selects_the_copy() {
