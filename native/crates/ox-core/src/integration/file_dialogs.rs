@@ -331,17 +331,23 @@ impl FileDialogRegistration {
         self.is_kde_session() && matches!(self.kde_script(), Ok(KdeScript::Other))
     }
 
-    /// What is at the login script's path.
+    /// What is at the login script's path: nothing, the app's script, or
+    /// anything else (a file of the user's, a symlink, or an entry that
+    /// cannot be read as text).
     fn kde_script(&self) -> Result<KdeScript, FileDialogError> {
         let script = self.kde_env_file();
         if refuse_symlink(&script).is_err_and(|error| matches!(error, FileDialogError::Symlink(_))) {
             return Ok(KdeScript::Other);
         }
-        Ok(match read_optional(&script)?.as_deref() {
-            None => KdeScript::Missing,
-            Some(KDE_ENV_SCRIPT) => KdeScript::Ours,
-            Some(_) => KdeScript::Other,
-        })
+        match read_optional(&script) {
+            Ok(None) => Ok(KdeScript::Missing),
+            Ok(Some(contents)) if contents == KDE_ENV_SCRIPT => Ok(KdeScript::Ours),
+            Ok(Some(_)) => Ok(KdeScript::Other),
+            // Something there that cannot be read as text (a folder, say)
+            // is not the app's script either: Enable and Restore leave it.
+            Err(_) if fs::symlink_metadata(&script).is_ok() => Ok(KdeScript::Other),
+            Err(error) => Err(error),
+        }
     }
 
     /// Writes the login script on a KDE session and says whether it did.

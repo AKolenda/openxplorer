@@ -580,6 +580,29 @@ fn a_kde_script_that_cannot_be_written_leaves_dialogs_off() {
     assert!(registration.covers_kde_apps());
 }
 
+/// Enable goes on when something it cannot read sits where KDE's login
+/// script goes: like a file of the user's, it is left alone, the dialogs
+/// are turned on, and the status says KDE apps keep KDE's dialog.
+///
+/// parity: INT-032
+#[test]
+fn enable_leaves_an_unreadable_kde_script_path_alone() {
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    let script = registration.kde_env_file();
+    fs::create_dir_all(&script).expect("a folder of that name");
+
+    registration.enable().expect("Enable goes on");
+
+    assert!(registration.is_enabled());
+    assert!(registration.kde_script_is_someone_elses());
+    assert!(!registration.covers_kde_apps());
+    assert!(script.is_dir(), "left alone");
+    registration.disable().expect("Restore");
+    assert!(!registration.is_enabled());
+    assert!(script.is_dir(), "still left alone");
+}
+
 /// Restore goes on when something it cannot read sits where KDE's login
 /// script goes: that is not the app's script, so it is left alone and the
 /// dialogs are given back.
