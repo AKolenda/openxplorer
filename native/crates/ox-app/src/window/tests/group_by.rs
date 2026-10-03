@@ -4,7 +4,8 @@
 //! date out of the box, and the Sort menu's More and Group by submenus.
 //!
 //! With `OX_NATIVE_CAPTURE_DIR` set, this also saves
-//! `native-group-by-date.png`.
+//! `native-group-by-date.png`, `native-sort-menu.png` and
+//! `native-group-by-menu.png`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,7 +17,9 @@ use ox_core::location::file_uri;
 use ox_core::places::FolderLocations;
 use ox_core::settings::PreferencesUpdate;
 
-use crate::test_support::harness::{capture, descendants, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    capture, capture_popover, descendants, wait_for_frames, wait_until, Fixture, TestWindow,
+};
 use crate::window::command_bar::menus::sort_menu;
 use crate::window::menu_popover::MenuEntry;
 
@@ -296,11 +299,29 @@ fn back_to_a_grouped_folder_keeps_its_scroll_position() {
 }
 
 /// The Sort menu's submenus: More holds Size and the further keys, and
-/// Group by Explorer's choices, "Same as sort" and (None).
+/// Group by Explorer's choices, "Same as sort" and (None); choosing one
+/// from the open menu groups the folder.
 ///
 /// parity: VIEW-022
 #[gtk::test]
 fn the_sort_menu_has_more_and_group_by_submenus() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    menu.row("Sort by").emit_activate();
+    wait_until("the Sort menu", || {
+        menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
+    });
+    capture_popover(&test.window, menu.upcast_ref(), "native-sort-menu.png");
+    menu.row("Group by").emit_activate();
+    wait_until("the Group by submenu", || {
+        menu.is_visible() && menu.row_labels().contains(&"Same as sort".to_owned())
+    });
+    capture_popover(&test.window, menu.upcast_ref(), "native-group-by-menu.png");
+    menu.row("Date modified").emit_activate();
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+
     let submenu = |label: &str| -> Vec<String> {
         sort_menu()
             .into_iter()
