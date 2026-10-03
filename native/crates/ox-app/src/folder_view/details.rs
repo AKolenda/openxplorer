@@ -490,9 +490,22 @@ impl DetailsView {
         let columns = self.imp().columns.get();
         let listing = self.imp().listing.get();
         let chosen = self.imp().chosen.borrow().clone();
-        for (column, view_column) in self.view_columns() {
-            view_column.set_visible(is_column_shown(column, columns, listing, &chosen));
+        let changes: Vec<(gtk::ColumnViewColumn, bool)> = self
+            .view_columns()
+            .map(|(column, view_column)| {
+                let shown = is_column_shown(column, columns, listing, &chosen);
+                (view_column, shown)
+            })
+            .filter(|(view_column, shown)| view_column.is_visible() != *shown)
+            .collect();
+        if changes.is_empty() {
+            return;
         }
+        self.change_columns_without_headers(|| {
+            for (view_column, shown) in changes {
+                view_column.set_visible(shown);
+            }
+        });
     }
 
     /// Applies saved column widths. Name keeps expanding until the user

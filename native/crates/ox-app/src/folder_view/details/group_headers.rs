@@ -76,6 +76,24 @@ impl DetailsView {
         self.column_view().set_header_factory(factory.as_ref());
     }
 
+    /// Runs `change`, which shows, hides or moves columns, with the group
+    /// headers taken off and put back after it. A header holds a cell of
+    /// every column: changing the columns under it left GTK finalizing
+    /// headers whose cells were still in them, and GTK 4.22 then crashed
+    /// in `gtk_widget_unparent` the next time a column was shown or hidden
+    /// (Downloads grouped, the Recycle Bin, then Back).
+    pub(super) fn change_columns_without_headers(&self, change: impl FnOnce()) {
+        let view = self.column_view();
+        let headers = view.header_factory();
+        if headers.is_some() {
+            view.set_header_factory(None::<&gtk::ListItemFactory>);
+        }
+        change();
+        if let Some(headers) = headers {
+            view.set_header_factory(Some(&headers));
+        }
+    }
+
     /// Whether the groups are headed.
     pub(crate) fn shows_group_headers(&self) -> bool {
         self.column_view().header_factory().is_some()

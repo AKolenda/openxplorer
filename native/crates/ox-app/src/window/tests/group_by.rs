@@ -17,6 +17,7 @@ use ox_core::location::file_uri;
 use ox_core::places::FolderLocations;
 use ox_core::settings::PreferencesUpdate;
 
+use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{
     capture, capture_popover, descendants, wait_for_frames, wait_until, Fixture, TestWindow,
 };
@@ -150,6 +151,44 @@ fn names_fall_in_explorers_letter_ranges() {
     test.activate("group-by", Some("size"));
     assert_eq!(headings(&test), ["Folders (1)", "Tiny (0 – 16 KB) (3)"]);
     assert_eq!(test.selected_names(), ["Notes 2.txt"], "and regrouping again");
+}
+
+/// Columns shown, hidden or moved while the groups are headed: Downloads
+/// grouped, then the Recycle Bin (its own columns) and Back, then a column
+/// chosen and taken away again. GTK 4.22 crashed on Back after it had
+/// finalized group headers whose cells were still in them.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn columns_change_safely_while_the_groups_are_headed() {
+    super::file_ops_support::require_private_trash();
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+
+    test.window.navigate("trash:///").expect("the Recycle Bin");
+    test.wait_for_listing("the Recycle Bin");
+    wait_for_frames(&test.window, 4);
+    test.activate("back", None);
+    test.wait_for_listing("Downloads");
+    wait_for_frames(&test.window, 4);
+    assert_eq!(
+        headings(&test),
+        ["Today (2)", "A long time ago (1)"],
+        "the groups are headed again"
+    );
+
+    let details = test.window.folder_pane().details();
+    let before = details.chosen_columns();
+    let mut more = before.clone();
+    more.push(SortColumn::Created);
+    details.show_chosen_columns(more);
+    wait_for_frames(&test.window, 4);
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+    details.show_chosen_columns(before);
+    wait_for_frames(&test.window, 4);
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
 }
 
 /// Downloads opens grouped by date, as in Explorer, while other folders

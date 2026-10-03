@@ -9,6 +9,8 @@
   menu now matches Explorer's: Name, Date modified and Type, with Size and
   the further keys under More. The first group's heading is no longer
   hidden when a grouped folder opens.
+- No more crash when Details columns change while groups are shown, such as
+  going Back from the Recycle Bin to Downloads grouped by date.
 
 # 2.0.1 — 2026-10-02
 
