@@ -576,9 +576,7 @@ impl Preferences {
         if let Some(folder_views) = &update.folder_views {
             self.folder_views.clone_from(folder_views);
         }
-        if update.downloads_group_by.is_some() {
-            self.downloads_group_by = update.downloads_group_by;
-        }
+        self.downloads_group_by = update.downloads_group_by.or(self.downloads_group_by);
         self.sync_style_defaults(update);
     }
 
