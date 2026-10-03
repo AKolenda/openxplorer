@@ -241,6 +241,10 @@ impl BrowserWindow {
         self.present();
         match &picker.name {
             Some(name) => {
+                // A new window gives its file list the keyboard once the
+                // first folder is listed, which ends after this: the name
+                // box keeps it instead, so typing replaces the name.
+                self.imp().file_list_awaits_focus.set(false);
                 name.grab_focus();
                 select_stem(name);
             }
@@ -1159,7 +1163,11 @@ mod tests {
             )],
         );
         let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
         portal.test.select_named("letter.odt");
+        // Choosing the file in the list takes the keyboard there, from
+        // File name where the dialog starts.
+        window.folder_pane().focus_view();
         // The details view's own key handling, as a key press there runs.
         let view = window.folder_pane().details().column_view();
         let keys = view
@@ -1333,6 +1341,47 @@ mod tests {
         name.emit_activate();
         let (_, uris) = Portal::finish(&answer);
         assert_eq!(uris, [fixture.uri_of("notes.md")]);
+    }
+
+    /// A Save dialog starts with the keyboard in File name and the name
+    /// selected without its extension, as Windows' does, so typing
+    /// replaces the name; the folder's listing, which ends after the
+    /// dialog shows, does not take the keyboard to the file list.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_save_dialog_starts_in_the_name_box_with_the_name_selected() {
+        let fixture = Fixture::empty();
+        for name in ["alpha.txt", "beta.txt", "report.md"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "report.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        settle();
+        assert!(
+            window.focus_is_in_picker_name(),
+            "the keyboard is in File name, not on {:?}",
+            GtkWindowExt::focus(window).map(|focus| focus.type_())
+        );
+        let name = window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+        assert_eq!(name.text(), "report.txt");
+        assert_eq!(
+            name.selection_bounds(),
+            Some((0, 6)),
+            "the name is selected without its extension"
+        );
     }
 
     /// Alt+Up works from the File name box, where focus starts in Save;

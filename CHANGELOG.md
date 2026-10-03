@@ -3,6 +3,9 @@
 - Open and Save dialogs behave more like Windows':
   - Escape closes the dialog while a file is selected in the list,
     instead of only clearing the selection.
+  - The keyboard starts in File name with the name selected (without its
+    extension), so typing replaces it instead of jumping through the
+    file list.
   - Open dialogs have a File name box too; File name takes a path from the
     folder shown, `~/...` or a full path, and a folder typed there opens.
   - Save adds the chosen type's extension to a name without one.
