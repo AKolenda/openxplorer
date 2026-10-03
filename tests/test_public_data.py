@@ -27,8 +27,8 @@ import zipfile
 
 AUDIT_PATH = Path(__file__).resolve().parents[1] / 'tools/audit-public-data.py'
 SCREENSHOTS = 'apps/web/public/assets/screenshots'
-# The audit expects exactly seven registered product screenshots.
-SCREENSHOT_COUNT = 7
+# The audit expects exactly eight registered product screenshots.
+SCREENSHOT_COUNT = 8
 ONE_PIXEL_PNG = base64.b64decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF1kAAAAASUVORK5CYII=')
 

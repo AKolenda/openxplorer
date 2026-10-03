@@ -14,7 +14,7 @@ Close every old Winspace/OpenXplorer window and finish file operations. Download
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_2.0.0_all.deb
+sudo apt install ./openxplorer_2.0.1_all.deb
 openxplorer --version
 openxplorer
 ```
@@ -27,7 +27,7 @@ Click the Check for updates icon at the bottom right, beside the view controls. 
 
 The installed Debian app downloads the release installer, verifies its GitHub SHA-256 digest and package identity, then asks for system administrator approval through polkit. APT installs the update without removing packages. Choose Restart now when finished; restarting closes existing windows and tabs.
 
-Older releases need one manual upgrade to 1.1.0 before this control is available; 1.1.x offers 2.0.0 there. Earlier releases need one manual upgrade from GitHub Releases. Source checkouts, RPM, Arch and Flatpak installations update through their own package manager. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature. To go back to 1.1.4, install its .deb with sudo apt install --allow-downgrades; settings and saved passwords are shared.
+Older releases need one manual upgrade to 1.1.0 before this control is available; 1.1.x offers the newest 2.x release there. Earlier releases need one manual upgrade from GitHub Releases. Source checkouts, RPM, Arch and Flatpak installations update through their own package manager. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature. To go back to 1.1.4, install its .deb with sudo apt install --allow-downgrades; settings and saved passwords are shared.
 
 ## Upgrading from Winspace
 
@@ -64,4 +64,4 @@ A signed repository with a pre-indexed AppStream catalog can supply that informa
 
 ---
 
-OpenXplorer 2.0.0. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.1. Project-authored documentation: AGPL-3.0-only.
