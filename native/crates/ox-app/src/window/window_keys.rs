@@ -153,6 +153,10 @@ impl BrowserWindow {
         if self.dialog_layer().shown().is_some() {
             return false;
         }
+        // A file dialog opens no other window.
+        if command == KeyCommand::NewWindow && self.is_picking() {
+            return false;
+        }
         !self.focus_is_in_text_field()
     }
 
@@ -160,6 +164,12 @@ impl BrowserWindow {
     #[cfg(test)]
     pub(super) fn tab_keys_apply(&self) -> bool {
         self.window_key_applies(KeyCommand::Window(WindowAction::NextTab))
+    }
+
+    /// Whether Ctrl+N opens a window now, for tests.
+    #[cfg(test)]
+    pub(super) fn new_window_key_applies(&self) -> bool {
+        self.window_key_applies(KeyCommand::NewWindow)
     }
 
     /// Whether Ctrl+T opens a tab now, for tests.

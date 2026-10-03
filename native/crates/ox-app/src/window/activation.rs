@@ -312,8 +312,13 @@ impl BrowserWindow {
         ));
     }
 
-    /// Opens an entry of a typed address or another app's request.
+    /// Opens an entry of a typed address or another app's request; in a
+    /// file dialog, a file is the choice (INT-032).
     fn activate_entry(&self, entry: &Entry) {
+        if self.is_picking() && matches!(activation_for(entry), Activation::File | Activation::Archive) {
+            self.pick_activated(entry);
+            return;
+        }
         match activation_for(entry) {
             Activation::Folder(uri) => self.navigate_or_report(&uri),
             Activation::File => {
@@ -370,6 +375,12 @@ impl BrowserWindow {
                     return;
                 }
                 match result {
+                    Ok(entry)
+                        if window.is_picking()
+                            && matches!(activation_for(&entry), Activation::File | Activation::Archive) =>
+                    {
+                        window.pick_activated(&entry);
+                    }
                     Ok(entry) if activation_for(&entry) == Activation::File => window.open_file(&entry),
                     Ok(entry) if activation_for(&entry) == Activation::Archive => {
                         window.open_archive_or_file(&entry);

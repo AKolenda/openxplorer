@@ -242,6 +242,14 @@ impl AppState {
     /// folder, else at home (app.js `newWindow`). New windows are refused
     /// while an update installs and until its restart (TAB-043).
     pub(super) fn new_window(&self, app: &gtk::Application) {
+        // A file dialog opens no other window.
+        let from_dialog = app
+            .active_window()
+            .and_downcast::<BrowserWindow>()
+            .is_some_and(|window| window.is_picking());
+        if from_dialog {
+            return;
+        }
         if let Some(refusal) = self.context.updates().new_window_refusal() {
             if let Some(window) = active_window(app) {
                 window.show_message(&refusal);

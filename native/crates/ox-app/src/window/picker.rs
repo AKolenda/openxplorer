@@ -8,8 +8,8 @@
 //! picker mode for it. Everything the user browses with is the normal
 //! window: the navigation pane, address bar, search, views and file
 //! commands. Picker mode adds the bar at the bottom, as Windows' common
-//! file dialog has: the file name for Save, the type list, the caller's
-//! extra choices, and the accept and Cancel buttons. It narrows the
+//! file dialog has: the file name (for Open and Save), the type list, the
+//! caller's extra choices, and the accept and Cancel buttons. It narrows the
 //! listing to the chosen type, or to folders when a folder is chosen, and
 //! keeps the window to one tab with no Settings.
 //!
@@ -23,6 +23,12 @@
 //!   and shares and devices that `GVfs` mounts.
 //! - **Never overwrite silently.** Saving over an existing file asks
 //!   first, as every desktop's dialog does.
+//! - **As Windows' dialog.** The File name box takes a name, a path from
+//!   the folder shown, `~/…` or a full path: a folder opens, a file is
+//!   the choice. Save adds the chosen type's extension to a name without
+//!   one. A file typed in the address bar is the choice too, a dialog
+//!   for one file keeps one selected, and Escape, Ctrl+Q and Ctrl+N act
+//!   on the dialog alone.
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -33,7 +39,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
 use ox_core::integration::{
-    checked_name, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest,
+    checked_name, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest, FilterPattern,
 };
 
 use super::{BrowserWindow, ButtonStyle, WindowAction};
@@ -47,7 +53,7 @@ const DEFAULT_SIZE: (i32, i32) = (980, 640);
 
 /// The window commands that make no sense while choosing a file: more tabs
 /// or windows, and Settings.
-const DISABLED_ACTIONS: [WindowAction; 11] = [
+const DISABLED_ACTIONS: [WindowAction; 12] = [
     WindowAction::NewTab,
     WindowAction::OpenTab,
     WindowAction::OpenTabBackground,
@@ -59,7 +65,11 @@ const DISABLED_ACTIONS: [WindowAction; 11] = [
     WindowAction::MoveTabToWindow,
     WindowAction::Settings,
     WindowAction::DefaultFileExplorer,
+    WindowAction::OpenFileLocationInWindow,
 ];
+
+/// Shown when the File name box names nothing that exists.
+const NOT_FOUND: &str = crate::i18n::message_id("“{name}” was not found. Check the file name and try again.");
 
 /// One of the caller's extra choices and its control.
 #[derive(Debug)]
@@ -88,7 +98,7 @@ impl ChoiceControl {
 pub(crate) struct Picker {
     request: ChooserRequest,
     reply: ChooserReply,
-    /// The name box of a Save dialog.
+    /// The File name box of a Save dialog or a dialog that opens files.
     name: Option<gtk::Entry>,
     /// The type list, when the caller gave filters.
     types: Option<gtk::DropDown>,
@@ -97,9 +107,36 @@ pub(crate) struct Picker {
     /// Set while the replace question is open, so the answer is not given
     /// twice.
     asking: Cell<bool>,
+    /// The one item selected, in a dialog that chooses one, so a second
+    /// item clicked with Ctrl or Shift takes its place.
+    single: Cell<Option<u32>>,
 }
 
 impl Picker {
+    /// Whether the dialog chooses one item: a file or a folder, not
+    /// several.
+    fn chooses_one(&self) -> bool {
+        match &self.request.mode {
+            ChooserMode::Open { multiple, .. } => !multiple,
+            ChooserMode::Save { .. } | ChooserMode::SaveFiles { .. } => true,
+        }
+    }
+
+    /// The extension of the type chosen in the list: its first pattern
+    /// when that is a plain `*.ext`, as Windows adds it to a name saved
+    /// without one.
+    fn chosen_extension(&self) -> Option<String> {
+        let filter = self.request.filters.get(self.chosen_filter()?)?;
+        filter.patterns.iter().find_map(|pattern| match pattern {
+            FilterPattern::Glob(glob) => {
+                let extension = glob.strip_prefix("*.")?;
+                (!extension.is_empty() && extension.chars().all(char::is_alphanumeric))
+                    .then(|| extension.to_owned())
+            }
+            FilterPattern::MimeType(_) => None,
+        })
+    }
+
     /// The type chosen in the list, an index into the request's filters.
     fn chosen_filter(&self) -> Option<usize> {
         self.types.as_ref().map(|types| types.selected() as usize)
@@ -140,6 +177,29 @@ fn start_folder(request: &ChooserRequest) -> PathBuf {
         .unwrap_or_else(glib::home_dir)
 }
 
+/// The path the File name box's `typed` text names, from `folder`: a
+/// full path, `~` or `~/…` from the home folder, else a path from the
+/// folder shown.
+fn typed_path(typed: &str, folder: &Path) -> PathBuf {
+    if typed == "~" {
+        return glib::home_dir();
+    }
+    if let Some(rest) = typed.strip_prefix("~/") {
+        return glib::home_dir().join(rest);
+    }
+    let path = Path::new(typed);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        folder.join(path)
+    }
+}
+
+/// Whether `name` has an extension: a dot after its first character.
+fn has_extension(name: &str) -> bool {
+    name.char_indices().skip(1).any(|(_, c)| c == '.') && !name.ends_with('.')
+}
+
 impl BrowserWindow {
     /// Turns this new window into the dialog for `call` and shows it.
     pub(crate) fn begin_picking(&self, call: ChooserCall) {
@@ -177,6 +237,7 @@ impl BrowserWindow {
             let _ = self.add_tab(&gio::File::for_path(glib::home_dir()).uri());
         }
         self.listen_for_escape();
+        self.keep_one_selected();
         self.present();
         match &picker.name {
             Some(name) => {
@@ -186,6 +247,16 @@ impl BrowserWindow {
             None => self.focus_new_file_list(),
         }
         self.update_picker();
+    }
+
+    /// Whether the keyboard is in the File name box, from which Alt+Left,
+    /// Alt+Right and Alt+Up move through folders as in Windows' dialog.
+    pub(super) fn focus_is_in_picker_name(&self) -> bool {
+        let Some(name) = self.picker().and_then(|picker| picker.name.clone()) else {
+            return false;
+        };
+        GtkWindowExt::focus(self)
+            .is_some_and(|focus| focus == *name.upcast_ref::<gtk::Widget>() || focus.is_ancestor(&name))
     }
 
     /// Whether this window is choosing files for another application.
@@ -205,7 +276,7 @@ impl BrowserWindow {
         let Some(picker) = self.picker() else {
             return;
         };
-        if let (Some(name), ChooserMode::Save { .. }) = (&picker.name, &picker.request.mode) {
+        if let Some(name) = &picker.name {
             if let [entry] = self.selected_entries().as_slice() {
                 if !entry.is_dir && !self.imp().changing_model.get() {
                     name.set_text(&entry.name);
@@ -286,10 +357,19 @@ impl BrowserWindow {
         };
         let selected = self.selected_entries();
         let folder = self.picking_folder();
+        let typed = picker
+            .name
+            .as_ref()
+            .is_some_and(|name| !name.text().trim().is_empty());
         let ready = match &picker.request.mode {
-            ChooserMode::Open { directory: false, .. } => !selected.is_empty(),
+            ChooserMode::Open { directory: false, .. } => {
+                typed
+                    || selected.iter().any(|entry| !entry.is_dir)
+                    || matches!(selected.as_slice(), [entry] if entry.is_dir)
+            }
             ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => {
-                folder.is_some() || matches!(selected.as_slice(), [entry] if entry.is_dir)
+                folder.is_some()
+                    || matches!(selected.as_slice(), [entry] if entry.is_dir && local_path(entry.navigation_uri()).is_some())
             }
             ChooserMode::Save { .. } => {
                 folder.is_some()
@@ -316,7 +396,10 @@ impl BrowserWindow {
             ChooserMode::Open {
                 directory: false,
                 multiple,
-            } => self.chosen_files(&selected, *multiple),
+            } => match self.typed_choice(&picker, &selected) {
+                Some(typed) => typed,
+                None => self.chosen_files(&selected, *multiple),
+            },
             ChooserMode::Open { directory: true, .. } => {
                 self.chosen_folder(&selected).map(|folder| vec![folder])
             }
@@ -383,8 +466,32 @@ impl BrowserWindow {
             return Ok(Vec::new());
         };
         let typed = name_box.text().trim().to_owned();
-        let folder = self.picking_folder().ok_or_else(not_local)?;
-        let name = checked_name(&typed).map_err(|_| format!("“{typed}” is not a valid file name."))?;
+        let shown = self.picking_folder().ok_or_else(not_local)?;
+        let path = typed_path(&typed, &shown);
+        if path.is_dir() {
+            name_box.set_text("");
+            self.navigate_or_report(&gio::File::for_path(&path).uri());
+            return Ok(Vec::new());
+        }
+        let bad_name =
+            || ox_core::i18n::format_message("“{name}” is not a valid file name.", &[("name", &typed)]);
+        let folder = path.parent().map(Path::to_path_buf).ok_or_else(bad_name)?;
+        if !folder.is_dir() {
+            return Err(ox_core::i18n::format_message(
+                "The folder “{folder}” does not exist.",
+                &[("folder", &folder.display().to_string())],
+            ));
+        }
+        let written = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let mut name = checked_name(&written).map_err(|_| bad_name())?;
+        if !has_extension(&name) {
+            if let Some(extension) = picker.chosen_extension() {
+                name = format!("{name}.{extension}");
+            }
+        }
         let target = folder.join(&name);
         if target.is_dir() {
             name_box.set_text("");
@@ -436,6 +543,75 @@ impl BrowserWindow {
         ));
     }
 
+    /// What the File name box of an Open dialog chooses, when it names
+    /// something other than the one file selected: a folder opens, a file
+    /// is the choice, and a name that names nothing says so. `None` leaves
+    /// the choice to the selection.
+    fn typed_choice(&self, picker: &Picker, selected: &[Entry]) -> Option<Result<Vec<PathBuf>, String>> {
+        let name_box = picker.name.as_ref()?;
+        let typed = name_box.text().trim().to_owned();
+        if typed.is_empty() {
+            return None;
+        }
+        // The selected file's own name: the selection, which a search
+        // result's folder belongs to.
+        if let [entry] = selected {
+            if !entry.is_dir && entry.name == typed {
+                return None;
+            }
+        }
+        let Some(shown) = self.picking_folder() else {
+            return Some(Err(not_local()));
+        };
+        let path = typed_path(&typed, &shown);
+        if path.is_dir() {
+            name_box.set_text("");
+            self.navigate_or_report(&gio::File::for_path(&path).uri());
+            return Some(Ok(Vec::new()));
+        }
+        if path.is_file() {
+            return Some(Ok(vec![path]));
+        }
+        Some(Err(ox_core::i18n::format_message(NOT_FOUND, &[("name", &typed)])))
+    }
+
+    /// In a dialog that chooses one item, a second item selected with
+    /// Ctrl or Shift takes the first one's place, as Windows' dialogs
+    /// select one item.
+    fn keep_one_selected(&self) {
+        let selection = self.folder_pane().model().selection().clone();
+        selection.connect_selection_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |selection, position, count| {
+                let Some(picker) = window.picker() else {
+                    return;
+                };
+                if !picker.chooses_one() {
+                    return;
+                }
+                let selected = selection.selection();
+                if selected.size() <= 1 {
+                    picker
+                        .single
+                        .set((selected.size() == 1).then(|| selected.minimum()));
+                    return;
+                }
+                // The item just selected: in the changed range, and not the
+                // one kept so far.
+                let kept = picker.single.get();
+                let newest = (position..position.saturating_add(count))
+                    .rev()
+                    .find(|item| selected.contains(*item) && Some(*item) != kept)
+                    .or(kept);
+                if let Some(item) = newest {
+                    picker.single.set(Some(item));
+                    selection.select_item(item, true);
+                }
+            }
+        ));
+    }
+
     /// Answers with `locations` and closes the window.
     fn finish_picking(&self, picker: &Picker, locations: Vec<PathBuf>) {
         picker.reply.send(&ChooserAnswer::Chosen {
@@ -446,8 +622,8 @@ impl BrowserWindow {
         self.close();
     }
 
-    /// Cancel and Escape.
-    pub(super) fn cancel_picking(&self) {
+    /// Cancel, Escape, and Ctrl+Q in a dialog.
+    pub(crate) fn cancel_picking(&self) {
         if let Some(picker) = self.picker() {
             picker.reply.send(&ChooserAnswer::Cancelled);
         }
@@ -486,10 +662,12 @@ impl BrowserWindow {
             .build();
         fields.add_css_class("picker-fields");
         let mut row = 0;
-        let name = matches!(request.mode, ChooserMode::Save { .. }).then(|| {
-            let ChooserMode::Save { name: suggested } = &request.mode else {
-                unreachable!("only a Save dialog has a name box");
-            };
+        let suggested = match &request.mode {
+            ChooserMode::Save { name } => Some(name.clone()),
+            ChooserMode::Open { directory: false, .. } => Some(String::new()),
+            ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => None,
+        };
+        let name = suggested.map(|suggested| {
             let entry = gtk::Entry::builder().text(suggested).hexpand(true).build();
             attach_field(&fields, row, "File name:", &entry);
             row += 1;
@@ -543,6 +721,7 @@ impl BrowserWindow {
             choices,
             accept,
             asking: Cell::new(false),
+            single: Cell::new(None),
         }
     }
 
@@ -1003,6 +1182,218 @@ mod tests {
         assert_eq!(response, RESPONSE_CANCELLED);
         assert!(uris.is_empty());
         wait_until("the picker to close", || !window.is_visible());
+    }
+
+    /// Opens a dialog of `method` with `entries` on `fixture`'s folder.
+    fn dialog_on(
+        portal: &Portal,
+        fixture: &Fixture,
+        method: &str,
+        mut entries: Vec<(&str, glib::Variant)>,
+    ) -> Rc<RefCell<Option<(u32, glib::VariantDict)>>> {
+        entries.push((
+            "current_folder",
+            path_variant(&fixture.root().display().to_string()),
+        ));
+        portal.call(method, &entries)
+    }
+
+    /// A file typed in the address bar is the choice, not opened in
+    /// another application.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_file_typed_in_the_address_bar_is_the_choice() {
+        let fixture = Fixture::empty();
+        fixture.write("letter.odt");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let window = &portal.test.window;
+
+        window.submit_address(&fixture.path("letter.odt").display().to_string());
+
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("letter.odt")]);
+        assert!(
+            portal.test.context.recorded_launches().is_empty(),
+            "nothing opened"
+        );
+    }
+
+    /// The Open dialog's File name box: a selected file fills it in, a
+    /// folder typed there opens, a name that names nothing says so, and a
+    /// full path is the choice.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_open_dialog_takes_a_file_name_or_a_path() {
+        let fixture = Fixture::empty();
+        fixture.write("letter.odt");
+        fs::create_dir(fixture.path("Drafts")).expect("a folder");
+        fs::write(fixture.path("Drafts/plan.txt"), b"x").expect("a file");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("Open has a File name box");
+        assert!(!picker.accept.is_sensitive(), "nothing chosen yet");
+
+        portal.test.select_named("letter.odt");
+        settle();
+        assert_eq!(name.text(), "letter.odt", "a selected file fills it in");
+
+        name.set_text("Drafts");
+        name.emit_activate();
+        wait_until("the folder typed", || {
+            portal.test.names().contains(&"plan.txt".to_owned())
+        });
+        assert_eq!(name.text(), "", "the box is cleared for the next name");
+
+        name.set_text("missing.txt");
+        name.emit_activate();
+        assert!(window.shown_message().contains("was not found"));
+        assert!(answer.borrow().is_none(), "no answer yet");
+
+        name.set_text(&fixture.path("letter.odt").display().to_string());
+        name.emit_activate();
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("letter.odt")]);
+    }
+
+    /// Save takes a path from the folder shown and adds the chosen type's
+    /// extension to a name without one; a missing folder is refused.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn saving_takes_a_path_and_adds_the_types_extension() {
+        let fixture = Fixture::empty();
+        fs::create_dir(fixture.path("Drafts")).expect("a folder");
+        let portal = Portal::new();
+        let text = ("Text".to_owned(), vec![(0_u32, "*.txt".to_owned())]).to_variant();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "notes.txt".to_variant()),
+                (
+                    "filters",
+                    glib::Variant::array_from_iter_with_type(text.type_(), [text.clone()]),
+                ),
+            ],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+
+        name.set_text("Missing/report");
+        name.emit_activate();
+        assert!(window.shown_message().contains("does not exist"));
+        assert!(answer.borrow().is_none());
+
+        name.set_text("Drafts/report");
+        name.emit_activate();
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(
+            uris,
+            [fixture.uri_of("Drafts/report.txt")],
+            "the type's extension added"
+        );
+    }
+
+    /// A name that has an extension is saved as typed, whatever the type.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_name_with_an_extension_is_saved_as_typed() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let text = ("Text".to_owned(), vec![(0_u32, "*.txt".to_owned())]).to_variant();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![(
+                "filters",
+                glib::Variant::array_from_iter_with_type(text.type_(), [text.clone()]),
+            )],
+        );
+        let name = portal
+            .test
+            .window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+        name.set_text("notes.md");
+        name.emit_activate();
+        let (_, uris) = Portal::finish(&answer);
+        assert_eq!(uris, [fixture.uri_of("notes.md")]);
+    }
+
+    /// Alt+Up works from the File name box, where focus starts in Save;
+    /// Ctrl+N and a search result's new window are off in a dialog.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_dialog_keys_work_from_the_name_box_and_open_no_window() {
+        let fixture = Fixture::empty();
+        fs::create_dir(fixture.path("Drafts")).expect("a folder");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "SaveFile", Vec::new());
+        let window = &portal.test.window;
+        let name = window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+        name.grab_focus();
+        settle();
+        assert!(window.focus_is_in_picker_name());
+
+        let handled = window.run_navigation_key(super::super::WindowAction::Up);
+        assert_eq!(handled, glib::Propagation::Stop, "Alt+Up acts from the name box");
+        let parent = gio::File::for_path(fixture.root())
+            .parent()
+            .expect("the fixture has a parent")
+            .uri()
+            .to_string();
+        wait_until("the parent folder", || {
+            window.current_uri().as_deref() == Some(parent.as_str())
+        });
+        assert!(!window.new_window_key_applies(), "Ctrl+N opens no window");
+        assert!(
+            !window
+                .lookup_action("open-file-location-in-window")
+                .expect("the action")
+                .is_enabled(),
+            "no new window from a search result"
+        );
+    }
+
+    /// A dialog for one file keeps one selected: a second item selected
+    /// with Ctrl takes the first one's place.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_dialog_for_one_file_keeps_one_selected() {
+        let fixture = Fixture::empty();
+        fixture.write("a.txt");
+        fixture.write("b.txt");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        let selection = test.window.folder_model().selection().clone();
+        selection.select_item(test.position_of("a.txt"), true);
+        settle();
+        selection.select_item(test.position_of("b.txt"), false);
+        settle();
+        assert_eq!(test.selected_names(), ["b.txt"], "the newer one stays");
     }
 
     /// Closing the window answers Cancelled, once.
