@@ -252,6 +252,38 @@ fn follow_hover(popover: &MenuPopover, list: &gtk::ListBox) {
         move |_| popover.rest_on(None)
     ));
     list.add_controller(motion);
+    pass_hover_back_to_parent_menu(popover);
+}
+
+/// An open submenu grabs the pointer (`gtk_grab_add` in GTK's
+/// `gtk_popover_map`), so GTK hands it the pointer's motion over the menus
+/// it hangs from too: their lists hear the pointer come back, but not
+/// where it goes next. With Group by open, resting on More did not open
+/// it on KDE Plasma. The submenu passes that motion back to the menu the
+/// pointer is over.
+fn pass_hover_back_to_parent_menu(popover: &MenuPopover) {
+    let motion = gtk::EventControllerMotion::new();
+    motion.connect_motion(glib::clone!(
+        #[weak]
+        popover,
+        move |motion, _, _| {
+            let Some(event) = motion.current_event() else {
+                return;
+            };
+            let (Some(surface), Some((x, y))) = (event.surface(), event.position()) else {
+                return;
+            };
+            let mut menu = popover.parent_menu();
+            while let Some(parent) = menu {
+                if parent.surface().as_ref() == Some(&surface) {
+                    parent.rest_at_surface_point(x, y);
+                    return;
+                }
+                menu = parent.parent_menu();
+            }
+        }
+    ));
+    popover.add_controller(motion);
 }
 
 /// Right opens the focused row's submenu and moves into it; Left in a
@@ -670,6 +702,23 @@ impl MenuPopover {
             ),
         );
         self.imp().hover.borrow_mut().1 = Some(timer);
+    }
+
+    /// The pointer rests at `x`, `y` on this menu's surface, as a submenu
+    /// that grabbed the pointer reports it: on the row there, or on none.
+    fn rest_at_surface_point(&self, x: f64, y: f64) {
+        let (left, top) = self.surface_transform();
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let point = gtk::graphene::Point::new((x - left) as f32, (y - top) as f32);
+        let list = self.list();
+        let row = self
+            .compute_point(list, &point)
+            .filter(|point| list.contains(f64::from(point.x()), f64::from(point.y())))
+            .and_then(|point| {
+                #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+                list.row_at_y(point.y() as i32)
+            });
+        self.rest_on(row.map(|row| row.index()));
     }
 
     /// Stops a submenu from opening or closing on its timer.

@@ -349,6 +349,40 @@ fn the_sort_menu_has_more_and_group_by_submenus() {
     });
 }
 
+/// With Group by open, the submenu grabs the pointer, so its motion over
+/// the Sort menu reaches the Sort menu through the submenu, as a position
+/// on the Sort menu's surface: resting there on More still opens More's
+/// submenu in Group by's place. Before, More stayed shut on KDE Plasma.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn the_pointer_back_from_group_by_still_opens_more() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    menu.row("Sort by").emit_activate();
+    wait_until("the Sort menu", || {
+        menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
+    });
+    menu.hover_row(Some("Group by"));
+    wait_until("the Group by submenu", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.is_visible())
+    });
+    // The pointer goes into the submenu, then back over the Sort menu.
+    menu.hover_row(None);
+    menu.hover_row_through_submenu("Descending");
+    menu.hover_row_through_submenu("More");
+    wait_until("More's submenu in Group by's place", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.row_labels().first().map(String::as_str) == Some("Size"))
+    });
+    menu.hover_row_through_submenu("Folders first");
+    wait_until("the submenu to close", || menu.open_submenu_menu().is_none());
+    assert!(menu.is_visible(), "the Sort menu stays open");
+}
+
 /// Resting the pointer on Group by opens its submenu after a moment, and
 /// resting it on another row closes it again, as Windows' menus do.
 ///

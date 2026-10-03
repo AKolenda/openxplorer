@@ -17,6 +17,18 @@ impl MenuPopover {
         self.rest_on(index);
     }
 
+    /// Rests the pointer on the middle of the row labelled `label` as an
+    /// open submenu that grabbed the pointer reports it: a position on this
+    /// menu's surface. For tests.
+    pub(crate) fn hover_row_through_submenu(&self, label: &str) {
+        let row = self.row(label);
+        let bounds = row.compute_bounds(self).expect("the row is in the menu");
+        let (left, top) = self.surface_transform();
+        let x = f64::from(bounds.x() + bounds.width() / 2.0) + left;
+        let y = f64::from(bounds.y() + bounds.height() / 2.0) + top;
+        self.rest_at_surface_point(x, y);
+    }
+
     /// Presses `key` in the rows' list, as the keyboard does, for tests.
     pub(crate) fn press_in_list(&self, key: gtk::gdk::Key) -> bool {
         let keys = self
