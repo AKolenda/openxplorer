@@ -40,7 +40,7 @@
         "id": "release-status",
         "title": "Know what you are installing",
         "paragraphs": [
-          "Version 2.0.0 replaces the Python app with the native GTK 4 app under the same name, settings and saved passwords, and adds Fluent icons, a categorised Settings page, undo, and Flatpak and distribution packages. Zorin is the primary target; Ubuntu 24.04+, Debian 13, Fedora, openSUSE and Arch are supported through their packages, and every other distribution through the Flatpak. The known gaps are listed in the changelog."
+          "Version 2.0.0 replaces the Python app with the native GTK 4 app under the same name, settings and saved passwords, and adds Fluent icons, a categorised Settings page, undo, and Flatpak and distribution packages. Zorin is the primary target; Ubuntu 24.04+, Debian 13, Fedora, openSUSE and Arch are supported through their packages, and every other distribution through the Flatpak. Version 2.0.1 adds split panes, a Compact view, a folder tree, thumbnails, transfer jobs with undo, SFTP, FTP, WebDAV and NFS locations, content search and optional Open and Save dialogs for other apps. The known gaps are listed in the changelog."
         ],
         "callout": "Use a disposable folder and a non-critical share first. SMB servers other than the maintainer's, phones and USB drives have not yet been accepted on real hardware with the native app."
       },
@@ -73,7 +73,7 @@
         "paragraphs": [
           "Close every old Winspace/OpenXplorer window and finish file operations. Download the .deb, then run these commands from that download directory as your normal user."
         ],
-        "code": "sudo apt update\nsudo apt install ./openxplorer_2.0.0_all.deb\nopenxplorer --version\nopenxplorer",
+        "code": "sudo apt update\nsudo apt install ./openxplorer_2.0.1_all.deb\nopenxplorer --version\nopenxplorer",
         "callout": "This is a local unsigned package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts."
       },
       {
@@ -82,7 +82,7 @@
         "paragraphs": [
           "Click the Check for updates icon at the bottom right, beside the view controls. In 1.1.0 and 1.1.1, this button is at the bottom of the sidebar. This contacts the public OpenXplorer GitHub Releases API only when requested. Review the installed and available versions, then choose Install update. Finish file operations and tab moves first.",
           "The installed Debian app downloads the release installer, verifies its GitHub SHA-256 digest and package identity, then asks for system administrator approval through polkit. APT installs the update without removing packages. Choose Restart now when finished; restarting closes existing windows and tabs.",
-          "Older releases need one manual upgrade to 1.1.0 before this control is available; 1.1.x offers 2.0.0 there. Earlier releases need one manual upgrade from GitHub Releases. Source checkouts, RPM, Arch and Flatpak installations update through their own package manager. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature. To go back to 1.1.4, install its .deb with sudo apt install --allow-downgrades; settings and saved passwords are shared."
+          "Older releases need one manual upgrade to 1.1.0 before this control is available; 1.1.x offers the newest 2.x release there. Earlier releases need one manual upgrade from GitHub Releases. Source checkouts, RPM, Arch and Flatpak installations update through their own package manager. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature. To go back to 1.1.4, install its .deb with sudo apt install --allow-downgrades; settings and saved passwords are shared."
         ]
       },
       {
@@ -275,6 +275,7 @@
         "paragraphs": [
           "Settings → Default apps → Apps’ Open and Save dialogs → Enable makes other applications choose and save files in an OpenXplorer window: the same navigation pane, address bar and search, with File name, Save as type and the Save or Open button at the bottom. It works for applications that use the desktop portal for file dialogs, such as Chrome, Firefox and Flatpak apps; applications that draw their own dialog keep it. As in Windows, the File name box takes a name, a path from the folder shown, ~/… or a full path: a folder opens, a file is chosen, and Save adds the chosen type’s extension to a name without one. A file typed in the address bar is chosen too. Escape cancels, Alt+Left, Alt+Right and Alt+Up work from the File name box, and Ctrl+Q and Ctrl+N act on the dialog alone.",
           "Enabling writes one preference into your own desktop-portal configuration (the file the portal reads now, or a new ~/.config/xdg-desktop-portal/<desktop>-portals.conf) and records what the file held; every other portal, such as screenshots or screen sharing, keeps its backend. Click Apply now to restart the desktop portal when it runs as a user service, or log out and back in. Saving over an existing file always asks first.",
+          "On KDE Plasma, KDE’s own apps (Plasma and its widgets, Kate, System Settings and the rest) show their own dialog unless told to use the portal, so Enable also adds ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh, which sets PLASMA_INTEGRATION_USE_PORTAL=1 when you log in. KDE apps follow after you log out and back in; Restore removes the file again. If a file of yours already has that name, OpenXplorer leaves it alone and the status line says KDE apps keep KDE’s dialog.",
           "Restore Open and Save dialogs puts the file back as it was, or, if you edited it since, removes only OpenXplorer’s line. The Flatpak cannot change the host’s portal, so this is available in the installed package only."
         ],
         "code": "cat ~/.config/xdg-desktop-portal/*-portals.conf\nsystemctl --user try-restart xdg-desktop-portal.service",
@@ -530,7 +531,7 @@
           "The website remains a Next.js static export. pnpm build writes apps/web/out, and pnpm check performs dependency-aware TypeScript checking. Cloudflare Workers Static Assets serves that export without a framework migration or application backend. The offline design renderer does not exercise the Next.js runtime.",
           "The native experience roadmap and public source checklist are in docs/NATIVE-EXPERIENCE-ROADMAP.md and docs/PUBLIC-RELEASE-CHECKLIST.md. They distinguish remaining desktop work, source-publication preparation and stable-release validation."
         ],
-        "code": "pnpm check\npnpm build\npnpm preview\n\n# Native checks and the release .deb (Ubuntu 24.04 build host)\npython3 native/tools/check.py\npython3 native/parity/check.py\npython3 native/tools/build_deb.py --app-id io.winspace.Development\npython3 native/tools/verify_deb.py dist/native/openxplorer_2.0.0_all.deb"
+        "code": "pnpm check\npnpm build\npnpm preview\n\n# Native checks and the release .deb (Ubuntu 24.04 build host)\npython3 native/tools/check.py\npython3 native/parity/check.py\npython3 native/tools/build_deb.py --app-id io.winspace.Development\npython3 native/tools/verify_deb.py dist/native/openxplorer_2.0.1_all.deb"
       },
       {
         "id": "contribute",

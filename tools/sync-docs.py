@@ -16,7 +16,7 @@ def markdown(doc,asset_prefix,demo_path):
         if s.get('image'):text+=f"\n![{s.get('imageAlt',s['title'])}]({asset_prefix}{s['image']}.png)\n\n*The native app, captured with fictional sample files. No live NAS connection.*\n"
         if s.get('demo'):text+=f"\n[Open the click-through tour of the real app]({demo_path}): pictures of the native app with sample files, no access to your computer.\n"
         if s.get('callout'):text+='\n> '+s['callout'].replace('\n','\n> ')+'\n'
-    text+='\n---\n\nOpenXplorer 2.0.0. Project-authored documentation: AGPL-3.0-only.\n'
+    text+='\n---\n\nOpenXplorer 2.0.1. Project-authored documentation: AGPL-3.0-only.\n'
     return text
 for doc in json.loads((root/'apps/web/lib/docs.json').read_text()):
     (root/'docs'/f"{doc['slug']}.md").write_text(markdown(doc,'../apps/web/public/assets/screenshots/','../apps/web/public/tour/index.html'))

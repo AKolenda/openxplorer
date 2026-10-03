@@ -27,11 +27,21 @@
 //!
 //! The portal reads its configuration when it starts, so a change applies
 //! at the next login, or at once after [`PORTAL_SERVICE`] restarts.
+//!
+//! KDE's own applications (Plasma, Kate, System Settings, a Plasma
+//! widget's settings) do not ask the portal: their Qt platform theme shows
+//! KDE's dialog itself unless `PLASMA_INTEGRATION_USE_PORTAL=1` is set.
+//! On a KDE session, enabling therefore also writes
+//! `$XDG_CONFIG_HOME/plasma-workspace/env/openxplorer-file-dialogs.sh`,
+//! which Plasma runs at login, exporting that variable; disabling removes
+//! it if it still holds what the app wrote. It applies from the next
+//! login, as Plasma reads it only then.
 
 use std::fs;
 use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use super::private_file::write_private_file;
 use super::sandbox::Sandbox;
@@ -55,6 +65,30 @@ const RECORD_FILE_NAME: &str = "file-dialogs.json";
 
 /// The section that holds the preferences.
 const PREFERRED_SECTION: &str = "[preferred]";
+
+/// The variable that makes KDE's Qt platform theme ask the portal for
+/// file dialogs instead of showing its own.
+pub const KDE_PORTAL_VARIABLE: &str = "PLASMA_INTEGRATION_USE_PORTAL";
+
+/// The folder below `$XDG_CONFIG_HOME` whose `*.sh` scripts Plasma runs at
+/// login, and the app's script there.
+const KDE_ENV_SUBDIR: &str = "plasma-workspace/env";
+const KDE_ENV_FILE_NAME: &str = "openxplorer-file-dialogs.sh";
+
+/// What the app's login script holds.
+const KDE_ENV_SCRIPT: &str = "# Open and Save dialogs of KDE apps go to the desktop portal, which sends them to\n\
+                              # OpenXplorer. Set by OpenXplorer (Settings > Default apps); Restore removes it.\n\
+                              export PLASMA_INTEGRATION_USE_PORTAL=1\n";
+
+/// What is at the KDE login script's path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KdeScript {
+    Missing,
+    /// The script the app writes.
+    Ours,
+    /// A file of the user's, or a symlink.
+    Other,
+}
 
 /// The folders and the desktop the opt-in works with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,36 +268,118 @@ impl FileDialogRegistration {
             return Err(FileDialogError::Unsupported);
         }
         if self.is_enabled() {
-            return Ok(());
+            // Enabled before KDE apps were covered: add their script.
+            return self.enable_for_kde_apps().map(|_| ());
         }
         let file = self.config_file();
         refuse_symlink(&file)?;
         let previous = read_optional(&file)?;
-        let base = match &previous {
-            Some(contents) => contents.clone(),
-            None => self.system_contents().unwrap_or_default(),
-        };
-        let written = with_preference(&base, FILE_CHOOSER_KEY, &self.portal_name);
-        if self.read_record()?.is_none() {
-            let record = Record {
-                file: file.clone(),
-                previous,
-                written: written.clone(),
+        // KDE's login script is written first, so an Enable that fails
+        // there changes nothing; if the portal file then fails, the script
+        // just written is taken away again.
+        let wrote_script = self.enable_for_kde_apps()?;
+        let commit = || -> Result<(), FileDialogError> {
+            let base = match &previous {
+                Some(contents) => contents.clone(),
+                None => self.system_contents().unwrap_or_default(),
             };
-            self.write_record(&record)?;
-        } else {
-            self.update_written(&written)?;
+            let written = with_preference(&base, FILE_CHOOSER_KEY, &self.portal_name);
+            if self.read_record()?.is_none() {
+                let record = Record {
+                    file: file.clone(),
+                    previous: previous.clone(),
+                    written: written.clone(),
+                };
+                self.write_record(&record)?;
+            } else {
+                self.update_written(&written)?;
+            }
+            write_text(&file, &written)
+        };
+        commit().inspect_err(|_| {
+            if wrote_script {
+                let _ = remove_file(&self.kde_env_file());
+            }
+        })
+    }
+
+    /// Whether this is a KDE session, whose own applications need
+    /// [`KDE_PORTAL_VARIABLE`] to ask the portal.
+    pub fn is_kde_session(&self) -> bool {
+        self.paths.desktops.iter().any(|desktop| desktop == "kde")
+    }
+
+    /// The login script that sets [`KDE_PORTAL_VARIABLE`].
+    pub fn kde_env_file(&self) -> PathBuf {
+        self.paths
+            .config_home
+            .join(KDE_ENV_SUBDIR)
+            .join(KDE_ENV_FILE_NAME)
+    }
+
+    /// Whether KDE's own applications are set to ask the portal at the
+    /// next login: this is a KDE session and the app's login script is in
+    /// place. Reading only reads.
+    pub fn covers_kde_apps(&self) -> bool {
+        self.is_kde_session() && matches!(self.kde_script(), Ok(KdeScript::Ours))
+    }
+
+    /// Whether a file of the user's, or a symlink, sits where the login
+    /// script goes on a KDE session, so the app leaves it alone and KDE's
+    /// own applications keep KDE's dialog.
+    pub fn kde_script_is_someone_elses(&self) -> bool {
+        self.is_kde_session() && matches!(self.kde_script(), Ok(KdeScript::Other))
+    }
+
+    /// What is at the login script's path: nothing, the app's script, or
+    /// anything else (a file of the user's, a symlink, or an entry that
+    /// cannot be read as text).
+    fn kde_script(&self) -> Result<KdeScript, FileDialogError> {
+        let script = self.kde_env_file();
+        if refuse_symlink(&script).is_err_and(|error| matches!(error, FileDialogError::Symlink(_))) {
+            return Ok(KdeScript::Other);
         }
-        write_text(&file, &written)
+        match read_optional(&script) {
+            Ok(None) => Ok(KdeScript::Missing),
+            Ok(Some(contents)) if contents == KDE_ENV_SCRIPT => Ok(KdeScript::Ours),
+            Ok(Some(_)) => Ok(KdeScript::Other),
+            // Something there that cannot be read as text (a folder, say)
+            // is not the app's script either: Enable and Restore leave it.
+            Err(_) if fs::symlink_metadata(&script).is_ok() => Ok(KdeScript::Other),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Writes the login script on a KDE session and says whether it did.
+    /// A file of the user's at that name, or a symlink, is left alone.
+    fn enable_for_kde_apps(&self) -> Result<bool, FileDialogError> {
+        if !self.is_kde_session() || self.kde_script()? != KdeScript::Missing {
+            return Ok(false);
+        }
+        write_text(&self.kde_env_file(), KDE_ENV_SCRIPT)?;
+        Ok(true)
+    }
+
+    /// Takes the login script away if it still holds what the app wrote.
+    /// A file of the user's, a symlink, or anything that cannot be read
+    /// there is not the app's and is left alone, so Restore goes on.
+    fn disable_for_kde_apps(&self) -> Result<(), FileDialogError> {
+        if matches!(self.kde_script(), Ok(KdeScript::Ours)) {
+            remove_file(&self.kde_env_file())?;
+        }
+        Ok(())
     }
 
     /// Gives file dialogs back: restores the file if it still holds what
-    /// the app wrote, otherwise removes only the app's line.
+    /// the app wrote, otherwise removes only the app's line. KDE's login
+    /// script goes first, so if it cannot be removed nothing has changed
+    /// and Restore can be tried again.
     ///
     /// # Errors
     ///
     /// [`FileDialogError::Symlink`] or [`FileDialogError::Io`].
     pub fn disable(&self) -> Result<DisabledFileDialogs, FileDialogError> {
+        self.disable_for_kde_apps()?;
         let record = self.read_record()?;
         let file = record
             .as_ref()
@@ -308,14 +424,18 @@ impl FileDialogRegistration {
     }
 
     /// Runs `operation` on a GIO worker thread, as the other integrations'
-    /// file work does.
+    /// file work does, after any other operation of this opt-in finished:
+    /// Enable, Apply now and Restore each read and write the portal file,
+    /// the record and KDE's login script in several steps, so two at once
+    /// (Enable clicked, then Restore before it finished) could leave the
+    /// script behind with the record gone.
     pub fn run_in_background<T, F>(&self, operation: F) -> impl Future<Output = T> + 'static
     where
         T: Send + 'static,
         F: FnOnce(&Self) -> T + Send + 'static,
     {
         let registration = self.clone();
-        on_worker(move || operation(&registration))
+        on_worker(move || one_at_a_time(|| operation(&registration)))
     }
 
     /// Whether `contents` prefers this backend for file dialogs.
@@ -375,6 +495,17 @@ impl FileDialogRegistration {
         }
         Ok(())
     }
+}
+
+/// Serialises the opt-in's file changes across the app's windows.
+static CHANGES: Mutex<()> = Mutex::new(());
+
+/// Runs `operation` while no other change of the opt-in runs.
+fn one_at_a_time<T>(operation: impl FnOnce() -> T) -> T {
+    // A change that panicked leaves nothing locked that matters: each one
+    // reads the files afresh.
+    let _turn = CHANGES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    operation()
 }
 
 /// [`FileDialogRegistration::restart_portal`] with `program` as `systemctl`.
@@ -571,6 +702,37 @@ mod tests {
 
     use super::*;
     use crate::test_support::temporary_folder;
+
+    /// Two changes never overlap: the second waits for the first.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn changes_run_one_at_a_time() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::{mpsc, Arc};
+
+        let first_done = Arc::new(AtomicBool::new(false));
+        let (started, wait_started) = mpsc::channel();
+        let (release, held) = mpsc::channel::<()>();
+        let done = Arc::clone(&first_done);
+        let first = std::thread::spawn(move || {
+            one_at_a_time(|| {
+                started.send(()).expect("the test waits");
+                held.recv().expect("the test releases");
+                done.store(true, Ordering::SeqCst);
+            });
+        });
+        wait_started.recv().expect("the first change started");
+        let seen = Arc::clone(&first_done);
+        let second = std::thread::spawn(move || one_at_a_time(|| seen.load(Ordering::SeqCst)));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        release.send(()).expect("the first change waits");
+        first.join().expect("the first change");
+        assert!(
+            second.join().expect("the second change"),
+            "the second change ran after the first finished"
+        );
+    }
 
     /// A stand-in `systemctl` in `folder` that logs its verbs and answers
     /// `is-active` from the file `active` (present: running).

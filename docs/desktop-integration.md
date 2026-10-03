@@ -32,6 +32,8 @@ Settings → Default apps → Apps’ Open and Save dialogs → Enable makes oth
 
 Enabling writes one preference into your own desktop-portal configuration (the file the portal reads now, or a new ~/.config/xdg-desktop-portal/<desktop>-portals.conf) and records what the file held; every other portal, such as screenshots or screen sharing, keeps its backend. Click Apply now to restart the desktop portal when it runs as a user service, or log out and back in. Saving over an existing file always asks first.
 
+On KDE Plasma, KDE’s own apps (Plasma and its widgets, Kate, System Settings and the rest) show their own dialog unless told to use the portal, so Enable also adds ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh, which sets PLASMA_INTEGRATION_USE_PORTAL=1 when you log in. KDE apps follow after you log out and back in; Restore removes the file again. If a file of yours already has that name, OpenXplorer leaves it alone and the status line says KDE apps keep KDE’s dialog.
+
 Restore Open and Save dialogs puts the file back as it was, or, if you edited it since, removes only OpenXplorer’s line. The Flatpak cannot change the host’s portal, so this is available in the installed package only.
 
 ```sh
@@ -55,4 +57,4 @@ Disable Show in folder removes only OpenXplorer’s unmodified user-level servic
 
 ---
 
-OpenXplorer 2.0.0. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.1. Project-authored documentation: AGPL-3.0-only.

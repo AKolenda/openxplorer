@@ -1198,7 +1198,7 @@ dependencies = [
 
 [[package]]
 name = "ox-app"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "async-channel",
  "gio",
@@ -1212,7 +1212,7 @@ dependencies = [
 
 [[package]]
 name = "ox-core"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "bzip2",
  "crc32fast",
