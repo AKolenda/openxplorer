@@ -38,7 +38,11 @@ open are listed in [native/BACKLOG.md](native/BACKLOG.md).
   applications that use the desktop portal (Chrome, Firefox, Flatpak apps)
   choose and save files in an OpenXplorer window. It is off until enabled,
   keeps every other portal backend, and Restore Open and Save dialogs undoes
-  it. The Flatpak cannot offer it.
+  it. The Flatpak cannot offer it. On KDE Plasma, Enable also adds a login
+  script, `~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh`, that
+  sets `PLASMA_INTEGRATION_USE_PORTAL=1`, so KDE's own apps (Plasma and its
+  widgets, Kate, System Settings) follow from the next login; Restore
+  removes it, and a file of the user's with that name is left alone.
 - **Flatpak:** Show in folder works inside the sandbox and the System theme
   follows a dark desktop.
 - **Translations:** the interface uses message catalogues; no reviewed

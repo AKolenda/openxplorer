@@ -171,6 +171,39 @@ fn making_openxplorer_the_default_can_be_undone() {
     );
 }
 
+/// While a change runs, the Open and Save dialogs' Enable, Apply now and
+/// Restore are off too, so Enable and Restore never overlap; the status
+/// read after the change turns on what applies.
+///
+/// parity: INT-032
+#[gtk::test]
+fn the_dialog_buttons_wait_while_a_change_runs() {
+    let default_apps = DefaultAppsTest::open();
+    let mut buttons: Vec<gtk::Button> = default_apps
+        .row(super::FILE_DIALOGS.title)
+        .controls()
+        .into_iter()
+        .filter_map(|control| control.downcast::<gtk::Button>().ok())
+        .collect();
+    assert_eq!(buttons.len(), 2, "Apply now and Enable");
+    buttons.push(default_apps.button(super::RESTORE_FILE_DIALOGS.title));
+    let before: Vec<bool> = buttons.iter().map(gtk::Button::is_sensitive).collect();
+    default_apps.switch_of("Include Show in folder").set_active(false);
+
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+
+    for button in &buttons {
+        assert!(
+            !button.is_sensitive(),
+            "{:?} waits for the change",
+            button.label()
+        );
+    }
+    default_apps.wait_for_status("the status after the change");
+    let after: Vec<bool> = buttons.iter().map(gtk::Button::is_sensitive).collect();
+    assert_eq!(after, before, "the status turns them back on as before");
+}
+
 /// Use `OpenXplorer` for ZIPs takes every ZIP type and leaves folders
 /// alone; Restore ZIP handler gives them back.
 ///

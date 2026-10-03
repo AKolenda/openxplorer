@@ -15491,7 +15491,7 @@ bridge = []
 dolphin = "Plasma's xdg-desktop-portal-kde serves FileChooser with the KIO file dialog (KFileWidget), the same widgets Dolphin uses; the backend is chosen in kde-portals.conf"
 gnome = "xdg-desktop-portal-gnome / -gtk serve FileChooser with GtkFileChooserDialog; portals.conf(5) chooses the backend per interface"
 native = "done"
-native_note = "native/crates/ox-core/tests/integration_file_chooser.rs (request checks, the portals.conf opt-in, the backend on a private bus), ox-app folder_view/filter.rs and window/picker tests, tools/test_package_data.py (the .portal file). Not done: making the window transient for the caller's window (parent_window is read but not used)."
+native_note = "native/crates/ox-core/tests/integration_file_chooser.rs (request checks, the portals.conf opt-in, the backend on a private bus, kde_apps_are_covered_by_a_login_script: on KDE Plasma, Enable also writes ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh setting PLASMA_INTEGRATION_USE_PORTAL=1, so KDE's own apps ask the portal from the next login; Restore removes it), ox-app folder_view/filter.rs and window/picker tests, tools/test_package_data.py (the .portal file). Not done: making the window transient for the caller's window (parent_window is read but not used)."
 
 [[feature]]
 id = "UPD-001"
