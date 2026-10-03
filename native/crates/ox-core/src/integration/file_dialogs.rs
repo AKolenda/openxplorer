@@ -269,33 +269,38 @@ impl FileDialogRegistration {
         }
         if self.is_enabled() {
             // Enabled before KDE apps were covered: add their script.
-            return self.enable_for_kde_apps();
+            return self.enable_for_kde_apps().map(|_| ());
         }
         let file = self.config_file();
         refuse_symlink(&file)?;
         let previous = read_optional(&file)?;
-        // Fails before the portal file changes when KDE's login script
-        // cannot be read, so a failed Enable changes nothing.
-        if self.is_kde_session() {
-            self.kde_script()?;
-        }
-        let base = match &previous {
-            Some(contents) => contents.clone(),
-            None => self.system_contents().unwrap_or_default(),
-        };
-        let written = with_preference(&base, FILE_CHOOSER_KEY, &self.portal_name);
-        if self.read_record()?.is_none() {
-            let record = Record {
-                file: file.clone(),
-                previous,
-                written: written.clone(),
+        // KDE's login script is written first, so an Enable that fails
+        // there changes nothing; if the portal file then fails, the script
+        // just written is taken away again.
+        let wrote_script = self.enable_for_kde_apps()?;
+        let commit = || -> Result<(), FileDialogError> {
+            let base = match &previous {
+                Some(contents) => contents.clone(),
+                None => self.system_contents().unwrap_or_default(),
             };
-            self.write_record(&record)?;
-        } else {
-            self.update_written(&written)?;
-        }
-        write_text(&file, &written)?;
-        self.enable_for_kde_apps()
+            let written = with_preference(&base, FILE_CHOOSER_KEY, &self.portal_name);
+            if self.read_record()?.is_none() {
+                let record = Record {
+                    file: file.clone(),
+                    previous: previous.clone(),
+                    written: written.clone(),
+                };
+                self.write_record(&record)?;
+            } else {
+                self.update_written(&written)?;
+            }
+            write_text(&file, &written)
+        };
+        commit().inspect_err(|_| {
+            if wrote_script {
+                let _ = remove_file(&self.kde_env_file());
+            }
+        })
     }
 
     /// Whether this is a KDE session, whose own applications need
@@ -339,19 +344,21 @@ impl FileDialogRegistration {
         })
     }
 
-    /// Writes the login script on a KDE session. A file of the user's at
-    /// that name, or a symlink, is left alone.
-    fn enable_for_kde_apps(&self) -> Result<(), FileDialogError> {
+    /// Writes the login script on a KDE session and says whether it did.
+    /// A file of the user's at that name, or a symlink, is left alone.
+    fn enable_for_kde_apps(&self) -> Result<bool, FileDialogError> {
         if !self.is_kde_session() || self.kde_script()? != KdeScript::Missing {
-            return Ok(());
+            return Ok(false);
         }
-        write_text(&self.kde_env_file(), KDE_ENV_SCRIPT)
+        write_text(&self.kde_env_file(), KDE_ENV_SCRIPT)?;
+        Ok(true)
     }
 
-    /// Removes the login script if it still holds what the app wrote; a
-    /// file of the user's, or a symlink, is left alone.
+    /// Takes the login script away if it still holds what the app wrote.
+    /// A file of the user's, a symlink, or anything that cannot be read
+    /// there is not the app's and is left alone, so Restore goes on.
     fn disable_for_kde_apps(&self) -> Result<(), FileDialogError> {
-        if self.kde_script()? == KdeScript::Ours {
+        if matches!(self.kde_script(), Ok(KdeScript::Ours)) {
             remove_file(&self.kde_env_file())?;
         }
         Ok(())

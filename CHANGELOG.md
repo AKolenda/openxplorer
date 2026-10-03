@@ -15,7 +15,8 @@
   that sets `PLASMA_INTEGRATION_USE_PORTAL=1`, so they ask the portal
   instead of showing KDE's dialog. It applies from the next login, and
   Restore removes it. Enable stays available for those who enabled the
-  dialogs before, to add it.
+  dialogs before, to add it. A file of the user's with that name is left
+  alone, and the status line says so.
 
 # 2.0.0 — 2026-09-28
 

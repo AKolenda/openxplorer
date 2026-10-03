@@ -551,6 +551,55 @@ fn kde_apps_are_covered_by_a_login_script() {
     assert!(!script.exists(), "GNOME apps already ask the portal");
 }
 
+/// An Enable that cannot write KDE's login script changes nothing: the
+/// portal file and the record are not written, so dialogs stay as they
+/// were.
+///
+/// parity: INT-032
+#[test]
+fn a_kde_script_that_cannot_be_written_leaves_dialogs_off() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    let folder = registration
+        .kde_env_file()
+        .parent()
+        .expect("the script's folder")
+        .to_path_buf();
+    fs::create_dir_all(&folder).expect("the folder");
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).expect("read-only");
+
+    let refused = registration.enable();
+
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).expect("writable again");
+    assert!(refused.is_err(), "the script could not be written");
+    assert!(!registration.is_enabled(), "dialogs stay as they were");
+    assert!(!fixture.user_file().exists(), "the portal file is untouched");
+    registration.enable().expect("enable once the folder is writable");
+    assert!(registration.covers_kde_apps());
+}
+
+/// Restore goes on when something it cannot read sits where KDE's login
+/// script goes: that is not the app's script, so it is left alone and the
+/// dialogs are given back.
+///
+/// parity: INT-032
+#[test]
+fn restore_goes_on_past_an_unreadable_kde_script_path() {
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    registration.enable().expect("enable");
+    let script = registration.kde_env_file();
+    fs::remove_file(&script).expect("the script");
+    fs::create_dir(&script).expect("a folder of that name");
+
+    registration.disable().expect("Restore goes on");
+
+    assert!(!registration.is_enabled());
+    assert!(script.is_dir(), "left alone");
+}
+
 /// A later edit by the user wins: disabling then removes only the app's
 /// line.
 ///
