@@ -556,11 +556,23 @@ impl MenuPopover {
         }
         let menu = MenuPopover::new(item.submenu.clone());
         // Beside the row, its first item level with the row, as Windows
-        // opens a submenu.
+        // opens a submenu. It hangs from this menu, not from the row: the
+        // pointer moving over the submenu must not count as hovering this
+        // menu's rows, which events bubbling up through the row would.
         menu.set_position(gtk::PositionType::Right);
         menu.set_halign(gtk::Align::Fill);
         menu.set_offset(2, -4);
-        menu.set_parent(&row);
+        menu.set_parent(self);
+        if let Some(bounds) = row.compute_bounds(self) {
+            #[expect(clippy::cast_possible_truncation, reason = "menu rows are small")]
+            let area = gdk::Rectangle::new(
+                bounds.x() as i32,
+                bounds.y() as i32,
+                bounds.width() as i32,
+                bounds.height() as i32,
+            );
+            menu.set_pointing_to(Some(&area));
+        }
         // Escape, or a click elsewhere, closes the submenu by itself:
         // it is let go of once GTK is done closing it.
         menu.connect_closed(glib::clone!(

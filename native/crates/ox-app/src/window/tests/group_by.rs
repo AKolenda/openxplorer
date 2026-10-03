@@ -369,6 +369,11 @@ fn hovering_group_by_opens_its_submenu_beside_the_menu() {
         menu.open_submenu_menu()
             .is_some_and(|submenu| submenu.is_visible())
     });
+    let submenu = menu.open_submenu_menu().expect("open");
+    assert!(
+        !submenu.is_ancestor(&menu.row_list()),
+        "the pointer over the submenu does not hover the menu's rows"
+    );
     menu.hover_row(Some("More"));
     wait_until("More's submenu in its place", || {
         menu.open_submenu_menu()
