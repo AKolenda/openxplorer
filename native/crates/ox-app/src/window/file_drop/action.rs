@@ -149,11 +149,27 @@ fn drop_menu_entries() -> Vec<MenuEntry> {
         ))
     };
     vec![
-        choice("Copy here", Icon::Copy, DropAction::Copy.name()),
-        choice("Move here", Icon::ArrowRight, DropAction::Move.name()),
-        choice("Create links here", Icon::Link, DropAction::Link.name()),
+        choice(
+            ox_core::i18n::gettext_static("Copy here"),
+            Icon::Copy,
+            DropAction::Copy.name(),
+        ),
+        choice(
+            ox_core::i18n::gettext_static("Move here"),
+            Icon::ArrowRight,
+            DropAction::Move.name(),
+        ),
+        choice(
+            ox_core::i18n::gettext_static("Create links here"),
+            Icon::Link,
+            DropAction::Link.name(),
+        ),
         MenuEntry::Divider,
-        choice("Cancel", Icon::Dismiss, CANCEL_CHOICE),
+        choice(
+            ox_core::i18n::gettext_static("Cancel"),
+            Icon::Dismiss,
+            CANCEL_CHOICE,
+        ),
     ]
 }
 

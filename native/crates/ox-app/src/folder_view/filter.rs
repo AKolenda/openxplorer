@@ -74,6 +74,11 @@ impl FilterState {
         changed
     }
 
+    /// Whether hidden items are shown.
+    pub(crate) fn shows_hidden(&self) -> bool {
+        self.show_hidden
+    }
+
     /// Sets whether hidden items are listed; returns true when it changed.
     pub(crate) fn set_show_hidden(&mut self, show_hidden: bool) -> bool {
         let changed = show_hidden != self.show_hidden;

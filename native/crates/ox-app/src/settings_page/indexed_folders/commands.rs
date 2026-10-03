@@ -18,8 +18,9 @@ use crate::settings_page::{SettingsPage, MESSAGE};
 
 /// What the window says after a folder was added to the index
 /// (`setCache` in app.js).
-const CACHING_STARTED: &str =
-    "Caching filenames and paths in the background. No file contents are downloaded.";
+const CACHING_STARTED: &str = crate::i18n::message_id(
+    "Caching filenames and paths in the background. No file contents are downloaded.",
+);
 
 /// A request of the Search & indexing settings.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,12 +91,12 @@ async fn run(
     match command {
         IndexCommand::Index { uri, label } => {
             cache.set_caching(&uri, Caching::Enabled, &label).await?;
-            return Ok(Some(CACHING_STARTED));
+            return Ok(Some(ox_core::i18n::gettext_static(CACHING_STARTED)));
         }
         IndexCommand::IndexTyped { typed, base } => {
             let uri = typed_folder(&typed, base.as_deref())?;
             cache.set_caching(&uri, Caching::Enabled, "").await?;
-            return Ok(Some(CACHING_STARTED));
+            return Ok(Some(ox_core::i18n::gettext_static(CACHING_STARTED)));
         }
         IndexCommand::Refresh(uri) => cache.refresh(Some(&uri)).await?,
         IndexCommand::RefreshAll => cache.refresh(None).await?,

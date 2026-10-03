@@ -24,6 +24,7 @@
 //! | Network | [`NETWORK_URI`] (`network:///`) | Network |
 //! | Trash | [`TRASH_URI`] (`trash:///`) | Recycle Bin |
 //! | Recently used files | [`RECENT_URI`] (`recent:///`) | Recent |
+//! | Recently visited folders | [`RECENT_LOCATIONS_URI`] (`ox:recent-locations`) | Recent locations |
 //!
 //! The web UI's spellings `home:`, `pc:`, `network:` and `settings:` are
 //! accepted as input by [`normalise_navigation`] and [`VirtualPlace::from_uri`].
@@ -60,12 +61,12 @@ pub use classify::{is_network_filesystem, is_smb_share_root};
 pub use display::{crumb_divider, device_root, parent_location, same_location, DeviceLabel, LocationContext};
 pub use names::{new_copy_name, safe_label, validate_name, ItemKind, MAX_LABEL_CHARS};
 pub use normalise::{
-    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
+    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share, without_user,
 };
 pub use parts::{canonical_remote_scheme, split_location, LocationKind, LocationParts, REMOTE_SCHEMES};
 pub use virtual_place::{
-    is_virtual_location, normalise_navigation, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI, RECENT_URI,
-    SETTINGS_URI, TRASH_URI,
+    is_virtual_location, normalise_navigation, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI,
+    RECENT_LOCATIONS_URI, RECENT_URI, SETTINGS_URI, TRASH_URI,
 };
 
 /// A user-facing validation error. Its `Display` text is the message,
@@ -94,7 +95,9 @@ impl LocationError {
     /// A `?` or `#` in a URL. `urlsplit` would cut the path there, so the
     /// user must escape them or type a plain path, which may hold both.
     pub(crate) fn query_or_fragment() -> Self {
-        Self::new("In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.")
+        Self::new(crate::i18n::gettext(
+            "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.",
+        ))
     }
 }
 

@@ -32,16 +32,18 @@ use crate::location::{file_uri, normalise, validate_name};
 use crate::transfer::{TransferResult, MAX_ITEMS};
 
 /// Why the folder takes no links.
-const NOT_LOCAL_FOLDER: &str = "Links can only be created in folders on this computer.";
+const NOT_LOCAL_FOLDER: &str =
+    crate::i18n::message_id("Links can only be created in folders on this computer.");
 
 /// Why one item gets no link.
-const NOT_LOCAL_ITEM: &str = "Links can only point to items on this computer.";
+const NOT_LOCAL_ITEM: &str = crate::i18n::message_id("Links can only point to items on this computer.");
 
 /// Why one item's link was not made.
-const NAME_TAKEN: &str = "An item with this name already exists. Nothing was replaced.";
+const NAME_TAKEN: &str =
+    crate::i18n::message_id("An item with this name already exists. Nothing was replaced.");
 
 /// Why New ▸ Link has nothing to point to.
-const NO_TARGET: &str = "Enter the path of the file or folder to link to.";
+const NO_TARGET: &str = crate::i18n::message_id("Enter the path of the file or folder to link to.");
 
 /// A link New ▸ Link to file or folder makes (OPS-004).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,14 +92,14 @@ fn create_link_blocking(request: &NewLink, context: &OperationContext) -> Result
     context.protection.check(&folder_uri)?;
     let folder = gio::File::for_uri(&folder_uri)
         .path()
-        .ok_or_else(|| OpsError::failed(NOT_LOCAL_FOLDER))?;
+        .ok_or_else(|| OpsError::failed(crate::i18n::gettext(NOT_LOCAL_FOLDER)))?;
     let target = link_target(&request.target)?;
     // A relative target is relative to the link's folder, as the system
     // resolves it.
     if folder.join(&target).symlink_metadata().is_err() {
-        return Err(OpsError::NotFound(format!(
-            "Nothing exists at “{}”. Check the path.",
-            target.display()
+        return Err(OpsError::NotFound(crate::i18n::format_message(
+            "Nothing exists at “{display}”. Check the path.",
+            &[("display", &(target.display()).to_string())],
         )));
     }
     let name = match request.name.trim() {
@@ -115,15 +117,15 @@ fn create_link_blocking(request: &NewLink, context: &OperationContext) -> Result
 fn link_target(typed: &str) -> Result<PathBuf, OpsError> {
     let typed = typed.trim();
     if typed.is_empty() {
-        return Err(OpsError::failed(NO_TARGET));
+        return Err(OpsError::failed(crate::i18n::gettext(NO_TARGET)));
     }
     if typed.starts_with("file:") {
         return gio::File::for_uri(typed)
             .path()
-            .ok_or_else(|| OpsError::failed(NOT_LOCAL_ITEM));
+            .ok_or_else(|| OpsError::failed(crate::i18n::gettext(NOT_LOCAL_ITEM)));
     }
     if typed.contains("://") {
-        return Err(OpsError::failed(NOT_LOCAL_ITEM));
+        return Err(OpsError::failed(crate::i18n::gettext(NOT_LOCAL_ITEM)));
     }
     if typed == "~" {
         return Ok(glib::home_dir());
@@ -140,7 +142,7 @@ fn default_link_name(target: &Path) -> Result<String, OpsError> {
     target
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
-        .ok_or_else(|| OpsError::failed("Enter a name for the link."))
+        .ok_or_else(|| OpsError::failed(crate::i18n::gettext("Enter a name for the link.")))
 }
 
 /// Links to some items, made in one folder.
@@ -175,13 +177,15 @@ fn create_links_blocking(
     context: &OperationContext,
 ) -> Result<TransferOutcome, OpsError> {
     if request.uris.is_empty() || request.uris.len() > MAX_ITEMS {
-        return Err(OpsError::failed("Select between 1 and 100,000 items."));
+        return Err(OpsError::failed(crate::i18n::gettext(
+            "Select between 1 and 100,000 items.",
+        )));
     }
     let folder_uri = normalise(&request.destination_folder)?;
     context.protection.check(&folder_uri)?;
     let folder = gio::File::for_uri(&folder_uri)
         .path()
-        .ok_or_else(|| OpsError::failed(NOT_LOCAL_FOLDER))?;
+        .ok_or_else(|| OpsError::failed(crate::i18n::gettext(NOT_LOCAL_FOLDER)))?;
     let mut outcome = TransferOutcome::default();
     for uri in &request.uris {
         if context.cancel.is_cancelled() {
@@ -209,13 +213,15 @@ fn create_links_blocking(
 fn link_item(uri: &str, folder: &Path) -> Result<PathBuf, String> {
     let target = gio::File::for_uri(uri)
         .path()
-        .ok_or_else(|| NOT_LOCAL_ITEM.to_owned())?;
-    let name = target.file_name().ok_or_else(|| NOT_LOCAL_ITEM.to_owned())?;
+        .ok_or_else(|| crate::i18n::gettext(NOT_LOCAL_ITEM))?;
+    let name = target
+        .file_name()
+        .ok_or_else(|| crate::i18n::gettext(NOT_LOCAL_ITEM))?;
     let link = folder.join(name);
     // `symlink` itself refuses a taken name, so a name that appears after
     // this check is never replaced either.
     if link.symlink_metadata().is_ok() {
-        return Err(NAME_TAKEN.to_owned());
+        return Err(crate::i18n::gettext(NAME_TAKEN));
     }
     symlink(&target, &link).map_err(|error| describe(&error))?;
     Ok(link)
@@ -224,7 +230,7 @@ fn link_item(uri: &str, folder: &Path) -> Result<PathBuf, String> {
 /// The message for a failed link.
 fn describe(error: &io::Error) -> String {
     if error.kind() == io::ErrorKind::AlreadyExists {
-        return NAME_TAKEN.to_owned();
+        return crate::i18n::gettext(NAME_TAKEN);
     }
     error.to_string()
 }

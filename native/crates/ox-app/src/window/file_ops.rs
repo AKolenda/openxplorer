@@ -9,8 +9,10 @@
 //! `updateToolbar` and the trash-support cache) on ox-core's
 //! [`ops`](ox_core::ops) service, whose operations run their blocking I/O
 //! on GIO's worker threads. The window awaits them on the main loop, so
-//! browsing never freezes while one runs, and it runs one at a time
-//! (OPS-024), with the transfer panel and Cancel.
+//! browsing stays responsive. `begin_operation` reserves the window for
+//! an exclusive write; `begin_transfer` admits bounded concurrent jobs
+//! when their source and destination paths do not overlap. Each job has
+//! its own transfer panel and cancellation token (OPS-024, OPS-025).
 //!
 //! Gains over the Python app, from Windows 11 and the Dolphin baseline:
 //! Rename edits the name in place with the name before its extension
@@ -21,7 +23,8 @@
 //!
 //! | Module | Responsibility |
 //! |---|---|
-//! | `running` | One operation at a time: the transfer panel, Cancel and the report at the end |
+//! | `running` | Exclusive operations, transfer progress, cancellation and completion reports |
+//! | `jobs` | Bounded concurrent transfers, independent panels and overlapping-path refusal |
 //! | `unfinished` | Marks of running copies, and what a crashed run left behind |
 //! | `availability` | When each file command is enabled (`updateToolbar`) |
 //! | `trash_support` | Whether each folder has a Trash, which labels Delete |
@@ -29,6 +32,7 @@
 //! | `name_dialog` | The dialog that asks for a name (`nameDialog`) |
 //! | `new_items` | New folder, and New file from a template |
 //! | `template_dialog` | The New file and New from template dialog |
+//! | `template_menu` | The user's templates in the New menu, subfolders as submenus |
 //! | `rename` | Rename: in place, or with the dialog |
 //! | `inline_rename` | Renaming in the item's row or tile |
 //! | `batch_rename` | Renaming several items to one numbered name |
@@ -56,8 +60,10 @@ mod conflict_dialog;
 mod conflict_rename;
 mod delete;
 mod duplicate;
+mod failure_dialog;
 mod hide_confirm;
 mod inline_rename;
+mod jobs;
 mod journal;
 mod links;
 mod move_by_copying_dialog;
@@ -69,6 +75,7 @@ mod rename;
 mod running;
 mod shortcuts;
 mod template_dialog;
+mod template_menu;
 mod transfer;
 mod trash_support;
 mod unfinished;
@@ -76,9 +83,11 @@ mod unstorable_dialog;
 mod worker_question;
 
 use ox_core::clipboard::ClipboardFiles;
+use ox_core::ops::TemplateList;
 use ox_core::transfer::Cancellation;
 
 pub(super) use availability::FileCommand;
+pub(super) use shortcuts::file_key_bindings;
 pub(super) use transfer::IncomingItems;
 pub(super) use trash_support::TrashSupport;
 
@@ -88,6 +97,8 @@ pub(crate) struct FileOperations {
     /// The cancellation of the operation that runs now; `None` while none
     /// runs (`state.operation` in app.js, OPS-024).
     running: Option<Cancellation>,
+    /// Independent copy, move and delete jobs, with their own panels.
+    jobs: Vec<jobs::Job>,
     /// Set while a paste checks its destination and asks about name
     /// conflicts (`state.transferPlanning`), so a second paste cannot
     /// start meanwhile.
@@ -105,16 +116,18 @@ pub(crate) struct FileOperations {
     /// The item to rename in place next, once the rename Tab committed
     /// has finished (OPS-012).
     rename_next: Option<String>,
+    /// The templates the New menu lists, as last read (OPS-003).
+    templates: Option<TemplateList>,
 }
 
 impl FileOperations {
-    /// True while an operation runs.
+    /// True while an exclusive operation runs.
     fn is_running(&self) -> bool {
         self.running.is_some()
     }
 
-    /// True while an operation runs or a paste is being planned: no other
-    /// file operation may start.
+    /// True while an exclusive operation runs or a paste is being planned:
+    /// no new file operation may start.
     fn is_busy(&self) -> bool {
         self.is_running() || self.planning
     }
@@ -122,6 +135,6 @@ impl FileOperations {
     /// True while no operation runs or is being planned, so a drag or a
     /// drop may start.
     pub(crate) fn is_idle(&self) -> bool {
-        !self.is_busy()
+        !self.is_busy() && self.jobs.is_empty()
     }
 }

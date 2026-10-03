@@ -72,7 +72,7 @@ impl ArchiveLocation {
         let Some(rest) = uri.strip_prefix(ARCHIVE_SCHEME) else {
             return Ok(None);
         };
-        let invalid = || LocationError::new("This is not a location inside a ZIP.");
+        let invalid = || LocationError::new(crate::i18n::gettext("This is not a location inside a ZIP."));
         let (escaped_archive, escaped_member) = rest.split_once('/').ok_or_else(invalid)?;
         if escaped_member.contains(['?', '#']) {
             return Err(LocationError::query_or_fragment());

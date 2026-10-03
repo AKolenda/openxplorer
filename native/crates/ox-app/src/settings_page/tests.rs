@@ -465,6 +465,17 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Text size",
             "Use the desktop font",
             "Right-click menu",
+            "Show previews",
+            "Show previews in network folders",
+            "Skip previews of large files",
+            "Preview pictures",
+            "Preview videos",
+            "Preview documents and other files",
+            "Show the number of items in folders",
+            "Relative dates",
+            "Remember each folder's view",
+            "Selection marker",
+            "Expandable folders",
             "Sidebar and column widths"
         ]
     );

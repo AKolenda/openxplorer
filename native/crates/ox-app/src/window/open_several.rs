@@ -9,10 +9,10 @@ use gtk::glib;
 use ox_core::entry::Entry;
 
 use super::activation::{activation_for, desktop_link, Activation};
-use super::dialog::Dialog;
 use super::session::TabPlacement;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 
 /// More items than this at once are asked about first (Dolphin's limit).
 const MANY_ITEMS: usize = 5;
@@ -40,14 +40,17 @@ impl BrowserWindow {
             self.open_each(&entries);
             return;
         }
-        let question = format!("Are you sure you want to open {} items?", entries.len());
+        let question = ox_core::i18n::format_message(
+            "Are you sure you want to open {len} items?",
+            &[("len", &entries.len().to_string())],
+        );
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
-                let dialog = Dialog::new(&window, "Open", &question);
+                let dialog = Dialog::new(&window, &ox_core::i18n::gettext("Open"), &question);
                 dialog.add_cancel_button();
-                let open = dialog.add_button("Open all", ButtonStyle::Accent);
+                let open = dialog.add_button(&ox_core::i18n::gettext("Open all"), ButtonStyle::Accent);
                 dialog.open();
                 let answer = dialog.next_response().await;
                 dialog.finish();

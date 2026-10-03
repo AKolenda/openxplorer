@@ -42,6 +42,8 @@ pub(crate) enum FileCommand {
     Copy,
     /// Paste (Ctrl+V).
     Paste,
+    /// Paste into the one selected folder (CMD-019).
+    PasteInto,
     /// Rename (F2).
     Rename,
     /// Delete: Move to Trash, or Delete permanently without a Trash.
@@ -64,11 +66,12 @@ pub(crate) enum FileCommand {
 
 impl FileCommand {
     /// Every command, for enabling them all at once.
-    pub(crate) const ALL: [FileCommand; 13] = [
+    pub(crate) const ALL: [FileCommand; 14] = [
         FileCommand::New,
         FileCommand::Cut,
         FileCommand::Copy,
         FileCommand::Paste,
+        FileCommand::PasteInto,
         FileCommand::Rename,
         FileCommand::Delete,
         FileCommand::DeletePermanently,
@@ -92,12 +95,14 @@ impl FileCommand {
                 WindowAction::NewJsonFile,
                 WindowAction::NewHtmlDocument,
                 WindowAction::NewFromTemplate,
+                WindowAction::NewFromUserTemplate,
                 WindowAction::NewLink,
                 WindowAction::ShowNewMenu,
             ],
             FileCommand::Cut => &[WindowAction::Cut],
             FileCommand::Copy => &[WindowAction::Copy],
             FileCommand::Paste => &[WindowAction::Paste],
+            FileCommand::PasteInto => &[WindowAction::PasteInto],
             FileCommand::Rename => &[WindowAction::Rename],
             FileCommand::Delete => &[WindowAction::Trash],
             FileCommand::DeletePermanently => &[WindowAction::DeletePermanently],
@@ -184,6 +189,12 @@ impl CommandFacts {
             FileCommand::Paste => {
                 self.has_file_clipboard && !folder.is_searching && !busy && folder.is_writable
             }
+            // The selected folder is the destination, so a search does not
+            // matter; whether it takes items is checked when pasting.
+            FileCommand::PasteInto => {
+                let is_one_item = selection.count == 1 && !selection.has_read_only;
+                self.has_file_clipboard && !busy && !folder.is_recycle_bin && is_one_item
+            }
             FileCommand::Undo => self.can_undo && !self.is_busy,
             FileCommand::Redo => self.can_redo && !self.is_busy,
             FileCommand::Restore => folder.is_recycle_bin && can_change,
@@ -201,36 +212,53 @@ impl CommandFacts {
         let selection = self.selection;
         let folder = self.folder;
         let reason = match command {
-            FileCommand::CancelOperation => "No file operation is running.",
-            FileCommand::Undo if !self.can_undo => "Nothing to undo.",
-            FileCommand::Redo if !self.can_redo => "Nothing to redo.",
-            FileCommand::Paste if !self.has_file_clipboard => "Nothing to paste here.",
-            FileCommand::Restore if !folder.is_recycle_bin => {
-                "Only items in the Recycle Bin can be restored."
+            FileCommand::CancelOperation => ox_core::i18n::gettext_static("No file operation is running."),
+            FileCommand::Undo if !self.can_undo => ox_core::i18n::gettext_static("Nothing to undo."),
+            FileCommand::Redo if !self.can_redo => ox_core::i18n::gettext_static("Nothing to redo."),
+            FileCommand::Paste | FileCommand::PasteInto if !self.has_file_clipboard => {
+                ox_core::i18n::gettext_static("Nothing to paste here.")
             }
-            FileCommand::EmptyRecycleBin if !folder.is_recycle_bin => "This is not the Recycle Bin.",
-            FileCommand::EmptyRecycleBin if !folder.has_items => "The Recycle Bin is empty.",
-            _ if self.is_busy => "Wait for the running file operation to finish.",
+            FileCommand::Restore if !folder.is_recycle_bin => {
+                ox_core::i18n::gettext_static("Only items in the Recycle Bin can be restored.")
+            }
+            FileCommand::EmptyRecycleBin if !folder.is_recycle_bin => {
+                ox_core::i18n::gettext_static("This is not the Recycle Bin.")
+            }
+            FileCommand::EmptyRecycleBin if !folder.has_items => {
+                ox_core::i18n::gettext_static("The Recycle Bin is empty.")
+            }
+            _ if self.is_busy => {
+                ox_core::i18n::gettext_static("Wait for the running file operation to finish.")
+            }
             FileCommand::New | FileCommand::Paste if folder.is_searching => {
-                "Clear the search to add items to this folder."
+                ox_core::i18n::gettext_static("Clear the search to add items to this folder.")
             }
             FileCommand::New | FileCommand::Paste if folder.is_zip => {
-                "A ZIP is read-only. Extract it to add items."
+                ox_core::i18n::gettext_static("A ZIP is read-only. Extract it to add items.")
             }
-            FileCommand::New => "This folder is read-only.",
-            FileCommand::Paste if !selection.has_inoperable => "This folder is read-only.",
-            _ if selection.count == 0 => "Select an item first.",
-            _ if selection.has_inoperable => "Drives, shares and virtual items cannot be changed here.",
+            FileCommand::New => ox_core::i18n::gettext_static("This folder is read-only."),
+            FileCommand::Paste if !selection.has_inoperable => {
+                ox_core::i18n::gettext_static("This folder is read-only.")
+            }
+            FileCommand::PasteInto if selection.count != 1 => {
+                ox_core::i18n::gettext_static("Select one folder to paste into.")
+            }
+            _ if selection.count == 0 => ox_core::i18n::gettext_static("Select an item first."),
+            _ if selection.has_inoperable => {
+                ox_core::i18n::gettext_static("Drives, shares and virtual items cannot be changed here.")
+            }
             FileCommand::Copy | FileCommand::Cut | FileCommand::Rename | FileCommand::Duplicate
                 if folder.is_recycle_bin =>
             {
-                "Items in the Recycle Bin can only be restored or deleted."
+                ox_core::i18n::gettext_static("Items in the Recycle Bin can only be restored or deleted.")
             }
             _ if selection.has_read_only && folder.is_zip => {
-                "Items in a ZIP are read-only. Copy them out or use Extract all."
+                ox_core::i18n::gettext_static(ox_core::i18n::gettext_static(
+                    "Items in a ZIP are read-only. Copy them out or use Extract all.",
+                ))
             }
-            _ if selection.has_read_only => "A previous version is read-only.",
-            _ => "Rename one item at a time.",
+            _ if selection.has_read_only => ox_core::i18n::gettext_static("A previous version is read-only."),
+            _ => ox_core::i18n::gettext_static("Rename one item at a time."),
         };
         Some(reason)
     }
@@ -281,20 +309,35 @@ impl BrowserWindow {
 
     /// Whether `command` is enabled now.
     pub(crate) fn allows(&self, command: FileCommand) -> bool {
-        self.command_facts().allows(command)
+        self.facts_for_command(command).allows(command)
+    }
+
+    fn facts_for_command(&self, command: FileCommand) -> CommandFacts {
+        let mut facts = self.command_facts();
+        let jobs = self.imp().file_operations.borrow().jobs.len();
+        if jobs > 0 {
+            facts.is_busy |= match command {
+                FileCommand::Copy | FileCommand::Cut => false,
+                FileCommand::Paste
+                | FileCommand::PasteInto
+                | FileCommand::Delete
+                | FileCommand::DeletePermanently => jobs >= super::jobs::MAX_JOBS,
+                _ => true,
+            };
+        }
+        facts
     }
 
     /// Enables and disables every file command, and labels Delete for the
     /// selection's folder (`updateToolbar`).
     pub(crate) fn update_file_commands(&self) {
-        let facts = self.command_facts();
         for command in FileCommand::ALL {
-            let enabled = facts.allows(command);
+            let enabled = self.allows(command);
             for &action in command.actions() {
                 self.set_action_enabled(action, enabled);
             }
         }
-        self.command_bar().set_new_enabled(facts.allows(FileCommand::New));
+        self.command_bar().set_new_enabled(self.allows(FileCommand::New));
         self.command_bar().show_delete_label(self.delete_label());
     }
 }
@@ -341,6 +384,7 @@ mod tests {
                 FileCommand::Cut,
                 FileCommand::Copy,
                 FileCommand::Paste,
+                FileCommand::PasteInto,
                 FileCommand::Rename,
                 FileCommand::Delete,
                 FileCommand::DeletePermanently,

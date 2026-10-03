@@ -19,16 +19,17 @@ use ox_core::transfer::TransferMode;
 
 use super::running::FinishedOperation;
 use super::FileCommand;
-use crate::window::dialog::Dialog;
+use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
 /// New ▸ Link's title.
-const NEW_LINK_TITLE: &str = "New link";
+const NEW_LINK_TITLE: &str = crate::i18n::message_id("New link");
 
 /// What New ▸ Link makes.
-const NEW_LINK_MESSAGE: &str =
-    "A link opens the file or folder it points to. Leave the name empty to use the name of that item.";
+const NEW_LINK_MESSAGE: &str = crate::i18n::message_id(
+    "A link opens the file or folder it points to. Leave the name empty to use the name of that item.",
+);
 
 impl BrowserWindow {
     /// Creates the links `request` asks for once the drop handler has
@@ -68,12 +69,16 @@ impl BrowserWindow {
         let Some(folder) = self.current_uri() else {
             return;
         };
-        let dialog = Dialog::new(self, NEW_LINK_TITLE, NEW_LINK_MESSAGE);
-        let target = dialog.add_text_field("Link to", "");
-        target.set_placeholder_text(Some("For example ~/Documents"));
-        let name = dialog.add_text_field("Name", "");
+        let dialog = Dialog::new(
+            self,
+            ox_core::i18n::gettext_static(NEW_LINK_TITLE),
+            ox_core::i18n::gettext_static(NEW_LINK_MESSAGE),
+        );
+        let target = dialog.add_text_field(ox_core::i18n::gettext_static("Link to"), "");
+        target.set_placeholder_text(Some(ox_core::i18n::gettext_static("For example ~/Documents")));
+        let name = dialog.add_text_field(ox_core::i18n::gettext_static("Name"), "");
         dialog.add_cancel_button();
-        dialog.add_button("Create", ButtonStyle::Accent);
+        dialog.add_button(ox_core::i18n::gettext_static("Create"), ButtonStyle::Accent);
         dialog.open();
         let protection = self.context().write_protection();
         loop {

@@ -5,7 +5,7 @@
   window of its own. The window has no title bar of its own; its title is
   the heading, and the whole surface is a window handle, so it can be
   dragged where the desktop does not attach it to its window.
-  src/window/dialog.rs adds the fields and buttons.
+  src/dialog/window.rs adds the fields and buttons.
 -->
 <interface>
   <requires lib="gtk" version="4.14"/>

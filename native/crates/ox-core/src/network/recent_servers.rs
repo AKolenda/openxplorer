@@ -9,12 +9,13 @@
 //! server typed once in any of these apps is offered in the others.
 //!
 //! Only server locations are written, and addresses never hold a password
-//! ([`normalise`](crate::location::normalise) refuses one), so the file
-//! reveals no more than the Network list does.
+//! ([`normalise`](crate::location::normalise) refuses one) or a user name
+//! ([`without_user`] drops it, SAFE-010), so the file reveals no more than
+//! the Network list does.
 
 use std::path::{Path, PathBuf};
 
-use crate::location::{is_server_location, normalise};
+use crate::location::{is_server_location, normalise, without_user};
 
 /// The application a bookmark names, as GTK names the app that added it.
 const APPLICATION_NAME: &str = "OpenXplorer";
@@ -48,14 +49,15 @@ impl RecentServers {
         }
     }
 
-    /// Adds `uri` to GTK 4's list, or marks it visited now, titled `title`.
-    /// Anything but a valid server location is ignored.
+    /// Adds `uri`, without a user name, to GTK 4's list, or marks it
+    /// visited now, titled `title`. Anything but a valid server location
+    /// is ignored.
     ///
     /// # Errors
     ///
     /// The error of reading a damaged list or of writing it.
     pub fn add(&self, uri: &str, title: &str) -> Result<(), glib::Error> {
-        let Ok(uri) = normalise(uri) else {
+        let Ok(uri) = normalise(uri).map(|uri| without_user(&uri)) else {
             return Ok(());
         };
         if !is_server_location(&uri) {

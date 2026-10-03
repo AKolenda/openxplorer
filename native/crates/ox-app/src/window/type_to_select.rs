@@ -48,8 +48,13 @@ impl Typeahead {
 fn typeahead_hint(result: &PrefixMatch, matched_name: Option<&str>) -> String {
     match (result.prefix.is_empty(), matched_name) {
         (true, _) => String::new(),
-        (false, Some(name)) => format!("Jump to: {} — {name}", result.prefix),
-        (false, None) => format!("No name starts with “{}”", result.prefix),
+        (false, Some(name)) => ox_core::i18n::format_message(
+            "Jump to: {prefix} — {name}",
+            &[("prefix", &result.prefix), ("name", name)],
+        ),
+        (false, None) => {
+            ox_core::i18n::format_message("No name starts with “{prefix}”", &[("prefix", &result.prefix)])
+        }
     }
 }
 
@@ -154,7 +159,7 @@ impl BrowserWindow {
 
     /// Ends the type-to-select prefix and closes every open menu of the
     /// window, as opening a dialog does in app.js.
-    pub(super) fn quiet_for_dialog(&self) {
+    pub(crate) fn quiet_for_dialog(&self) {
         self.reset_typeahead();
         let popovers = descendants::<gtk::Popover>(self);
         for popover in popovers.iter().filter(|popover| popover.is_visible()) {

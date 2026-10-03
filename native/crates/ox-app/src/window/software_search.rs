@@ -11,7 +11,7 @@ use gtk::{gio, glib};
 use ox_core::integration::OpenError;
 
 /// The failure dialog's button.
-pub(super) const FIND_IN_SOFTWARE: &str = "Find an app in Software";
+pub(super) const FIND_IN_SOFTWARE: &str = crate::i18n::message_id("Find an app in Software");
 
 /// GNOME Software's desktop ID, which is also its bus name.
 const SOFTWARE_ID: &str = "org.gnome.Software";

@@ -17,7 +17,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::settings::{
-    ColumnWidth, DetailsPaneOptions, PreferencesUpdate, SettingsError, Theme, WindowSize, SIDEBAR_WIDTHS,
+    DetailsPaneOptions, FolderTreeOptions, PreferencesUpdate, SettingsError, Theme, WindowSize,
+    SIDEBAR_WIDTHS,
 };
 
 use super::folder_pane::FolderView;
@@ -36,10 +37,6 @@ const HANDLE_REACH: f64 = 6.0;
 /// One preference the user changed in this window.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Preference {
-    /// Details or an icon size (saved as the Python app's `grid`).
-    View(FolderView),
-    /// Show hidden files.
-    ShowHidden(bool),
     /// Show the details pane.
     DetailsPane(bool),
     /// System, Light or Dark.
@@ -48,8 +45,6 @@ pub(super) enum Preference {
     TextSize(TextSize),
     /// Sidebar width in pixels.
     SidebarWidth(i32),
-    /// The details columns the user sized, in pixels.
-    ColumnWidths(Vec<ColumnWidth>),
     /// The default sidebar width and column widths (`resetLayout`).
     DefaultLayout,
     /// The size new windows open at (TAB-054).
@@ -62,6 +57,8 @@ pub(super) enum Preference {
     Sidebar(bool),
     /// The sidebar's icon size in pixels, 0 for automatic (SIDE-012).
     SidebarIconSize(u32),
+    /// The folder tree's options (SIDE-028).
+    FolderTree(FolderTreeOptions),
 }
 
 impl Preference {
@@ -69,18 +66,16 @@ impl Preference {
     fn into_update(self) -> PreferencesUpdate {
         let mut update = PreferencesUpdate::default();
         match self {
-            Preference::View(view) => update.view = Some(view.setting()),
-            Preference::ShowHidden(show) => update.show_hidden = Some(show),
             Preference::DetailsPane(show) => update.show_details_pane = Some(show),
             Preference::Theme(theme) => update.theme = Some(theme),
             Preference::TextSize(size) => update.text_size = Some(size.percent()),
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
-            Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
             Preference::WindowSize(size) => update.window_size = Some(size),
             Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
             Preference::DetailsPaneOptions(options) => update.details_pane_options = Some(options),
             Preference::Sidebar(shown) => update.hide_sidebar = Some(!shown),
             Preference::SidebarIconSize(size) => update.sidebar_icon_size = Some(size),
+            Preference::FolderTree(options) => update.folder_tree = Some(options),
             Preference::DefaultLayout => {
                 update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
                 // An empty list clears every saved column width.
@@ -95,17 +90,29 @@ impl Preference {
     /// `fire('preferences', …)` calls in app.js).
     fn failure_message(&self, error: &SettingsError) -> String {
         match self {
-            Preference::TextSize(_) => {
-                format!("Text size changed for this window, but could not be saved: {error}")
-            }
-            _ => format!("Changed for this window, but could not be saved: {error}"),
+            Preference::TextSize(_) => ox_core::i18n::format_message(
+                "Text size changed for this window, but could not be saved: {error}",
+                &[("error", &error.to_string())],
+            ),
+            _ => not_saved_message(error),
         }
     }
 }
 
+/// What the window says when a change it keeps could not be saved.
+fn not_saved_message(error: &SettingsError) -> String {
+    ox_core::i18n::format_message(
+        "Changed for this window, but could not be saved: {error}",
+        &[("error", &error.to_string())],
+    )
+}
+
 /// The toast a text-size change shows (`changeTextSize`).
 fn text_size_toast(size: TextSize) -> String {
-    format!("Text size: {}%", size.percent())
+    ox_core::i18n::format_message(
+        "Text size: {percent}%",
+        &[("percent", &size.percent().to_string())],
+    )
 }
 
 /// The sidebar widths the settings save (ox-core's [`SIDEBAR_WIDTHS`]),
@@ -147,35 +154,53 @@ impl BrowserWindow {
     /// the ones the user changes.
     pub(super) fn apply_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
-        self.folder_pane()
-            .model()
-            .set_show_hidden(preferences.show_hidden);
+        let view = FolderView::from_setting(preferences.view);
+        for pane in self.folder_panes() {
+            pane.model().set_show_hidden(preferences.show_hidden);
+            pane.show_view(view);
+            let details_view = pane.details();
+            details_view.apply_column_widths(preferences.column_widths.as_ref());
+            details_view.connect_columns_resized(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                pane,
+                move |_| window.remember_pane_style(&pane)
+            ));
+        }
         // `win.details-pane` starts from the same preferences.
         self.details_pane()
             .set_options(preferences.details_pane_options.clone());
         self.fit_details_pane();
-        self.show_view(FolderView::from_setting(preferences.view));
+        // The shared style; a folder with its own is shown in it once it
+        // is opened (VIEW-020).
+        for pane in self.folder_panes() {
+            self.apply_style_to(pane, &preferences.view_for(""));
+        }
+        self.show_pane_view_state();
+        self.follow_item_preferences();
         let workspace = self.workspace();
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
-        let details_view = self.folder_pane().details();
-        details_view.apply_column_widths(preferences.column_widths.as_ref());
-        details_view.connect_columns_resized(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |widths| window.save_preference(Preference::ColumnWidths(widths))
-        ));
         self.save_sidebar_width_after_drags();
         self.keep_sidebar_within_limit();
         self.reset_sidebar_on_double_click();
         self.install_sidebar_resizer();
         self.install_sidebar_toggle();
+        self.install_folder_tree();
         self.follow_layout_reset();
     }
 
     /// Settings > "Reset sidebar and column widths": saves the default
     /// widths and has every window show them.
     pub(super) fn reset_layout(&self) {
-        self.save_preference(Preference::DefaultLayout);
+        let mut update = Preference::DefaultLayout.into_update();
+        let mut folders = self.context().settings_data().preferences.folder_views;
+        for folder in &mut folders {
+            folder.properties.column_widths = Some(ox_core::settings::ColumnWidths::default());
+        }
+        update.folder_views = Some(folders);
+        self.context()
+            .update_preferences(update, self.preference_failure_reply());
         self.context().announce_layout_reset();
     }
 
@@ -194,7 +219,9 @@ impl BrowserWindow {
     /// saving them: the window that reset the layout saves it once.
     fn show_default_layout(&self) {
         self.workspace().set_position(DEFAULT_SIDEBAR_WIDTH);
-        self.folder_pane().details().apply_column_widths(None);
+        for pane in self.folder_panes() {
+            pane.details().apply_column_widths(None);
+        }
     }
 
     /// The widest the sidebar may be now, or `None` before the workspace
@@ -288,6 +315,20 @@ impl BrowserWindow {
         self.context().update_preferences(update, reply);
     }
 
+    /// The reply to a settings change that says when it could not be
+    /// saved; the change stays in this window.
+    pub(super) fn preference_failure_reply(&self) -> impl FnOnce(Result<(), SettingsError>) + 'static {
+        glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |result: Result<(), SettingsError>| {
+                if let Err(error) = result {
+                    window.show_message(&not_saved_message(&error));
+                }
+            }
+        )
+    }
+
     /// Draws text at `size` in every window, says so and saves it for all
     /// windows (`changeTextSize` in app.js). Saves run one after another,
     /// so the size asked for last is the one kept.
@@ -301,10 +342,6 @@ impl BrowserWindow {
 
 #[cfg(test)]
 mod tests {
-    use ox_core::settings::View;
-
-    use crate::folder_view::grid::IconSize;
-
     use super::*;
 
     /// parity: SIDE-023
@@ -341,15 +378,7 @@ mod tests {
         let failure = Preference::TextSize(TextSize::DEFAULT).failure_message(&error);
         let expected = "Text size changed for this window, but could not be saved: the disk is full";
         assert_eq!(failure, expected);
-        let other = Preference::ShowHidden(true).failure_message(&error);
+        let other = Preference::Theme(Theme::Dark).failure_message(&error);
         assert!(other.starts_with("Changed for this window, but could not be saved: "));
-    }
-
-    #[test]
-    fn every_icon_size_is_saved_as_the_python_grid_view() {
-        let update = Preference::View(FolderView::Icons(IconSize::Small)).into_update();
-        assert_eq!(update.view, Some(View::Grid));
-        let update = Preference::View(FolderView::Details).into_update();
-        assert_eq!(update.view, Some(View::Details));
     }
 }

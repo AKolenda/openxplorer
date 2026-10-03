@@ -34,33 +34,40 @@ use ox_core::location::normalise_location;
 use ox_core::transfer::Cancellation;
 
 use super::ArchiveTarget;
-use crate::dialog_layer::{check_row, quiet_text, DialogFrame, DialogWidth};
+use crate::dialog::{check_row, quiet_text, DialogFrame, DialogWidth};
 use crate::icons::{self, Icon};
 use crate::window::ButtonStyle;
 
 /// What the dialog promises, in the information bubble.
-const EXTRACT_MESSAGE: &str = "The ZIP is kept unchanged. A folder that does not exist yet is created; \
-                               in an existing folder you are asked before any file is replaced.";
+const EXTRACT_MESSAGE: &str = crate::i18n::message_id(
+    "The ZIP is kept unchanged. A folder that does not exist yet is created; \
+                               in an existing folder you are asked before any file is replaced.",
+);
 /// The field's label, as Explorer words it.
-const TARGET_LABEL: &str = "Files will be extracted to this folder";
+const TARGET_LABEL: &str = crate::i18n::message_id("Files will be extracted to this folder");
 /// Extract with an empty field.
-const NO_FOLDER: &str = "Enter the folder to extract to.";
+const NO_FOLDER: &str = crate::i18n::message_id("Enter the folder to extract to.");
 /// Shown while the members are checked.
-const CHECKING: &str = "Checking archive contents…";
+const CHECKING: &str = crate::i18n::message_id("Checking archive contents…");
 /// For shares and encrypted archives, in the information bubble.
-const EXTRACT_HINT: &str = "For SMB, open and sign in to the source and destination shares first. \
-                            Password-protected ZIPs need an external archive manager.";
+const EXTRACT_HINT: &str = crate::i18n::message_id(
+    "For SMB, open and sign in to the source and destination shares first. \
+                            Password-protected ZIPs need an external archive manager.",
+);
 /// Extract before the check finished.
-const WAIT_FOR_CHECK: &str = "Still checking the ZIP. Try again in a moment.";
+const WAIT_FOR_CHECK: &str = crate::i18n::message_id("Still checking the ZIP. Try again in a moment.");
 /// A ZIP the check refused because a member is encrypted.
-const HAS_PASSWORD: &str = "This ZIP has a password, so OpenXplorer cannot extract it. \
-                            Open it in the archive manager instead.";
+const HAS_PASSWORD: &str = crate::i18n::message_id(
+    "This ZIP has a password, so OpenXplorer cannot extract it. \
+                            Open it in the archive manager instead.",
+);
 /// The information button's name for screen readers and its tooltip.
-const INFO_LABEL: &str = "More about extracting";
+const INFO_LABEL: &str = crate::i18n::message_id("More about extracting");
 /// How many characters wide the information bubble's notes wrap.
 const INFO_CHARS: i32 = 44;
 /// A destination that is not a writable folder.
-const NOT_WRITABLE: &str = "Choose a writable folder outside Previous versions, not a server listing.";
+const NOT_WRITABLE: &str =
+    crate::i18n::message_id("Choose a writable folder outside Previous versions, not a server listing.");
 /// The size of the information button's glyph.
 const INFO_GLYPH: i32 = 16;
 
@@ -95,19 +102,29 @@ pub(crate) fn extract_dialog(
     extract: impl Fn(ExtractionChoice) + 'static,
     open_externally: impl Fn() + 'static,
 ) -> DialogFrame {
-    let frame = DialogFrame::new(&format!("Extract {}", archive.name), DialogWidth::Standard);
+    let frame = DialogFrame::new(
+        &ox_core::i18n::format_message("Extract {name}", &[("name", &archive.name)]),
+        DialogWidth::Standard,
+    );
     let body = frame.body();
     let suggested = suggested_folder_name(&archive.name).unwrap_or_default();
     let target = target_field(&body, &suggested_target(&setup.shown_destination, &suggested));
-    let show = check_row("Show extracted files when finished", true);
+    let show = check_row(
+        &ox_core::i18n::gettext("Show extracted files when finished"),
+        true,
+    );
     body.append(&show);
     let open_externally: Rc<dyn Fn()> = Rc::new(open_externally);
     let (info, summary) = info_button(&frame, &open_externally);
     frame.add_footer_start(&info);
-    let fallback = frame.add_closing_button("Open in archive manager", ButtonStyle::Bordered, {
-        let open_externally = Rc::clone(&open_externally);
-        move || open_externally()
-    });
+    let fallback = frame.add_closing_button(
+        &ox_core::i18n::gettext("Open in archive manager"),
+        ButtonStyle::Bordered,
+        {
+            let open_externally = Rc::clone(&open_externally);
+            move || open_externally()
+        },
+    );
     // Only when the check refuses the archive: then it is the way on.
     fallback.set_visible(false);
     let check = Rc::new(ArchiveCheck::default());
@@ -139,7 +156,7 @@ pub(crate) fn extract_dialog(
 /// be filled in), what happens to the ZIP and to files already there, the
 /// notes on shares and passwords, and Open in archive manager.
 fn info_button(frame: &DialogFrame, open_externally: &Rc<dyn Fn()>) -> (gtk::MenuButton, gtk::Label) {
-    let summary = quiet_text(CHECKING);
+    let summary = quiet_text(ox_core::i18n::gettext_static(CHECKING));
     summary.set_accessible_role(gtk::AccessibleRole::Status);
     let content = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -147,14 +164,14 @@ fn info_button(frame: &DialogFrame, open_externally: &Rc<dyn Fn()>) -> (gtk::Men
         .build();
     for text in [
         summary.clone(),
-        quiet_text(EXTRACT_MESSAGE),
-        quiet_text(EXTRACT_HINT),
+        quiet_text(ox_core::i18n::gettext_static(EXTRACT_MESSAGE)),
+        quiet_text(ox_core::i18n::gettext_static(EXTRACT_HINT)),
     ] {
         text.set_max_width_chars(INFO_CHARS);
         text.set_width_chars(INFO_CHARS);
         content.append(&text);
     }
-    let manager = gtk::Button::with_label("Open in archive manager");
+    let manager = gtk::Button::with_label(&ox_core::i18n::gettext("Open in archive manager"));
     manager.add_css_class(ButtonStyle::Bordered.css_class());
     manager.set_halign(gtk::Align::Start);
     content.append(&manager);
@@ -175,11 +192,13 @@ fn info_button(frame: &DialogFrame, open_externally: &Rc<dyn Fn()>) -> (gtk::Men
     let button = gtk::MenuButton::builder()
         .child(&icons::image(Icon::Info, INFO_GLYPH))
         .popover(&popover)
-        .tooltip_text(INFO_LABEL)
+        .tooltip_text(ox_core::i18n::gettext_static(INFO_LABEL))
         .valign(gtk::Align::Center)
         .css_classes(["extract-info", ButtonStyle::Bordered.css_class()])
         .build();
-    button.update_property(&[gtk::accessible::Property::Label(INFO_LABEL)]);
+    button.update_property(&[gtk::accessible::Property::Label(ox_core::i18n::gettext_static(
+        INFO_LABEL,
+    ))]);
     (button, summary)
 }
 
@@ -195,14 +214,14 @@ fn suggested_target(destination: &str, name: &str) -> String {
 /// "Files will be extracted to this folder" with its Browse… button.
 fn target_field(body: &gtk::Box, text: &str) -> gtk::Entry {
     let caption = gtk::Label::builder()
-        .label(TARGET_LABEL)
+        .label(ox_core::i18n::gettext_static(TARGET_LABEL))
         .xalign(0.0)
         .css_classes(["field-label"])
         .build();
     let entry = gtk::Entry::builder().text(text).hexpand(true).build();
     entry.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
     caption.set_mnemonic_widget(Some(&entry));
-    let browse = gtk::Button::with_label("Browse…");
+    let browse = gtk::Button::with_label(&ox_core::i18n::gettext("Browse…"));
     browse.add_css_class(ButtonStyle::Bordered.css_class());
     browse.add_css_class("extract-browse");
     browse.set_valign(gtk::Align::Center);
@@ -223,7 +242,7 @@ fn target_field(body: &gtk::Box, text: &str) -> gtk::Entry {
 /// when it exists, and writes its path into `entry`.
 fn pick_folder_into(button: &gtk::Button, entry: &gtk::Entry) {
     let picker = gtk::FileDialog::builder()
-        .title("Select a destination")
+        .title(ox_core::i18n::gettext("Select a destination"))
         .modal(true)
         .build();
     let typed = entry.text();
@@ -316,7 +335,7 @@ impl ArchiveCheck {
 /// Why the check refused the archive, in plain words.
 fn refusal_text(error: &ArchiveError) -> String {
     match error {
-        ArchiveError::PasswordProtected => HAS_PASSWORD.to_owned(),
+        ArchiveError::PasswordProtected => ox_core::i18n::gettext_static(HAS_PASSWORD).to_owned(),
         other => other.to_string(),
     }
 }
@@ -328,7 +347,16 @@ pub(super) fn summary_text(summary: &ExtractionSummary) -> String {
     let file_word = if files == 1 { "file" } else { "files" };
     let folder_word = if folders == 1 { "folder" } else { "folders" };
     let bytes = format::pretty_bytes(summary.unpacked_bytes);
-    format!("{files} {file_word} · {folders} {folder_word} · {bytes} unpacked")
+    ox_core::i18n::format_message(
+        "{files} {file_word} · {folders} {folder_word} · {bytes} unpacked",
+        &[
+            ("files", &files.to_string()),
+            ("file_word", file_word),
+            ("folders", &folders.to_string()),
+            ("folder_word", folder_word),
+            ("bytes", &bytes),
+        ],
+    )
 }
 
 /// The fields Extract reads.
@@ -347,17 +375,17 @@ impl ExtractForm {
             return Err(reason.clone());
         }
         if !self.check.is_ready.get() {
-            return Err(WAIT_FOR_CHECK.to_owned());
+            return Err(ox_core::i18n::gettext_static(WAIT_FOR_CHECK).to_owned());
         }
         let typed = self.target.text();
         if typed.trim().is_empty() {
-            return Err(NO_FOLDER.to_owned());
+            return Err(ox_core::i18n::gettext_static(NO_FOLDER).to_owned());
         }
         let home = glib::home_dir();
         let target = normalise_location(typed.trim(), Some(&self.default_destination), Path::new(&home))
             .map_err(|error| error.to_string())?;
         if !(self.is_writable)(&target) {
-            return Err(NOT_WRITABLE.to_owned());
+            return Err(ox_core::i18n::gettext_static(NOT_WRITABLE).to_owned());
         }
         Ok(ExtractionChoice {
             target_uri: target,
@@ -368,8 +396,8 @@ impl ExtractForm {
 
 /// Cancel and Extract.
 fn add_buttons(frame: &DialogFrame, form: ExtractForm, extract: impl Fn(ExtractionChoice) + 'static) {
-    frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
-    let confirm = frame.add_button("Extract", ButtonStyle::Accent);
+    frame.add_closing_button(&ox_core::i18n::gettext("Cancel"), ButtonStyle::Bordered, || {});
+    let confirm = frame.add_button(&ox_core::i18n::gettext("Extract"), ButtonStyle::Accent);
     confirm.connect_clicked(glib::clone!(
         #[weak]
         frame,

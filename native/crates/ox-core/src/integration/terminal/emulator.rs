@@ -73,12 +73,12 @@ impl TerminalKind {
     /// The name messages use.
     pub fn label(self) -> &'static str {
         match self {
-            Self::GnomeTerminal => "GNOME Terminal",
-            Self::Console => "Console",
-            Self::XfceTerminal => "Xfce Terminal",
-            Self::Konsole => "Konsole",
-            Self::XTerm => "XTerm",
-            Self::UXTerm => "UXTerm",
+            Self::GnomeTerminal => crate::i18n::gettext_static("GNOME Terminal"),
+            Self::Console => crate::i18n::gettext_static("Console"),
+            Self::XfceTerminal => crate::i18n::gettext_static("Xfce Terminal"),
+            Self::Konsole => crate::i18n::gettext_static("Konsole"),
+            Self::XTerm => crate::i18n::gettext_static("XTerm"),
+            Self::UXTerm => crate::i18n::gettext_static("UXTerm"),
         }
     }
 

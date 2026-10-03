@@ -109,7 +109,16 @@ mod imp {
             let list = super::item_list(&popover);
             let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
             content.append(&strip);
-            content.append(&list);
+            // A service catalogue can make a menu taller than the monitor.
+            // Keep every command reachable by scrolling and keyboard focus.
+            let rows = gtk::ScrolledWindow::builder()
+                .hscrollbar_policy(gtk::PolicyType::Never)
+                .vscrollbar_policy(gtk::PolicyType::Automatic)
+                .propagate_natural_height(true)
+                .max_content_height(560)
+                .child(&list)
+                .build();
+            content.append(&rows);
             popover.set_child(Some(&content));
             self.strip.set(strip).expect("constructed runs once per object");
             self.list.set(list).expect("constructed runs once per object");
@@ -144,7 +153,9 @@ fn strip_box() -> gtk::Box {
         .css_classes(["context-strip"])
         .accessible_role(gtk::AccessibleRole::Group)
         .build();
-    strip.update_property(&[gtk::accessible::Property::Label("File actions")]);
+    strip.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "File actions",
+    ))]);
     strip
 }
 
@@ -398,6 +409,11 @@ impl MenuPopover {
     /// Closes the menu, then runs `item`'s action, as `closeMenu()` before
     /// `it.fn()` in app.js, so an item may open another menu here.
     fn choose(&self, item: &MenuItem) {
+        if !item.submenu.is_empty() {
+            self.set_entries(item.submenu.clone());
+            self.focus_first_item();
+            return;
+        }
         self.popdown();
         // GTK fails only when no ancestor has the action. Every browser
         // window and the application register them all, so that is a menu
@@ -478,6 +494,9 @@ fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
         label.set_attributes(Some(&bold));
     }
     content.append(&label);
+    if !item.submenu.is_empty() {
+        content.append(&icons::image(Icon::ChevronRight16, ROW_GLYPH));
+    }
     if let Some(shortcut) = item.shortcut {
         let shortcut = gtk::Label::builder()
             .label(shortcut)

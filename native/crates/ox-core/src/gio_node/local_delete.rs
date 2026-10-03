@@ -87,9 +87,9 @@ fn open_parent(path: &Path) -> Result<OwnedFd, TransferError> {
     // resolve to the link target's parent, not the folder shown.
     let has_parent_reference = path.components().any(|part| part == Component::ParentDir);
     if !path.is_absolute() || has_parent_reference {
-        return Err(TransferError::failed(
+        return Err(TransferError::failed(crate::i18n::gettext(
             "Open the actual folder before deleting its contents.",
-        ));
+        )));
     }
     let flags = OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC;
     fs::open(path, flags, Mode::empty()).map_err(|errno| {
@@ -128,12 +128,12 @@ struct Deletion<'a> {
 impl Deletion<'_> {
     /// Deletes the item at the absolute `path`.
     fn delete_path(&self, path: &Path) -> Result<(), TransferError> {
-        let parent = path
-            .parent()
-            .ok_or_else(|| TransferError::failed("Filesystem roots cannot be deleted."))?;
-        let name = path
-            .file_name()
-            .ok_or_else(|| TransferError::failed("Choose a file or folder to delete."))?;
+        let parent = path.parent().ok_or_else(|| {
+            TransferError::failed(crate::i18n::gettext("Filesystem roots cannot be deleted."))
+        })?;
+        let name = path.file_name().ok_or_else(|| {
+            TransferError::failed(crate::i18n::gettext("Choose a file or folder to delete."))
+        })?;
         let parent_folder = open_parent(parent)?;
         self.delete_at(parent_folder.as_fd(), name, path, 0)
     }
@@ -215,7 +215,7 @@ impl Deletion<'_> {
     fn require_root_identity(&self, seen: &Stat) -> Result<(), TransferError> {
         match self.root_identity {
             Some(expected) if expected != identity_of(seen) => Err(TransferError::failed(
-                "Another item now has the staging folder's name. It was left in place.",
+                crate::i18n::gettext("Another item now has the staging folder's name. It was left in place."),
             )),
             _ => Ok(()),
         }
@@ -241,9 +241,9 @@ fn require_still_named(parent: BorrowedFd<'_>, name: &OsStr, opened: &Stat) -> R
 /// opened: the tree changed during the deletion.
 fn require_same_item(expected: &Stat, actual: &Stat) -> Result<(), TransferError> {
     if identity_of(expected) != identity_of(actual) {
-        return Err(TransferError::failed(
+        return Err(TransferError::failed(crate::i18n::gettext(
             "The folder changed during deletion. Remaining items were left in place.",
-        ));
+        )));
     }
     Ok(())
 }

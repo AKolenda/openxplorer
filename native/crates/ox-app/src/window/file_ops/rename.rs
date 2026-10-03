@@ -15,9 +15,10 @@
 //! toast with Undo says it is renamed (OPS-032), and Undo renames it back
 //! (OPS-029).
 
-use gtk::glib::prelude::*;
+use gtk::gio::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::entry::Entry;
+use gtk::{gio, glib};
+use ox_core::entry::{entry_from_info, Entry, ATTRIBUTES};
 use ox_core::location::parent_location;
 use ox_core::ops::{rename_item, OperationContext, RenamedItem};
 
@@ -27,7 +28,7 @@ use crate::window::BrowserWindow;
 
 /// The Rename dialog's line when the user keeps a name that would hide
 /// the item.
-const NOT_RENAMED: &str = "The name was not changed.";
+const NOT_RENAMED: &str = crate::i18n::message_id("The name was not changed.");
 
 /// How much of `entry`'s name a rename selects: a file's name before its
 /// extension, a folder's whole name.
@@ -37,6 +38,23 @@ pub(super) fn selected_name_length(entry: &Entry) -> usize {
     } else {
         stem_length(&entry.name)
     }
+}
+
+/// Where `shown` is after the folder `old` was renamed to `new`: `None`
+/// unless `shown` is `old` or inside it.
+fn moved_location(shown: &str, old: &str, new: &str) -> Option<String> {
+    let shown_file = gio::File::for_uri(shown);
+    let old_file = gio::File::for_uri(old);
+    if shown_file.equal(&old_file) {
+        return Some(new.to_owned());
+    }
+    let inside = old_file.relative_path(&shown_file)?;
+    Some(
+        gio::File::for_uri(new)
+            .resolve_relative_path(inside)
+            .uri()
+            .to_string(),
+    )
 }
 
 impl BrowserWindow {
@@ -67,8 +85,49 @@ impl BrowserWindow {
         }
     }
 
+    /// Rename… of the folder tree's folder at `uri` (SIDE-028): asks for
+    /// its new name in the Rename dialog.
+    pub(crate) async fn rename_folder_at(&self, uri: &str) {
+        if self.refuses_writes_during_update() {
+            return;
+        }
+        let file = gio::File::for_uri(uri);
+        let info = file
+            .query_info_future(ATTRIBUTES, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
+            .await;
+        let info = match info {
+            Ok(info) => info,
+            Err(error) => {
+                self.show_message(error.message());
+                return;
+            }
+        };
+        let Some(renamed) = self.ask_and_rename(&entry_from_info(&file, &info)).await else {
+            return;
+        };
+        // The folder shown, or one it is in, moves with its new name, as
+        // Dolphin's view follows a renamed folder.
+        let shown = self.current_uri().filter(|_| !renamed.is_unchanged());
+        let moved = shown.and_then(|shown| moved_location(&shown, &renamed.original_uri, &renamed.uri));
+        match moved {
+            Some(moved) => {
+                self.remember_rename(&renamed);
+                self.navigate_or_report(&moved);
+            }
+            None => self.finish_rename(renamed),
+        }
+    }
+
     /// Asks for `entry`'s new name in the Rename dialog and renames it.
     async fn rename_with_dialog(&self, entry: &Entry) {
+        if let Some(renamed) = self.ask_and_rename(entry).await {
+            self.finish_rename(renamed);
+        }
+    }
+
+    /// Asks for `entry`'s new name in the Rename dialog and renames it;
+    /// the renamed item, or `None` when the user cancelled.
+    async fn ask_and_rename(&self, entry: &Entry) -> Option<RenamedItem> {
         let selection = if entry.is_dir {
             NameSelection::Whole
         } else {
@@ -80,9 +139,10 @@ impl BrowserWindow {
             initial_name: &entry.name,
             selection,
             folder: &folder,
+            takes_folder_path: false,
         };
         let protection = self.context().write_protection();
-        let renamed = ask_for_name(self, request, |name, cancel| {
+        ask_for_name(self, request, |name, cancel| {
             let uri = entry.uri.clone();
             let old_name = entry.name.clone();
             let context = OperationContext {
@@ -91,19 +151,18 @@ impl BrowserWindow {
             };
             let window = self.downgrade();
             async move {
-                let window = window.upgrade().ok_or_else(|| NOT_RENAMED.to_owned())?;
+                let window = window
+                    .upgrade()
+                    .ok_or_else(|| ox_core::i18n::gettext_static(NOT_RENAMED).to_owned())?;
                 if !window.confirm_hiding_rename(&old_name, &name).await {
-                    return Err(NOT_RENAMED.to_owned());
+                    return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
                 }
                 rename_item(&uri, &name, &context)
                     .await
                     .map_err(|error| error.to_string())
             }
         })
-        .await;
-        if let Some(renamed) = renamed {
-            self.finish_rename(renamed);
-        }
+        .await
     }
 
     /// Renames the item at `uri` to `name`, as the name field of
@@ -139,7 +198,10 @@ impl BrowserWindow {
     fn remember_rename(&self, renamed: &RenamedItem) {
         if let Some(record) = renamed.undo_record() {
             self.context().record_operation(record);
-            self.show_message_with_undo(&format!("Renamed to “{}”.", renamed.name));
+            self.show_message_with_undo(&ox_core::i18n::format_message(
+                "Renamed to “{name}”.",
+                &[("name", &renamed.name)],
+            ));
         }
     }
 }

@@ -45,16 +45,16 @@ pub(crate) enum SuggestionReason {
 
 impl SuggestionReason {
     /// The "Suggested because" column's text.
-    pub(crate) const fn text(self) -> &'static str {
+    pub(crate) fn text(self) -> &'static str {
         match self {
-            SuggestionReason::OpenFolder => "Folder you came from",
-            SuggestionReason::IndexedBefore => "Indexed before",
-            SuggestionReason::Home => "Contains the others",
-            SuggestionReason::StandardFolder => "Standard folder",
-            SuggestionReason::Pinned => "Pinned",
-            SuggestionReason::SavedShare => "Saved share",
-            SuggestionReason::LocalDisk => "Whole disk",
-            SuggestionReason::MountedDrive => "Mounted drive",
+            SuggestionReason::OpenFolder => ox_core::i18n::gettext_static("Folder you came from"),
+            SuggestionReason::IndexedBefore => ox_core::i18n::gettext_static("Indexed before"),
+            SuggestionReason::Home => ox_core::i18n::gettext_static("Contains the others"),
+            SuggestionReason::StandardFolder => ox_core::i18n::gettext_static("Standard folder"),
+            SuggestionReason::Pinned => ox_core::i18n::gettext_static("Pinned"),
+            SuggestionReason::SavedShare => ox_core::i18n::gettext_static("Saved share"),
+            SuggestionReason::LocalDisk => ox_core::i18n::gettext_static("Whole disk"),
+            SuggestionReason::MountedDrive => ox_core::i18n::gettext_static("Mounted drive"),
         }
     }
 }
@@ -209,9 +209,9 @@ fn location_text(uri: &str, is_network: bool) -> String {
     let parts = split_location(uri).ok();
     let share = parts.filter(|parts| parts.kind() == LocationKind::Smb);
     match share {
-        Some(parts) => format!("SMB · {}", parts.authority),
-        None if is_network => "Network drive".to_owned(),
-        None => "Local disk".to_owned(),
+        Some(parts) => ox_core::i18n::format_message("SMB · {authority}", &[("authority", &parts.authority)]),
+        None if is_network => ox_core::i18n::gettext("Network drive"),
+        None => ox_core::i18n::gettext("Local disk"),
     }
 }
 

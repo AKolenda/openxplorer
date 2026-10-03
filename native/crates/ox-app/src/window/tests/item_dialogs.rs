@@ -12,7 +12,7 @@ use gtk::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 
 use super::icons::{assert_same_colour, css_colour, painted_colour, TRANSITION_TIME};
-use crate::dialog_layer::DialogFrame;
+use crate::dialog::DialogFrame;
 use crate::integration::OpenWithDialog;
 use crate::properties::{FolderSizeState, PropertiesView, RestoreRequest, SnapshotTarget};
 use crate::test_support::harness::{
@@ -277,7 +277,10 @@ fn the_owner_changes_a_files_permissions() {
 
     let mode = || fs::metadata(&path).expect("metadata").permissions().mode() & 0o7777;
     wait_until("the new mode", || mode() == 0o600);
-    assert_eq!(test.window.shown_message(), "Permissions changed.");
+    // The mode can change on disk before the result reaches the window.
+    wait_until("the confirmation", || {
+        test.window.shown_message() == "Permissions changed."
+    });
 
     // Advanced Permissions set single bits, such as Others Exec and
     // Set GID, which the three accesses cannot say.

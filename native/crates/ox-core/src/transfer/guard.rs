@@ -18,8 +18,9 @@ pub const MAX_DEPTH: usize = 128;
 
 /// The error for a tree deeper than [`MAX_DEPTH`].
 pub(crate) fn nesting_error() -> TransferError {
-    TransferError::failed(format!(
-        "Folder nesting exceeds this build’s safety limit ({MAX_DEPTH})."
+    TransferError::failed(crate::i18n::format_message(
+        "Folder nesting exceeds this build’s safety limit ({MAX_DEPTH}).",
+        &[("MAX_DEPTH", &(MAX_DEPTH).to_string())],
     ))
 }
 

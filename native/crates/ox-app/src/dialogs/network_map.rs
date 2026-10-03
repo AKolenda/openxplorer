@@ -14,12 +14,12 @@ use crate::window::{ButtonStyle, Dialog};
 
 /// What the dialog says under its heading.
 const MESSAGE: &str =
-    "Add a network folder to your sidebar: a Windows share, or a folder on an SSH, FTP, WebDAV or NFS server.";
+    crate::i18n::message_id("Add a network folder to your sidebar: a Windows share, or a folder on an SSH, FTP, WebDAV or NFS server.");
 
 /// The note under the fields: what connecting asks and saves.
-const NOTE: &str = "OpenXplorer will ask for your username and password if needed. Remember my credentials is \
+const NOTE: &str = crate::i18n::message_id("OpenXplorer will ask for your username and password if needed. Remember my credentials is \
 selected by default. No passwords are saved in OpenXplorer settings. A label such as “Z:” is only a label, not a \
-system-wide drive letter.";
+system-wide drive letter.");
 
 /// Whether a mapped share is kept in the sidebar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,13 +48,20 @@ pub(crate) fn map_network_dialog(
     parent: &impl IsA<gtk::Window>,
     on_connect: impl Fn(&Dialog, MapRequest) + 'static,
 ) -> Dialog {
-    let dialog = Dialog::new(parent, "Map network location", MESSAGE);
+    let dialog = Dialog::new(
+        parent,
+        &ox_core::i18n::gettext("Map network location"),
+        ox_core::i18n::gettext_static(MESSAGE),
+    );
     let fields = ServerFields::add_to(&dialog);
     let label = address_field(&dialog, "Display name (optional)", "Projects (Z:)");
-    let save = dialog.add_check_button("Save in the sidebar · reconnect when opened", true);
-    dialog.add_note(NOTE);
+    let save = dialog.add_check_button(
+        &ox_core::i18n::gettext("Save in the sidebar · reconnect when opened"),
+        true,
+    );
+    dialog.add_note(ox_core::i18n::gettext_static(NOTE));
     dialog.add_cancel_button();
-    dialog.add_button("Connect", ButtonStyle::Accent);
+    dialog.add_button(&ox_core::i18n::gettext("Connect"), ButtonStyle::Accent);
     dialog.connect_confirmed(move |dialog| {
         let keeping = if save.is_active() {
             ShareKeeping::SaveInSidebar
@@ -95,7 +102,7 @@ impl ServerFields {
     fn add_to(dialog: &Dialog) -> Self {
         let labels = Protocol::ALL.map(Protocol::label);
         let protocol = gtk::DropDown::from_strings(&labels);
-        dialog.add_labelled("Type", &protocol);
+        dialog.add_labelled(ox_core::i18n::gettext_static("Type"), &protocol);
         let folder = address_field(dialog, "Folder", Protocol::Smb.placeholder());
         let port = address_field(dialog, "Port (optional)", "");
         port.set_input_purpose(gtk::InputPurpose::Digits);

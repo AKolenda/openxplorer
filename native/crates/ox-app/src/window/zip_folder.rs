@@ -29,10 +29,12 @@ use crate::archive_view::ArchiveTarget;
 use super::BrowserWindow;
 
 /// Shown for a file inside a ZIP that is not opened from it.
-const NOT_OPENABLE: &str = "This file cannot be opened from the ZIP. Copy it out or use Extract all.";
+const NOT_OPENABLE: &str =
+    crate::i18n::message_id("This file cannot be opened from the ZIP. Copy it out or use Extract all.");
 
 /// Shown when a file dialog meets an item inside a ZIP.
-const NOT_IN_DIALOGS: &str = "Files inside a ZIP cannot be chosen here. Extract the ZIP first.";
+const NOT_IN_DIALOGS: &str =
+    crate::i18n::message_id("Files inside a ZIP cannot be chosen here. Extract the ZIP first.");
 
 /// Whether `entry` is a ZIP (by name or type), the one archive type that
 /// opens like a folder; TAR archives keep the window.
@@ -83,7 +85,7 @@ impl BrowserWindow {
             return true;
         }
         if self.is_picking() {
-            self.show_message(NOT_IN_DIALOGS);
+            self.show_message(ox_core::i18n::gettext_static(NOT_IN_DIALOGS));
             return true;
         }
         let browser = ArchiveBrowser::new(Arc::new(GioArchiveOpener), default_preview_root());
@@ -97,7 +99,7 @@ impl BrowserWindow {
                 match copy {
                     Ok(copy) => window.open_externally(&copy.uri()),
                     Err(ox_core::archive::ArchiveError::UnsafePreviewType) => {
-                        window.show_message(NOT_OPENABLE);
+                        window.show_message(ox_core::i18n::gettext_static(NOT_OPENABLE));
                     }
                     Err(error) => window.show_message(&error.to_string()),
                 }

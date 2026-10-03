@@ -10,67 +10,88 @@ use std::path::PathBuf;
 #[derive(Debug, thiserror::Error)]
 pub enum BraveError {
     /// The consent checkbox was not ticked for a sync (INT-020).
-    #[error("Confirm updating the selected Brave profiles.")]
+    #[error("{}", crate::i18n::gettext("Confirm updating the selected Brave profiles."))]
     SyncNotConfirmed,
     /// The consent checkbox was not ticked for a restore (INT-021).
-    #[error("Confirm restoring the previous Brave download directory.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Confirm restoring the previous Brave download directory.")
+    )]
     RestoreNotConfirmed,
     /// Not 1 to 40 profiles, or a profile named twice.
-    #[error("Select 1–40 distinct Brave profiles.")]
+    #[error("{}", crate::i18n::gettext("Select 1–40 distinct Brave profiles."))]
     InvalidSelection,
     /// The download folder contains a NUL character.
-    #[error("Invalid download directory.")]
+    #[error("{}", crate::i18n::gettext("Invalid download directory."))]
     InvalidDirectory,
     /// The download folder is not an absolute path.
-    #[error("Use an absolute download directory.")]
+    #[error("{}", crate::i18n::gettext("Use an absolute download directory."))]
     RelativeDirectory,
     /// The download folder does not exist, is not a folder, or is not
     /// writable and enterable.
-    #[error("Downloads must be an existing writable local or persistent-mount path.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Downloads must be an existing writable local or persistent-mount path.")
+    )]
     UnusableDirectory,
     /// The download folder is volatile (`/run`, `/proc`, `/sys`, `/dev`),
     /// the home folder or `/`.
-    #[error("Use a persistent, dedicated download directory.")]
+    #[error("{}", crate::i18n::gettext("Use a persistent, dedicated download directory."))]
     NotDedicated,
     /// Brave is running, or its processes cannot be inspected.
-    #[error("Fully quit Brave, including background processes, then retry. OpenXplorer will not force it to close.")]
+    #[error("{}", crate::i18n::gettext("Fully quit Brave, including background processes, then retry. OpenXplorer will not force it to close."))]
     BraveRunningBeforeSync,
     /// Brave is running, or its processes cannot be inspected.
-    #[error("Fully quit Brave before restoring.")]
+    #[error("{}", crate::i18n::gettext("Fully quit Brave before restoring."))]
     BraveRunningBeforeRestore,
     /// The profile is not one of the detected native profiles.
-    #[error(
-        "Choose a detected native Brave profile. Custom, Snap and Flatpak profiles require manual browser settings."
-    )]
+    #[error("{}", crate::i18n::gettext("Choose a detected native Brave profile. Custom, Snap and Flatpak profiles require manual browser settings."))]
     UnknownProfile,
     /// `download` or `savefile` in the preferences is not an object.
-    #[error("Unsupported browser preference structure.")]
+    #[error("{}", crate::i18n::gettext("Unsupported browser preference structure."))]
     UnsupportedStructure,
     /// The backup folder is a symlink.
-    #[error("Refusing a symlinked backup directory.")]
+    #[error("{}", crate::i18n::gettext("Refusing a symlinked backup directory."))]
     SymlinkedBackupFolder,
     /// Brave started, or its preferences changed, while a profile was
     /// being updated.
-    #[error("Brave started or its preferences changed. Close Brave and retry.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Brave started or its preferences changed. Close Brave and retry.")
+    )]
     ChangedDuringSync,
     /// Brave started, or its preferences changed, while restoring.
-    #[error("Browser preferences changed; retry after closing Brave.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Browser preferences changed; retry after closing Brave.")
+    )]
     ChangedDuringRestore,
     /// No undo record exists for the profile.
-    #[error("No previous download setting was recorded for this profile.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("No previous download setting was recorded for this profile.")
+    )]
     NoRecord,
     /// The user or Brave changed both download folders since the sync.
-    #[error("Brave settings changed since OpenXplorer last updated them. Nothing was overwritten.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "Brave settings changed since OpenXplorer last updated them. Nothing was overwritten."
+        )
+    )]
     ChangedSinceSync,
     /// The preference file is a symlink.
-    #[error("Refusing a symlinked browser preference file.")]
+    #[error("{}", crate::i18n::gettext("Refusing a symlinked browser preference file."))]
     SymlinkedPreferences,
     /// The preference file is not a regular file owned by the user, or is
     /// over 32 MB.
-    #[error("Browser preferences are not a supported private regular file.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Browser preferences are not a supported private regular file.")
+    )]
     NotPrivateRegularFile,
     /// The preference file holds JSON that is not an object.
-    #[error("Browser preferences are not an object.")]
+    #[error("{}", crate::i18n::gettext("Browser preferences are not an object."))]
     NotAnObject,
     /// The preference file or undo record is not valid JSON of the
     /// expected shape.
@@ -79,8 +100,11 @@ pub enum BraveError {
     /// The app runs in a Flatpak sandbox, which cannot see or change
     /// the host's Brave profiles.
     #[error(
-        "OpenXplorer runs as a Flatpak and cannot change Brave's settings. \
+        "{}",
+        crate::i18n::gettext(
+            "OpenXplorer runs as a Flatpak and cannot change Brave's settings. \
          Set the download folder in brave://settings/downloads."
+        )
     )]
     Sandboxed,
     /// Reading or writing a file failed.

@@ -50,7 +50,10 @@ fn published_message(mode: ClipboardMode, count: usize) -> String {
         ClipboardMode::Copy => "copied",
         ClipboardMode::Cut => "cut",
     };
-    format!("{count} item(s) {verb} — ready to paste in another window.")
+    ox_core::i18n::format_message(
+        "{count} item(s) {verb} — ready to paste in another window.",
+        &[("count", &count.to_string()), ("verb", verb)],
+    )
 }
 
 /// Reads the whole payload of `mime_type` from `clipboard`; `None` when
@@ -141,7 +144,9 @@ impl BrowserWindow {
         }
         let facts = command_facts.selection;
         if facts.has_inoperable {
-            self.show_message("Open the share first, then select its files or folders.");
+            self.show_message(ox_core::i18n::gettext_static(
+                "Open the share first, then select its files or folders.",
+            ));
             return;
         }
         let uris: Vec<String> = items.iter().map(|item| item.entry().uri.clone()).collect();
@@ -152,10 +157,22 @@ impl BrowserWindow {
             return;
         }
         if mode == ClipboardMode::Cut && facts.has_read_only {
-            self.show_message("Previous versions are read-only. Use Restore a copy.");
+            self.show_message(ox_core::i18n::gettext_static(
+                "Previous versions are read-only. Use Restore a copy.",
+            ));
             return;
         }
-        let files = match ClipboardFiles::new(mode, &uris) {
+        self.copy_items(mode, &uris);
+    }
+
+    /// Copy or Cut of the folder tree's folder at `uri` (SIDE-028).
+    pub(crate) fn copy_folder_at(&self, mode: ClipboardMode, uri: &str) {
+        self.copy_items(mode, &[uri.to_owned()]);
+    }
+
+    /// Puts `uris` on the desktop's clipboard and says so.
+    fn copy_items(&self, mode: ClipboardMode, uris: &[String]) {
+        let files = match ClipboardFiles::new(mode, uris) {
             Ok(files) => files,
             Err(error) => {
                 self.show_message(&error.to_string());
@@ -168,7 +185,9 @@ impl BrowserWindow {
     /// Makes `files` the desktop's clipboard and says so.
     pub(crate) fn put_files_on_clipboard(&self, files: ClipboardFiles) {
         if publish(&self.clipboard(), &files).is_err() {
-            self.show_message("The desktop clipboard could not be claimed.");
+            self.show_message(ox_core::i18n::gettext_static(
+                "The desktop clipboard could not be claimed.",
+            ));
             return;
         }
         let message = published_message(files.mode(), files.uris().len());
@@ -221,7 +240,9 @@ impl BrowserWindow {
     /// and updates Paste.
     fn remember_clipboard(&self, files: Option<ClipboardFiles>) {
         let cut_uris = cut_uris(files.as_ref());
-        self.folder_pane().owners().show_cut_items(cut_uris);
+        for pane in self.folder_panes() {
+            pane.owners().show_cut_items(cut_uris.clone());
+        }
         self.imp().file_operations.borrow_mut().clipboard = files;
         self.update_file_commands();
     }

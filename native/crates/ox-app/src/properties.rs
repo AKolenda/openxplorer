@@ -9,7 +9,7 @@
 //! `v2.0.0:desktop/folder_sizes.py`.
 //!
 //! The dialog belongs to the tab that opened it (PROP-008): the window
-//! shows it on an in-window [`DialogLayer`](crate::dialog_layer::DialogLayer),
+//! shows it on an in-window [`DialogLayer`](crate::dialog::DialogLayer),
 //! withdraws it when another tab comes to the front and shows it again,
 //! as it was, when its tab returns. What the dialog asks of the window
 //! (open a snapshot in a tab, restore a copy, measure a folder) it asks
@@ -59,7 +59,7 @@ use ox_core::location::ItemKind;
 use ox_core::places::KnownFolder;
 
 /// Shown while the properties are read.
-const READING: &str = "Reading file properties…";
+const READING: &str = crate::i18n::message_id("Reading file properties…");
 /// Shown for a value being calculated: a size, a content count or a
 /// checksum.
 const CALCULATING: &str = "Calculating…";
@@ -96,7 +96,7 @@ pub(crate) struct PropertiesTarget {
 impl PropertiesTarget {
     /// The dialog's title: `<name> Properties`.
     pub(crate) fn dialog_title(&self) -> String {
-        format!("{} Properties", self.title)
+        ox_core::i18n::format_message("{title} Properties", &[("title", &self.title)])
     }
 }
 
@@ -119,14 +119,14 @@ pub(crate) enum PropertiesTab {
 
 impl PropertiesTab {
     /// The tab's label.
-    pub(crate) const fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
-            PropertiesTab::General => "General",
-            PropertiesTab::Sharing => "Sharing",
-            PropertiesTab::Location => "Location",
-            PropertiesTab::Permissions => "Permissions",
-            PropertiesTab::Checksums => "Checksums",
-            PropertiesTab::PreviousVersions => "Previous versions",
+            PropertiesTab::General => ox_core::i18n::gettext_static("General"),
+            PropertiesTab::Sharing => ox_core::i18n::gettext_static("Sharing"),
+            PropertiesTab::Location => ox_core::i18n::gettext_static("Location"),
+            PropertiesTab::Permissions => ox_core::i18n::gettext_static("Permissions"),
+            PropertiesTab::Checksums => ox_core::i18n::gettext_static("Checksums"),
+            PropertiesTab::PreviousVersions => ox_core::i18n::gettext_static("Previous versions"),
         }
     }
 

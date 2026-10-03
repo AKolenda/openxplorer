@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Copy path: puts the address of the selected item, or of the folder, on
-//! the clipboard as text (CLIP-012).
+//! Copy path: puts the address of each selected item, one per line, or of
+//! the folder, on the clipboard as text (CLIP-012, CLIP-014).
 //!
 //! Ports `copyPath` in `v2.0.0:desktop/ui/app.js` and the text it copies,
 //! `displayUri`: a plain path for local items, `\\server\share\…` for SMB
@@ -24,29 +24,36 @@ use super::BrowserWindow;
 /// What Copy path copies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum CopiedPath {
-    /// The display address of a folder or item.
+    /// The display address of a folder or item, or of several items, one
+    /// per line.
     Address(String),
     /// A landing page has no path.
     NoFolder,
 }
 
 /// What Copy path copies when `selected` are the URIs of the selected
-/// items in the folder `folder_uri`: the address of the single selected
-/// item, else the folder's. A landing page has none.
+/// items in the folder `folder_uri`: the address of every selected item,
+/// one per line, else the folder's. A landing page has none.
 fn copied_path(selected: &[String], folder_uri: Option<&str>, locations: &LocationContext) -> CopiedPath {
-    let uri = match selected {
-        [item] => Some(item.as_str()),
-        _ => folder_uri,
+    let uris: Vec<&str> = if selected.is_empty() {
+        folder_uri.into_iter().collect()
+    } else {
+        selected.iter().map(String::as_str).collect()
     };
-    let Some(uri) = uri.filter(|uri| Page::from_uri(uri).is_none()) else {
+    let addresses: Vec<String> = uris
+        .into_iter()
+        .filter(|uri| Page::from_uri(uri).is_none())
+        .map(|uri| locations.copied_location(uri))
+        .collect();
+    if addresses.is_empty() {
         return CopiedPath::NoFolder;
-    };
-    CopiedPath::Address(locations.display_location(uri))
+    }
+    CopiedPath::Address(addresses.join("\n"))
 }
 
 impl BrowserWindow {
-    /// What Copy path would copy now: the single selected item, else the
-    /// folder the tab shows.
+    /// What Copy path would copy now: the selected items, else the folder
+    /// the tab shows.
     pub(super) fn path_to_copy(&self) -> CopiedPath {
         let selected = self.folder_pane().model().selected_uris();
         let folder_uri = self.current_uri();
@@ -57,10 +64,12 @@ impl BrowserWindow {
     /// Copies the path and says so, as app.js does.
     pub(super) fn copy_path(&self) {
         match self.path_to_copy() {
-            CopiedPath::NoFolder => self.show_message("Open a folder first."),
+            CopiedPath::NoFolder => self.show_message(&ox_core::i18n::gettext("Open a folder first.")),
             CopiedPath::Address(address) => {
                 self.clipboard().set_text(&address);
-                self.show_message("Path copied. Sharing permissions are unchanged.");
+                self.show_message(&ox_core::i18n::gettext(
+                    "Path copied. Sharing permissions are unchanged.",
+                ));
             }
         }
     }
@@ -103,16 +112,23 @@ mod tests {
 
     /// parity: CLIP-012
     #[test]
-    fn without_one_selected_item_the_folder_is_copied_and_a_page_has_none() {
+    fn without_a_selection_the_folder_is_copied_and_a_page_has_none() {
         let locations = LocationContext::default();
-        let two = ["file:///srv/a.txt".to_owned(), "file:///srv/b.txt".to_owned()];
-
         let nothing_selected = copied_path(&[], Some("file:///srv/media"), &locations);
         let on_this_pc = copied_path(&[], Some(Page::ThisPc.uri()), &locations);
-        let several_selected = copied_path(&two, Some("file:///srv"), &locations);
 
         assert_eq!(nothing_selected, address("/srv/media"));
         assert_eq!(on_this_pc, CopiedPath::NoFolder);
-        assert_eq!(several_selected, address("/srv"));
+    }
+
+    /// parity: CLIP-014
+    #[test]
+    fn several_selected_items_copy_one_path_per_line() {
+        let locations = LocationContext::default();
+        let two = ["file:///srv/a.txt".to_owned(), "file:///srv/b%20c.txt".to_owned()];
+
+        let several_selected = copied_path(&two, Some("file:///srv"), &locations);
+
+        assert_eq!(several_selected, address("/srv/a.txt\n/srv/b c.txt"));
     }
 }

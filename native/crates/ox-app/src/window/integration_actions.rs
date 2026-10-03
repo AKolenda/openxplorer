@@ -18,10 +18,10 @@ use ox_core::location::{is_smb_server, parent_location};
 use ox_core::update::Activity;
 
 use super::actions::{plain_action, text_action};
-use super::dialog::Dialog;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 use super::ButtonStyle;
+use crate::dialog::Dialog;
 use crate::integration::{self, OpenWithDialog, OpenWithSubject, Tool};
 use crate::locations::Page;
 use crate::update::{UpdateDialog, UpdateState};
@@ -263,14 +263,17 @@ impl BrowserWindow {
             }
             return;
         }
-        let question = format!("Are you sure you want to open {} terminals?", folders.len());
+        let question = ox_core::i18n::format_message(
+            "Are you sure you want to open {len} terminals?",
+            &[("len", &folders.len().to_string())],
+        );
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
-                let dialog = Dialog::new(&window, "Open Terminal Here", &question);
+                let dialog = Dialog::new(&window, &ox_core::i18n::gettext("Open Terminal Here"), &question);
                 dialog.add_cancel_button();
-                let open = dialog.add_button("Open terminals", ButtonStyle::Accent);
+                let open = dialog.add_button(&ox_core::i18n::gettext("Open terminals"), ButtonStyle::Accent);
                 dialog.open();
                 let answer = dialog.next_response().await;
                 dialog.finish();
@@ -361,7 +364,7 @@ impl BrowserWindow {
                 let launched = prepared
                     .and_then(|prepared| launcher(&editor_id, &prepared, integration::DefaultChoice::Keep));
                 let message = match launched {
-                    Ok(_) => format!("Opened with {name}"),
+                    Ok(_) => ox_core::i18n::format_message("Opened with {name}", &[("name", &name)]),
                     Err(error) => error.to_string(),
                 };
                 window.show_message(&message);
@@ -387,7 +390,7 @@ impl BrowserWindow {
                 let launched = prepared
                     .and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
                 let message = match launched {
-                    Ok(_) => format!("Opened with {name}"),
+                    Ok(_) => ox_core::i18n::format_message("Opened with {name}", &[("name", &name)]),
                     Err(error) => error.to_string(),
                 };
                 window.show_message(&message);
@@ -457,7 +460,8 @@ impl BrowserWindow {
     /// Whether any tab of this window is being listed.
     fn is_listing_any_tab(&self) -> bool {
         let session = self.imp().session.borrow();
-        session.tabs().iter().any(|tab| tab.listing_state.is_listing())
+        let is_listing = session.panes().any(|tab| tab.listing_state.is_listing());
+        is_listing
     }
 }
 

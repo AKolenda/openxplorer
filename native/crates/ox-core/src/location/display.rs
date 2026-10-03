@@ -17,7 +17,7 @@
 use std::path::PathBuf;
 
 use super::device_uri::DeviceUriMatch;
-use super::normalise::file_uri;
+use super::normalise::{file_uri, without_user};
 use super::parts::{split_location, split_scheme, LocationKind, LocationParts};
 use super::text::{decode_uri_component, strip_one_trailing_slash};
 use super::virtual_place::{VirtualFolder, VirtualPlace};
@@ -167,6 +167,14 @@ impl LocationContext {
         }
     }
 
+    /// Text Copy path and Copy address put on the clipboard:
+    /// [`display_location`](Self::display_location) without the user name
+    /// of an SFTP, FTP or WebDAV address, which stays in the session as
+    /// for SMB (SAFE-010).
+    pub fn copied_location(&self, uri: &str) -> String {
+        without_user(&self.display_location(uri))
+    }
+
     /// Breadcrumb buttons from the root to `uri`. Local folders start at
     /// `/`, SMB at the server, devices at the device name and virtual
     /// folders at their title; the app's pages are a single crumb.
@@ -209,6 +217,9 @@ impl LocationContext {
     fn root_name(&self, uri: &str, parts: LocationParts) -> String {
         if parts.is_device() {
             self.device_name(uri).to_string()
+        } else if let Some((_, host)) = parts.authority.rsplit_once('@') {
+            // A tab names a server without the account (SAFE-010).
+            host.to_owned()
         } else if !parts.authority.is_empty() {
             parts.authority
         } else {
@@ -240,6 +251,7 @@ impl LocationContext {
             LocationKind::Local => Some(Crumb::new("/", "file:///")),
             LocationKind::Smb | LocationKind::Remote => Some(Crumb::new(&parts.authority, root_uri(parts))),
             LocationKind::Device => Some(Crumb::new(self.device_name(uri), root_uri(parts))),
+            LocationKind::Other if parts.scheme == "admin" => Some(Crumb::new("Administrator", "admin:///")),
             LocationKind::Other => None,
         }
     }
@@ -414,6 +426,8 @@ mod tests {
         let shown = context.display_location(uri);
         assert_eq!(shown, "sftp://anna@build/Q3 plans/été %231");
         assert_eq!(crate::location::normalise(&shown).as_deref(), Ok(uri));
+        assert_eq!(context.copied_location(uri), "sftp://build/Q3 plans/été %231");
+        assert_eq!(context.title_for("sftp://anna@build/"), "build");
     }
 
     #[test]

@@ -2,13 +2,13 @@
 
 A Windows File Explorer-inspired file manager, **developed for Zorin OS first and foremost**. Zorin is the primary target for its desktop experience and integration; Ubuntu and Debian are secondary compatibility targets and require compatible system packages.
 
-Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with tabs, clickable paths, pinned folders, search and light/dark themes.
+Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with tabs, split panes, Details, List and icon views, clickable paths, pinned folders, search and light/dark themes.
 
 **[Releases](https://github.com/AKolenda/openxplorer/releases)** · **[Website](https://openxplorer.app)** · **[Installation](docs/installation.md)** · **[Documentation](docs/introduction.md)**
 
 ![OpenXplorer browsing fictional sample files](apps/web/public/assets/screenshots/explorer-light.png)
 
-*The interface of OpenXplorer 1.x, its HTML captured in Chromium with fictional files. The native 2.x app keeps this layout; this is not a capture of the native app or a live-SMB test.*
+*The native GTK 4 app, captured in an isolated session with fictional files. Network examples in these pictures do not establish live SMB compatibility.*
 
 ## Install
 

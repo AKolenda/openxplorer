@@ -32,16 +32,17 @@ const RESIZE_EDGE: f64 = 8.0;
 const NUDGE_STEP: i32 = 10;
 
 /// What a title says about its edge (`handle.title` in app.js).
-const TITLE_TOOLTIP: &str = "Drag to resize · double-click to fit loaded items (up to 2,000)";
+const TITLE_TOOLTIP: &str =
+    crate::i18n::message_id("Drag to resize · double-click to fit loaded items (up to 2,000)");
 
 impl DetailsView {
     /// Lets the titles fit and nudge their columns, and keeps dragged
     /// widths within the columns' limits.
     pub(super) fn install_column_fit(&self) {
         let Some(header) = self.header() else { return };
-        for (column, title) in Self::titles(&header) {
+        for (column, title) in self.titles(&header) {
             title.set_focusable(true);
-            title.set_tooltip_text(Some(TITLE_TOOLTIP));
+            title.set_tooltip_text(Some(ox_core::i18n::gettext_static(TITLE_TOOLTIP)));
             describe_resizing(&title, column);
             let keys = gtk::EventControllerKey::new();
             keys.connect_key_pressed(glib::clone!(
@@ -69,7 +70,7 @@ impl DetailsView {
             }
         ));
         header.add_controller(double_click);
-        let titles = Self::titles(&header);
+        let titles = self.titles(&header);
         for ((column, view_column), (_, title)) in self.view_columns().zip(titles) {
             // The title holds its column, so the column holds it weakly.
             if let Some(start) = column_widths::saved_width(column, view_column.fixed_width()) {
@@ -103,15 +104,15 @@ impl DetailsView {
     }
 
     /// Each column with its title, in column order.
-    fn titles(header: &gtk::Widget) -> Vec<(SortColumn, gtk::Widget)> {
+    fn titles(&self, header: &gtk::Widget) -> Vec<(SortColumn, gtk::Widget)> {
         let titles = std::iter::successors(header.first_child(), WidgetExt::next_sibling);
-        SortColumn::ALL.into_iter().zip(titles).collect()
+        self.column_order().into_iter().zip(titles).collect()
     }
 
     /// The shown column whose title ends within [`RESIZE_EDGE`] of `x`,
     /// a position in `header`.
-    fn column_at_edge(header: &gtk::Widget, x: f64) -> Option<SortColumn> {
-        let titles = Self::titles(header);
+    fn column_at_edge(&self, header: &gtk::Widget, x: f64) -> Option<SortColumn> {
+        let titles = self.titles(header);
         let shown = titles.iter().filter(|(_, title)| title.is_visible());
         shown
             .filter_map(|(column, title)| Some((*column, title.compute_bounds(header)?)))
@@ -123,7 +124,7 @@ impl DetailsView {
     /// as a double-click on its resize edge does; `false` when no title
     /// ends there.
     fn fit_column_at_edge(&self, header: &gtk::Widget, x: f64) -> bool {
-        let Some(column) = Self::column_at_edge(header, x) else {
+        let Some(column) = self.column_at_edge(header, x) else {
             return false;
         };
         self.fit_column(column);
@@ -153,7 +154,7 @@ impl DetailsView {
         } else {
             self.header()
                 .and_then(|header| {
-                    let titles = Self::titles(&header);
+                    let titles = self.titles(&header);
                     let title = titles.into_iter().find(|(shown, _)| *shown == column)?.1;
                     Some(title.width())
                 })
@@ -184,7 +185,7 @@ impl DetailsView {
         let widths = (0..shown)
             .filter_map(|position| model.item(position).and_downcast::<FileItem>())
             .map(|item| {
-                let layout = view.create_pango_layout(Some(&cell_text(column, &item)));
+                let layout = view.create_pango_layout(Some(&cell_text(column, &item, self.date_style())));
                 layout.pixel_size().0
             });
         f64::from(widths.max().unwrap_or_default())
@@ -198,9 +199,9 @@ impl DetailsView {
 /// [`DetailsView::install_column_fit`] keeps its current width.
 fn describe_resizing(title: &gtk::Widget, column: SortColumn) {
     let limits = column_widths::width_limits(column);
-    let description = format!(
-        "Resize {} column: Left and Right change its width, Home fits it",
-        column.label()
+    let description = ox_core::i18n::format_message(
+        "Resize {label} column: Left and Right change its width, Home fits it",
+        &[("label", column.label())],
     );
     title.update_property(&[
         gtk::accessible::Property::Description(&description),
@@ -268,7 +269,7 @@ mod tests {
         let long_name = "A rather long file name that needs a wide column.txt";
         let (view, _model) = view_of(&["a.txt", long_name]);
         let header = view.header().expect("column titles");
-        let titles = DetailsView::titles(&header);
+        let titles = view.titles(&header);
         assert!(titles.iter().all(|(_, title)| title.is_focusable()));
         let name = view.column(SortColumn::Name).expect("a Name column");
         assert_eq!(
@@ -302,7 +303,7 @@ mod tests {
     /// A double-click on a title's end edge fits that column, and the
     /// fitted width is reported to be saved once it settles.
     ///
-    /// parity: VIEW-029
+    /// parity: VIEW-029, VIEW-032
     #[gtk::test]
     fn a_double_click_on_a_resize_edge_fits_and_saves_the_column() {
         let (view, _model) = view_of(&["a.txt", "A rather long file name that needs a wide column.txt"]);
@@ -313,7 +314,7 @@ mod tests {
             .build();
         window.present();
         let header = view.header().expect("column titles");
-        let titles = DetailsView::titles(&header);
+        let titles = view.titles(&header);
         let name_title = &titles[0].1;
         wait_until("the titles to be laid out", || name_title.width() > 0);
         let reported = Rc::new(RefCell::new(None));

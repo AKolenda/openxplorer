@@ -11,7 +11,7 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use super::preferences::Preference;
+use super::folder_pane::FolderPane;
 use super::{BrowserWindow, WindowAction};
 
 /// Touchpad movement, in pixels, that makes one step: about a wheel
@@ -19,8 +19,16 @@ use super::{BrowserWindow, WindowAction};
 const PIXELS_PER_NOTCH: f64 = 50.0;
 
 impl BrowserWindow {
-    /// Lets Ctrl+wheel over the folder pane step through the layouts.
+    /// Lets Ctrl+wheel over a folder pane step through the layouts.
     pub(super) fn install_view_zoom(&self) {
+        for pane in self.folder_panes() {
+            self.zoom_with_wheel(pane);
+        }
+    }
+
+    /// Lets Ctrl+wheel over `pane` step through its layouts; a split tab's
+    /// other pane becomes active first.
+    fn zoom_with_wheel(&self, pane: &FolderPane) {
         let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
         wheel.set_propagation_phase(gtk::PropagationPhase::Capture);
         let pending = Rc::new(Cell::new(0.0_f64));
@@ -39,11 +47,14 @@ impl BrowserWindow {
                 }
                 let (steps, rest) = zoom_steps(pending.get(), delta_y, wheel.unit());
                 pending.set(rest);
+                if let Some(side) = wheel.widget().and_then(|pane| window.side_holding(&pane)) {
+                    window.activate_pane(side);
+                }
                 window.zoom_view(steps);
                 glib::Propagation::Stop
             }
         ));
-        self.folder_pane().add_controller(wheel);
+        pane.add_controller(wheel);
     }
 
     /// Shows the layout `steps` steps bigger (smaller when negative) and
@@ -59,7 +70,7 @@ impl BrowserWindow {
         let kept = pane.model().first_selected();
         self.set_action_state(WindowAction::View, &zoomed.as_str().to_variant());
         self.show_view(zoomed);
-        self.save_preference(Preference::View(zoomed));
+        self.remember_style();
         if let Some(position) = kept {
             glib::idle_add_local_once(glib::clone!(
                 #[weak]

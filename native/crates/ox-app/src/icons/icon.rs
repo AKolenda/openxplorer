@@ -177,7 +177,7 @@ pub(crate) enum Icon {
     MoreHorizontal,
     /// `music_note_2_20_regular`: the Music folder.
     MusicNote,
-    /// `open_20_regular`: the details pane's Open.
+    /// `open_20_regular`: the details pane's Open and a link's Show target.
     Open,
     /// `organization_20_regular`: Network, its page, SMB addresses, Map
     /// network location and a location that cannot be reached.

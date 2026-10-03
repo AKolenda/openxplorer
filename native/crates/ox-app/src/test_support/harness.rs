@@ -371,7 +371,10 @@ impl Drop for TestWindow {
             settle();
             thread::sleep(POLL_INTERVAL);
         }
-        self.window.close();
+        // `close()` does nothing for an unpresented window and can ask a
+        // question for a presented one. Tests exercise those user-facing
+        // requests explicitly; fixture teardown must always unregister it.
+        self.window.destroy();
         // The search cache's thread would otherwise tick on in a settings
         // directory that is about to be deleted.
         self.context.search_cache().shut_down();
@@ -504,4 +507,21 @@ pub(crate) fn wait_for_frames(window: &impl IsA<gtk::Widget>, count: u32) {
         }
     });
     wait_until("the window to draw", || frames.get() >= count);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[gtk::test]
+    fn teardown_unregisters_a_window_that_was_never_presented() {
+        let window = {
+            let test = TestWindow::without_tabs();
+            test.window.clone()
+        };
+        assert!(
+            !application().windows().contains(window.upcast_ref()),
+            "an unpresented fixture must not survive into the next test"
+        );
+    }
 }

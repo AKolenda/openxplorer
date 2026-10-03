@@ -12,7 +12,8 @@
 //!
 //! Opened files and visited folders also go to the desktop's recently used
 //! list, as Dolphin records them (OPEN-025), so the file chooser's Recent
-//! and other applications show them.
+//! and other applications show them, while the desktop's privacy settings
+//! allow it ([`super::recent_privacy`]).
 
 use gtk::gio;
 use gtk::prelude::*;
@@ -40,8 +41,10 @@ impl AppContext {
             return Ok(());
         };
         let content_type = prepared.entry.content_type.as_deref();
-        add_to_desktop_history(&prepared.entry.uri, content_type.unwrap_or(UNKNOWN_CONTENT_TYPE));
-        self.remember_open(recent_entry(&prepared.entry));
+        self.record_opened(
+            recent_entry(&prepared.entry),
+            content_type.unwrap_or(UNKNOWN_CONTENT_TYPE),
+        );
         Ok(())
     }
 
@@ -96,6 +99,9 @@ impl AppContext {
 /// named as `OpenXplorer`'s. Tests add only with a private data folder
 /// (native/tools/check.py), never to the user's.
 pub(crate) fn add_to_desktop_history(uri: &str, content_type: &str) {
+    if !super::desktop_recent_policy().remember || uri.starts_with("admin:") {
+        return;
+    }
     #[cfg(test)]
     if !gtk::glib::user_data_dir().starts_with(std::env::temp_dir()) {
         return;
@@ -115,12 +121,12 @@ async fn launch(prepared: &PreparedOpen, window: &gtk::Window) -> Result<(), Str
     };
     match &prepared.launcher {
         Launcher::Application { id, .. } => {
-            let application =
-                crate::integration::installed_application(id).ok_or_else(|| NOT_INSTALLED.to_owned())?;
+            let application = crate::integration::installed_application(id)
+                .ok_or_else(|| ox_core::i18n::gettext_static(NOT_INSTALLED).to_owned())?;
             let context = WidgetExt::display(window).app_launch_context();
             application
                 .launch(&[file], Some(&context))
-                .map_err(|_| NOT_ACCEPTED.to_owned())
+                .map_err(|_| ox_core::i18n::gettext_static(NOT_ACCEPTED).to_owned())
         }
         Launcher::DesktopPortal => gtk::FileLauncher::new(Some(&file))
             .launch_future(Some(window))
@@ -130,10 +136,10 @@ async fn launch(prepared: &PreparedOpen, window: &gtk::Window) -> Result<(), Str
 }
 
 /// Why the chosen application could not be found again to launch it.
-const NOT_INSTALLED: &str = "That application is no longer installed.";
+const NOT_INSTALLED: &str = crate::i18n::message_id("That application is no longer installed.");
 
 /// Why the chosen application did not open the file (`launch_default`).
-const NOT_ACCEPTED: &str = "The application did not accept this file.";
+const NOT_ACCEPTED: &str = crate::i18n::message_id("The application did not accept this file.");
 
 #[cfg(test)]
 mod tests {

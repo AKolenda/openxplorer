@@ -29,8 +29,8 @@ use super::breakpoints::WindowWidth;
 use super::menu_popover::{name_menu_button, MenuEntry, MenuPopover};
 use super::window_action::WindowAction;
 
-pub(super) use menus::new_menu;
-use menus::{appearance_items, more_menu, sort_menu, view_menu};
+use menus::{appearance_items, more_menu};
+pub(super) use menus::{new_menu, sort_menu, view_menu};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -65,49 +65,49 @@ const EDIT_COMMANDS: [IconCommand; 6] = [
     IconCommand {
         glyph: Icon::Cut,
         action: WindowAction::Cut,
-        name: "Cut",
-        tooltip: "Cut (Ctrl+X)",
+        name: crate::i18n::message_id("Cut"),
+        tooltip: crate::i18n::message_id("Cut (Ctrl+X)"),
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
         glyph: Icon::Copy,
         action: WindowAction::Copy,
-        name: "Copy",
-        tooltip: "Copy (Ctrl+C)",
+        name: crate::i18n::message_id("Copy"),
+        tooltip: crate::i18n::message_id("Copy (Ctrl+C)"),
         compact: InCompactWindow::Kept,
     },
     IconCommand {
         glyph: Icon::ClipboardPaste,
         action: WindowAction::Paste,
-        name: "Paste",
-        tooltip: "Paste files (Ctrl+V)",
+        name: crate::i18n::message_id("Paste"),
+        tooltip: crate::i18n::message_id("Paste files (Ctrl+V)"),
         compact: InCompactWindow::Kept,
     },
     IconCommand {
         glyph: Icon::Rename,
         action: WindowAction::Rename,
-        name: "Rename",
-        tooltip: "Rename (F2)",
+        name: crate::i18n::message_id("Rename"),
+        tooltip: crate::i18n::message_id("Rename (F2)"),
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
         glyph: Icon::Share,
         action: WindowAction::CopyPath,
-        name: "Copy path",
-        tooltip: "Copy path (does not change sharing permissions)",
+        name: crate::i18n::message_id("Copy path"),
+        tooltip: crate::i18n::message_id("Copy path (does not change sharing permissions)"),
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
         glyph: Icon::Delete,
         action: WindowAction::Trash,
-        name: "Move to Trash",
-        tooltip: "Move to Trash (Delete)",
+        name: crate::i18n::message_id("Move to Trash"),
+        tooltip: crate::i18n::message_id("Move to Trash (Delete)"),
         compact: InCompactWindow::Kept,
     },
 ];
 
 /// The tooltip of Settings.
-const SETTINGS_TOOLTIP: &str = "Settings (Ctrl+,)";
+const SETTINGS_TOOLTIP: &str = crate::i18n::message_id("Settings (Ctrl+,)");
 
 mod imp {
     use std::cell::{OnceCell, RefCell};
@@ -169,6 +169,7 @@ mod imp {
     impl ObjectImpl for CommandBar {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "command-bar.ui");
             let bar = self.obj();
             bar.add_file_commands();
             bar.finish_right_commands();
@@ -192,7 +193,12 @@ impl CommandBar {
     fn add_file_commands(&self) {
         let imp = self.imp();
         let group = &*imp.file_commands;
-        let new_button = text_menu_button("New", Icon::Add, "new-command", new_menu());
+        let new_button = text_menu_button(
+            &ox_core::i18n::gettext("New"),
+            Icon::Add,
+            "new-command",
+            new_menu(Vec::new()),
+        );
         group.append(&new_button);
         imp.new_button
             .set(new_button)
@@ -217,12 +223,17 @@ impl CommandBar {
             .set(extract)
             .expect("constructed runs once per object");
         group.append(&text_menu_button(
-            "Sort",
+            &ox_core::i18n::gettext("Sort"),
             Icon::ArrowSort,
             "sort-command",
             sort_menu(),
         ));
-        group.append(&text_menu_button("View", Icon::Grid, "view-command", view_menu()));
+        group.append(&text_menu_button(
+            &ox_core::i18n::gettext("View"),
+            Icon::Grid,
+            "view-command",
+            view_menu(),
+        ));
         group.append(&more_button());
     }
 
@@ -246,7 +257,9 @@ impl CommandBar {
     fn finish_settings_button(&self) {
         let settings = &*self.imp().settings_button;
         settings.set_child(Some(&icons::image(Icon::Settings, ICON_COMMAND_GLYPH)));
-        settings.set_tooltip_text(Some(SETTINGS_TOOLTIP));
+        settings.set_tooltip_text(Some(&ox_core::i18n::gettext(ox_core::i18n::gettext_static(
+            SETTINGS_TOOLTIP,
+        ))));
         WindowAction::Settings.assign_to(settings);
     }
 
@@ -264,7 +277,8 @@ impl CommandBar {
     fn show_appearance_glyph(&self, appearance: Appearance) {
         let imp = self.imp();
         icons::set_icon(&imp.appearance_glyph, appearance.icon(), TEXT_COMMAND_GLYPH);
-        imp.appearance_label.set_text(appearance.label());
+        imp.appearance_label
+            .set_text(&ox_core::i18n::gettext(appearance.label()));
     }
 
     /// Shows the drawn appearance on the theme button: a sun and "Light"
@@ -276,6 +290,12 @@ impl CommandBar {
     }
 
     /// Enables or disables New ▾ (`$('new').disabled` in app.js).
+    /// The New button's menu.
+    pub(super) fn new_menu_popover(&self) -> Option<MenuPopover> {
+        let button = self.imp().new_button.get()?;
+        button.popover().and_downcast::<MenuPopover>()
+    }
+
     pub(super) fn set_new_enabled(&self, enabled: bool) {
         if let Some(button) = self.imp().new_button.get() {
             button.set_sensitive(enabled);
@@ -288,7 +308,10 @@ impl CommandBar {
         let Some(button) = self.imp().delete_button.get() else {
             return;
         };
-        button.set_tooltip_text(Some(&format!("{label} (Delete)")));
+        button.set_tooltip_text(Some(&ox_core::i18n::format_message(
+            "{label} (Delete)",
+            &[("label", label)],
+        )));
         button.update_property(&[gtk::accessible::Property::Label(label)]);
     }
 
@@ -329,12 +352,14 @@ fn separator() -> gtk::Separator {
 fn icon_button(command: &IconCommand) -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::image(command.glyph, ICON_COMMAND_GLYPH))
-        .tooltip_text(command.tooltip)
+        .tooltip_text(ox_core::i18n::gettext(command.tooltip))
         .action_name(command.action.detailed_name())
         .valign(gtk::Align::Center)
         .css_classes(["command"])
         .build();
-    button.update_property(&[gtk::accessible::Property::Label(command.name)]);
+    button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        command.name,
+    ))]);
     button
 }
 
@@ -366,27 +391,106 @@ fn text_menu_button(label: &str, glyph: Icon, css_class: &str, entries: Vec<Menu
 fn extract_all_button() -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     content.append(&icons::image(Icon::FolderZip, TEXT_COMMAND_GLYPH));
-    content.append(&gtk::Label::new(Some("Extract all")));
+    content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Extract all"))));
     let button = gtk::Button::builder()
         .child(&content)
-        .tooltip_text("Extract all files from this ZIP")
+        .tooltip_text(ox_core::i18n::gettext("Extract all files from this ZIP"))
         .action_name(WindowAction::ExtractAll.detailed_name())
         .valign(gtk::Align::Center)
         .visible(false)
         .css_classes(["command", "text-command", "extract-command"])
         .build();
-    button.update_property(&[gtk::accessible::Property::Label("Extract all")]);
+    button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "Extract all",
+    ))]);
     button
 }
 
 fn more_button() -> gtk::MenuButton {
     let button = gtk::MenuButton::builder()
         .child(&icons::image(Icon::MoreHorizontal, ICON_COMMAND_GLYPH))
-        .tooltip_text("More options")
+        .tooltip_text(ox_core::i18n::gettext("More options"))
         .popover(&MenuPopover::new(more_menu()))
         .valign(gtk::Align::Center)
         .css_classes(["command", "more-command"])
         .build();
-    name_menu_button(&button, "More options");
+    name_menu_button(&button, &ox_core::i18n::gettext("More options"));
     button
+}
+
+#[cfg(test)]
+mod translation_tests {
+    use ox_core::i18n::{Catalog, DOMAIN};
+
+    use super::*;
+    use crate::i18n::translate_properties;
+
+    fn label(widget: &gtk::Widget) -> Option<gtk::Label> {
+        if widget.buildable_id().as_deref() == Some("i18n_1") {
+            return widget.clone().downcast().ok();
+        }
+        let mut child = widget.first_child();
+        while let Some(current) = child {
+            child = current.next_sibling();
+            if let Some(found) = label(&current) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    /// A real composite-template widget uses the selected catalogue for
+    /// static text. Metacharacters stay literal, and entry data stays intact.
+    ///
+    /// parity: INT-031
+    #[gtk::test]
+    fn marked_template_text_uses_the_selected_catalogue() {
+        let temporary = tempfile::tempdir().expect("a private locale folder");
+        let locale = temporary.path().join("test/LC_MESSAGES");
+        std::fs::create_dir_all(&locale).expect("the test locale");
+        let message = "Details";
+        let translated = "Locale <&> details";
+        let bytes = one_message_catalogue(message, translated);
+        std::fs::write(locale.join(format!("{DOMAIN}.mo")), bytes).expect("the test catalogue");
+        let catalog = Catalog::find(DOMAIN, &[temporary.path().to_owned()], &["test".to_owned()])
+            .expect("the requested locale is found");
+        let bar: CommandBar = glib::Object::new();
+        let entry = gtk::Entry::new();
+        entry.set_text(message);
+        bar.append(&entry);
+        translate_properties(bar.upcast_ref(), "command-bar.ui", &|message| {
+            catalog.gettext(message)
+        });
+        let label = label(bar.upcast_ref()).expect("the actual template label");
+        assert_eq!(label.text(), translated);
+        assert_eq!(entry.text(), message, "entry contents are never translated");
+    }
+
+    /// A one-message GNU MO fixture, with an obvious sentinel rather
+    /// than an invented translation committed as a real language.
+    fn one_message_catalogue(message: &str, translated: &str) -> Vec<u8> {
+        let length = |text: &str| u32::try_from(text.len()).expect("a tiny test message");
+        let mut bytes = Vec::new();
+        let header = [
+            0x9504_12de,
+            0,
+            1,
+            28,
+            36,
+            0,
+            0,
+            length(message),
+            44,
+            length(translated),
+            45 + length(message),
+        ];
+        for word in header {
+            bytes.extend(word.to_le_bytes());
+        }
+        bytes.extend(message.as_bytes());
+        bytes.push(0);
+        bytes.extend(translated.as_bytes());
+        bytes.push(0);
+        bytes
+    }
 }

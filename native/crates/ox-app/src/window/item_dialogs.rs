@@ -22,7 +22,7 @@ use gtk::{gio, glib};
 use ox_core::location::{same_location, ItemKind};
 use ox_core::versions::SnapshotLocation;
 
-use crate::dialog_layer::{quiet_text, DialogFrame, DialogLayer, DialogWidth};
+use crate::dialog::{quiet_text, DialogFrame, DialogLayer, DialogWidth};
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::properties::{
@@ -267,7 +267,7 @@ impl BrowserWindow {
         };
         self.discard_dialog_of_tab(owner);
         frame.add_css_class("properties-dialog");
-        frame.add_closing_button("Close", ButtonStyle::Accent, || {});
+        frame.add_closing_button(&ox_core::i18n::gettext("Close"), ButtonStyle::Accent, || {});
         frame.connect_closed(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -430,17 +430,19 @@ impl BrowserWindow {
     pub(super) fn show_result_dialog(&self, title: &str, text: &str) {
         let frame = DialogFrame::new(title, DialogWidth::Standard);
         frame.body().append(&quiet_text(text));
-        frame.add_closing_button("OK", ButtonStyle::Accent, || {});
+        frame.add_closing_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent, || {});
         self.present_window_dialog(&frame);
     }
 
     /// Shows the new icon of the item at `uri` in the folder view
     /// (PROP-016).
     pub(crate) fn refresh_item_icon(&self, uri: &str) {
-        self.folder_pane().owners().refresh_custom_icon(uri);
+        for pane in self.folder_panes() {
+            pane.owners().refresh_custom_icon(uri);
+        }
     }
 
-    /// Lists again every tab showing `folder`, keeping their selection,
+    /// Lists again every tab and split pane showing `folder`, keeping their selection,
     /// after something was written there; the search cache reads it
     /// again too (SRCH-033).
     pub(super) fn reload_tabs_showing(&self, folder: &str) {
@@ -448,10 +450,7 @@ impl BrowserWindow {
         self.context().search_cache().folders_written(changed);
         let tabs: Vec<TabId> = {
             let session = self.imp().session.borrow();
-            let showing = session
-                .tabs()
-                .iter()
-                .filter(|tab| same_location(tab.uri(), folder));
+            let showing = session.panes().filter(|tab| same_location(tab.uri(), folder));
             showing.map(|tab| tab.id).collect()
         };
         for id in tabs {

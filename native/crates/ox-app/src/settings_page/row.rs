@@ -11,6 +11,7 @@ use std::cell::{Cell, OnceCell};
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::i18n::gettext;
 
 use super::search::{jump_to, shown_text, RowText, SearchQuery};
 use crate::window::children;
@@ -83,7 +84,12 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for SettingRow {}
+    impl ObjectImpl for SettingRow {
+        fn constructed(&self) {
+            self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "settings-row.ui");
+        }
+    }
     impl WidgetImpl for SettingRow {}
     impl BoxImpl for SettingRow {}
 }
@@ -100,8 +106,8 @@ impl SettingRow {
     pub(crate) fn new(text: RowText) -> Self {
         let row: Self = glib::Object::new();
         let imp = row.imp();
-        imp.title_label.set_text(text.title);
-        imp.description_label.set_text(text.description);
+        imp.title_label.set_text(&gettext(text.title));
+        imp.description_label.set_text(&gettext(text.description));
         imp.description_label.set_visible(!text.description.is_empty());
         imp.text.set(text).expect("a new row has no text yet");
         row

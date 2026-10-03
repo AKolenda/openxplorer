@@ -43,10 +43,15 @@ pub(crate) struct DraggedItems(pub(crate) Vec<String>);
 pub(crate) enum DragRefusal {
     /// No items, more than [`MAX_DRAGGED_ITEMS`], or an item that may not
     /// leave: a ZIP member, a share listing, a server, a special file.
-    #[error("Select up to 200 files or folders. Extract ZIP contents before dragging them.")]
+    #[error(
+        "{}",
+        ox_core::i18n::gettext(
+            "Select up to 200 files or folders. Extract ZIP contents before dragging them."
+        )
+    )]
     NotDraggable,
     /// The addresses and paths are over [`MAX_PAYLOAD_BYTES`].
-    #[error("This file selection is too large to drag.")]
+    #[error("{}", ox_core::i18n::gettext("This file selection is too large to drag."))]
     TooLarge,
 }
 

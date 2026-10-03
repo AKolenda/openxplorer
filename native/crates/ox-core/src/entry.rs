@@ -29,6 +29,7 @@ mod enumerate;
 mod error;
 mod info;
 mod inspect;
+mod meta;
 #[cfg(test)]
 mod test_support;
 mod thumbnail;
@@ -38,7 +39,10 @@ pub use enumerate::enumerate_folder;
 pub use error::EntryError;
 pub use info::entry_from_info;
 pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
-pub use thumbnail::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
+pub use meta::EntryMeta;
+pub use thumbnail::{
+    cached_thumbnail, thumbnail_file, thumbnail_path, CachedThumbnail, ThumbnailFlavor, THUMBNAIL_ATTRIBUTES,
+};
 
 use std::path::PathBuf;
 
@@ -53,9 +57,11 @@ use gio::prelude::Cast;
 pub const ATTRIBUTES: &str = concat!(
     "standard::name,standard::display-name,standard::type,standard::is-hidden,",
     "standard::is-symlink,standard::size,standard::content-type,standard::target-uri,",
-    "standard::is-virtual,standard::icon,time::modified,",
+    "standard::is-virtual,standard::icon,time::modified,time::created,owner::user,unix::mode,",
     "access::can-rename,access::can-trash,access::can-delete,access::can-write,",
-    "trash::orig-path,trash::deletion-date",
+    "trash::orig-path,trash::deletion-date,",
+    // EntryMeta, for the further sort keys (VIEW-019).
+    "time::created,time::access,owner::user,owner::group,unix::mode,standard::symlink-target",
 );
 
 /// What GIO says an item is (`standard::type`).
@@ -174,6 +180,9 @@ pub struct Entry {
     /// `standard::icon`, serialized with `g_icon_serialize` because a
     /// `GIcon` cannot cross threads. Use [`Entry::icon`].
     pub serialized_icon: Option<glib::Variant>,
+    /// The other times, the owner, the permissions and a link's target;
+    /// boxed, as most code never reads them.
+    pub meta: Box<EntryMeta>,
 }
 
 impl Entry {
@@ -233,6 +242,9 @@ impl Entry {
             // whole ZIP is read-only, which the commands say.
             can_write: None,
             serialized_icon,
+            // Owner, permissions and the like belong to the ZIP, not to its
+            // members.
+            meta: Box::default(),
         }
     }
 

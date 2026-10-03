@@ -51,7 +51,12 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for SettingsGroup {}
+    impl ObjectImpl for SettingsGroup {
+        fn constructed(&self) {
+            self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "settings-group.ui");
+        }
+    }
     impl WidgetImpl for SettingsGroup {}
     impl BoxImpl for SettingsGroup {}
 }

@@ -34,6 +34,7 @@ use ox_core::location::same_location;
 
 use crate::icons::{self, Icon};
 
+use super::folder_tree::FolderTree;
 use super::menu_popover::MenuPopover;
 use super::window_action::WindowAction;
 use super::{gestures, preferences};
@@ -68,13 +69,15 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{HiddenRow, MenuPopover, SidebarEntry};
+    use super::{FolderTree, HiddenRow, MenuPopover, SidebarEntry};
 
     /// Private state of [`super::Sidebar`].
     #[derive(Debug, Default)]
     pub(crate) struct Sidebar {
         /// The rows, built by `constructed`.
         pub(super) list: OnceCell<gtk::ListBox>,
+        /// The folder tree below them (SIDE-028).
+        pub(super) folder_tree: OnceCell<FolderTree>,
         /// What each row shows and does, in row order.
         pub(super) entries: RefCell<Vec<SidebarEntry>>,
         /// The rows' context menu, built by `constructed`.
@@ -124,16 +127,28 @@ impl Sidebar {
         self.imp().list.get().expect("constructed builds the list")
     }
 
+    /// The folder tree below the places.
+    pub(super) fn folder_tree(&self) -> &FolderTree {
+        self.imp()
+            .folder_tree
+            .get()
+            .expect("constructed builds the folder tree")
+    }
+
     /// Builds the list and, below it, the footer into the pane.
     fn build_pane(&self) {
         self.set_orientation(gtk::Orientation::Vertical);
         self.add_css_class("sidebar");
-        self.update_property(&[gtk::accessible::Property::Label("Folders and network locations")]);
+        self.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Folders and network locations",
+        ))]);
         let list = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::Single)
             .activate_on_single_click(true)
             .build();
-        list.update_property(&[gtk::accessible::Property::Label("Navigation pane")]);
+        list.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Navigation pane",
+        ))]);
         self.separate_sections(&list);
         self.open_places_on_middle_click(&list);
         self.open_places_in_tabs_on_ctrl_click(&list);
@@ -145,11 +160,22 @@ impl Sidebar {
             .vexpand(true)
             .child(&list)
             .build();
-        self.append(&scroller);
+        // The folder tree, while shown, takes the lower part (SIDE-028).
+        let folder_tree = FolderTree::default();
+        let panes = gtk::Paned::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .start_child(&scroller)
+            .end_child(&folder_tree)
+            .shrink_start_child(false)
+            .shrink_end_child(false)
+            .vexpand(true)
+            .build();
+        self.append(&panes);
         self.append(&map_network_button());
-        self.imp()
-            .list
-            .set(list)
+        let imp = self.imp();
+        imp.list.set(list).expect("constructed runs once per object");
+        imp.folder_tree
+            .set(folder_tree)
             .expect("constructed runs once per object");
     }
 
@@ -487,11 +513,13 @@ fn section_separator() -> gtk::Separator {
 fn map_network_button() -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 11);
     content.append(&icons::image(Icon::Add, MAP_NETWORK_GLYPH));
-    content.append(&gtk::Label::new(Some("Map network location")));
+    content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext(
+        "Map network location",
+    ))));
     let button = gtk::Button::builder()
         .child(&content)
         .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text("Map network location")
+        .tooltip_text(ox_core::i18n::gettext("Map network location"))
         .build();
     let footer = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)

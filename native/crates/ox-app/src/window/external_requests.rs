@@ -21,7 +21,7 @@ use crate::properties::PropertiesTab;
 
 use super::activation::IncomingTab;
 use super::loading::LoadMode;
-use super::session::{TabId, TabPlacement};
+use super::session::TabId;
 use super::BrowserWindow;
 
 /// The requested items, grouped by the folder that holds them, in the
@@ -86,7 +86,7 @@ impl BrowserWindow {
     /// Opens `folder` in a new tab in front, saying in the message line
     /// why an address cannot be opened.
     fn open_folder_tab(&self, folder: &str) {
-        if let Err(error) = self.open_tab(folder, TabPlacement::Foreground) {
+        if let Err(error) = self.add_tab(folder) {
             self.show_message(&error.to_string());
         }
     }
@@ -107,7 +107,7 @@ impl BrowserWindow {
     /// Opens `folder` in a new tab in front with `items` selected once it
     /// is listed.
     fn select_in_new_tab(&self, folder: &str, items: Vec<String>) {
-        if let Err(error) = self.open_tab(folder, TabPlacement::Foreground) {
+        if let Err(error) = self.add_tab(folder) {
             self.show_message(&error.to_string());
             return;
         }

@@ -25,9 +25,9 @@ use crate::integration::{DesktopIntegration, IntegrationError, IntegrationStatus
 /// The status card's title once the defaults are read.
 fn status_title(is_default: bool) -> &'static str {
     if is_default {
-        "OpenXplorer is your default file explorer"
+        ox_core::i18n::gettext_static("OpenXplorer is your default file explorer")
     } else {
-        "OpenXplorer isn't your default file explorer yet"
+        ox_core::i18n::gettext_static("OpenXplorer isn't your default file explorer yet")
     }
 }
 

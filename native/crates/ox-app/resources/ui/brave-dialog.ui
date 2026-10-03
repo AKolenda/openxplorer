@@ -11,7 +11,7 @@
 <interface>
   <requires lib="gtk" version="4.14"/>
   <template class="OxBraveDialog" parent="GtkWindow">
-    <property name="title">Use this Downloads folder in Brave</property>
+    <property name="title" translatable="yes">Use this Downloads folder in Brave</property>
     <property name="modal">true</property>
     <property name="resizable">false</property>
     <property name="destroy-with-parent">true</property>
@@ -46,8 +46,8 @@
                       <class name="dialog-content"/>
                     </style>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">Use this Downloads folder in Brave</property>
+                      <object class="GtkLabel" id="i18n_1">
+                        <property name="label" translatable="yes">Use this Downloads folder in Brave</property>
                         <property name="xalign">0</property>
                         <property name="wrap">true</property>
                         <style>
@@ -56,8 +56,8 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">One-time sync. Quit Brave before applying. Your browser’s other settings are left alone.</property>
+                      <object class="GtkLabel" id="i18n_2">
+                        <property name="label" translatable="yes">One-time sync. Quit Brave before applying. Your browser’s other settings are left alone.</property>
                         <property name="xalign">0</property>
                         <property name="wrap">true</property>
                         <property name="max-width-chars">60</property>
@@ -80,7 +80,7 @@
                     </child>
                     <child>
                       <object class="GtkLabel" id="status_label">
-                        <property name="label">Checking native Brave profiles…</property>
+                        <property name="label" translatable="yes">Checking native Brave profiles…</property>
                         <property name="xalign">0</property>
                         <property name="wrap">true</property>
                         <property name="max-width-chars">60</property>
@@ -100,7 +100,7 @@
                     </child>
                     <child>
                       <object class="GtkButton" id="recheck_button">
-                        <property name="label">Recheck profiles</property>
+                        <property name="label" translatable="yes">Recheck profiles</property>
                         <property name="halign">start</property>
                         <property name="margin-top">12</property>
                         <style>
@@ -110,15 +110,15 @@
                     </child>
                     <child>
                       <object class="GtkCheckButton" id="consent_check">
-                        <property name="label">Back up and update the selected Brave profiles.</property>
+                        <property name="label" translatable="yes">Back up and update the selected Brave profiles.</property>
                         <style>
                           <class name="dialog-check"/>
                         </style>
                       </object>
                     </child>
                     <child>
-                      <object class="GtkLabel">
-                        <property name="label">Only detected native profiles are changed. Passwords and account data are not shown here. Backups remain private in your OpenXplorer configuration directory.</property>
+                      <object class="GtkLabel" id="i18n_3">
+                        <property name="label" translatable="yes">Only detected native profiles are changed. Passwords and account data are not shown here. Backups remain private in your OpenXplorer configuration directory.</property>
                         <property name="xalign">0</property>
                         <property name="wrap">true</property>
                         <property name="max-width-chars">60</property>
@@ -143,7 +143,7 @@
                     <property name="spacing">8</property>
                     <child>
                       <object class="GtkButton" id="cancel_button">
-                        <property name="label">Cancel</property>
+                        <property name="label" translatable="yes">Cancel</property>
                         <style>
                           <class name="bordered"/>
                           <class name="dialog-button"/>
@@ -152,7 +152,7 @@
                     </child>
                     <child>
                       <object class="GtkButton" id="restore_button">
-                        <property name="label">Restore previous</property>
+                        <property name="label" translatable="yes">Restore previous</property>
                         <style>
                           <class name="bordered"/>
                           <class name="dialog-button"/>
@@ -161,7 +161,7 @@
                     </child>
                     <child>
                       <object class="GtkButton" id="apply_button">
-                        <property name="label">Apply to Brave</property>
+                        <property name="label" translatable="yes">Apply to Brave</property>
                         <style>
                           <class name="accent"/>
                           <class name="dialog-button"/>

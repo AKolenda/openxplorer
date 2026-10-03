@@ -33,8 +33,8 @@ impl JournalDirection {
     /// The command's name, `Undo` or `Redo`.
     pub fn command_name(self) -> &'static str {
         match self {
-            JournalDirection::Undo => "Undo",
-            JournalDirection::Redo => "Redo",
+            JournalDirection::Undo => crate::i18n::gettext_static("Undo"),
+            JournalDirection::Redo => crate::i18n::gettext_static("Redo"),
         }
     }
 
@@ -72,7 +72,10 @@ impl JournalEntry {
 
     /// The command label for this step, such as `Undo: Rename`.
     pub fn label(&self, direction: JournalDirection) -> String {
-        format!("{}: {}", direction.command_name(), self.title)
+        crate::i18n::format_message(
+            "{command}: {title}",
+            &[("command", direction.command_name()), ("title", self.title)],
+        )
     }
 }
 

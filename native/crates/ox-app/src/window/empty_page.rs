@@ -98,7 +98,7 @@ impl EmptyPage {
         message.set_max_width_chars(MESSAGE_WIDTH_CHARS);
         message.set_selectable(true);
         let retry = gtk::Button::builder()
-            .label("Try again")
+            .label(ox_core::i18n::gettext("Try again"))
             .action_name(WindowAction::Refresh.detailed_name())
             .halign(gtk::Align::Center)
             .css_classes([ButtonStyle::Bordered.css_class()])
@@ -126,12 +126,24 @@ impl EmptyPage {
         };
         icons::set_icon(&self.icon, glyph, STATE_GLYPH);
         let (title, message) = match state {
-            EmptyState::Unavailable(error) => ("This location is unavailable", error.as_str()),
-            EmptyState::NoMatches(reason) => ("No matching items", reason.as_str()),
-            EmptyState::EmptyFolder => ("This folder is empty", "Create a folder or paste files here."),
-            EmptyState::EmptyRecycleBin => ("Recycle Bin is empty", ""),
-            EmptyState::NoShares => ("No shared folders found", ""),
-            EmptyState::NoDevices => ("No MTP-compatible devices found", ""),
+            EmptyState::Unavailable(error) => (
+                ox_core::i18n::gettext_static("This location is unavailable"),
+                error.as_str(),
+            ),
+            EmptyState::NoMatches(reason) => (
+                ox_core::i18n::gettext_static("No matching items"),
+                reason.as_str(),
+            ),
+            EmptyState::EmptyFolder => (
+                ox_core::i18n::gettext_static("This folder is empty"),
+                ox_core::i18n::gettext_static("Create a folder or paste files here."),
+            ),
+            EmptyState::EmptyRecycleBin => (ox_core::i18n::gettext_static("Recycle Bin is empty"), ""),
+            EmptyState::NoShares => (ox_core::i18n::gettext_static("No shared folders found"), ""),
+            EmptyState::NoDevices => (
+                ox_core::i18n::gettext_static("No MTP-compatible devices found"),
+                "",
+            ),
         };
         self.title.set_text(title);
         self.message.set_text(message);

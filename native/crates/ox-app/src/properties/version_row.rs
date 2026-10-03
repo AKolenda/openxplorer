@@ -113,8 +113,11 @@ fn date_cell(version: &PreviousVersion) -> gtk::Box {
         .css_classes(["version-date"])
         .build();
     let Some(date) = version.date() else {
-        cell.set_tooltip_text(Some(NO_DATE_EXPLANATION));
-        cell.append(&ellipsized(DATE_UNAVAILABLE, "version-calendar-date"));
+        cell.set_tooltip_text(Some(ox_core::i18n::gettext_static(NO_DATE_EXPLANATION)));
+        cell.append(&ellipsized(
+            ox_core::i18n::gettext_static(DATE_UNAVAILABLE),
+            "version-calendar-date",
+        ));
         return cell;
     };
     cell.set_tooltip_text(Some(date.explanation()));
@@ -152,12 +155,12 @@ fn actions(version: &PreviousVersion) -> gtk::Box {
         .css_classes(["version-actions"])
         .build();
     if version.entry.is_dir {
-        let browse = row_button("Browse", Icon::Folder);
+        let browse = row_button(ox_core::i18n::gettext_static("Browse"), Icon::Folder);
         let target = SnapshotTarget::of_version(version).to_variant();
         WindowAction::BrowseSnapshot.assign_with_target_to(&browse, &target);
         actions.append(&browse);
     }
-    let restore = row_button("Restore a copy…", Icon::Copy);
+    let restore = row_button(ox_core::i18n::gettext_static("Restore a copy…"), Icon::Copy);
     let request = super::RestoreRequest::of_version(version).to_variant();
     WindowAction::RestoreVersion.assign_with_target_to(&restore, &request);
     actions.append(&restore);

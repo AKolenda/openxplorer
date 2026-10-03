@@ -32,7 +32,7 @@ const SERVICE_OPTION: &str = "--filemanager-service";
 
 /// Why the Flatpak asks to start at login, which the portal may show.
 const AUTOSTART_REASON: &str =
-    "Answer Show in folder requests from browsers and other apps after you log in.";
+    crate::i18n::message_id("Answer Show in folder requests from browsers and other apps after you log in.");
 
 /// Why a change to the defaults or Show in folder failed. `Display` is
 /// the message the window shows.
@@ -52,15 +52,18 @@ pub(crate) enum IntegrationError {
     Registration(#[from] RegistrationFailed),
     /// The test needs the service to own the name first (`revealTest`).
     #[error(
-        "OpenXplorer does not own Show in folder yet. Close other file managers, or log out and back in \
+        "{}",
+        ox_core::i18n::gettext(
+            "OpenXplorer does not own Show in folder yet. Close other file managers, or log out and back in \
          after enabling."
+        )
     )]
     NotOwner,
     /// The test request was not answered.
     #[error("{0}")]
     TestFailed(glib::Error),
     /// The application is not on the session bus, which the service needs.
-    #[error("Show in folder needs the desktop session bus.")]
+    #[error("{}", ox_core::i18n::gettext("Show in folder needs the desktop session bus."))]
     NoApplication,
 }
 
@@ -80,9 +83,10 @@ impl ShowInFolderReach {
     pub(crate) fn message(&self) -> Option<String> {
         match self {
             Self::Always => None,
-            Self::WhileRunning(error) => {
-                Some(format!("Show in folder answers while OpenXplorer runs. {error}"))
-            }
+            Self::WhileRunning(error) => Some(ox_core::i18n::format_message(
+                "Show in folder answers while OpenXplorer runs. {error}",
+                &[("error", &error.to_string())],
+            )),
         }
     }
 }
@@ -113,10 +117,13 @@ impl ChangeOutcome {
     pub(crate) fn message(&self) -> String {
         match self {
             Self::Done(message) => (*message).to_owned(),
-            Self::ShowInFolderFailed(error) => {
-                format!("File handlers updated, but Show in folder setup failed: {error}")
+            Self::ShowInFolderFailed(error) => ox_core::i18n::format_message(
+                "File handlers updated, but Show in folder setup failed: {error}",
+                &[("error", error)],
+            ),
+            Self::ShowInFolderWhileRunning(note) => {
+                ox_core::i18n::format_message("File handlers updated. {note}", &[("note", note)])
             }
-            Self::ShowInFolderWhileRunning(note) => format!("File handlers updated. {note}"),
         }
     }
 }
@@ -147,9 +154,9 @@ impl DesktopIntegration {
                 }
             }
         }
-        Ok(ChangeOutcome::Done(
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
             "Requested associations updated. Review each status below.",
-        ))
+        )))
     }
 
     /// Puts every recorded handler back where the app is still the
@@ -165,7 +172,9 @@ impl DesktopIntegration {
             .run_in_background(|defaults| defaults.restore(RestoreScope::Everything))
             .await?;
         self.disable_show_in_folder().await?;
-        Ok(ChangeOutcome::Done("Previous recorded handlers restored."))
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
+            "Previous recorded handlers restored.",
+        )))
     }
 
     /// Makes the app the default for every ZIP type (`zipDefault`).
@@ -176,7 +185,9 @@ impl DesktopIntegration {
     pub(crate) async fn make_zip_default(&self) -> Result<ChangeOutcome, IntegrationError> {
         let defaults = &self.services().defaults;
         defaults.run_in_background(DefaultApps::make_zip_default).await?;
-        Ok(ChangeOutcome::Done("ZIP files now open in OpenXplorer."))
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
+            "ZIP files now open in OpenXplorer.",
+        )))
     }
 
     /// Gives ZIP files back to their recorded handler (`zipRestore`).
@@ -189,7 +200,9 @@ impl DesktopIntegration {
         defaults
             .run_in_background(|defaults| defaults.restore(RestoreScope::ZipOnly))
             .await?;
-        Ok(ChangeOutcome::Done("Previous ZIP handlers restored."))
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
+            "Previous ZIP handlers restored.",
+        )))
     }
 
     /// Writes the two Show in folder session files and starts answering
@@ -247,7 +260,7 @@ impl DesktopIntegration {
         let request = AutostartRequest {
             autostart,
             commandline: service_commandline(),
-            reason: AUTOSTART_REASON.to_owned(),
+            reason: ox_core::i18n::gettext_static(AUTOSTART_REASON).to_owned(),
         };
         let result = request_autostart(&connection, &self.services().background_portal, &request).await;
         if let Err(BackgroundError::Unavailable(error)) = &result {
@@ -285,7 +298,9 @@ impl DesktopIntegration {
             TEST_TIMEOUT_MS,
         );
         call.await.map_err(IntegrationError::TestFailed)?;
-        Ok(ChangeOutcome::Done("Test request sent through FileManager1."))
+        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
+            "Test request sent through FileManager1.",
+        )))
     }
 }
 

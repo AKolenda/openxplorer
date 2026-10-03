@@ -35,7 +35,10 @@ pub(crate) fn style_titles(view: &gtk::ColumnView) -> Vec<gtk::Image> {
         glib::g_warning!(LOG_DOMAIN, "The column titles have an unexpected structure");
         return Vec::new();
     }
-    if let Some(size_title) = titles.last() {
+    let size = SortColumn::ALL
+        .iter()
+        .position(|column| *column == SortColumn::Size);
+    if let Some(size_title) = size.and_then(|size| titles.get(size)) {
         // `.column:last-child .column-label{justify-content:flex-end}`,
         // with the arrow kept beside the text.
         size_title.set_halign(gtk::Align::End);

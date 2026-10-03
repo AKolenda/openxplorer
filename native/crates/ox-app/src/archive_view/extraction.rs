@@ -12,7 +12,7 @@
 use ox_core::archive::{ArchiveError, ExtractedFolder};
 
 /// The title of the dialog of a failed extraction.
-pub(crate) const EXTRACTION_STOPPED: &str = "Extraction stopped";
+pub(crate) const EXTRACTION_STOPPED: &str = crate::i18n::message_id("Extraction stopped");
 
 /// How many names Extract here tries before it gives up.
 const MAX_NAME_TRIES: u32 = 100;
@@ -20,14 +20,20 @@ const MAX_NAME_TRIES: u32 = 100;
 /// The text of "Extraction stopped": the reason, then that the archive
 /// and existing files were not touched.
 pub(crate) fn extraction_failure_text(error: &ArchiveError) -> String {
-    format!("{error}\n\nThe ZIP is unchanged. Existing files were not overwritten.")
+    ox_core::i18n::format_message(
+        "{error}\n\nThe ZIP is unchanged. Existing files were not overwritten.",
+        &[("error", &error.to_string())],
+    )
 }
 
 /// The toast after an extraction: `Extracted 3 files into Assets.`
 pub(crate) fn extraction_success_text(folder: &ExtractedFolder) -> String {
-    format!(
-        "Extracted {} files into {}.",
-        folder.summary.file_count, folder.name
+    ox_core::i18n::format_message(
+        "Extracted {file_count} files into {name}.",
+        &[
+            ("file_count", &folder.summary.file_count.to_string()),
+            ("name", &folder.name),
+        ],
     )
 }
 

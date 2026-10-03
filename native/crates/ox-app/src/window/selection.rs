@@ -16,7 +16,7 @@ use ox_core::location::is_smb_location;
 use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts};
-use super::status_bar::StatusSubject;
+use super::status_bar::{self, StatusSubject};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -53,19 +53,33 @@ impl BrowserWindow {
     }
 
     /// Updates the status bar and the details pane whenever the selection
-    /// or the shown items change.
+    /// or the shown items of the active pane change.
     pub(super) fn follow_selection(&self) {
-        let model = self.folder_pane().model();
-        model.selection().connect_selection_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _, _| window.selection_changed()
-        ));
-        model.sorted().connect_items_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _, _, _| window.update_status()
-        ));
+        for pane in self.folder_panes() {
+            let model = pane.model();
+            model.selection().connect_selection_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                pane,
+                move |_, _, _| {
+                    if window.is_active_pane(&pane) {
+                        window.selection_changed();
+                    }
+                }
+            ));
+            model.selection().connect_items_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[weak]
+                pane,
+                move |_, _, _, _| {
+                    if window.is_active_pane(&pane) {
+                        window.update_status();
+                    }
+                }
+            ));
+        }
     }
 
     fn selection_changed(&self) {
@@ -77,11 +91,10 @@ impl BrowserWindow {
         self.follow_quick_look();
         let selected = self.folder_pane().model().summary().count;
         self.set_action_enabled(WindowAction::Open, selected >= 1);
-        // Copy path copies one item, or the folder when none is selected.
-        self.set_action_enabled(WindowAction::CopyPath, selected <= 1);
         self.set_action_enabled(WindowAction::PinSelected, selected == 1);
         self.update_file_commands();
         self.update_open_location_action(selected);
+        self.update_show_target_action();
         self.update_properties_actions();
         self.update_size_actions();
         self.update_archive_actions();
@@ -121,11 +134,17 @@ impl BrowserWindow {
         } else {
             StatusSubject::Folder {
                 shown,
+                bytes: self.folder_pane().model().shown_file_bytes(),
                 loading: self.is_loading() && self.folder_pane().shows_loading_line(),
             }
         };
-        let selected = self.folder_pane().model().summary();
-        self.status_bar().set_counts(subject, selected);
+        let model = self.folder_pane().model();
+        let selected = model.summary();
+        let single = (selected.count == 1)
+            .then(|| model.selected_items().first().map(status_bar::item_text))
+            .flatten();
+        self.status_bar().set_counts(subject, selected, single);
+        self.show_watch_state();
     }
 
     /// Shows the selection's properties, or the folder's, in the details

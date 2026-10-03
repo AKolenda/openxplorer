@@ -27,7 +27,7 @@
                   <class name="tabs"/>
                 </style>
                 <accessibility>
-                  <property name="label">Folder tabs</property>
+                  <property name="label" translatable="yes">Folder tabs</property>
                 </accessibility>
               </object>
             </property>

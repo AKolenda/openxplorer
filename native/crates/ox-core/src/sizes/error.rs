@@ -16,13 +16,19 @@ pub enum SizeError {
     #[error(transparent)]
     Location(#[from] LocationError),
     /// A whole SMB server holds shares, which are measured one at a time.
-    #[error("Open or select a share first, not the whole SMB server.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Open or select a share first, not the whole SMB server.")
+    )]
     ServerRoot,
     /// An entry or time limit of zero.
-    #[error("Scan limits must be positive.")]
+    #[error("{}", crate::i18n::gettext("Scan limits must be positive."))]
     InvalidLimits,
     /// Only a real folder is measured, never a file or a link to a folder.
-    #[error("Select a directory, not a file or symbolic link.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Select a directory, not a file or symbolic link.")
+    )]
     NotAFolder,
     /// The scanned folder itself could not be read. When
     /// [`EntryError::needs_mount`] is true, mount the location and scan

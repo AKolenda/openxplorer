@@ -56,9 +56,9 @@ impl GioNode {
         cancel: Option<&Cancellation>,
     ) -> Result<Vec<Box<dyn Node>>, TransferError> {
         if self.query_info(cancel)?.kind != NodeKind::Directory {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "Only real folders can be enumerated during a transfer.",
-            ));
+            )));
         }
         let files = enumerate_files(&self.file, cancel)?;
         let children = files
@@ -122,7 +122,9 @@ pub(super) fn enumerate_files(
         return Err(error.into());
     }
     if !closed {
-        return Err(TransferError::failed("The folder listing could not be closed."));
+        return Err(TransferError::failed(crate::i18n::gettext(
+            "The folder listing could not be closed.",
+        )));
     }
     Ok(files)
 }

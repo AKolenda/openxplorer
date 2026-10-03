@@ -62,44 +62,64 @@ pub enum RelocationError {
     Address(#[from] LocationError),
     /// An `smb://` address without a kernel mount of its share.
     #[error(
-        "This SMB folder is not mounted at a stable Linux path. Use “Set up network mount”, or mount it \
+        "{}",
+        crate::i18n::gettext(
+            "This SMB folder is not mounted at a stable Linux path. Use “Set up network mount”, or mount it \
          with CIFS first. A sidebar bookmark alone is not enough."
+        )
     )]
     NotMounted,
     /// Under `/run`, `/tmp` or `/var/tmp`.
-    #[error("Use a persistent location, not a temporary or per-login GVfs path.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Use a persistent location, not a temporary or per-login GVfs path.")
+    )]
     Temporary,
     /// On a `GVfs` FUSE mount.
-    #[error("GVfs session paths cannot be used as persistent standard folders.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("GVfs session paths cannot be used as persistent standard folders.")
+    )]
     GvfsSession,
     /// Missing, or not a folder.
-    #[error("The new location must be an existing folder.")]
+    #[error("{}", crate::i18n::gettext("The new location must be an existing folder."))]
     NotAFolder,
     /// The home folder itself or `/`.
-    #[error("Choose a dedicated folder, not your entire home directory or the filesystem root.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "Choose a dedicated folder, not your entire home directory or the filesystem root."
+        )
+    )]
     WholeHomeOrRoot,
     /// Not writable or not enterable by this user.
-    #[error("You do not have write access to this folder.")]
+    #[error("{}", crate::i18n::gettext("You do not have write access to this folder."))]
     NotWritable,
     /// The path could not be resolved for another reason.
-    #[error("The new location could not be read: {0}.")]
+    #[error("{}", crate::i18n::format_message("The new location could not be read: {error}.", &[("error", &.0.to_string())]))]
     Unreadable(io::Error),
     /// `/proc/self/mountinfo` could not be read.
-    #[error("The mount table could not be read: {0}.")]
+    #[error("{}", crate::i18n::format_message("The mount table could not be read: {error}.", &[("error", &.0.to_string())]))]
     MountTable(io::Error),
     /// [`apply`](FolderRelocation::apply) without [`Consent::Given`].
-    #[error("Confirm the new location before applying it.")]
+    #[error("{}", crate::i18n::gettext("Confirm the new location before applying it."))]
     NotConfirmed,
     /// `xdg-user-dirs-update` is not installed.
-    #[error("Install xdg-user-dirs before changing a standard folder.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("Install xdg-user-dirs before changing a standard folder.")
+    )]
     UpdaterMissing,
     /// `xdg-user-dirs-update` failed or did not finish in time.
-    #[error("The XDG folder setting could not be changed.")]
+    #[error("{}", crate::i18n::gettext("The XDG folder setting could not be changed."))]
     UpdaterFailed,
     /// `user-dirs.dirs` does not name the new path after the update.
     #[error(
-        "The folder configuration did not retain the requested path. A backup was saved; no user files \
+        "{}",
+        crate::i18n::gettext(
+            "The folder configuration did not retain the requested path. A backup was saved; no user files \
          were moved."
+        )
     )]
     NotRetained,
     /// The backup or the history could not be written.

@@ -74,9 +74,9 @@ impl GioNode {
     /// `require_item_uri` in `v2.0.0:desktop/core.py`.
     fn require_item(&self) -> Result<(), TransferError> {
         if self.file.parent().is_none() {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "Filesystem roots cannot be changed as items.",
-            ));
+            )));
         }
         crate::location::require_item_uri(&self.uri())?;
         Ok(())

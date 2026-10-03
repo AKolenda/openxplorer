@@ -153,6 +153,7 @@ mod imp {
     impl ObjectImpl for DetailsPane {
         fn constructed(&self) {
             self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "details-pane.ui");
             let pane = self.obj();
             pane.set_width(super::PANE_WIDTH);
             pane.show_glyphs();

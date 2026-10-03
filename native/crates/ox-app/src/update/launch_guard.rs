@@ -57,7 +57,8 @@ pub(crate) const LAUNCHER_OPTIONS: [(&str, &str); 4] = [
 const GUARD_FAILURE: u8 = 3;
 
 /// What a launch as root prints before it exits (`main` in winspace.py).
-const RUN_AS_USER: &str = "Run OpenXplorer as your regular desktop user, not with sudo.";
+const RUN_AS_USER: &str =
+    crate::i18n::message_id("Run OpenXplorer as your regular desktop user, not with sudo.");
 
 /// The user ID of root.
 const ROOT_USER_ID: u32 = 0;
@@ -200,14 +201,11 @@ fn confirm_restart(status: &InstanceStatus) -> bool {
         .running
         .as_ref()
         .map_or("an older release", |identity| identity.version.as_str());
-    let detail = format!(
-        "The installed version is {}; the existing background process is {running}. A restart \
-         closes existing windows. File operations must finish first; they will not be \
-         force-stopped.",
-        running_version()
-    );
+    let detail = ox_core::i18n::format_message("The installed version is {running_version}; the existing background process is {running}. A restart closes existing windows. File operations must finish first; they will not be force-stopped.", &[("running_version", &running_version().to_string()), ("running", running)]);
     let dialog = gtk::AlertDialog::builder()
-        .message("Restart OpenXplorer to finish updating")
+        .message(ox_core::i18n::gettext_static(
+            "Restart OpenXplorer to finish updating",
+        ))
         .detail(detail)
         .buttons(["Not now", "Restart OpenXplorer"])
         .cancel_button(0)

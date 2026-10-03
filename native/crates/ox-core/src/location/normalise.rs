@@ -16,6 +16,7 @@ use percent_encoding::percent_encode;
 mod remote;
 
 use remote::normalise_remote_url;
+pub use remote::without_user;
 
 use super::device_uri::DeviceUriMatch;
 use super::parts::{split_location, split_scheme, split_url, LocationKind, LocationParts};
@@ -56,14 +57,16 @@ const MAX_DEVICE_AUTHORITY_CHARS: usize = 512;
 pub fn normalise_location(address: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
     let address = python_strip(address);
     if address.is_empty() {
-        return Err(LocationError::new("Enter a local folder path or an SMB address."));
+        return Err(LocationError::new(crate::i18n::gettext(
+            "Enter a local folder path or an SMB address.",
+        )));
     }
     // Safety rule (`core.py`: `CONTROL.search(value)`): no control
     // character in an address reaches GIO, a file name or settings.json.
     if has_control_character(address) {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Control characters are not allowed in an address.",
-        ));
+        )));
     }
     let address = if is_unc_path(address) {
         Cow::Owned(unc_to_smb(address)?)
@@ -71,9 +74,9 @@ pub fn normalise_location(address: &str, base: Option<&str>, home: &Path) -> Res
         Cow::Borrowed(address)
     };
     if is_windows_drive_path(&address) {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share.",
-        ));
+        )));
     }
     let Some((scheme, _)) = split_scheme(&address) else {
         return normalise_plain_path(&address, base, home);
@@ -121,9 +124,9 @@ pub fn require_share(address: &str) -> Result<String, LocationError> {
         LocationKind::Local | LocationKind::Device | LocationKind::Other => false,
     };
     if !is_folder {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Enter a shared folder such as \\\\nas\\Projects, not only the server name.",
-        ));
+        )));
     }
     Ok(uri)
 }
@@ -144,22 +147,22 @@ pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
     // device is never renamed, moved, copied or trashed as if it were a
     // folder.
     if parts.is_smb() && parts.path_depth() <= 1 {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Open the network share first, then select files or folders inside it. The share itself \
              cannot be renamed, moved, copied or trashed here.",
-        ));
+        )));
     }
     if parts.is_remote() && parts.path_depth() == 0 {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Open a folder on the server first, then select files or folders inside it. The server itself \
              cannot be renamed, moved, copied or trashed here.",
-        ));
+        )));
     }
     if parts.is_device() && parts.path_depth() == 0 {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Open the device storage first, then select files or folders inside it. The device itself \
              cannot be moved or copied.",
-        ));
+        )));
     }
     Ok(uri)
 }
@@ -187,9 +190,9 @@ fn unc_to_smb(address: &str) -> Result<String, LocationError> {
     // Safety rule (SAFE-010): credentials never enter an address, so they
     // cannot reach settings.json, a tab title or the clipboard.
     if server.is_empty() || server.contains(['@', ':']) || has_control_character(server) {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Use a server name without credentials, for example \\\\nas\\share.",
-        ));
+        )));
     }
     let escaped_components: Vec<String> = components.map(quote_component).collect();
     Ok(format!("smb://{server}/{}", escaped_components.join("/")))
@@ -239,7 +242,9 @@ fn expand_home(address: &str, home: &Path) -> String {
 /// True when relative paths should be appended to `base` as a URL: SMB
 /// and connected-device folders.
 fn is_remote_base(base: &str) -> bool {
-    split_location(base).is_ok_and(|parts| parts.is_smb() || parts.is_remote() || parts.is_device())
+    split_location(base).is_ok_and(|parts| {
+        parts.is_smb() || parts.is_remote() || parts.is_device() || parts.scheme == "admin"
+    })
 }
 
 /// `os.path.join(base, path)`: an absolute `path` replaces `base`.
@@ -261,8 +266,12 @@ fn local_path_uri(path: &str) -> Result<String, LocationError> {
     } else {
         // Only reachable with a relative home or base; resolve it like
         // `os.path.abspath` against the working directory.
-        let current_folder = std::env::current_dir()
-            .map_err(|error| LocationError::new(format!("Could not resolve the current folder: {error}")))?;
+        let current_folder = std::env::current_dir().map_err(|error| {
+            LocationError::new(crate::i18n::format_message(
+                "Could not resolve the current folder: {error}",
+                &[("error", &error.to_string())],
+            ))
+        })?;
         normalise_posix_path(&join_path(&current_folder.to_string_lossy(), &normal))
     };
     Ok(format!("file://{}", quote_path(&absolute)))
@@ -271,23 +280,32 @@ fn local_path_uri(path: &str) -> Result<String, LocationError> {
 /// A `file:` or `smb:` URL; any other scheme is rejected.
 fn normalise_url(address: &str) -> Result<String, LocationError> {
     let parts = split_url(address)?;
-    if !parts.is_local() && !parts.is_smb() {
-        return Err(LocationError::new(
+    if !parts.is_local() && !parts.is_smb() && parts.scheme != "admin" {
+        return Err(LocationError::new(crate::i18n::gettext(
             "Only local paths, smb:// locations and connected devices are supported in this build.",
-        ));
+        )));
     }
     // Safety rule (SAFE-010): credentials never enter an address, so they
     // cannot reach settings.json, a tab title or the clipboard. Users sign
     // in through the sign-in dialog instead.
     if parts.has_credentials() {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.",
-        ));
+        )));
     }
     if !parts.query.is_empty() || !parts.fragment.is_empty() {
         return Err(LocationError::query_or_fragment());
     }
     let decoded = unquote_without_controls(&parts.path)?;
+    if parts.scheme == "admin" {
+        if !parts.authority.is_empty() {
+            return Err(LocationError::new(crate::i18n::gettext(
+                "Administrator access accepts only local paths without a host or credentials.",
+            )));
+        }
+        let local = normalise_file_url("", &decoded)?;
+        return Ok(local.replacen("file:", "admin:", 1));
+    }
     if parts.is_smb() {
         normalise_smb_url(&parts, &decoded)
     } else {
@@ -299,12 +317,14 @@ fn normalise_url(address: &str) -> Result<String, LocationError> {
 /// canonical.
 fn normalise_file_url(authority: &str, decoded_path: &str) -> Result<String, LocationError> {
     if !authority.is_empty() && !authority.eq_ignore_ascii_case("localhost") {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "For network folders, use smb://server/share rather than file://server/…",
-        ));
+        )));
     }
     if !decoded_path.starts_with('/') {
-        return Err(LocationError::new("A file URL must contain an absolute path."));
+        return Err(LocationError::new(crate::i18n::gettext(
+            "A file URL must contain an absolute path.",
+        )));
     }
     let path = normalise_posix_path(decoded_path);
     Ok(format!("file://{}", quote_path(&path)))
@@ -323,8 +343,8 @@ fn normalise_smb_url(parts: &LocationParts, decoded_path: &str) -> Result<String
 fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
     server_authority(
         parts,
-        "Enter an SMB server name, for example smb://nas/Projects.",
-        "Invalid SMB port.",
+        crate::i18n::gettext_static("Enter an SMB server name, for example smb://nas/Projects."),
+        crate::i18n::gettext_static("Invalid SMB port."),
     )
 }
 
@@ -336,9 +356,9 @@ fn server_authority(parts: &LocationParts, no_host: &str, bad_port: &str) -> Res
     // an escaped server name could hide credentials (`u%40nas` is `u@nas`)
     // or a control character from the checks on the decoded address.
     if parts.authority.contains('%') || has_control_character(&parts.authority) {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "Use an unescaped server name without credentials or control characters.",
-        ));
+        )));
     }
     let Some(hostname) = parts.hostname().filter(|host| !contains_python_space(host)) else {
         return Err(LocationError::new(no_host));
@@ -361,9 +381,9 @@ fn server_authority(parts: &LocationParts, no_host: &str, bad_port: &str) -> Res
 fn normalise_device_location(address: &str, scheme: &str) -> Result<String, LocationError> {
     let device = DeviceUriMatch::parse(address).filter(|device| device.scheme.eq_ignore_ascii_case(scheme));
     let Some(device) = device else {
-        return Err(LocationError::new(
+        return Err(LocationError::new(crate::i18n::gettext(
             "A connected-device address must include a device identifier and path.",
-        ));
+        )));
     };
     check_device_authority(device.authority)?;
     let decoded = unquote_without_controls(device.path)?;
@@ -381,7 +401,9 @@ fn check_device_authority(authority: &str) -> Result<(), LocationError> {
         || has_control_character(authority);
     let has_stray_bracket = authority.contains(['[', ']']) && !is_one_bracketed_identifier(authority);
     if is_too_long || has_forbidden_character || has_stray_bracket {
-        return Err(LocationError::new("Invalid connected-device identifier."));
+        return Err(LocationError::new(crate::i18n::gettext(
+            "Invalid connected-device identifier.",
+        )));
     }
     Ok(())
 }
@@ -679,5 +701,26 @@ mod tests {
         assert!(!is_smb_server("smb://nas/work"));
         assert!(!is_smb_server("file:///"));
         assert!(!is_smb_server("http://nas/"));
+    }
+    /// parity: OPS-039
+    #[test]
+    fn administrator_uris_are_explicit_local_paths_without_authority_or_credentials() {
+        assert_eq!(
+            canonical("admin:///etc/../etc/private%20folder").unwrap(),
+            "admin:///etc/private%20folder"
+        );
+        assert_eq!(
+            normalise_location("child", Some("admin:///etc"), Path::new("/tmp")).unwrap(),
+            "admin:///etc/child"
+        );
+        for bad in [
+            "admin://server/etc",
+            "admin://root@localhost/etc",
+            "admin:etc",
+            "admin:///etc?x",
+            "admin:///etc%00",
+        ] {
+            assert!(canonical(bad).is_err(), "{bad}");
+        }
     }
 }

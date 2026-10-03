@@ -278,8 +278,8 @@ impl SearchEngine {
     /// The name the Search settings show.
     pub fn label(self) -> &'static str {
         match self {
-            Self::Trigram => "SQLite FTS5 trigram",
-            Self::SubstringFallback => "SQLite substring fallback",
+            Self::Trigram => crate::i18n::gettext_static("SQLite FTS5 trigram"),
+            Self::SubstringFallback => crate::i18n::gettext_static("SQLite substring fallback"),
         }
     }
 }

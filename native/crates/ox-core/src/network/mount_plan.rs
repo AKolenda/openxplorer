@@ -52,16 +52,19 @@ pub enum MountPlanError {
     #[error(transparent)]
     Location(#[from] LocationError),
     /// A port, or a host name the unit files cannot carry.
-    #[error("The persistent mount assistant supports a hostname or IPv4 address without a port.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "The persistent mount assistant supports a hostname or IPv4 address without a port."
+        )
+    )]
     UnsupportedServer,
     /// A share name outside the allowed characters.
-    #[error(
-        "This share name needs manual mounting. The assistant allows letters, numbers, spaces, dots, _, $, \
-         and hyphens."
-    )]
+    #[error("{}", crate::i18n::gettext("This share name needs manual mounting. The assistant allows letters, numbers, spaces, dots, _, $, \
+         and hyphens."))]
     UnsupportedShareName,
     /// An empty, `.` or `..` path component, or a root or invalid user.
-    #[error("Invalid mount destination or user identity.")]
+    #[error("{}", crate::i18n::gettext("Invalid mount destination or user identity."))]
     InvalidDestination,
 }
 

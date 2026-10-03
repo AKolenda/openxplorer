@@ -74,7 +74,8 @@ impl BrowserWindow {
                     DropDestination::Folder(_)
                     | DropDestination::Volume(_)
                     | DropDestination::QuickAccess { .. }
-                    | DropDestination::RecycleBin => None,
+                    | DropDestination::RecycleBin
+                    | DropDestination::NewTabs => None,
                 };
                 (*row, row.is_none(), program)
             }
@@ -87,7 +88,7 @@ impl BrowserWindow {
         } else {
             view.remove_css_class(VIEW_DROP_CLASS);
         }
-        let hint = program.map(|name| format!("Open with {name}"));
+        let hint = program.map(|name| ox_core::i18n::format_message("Open with {name}", &[("name", &name)]));
         pane.show_drag_hint(hint.as_deref());
     }
 

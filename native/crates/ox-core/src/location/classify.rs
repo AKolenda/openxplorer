@@ -28,6 +28,9 @@ impl LocationContext {
     /// `#snapshot`, `@GMT-…` or `.zfs/snapshot` component, or a configured
     /// snapshot root. The web UI's `readonlyLocation`.
     pub fn is_snapshot_location(&self, uri: &str) -> bool {
+        if let Some(path) = uri.strip_prefix("admin:") {
+            return self.is_snapshot_location(&format!("file:{path}"));
+        }
         if uri.is_empty() {
             return false;
         }

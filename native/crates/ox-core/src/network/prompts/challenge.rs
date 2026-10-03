@@ -134,22 +134,25 @@ pub struct Identity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum SignInError {
     /// The challenge was answered, cancelled, superseded or timed out.
-    #[error("This sign-in request expired or was cancelled. Try connecting again.")]
+    #[error(
+        "{}",
+        crate::i18n::gettext("This sign-in request expired or was cancelled. Try connecting again.")
+    )]
     Expired,
     /// Too long, or contains NUL, CR or LF.
-    #[error("Enter a valid username.")]
+    #[error("{}", crate::i18n::gettext("Enter a valid username."))]
     InvalidUsername,
     /// `DOMAIN\user` with an empty part or a second backslash.
-    #[error("Enter a username, or use DOMAIN\\username.")]
+    #[error("{}", crate::i18n::gettext("Enter a username, or use DOMAIN\\username."))]
     MalformedDomainUsername,
     /// The server needs a user name and none was entered.
-    #[error("Enter your username.")]
+    #[error("{}", crate::i18n::gettext("Enter your username."))]
     MissingUsername,
     /// Too long, or contains NUL.
-    #[error("The password is not valid.")]
+    #[error("{}", crate::i18n::gettext("The password is not valid."))]
     InvalidPassword,
     /// Not one of the question's choices.
-    #[error("Choose one of the offered actions.")]
+    #[error("{}", crate::i18n::gettext("Choose one of the offered actions."))]
     InvalidChoice,
 }
 

@@ -118,7 +118,7 @@ pub(super) fn subfolder_menu(
         entries.push(MenuEntry::Divider);
         entries.push(
             MenuItem::with_target(
-                "More",
+                &ox_core::i18n::gettext("More"),
                 Icon::MoreHorizontal,
                 WindowAction::CrumbSubfolders,
                 target,
@@ -152,7 +152,7 @@ pub(super) fn open_subfolders_on_click(label: &gtk::Label, folder: &str, shown: 
     });
     label.add_controller(click);
     label.set_cursor_from_name(Some("pointer"));
-    label.set_tooltip_text(Some("Show subfolders"));
+    label.set_tooltip_text(Some(&ox_core::i18n::gettext("Show subfolders")));
 }
 
 impl AddressBar {

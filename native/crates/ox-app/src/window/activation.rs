@@ -30,7 +30,7 @@ use super::BrowserWindow;
 mod outcome;
 
 /// Why an item cannot be opened (`activation_kind` in activation.py).
-const NOT_OPENABLE: &str = "This item is not a regular file or a readable folder.";
+const NOT_OPENABLE: &str = crate::i18n::message_id("This item is not a regular file or a readable folder.");
 
 /// What is left to do once an activated item was read again.
 #[derive(Debug)]
@@ -38,7 +38,7 @@ enum Resolved {
     /// Open this folder in the tab.
     Folder(String),
     /// Browse this ZIP archive.
-    Archive(Entry),
+    Archive(Box<Entry>),
     /// The file opened in its application.
     Opened,
 }
@@ -98,7 +98,7 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
         entry.kind,
         EntryKind::Special | EntryKind::Unknown | EntryKind::Symlink
     ) {
-        return Activation::Refused(NOT_OPENABLE);
+        return Activation::Refused(ox_core::i18n::gettext_static(NOT_OPENABLE));
     }
     if integration::Activation::for_entry(entry) == Ok(integration::Activation::BrowseArchive) {
         return Activation::Archive;
@@ -211,6 +211,8 @@ impl BrowserWindow {
     /// or closed meanwhile; a folder opens in that tab even when another
     /// one is in front by then (OPEN-001, OPEN-004).
     pub(super) fn activate_item(&self, position: u32) {
+        // A double-click opens; it never also renames (OPS-011).
+        self.cancel_slow_click_rename();
         let Some(item) = self.folder_pane().model().item(position) else {
             return;
         };
@@ -257,7 +259,7 @@ impl BrowserWindow {
         }
         match activation_for(&fresh) {
             Activation::Folder(uri) => Ok(Resolved::Folder(uri)),
-            Activation::Archive => Ok(Resolved::Archive(fresh)),
+            Activation::Archive => Ok(Resolved::Archive(Box::new(fresh))),
             Activation::Refused(message) => Err(message.to_owned()),
             Activation::File => {
                 if let Some(target) = desktop_link(&fresh) {
@@ -471,7 +473,10 @@ impl BrowserWindow {
             move |error: glib::Error| window.show_message(&error.to_string())
         );
         self.context().open_uri(address, self.upcast_ref(), on_error);
-        self.show_message(&format!("Opening {address} in your web browser."));
+        self.show_message(&ox_core::i18n::format_message(
+            "Opening {address} in your web browser.",
+            &[("address", address)],
+        ));
     }
 
     /// Opens the location an address resolved to, whose metadata query

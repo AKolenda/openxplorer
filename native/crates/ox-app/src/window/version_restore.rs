@@ -24,7 +24,7 @@ use super::BrowserWindow;
 
 /// Shown when Restore a copy is asked for while a write runs, as the
 /// Python bridge refused a second `operate`.
-const OPERATION_RUNNING: &str = "Another file operation is still running.";
+const OPERATION_RUNNING: &str = crate::i18n::message_id("Another file operation is still running.");
 
 impl BrowserWindow {
     /// Asks where to restore a copy of a previous version, then copies it
@@ -50,7 +50,7 @@ impl BrowserWindow {
     fn restore_copy(&self, source: String, destination: String) {
         // One operation at a time (OPS-024).
         if self.is_writing_files() {
-            self.show_message(OPERATION_RUNNING);
+            self.show_message(ox_core::i18n::gettext_static(OPERATION_RUNNING));
             return;
         }
         if self.refuses_writes_during_update() {
@@ -83,7 +83,8 @@ impl BrowserWindow {
                         &summarize(TransferMode::Copy, &outcome.result),
                         Destination::items(outcome.created),
                     ),
-                    Err(error) => window.show_result_dialog(STOPPED_TITLE, &error.to_string()),
+                    Err(error) => window
+                        .show_result_dialog(ox_core::i18n::gettext_static(STOPPED_TITLE), &error.to_string()),
                 }
             }
         ));
@@ -95,7 +96,9 @@ impl BrowserWindow {
         self.notify_if_in_background(summary, destination);
         match summary {
             OperationSummary::Toast(text) => self.show_message(text),
-            OperationSummary::Report(text) => self.show_result_dialog(RESULT_TITLE, text),
+            OperationSummary::Report(text) => {
+                self.show_result_dialog(ox_core::i18n::gettext_static(RESULT_TITLE), text);
+            }
         }
     }
 }

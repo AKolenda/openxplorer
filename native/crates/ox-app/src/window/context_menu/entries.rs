@@ -54,6 +54,10 @@ pub(crate) enum Comparison {
 /// What a file or folder's menu depends on: the right-clicked item and
 /// the selection it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent selection and location facts determine menu availability"
+)]
 pub(crate) struct ItemFacts {
     /// Where the item opens: a folder's, share's or shortcut's target.
     pub(crate) navigation_uri: String,
@@ -68,6 +72,8 @@ pub(crate) struct ItemFacts {
     /// It is a search result, listed away from its folder
     /// (`state.query`).
     pub(crate) is_search_result: bool,
+    /// It is a symbolic link, whose target "Show target" opens (CMD-030).
+    pub(crate) is_symlink: bool,
     /// Whether the selection can be compared (Dolphin's Compare Files).
     pub(crate) comparison: Comparison,
     /// The installed code editors, each offered as "Open in <editor>".
@@ -97,11 +103,11 @@ pub(crate) struct ContextMenu {
 }
 
 /// Why a command for one item is disabled while several are selected.
-const ONE_ITEM_AT_A_TIME: &str = "Select only one item for this command.";
+const ONE_ITEM_AT_A_TIME: &str = crate::i18n::message_id("Select only one item for this command.");
 
 /// Why a command that runs or changes an item is disabled in a previous
 /// version.
-const READ_ONLY_VERSION: &str = "Items in a previous version are read-only.";
+const READ_ONLY_VERSION: &str = crate::i18n::message_id("Items in a previous version are read-only.");
 
 /// An item that runs `action`.
 fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
@@ -112,9 +118,12 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
 /// are selected, and where `needs_writable` holds, in a previous version.
 fn for_one_item(item: MenuItem, facts: &ItemFacts, needs_writable: bool) -> MenuItem {
     if !facts.is_single {
-        return item.disabled_because(true, ONE_ITEM_AT_A_TIME);
+        return item.disabled_because(true, ox_core::i18n::gettext_static(ONE_ITEM_AT_A_TIME));
     }
-    item.disabled_because(needs_writable && facts.is_read_only, READ_ONLY_VERSION)
+    item.disabled_because(
+        needs_writable && facts.is_read_only,
+        ox_core::i18n::gettext_static(READ_ONLY_VERSION),
+    )
 }
 
 /// The Open group: Open, the extraction commands, the applications, for
@@ -124,9 +133,16 @@ fn for_one_item(item: MenuItem, facts: &ItemFacts, needs_writable: bool) -> Menu
 /// (SRCH-016).
 fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let is_folder = facts.shape == ItemShape::Folder;
-    let open = item("Open", Icon::Folder, WindowAction::Open)
-        .with_shortcut("Enter")
-        .disabled_because(!is_folder && facts.is_read_only, READ_ONLY_VERSION);
+    let open = item(
+        ox_core::i18n::gettext_static("Open"),
+        Icon::Folder,
+        WindowAction::Open,
+    )
+    .with_shortcut("Enter")
+    .disabled_because(
+        !is_folder && facts.is_read_only,
+        ox_core::i18n::gettext_static(READ_ONLY_VERSION),
+    );
     let mut entries: Vec<MenuEntry> = vec![open.into()];
     if facts.shape == ItemShape::ZipArchive {
         entries.extend(extraction_items(facts));
@@ -134,7 +150,7 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     entries.extend(application_items(facts));
     if facts.disk_tool == Some(DiskTool::MountImage) {
         let mount = MenuItem::with_text_target(
-            "Mount disk image",
+            &ox_core::i18n::gettext("Mount disk image"),
             Icon::HardDrive,
             WindowAction::MountDiskImage,
             &facts.navigation_uri,
@@ -144,27 +160,50 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     if is_folder {
         let new_tab = if facts.is_single {
             MenuItem::with_text_target(
-                "Open in new tab",
+                &ox_core::i18n::gettext("Open in new tab"),
                 Icon::Add,
                 WindowAction::OpenTab,
                 &facts.navigation_uri,
             )
         } else {
-            item("Open in new tabs", Icon::Add, WindowAction::OpenSelectionInTabs)
+            item(
+                ox_core::i18n::gettext_static("Open in new tabs"),
+                Icon::Add,
+                WindowAction::OpenSelectionInTabs,
+            )
         };
         let new_window = MenuItem::with_text_target(
-            "Open in new window",
+            &ox_core::i18n::gettext("Open in new window"),
             Icon::WindowNew,
             WindowAction::OpenWindow,
             &facts.navigation_uri,
         );
-        let pin = item("Pin to Quick access", Icon::Pin, WindowAction::PinSelected);
+        let pin = item(
+            ox_core::i18n::gettext_static("Pin to Quick access"),
+            Icon::Pin,
+            WindowAction::PinSelected,
+        );
         entries.push(new_tab.into());
         entries.push(for_one_item(new_window, facts, false).into());
         entries.push(for_one_item(pin, facts, false).into());
     }
     if facts.comparison == Comparison::TwoFiles {
-        entries.push(item("Compare files", Icon::DocumentCopy, WindowAction::CompareFiles).into());
+        entries.push(
+            item(
+                ox_core::i18n::gettext_static("Compare files"),
+                Icon::DocumentCopy,
+                WindowAction::CompareFiles,
+            )
+            .into(),
+        );
+    }
+    if facts.is_symlink {
+        let show_target = item(
+            ox_core::i18n::gettext_static("Show target"),
+            Icon::Open,
+            WindowAction::ShowTarget,
+        );
+        entries.push(for_one_item(show_target, facts, false).into());
     }
     if facts.is_search_result {
         let locations = [
@@ -189,8 +228,16 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
 
 /// Extract all… and, beyond the Python app, Dolphin's Extract here.
 fn extraction_items(facts: &ItemFacts) -> [MenuEntry; 2] {
-    let extract_all = item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll);
-    let extract_here = item("Extract here", Icon::FolderZip, WindowAction::ExtractHere);
+    let extract_all = item(
+        ox_core::i18n::gettext_static("Extract all…"),
+        Icon::FolderZip,
+        WindowAction::ExtractAll,
+    );
+    let extract_here = item(
+        ox_core::i18n::gettext_static("Extract here"),
+        Icon::FolderZip,
+        WindowAction::ExtractHere,
+    );
     [
         for_one_item(extract_all, facts, false).into(),
         for_one_item(extract_here, facts, false).into(),
@@ -220,7 +267,7 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     }
     entries.push(for_one_item(open_with, facts, true).into());
     for editor in &facts.editors {
-        let label = format!("Open in {}", editor.name);
+        let label = ox_core::i18n::format_message("Open in {name}", &[("name", &editor.name)]);
         let open_in_editor =
             MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
                 .with_application_icon(editor.icon.as_deref());
@@ -230,34 +277,70 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
 }
 
 /// Cut, Copy, Paste, Rename and Delete, with their shortcuts; their
-/// actions decide when they are enabled.
+/// actions decide when they are enabled. On one folder, Paste pastes into
+/// it, as Explorer's does and Dolphin's "Paste into folder" (CMD-019).
 fn edit_items(facts: &ItemFacts) -> [MenuItem; 5] {
+    let paste = if facts.shape == ItemShape::Folder && facts.is_single {
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Paste into folder"),
+            Icon::ClipboardPaste,
+            WindowAction::PasteInto,
+            &facts.navigation_uri,
+        )
+    } else {
+        item(
+            ox_core::i18n::gettext_static("Paste"),
+            Icon::ClipboardPaste,
+            WindowAction::Paste,
+        )
+        .with_shortcut("Ctrl+V")
+    };
     [
-        item("Cut", Icon::Cut, WindowAction::Cut).with_shortcut("Ctrl+X"),
-        item("Copy", Icon::Copy, WindowAction::Copy).with_shortcut("Ctrl+C"),
-        item("Paste", Icon::ClipboardPaste, WindowAction::Paste).with_shortcut("Ctrl+V"),
-        item("Rename", Icon::Rename, WindowAction::Rename).with_shortcut("F2"),
+        item(ox_core::i18n::gettext_static("Cut"), Icon::Cut, WindowAction::Cut).with_shortcut("Ctrl+X"),
+        item(
+            ox_core::i18n::gettext_static("Copy"),
+            Icon::Copy,
+            WindowAction::Copy,
+        )
+        .with_shortcut("Ctrl+C"),
+        paste,
+        item(
+            ox_core::i18n::gettext_static("Rename"),
+            Icon::Rename,
+            WindowAction::Rename,
+        )
+        .with_shortcut("F2"),
         item(facts.delete_label, Icon::Delete, WindowAction::Trash).with_shortcut("Delete"),
     ]
 }
 
 /// Duplicate, which the Python app did not have.
 fn duplicate_item() -> MenuEntry {
-    item("Duplicate", Icon::DocumentCopy, WindowAction::Duplicate).into()
+    item(
+        ox_core::i18n::gettext_static("Duplicate"),
+        Icon::DocumentCopy,
+        WindowAction::Duplicate,
+    )
+    .into()
 }
 
-/// Copy path, for one item, with Explorer's key for "Copy as path"
-/// (CLIP-013).
-fn copy_path_item(facts: &ItemFacts) -> MenuEntry {
-    let copy_path = item("Copy path", Icon::Link, WindowAction::CopyPath).with_shortcut("Ctrl+Shift+C");
-    for_one_item(copy_path, facts, false).into()
+/// Copy path, one line per selected item (CLIP-014), with Explorer's key
+/// for "Copy as path" (CLIP-013).
+fn copy_path_item() -> MenuEntry {
+    item(
+        ox_core::i18n::gettext_static("Copy path"),
+        Icon::Link,
+        WindowAction::CopyPath,
+    )
+    .with_shortcut("Ctrl+Shift+C")
+    .into()
 }
 
 /// Compress to ZIP file, which the Python app did not have (Windows 11's
 /// "Compress to ZIP file").
 fn compress_item() -> MenuEntry {
     item(
-        "Compress to ZIP file",
+        ox_core::i18n::gettext_static("Compress to ZIP file"),
         Icon::FolderZip,
         WindowAction::CompressToZip,
     )
@@ -271,7 +354,7 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let is_measurable = facts.location != ItemLocation::SmbServer;
     if facts.shape == ItemShape::Folder && is_measurable {
         let size = item(
-            "Calculate folder size",
+            ox_core::i18n::gettext_static("Calculate folder size"),
             Icon::HardDrive,
             WindowAction::CalculateFolderSize,
         );
@@ -279,15 +362,24 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     }
     if facts.disk_tool == Some(DiskTool::AnalyseUsage) {
         let analyse = MenuItem::with_text_target(
-            "Analyse disk usage",
+            &ox_core::i18n::gettext("Analyse disk usage"),
             Icon::HardDrive,
             WindowAction::AnalyseDiskUsage,
             &facts.navigation_uri,
         );
         entries.push(for_one_item(analyse, facts, false).into());
     }
-    let versions = item("Previous versions", Icon::History, WindowAction::PreviousVersions);
-    let properties = item("Properties", Icon::Info, WindowAction::Properties).with_shortcut("Alt+Enter");
+    let versions = item(
+        ox_core::i18n::gettext_static("Previous versions"),
+        Icon::History,
+        WindowAction::PreviousVersions,
+    );
+    let properties = item(
+        ox_core::i18n::gettext_static("Properties"),
+        Icon::Info,
+        WindowAction::Properties,
+    )
+    .with_shortcut("Alt+Enter");
     entries.push(for_one_item(versions, facts, false).into());
     // Properties describe several items together (PROP-002).
     entries.push(properties.into());
@@ -307,13 +399,13 @@ pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
 fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     let mut entries = open_group(facts);
     entries.push(duplicate_item());
-    entries.push(copy_path_item(facts));
+    entries.push(copy_path_item());
     entries.push(compress_item());
     entries.push(MenuEntry::Divider);
     entries.extend(details_group(facts));
     entries.push(MenuEntry::Divider);
     let more = item(
-        "Show more options",
+        ox_core::i18n::gettext_static("Show more options"),
         Icon::MoreHorizontal,
         WindowAction::ShowMoreOptions,
     );
@@ -335,16 +427,21 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
         rename.into(),
         delete.into(),
         duplicate_item(),
-        copy_path_item(facts),
+        copy_path_item(),
         compress_item(),
-        item("Compress to…", Icon::FolderZip, WindowAction::CompressTo).into(),
+        item(
+            ox_core::i18n::gettext_static("Compress to…"),
+            Icon::FolderZip,
+            WindowAction::CompressTo,
+        )
+        .into(),
     ]);
     if let Some(caching) = facts.caching {
         entries.push(cache_item(&facts.navigation_uri, caching).into());
     }
     if facts.location != ItemLocation::Local {
         let sign_out = MenuItem::with_text_target(
-            "Sign out of server…",
+            &ox_core::i18n::gettext("Sign out of server…"),
             Icon::ArrowEject,
             WindowAction::SignOut,
             &facts.navigation_uri,
@@ -360,7 +457,7 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
 }
 
 /// The menu of blank space in a folder, acting on the folder
-/// (`backgroundMenu`, CMD-011). `undo_label` and `redo_label` name what
+/// (`backgroundMenu`, CMD-011, CMD-012). `undo_label` and `redo_label` name what
 /// Undo and Redo would do, such as "Undo: Rename".
 pub(crate) fn background_menu(
     undo_label: &str,
@@ -368,21 +465,49 @@ pub(crate) fn background_menu(
     applications: &[ApplicationChoice],
 ) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = vec![
-        item("New…", Icon::Add, WindowAction::ShowNewMenu).into(),
-        item("Paste", Icon::ClipboardPaste, WindowAction::Paste)
-            .with_shortcut("Ctrl+V")
-            .into(),
+        // Explorer's and Dolphin's View and Sort by (CMD-012), as the
+        // command bar's menus.
+        item(
+            ox_core::i18n::gettext_static("View"),
+            Icon::Grid,
+            WindowAction::ShowViewMenu,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Sort by"),
+            Icon::ArrowSort,
+            WindowAction::ShowSortMenu,
+        )
+        .into(),
+        MenuEntry::Divider,
+        item(
+            ox_core::i18n::gettext_static("New…"),
+            Icon::Add,
+            WindowAction::ShowNewMenu,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Paste"),
+            Icon::ClipboardPaste,
+            WindowAction::Paste,
+        )
+        .with_shortcut("Ctrl+V")
+        .into(),
         item(undo_label, Icon::ArrowUndo, WindowAction::Undo)
             .with_shortcut("Ctrl+Z")
             .into(),
         item(redo_label, Icon::ArrowRedo, WindowAction::Redo)
             .with_shortcut("Ctrl+Y")
             .into(),
-        item("Refresh", Icon::ArrowClockwise, WindowAction::Refresh)
-            .with_shortcut("F5")
-            .into(),
         item(
-            "Open in Terminal",
+            ox_core::i18n::gettext_static("Refresh"),
+            Icon::ArrowClockwise,
+            WindowAction::Refresh,
+        )
+        .with_shortcut("F5")
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Open in Terminal"),
             Icon::WindowConsole,
             WindowAction::OpenInTerminal,
         )
@@ -394,27 +519,48 @@ pub(crate) fn background_menu(
             .iter()
             .map(|application| open_with_application(application).into()),
     );
-    entries.push(item("Open folder with…", Icon::Apps, WindowAction::OpenWith).into());
+    entries.push(
+        item(
+            ox_core::i18n::gettext_static("Open folder with…"),
+            Icon::Apps,
+            WindowAction::OpenWith,
+        )
+        .into(),
+    );
     entries.extend([
         MenuEntry::Divider,
-        item("Pin this folder", Icon::Pin, WindowAction::PinFolder).into(),
+        item(
+            ox_core::i18n::gettext_static("Pin this folder"),
+            Icon::Pin,
+            WindowAction::PinFolder,
+        )
+        .into(),
         MenuItem::toggle(
-            "Cache this folder for search",
+            &ox_core::i18n::gettext("Cache this folder for search"),
             Icon::Search,
             WindowAction::CacheFolder,
         )
         .into(),
         item(
-            "Calculate folder sizes",
+            ox_core::i18n::gettext_static("Calculate folder sizes"),
             Icon::HardDrive,
             WindowAction::CalculateFolderSizes,
         )
         .into(),
         MenuEntry::Divider,
-        item("Previous versions", Icon::History, WindowAction::PreviousVersions).into(),
-        item("Properties", Icon::Info, WindowAction::Properties)
-            .with_shortcut("Alt+Enter")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("Previous versions"),
+            Icon::History,
+            WindowAction::PreviousVersions,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Properties"),
+            Icon::Info,
+            WindowAction::Properties,
+        )
+        .with_shortcut("Alt+Enter")
+        .into(),
     ]);
     entries
 }
@@ -422,7 +568,7 @@ pub(crate) fn background_menu(
 /// "Open with <app>", opening the item, or the folder when nothing is
 /// selected, in `application` (OPEN-013).
 fn open_with_application(application: &ApplicationChoice) -> MenuItem {
-    let label = format!("Open with {}", application.name);
+    let label = ox_core::i18n::format_message("Open with {name}", &[("name", &application.name)]);
     MenuItem::with_text_target(&label, Icon::Apps, WindowAction::OpenWithApp, &application.id)
         .with_application_icon(application.icon.as_deref())
 }
@@ -432,18 +578,35 @@ fn open_with_application(application: &ApplicationChoice) -> MenuItem {
 /// Extract all (ARC-026). The ZIP is read-only, so nothing else applies.
 pub(crate) fn zip_item_menu() -> Vec<MenuEntry> {
     vec![
-        item("Open", Icon::Open, WindowAction::Open)
-            .with_shortcut("Enter")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("Open"),
+            Icon::Open,
+            WindowAction::Open,
+        )
+        .with_shortcut("Enter")
+        .into(),
         MenuEntry::Divider,
-        item("Copy", Icon::Copy, WindowAction::Copy)
-            .with_shortcut("Ctrl+C")
-            .into(),
-        item("Copy path", Icon::Link, WindowAction::CopyPath)
-            .with_shortcut("Ctrl+Shift+C")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("Copy"),
+            Icon::Copy,
+            WindowAction::Copy,
+        )
+        .with_shortcut("Ctrl+C")
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Copy path"),
+            Icon::Link,
+            WindowAction::CopyPath,
+        )
+        .with_shortcut("Ctrl+Shift+C")
+        .into(),
         MenuEntry::Divider,
-        item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll).into(),
+        item(
+            ox_core::i18n::gettext_static("Extract all…"),
+            Icon::FolderZip,
+            WindowAction::ExtractAll,
+        )
+        .into(),
     ]
 }
 
@@ -451,24 +614,49 @@ pub(crate) fn zip_item_menu() -> Vec<MenuEntry> {
 /// all and Refresh (ARC-026).
 pub(crate) fn zip_background_menu() -> Vec<MenuEntry> {
     vec![
-        item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll).into(),
-        item("Refresh", Icon::ArrowClockwise, WindowAction::Refresh)
-            .with_shortcut("F5")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("Extract all…"),
+            Icon::FolderZip,
+            WindowAction::ExtractAll,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Refresh"),
+            Icon::ArrowClockwise,
+            WindowAction::Refresh,
+        )
+        .with_shortcut("F5")
+        .into(),
     ]
 }
 
 /// The menu of items in the Recycle Bin: Restore, Delete permanently and
 /// Properties (OPS-040).
 pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
-    let properties = item("Properties", Icon::Info, WindowAction::Properties).with_shortcut("Alt+Enter");
+    let properties = item(
+        ox_core::i18n::gettext_static("Properties"),
+        Icon::Info,
+        WindowAction::Properties,
+    )
+    .with_shortcut("Alt+Enter");
     vec![
-        item("Restore", Icon::ArrowCounterclockwise, WindowAction::Restore).into(),
-        item("Delete permanently", Icon::Delete, WindowAction::Trash)
-            .with_shortcut("Delete")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("Restore"),
+            Icon::ArrowCounterclockwise,
+            WindowAction::Restore,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Delete permanently"),
+            Icon::Delete,
+            WindowAction::Trash,
+        )
+        .with_shortcut("Delete")
+        .into(),
         MenuEntry::Divider,
-        properties.disabled_because(!is_single, ONE_ITEM_AT_A_TIME).into(),
+        properties
+            .disabled_because(!is_single, ox_core::i18n::gettext_static(ONE_ITEM_AT_A_TIME))
+            .into(),
     ]
 }
 
@@ -477,14 +665,18 @@ pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
 pub(crate) fn recycle_bin_background_menu() -> Vec<MenuEntry> {
     vec![
         item(
-            "Empty Recycle Bin",
+            ox_core::i18n::gettext_static("Empty Recycle Bin"),
             Icon::DeleteDismiss,
             WindowAction::EmptyRecycleBin,
         )
         .into(),
-        item("Refresh", Icon::ArrowClockwise, WindowAction::Refresh)
-            .with_shortcut("F5")
-            .into(),
+        item(
+            ox_core::i18n::gettext_static("Refresh"),
+            Icon::ArrowClockwise,
+            WindowAction::Refresh,
+        )
+        .with_shortcut("F5")
+        .into(),
     ]
 }
 
@@ -504,6 +696,7 @@ mod tests {
             is_read_only: false,
             is_single: true,
             is_search_result: false,
+            is_symlink: false,
             comparison: Comparison::Unavailable,
             editors: Vec::new(),
             applications: Vec::new(),
@@ -564,7 +757,7 @@ mod tests {
                 "-",
                 "Cut",
                 "Copy",
-                "Paste",
+                "Paste into folder",
                 "-",
                 "Rename",
                 "Move to Trash",
@@ -592,7 +785,7 @@ mod tests {
             ("Open", "Enter"),
             ("Cut", "Ctrl+X"),
             ("Copy", "Ctrl+C"),
-            ("Paste", "Ctrl+V"),
+            // CMD-019: Paste on one folder pastes into it, without a key.
             ("Rename", "F2"),
             ("Move to Trash", "Delete"),
             // A gain: the Python app had no key for Copy path.
@@ -677,7 +870,6 @@ mod tests {
                 "Open folder with…",
                 "Open in new window",
                 "Pin to Quick access",
-                "Copy path",
                 "Previous versions",
             ]
         );
@@ -829,7 +1021,10 @@ mod tests {
         let menu = item_menu(&folder(), MenuStyle::Compact);
 
         let strip: Vec<&str> = menu.strip.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(strip, ["Cut", "Copy", "Paste", "Rename", "Move to Trash"]);
+        assert_eq!(
+            strip,
+            ["Cut", "Copy", "Paste into folder", "Rename", "Move to Trash"]
+        );
         assert_eq!(
             labels(&menu.entries),
             [
@@ -869,6 +1064,9 @@ mod tests {
         assert_eq!(
             labels(&background_menu("Undo: Rename", "Redo", &[files])),
             [
+                "View",
+                "Sort by",
+                "-",
                 "New…",
                 "Paste",
                 "Undo: Rename",

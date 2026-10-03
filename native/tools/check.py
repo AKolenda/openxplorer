@@ -387,10 +387,11 @@ def run_isolated(command: Sequence[str], timeout: float) -> None:
 
 
 def check_inventories_and_driver() -> None:
-    """Test and validate the parity inventories, then test this driver."""
+    """Test and validate the parity inventories and the message template, then test this driver."""
     python = sys.executable
     run(python, '-m', 'unittest', 'discover', '-s', 'parity', '-p', 'test_*.py')
     run(python, 'parity/check.py')
+    run(python, 'tools/i18n.py', 'check')
     run(python, '-m', 'unittest', 'discover', '-s', 'tools', '-p', 'test_*.py')
 
 

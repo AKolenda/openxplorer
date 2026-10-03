@@ -8,6 +8,7 @@
 
 use std::ffi::OsStr;
 use std::fmt;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::batch::{Batch, ItemAction, Removal};
@@ -17,6 +18,7 @@ use super::conflicts::Placement;
 use super::containment::guard_destination;
 use super::error::TransferError;
 use super::guard::{check_write_tree, SourceChange};
+use super::item_failure::{FailedItem, FailureAnswer, ItemFailures};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
 use super::limits::{Incoming, StorageRules};
 use super::move_by_copying::{MoveByCopying, MoveByCopyingItem};
@@ -42,12 +44,16 @@ pub struct TransferEngine {
     factory: NodeFactory,
     /// Named after `self.emit` of the Python engine.
     emit: ProgressCallback,
+    /// Accounting is shared with the report closure and reset per engine run.
+    byte_counts: Arc<Mutex<(u64, u64, Option<u64>)>>,
     write_guard: Option<Box<WriteGuard>>,
     sleep: SleepCallback,
     /// What the run's destination cannot store (XFER-028).
     unstorable: Unstorable,
     /// Whether moves the backend cannot do are finished by copying.
     move_by_copying: MoveByCopying,
+    /// What to do when an item fails (OPS-047).
+    failures: ItemFailures,
 }
 
 impl fmt::Debug for TransferEngine {
@@ -92,17 +98,34 @@ impl TransferEngine {
         Self {
             factory,
             emit: Box::new(|_| {}),
+            byte_counts: Arc::default(),
             write_guard: None,
             sleep: Box::new(std::thread::sleep),
             unstorable: Unstorable::default(),
             move_by_copying: MoveByCopying::default(),
+            failures: ItemFailures::default(),
         }
     }
 
     /// Receives progress for the transfer panel.
     #[must_use]
-    pub fn with_progress(mut self, emit: impl FnMut(Progress) + Send + 'static) -> Self {
-        self.emit = Box::new(emit);
+    pub fn with_progress(mut self, mut emit: impl FnMut(Progress) + Send + 'static) -> Self {
+        let counts = Arc::clone(&self.byte_counts);
+        self.emit = Box::new(move |mut progress: Progress| {
+            if let Some(bytes) = progress.bytes.as_mut() {
+                let mut counts = counts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                if bytes.file_written == 0 {
+                    counts.0 = 0;
+                }
+                counts.1 = counts
+                    .1
+                    .saturating_add(bytes.file_written.saturating_sub(counts.0));
+                counts.0 = bytes.file_written;
+                bytes.batch_written = counts.1;
+                bytes.batch_size = counts.2;
+            }
+            emit(progress);
+        });
         self
     }
 
@@ -139,6 +162,19 @@ impl TransferEngine {
         question: impl FnMut(&MoveByCopyingItem) -> bool + Send + 'static,
     ) -> Self {
         self.move_by_copying = MoveByCopying::with_question(Box::new(question));
+        self
+    }
+
+    /// OPS-047: asks what to do when an item fails for a reason other than
+    /// a name conflict: retry it, skip it, skip every later failure, or
+    /// cancel. It runs on the engine's thread and blocks the run until it
+    /// answers. Without it the error is recorded and the next item runs.
+    #[must_use]
+    pub fn with_failure_question(
+        mut self,
+        question: impl FnMut(&FailedItem) -> FailureAnswer + Send + 'static,
+    ) -> Self {
+        self.failures = ItemFailures::with_question(Box::new(question));
         self
     }
 
@@ -208,7 +244,9 @@ impl TransferEngine {
         cancel: &Cancellation,
     ) -> Result<TransferResult, TransferError> {
         if !matches!(mode, TransferMode::Copy | TransferMode::Move) {
-            return Err(TransferError::failed("Only copies and moves can rename an item."));
+            return Err(TransferError::failed(crate::i18n::gettext(
+                "Only copies and moves can rename an item.",
+            )));
         }
         let uris = [uri.to_owned()];
         let uris = distinct_items(&uris)?;
@@ -252,13 +290,15 @@ impl TransferEngine {
         let mut on_folder = || {
             if !std::mem::replace(&mut announced, true) {
                 emit(Progress {
-                    label: CHECKING_SPACE_LABEL.to_owned(),
+                    label: crate::i18n::gettext(CHECKING_SPACE_LABEL),
                     fraction: 0.0,
                     scope: ProgressScope::Batch,
+                    bytes: None,
                 });
             }
         };
-        incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)?;
+        let batch_size = incoming.check_free_space(&self.factory, uris, cancel, &mut on_folder)?;
+        self.report_batch_size(batch_size);
         let placement = Placement {
             mode,
             policy,
@@ -266,6 +306,16 @@ impl TransferEngine {
             name,
         };
         Ok(self.run_items(ItemAction::Transfer(placement), uris, cancel))
+    }
+
+    /// Makes every byte report of this run say that the batch writes
+    /// `batch_size` bytes, for the panel's time left (OPS-021).
+    fn report_batch_size(&mut self, batch_size: Option<u64>) {
+        let mut counts = self
+            .byte_counts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *counts = (0, 0, batch_size);
     }
 
     /// Runs `action` over the distinct `uris` of an accepted request, then
@@ -290,6 +340,7 @@ impl TransferEngine {
             label: completed_label(state.result.done.len()),
             fraction: 1.0,
             scope: ProgressScope::Batch,
+            bytes: None,
         });
         state.result
     }
@@ -297,9 +348,35 @@ impl TransferEngine {
     /// Runs one top-level item and records its outcome. Staging this item
     /// created is removed afterwards, whatever happened; a leftover is
     /// reported with its exact location.
+    ///
+    /// A failure the user may answer is asked about first (OPS-047):
+    /// Retry runs the item again once its staging is gone, Cancel stops
+    /// the run after recording it.
     fn run_item(&mut self, batch: &Batch, index: usize, uri: &str, state: &mut RunState) {
         let mut staging = ItemStaging::default();
-        let outcome = self.process_item(batch, index, uri, state, &mut staging);
+        let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
+        while let Err(error) = &outcome {
+            if batch.cancel.is_cancelled() || !self.failures.asks_about(error) {
+                break;
+            }
+            let failed = FailedItem {
+                mode: batch.mode(),
+                name: self.display_name(uri),
+                error: error.to_string(),
+                more_items: index + 1 < batch.total,
+            };
+            match self.failures.answer(&failed) {
+                Some(FailureAnswer::Retry) => {
+                    self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
+                    outcome = self.process_item(batch, index, uri, state, &mut staging);
+                }
+                Some(FailureAnswer::Cancel) => {
+                    state.result.cancelled = true;
+                    break;
+                }
+                Some(FailureAnswer::Skip | FailureAnswer::SkipAll) | None => break,
+            }
+        }
         match outcome {
             Ok(ItemOutcome::Skipped) => state.result.skipped.push(uri.to_owned()),
             Ok(ItemOutcome::Done) => {
@@ -337,19 +414,22 @@ impl TransferEngine {
     /// Resolves the selected item at `uri` and announces it on the progress
     /// panel.
     fn start_item(&mut self, batch: &Batch, index: usize, uri: &str) -> Result<SelectedItem, TransferError> {
+        // OPS-021: a paused run waits before its next item.
+        batch.cancel.wait_while_paused();
         batch.cancel.check()?;
         let node = (self.factory)(uri)?;
         // XFER-019: a root has no name to copy, move or trash it under.
         if node.parent().is_none() {
-            return Err(TransferError::failed(
+            return Err(TransferError::failed(crate::i18n::gettext(
                 "Filesystem roots cannot be copied, moved or trashed as items.",
-            ));
+            )));
         }
         let info = node.info(Some(batch.cancel))?;
         (self.emit)(Progress {
             label: item_label(batch.mode(), &node.display_name(), index + 1, batch.total),
             fraction: batch.start_fraction(index),
             scope: ProgressScope::Batch,
+            bytes: None,
         });
         Ok(SelectedItem {
             node,
@@ -491,19 +571,14 @@ impl TransferEngine {
             Some(&mut copied),
         )?;
         if self.unstorable.take_skipped() > 0 {
-            return Err(TransferError::RecoveryRequired(format!(
-                "The copy at {} leaves out items the destination cannot store, so the original \
-                 was kept.",
-                destination.uri()
+            return Err(TransferError::RecoveryRequired(crate::i18n::format_message(
+                "The copy at {uri} leaves out items the destination cannot store, so the original was kept.",
+                &[("uri", &destination.uri())],
             )));
         }
         let source = selected.node.as_ref();
         let kept = remove_copied_source(source, &selected.info, &copied, self.guard()).map_err(|error| {
-            TransferError::RecoveryRequired(format!(
-                "The item was copied to {}, but the original could not be removed. \
-                 Check the copy, then delete the original. {error}",
-                destination.uri()
-            ))
+            TransferError::RecoveryRequired(crate::i18n::format_message("The item was copied to {uri}, but the original could not be removed. Check the copy, then delete the original. {error}", &[("uri", &destination.uri()), ("error", &(error).to_string())]))
         })?;
         Ok(kept.notice(&source.uri()))
     }

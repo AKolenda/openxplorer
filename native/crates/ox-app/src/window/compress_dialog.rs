@@ -11,7 +11,7 @@ use ox_core::location::validate_name;
 use ox_core::transfer::Cancellation;
 
 use crate::archive_view::{compressed_file_name, compression_success_text};
-use crate::dialog_layer::{labelled_entry, DialogFrame, DialogWidth};
+use crate::dialog::{labelled_entry, DialogFrame, DialogWidth};
 
 use super::transfer_panel::TransferKind;
 use super::{BrowserWindow, ButtonStyle};
@@ -32,15 +32,17 @@ impl BrowserWindow {
             .unwrap_or_default()
             .trim_end_matches(".zip")
             .to_owned();
-        let frame = DialogFrame::new("Compress", DialogWidth::Standard);
-        let name = labelled_entry(&frame.body(), "Archive name", &suggested);
+        let frame = DialogFrame::new(&ox_core::i18n::gettext("Compress"), DialogWidth::Standard);
+        let name = labelled_entry(&frame.body(), &ox_core::i18n::gettext("Archive name"), &suggested);
         let formats: Vec<&str> = FORMATS.iter().map(|(label, _)| *label).collect();
         let format = gtk::DropDown::from_strings(&formats);
         format.set_halign(gtk::Align::Start);
-        format.update_property(&[gtk::accessible::Property::Label("Format")]);
+        format.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+            "Format",
+        ))]);
         frame.body().append(&format);
-        let compress = frame.add_button("Compress", ButtonStyle::Accent);
-        frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
+        let compress = frame.add_button(&ox_core::i18n::gettext("Compress"), ButtonStyle::Accent);
+        frame.add_closing_button(&ox_core::i18n::gettext("Cancel"), ButtonStyle::Bordered, || {});
         compress.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,

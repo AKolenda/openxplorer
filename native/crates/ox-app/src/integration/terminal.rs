@@ -57,9 +57,11 @@ pub(crate) async fn open_terminal(
         versions: Arc::new(PreviousVersions::new(settings_directory)),
     };
     let launched = open_terminal_in_background(uri, checks, sandbox, Cancellation::new()).await?;
-    Ok(format!(
-        "Opened {} in {}",
-        launched.terminal,
-        launched.path.display()
+    Ok(ox_core::i18n::format_message(
+        "Opened {terminal} in {display}",
+        &[
+            ("terminal", launched.terminal),
+            ("display", &launched.path.display().to_string()),
+        ],
     ))
 }

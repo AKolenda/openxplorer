@@ -73,7 +73,10 @@ impl Notice {
     pub(super) fn of(summary: &OperationSummary, window: u32, destination: Destination) -> Self {
         let (title, body) = match summary {
             OperationSummary::Toast(text) => (text.clone(), None),
-            OperationSummary::Report(text) => (RESULT_TITLE.to_owned(), Some(text.clone())),
+            OperationSummary::Report(text) => (
+                ox_core::i18n::gettext_static(RESULT_TITLE).to_owned(),
+                Some(text.clone()),
+            ),
         };
         Self {
             title,

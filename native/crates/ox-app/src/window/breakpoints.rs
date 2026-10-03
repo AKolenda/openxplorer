@@ -186,7 +186,9 @@ impl BrowserWindow {
         } else {
             DetailsColumns::All
         };
-        self.folder_pane().details().show_columns(details_columns);
+        for pane in self.folder_panes() {
+            pane.details().show_columns(details_columns);
+        }
         self.settings_page().fit_to_width(band.settings_page_width());
         self.render_landing();
     }

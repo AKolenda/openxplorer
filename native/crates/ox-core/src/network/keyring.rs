@@ -108,21 +108,24 @@ pub enum KeyringError {
     /// from the window's memory; there is deliberately no plaintext
     /// fallback.
     #[error(
-        "The system keyring is unavailable. Credentials are reused in this window only; they cannot \
+        "{}",
+        crate::i18n::gettext(
+            "The system keyring is unavailable. Credentials are reused in this window only; they cannot \
          survive closing it."
+        )
     )]
     Unavailable,
     /// The keyring did not answer in time, for example because its unlock
     /// prompt was left open.
-    #[error("The system keyring did not answer in time.")]
+    #[error("{}", crate::i18n::gettext("The system keyring did not answer in time."))]
     TimedOut,
     /// The user dismissed the keyring's unlock prompt.
-    #[error("The keyring unlock was cancelled.")]
+    #[error("{}", crate::i18n::gettext("The keyring unlock was cancelled."))]
     UnlockDismissed,
     /// The Secret Service reported another error. Its own description is
     /// developer text, so it is kept as the source, for logs, and not
     /// shown.
-    #[error("The system keyring reported an error.")]
+    #[error("{}", crate::i18n::gettext("The system keyring reported an error."))]
     Failed {
         /// What the Secret Service client reported.
         #[source]

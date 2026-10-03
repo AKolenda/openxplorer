@@ -15,7 +15,7 @@ use crate::locations::Page;
 impl Capacity {
     /// The status bar's text: "12.4 GB free".
     pub(super) fn free_text(self) -> String {
-        format!("{} free", format::pretty_bytes(self.free))
+        ox_core::i18n::format_message("{value1} free", &[("value1", &format::pretty_bytes(self.free))])
     }
 
     /// The status bar's tooltip: "12.4 GB free out of 100 GB (88% used)".
@@ -23,7 +23,10 @@ impl Capacity {
         let free = format::pretty_bytes(self.free);
         let size = format::pretty_bytes(self.size);
         let used = (self.used_share() * 100.0).round();
-        format!("{free} free out of {size} ({used}% used)")
+        ox_core::i18n::format_message(
+            "{free} free out of {size} ({used}% used)",
+            &[("free", &free), ("size", &size), ("used", &used.to_string())],
+        )
     }
 }
 

@@ -18,9 +18,9 @@ use super::version_row::medium_date;
 use crate::icons::{self, Icon};
 
 /// The banner's heading.
-const HEADING: &str = "Previous version";
+const HEADING: &str = crate::i18n::message_id("Previous version");
 /// What the user may do with a previous version.
-const SAFETY: &str = "Read-only in OpenXplorer · Restore a copy to edit";
+const SAFETY: &str = crate::i18n::message_id("Read-only in OpenXplorer · Restore a copy to edit");
 /// The clock's size (`icon('clock', 16)`).
 const GLYPH_SIZE: i32 = 16;
 
@@ -28,7 +28,10 @@ const GLYPH_SIZE: i32 = 16;
 /// name when it has no date, with the tooltip that explains it.
 pub(crate) fn date_line(snapshot: &SnapshotLocation) -> (String, &'static str) {
     let Some(date) = snapshot.date() else {
-        return (snapshot.label().to_owned(), NO_DATE_EXPLANATION);
+        return (
+            snapshot.label().to_owned(),
+            ox_core::i18n::gettext_static(NO_DATE_EXPLANATION),
+        );
     };
     let time = date.time_text();
     let day = medium_date(&date);
@@ -89,13 +92,13 @@ impl SnapshotBanner {
         self.set_accessible_role(gtk::AccessibleRole::Status);
         self.append(&icons::image(Icon::Clock, GLYPH_SIZE));
         let heading = gtk::Label::builder()
-            .label(HEADING)
+            .label(ox_core::i18n::gettext_static(HEADING))
             .css_classes(["snapshot-heading"])
             .build();
         self.append(&heading);
         self.append(&self.imp().date);
         let safety = gtk::Label::builder()
-            .label(SAFETY)
+            .label(ox_core::i18n::gettext_static(SAFETY))
             .hexpand(true)
             .xalign(1.0)
             .ellipsize(gtk::pango::EllipsizeMode::End)

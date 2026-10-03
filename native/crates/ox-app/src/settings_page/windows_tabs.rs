@@ -20,10 +20,41 @@ use super::parts;
 use super::row::{ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
+use super::startup::startup_group;
 use super::SettingsPage;
 use crate::application::AppAction;
 use crate::icons::Icon;
 use crate::window::list_open_windows_on_click;
+
+const NEW_TAB_POSITION: RowText = RowText {
+    title: "Open new tabs",
+    description: "Where a folder opened in a new tab goes. Ctrl+T always adds a tab at the end.",
+    keywords: "new tab position after current end tab bar order middle click",
+};
+
+/// The choices of "Open new tabs" (Dolphin's `OpenNewTabAfterLastTab`).
+const NEW_TAB_POSITIONS: [Choice<bool>; 2] = [
+    Choice {
+        value: false,
+        label: crate::i18n::message_id("After the current tab"),
+    },
+    Choice {
+        value: true,
+        label: crate::i18n::message_id("At the end of the tab bar"),
+    },
+];
+
+const BEGIN_SPLIT: RowText = RowText {
+    title: "Open new windows in split view",
+    description: "New windows show two folders side by side. F3 splits or unsplits a tab.",
+    keywords: "split view dual pane two panes side by side f3 commander",
+};
+
+const TAB_SWITCHES_PANES: RowText = RowText {
+    title: "Switch between split panes with Tab",
+    description: "Off: Tab moves keyboard focus through the window as usual.",
+    keywords: "split view tab key switch pane focus keyboard",
+};
 
 const OPEN_WINDOWS: RowText = RowText {
     title: "Open windows",
@@ -115,12 +146,14 @@ const DROP_ON_FOLDERS: RowText = RowText {
 };
 
 /// The rest of the Python section's paragraph.
-const DRAGGING_NOTE: &str = "Right-click a tab → Move tab to window… lets you pick an existing \
+const DRAGGING_NOTE: &str = crate::i18n::message_id(
+    "Right-click a tab → Move tab to window… lets you pick an existing \
                              window without dragging. The original is kept until the destination \
                              accepts it. Close this tab's dialogs and finish file operations first. \
                              File drops never remove the source. Files can be dragged out of a \
                              ZIP opened like a folder; from the pop-up window, extract them first. \
-                             Some apps need a mounted network path.";
+                             Some apps need a mounted network path.",
+);
 
 const BROWSE_ARCHIVES: RowText = RowText {
     title: "Open archives as folders",
@@ -141,11 +174,11 @@ const ZIP_OPENING: RowText = RowText {
 const ZIP_OPENINGS: [Choice<ZipOpening>; 2] = [
     Choice {
         value: ZipOpening::Folder,
-        label: "Like a folder (Windows)",
+        label: crate::i18n::message_id("Like a folder (Windows)"),
     },
     Choice {
         value: ZipOpening::Window,
-        label: "In a pop-up window (default)",
+        label: crate::i18n::message_id("In a pop-up window (default)"),
     },
 ];
 
@@ -154,29 +187,34 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::WindowsAndTabs;
     let windows = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     windows.append_group(&windows_group(page));
+    windows.append_group(&startup_group(page));
+    windows.append_group(&split_view_group(page));
     windows.append_group(&address_group(page));
     windows.append_group(&archives_group(page));
     windows.append_group(&confirmations_group(page));
     windows.append_group(&dragging_group());
-    windows.append_text(&parts::note(Icon::Info, DRAGGING_NOTE));
+    windows.append_text(&parts::note(
+        Icon::Info,
+        ox_core::i18n::gettext_static(DRAGGING_NOTE),
+    ));
     windows
 }
 
 /// "Open windows…" with the windows button's glyph, opening the title
 /// bar's windows menu.
 fn open_windows_button() -> gtk::MenuButton {
-    let button = parts::menu_button_with_glyph("Open windows…", Icon::Desktop);
+    let button = parts::menu_button_with_glyph(ox_core::i18n::gettext_static("Open windows…"), Icon::Desktop);
     list_open_windows_on_click(&button);
     button
 }
 
 fn windows_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Windows");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Windows"));
     let listing = SettingRow::new(OPEN_WINDOWS);
     listing.add_control(&open_windows_button(), ControlName::OwnLabel);
     group.add_row(&listing);
     let new_window = SettingRow::new(NEW_WINDOW);
-    let button = parts::button_with_glyph("New window", Icon::WindowNew);
+    let button = parts::button_with_glyph(&ox_core::i18n::gettext("New window"), Icon::WindowNew);
     button.set_action_name(Some(&AppAction::NewWindow.detailed_name()));
     new_window.add_control(&button, ControlName::OwnLabel);
     group.add_row(&new_window);
@@ -200,6 +238,53 @@ fn windows_group(page: &SettingsPage) -> SettingsGroup {
     };
     title_path.add_control(&page.preference_switch(full_path_in_title), ControlName::RowTitle);
     group.add_row(&title_path);
+    let new_tabs = SettingRow::new(NEW_TAB_POSITION);
+    let at_end = PreferenceBinding {
+        read: |preferences| preferences.open_tabs_at_end,
+        write: |at_end| PreferencesUpdate {
+            open_tabs_at_end: Some(at_end),
+            ..PreferencesUpdate::default()
+        },
+    };
+    new_tabs.add_control(
+        &page.preference_choice(&NEW_TAB_POSITIONS, at_end),
+        ControlName::RowTitle,
+    );
+    group.add_row(&new_tabs);
+    group
+}
+
+/// Split view's options (VIEW-059, Dolphin's "Begin in split view mode"
+/// and "Switch between split views with tab key").
+fn split_view_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Split view"));
+    let bindings = [
+        (
+            BEGIN_SPLIT,
+            PreferenceBinding {
+                read: |preferences| preferences.begin_in_split_view,
+                write: |on| PreferencesUpdate {
+                    begin_in_split_view: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            TAB_SWITCHES_PANES,
+            PreferenceBinding {
+                read: |preferences| preferences.tab_switches_split_panes,
+                write: |on| PreferencesUpdate {
+                    tab_switches_split_panes: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+    ];
+    for (text, binding) in bindings {
+        let row = SettingRow::new(text);
+        row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+        group.add_row(&row);
+    }
     group
 }
 
@@ -207,7 +292,7 @@ fn windows_group(page: &SettingsPage) -> SettingsGroup {
 /// opened runs (OPEN-008) and before a window with several tabs closes
 /// (Dolphin's Confirmations page, SET-010).
 fn confirmations_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Confirmations");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Confirmations"));
     let bindings = [
         (
             CONFIRM_TRASH,
@@ -270,7 +355,7 @@ fn confirmations_group(page: &SettingsPage) -> SettingsGroup {
 
 /// The address bar's options (NAV-024, NAV-029).
 fn address_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Address bar");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Address bar"));
     let full_path = SettingRow::new(FULL_PATH);
     let show_full_path = PreferenceBinding {
         read: |preferences| preferences.show_full_path,
@@ -297,7 +382,7 @@ fn address_group(page: &SettingsPage) -> SettingsGroup {
 /// Whether archives open as folders (ARC-022), as Dolphin's Navigation
 /// setting "Open archives as folder".
 fn archives_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new("Archives");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Archives"));
     let row = SettingRow::new(BROWSE_ARCHIVES);
     let binding = PreferenceBinding {
         read: |preferences| preferences.browse_archives,
@@ -326,7 +411,7 @@ fn archives_group(page: &SettingsPage) -> SettingsGroup {
 
 /// Dragging tabs and files.
 fn dragging_group() -> SettingsGroup {
-    let group = SettingsGroup::new("Tabs and files");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Tabs and files"));
     for text in [MOVE_TABS, DRAG_TO_APPS, DROP_ON_FOLDERS] {
         group.add_row(&SettingRow::new(text));
     }

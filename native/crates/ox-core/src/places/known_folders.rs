@@ -79,18 +79,22 @@ impl KnownFolder {
         Self::ALL.into_iter().find(|folder| folder.xdg_key() == key)
     }
 
-    /// The visible name, which is also the default folder name in the home
-    /// folder.
-    pub const fn label(self) -> &'static str {
+    /// The localized display name; it never determines a filesystem path.
+    pub fn label(self) -> &'static str {
+        crate::i18n::gettext_static(self.default_name())
+    }
+
+    /// The stable fallback directory name, used when XDG has no configured path.
+    const fn default_name(self) -> &'static str {
         match self {
-            KnownFolder::Desktop => "Desktop",
-            KnownFolder::Downloads => "Downloads",
-            KnownFolder::Documents => "Documents",
-            KnownFolder::Pictures => "Pictures",
-            KnownFolder::Music => "Music",
-            KnownFolder::Videos => "Videos",
-            KnownFolder::Templates => "Templates",
-            KnownFolder::Public => "Public",
+            KnownFolder::Desktop => crate::i18n::message_id("Desktop"),
+            KnownFolder::Downloads => crate::i18n::message_id("Downloads"),
+            KnownFolder::Documents => crate::i18n::message_id("Documents"),
+            KnownFolder::Pictures => crate::i18n::message_id("Pictures"),
+            KnownFolder::Music => crate::i18n::message_id("Music"),
+            KnownFolder::Videos => crate::i18n::message_id("Videos"),
+            KnownFolder::Templates => crate::i18n::message_id("Templates"),
+            KnownFolder::Public => crate::i18n::message_id("Public"),
         }
     }
 
@@ -178,7 +182,7 @@ impl FolderLocations {
     fn paths_with(&self, mut configured: UserDirs) -> KnownFolderPaths {
         let mut paths = HashMap::new();
         for folder in KnownFolder::ALL {
-            let default_path = self.home.join(folder.label());
+            let default_path = self.home.join(folder.default_name());
             let path = configured.remove(&folder).unwrap_or(default_path);
             paths.insert(folder, path);
         }
@@ -287,7 +291,7 @@ mod tests {
         let fixture = Fixture::new();
         let paths = fixture.locations().read_paths();
         for folder in KnownFolder::ALL {
-            assert_eq!(paths.path(folder), fixture.home.join(folder.label()));
+            assert_eq!(paths.path(folder), fixture.home.join(folder.default_name()));
         }
     }
 
@@ -297,7 +301,7 @@ mod tests {
         fixture.write_user_dirs("XDG_DOWNLOAD_DIR=\"$HOME/Incoming\"\n");
         let defaults = fixture.locations().default_paths();
         for folder in KnownFolder::ALL {
-            assert_eq!(defaults.path(folder), fixture.home.join(folder.label()));
+            assert_eq!(defaults.path(folder), fixture.home.join(folder.default_name()));
         }
         assert_eq!(
             fixture.locations().user_dirs_file(),

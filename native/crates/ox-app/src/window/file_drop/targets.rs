@@ -99,6 +99,14 @@ impl BrowserWindow {
         x: f64,
         y: f64,
     ) -> gdk::DragAction {
+        if zone == DropZone::FolderView {
+            // A drag over the other pane of a split tab makes it active,
+            // so the drop goes where any drop on a folder view goes.
+            let side = target.widget().and_then(|widget| self.side_holding(&widget));
+            if let Some(side) = side {
+                self.activate_pane(side);
+            }
+        }
         let spot = target
             .widget()
             .and_then(|widget| self.hover_drop_at(zone, &widget, x, y));

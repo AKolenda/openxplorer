@@ -32,7 +32,13 @@ impl BrowserWindow {
         let [item] = items.as_slice() else {
             return;
         };
-        let uri = item.entry().uri.clone();
+        self.open_item_location(item.entry().uri.clone(), target);
+    }
+
+    /// Opens the folder that holds `uri` where `target` says, with `uri`
+    /// selected and scrolled into view: a search result's location, or
+    /// a link's target (CMD-030).
+    pub(super) fn open_item_location(&self, uri: String, target: LocationTarget) {
         let Some(folder) = parent_location(&uri) else {
             return;
         };
@@ -59,8 +65,9 @@ impl BrowserWindow {
     fn open_located_tab(&self, folder: &str, uri: String) -> Result<(), LocationError> {
         let folder = self.resolve_address(folder)?;
         self.save_tab_view();
+        let position = self.opened_tab_position();
         let mut session = self.imp().session.borrow_mut();
-        let id = session.add(&folder, TabPlacement::Background);
+        let id = session.add_at(&folder, TabPlacement::Background, position);
         if let Some(tab) = session.tab_mut(id) {
             tab.selected = vec![uri.clone()];
             tab.revealed_item = Some(uri);

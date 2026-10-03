@@ -36,7 +36,8 @@ use super::zip_folder::archive_location;
 use super::BrowserWindow;
 
 /// Cut inside a ZIP.
-pub(super) const NO_CUT: &str = "Items in a ZIP are read-only. Use Copy, then Paste where you want them.";
+pub(super) const NO_CUT: &str =
+    crate::i18n::message_id("Items in a ZIP are read-only. Use Copy, then Paste where you want them.");
 
 /// Extracts the copies of a drag when the drop asks for them.
 type Materialise = Rc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>>>;
@@ -55,15 +56,17 @@ impl BrowserWindow {
     ) -> Result<Vec<String>, String> {
         let first = locations
             .first()
-            .ok_or_else(|| "Select the items to copy.".to_owned())?;
+            .ok_or_else(|| ox_core::i18n::gettext_static("Select the items to copy.").to_owned())?;
         if locations
             .iter()
             .any(|location| location.archive_uri != first.archive_uri)
         {
-            return Err("Copy items from one ZIP at a time.".to_owned());
+            return Err(ox_core::i18n::gettext_static("Copy items from one ZIP at a time.").to_owned());
         }
         if !self.may_start_archive_operation() {
-            return Err("Wait for the running file operation to finish.".to_owned());
+            return Err(
+                ox_core::i18n::gettext_static("Wait for the running file operation to finish.").to_owned(),
+            );
         }
         let archive_uri = first.archive_uri.clone();
         let root = copies_root();
@@ -75,7 +78,12 @@ impl BrowserWindow {
         })
         .await
         .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
-        .map_err(|error| format!("Could not prepare the copies: {error}"))?;
+        .map_err(|error| {
+            ox_core::i18n::format_message(
+                "Could not prepare the copies: {error}",
+                &[("error", &error.to_string())],
+            )
+        })?;
         let members: Vec<String> = locations.iter().map(|location| location.member.clone()).collect();
         let request = ExtractionRequest {
             archive_uri,
@@ -99,7 +107,7 @@ impl BrowserWindow {
     /// the clipboard. Cut is refused.
     pub(super) fn copy_zip_selection(&self, mode: ClipboardMode, locations: Vec<ArchiveLocation>) {
         if mode == ClipboardMode::Cut {
-            self.show_message(NO_CUT);
+            self.show_message(ox_core::i18n::gettext_static(NO_CUT));
             return;
         }
         let generation = self.clipboard_generation();
@@ -283,10 +291,9 @@ async fn shared_copies(
         }
     };
     if let Some(receiver) = waiting {
-        return receiver
-            .recv()
-            .await
-            .unwrap_or_else(|_| Err("The copies could not be made.".to_owned()));
+        return receiver.recv().await.unwrap_or_else(|_| {
+            Err(ox_core::i18n::gettext_static("The copies could not be made.").to_owned())
+        });
     }
     let result = materialise().await;
     let waiters = match copies.replace(imp::Copies::Done(result.clone())) {

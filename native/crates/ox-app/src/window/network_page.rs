@@ -50,8 +50,10 @@ const LOCATION_CARD_ICON: i32 = 34;
 const SERVER_CARD_ICON: i32 = 40;
 
 /// The note under the discovered servers (`.discovery-note`).
-const DISCOVERY_NOTE: &str = "Discovery depends on devices advertising themselves and on local \
-firewall/network settings. It does not guarantee a list of every host.";
+const DISCOVERY_NOTE: &str = crate::i18n::message_id(
+    "Discovery depends on devices advertising themselves and on local \
+firewall/network settings. It does not guarantee a list of every host.",
+);
 
 /// A bordered or accent button that runs `action`.
 fn command_button(label: &str, action: WindowAction, style: ButtonStyle) -> gtk::Button {
@@ -70,7 +72,7 @@ fn banner(discovery: &DiscoveryState) -> gtk::Box {
     words.set_hexpand(true);
     words.append(
         &gtk::Label::builder()
-            .label("Computers & network storage")
+            .label(ox_core::i18n::gettext("Computers & network storage"))
             .xalign(0.0)
             .build(),
     );
@@ -90,10 +92,14 @@ fn banner(discovery: &DiscoveryState) -> gtk::Box {
     banner.append(&glyph);
     banner.append(&words);
     let toggle = if discovery.is_busy {
-        command_button("Stop", WindowAction::StopDiscovery, ButtonStyle::Accent)
+        command_button(
+            ox_core::i18n::gettext_static("Stop"),
+            WindowAction::StopDiscovery,
+            ButtonStyle::Accent,
+        )
     } else {
         command_button(
-            "Discover servers",
+            ox_core::i18n::gettext_static("Discover servers"),
             WindowAction::DiscoverServers,
             ButtonStyle::Accent,
         )
@@ -106,13 +112,15 @@ fn banner(discovery: &DiscoveryState) -> gtk::Box {
 /// (`.network-manual`).
 fn server_address_field() -> gtk::Box {
     let address = gtk::Entry::builder()
-        .placeholder_text("\\\\server or \\\\archive-nas")
+        .placeholder_text(ox_core::i18n::gettext("\\\\server or \\\\archive-nas"))
         .hexpand(true)
         .build();
-    address.update_property(&[gtk::accessible::Property::Label("SMB server address")]);
+    address.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        "SMB server address",
+    ))]);
     address.connect_activate(open_typed_address);
     let open = gtk::Button::builder()
-        .label("Open address")
+        .label(ox_core::i18n::gettext("Open address"))
         .valign(gtk::Align::Center)
         .css_classes([ButtonStyle::Bordered.css_class()])
         .build();
@@ -123,10 +131,10 @@ fn server_address_field() -> gtk::Box {
     ));
     let map_content = gtk::Box::new(gtk::Orientation::Horizontal, MAP_GLYPH_GAP);
     map_content.append(&icons::image(Icon::Add, MAP_GLYPH));
-    map_content.append(&gtk::Label::new(Some("Map location")));
+    map_content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Map location"))));
     // Opens the connect dialog (`connectDialog`).
     let map = command_button(
-        "Map location",
+        ox_core::i18n::gettext_static("Map location"),
         WindowAction::MapNetworkLocation,
         ButtonStyle::Bordered,
     );
@@ -154,7 +162,10 @@ fn server_card(server: &DiscoveredServer, locations: &LocationContext) -> gtk::B
     let art = Art::for_network_location(NetworkKind::Server, &server.label, Connection::Connected);
     let texts = card_texts(&server.label, &locations.display_location(&server.uri));
     let protocol = gtk::Label::builder()
-        .label(format!("{} · Discovered", protocol_name(&server.uri)))
+        .label(ox_core::i18n::format_message(
+            "{protocol_name} · Discovered",
+            &[("protocol_name", protocol_name(&server.uri))],
+        ))
         .xalign(0.0)
         .css_classes(["network-protocol"])
         .build();
@@ -176,7 +187,7 @@ fn protocol_name(uri: &str) -> &'static str {
 /// "Discovered servers" with their count, their cards, the notice while
 /// there are none, and the note on how discovery works.
 fn discovered_servers(body: &gtk::Box, discovery: &DiscoveryState, locations: &LocationContext) {
-    let title = section_title("Discovered servers", Icon::Desktop);
+    let title = section_title(ox_core::i18n::gettext_static("Discovered servers"), Icon::Desktop);
     let count = gtk::Label::builder()
         .label(discovery.servers.len().to_string())
         .hexpand(true)
@@ -200,7 +211,7 @@ fn discovered_servers(body: &gtk::Box, discovery: &DiscoveryState, locations: &L
         body.append(&notice);
     }
     let note = gtk::Label::builder()
-        .label(DISCOVERY_NOTE)
+        .label(ox_core::i18n::gettext_static(DISCOVERY_NOTE))
         .xalign(0.0)
         .wrap(true)
         .css_classes(["discovery-note"])
@@ -220,7 +231,10 @@ fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk:
 
 /// Every connected, saved and visited network location.
 fn connected_and_saved(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&section_title("Connected & saved locations", Icon::Pin));
+    body.append(&section_title(
+        ox_core::i18n::gettext_static("Connected & saved locations"),
+        Icon::Pin,
+    ));
     let cards = card_grid(DRIVE_GRID);
     for location in &places.network {
         cards.append(&network_card(location, locations));
@@ -247,7 +261,9 @@ impl BrowserWindow {
     pub(super) fn open_server_address(&self, typed: &str) {
         match location::normalise_location(typed, None, &glib::home_dir()) {
             Ok(uri) if is_server_location(&uri) => self.navigate_or_report(&uri),
-            Ok(_) => self.show_message("Enter a network server or shared folder."),
+            Ok(_) => self.show_message(&ox_core::i18n::gettext(
+                "Enter a network server or shared folder.",
+            )),
             Err(error) => self.show_message(&error.to_string()),
         }
     }

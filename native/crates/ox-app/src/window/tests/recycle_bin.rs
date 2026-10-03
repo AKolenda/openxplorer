@@ -16,6 +16,8 @@ use ox_core::transfer::Cancellation;
 use super::file_ops_support::{
     dialog_over, is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
 };
+use crate::folder_view::details::cell_text;
+use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
 
@@ -71,6 +73,60 @@ fn the_recycle_bin_lists_trashed_items_and_restore_puts_them_back() {
     wait_until("the toast", || {
         test.window.shown_message() == "1 item(s) restored."
     });
+}
+
+/// The details view of the Recycle Bin shows where each item was
+/// deleted from and when, in place of Date modified, and sorts by them.
+///
+/// parity: VIEW-062, OPS-040
+#[gtk::test]
+fn the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted() {
+    require_private_trash();
+    let fixture = Fixture::empty();
+    for (folder, name) in [("Zeta", "Agenda.txt"), ("Alpha", "Budget.txt")] {
+        std::fs::create_dir(fixture.path(folder)).expect("fixture subfolder");
+        fixture.write(&format!("{folder}/{name}"));
+        trash(&fixture.path(&format!("{folder}/{name}")));
+    }
+    let test = TestWindow::open(TRASH_URI);
+    let ours = || {
+        let names = test.names().into_iter();
+        names
+            .filter(|name| name == "Agenda.txt" || name == "Budget.txt")
+            .collect::<Vec<_>>()
+    };
+    wait_until("both trashed files to be listed", || ours().len() == 2);
+    let details = test.window.folder_pane().details();
+    let shown = |column| details.column(column).is_some_and(|column| column.is_visible());
+
+    details.sort_by(SortOrder {
+        column: SortColumn::OriginalLocation,
+        direction: SortDirection::Ascending,
+    });
+
+    assert!(shown(SortColumn::OriginalLocation) && shown(SortColumn::Deleted));
+    assert!(!shown(SortColumn::Modified), "Date deleted takes its place");
+    assert_eq!(ours(), ["Budget.txt", "Agenda.txt"], "Alpha before Zeta");
+    let model = test.window.folder_model();
+    let budget = (0..model.n_items())
+        .filter_map(|position| model.item(position))
+        .find(|item| item.entry().name == "Budget.txt")
+        .expect("Budget.txt is listed");
+    let alpha = fixture.path("Alpha").display().to_string();
+    assert_eq!(
+        cell_text(
+            SortColumn::OriginalLocation,
+            &budget,
+            ox_core::format::DateStyle::Absolute
+        ),
+        alpha
+    );
+    let unknown = ox_core::format::date_short_time_text(None);
+    assert_ne!(
+        cell_text(SortColumn::Deleted, &budget, ox_core::format::DateStyle::Absolute),
+        unknown,
+        "the deletion date is known"
+    );
 }
 
 /// parity: OPS-043
@@ -168,7 +224,7 @@ fn empty_recycle_bin_asks_nothing_when_the_settings_say_so() {
 /// The sidebar's Recycle Bin shows whether it is full and empties it
 /// from any folder; Recent files sits beside it.
 ///
-/// parity: SIDE-025, SIDE-026
+/// parity: SIDE-025, SIDE-026, OPS-042
 #[gtk::test]
 fn the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere() {
     require_private_trash();

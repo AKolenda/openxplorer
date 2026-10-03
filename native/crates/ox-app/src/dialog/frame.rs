@@ -127,6 +127,11 @@ mod imp {
     }
 
     impl ObjectImpl for DialogFrame {
+        fn constructed(&self) {
+            self.parent_constructed();
+            crate::i18n::translate_template(&*self.obj(), "dialog-frame.ui");
+        }
+
         fn signals() -> &'static [Signal] {
             static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
             SIGNALS.get_or_init(|| vec![Signal::builder(CLOSED).build()])

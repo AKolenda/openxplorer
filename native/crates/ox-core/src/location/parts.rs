@@ -125,7 +125,7 @@ impl LocationParts {
         let Some(port) = port else {
             return Ok(None);
         };
-        let invalid_port = || LocationError::new("Invalid SMB port.");
+        let invalid_port = || LocationError::new(crate::i18n::gettext("Invalid SMB port."));
         if !port.bytes().all(|byte| byte.is_ascii_digit()) {
             return Err(invalid_port());
         }
@@ -323,20 +323,23 @@ fn check_bracketed_authority(authority: &str) -> Result<(), LocationError> {
 fn check_bracketed_host(host: &str) -> Result<(), LocationError> {
     if host.starts_with('v') {
         if !is_ip_future_address(host) {
-            return Err(LocationError::new(format!(
-                "The server name “{host}” in brackets is not a valid IPvFuture address."
+            return Err(LocationError::new(crate::i18n::format_message(
+                "The server name “{host}” in brackets is not a valid IPvFuture address.",
+                &[("host", host)],
             )));
         }
         return Ok(());
     }
     if host.parse::<Ipv4Addr>().is_ok() {
-        return Err(LocationError::new(format!(
-            "Enter the IPv4 address “{host}” without brackets."
+        return Err(LocationError::new(crate::i18n::format_message(
+            "Enter the IPv4 address “{host}” without brackets.",
+            &[("host", host)],
         )));
     }
     if !is_ipv6_address(host) {
-        return Err(LocationError::new(format!(
-            "The server name “{host}” in brackets is not an IPv6 address."
+        return Err(LocationError::new(crate::i18n::format_message(
+            "The server name “{host}” in brackets is not an IPv6 address.",
+            &[("host", host)],
         )));
     }
     Ok(())
@@ -382,8 +385,9 @@ fn check_nfkc_authority(authority: &str) -> Result<(), LocationError> {
     if !normalised.contains(['/', '?', '#', '@', ':']) {
         return Ok(());
     }
-    Err(LocationError::new(format!(
-        "The server name “{authority}” contains characters that are not allowed in an address."
+    Err(LocationError::new(crate::i18n::format_message(
+        "The server name “{authority}” contains characters that are not allowed in an address.",
+        &[("authority", authority)],
     )))
 }
 
@@ -401,7 +405,9 @@ fn partition(text: &str, separator: char) -> (&str, &str) {
 /// The refusal of unbalanced or misplaced brackets, which Python words
 /// "Invalid IPv6 URL".
 fn misplaced_brackets() -> LocationError {
-    LocationError::new("Put only an IPv6 address in brackets, as in smb://[fe80::1]/share.")
+    LocationError::new(crate::i18n::gettext(
+        "Put only an IPv6 address in brackets, as in smb://[fe80::1]/share.",
+    ))
 }
 
 #[cfg(test)]

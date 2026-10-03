@@ -39,13 +39,14 @@ use super::transfer_panel::TransferKind;
 use super::BrowserWindow;
 
 /// Shown in the transfer panel while the archive is checked.
-const PREPARING: &str = "Preparing extraction…";
+const PREPARING: &str = crate::i18n::message_id("Preparing extraction…");
 
 /// The folder field names a file.
-const NOT_A_FOLDER: &str = "A file with that name is already there. Choose a folder to extract to.";
+const NOT_A_FOLDER: &str =
+    crate::i18n::message_id("A file with that name is already there. Choose a folder to extract to.");
 
 /// The user cancelled the name-conflict question.
-const NOTHING_ADDED: &str = "Extraction cancelled. Nothing was added to the folder.";
+const NOTHING_ADDED: &str = crate::i18n::message_id("Extraction cancelled. Nothing was added to the folder.");
 
 /// What the dialog's folder is now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,18 +128,18 @@ impl BrowserWindow {
                 let result = match target_of(&choice.target_uri).await {
                     Ok(Target::Missing) => window.extract_into_new_folder(&archive, &choice).await,
                     Ok(Target::Folder) => window.extract_into_existing_folder(&archive, &choice).await,
-                    Ok(Target::Other) => Err(NOT_A_FOLDER.to_owned()),
+                    Ok(Target::Other) => Err(ox_core::i18n::gettext_static(NOT_A_FOLDER).to_owned()),
                     Err(message) => Err(message),
                 };
                 match result {
                     Ok(Some((shown, text))) => window.conclude_extraction(&shown, &choice, &text, origin),
-                    Ok(None) => window.show_message(NOTHING_ADDED),
+                    Ok(None) => window.show_message(ox_core::i18n::gettext_static(NOTHING_ADDED)),
                     Err(text) => {
                         window.notify_if_in_background(
                             &OperationSummary::Report(text.clone()),
                             Destination::default(),
                         );
-                        window.show_result_dialog(EXTRACTION_STOPPED, &text);
+                        window.show_result_dialog(ox_core::i18n::gettext_static(EXTRACTION_STOPPED), &text);
                     }
                 }
             }
@@ -153,7 +154,8 @@ impl BrowserWindow {
         choice: &ExtractionChoice,
     ) -> Result<Option<(String, String)>, String> {
         let target = &choice.target_uri;
-        let parent = parent_location(target).ok_or_else(|| NOT_A_FOLDER.to_owned())?;
+        let parent =
+            parent_location(target).ok_or_else(|| ox_core::i18n::gettext_static(NOT_A_FOLDER).to_owned())?;
         let name = last_name(target).unwrap_or_default();
         let name = validate_name(&name)
             .map_err(|error| error.to_string())?
@@ -228,8 +230,9 @@ impl BrowserWindow {
             .await
             .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
         if let Err(error) = removed {
-            self.show_message(&format!(
-                "Could not remove the extraction's temporary folder: {error}"
+            self.show_message(&ox_core::i18n::format_message(
+                "Could not remove the extraction's temporary folder: {error}",
+                &[("error", &error.to_string())],
             ));
         }
     }
@@ -242,8 +245,11 @@ impl BrowserWindow {
         selection: Option<&[String]>,
     ) -> Result<ExtractedFolder, ArchiveError> {
         let cancel = Cancellation::new();
-        self.transfer_panel()
-            .start(TransferKind::Archive, PREPARING, cancel.clone());
+        self.transfer_panel().start(
+            TransferKind::Archive,
+            ox_core::i18n::gettext_static(PREPARING),
+            cancel.clone(),
+        );
         self.update_archive_actions();
         let mut extractor = self
             .zip_extractor()

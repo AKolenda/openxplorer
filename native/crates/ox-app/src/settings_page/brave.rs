@@ -30,22 +30,29 @@ const USE_LINUX_DOWNLOADS: RowText = RowText {
 };
 
 /// What to do first and what the sync changes, from the Python section.
-const SYNC_NOTE: &str = "Fully quit Brave first, including background processes. OpenXplorer \
+const SYNC_NOTE: &str = crate::i18n::message_id(
+    "Fully quit Brave first, including background processes. OpenXplorer \
                          backs up Preferences and changes only the download and Save as \
-                         directories. This is a one-time sync, not a managed browser policy.";
+                         directories. This is a one-time sync, not a managed browser policy.",
+);
 
 /// What to do where the sync cannot reach, from the Python section.
-const MANUAL_NOTE: &str = "Flatpak/Snap, custom profiles, or managed browsers: open \
+const MANUAL_NOTE: &str = crate::i18n::message_id(
+    "Flatpak/Snap, custom profiles, or managed browsers: open \
                            brave://settings/downloads and choose the same mounted Linux directory \
-                           manually. SMB bookmarks are not persistent download paths.";
+                           manually. SMB bookmarks are not persistent download paths.",
+);
 
 /// The Brave & downloads page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::BraveAndDownloads;
     let brave = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
-    let group = SettingsGroup::new("Download folder");
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Download folder"));
     let row = SettingRow::new(USE_LINUX_DOWNLOADS);
-    let sync = parts::button("Use Linux Downloads in Brave…", ButtonStyle::Accent);
+    let sync = parts::button(
+        &ox_core::i18n::gettext("Use Linux Downloads in Brave…"),
+        ButtonStyle::Accent,
+    );
     sync.connect_clicked(glib::clone!(
         #[weak]
         page,
@@ -54,8 +61,11 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     row.add_control(&sync, ControlName::OwnLabel);
     group.add_row(&row);
     brave.append_group(&group);
-    brave.append_text(&parts::note(Icon::Info, SYNC_NOTE));
-    brave.append_text(&parts::note(Icon::Info, MANUAL_NOTE));
+    brave.append_text(&parts::note(Icon::Info, ox_core::i18n::gettext_static(SYNC_NOTE)));
+    brave.append_text(&parts::note(
+        Icon::Info,
+        ox_core::i18n::gettext_static(MANUAL_NOTE),
+    ));
     brave
 }
 
