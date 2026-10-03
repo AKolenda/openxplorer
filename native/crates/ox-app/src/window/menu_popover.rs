@@ -230,16 +230,22 @@ fn item_list(popover: &MenuPopover) -> gtk::ListBox {
 /// Opens a row's submenu once the pointer rests on it, and closes an open
 /// submenu once it rests on another row.
 fn follow_hover(popover: &MenuPopover, list: &gtk::ListBox) {
-    let motion = gtk::EventControllerMotion::new();
-    motion.connect_motion(glib::clone!(
+    let rest_at = glib::clone!(
         #[weak]
         popover,
-        move |_, _, y| {
+        move |y: f64| {
             #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
             let index = popover.list().row_at_y(y as i32).map(|row| row.index());
             popover.rest_on(index);
         }
-    ));
+    );
+    let motion = gtk::EventControllerMotion::new();
+    // Coming back from a submenu, GTK may send a motion with the other
+    // surface's position, a leave, then an enter where the pointer really
+    // is: the enter counts as resting there too.
+    let on_enter = rest_at.clone();
+    motion.connect_enter(move |_, _, y| on_enter(y));
+    motion.connect_motion(move |_, _, y| rest_at(y));
     motion.connect_leave(glib::clone!(
         #[weak]
         popover,
