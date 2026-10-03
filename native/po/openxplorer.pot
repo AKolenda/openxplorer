@@ -547,7 +547,7 @@ msgstr ""
 msgid "Save in the sidebar · reconnect when opened"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
 msgid "Type"
 msgstr ""
 
@@ -697,19 +697,19 @@ msgstr ""
 msgid "{title} ({count})"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
 msgid "0 – 9"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
 msgid "Earlier this month"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
 msgid "Earlier this week"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
 msgid "Earlier this year"
 msgstr ""
 
@@ -729,7 +729,7 @@ msgstr ""
 msgid "Huge (1 – 4 GB)"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
 msgid "In the future"
 msgstr ""
 
@@ -737,11 +737,11 @@ msgstr ""
 msgid "Large (128 MB – 1 GB)"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
 msgid "Last month"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
 msgid "Last week"
 msgstr ""
 
@@ -765,7 +765,7 @@ msgstr ""
 msgid "Tiny (0 – 16 KB)"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs crates/ox-core/src/search/facets.rs
 msgid "Today"
 msgstr ""
 
@@ -773,11 +773,11 @@ msgstr ""
 msgid "Unknown"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
 msgid "Unknown date"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/search/facets.rs
+#: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs crates/ox-core/src/search/facets.rs
 msgid "Yesterday"
 msgstr ""
 
@@ -801,7 +801,7 @@ msgstr ""
 msgid "Date accessed"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-core/src/grouping.rs
 msgid "Date created"
 msgstr ""
 
@@ -829,7 +829,7 @@ msgstr ""
 msgid "Date deleted"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/search/info_strip.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/search/info_strip.rs crates/ox-core/src/grouping.rs
 msgid "Date modified"
 msgstr ""
 
@@ -837,7 +837,7 @@ msgstr ""
 msgid "Folder path"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
 msgid "Name"
 msgstr ""
 
@@ -845,7 +845,7 @@ msgstr ""
 msgid "Original location"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/grouping.rs
 msgid "Size"
 msgstr ""
 
@@ -3447,6 +3447,10 @@ msgstr ""
 msgid "From template…"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/view_properties_dialog.rs
+msgid "Group by"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
 msgid "HTML document"
 msgstr ""
@@ -3491,6 +3495,10 @@ msgstr ""
 msgid "Markdown document"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/crumb_menus.rs
+msgid "More"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar.rs
 msgid "Navigation pane"
 msgstr ""
@@ -3521,10 +3529,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Show hidden files"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Show in groups"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -3679,10 +3683,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/copy_path.rs
 msgid "Path copied. Sharing permissions are unchanged."
-msgstr ""
-
-#: crates/ox-app/src/window/crumb_menus.rs
-msgid "More"
 msgstr ""
 
 #: crates/ox-app/src/window/crumb_menus.rs
@@ -5735,6 +5735,58 @@ msgstr ""
 
 #: crates/ox-core/src/gio_node/query.rs
 msgid "The folder listing could not be closed."
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "(None)"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "A long time ago"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "A – H"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "I – P"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Later this month"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Later this week"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Later this year"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Next month"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Next week"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Other"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Q – Z"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Same as sort"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Tomorrow"
 msgstr ""
 
 #: crates/ox-core/src/integration/activation.rs

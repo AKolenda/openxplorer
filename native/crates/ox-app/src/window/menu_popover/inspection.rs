@@ -3,12 +3,46 @@
 //! check marks, the compact style's strip and the style.
 
 use gtk::glib;
+use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::{MenuPopover, MenuStyle};
 
 impl MenuPopover {
+    /// Rests the pointer on the row labelled `label`, or on no row with
+    /// `None`, as hovering does, for tests.
+    pub(crate) fn hover_row(&self, label: Option<&str>) {
+        let index = label.map(|label| self.row(label).index());
+        self.rest_on(index);
+    }
+
+    /// Rests the pointer on the middle of the row labelled `label` as an
+    /// open submenu that grabbed the pointer reports it: a position on this
+    /// menu's surface. For tests.
+    pub(crate) fn hover_row_through_submenu(&self, label: &str) {
+        let row = self.row(label);
+        let bounds = row.compute_bounds(self).expect("the row is in the menu");
+        let (left, top) = self.surface_transform();
+        let x = f64::from(bounds.x() + bounds.width() / 2.0) + left;
+        let y = f64::from(bounds.y() + bounds.height() / 2.0) + top;
+        self.rest_at_surface_point(x, y);
+    }
+
+    /// Presses `key` in the rows' list, as the keyboard does, for tests.
+    pub(crate) fn press_in_list(&self, key: gtk::gdk::Key) -> bool {
+        let keys = self
+            .list()
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+            .expect("the list takes keys");
+        let no_keycode = 0_u32;
+        let none = gtk::gdk::ModifierType::empty();
+        keys.emit_by_name::<bool>("key-pressed", &[&key.into_glib(), &no_keycode, &none])
+    }
+
     /// The labels of the rows, a divider as `-`, for tests.
     pub(crate) fn row_labels(&self) -> Vec<String> {
         let mut labels = Vec::new();

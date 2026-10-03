@@ -1,3 +1,15 @@
+# Unreleased
+
+- Group by, as in Windows Explorer: Sort > Group by groups a folder apart
+  from its sort, so a folder grouped by date modified can be sorted by name
+  within each group. The choices are Name (A - H, I - P, Q - Z), Date
+  modified (Today, Yesterday, ... A long time ago), Type, Size, Date
+  created, Same as sort (the former Show in groups) and (None). Downloads
+  is grouped by date modified until another choice is made there. The Sort
+  menu now matches Explorer's: Name, Date modified and Type, with Size and
+  the further keys under More. The first group's heading is no longer
+  hidden when a grouped folder opens.
+
 # 2.0.1 — 2026-10-02
 
 Most of the gaps left by 2.0.0 are closed: 635 of the tracked behaviours of

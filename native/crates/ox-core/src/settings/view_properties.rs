@@ -14,6 +14,7 @@ use serde_json::Value;
 use super::preferences::{read_column_widths, ColumnWidths};
 use super::view_options::read_column_keys;
 
+use crate::grouping::GroupBy;
 use crate::location::{parent_location, same_location};
 
 /// The most folders whose own style is kept; the oldest go first.
@@ -44,8 +45,14 @@ pub struct ViewProperties {
     pub sort: String,
     /// Sorted descending.
     pub descending: bool,
-    /// Items shown in groups by the sort key.
+    /// Items shown in groups: by [`Self::group_by`] when it is set, else
+    /// by the sort key. Read the grouping with [`Self::grouping`].
     pub groups: bool,
+    /// What the items are grouped by while `groups` is set, when it is a
+    /// key of its own (Explorer's Group by) rather than the sort key.
+    /// Stored only then, so styles without it keep their layout.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_by: Option<GroupBy>,
     /// Folders listed before files.
     pub folders_first: bool,
     /// Hidden items shown.
@@ -72,6 +79,7 @@ impl Default for ViewProperties {
             sort: "name".to_owned(),
             descending: false,
             groups: false,
+            group_by: None,
             folders_first: true,
             show_hidden: false,
             hidden_last: false,
@@ -107,6 +115,11 @@ impl ViewProperties {
             sort: key("sort").unwrap_or(defaults.sort),
             descending: flag("descending", defaults.descending),
             groups: flag("groups", defaults.groups),
+            group_by: values
+                .get("groupBy")
+                .and_then(Value::as_str)
+                .and_then(GroupBy::from_key)
+                .filter(|key| own_group_key(*key)),
             folders_first: flag("foldersFirst", defaults.folders_first),
             show_hidden: flag("showHidden", defaults.show_hidden),
             hidden_last: flag("hiddenLast", defaults.hidden_last),
@@ -118,6 +131,30 @@ impl ViewProperties {
                 .map(|widths| ColumnWidths::from_values(&widths)),
         })
     }
+}
+
+impl ViewProperties {
+    /// What the items are grouped by: nothing, the sort key (Dolphin's
+    /// "Show in groups"), or a key of their own (Explorer's Group by).
+    pub fn grouping(&self) -> GroupBy {
+        if !self.groups {
+            return GroupBy::None;
+        }
+        self.group_by.unwrap_or(GroupBy::SortKey)
+    }
+
+    /// Groups the items by `group_by`, storing it as [`Self::grouping`]
+    /// reads it.
+    pub fn set_grouping(&mut self, group_by: GroupBy) {
+        self.groups = group_by.is_grouped();
+        self.group_by = own_group_key(group_by).then_some(group_by);
+    }
+}
+
+/// Whether `key` is a grouping of its own, stored as `groupBy`; no
+/// grouping and the sort key are `groups` alone.
+fn own_group_key(key: GroupBy) -> bool {
+    !matches!(key, GroupBy::None | GroupBy::SortKey)
 }
 
 /// A key the app gives a mode or a sort order: short ASCII letters.
@@ -195,20 +232,27 @@ pub enum ViewScope {
 /// The style `uri` is shown in: its own, else that of the nearest folder
 /// above it saved for its sub-folders, else `defaults`.
 pub fn style_for(folder_views: &[FolderView], defaults: &ViewProperties, uri: &str) -> ViewProperties {
+    saved_style_for(folder_views, uri).map_or_else(|| defaults.clone(), |saved| saved.properties.clone())
+}
+
+/// The saved style `uri` is shown in: its own, else the nearest one saved
+/// for a folder above it and its sub-folders; `None` when it shows the
+/// default.
+pub fn saved_style_for<'a>(folder_views: &'a [FolderView], uri: &str) -> Option<&'a FolderView> {
     if let Some(own) = folder_views.iter().find(|view| same_location(&view.uri, uri)) {
-        return own.properties.clone();
+        return Some(own);
     }
     let mut above = parent_location(uri);
     while let Some(folder) = above {
         let inherited = folder_views
             .iter()
             .find(|view| view.subfolders && same_location(&view.uri, &folder));
-        if let Some(inherited) = inherited {
-            return inherited.properties.clone();
+        if inherited.is_some() {
+            return inherited;
         }
         above = parent_location(&folder);
     }
-    defaults.clone()
+    None
 }
 
 /// Saves `properties` for `uri` with `scope` into `folder_views` and
@@ -265,6 +309,48 @@ mod tests {
             sort: key.to_owned(),
             ..ViewProperties::default()
         }
+    }
+
+    /// Group by is stored apart from the sort only when it is a key of
+    /// its own: no grouping and grouping by the sort key keep the layout
+    /// of styles saved before it, which read back as before.
+    ///
+    /// parity: VIEW-022
+    #[test]
+    fn group_by_is_stored_only_as_a_key_of_its_own() {
+        let mut style = ViewProperties::default();
+        assert_eq!(style.grouping(), GroupBy::None);
+        let plain = serde_json::to_value(&style).expect("a style");
+        assert!(plain.get("groupBy").is_none(), "{plain}");
+
+        style.set_grouping(GroupBy::SortKey);
+        let by_sort = serde_json::to_value(&style).expect("a style");
+        assert_eq!(by_sort["groups"], json!(true));
+        assert!(by_sort.get("groupBy").is_none(), "Show in groups as before");
+        assert_eq!(
+            ViewProperties::from_json(&by_sort).expect("read").grouping(),
+            GroupBy::SortKey
+        );
+
+        style.set_grouping(GroupBy::Modified);
+        let by_date = serde_json::to_value(&style).expect("a style");
+        assert_eq!(by_date["groups"], json!(true));
+        assert_eq!(by_date["groupBy"], json!("modified"));
+        assert_eq!(ViewProperties::from_json(&by_date), Some(style.clone()));
+
+        style.set_grouping(GroupBy::None);
+        assert_eq!(style, ViewProperties::default());
+        let stray = json!({"groups": false, "groupBy": "name"});
+        assert_eq!(
+            ViewProperties::from_json(&stray).expect("read").grouping(),
+            GroupBy::None,
+            "groupBy alone groups nothing"
+        );
+        let unknown = json!({"groups": true, "groupBy": "colour"});
+        assert_eq!(
+            ViewProperties::from_json(&unknown).expect("read").grouping(),
+            GroupBy::SortKey
+        );
     }
 
     /// A folder's own style wins, a style saved for sub-folders reaches

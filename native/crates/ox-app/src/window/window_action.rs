@@ -159,8 +159,9 @@ pub(crate) enum WindowAction {
     Sort,
     /// Whether the details view sorts ascending or descending.
     Direction,
-    /// Shows the items in groups by the sort key (VIEW-022).
-    Groups,
+    /// What the items are grouped by, in the string target: a key of
+    /// their own (Explorer's Group by), the sort key, or none (VIEW-022).
+    GroupBy,
     /// Lists folders before files.
     FoldersFirst,
     /// Opens the Adjust View Display Style dialog (VIEW-021).
@@ -489,7 +490,7 @@ impl WindowAction {
             WindowAction::ShowPlace => "show-place",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
-            WindowAction::Groups => "groups",
+            WindowAction::GroupBy => "group-by",
             WindowAction::FoldersFirst => "folders-first",
             WindowAction::ViewProperties => "view-properties",
             WindowAction::Theme => "theme",
