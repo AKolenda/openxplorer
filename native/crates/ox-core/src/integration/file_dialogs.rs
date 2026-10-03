@@ -497,7 +497,6 @@ impl FileDialogRegistration {
     }
 }
 
-/// [`FileDialogRegistration::restart_portal`] with `program` as `systemctl`.
 /// Serialises the opt-in's file changes across the app's windows.
 static CHANGES: Mutex<()> = Mutex::new(());
 
@@ -509,6 +508,7 @@ fn one_at_a_time<T>(operation: impl FnOnce() -> T) -> T {
     operation()
 }
 
+/// [`FileDialogRegistration::restart_portal`] with `program` as `systemctl`.
 fn restart_portal_with(program: &Path) -> Result<PortalRestart, FileDialogError> {
     if !run_systemctl(program, "is-active")? {
         return Ok(PortalRestart::NotRunning);

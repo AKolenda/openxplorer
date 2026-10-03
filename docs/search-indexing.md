@@ -34,4 +34,4 @@ Click the current file list and type SC to select a loaded filename beginning wi
 
 ---
 
-OpenXplorer 2.0.0. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.1. Project-authored documentation: AGPL-3.0-only.

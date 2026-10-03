@@ -1,22 +1,63 @@
-# Unreleased
+# 2.0.1 — 2026-10-02
 
-- Optional: other applications' Open and Save dialogs in OpenXplorer.
+Most of the gaps left by 2.0.0 are closed: 635 of the tracked behaviours of
+Dolphin, Windows 11 File Explorer and the 1.x app are now native. The 67 still
+open are listed in [native/BACKLOG.md](native/BACKLOG.md).
+
+- **Views:** a Compact view, Dolphin's per-folder view properties ("Remember
+  display style for each folder"), Show in groups (headed groups in Details),
+  more sort keys, configurable columns, zoom with Ctrl+wheel and thumbnail
+  previews from the desktop's thumbnail cache.
+- **Split panes** (F3), each with its own tabs, history and selection, and a
+  folder tree that expands folders in place in Details.
+- **Sessions:** with Settings > Windows & tabs > "Restore previous tabs at
+  startup" on, the tabs, split panes and histories come back at the next
+  start.
+- **Tabs:** tab numbers, Close other tabs, reopen closed tabs
+  (Ctrl+Shift+T), open several folders in tabs, and closing or quitting is
+  guarded while files are written.
+- **File operations:** Undo and Redo for copy, move, rename, new items,
+  duplicates, links and Recycle Bin; batch rename; New link; a richer name
+  conflict dialog; per-file progress; independent transfer jobs with speed,
+  remaining time and their own Cancel; a report of what an interrupted copy
+  left behind.
+- **Navigation and commands:** breadcrumb subfolder menus, Back/Forward
+  history menus, typed-address history and completion, Recent locations,
+  template menus for New, offline help and a shortcuts list, opt-in service
+  actions and Open as administrator (asks first, through GVfs and polkit).
+- **Network:** SFTP, FTP, WebDAV and NFS besides SMB, with servers found on
+  the network; Disconnect for remote mounts; the Sharing tab in Properties.
+- **Search:** file contents, wildcards, live search of folders without an
+  index, saved searches, and Kind and Date filters.
+- **Selection and keyboard:** rubber-band selection, type-ahead, F6/F8 focus
+  cycling and screen-reader names and announcements.
+- **Look:** accent colours from Zorin and the desktop portal, desktop text
+  scaling, emblems.
+- **Optional: other applications' Open and Save dialogs in OpenXplorer.**
   Settings > Default apps > "Apps' Open and Save dialogs" > Enable makes
   applications that use the desktop portal (Chrome, Firefox, Flatpak apps)
-  choose and save files in an OpenXplorer window, with File name, the type
-  list and Save or Open at the bottom. It is off until enabled, keeps every
-  other portal backend, and Restore Open and Save dialogs undoes it. Host
-  packages install `/usr/share/xdg-desktop-portal/portals/<id>.portal`;
-  the Flatpak cannot offer it.
+  choose and save files in an OpenXplorer window. It is off until enabled,
+  keeps every other portal backend, and Restore Open and Save dialogs undoes
+  it. The Flatpak cannot offer it. On KDE Plasma, Enable also adds a login
+  script, `~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh`, that
+  sets `PLASMA_INTEGRATION_USE_PORTAL=1`, so KDE's own apps (Plasma and its
+  widgets, Kate, System Settings) follow from the next login; Restore
+  removes it, and a file of the user's with that name is left alone.
+- **Flatpak:** Show in folder works inside the sandbox and the System theme
+  follows a dark desktop.
+- **Translations:** the interface uses message catalogues; no reviewed
+  language ships yet.
+- The Python app of 1.x is no longer in the source tree; its last release is
+  1.1.4 and its final sources are `desktop/` at tag v2.0.0.
 
-- Open and Save dialogs now cover KDE's own apps too (Plasma and its
-  widgets, Kate, System Settings): on KDE Plasma, Enable also adds a login
-  script, `~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh`,
-  that sets `PLASMA_INTEGRATION_USE_PORTAL=1`, so they ask the portal
-  instead of showing KDE's dialog. It applies from the next login, and
-  Restore removes it. Enable stays available for those who enabled the
-  dialogs before, to add it. A file of the user's with that name is left
-  alone, and the status line says so.
+## Known gaps
+
+The open items, the owner decisions still pending and the hardware acceptance
+still owed (SMB servers other than the maintainer's, phones, USB drives,
+Orca, mixed-DPI Wayland) are listed in [native/BACKLOG.md](native/BACKLOG.md).
+
+Rollback: `sudo apt install --allow-downgrades ./openxplorer_2.0.0_all.deb`
+returns to 2.0.0; settings and saved passwords are shared.
 
 # 2.0.0 — 2026-09-28
 
