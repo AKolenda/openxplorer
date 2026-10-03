@@ -40,6 +40,8 @@ SCREENSHOTS = {
     'previous-versions': Picture(start=LAUNCH_PLANNING,
                                  scene=('select=Budget.ods', 'action=previous-versions')),
     'snapshot-tab': Picture(start=SNAPSHOT),
+    # Split panes (F3): Documents in both panes, with the left one's selection.
+    'split-view': Picture(start=DOCUMENTS, scene=('select=Launch planning', 'action=split-view')),
 }
 FIXTURE_POLICY = ('Entirely fictional sample names, addresses and paths (docs/PRIVACY.md); '
                   'a fresh isolated session with no network. No user screenshots.')

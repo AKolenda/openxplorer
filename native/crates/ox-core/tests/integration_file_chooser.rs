@@ -22,8 +22,8 @@ use ox_core::integration::{
     glob_matches, options_from_entries, path_variant, preferred_value, with_preference, without_preference,
     ChooserAnswer, ChooserCall, ChooserMode, ChooserNotShown, ChooserRequest, ChooserRequestError,
     DisabledFileDialogs, FileChooserBus, FileDialogError, FileDialogPaths, FileDialogRegistration,
-    FilterPattern, Sandbox, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY, MAX_LIST_ITEMS, PORTAL_BACKEND_PATH,
-    RESPONSE_CANCELLED, RESPONSE_OTHER, RESPONSE_SUCCESS,
+    FilterPattern, Sandbox, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY, KDE_PORTAL_VARIABLE, MAX_LIST_ITEMS,
+    PORTAL_BACKEND_PATH, RESPONSE_CANCELLED, RESPONSE_OTHER, RESPONSE_SUCCESS,
 };
 use tempfile::TempDir;
 
@@ -482,6 +482,145 @@ fn the_user_file_in_use_is_changed_and_not_hidden() {
         DisabledFileDialogs::Restored
     );
     assert_eq!(fs::read_to_string(&in_use).expect("user file"), original);
+}
+
+/// On KDE, enabling also writes the login script that makes KDE's own
+/// apps ask the portal; disabling removes it; a file of the user's with
+/// that name is never replaced; other desktops get no script.
+///
+/// parity: INT-032
+#[test]
+fn kde_apps_are_covered_by_a_login_script() {
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    let script = registration.kde_env_file();
+    assert!(script.ends_with("plasma-workspace/env/openxplorer-file-dialogs.sh"));
+    assert!(!registration.covers_kde_apps());
+
+    registration.enable().expect("enable");
+    let written = fs::read_to_string(&script).expect("the login script");
+    assert!(
+        written.contains(&format!("export {KDE_PORTAL_VARIABLE}=1\n")),
+        "{written}"
+    );
+    assert!(registration.covers_kde_apps());
+    registration.disable().expect("disable");
+    assert!(!script.exists());
+
+    // Enabled before KDE apps were covered: enabling again adds the script.
+    registration.enable().expect("enable");
+    fs::remove_file(&script).expect("an older version wrote none");
+    registration.enable().expect("enable again");
+    assert!(registration.covers_kde_apps());
+    registration.disable().expect("disable");
+
+    fs::write(&script, "export SOMETHING_ELSE=1\n").expect("the user's own file");
+    registration.enable().expect("enable");
+    registration.disable().expect("disable");
+    assert_eq!(
+        fs::read_to_string(&script).expect("kept"),
+        "export SOMETHING_ELSE=1\n"
+    );
+
+    assert!(registration.kde_script_is_someone_elses());
+
+    // A symlink there is not the app's either: Enable and Restore leave it
+    // and still change the portal file.
+    fs::remove_file(&script).expect("cleared");
+    symlink(fixture.user_file(), &script).expect("a symlink");
+    registration.enable().expect("enable");
+    assert!(registration.is_enabled());
+    assert!(registration.kde_script_is_someone_elses());
+    registration.disable().expect("disable");
+    assert!(!registration.is_enabled());
+    assert!(fs::symlink_metadata(&script)
+        .expect("kept")
+        .file_type()
+        .is_symlink());
+    fs::remove_file(&script).expect("the symlink");
+
+    let gnome = FileDialogRegistration::new(
+        FileDialogPaths {
+            desktops: vec!["gnome".to_owned()],
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    );
+    gnome.enable().expect("enable on GNOME");
+    assert!(!script.exists(), "GNOME apps already ask the portal");
+}
+
+/// An Enable that cannot write KDE's login script changes nothing: the
+/// portal file and the record are not written, so dialogs stay as they
+/// were.
+///
+/// parity: INT-032
+#[test]
+fn a_kde_script_that_cannot_be_written_leaves_dialogs_off() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    let folder = registration
+        .kde_env_file()
+        .parent()
+        .expect("the script's folder")
+        .to_path_buf();
+    fs::create_dir_all(&folder).expect("the folder");
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).expect("read-only");
+
+    let refused = registration.enable();
+
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).expect("writable again");
+    assert!(refused.is_err(), "the script could not be written");
+    assert!(!registration.is_enabled(), "dialogs stay as they were");
+    assert!(!fixture.user_file().exists(), "the portal file is untouched");
+    registration.enable().expect("enable once the folder is writable");
+    assert!(registration.covers_kde_apps());
+}
+
+/// Enable goes on when something it cannot read sits where KDE's login
+/// script goes: like a file of the user's, it is left alone, the dialogs
+/// are turned on, and the status says KDE apps keep KDE's dialog.
+///
+/// parity: INT-032
+#[test]
+fn enable_leaves_an_unreadable_kde_script_path_alone() {
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    let script = registration.kde_env_file();
+    fs::create_dir_all(&script).expect("a folder of that name");
+
+    registration.enable().expect("Enable goes on");
+
+    assert!(registration.is_enabled());
+    assert!(registration.kde_script_is_someone_elses());
+    assert!(!registration.covers_kde_apps());
+    assert!(script.is_dir(), "left alone");
+    registration.disable().expect("Restore");
+    assert!(!registration.is_enabled());
+    assert!(script.is_dir(), "still left alone");
+}
+
+/// Restore goes on when something it cannot read sits where KDE's login
+/// script goes: that is not the app's script, so it is left alone and the
+/// dialogs are given back.
+///
+/// parity: INT-032
+#[test]
+fn restore_goes_on_past_an_unreadable_kde_script_path() {
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    registration.enable().expect("enable");
+    let script = registration.kde_env_file();
+    fs::remove_file(&script).expect("the script");
+    fs::create_dir(&script).expect("a folder of that name");
+
+    registration.disable().expect("Restore goes on");
+
+    assert!(!registration.is_enabled());
+    assert!(script.is_dir(), "left alone");
 }
 
 /// A later edit by the user wins: disabling then removes only the app's
