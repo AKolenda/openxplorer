@@ -1,3 +1,26 @@
+# Unreleased
+
+- Extract all… works like Windows Explorer's: one field, "Files will be
+  extracted to this folder", filled in with the ZIP's folder and name, with
+  Browse…. A missing folder is created; an existing one (such as
+  Downloads) receives the files directly, asking before any file is
+  replaced; a ZIP holding one folder of the same name is no longer nested
+  (`tidewater/tidewater`).
+- Open in archive manager no longer reopens the archive in OpenXplorer when
+  OpenXplorer is the default application for ZIPs.
+- The Extract dialog is as short as Explorer's: the folder field, Browse…,
+  "Show extracted files when finished", Cancel and Extract. The counts,
+  notes and Open in archive manager are behind the (i) button. A
+  password-protected ZIP now says so straight away and offers the archive
+  manager, instead of "Wait for the ZIP check to finish".
+- ZIPs can open like folders, as in Windows Explorer: Settings > Windows &
+  tabs > Open ZIP files > Like a folder (Windows). The ZIP opens in the tab,
+  with the address bar, crumbs, Back and Up working through it, Extract all
+  in the bar, and Copy, Paste and dragging items out (as real copies). It
+  stays read-only. The default, In a pop-up window, keeps today's window.
+- Extract all appears in the command bar while a ZIP is selected, as in
+  Windows Explorer.
+
 # 2.0.1 — 2026-10-02
 
 Most of the gaps left by 2.0.0 are closed: 635 of the tracked behaviours of
@@ -58,27 +81,6 @@ Orca, mixed-DPI Wayland) are listed in [native/BACKLOG.md](native/BACKLOG.md).
 
 Rollback: `sudo apt install --allow-downgrades ./openxplorer_2.0.0_all.deb`
 returns to 2.0.0; settings and saved passwords are shared.
-
-- Extract all… works like Windows Explorer's: one field, "Files will be
-  extracted to this folder", filled in with the ZIP's folder and name, with
-  Browse…. A missing folder is created; an existing one (such as
-  Downloads) receives the files directly, asking before any file is
-  replaced; a ZIP holding one folder of the same name is no longer nested
-  (`tidewater/tidewater`).
-- Open in archive manager no longer reopens the archive in OpenXplorer when
-  OpenXplorer is the default application for ZIPs.
-- The Extract dialog is as short as Explorer's: the folder field, Browse…,
-  "Show extracted files when finished", Cancel and Extract. The counts,
-  notes and Open in archive manager are behind the (i) button. A
-  password-protected ZIP now says so straight away and offers the archive
-  manager, instead of "Wait for the ZIP check to finish".
-- ZIPs can open like folders, as in Windows Explorer: Settings > Windows &
-  tabs > Open ZIP files > Like a folder (Windows). The ZIP opens in the tab,
-  with the address bar, crumbs, Back and Up working through it, Extract all
-  in the bar, and Copy, Paste and dragging items out (as real copies). It
-  stays read-only. The default, In a pop-up window, keeps today's window.
-- Extract all appears in the command bar while a ZIP is selected, as in
-  Windows Explorer.
 
 # 2.0.0 — 2026-09-28
 
