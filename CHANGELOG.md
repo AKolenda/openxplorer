@@ -1,4 +1,7 @@
-# Unreleased
+# 2.0.2 — 2026-10-04
+
+More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
+dialogs, Delete, Compact view and the navigation pane.
 
 - Extract all works like Windows Explorer's: it appears in the command bar
   while a ZIP is selected, and its dialog is as short as Explorer's, with

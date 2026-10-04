@@ -11,8 +11,10 @@ Isolation follows docs/PRIVACY.md and native/README.md:
 
 - bubblewrap (bwrap) hides /home, /media, /mnt and /run/user behind empty
   folders, so the app can neither read the user's files nor reach the user's
-  session bus, mounts or phones. It also gives the app no network, so the
-  Network page discovers nothing on the LAN, and its own process namespace,
+  session bus, mounts or phones. It also gives the app no network and hides
+  the system bus and Avahi's socket (Avahi answers over them with the servers
+  it has seen on the LAN), so the Network page discovers nothing, and its own
+  process namespace,
   so no helper outlives the picture. The fictional demo tree is mounted as
   /home/demo, the home folder the published examples use.
 - The app runs on its own X display (xvfb-run) and D-Bus session
@@ -53,6 +55,9 @@ DAY = 86400
 # Where the desktop's installed applications are listed.
 APPLICATION_FOLDERS = ('/usr/share/applications', '/usr/local/share/applications',
                        '/var/lib/flatpak/exports/share/applications')
+# The system bus and Avahi's socket. They stay reachable without a network,
+# and Avahi answers over them with the servers it has already seen on the LAN.
+SYSTEM_SERVICE_FOLDERS = ('/run/dbus', '/run/avahi-daemon')
 # A snapshot hook run takes a few seconds; one that hangs is stopped.
 CAPTURE_TIMEOUT = 120
 
@@ -296,6 +301,9 @@ def isolated_command(program: Path, home: Path, runtime: Path,
     }
     # No installed applications, so menus do not list this computer's apps
     # and the pictures are the same everywhere.
+    for service in SYSTEM_SERVICE_FOLDERS:
+        if Path(service).is_dir():
+            command += ['--tmpfs', service]
     for applications in APPLICATION_FOLDERS:
         if Path(applications).is_dir():
             command += ['--tmpfs', applications]
