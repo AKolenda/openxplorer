@@ -178,21 +178,11 @@ fn start_folder(request: &ChooserRequest) -> PathBuf {
 }
 
 /// The path the File name box's `typed` text names, from `folder`: a
-/// full path, `~` or `~/…` from the home folder, else a path from the
-/// folder shown.
-fn typed_path(typed: &str, folder: &Path) -> PathBuf {
-    if typed == "~" {
-        return glib::home_dir();
-    }
-    if let Some(rest) = typed.strip_prefix("~/") {
-        return glib::home_dir().join(rest);
-    }
-    let path = Path::new(typed);
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        folder.join(path)
-    }
+/// full path or `file:` URI, `~` or `~/…` from the home folder, else a
+/// path from the folder shown. `None` for a location of another kind.
+fn typed_path(typed: &str, folder: &Path) -> Option<PathBuf> {
+    // Joining an absolute path replaces the folder.
+    ox_core::location::typed_local_path(typed).map(|path| folder.join(path))
 }
 
 /// Whether `name` has an extension: a dot after its first character.
@@ -478,7 +468,7 @@ impl BrowserWindow {
         };
         let typed = name_box.text().trim().to_owned();
         let shown = self.picking_folder().ok_or_else(not_local)?;
-        let path = typed_path(&typed, &shown);
+        let path = typed_path(&typed, &shown).ok_or_else(not_local)?;
         if path.is_dir() {
             name_box.set_text("");
             self.navigate_or_report(&gio::File::for_path(&path).uri());
@@ -582,7 +572,9 @@ impl BrowserWindow {
         if let Some(names) = parse_quoted_names(&typed) {
             return Some(typed_files(picker, &shown, &names));
         }
-        let path = typed_path(&typed, &shown);
+        let Some(path) = typed_path(&typed, &shown) else {
+            return Some(Err(not_local()));
+        };
         if path.is_dir() {
             name_box.set_text("");
             self.navigate_or_report(&gio::File::for_path(&path).uri());
@@ -841,7 +833,7 @@ fn typed_files(picker: &Picker, shown: &Path, names: &[String]) -> Result<Vec<Pa
     names
         .iter()
         .map(|name| {
-            let path = typed_path(name, shown);
+            let path = typed_path(name, shown).ok_or_else(not_local)?;
             if path.is_file() {
                 Ok(path)
             } else {
