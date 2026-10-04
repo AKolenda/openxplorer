@@ -323,8 +323,9 @@ impl BrowserWindow {
         self.update_picker();
     }
 
-    /// A file was activated (double-click or Enter): it is the choice in
-    /// an Open dialog, and the name to save over in a Save dialog.
+    /// A file was activated (double-click, Enter or typed in the address
+    /// bar): it is the choice in an Open dialog, and the file to replace,
+    /// after asking, in a Save dialog.
     pub(super) fn pick_activated(&self, entry: &Entry) {
         let Some(picker) = self.picker() else {
             return;
@@ -341,10 +342,15 @@ impl BrowserWindow {
                 }
             }
             ChooserMode::Save { .. } => {
+                let Some(path) = local_path(&entry.uri) else {
+                    return self.show_message(&not_local());
+                };
                 if let Some(name) = &picker.name {
                     name.set_text(&entry.name);
                 }
-                self.accept_choice();
+                if !picker.asking.get() && !picker.reply.is_answered() {
+                    self.confirm_replace(&picker, vec![path], std::slice::from_ref(&entry.name));
+                }
             }
             ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => {}
         }
@@ -954,6 +960,7 @@ mod tests {
     };
 
     use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow};
+    use crate::window::tests::file_ops_support::{open_dialog, wait_for_no_dialog};
 
     /// A `dbus-daemon` of the test's own, stopped when dropped.
     struct PrivateBus {
@@ -1701,6 +1708,58 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of(" notes.txt ")]);
+    }
+
+    /// In a Save dialog, a file activated or typed in the address bar is
+    /// the file to replace, after asking: its own path, never its name in
+    /// the folder shown with the type's extension added.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_file_activated_in_a_save_dialog_is_replaced_after_asking() {
+        let fixture = Fixture::empty();
+        fixture.write("README");
+        fs::create_dir(fixture.path("Drafts")).expect("a folder");
+        fs::write(fixture.path("Drafts/plan.txt"), b"x").expect("a file");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("filters", text_type(&["*.txt", "README"]))],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        let name = window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+
+        window.activate_item(test.position_of("README"));
+        let question = open_dialog(test);
+        assert_eq!(
+            question.message_text(),
+            "“README” already exists. Do you want to replace it?",
+            "README itself, not a new README.txt"
+        );
+        assert_eq!(name.text(), "README");
+        question.press("Cancel");
+        wait_for_no_dialog(test);
+        assert!(answer.borrow().is_none(), "Cancel keeps the dialog open");
+
+        window.submit_address(&fixture.path("Drafts/plan.txt").display().to_string());
+        let question = open_dialog(test);
+        assert_eq!(name.text(), "plan.txt");
+        question.press("Replace");
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(
+            uris,
+            [fixture.uri_of("Drafts/plan.txt")],
+            "the file typed, not plan.txt in the folder shown"
+        );
     }
 
     /// Alt+Up works from the File name box, where focus starts in Save;
