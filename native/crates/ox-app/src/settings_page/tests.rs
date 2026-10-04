@@ -672,8 +672,8 @@ fn the_text_size_row_draws_and_saves_the_chosen_size() {
     );
 }
 
-/// "Hide expand arrows" is off by default and saves the
-/// choice, which the open window's folder tree then takes up (SIDE-032).
+/// "Hide expand arrows" is off by default and saves the choice, which
+/// the open window then takes up (SIDE-032).
 ///
 /// parity: SIDE-032
 #[gtk::test]
