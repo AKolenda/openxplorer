@@ -547,3 +547,35 @@ fn hovering_group_by_opens_its_submenu_beside_the_menu() {
         ]
     );
 }
+
+/// Turning groups on and off again in Details, as often as the user
+/// likes, keeps the list and saves the choice. In 2.0.2, turning "Show in
+/// groups" off aborted in `FolderModel::set_grouping`, so the choice was
+/// never saved and the groups could not be turned off.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn groups_turn_on_and_off_again_in_details() {
+    let fixture = Fixture::standard();
+    // Shown and laid out: GTK builds group headings only for a list on screen.
+    let test = super::geometry::laid_out(&fixture.uri());
+    test.activate("view", Some("details"));
+    test.wait_for_listing("the folder");
+    let listed = test.names();
+
+    for round in 0..3 {
+        for by in ["sort", "modified", "name"] {
+            test.activate("group-by", Some(by));
+            assert!(!headings(&test).is_empty(), "round {round}: grouped by {by}");
+
+            test.activate("group-by", Some("none"));
+            assert!(headings(&test).is_empty(), "round {round}: {by} turned off");
+            assert_eq!(test.names(), listed, "round {round}: the list is whole again");
+            assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+            wait_until("groups off to be saved", || {
+                let saved = test.context.settings_data().preferences.view_defaults;
+                saved.is_some_and(|style| style.grouping() == GroupBy::None)
+            });
+        }
+    }
+}
