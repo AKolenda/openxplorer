@@ -10,8 +10,9 @@
 //! section's paragraph about dragging tabs and files becomes three rows
 //! and a note with the rest.
 
+use gtk::glib;
 use gtk::prelude::*;
-use ox_core::settings::PreferencesUpdate;
+use ox_core::settings::{PreferencesUpdate, ZipOpening};
 
 use super::bindings::{Choice, PreferenceBinding};
 use super::group::SettingsGroup;
@@ -150,8 +151,9 @@ const DRAGGING_NOTE: &str = crate::i18n::message_id(
     "Right-click a tab → Move tab to window… lets you pick an existing \
                              window without dragging. The original is kept until the destination \
                              accepts it. Close this tab's dialogs and finish file operations first. \
-                             File drops never remove the source. ZIP contents must be extracted \
-                             first; some apps need a mounted network path.",
+                             File drops never remove the source. Files can be dragged out of a \
+                             ZIP opened like a folder; from the pop-up window, extract them first. \
+                             Some apps need a mounted network path.",
 );
 
 const BROWSE_ARCHIVES: RowText = RowText {
@@ -160,6 +162,26 @@ const BROWSE_ARCHIVES: RowText = RowText {
                   OpenXplorer. Off, they open in their default application.",
     keywords: "zip tar gz archive compressed browse extract",
 };
+
+const ZIP_OPENING: RowText = RowText {
+    title: "Open ZIP files",
+    description: "Like a folder opens a ZIP in the tab, as Windows Explorer does: browse it with \
+                  the address bar, Back and Up, copy or drag files out, and Extract all from the \
+                  bar. In a pop-up window shows it over the tab.",
+    keywords: "zip open folder window pop-up compressed explorer browse",
+};
+
+/// How a ZIP opens (ARC-026).
+const ZIP_OPENINGS: [Choice<ZipOpening>; 2] = [
+    Choice {
+        value: ZipOpening::Folder,
+        label: crate::i18n::message_id("Like a folder (Windows)"),
+    },
+    Choice {
+        value: ZipOpening::Window,
+        label: crate::i18n::message_id("In a pop-up window (default)"),
+    },
+];
 
 /// The Windows & tabs page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
@@ -372,6 +394,23 @@ fn archives_group(page: &SettingsPage) -> SettingsGroup {
     };
     row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
     group.add_row(&row);
+    let opening = SettingRow::new(ZIP_OPENING);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.zip_opening,
+        write: |opening| PreferencesUpdate {
+            zip_opening: Some(opening),
+            ..PreferencesUpdate::default()
+        },
+    };
+    let choice = page.preference_choice(&ZIP_OPENINGS, binding);
+    // Only a ZIP that is browsed opens one way or the other.
+    page.follow_preferences(glib::clone!(
+        #[weak]
+        choice,
+        move |preferences| choice.set_sensitive(preferences.browse_archives)
+    ));
+    opening.add_control(&choice, ControlName::RowTitle);
+    group.add_row(&opening);
     group
 }
 

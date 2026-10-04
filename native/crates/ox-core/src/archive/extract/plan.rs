@@ -88,6 +88,22 @@ pub(super) struct ExtractionPlan {
     pub(super) summary: ExtractionSummary,
 }
 
+impl ExtractionPlan {
+    /// Keeps only the members at or below one of `selected` (path
+    /// segments) and counts the files and bytes again; the folders that
+    /// hold them are created as the files need them.
+    pub(super) fn keep_selected(&mut self, selected: &[Vec<String>], members: &[ZipMember]) {
+        self.members
+            .retain(|planned| selected.iter().any(|chosen| planned.segments.starts_with(chosen)));
+        let files = self
+            .members
+            .iter()
+            .filter(|planned| planned.kind == PathKind::File);
+        self.summary.file_count = files.clone().count();
+        self.summary.unpacked_bytes = files.map(|planned| members[planned.index].size).sum();
+    }
+}
+
 /// Checks every member of an archive and summarises it (`plan`).
 ///
 /// # Errors

@@ -77,6 +77,7 @@ mod environment;
 mod expand_arrows;
 mod expanding;
 mod external_requests;
+mod extract_into;
 mod file_drag;
 mod file_drop;
 mod file_ops;
@@ -164,6 +165,8 @@ pub(crate) mod widget_tree;
 mod window_action;
 mod window_keys;
 mod window_size;
+mod zip_copies;
+mod zip_folder;
 
 #[cfg(test)]
 mod tests;

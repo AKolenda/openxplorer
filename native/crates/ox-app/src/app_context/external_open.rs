@@ -2,10 +2,12 @@
 //! Opening a location in the desktop's application for its type, without
 //! recording it among the recent files.
 //!
-//! The archive browser uses it for Open in archive manager and for the
-//! private read-only copy of a member (`open` and `open_archive_preview`
-//! in `v2.0.0:desktop/winspace.py`): neither is a file the user opened from a
-//! folder, so neither belongs in Recent.
+//! Web pages (the issue tracker, a web address typed in the address bar)
+//! and tools started on files, such as a comparison tool, use it: neither
+//! is a file the user opened from a folder, so neither belongs in Recent.
+//! The archive browser's Open in archive manager and a member's private
+//! copy go through [`AppContext::open_uri_in_application`] instead, which
+//! never picks this app.
 
 use gtk::prelude::*;
 #[cfg(test)]

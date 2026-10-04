@@ -26,13 +26,17 @@ mod compress;
 mod extract_dialog;
 mod extraction;
 
-use ox_core::archive::{ArchiveEntry, ArchiveEntryKind};
+use std::sync::Arc;
+
+use ox_core::archive::{
+    default_preview_root, ArchiveBrowser, ArchiveEntry, ArchiveEntryKind, GioArchiveOpener,
+};
 
 use crate::icons::Art;
 
 #[cfg(test)]
 pub(crate) use browser::ArchiveBrowserView;
-pub(crate) use browser::{archive_dialog, ArchiveDialogActions};
+pub(crate) use browser::{archive_dialog, listing_notice, ArchiveDialogActions};
 pub(crate) use compress::{
     compressed_file_name, compression_failure_text, compression_success_text, COMPRESSION_STOPPED,
 };
@@ -48,6 +52,12 @@ pub(crate) struct ArchiveTarget {
     pub uri: String,
     /// The archive's file name.
     pub name: String,
+}
+
+/// The archive browser the app reads archives with: through GIO, with
+/// opened members copied into the private preview root.
+pub(crate) fn archive_browser() -> ArchiveBrowser {
+    ArchiveBrowser::new(Arc::new(GioArchiveOpener), default_preview_root())
 }
 
 /// The picture of an archive row: a folder, or the file's type

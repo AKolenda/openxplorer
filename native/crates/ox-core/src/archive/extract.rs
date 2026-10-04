@@ -40,7 +40,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::sync::Arc;
 
-pub use lift::lift_single_folder;
+pub use lift::{lift_same_named_folder, lift_single_folder, private_extraction_name};
 pub use limits::ExtractionLimits;
 pub use output::{ExtractionOutput, GioExtractionOutput, OutputFile};
 pub use plan::ExtractionSummary;
@@ -53,6 +53,7 @@ use crate::transfer::{
     Cancellation, Node, NodeFactory, NodeKind, Progress, ProgressScope, TransferError, WriteGuard,
 };
 use plan::{plan, ExtractionPlan};
+pub(super) use staging::is_staging_name;
 use staging::ExtractionStaging;
 use unpack::Unpacking;
 
@@ -97,6 +98,9 @@ pub struct ZipExtractor {
     emit: ProgressCallback,
     write_guard: Option<Box<WriteGuard>>,
     limits: ExtractionLimits,
+    /// The members to extract, as path segments, when only some are:
+    /// files, and folders with everything in them.
+    selection: Option<Vec<Vec<String>>>,
 }
 
 impl fmt::Debug for ZipExtractor {
@@ -133,7 +137,30 @@ impl ZipExtractor {
             emit: Box::new(|_| {}),
             write_guard: None,
             limits: ExtractionLimits::default(),
+            selection: None,
         }
+    }
+
+    /// Extracts only `members` (as the archive browser names them: `Docs/`
+    /// for a folder and everything in it, `Docs/a.txt` for a file), at
+    /// their paths inside the new folder, for copying items out of a ZIP
+    /// (ARC-026). The whole archive is still checked with every rule
+    /// first.
+    #[must_use]
+    pub fn with_selection(mut self, members: &[String]) -> Self {
+        let selected = members
+            .iter()
+            .map(|member| {
+                member
+                    .trim_end_matches('/')
+                    .split('/')
+                    .map(str::to_owned)
+                    .collect::<Vec<String>>()
+            })
+            .filter(|segments| segments.iter().all(|segment| !segment.is_empty()))
+            .collect();
+        self.selection = Some(selected);
+        self
     }
 
     /// Receives progress for the transfer panel. It is called on the
@@ -214,7 +241,10 @@ impl ZipExtractor {
         let name = request.folder_name.clone();
         self.report("Checking ZIP contents…".to_owned(), 0.0);
         let mut archive = open_archive(self.opener.as_ref(), &archive_uri, cancel)?;
-        let plan = plan(archive.members(), &self.limits, cancel)?;
+        let mut plan = plan(archive.members(), &self.limits, cancel)?;
+        if let Some(selected) = &self.selection {
+            plan.keep_selected(selected, archive.members());
+        }
         self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)?;
         cancel.check()?;
         let mut staging = ExtractionStaging::create(destination.folder.as_ref(), cancel)?;

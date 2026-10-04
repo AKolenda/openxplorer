@@ -125,6 +125,45 @@ impl ContextMenu {
     }
 }
 
+/// How a ZIP opens when the app opens archives itself
+/// (`preferences.zipOpening`, ARC-026).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ZipOpening {
+    /// In the tab, like a folder, as Windows Explorer opens it.
+    Folder,
+    /// In the "Compressed folder" window over the tab, as before.
+    #[default]
+    Window,
+}
+
+impl ZipOpening {
+    /// Every choice.
+    pub const ALL: [ZipOpening; 2] = [ZipOpening::Folder, ZipOpening::Window];
+
+    /// The value stored in `settings.json`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ZipOpening::Folder => "folder",
+            ZipOpening::Window => "window",
+        }
+    }
+
+    /// The choice stored as `key`, or `None` for anything else.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|choice| choice.as_str() == key)
+    }
+
+    /// True for the window, which is not stored.
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde passes the field by reference"
+    )]
+    pub(super) fn is_window(&self) -> bool {
+        *self == ZipOpening::Window
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::{json, Value};

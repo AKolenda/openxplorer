@@ -31,6 +31,7 @@
 //! |---|---|---|
 //! | `browse` | Listing an archive folder | `archives.py` |
 //! | `preview` | Opening one member as a private copy | `archives.py` |
+//! | `copies` | Copies of members taken out of a ZIP browsed as a folder | new (Explorer) |
 //! | `extract` | Checking and extracting a whole archive | `zip_extraction.py`, `winspace.py` |
 //! | `create` | Compressing items into a new ZIP | new (Dolphin, Explorer) |
 //! | `member_names` | Safe member names, previewable types, suggested folder names | `archives.py`, `zip_extraction.py` |
@@ -41,6 +42,7 @@
 //! | `error` | [`ArchiveError`] with the app's messages | all of them |
 
 mod browse;
+mod copies;
 mod create;
 mod error;
 mod extract;
@@ -55,14 +57,17 @@ mod zip;
 pub use browse::{
     default_preview_root, ArchiveBrowser, ArchiveEntry, ArchiveEntryKind, ArchiveListing, MAX_LISTED_ENTRIES,
 };
+pub use copies::{
+    copied_member, copies_root, copy_folder_name, prepare_copies_root, remove_old_copies, COPY_LIFETIME,
+};
 pub use create::{CompressionRequest, CreatedArchive, ZipCompressor};
 pub use error::ArchiveError;
 pub use extract::{
-    lift_single_folder, ExtractedFolder, ExtractionLimits, ExtractionOutput, ExtractionRequest,
-    ExtractionSummary, GioExtractionOutput, OutputFile, ZipExtractor,
+    lift_same_named_folder, lift_single_folder, private_extraction_name, ExtractedFolder, ExtractionLimits,
+    ExtractionOutput, ExtractionRequest, ExtractionSummary, GioExtractionOutput, OutputFile, ZipExtractor,
 };
 pub use gio_reader::GioArchiveReader;
-pub use member_names::{is_supported_archive, suggested_folder_name};
-pub use preview::{PreviewCopy, PREVIEW_NOTICE};
+pub use member_names::{is_safe_member as is_safe_member_name, is_supported_archive, suggested_folder_name};
+pub use preview::{remove_old_previews, remove_preview_copy, PreviewCopy, PREVIEW_LIFETIME, PREVIEW_NOTICE};
 pub use source::{ArchiveOpener, ArchiveStream, GioArchiveOpener};
 pub use zip::{Zip64Field, ZipFormatError};

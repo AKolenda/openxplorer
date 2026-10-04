@@ -732,6 +732,23 @@ fn the_menu_watch_and_interval_rows_save_the_python_keys() {
     assert_eq!(python_preference(directory, "networkInterval"), "300");
 }
 
+/// "Open ZIP files" says how a browsed ZIP opens, so it is off while
+/// "Open archives as folders" is off.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn open_zip_files_waits_for_open_archives_as_folders() {
+    let settings = SettingsTest::open();
+    let opening = settings.row("Open ZIP files");
+    let is_usable = || opening.controls().iter().all(WidgetExt::is_sensitive);
+    assert!(is_usable());
+
+    switch_of(&settings.row("Open archives as folders")).set_active(false);
+    wait_until("the row to be off", || !is_usable());
+    switch_of(&settings.row("Open archives as folders")).set_active(true);
+    wait_until("the row to be on again", is_usable);
+}
+
 /// parity: SET-019, SET-015
 #[gtk::test]
 fn the_rows_show_what_the_python_app_saved() {

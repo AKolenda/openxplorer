@@ -120,6 +120,16 @@ fn staging_name() -> Result<String, ArchiveError> {
     Ok(format!("{STAGING_PREFIX}{digits}{STAGING_SUFFIX}"))
 }
 
+/// Whether `name` has the form of a staging folder's name, as
+/// [`staging_name`] makes them.
+pub(in crate::archive) fn is_staging_name(name: &str) -> bool {
+    name.strip_prefix(STAGING_PREFIX)
+        .and_then(|rest| rest.strip_suffix(STAGING_SUFFIX))
+        .is_some_and(|digits| {
+            digits.len() == 2 * NAME_BYTES && digits.bytes().all(|digit| digit.is_ascii_hexdigit())
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

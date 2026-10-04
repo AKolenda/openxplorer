@@ -1,5 +1,24 @@
 # Unreleased
 
+- Extract all works like Windows Explorer's: it appears in the command bar
+  while a ZIP is selected, and its dialog is as short as Explorer's, with
+  one field, "Files will be extracted to this folder", filled in with the
+  ZIP's folder and name, and Browse…. A missing folder is created; an
+  existing one (such as Downloads) receives the files directly, asking
+  before any file is replaced; a ZIP holding one folder of the same name is
+  no longer nested (`tidewater/tidewater`). The counts, notes and Open in
+  archive manager are behind the (i) button; a password-protected ZIP says
+  so straight away and offers the archive manager, which no longer reopens
+  the archive in OpenXplorer when OpenXplorer is the default for ZIPs.
+- ZIPs can open like folders, as in Windows Explorer: Settings > Windows &
+  tabs > Open ZIP files > Like a folder (Windows). The ZIP opens in the tab,
+  with the address bar, crumbs, Back and Up working through it, Extract all
+  in the bar, and Copy, Paste and dragging items out (as real copies). It
+  stays read-only. The default, In a pop-up window, keeps today's window.
+- Copies made from inside a ZIP are cleaned up: a file opened from a ZIP no
+  longer leaves its copy in memory until logout (it is removed ten minutes
+  after it was opened), and items copied or dragged out are removed after a
+  day, when OpenXplorer starts or copies again.
 - Open and Save dialogs behave more like Windows':
   - Escape closes the dialog while a file is selected in the list,
     instead of only clearing the selection.

@@ -21,7 +21,7 @@ use super::normalise::{file_uri, without_user};
 use super::parts::{split_location, split_scheme, LocationKind, LocationParts};
 use super::text::{decode_uri_component, strip_one_trailing_slash};
 use super::virtual_place::{VirtualFolder, VirtualPlace};
-use super::{location_kind, Crumb};
+use super::{location_kind, ArchiveLocation, Crumb};
 
 /// Name of a device whose mount is not known.
 const UNKNOWN_DEVICE: &str = "Connected device";
@@ -88,6 +88,12 @@ impl LocationContext {
         if let Some(place) = VirtualPlace::from_uri(uri) {
             return place.title().to_string();
         }
+        if let Some(inside) = ArchiveLocation::from_uri(uri) {
+            return match inside.segments().last() {
+                Some(name) => (*name).to_owned(),
+                None => self.base_name(&inside.archive_uri),
+            };
+        }
         if let Ok(Some(folder)) = VirtualFolder::parse(uri) {
             return folder.segments.last().cloned().unwrap_or_default();
         }
@@ -122,6 +128,21 @@ impl LocationContext {
     pub fn display_location(&self, uri: &str) -> String {
         if let Some(place) = VirtualPlace::from_uri(uri) {
             return place.title().to_string();
+        }
+        if let Some(inside) = ArchiveLocation::from_uri(uri) {
+            // As Explorer shows it: the ZIP's path, then the folders in it.
+            let archive = self.display_location(&inside.archive_uri);
+            let separator = if location_kind(&inside.archive_uri) == LocationKind::Smb {
+                "\\"
+            } else {
+                "/"
+            };
+            let mut text = archive;
+            for segment in inside.segments() {
+                text.push_str(separator);
+                text.push_str(segment);
+            }
+            return text;
         }
         if let Ok(Some(folder)) = VirtualFolder::parse(uri) {
             return with_subpath(folder.place.title(), &folder.segments.join("/"));
@@ -164,8 +185,31 @@ impl LocationContext {
         if let Ok(Some(folder)) = VirtualFolder::parse(uri) {
             return virtual_crumbs(&folder);
         }
+        if let Some(inside) = ArchiveLocation::from_uri(uri) {
+            return self.archive_crumbs(&inside);
+        }
         self.folder_crumbs(uri)
             .unwrap_or_else(|| vec![Crumb::new(uri, uri)])
+    }
+
+    /// The crumbs of a location inside a ZIP: the crumbs of the ZIP's own
+    /// location, whose last one opens the ZIP's root, then one per folder
+    /// inside it.
+    fn archive_crumbs(&self, inside: &ArchiveLocation) -> Vec<Crumb> {
+        let root = ArchiveLocation::root(&inside.archive_uri);
+        let mut crumbs = self
+            .folder_crumbs(&inside.archive_uri)
+            .unwrap_or_else(|| vec![Crumb::new(self.base_name(&inside.archive_uri), root.uri())]);
+        if let Some(last) = crumbs.last_mut() {
+            last.uri = root.uri();
+        }
+        let mut member = String::new();
+        for segment in inside.segments() {
+            member.push_str(segment);
+            member.push('/');
+            crumbs.push(Crumb::new(segment, root.member(&member).uri()));
+        }
+        crumbs
     }
 
     /// The name of a root folder: the device label, the server, or
@@ -219,6 +263,9 @@ impl LocationContext {
 /// the web UI's `renderNavigation`. The scheme decides, as app.js's
 /// `startsWith('smb:')` does for the canonical URIs the window shows.
 pub fn crumb_divider(uri: &str, index: usize) -> Option<&'static str> {
+    if let Some(inside) = ArchiveLocation::from_uri(uri) {
+        return crumb_divider(&inside.archive_uri, index);
+    }
     match (location_kind(uri), index) {
         (_, 0) | (LocationKind::Local, 1) => None,
         (LocationKind::Smb, _) => Some("\\"),
@@ -232,6 +279,13 @@ pub fn crumb_divider(uri: &str, index: usize) -> Option<&'static str> {
 pub fn parent_location(uri: &str) -> Option<String> {
     if VirtualPlace::from_uri(uri).is_some() {
         return None;
+    }
+    if let Some(inside) = ArchiveLocation::from_uri(uri) {
+        // Up from the ZIP's root leaves it for the folder that holds it.
+        return match inside.parent() {
+            Some(parent) => Some(parent.uri()),
+            None => parent_location(&inside.archive_uri),
+        };
     }
     // A malformed address inside a virtual folder has no parent either.
     let virtual_folder = VirtualFolder::parse(uri).ok()?;

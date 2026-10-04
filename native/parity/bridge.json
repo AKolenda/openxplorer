@@ -38,7 +38,7 @@
       "note": "The Extract compressed folder dialog checks the archive on a worker and shows the summary before Extract is allowed.",
       "evidence": [
         "native/crates/ox-app/src/window/tests/archives.rs::extract_all_unpacks_into_a_new_folder_and_shows_it",
-        "native/crates/ox-app/src/window/tests/archives.rs::extract_refuses_a_bad_name_and_keeps_the_dialog_open",
+        "native/crates/ox-app/src/window/tests/archives.rs::extract_refuses_an_empty_folder_and_keeps_the_dialog_open",
         "native/crates/ox-core/tests/archive_extract_checks.rs::inspection_summarises_and_writes_nothing",
         "native/crates/ox-core/tests/archive_extract_dispatch.rs::inspection_and_extraction_agree",
         "native/crates/ox-core/tests/archive_gio.rs::background_variants_return_the_blocking_results"

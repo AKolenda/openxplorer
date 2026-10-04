@@ -36,8 +36,8 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 use entries::{
-    background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu, Comparison, ContextMenu,
-    ItemFacts, ItemLocation, ItemShape,
+    background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu, zip_background_menu,
+    zip_item_menu, Comparison, ContextMenu, ItemFacts, ItemLocation, ItemShape,
 };
 
 /// How far into a row, and from the view's corner without one, a menu
@@ -144,7 +144,10 @@ impl BrowserWindow {
             return;
         };
         let mut menu = self.menu_for_selection(style);
-        if !self.command_facts().folder.is_recycle_bin {
+        // Service actions run programs on files: the Recycle Bin's items
+        // and those inside a ZIP (ARC-026) are not files they can open.
+        let folder = self.command_facts().folder;
+        if !folder.is_recycle_bin && !folder.is_zip {
             self.append_service_actions(&mut menu.entries);
         }
         if self.administrator_target().is_some() {
@@ -166,7 +169,19 @@ impl BrowserWindow {
     /// What the menu lists for the selection now.
     fn menu_for_selection(&self, style: MenuStyle) -> ContextMenu {
         let items = self.folder_pane().model().selected_items();
-        let in_recycle_bin = self.command_facts().folder.is_recycle_bin;
+        let facts = self.command_facts();
+        if facts.folder.is_zip {
+            let entries = if items.is_empty() {
+                zip_background_menu()
+            } else {
+                zip_item_menu()
+            };
+            return ContextMenu {
+                entries,
+                strip: Vec::new(),
+            };
+        }
+        let in_recycle_bin = facts.folder.is_recycle_bin;
         let entries = match (items.first(), in_recycle_bin) {
             (None, true) => recycle_bin_background_menu(),
             (None, false) => background_menu(

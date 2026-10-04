@@ -149,13 +149,19 @@ impl BrowserWindow {
             ));
             return;
         }
+        let uris: Vec<String> = items.iter().map(|item| item.entry().uri.clone()).collect();
+        // Inside a ZIP opened like a folder, copies are extracted first
+        // (ARC-026).
+        if let Some(inside) = crate::window::zip_copies::zip_items(&uris) {
+            self.copy_zip_selection(mode, inside);
+            return;
+        }
         if mode == ClipboardMode::Cut && facts.has_read_only {
             self.show_message(ox_core::i18n::gettext_static(
                 "Previous versions are read-only. Use Restore a copy.",
             ));
             return;
         }
-        let uris: Vec<String> = items.iter().map(|item| item.entry().uri.clone()).collect();
         self.copy_items(mode, &uris);
     }
 
@@ -173,13 +179,18 @@ impl BrowserWindow {
                 return;
             }
         };
+        self.put_files_on_clipboard(files);
+    }
+
+    /// Makes `files` the desktop's clipboard and says so.
+    pub(crate) fn put_files_on_clipboard(&self, files: ClipboardFiles) {
         if publish(&self.clipboard(), &files).is_err() {
             self.show_message(ox_core::i18n::gettext_static(
                 "The desktop clipboard could not be claimed.",
             ));
             return;
         }
-        let message = published_message(mode, files.uris().len());
+        let message = published_message(files.mode(), files.uris().len());
         self.remember_clipboard(Some(files));
         self.show_message(&message);
     }
@@ -237,7 +248,7 @@ impl BrowserWindow {
     }
 
     /// How many times the clipboard has changed while the window watched.
-    fn clipboard_generation(&self) -> u64 {
+    pub(crate) fn clipboard_generation(&self) -> u64 {
         self.imp().file_operations.borrow().clipboard_generation
     }
 

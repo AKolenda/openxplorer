@@ -48,7 +48,8 @@ fn pinnable_uris(uris: &[String]) -> Result<Vec<String>, DropRefusal> {
     let mut pins: Vec<String> = Vec::with_capacity(uris.len());
     for uri in uris {
         let pin = normalise(uri).map_err(|_| DropRefusal::NotPinnable)?;
-        if !is_draggable_location(&pin) {
+        // A copy taken out of a ZIP is removed a day later (ARC-026).
+        if !is_draggable_location(&pin) || super::zip_copies::is_zip_copy(&pin) {
             return Err(DropRefusal::NotPinnable);
         }
         if !pins.contains(&pin) {
