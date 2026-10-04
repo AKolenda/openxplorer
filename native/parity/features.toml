@@ -5114,7 +5114,7 @@ native_note = "native/crates/ox-app/src/window/select_matching.rs: 'Select items
 id = "SIDE-001"
 area = "SIDE"
 title = "Sidebar sections and order"
-behaviour = "The sidebar is ordered: 'Home' (blue home icon); separator; Quick access pins (no visible heading or counter); separator; 'This PC' (chevron), then indented 'Local Disk' and every non-SMB volume or device; separator; 'Network' (chevron), then indented network locations. The chevrons are decorative and do not collapse sections. The bottom bar holds 'Map network location'."
+behaviour = "The sidebar is ordered: 'Home' (blue home icon); separator; Quick access pins (no visible heading or counter); separator; 'This PC' (chevron), then indented 'Local Disk' and every non-SMB volume or device; separator; 'Network' (chevron), then indented network locations. The chevrons collapse and expand their sections (SIDE-033). The bottom bar holds 'Map network location'."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -5137,7 +5137,7 @@ python_tests = [
 bridge = ["environment", "bookmark", "pin"]
 dolphin = "Places panel; show_places_panel: F9"
 native = "done"
-native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, home_this_pc_and_network_show_their_glyphs_in_their_own_colours, a_section_knows_its_first_and_last_rows); native/crates/ox-app/src/window/tests/sidebar_layout.rs (map_network_location_sits_below_the_list); native/crates/ox-app/src/window/tests/sidebar.rs (the_group_chevrons_never_collapse_and_quick_access_has_no_heading). The order, the blue Home glyph, the section separators, non-SMB volumes and devices under This PC, the Map network location bar, the decorative chevrons (images, not buttons; activating This PC opens it and its drives stay listed) and the absence of a Quick access heading or counter are tested."
+native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, home_this_pc_and_network_show_their_glyphs_in_their_own_colours, a_section_knows_its_first_and_last_rows); native/crates/ox-app/src/window/tests/sidebar_layout.rs (map_network_location_sits_below_the_list); native/crates/ox-app/src/window/tests/sidebar.rs (quick_access_has_no_heading_and_this_pc_opens_from_its_name). The order, the blue Home glyph, the section separators, non-SMB volumes and devices under This PC, the Map network location bar, the chevrons (buttons that collapse their section, SIDE-033; activating This PC's row opens it and its drives stay listed) and the absence of a Quick access heading or counter are tested."
 
 [[feature]]
 id = "SIDE-002"
@@ -5818,6 +5818,38 @@ dolphin = "KFilePlacesView context menu 'Add Entry…' (empty area)"
 gnome = "GTK bookmarks file entries (SIDE-013)"
 native = "done"
 native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (add_entry_pins_a_typed_location_and_edit_changes_it_in_place, closing_add_entry_during_the_check_saves_no_pin). A right-click on the sidebar's empty space offers 'Add entry…' (win.add-place): a dialog with Label and Location, which takes any address the address bar takes (a path, ~/…, smb://server/share/folder, sftp://…) and has a Browse… folder picker. The location is checked off the main thread with the pin check of SIDE-007 (GIO must find a folder or share; a share browse entry is saved as its real share), then pinned at the end of Quick access without the window going there; errors show in the dialog. While the location is checked the buttons are disabled, only one pin request runs at a time, and closing the dialog cancels the check and saves nothing. No icon field: Quick access draws every place with its folder's own art, as Explorer's navigation pane does."
+
+[[feature]]
+id = "SIDE-032"
+area = "SIDE"
+title = "Hide expand arrows"
+behaviour = "Settings › Appearance › Layout › 'Hide expand arrows' draws the navigation pane's expand arrows as Windows Explorer does: the chevrons beside This PC and Network and the folder tree's arrows show only while the pointer is over the pane or keyboard focus is in it, fading in. Every open window follows at once, rows built later too, and nothing moves sideways. The file list's folder arrows are left to Settings › Appearance › Files and folders › Expandable folders, which already gives Explorer's file list without arrows. Off by default, so the arrows show."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "docs/interface.md (Previews and the folder tree)",
+]
+python_tests = []
+bridge = ["preferences"]
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/expand_arrows.rs (hidden_navigation_arrows_show_with_focus_in_the_pane: the chevrons of This PC and Network and the folder tree's arrows draw nothing with the setting on and focus in the file list, show again once a sidebar row has focus, and the file list's folder arrows are drawn throughout; flipping_the_setting_from_the_settings_tab_hides_and_shows_the_arrows: four flips from the Settings tab, the folder tab following each time); native/crates/ox-app/src/theme/stylesheets.rs (the_skin_hides_the_navigation_panes_expand_arrows: hidden, shown under .sidebar:hover and .sidebar:focus-within, and no rule for the file list); native/crates/ox-app/src/settings_page/tests.rs (the_expand_arrows_switch_saves_the_choice); native/crates/ox-core/src/settings/preferences.rs (expand_arrows_are_shown_by_default_and_hiding_them_is_stored). Saved as hideExpandArrows. The window carries hide-expand-arrows (followed with the places, next to the full-path option) and resources/skin/sidebar.css draws the arrows transparent, keeping their room. A class on the window rather than a property set on each row: setting each folder tree row's hide-expander missed rows on GTK 4.22, which kept their arrows until the tree was built again. The pointer-over reveal is CSS :hover and was not exercised by a test."
+
+[[feature]]
+id = "SIDE-033"
+area = "SIDE"
+title = "This PC and Network collapse with their chevrons"
+behaviour = "The chevron beside This PC and beside Network is a button of its own, as in Windows Explorer's navigation pane: clicking it collapses the section (its rows are hidden and the chevron points right) or expands it again (pointing down); it has its own hover highlight, a step past the row's, and its tooltip says Collapse This PC, Expand Network and so on. From the keyboard, Left on the section's row collapses it and Right expands it; the row tells screen readers whether it is expanded. Clicking the name still opens the place, and a click, Ctrl+click or middle-click on the chevron never opens it. While the place that holds the current location is inside a collapsed section, the section's row is highlighted instead. A collapsed section stays collapsed while the sidebar's rows are rebuilt (a drive coming or going); it is kept per window, not saved."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "docs/interface.md (Previews and the folder tree)",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar_sections.rs (the_this_pc_chevron_collapses_and_expands_its_section: Local Disk hidden and shown again, the chevron's tooltip Collapse This PC then Expand This PC, the row's expanded state set, the window left where it was, the collapse kept when the rows are rebuilt; left_and_right_on_a_section_head_collapse_and_expand_it; a_collapsed_section_highlights_its_head_for_the_place_inside: on /, This PC highlighted while collapsed and Local Disk again once expanded; a_click_on_a_chevron_opens_no_place: the list's Ctrl+click and middle-click find no place on the chevron, and a middle-click there opens no tab); native/crates/ox-app/src/window/sidebar/collapsing.rs (a_place_in_a_collapsed_section_shows_as_its_head); native/crates/ox-app/src/window/tests/sidebar.rs (quick_access_has_no_heading_and_this_pc_opens_from_its_name: each chevron runs win.toggle-sidebar-section); native/crates/ox-app/src/theme/stylesheets.rs (the_section_chevrons_have_their_own_highlight). The chevron runs its own action, as the eject button does, and takes no focus; Left and Right on the head row are a capture-phase key controller on the list, as the folder tree's. A plain click on the chevron not activating the row was checked by hand with a real pointer under kwin_wayland 5.27 (a click on the chevron collapsed This PC and left the window on Home; a click on the name opened This PC); the Ctrl+click path is tested through the location the gesture looks up, not with a synthesised pointer event."
 
 [[feature]]
 id = "CMD-001"
@@ -16231,7 +16263,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (column_titles_sort_and_resize_from_the_keyboard, menus_open_their_items_from_the_keyboard); native/crates/ox-app/src/folder_view/column_keys.rs (title_keys_sort_resize_within_the_limits_and_fit_the_items); native/crates/ox-app/src/window/sidebar_resizer.rs (arrows_move_the_resizer_10_pixels_shift_40_and_home_resets_it); native/crates/ox-app/src/window/tests/sidebar.rs (the_resizer_is_a_titled_separator_that_the_keys_move, the_group_chevrons_never_collapse_and_quick_access_has_no_heading). Buttons, tabs, close buttons, breadcrumbs, menu rows, sidebar rows, archive rows and Settings results are GTK buttons or activatable list rows that Enter (and Space) activate. The column titles take focus: Enter or Space sorts, Left/Right resize 10 px (Shift 40) and Home fits the column to the widest text among the first 2,000 listed items plus 64 px on Name or 30 px on the others, within the column's limits, and saves it, as fitColumn does. The sidebar resizer takes Left/Right and Home."
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (column_titles_sort_and_resize_from_the_keyboard, menus_open_their_items_from_the_keyboard); native/crates/ox-app/src/folder_view/column_keys.rs (title_keys_sort_resize_within_the_limits_and_fit_the_items); native/crates/ox-app/src/window/sidebar_resizer.rs (arrows_move_the_resizer_10_pixels_shift_40_and_home_resets_it); native/crates/ox-app/src/window/tests/sidebar.rs (the_resizer_is_a_titled_separator_that_the_keys_move, quick_access_has_no_heading_and_this_pc_opens_from_its_name); native/crates/ox-app/src/window/tests/sidebar_sections.rs (left_and_right_on_a_section_head_collapse_and_expand_it). Buttons, tabs, close buttons, breadcrumbs, menu rows, sidebar rows, archive rows and Settings results are GTK buttons or activatable list rows that Enter (and Space) activate. The column titles take focus: Enter or Space sorts, Left/Right resize 10 px (Shift 40) and Home fits the column to the widest text among the first 2,000 listed items plus 64 px on Name or 30 px on the others, within the column's limits, and saves it, as fitColumn does. The sidebar resizer takes Left/Right and Home. The rows of This PC and Network take Left and Right, which collapse and expand their sections, as their chevrons take no focus (SIDE-033)."
 
 [[feature]]
 id = "ACC-007"

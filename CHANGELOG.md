@@ -9,6 +9,16 @@
   in Settings > Appearance > Files and folders, draws the Details rows and
   the navigation pane's rows closer together, so more items fit. Off by
   default. (Not the List layout, which Dolphin calls "Compact".)
+- The arrows beside This PC and Network in the sidebar now collapse and
+  expand those sections, as in Windows, with their own highlight; Left
+  and Right on the section's row do the same from the keyboard. Clicking
+  the name still opens the place. While the open place is inside a
+  collapsed section, the section's row is highlighted.
+- Settings > Appearance > Layout > "Hide expand arrows", as in Windows:
+  the navigation pane's arrows (This PC, Network and the folder tree)
+  show only while the pointer is over the pane or keyboard focus is in
+  it. The arrows show by default. The file list's folder arrows stay
+  with Settings > Appearance > Files and folders > "Expandable folders".
 
 # 2.0.1 — 2026-10-02
 

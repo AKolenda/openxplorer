@@ -22,7 +22,7 @@ use crate::window::sidebar::SidebarDropSpot;
 use crate::window::{gestures, WindowAction};
 
 /// The sidebar row labelled `label`.
-fn row_named(test: &TestWindow, label: &str) -> gtk::ListBoxRow {
+pub(super) fn row_named(test: &TestWindow, label: &str) -> gtk::ListBoxRow {
     let labels = test.window.sidebar().labels();
     let index = labels.iter().position(|shown| shown == label);
     let index = index.unwrap_or_else(|| panic!("{label} is in the sidebar: {labels:?}"));
@@ -51,7 +51,7 @@ fn with_fixture_pinned(fixture: &Fixture) -> TestWindow {
 
 /// parity: SIDE-001
 #[gtk::test]
-fn the_group_chevrons_never_collapse_and_quick_access_has_no_heading() {
+fn quick_access_has_no_heading_and_this_pc_opens_from_its_name() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let sidebar = test.window.sidebar();
@@ -66,8 +66,12 @@ fn the_group_chevrons_never_collapse_and_quick_access_has_no_heading() {
         "{texts:?}"
     );
     for group in ["This PC", "Network"] {
-        let buttons = descendants::<gtk::Button>(&row_named(&test, group));
-        assert!(buttons.is_empty(), "{group}'s chevron is no button");
+        let chevron = section_chevron(&test, group);
+        assert_eq!(
+            chevron.action_name().as_deref(),
+            Some("win.toggle-sidebar-section"),
+            "{group}'s chevron collapses its section, not the row's place"
+        );
     }
 
     assert!(row_named(&test, "This PC").activate());
@@ -75,6 +79,14 @@ fn the_group_chevrons_never_collapse_and_quick_access_has_no_heading() {
 
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::ThisPc.uri()));
     assert!(sidebar.labels().contains(&"Local Disk".to_owned()));
+}
+
+/// The chevron button of the group head labelled `group`.
+pub(super) fn section_chevron(test: &TestWindow, group: &str) -> gtk::Button {
+    descendants::<gtk::Button>(&row_named(test, group))
+        .into_iter()
+        .find(|button| button.has_css_class("side-expander"))
+        .unwrap_or_else(|| panic!("{group} has a chevron button"))
 }
 
 /// parity: SIDE-002

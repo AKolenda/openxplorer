@@ -151,6 +151,9 @@ pub(crate) enum WindowAction {
     SidebarShowAll,
     /// Hides the sidebar section whose key is the string target.
     HideSection,
+    /// Collapses or expands the sidebar section whose key is the string
+    /// target: the chevron of This PC or Network (SIDE-033).
+    ToggleSidebarSection,
     /// Shows the hidden sidebar section whose key is the string target.
     ShowSection,
     /// Hides the sidebar place at the string target (SIDE-010).
@@ -488,6 +491,7 @@ impl WindowAction {
             WindowAction::SidebarIconSize => "sidebar-icon-size",
             WindowAction::SidebarShowAll => "sidebar-show-all",
             WindowAction::HideSection => "hide-section",
+            WindowAction::ToggleSidebarSection => "toggle-sidebar-section",
             WindowAction::ShowSection => "show-section",
             WindowAction::HidePlace => "hide-place",
             WindowAction::ShowPlace => "show-place",
