@@ -71,6 +71,12 @@ const DISABLED_ACTIONS: [WindowAction; 12] = [
 /// Shown when the File name box names nothing that exists.
 const NOT_FOUND: &str = crate::i18n::message_id("“{name}” was not found. Check the file name and try again.");
 
+/// Shown when a quoted list in File name names a folder.
+const NOT_A_FILE: &str = crate::i18n::message_id("“{name}” is a folder, not a file.");
+
+/// Shown when several files are chosen in a dialog for one.
+const CHOOSE_ONE: &str = crate::i18n::message_id("Choose one file.");
+
 /// One of the caller's extra choices and its control.
 #[derive(Debug)]
 enum ChoiceControl {
@@ -470,7 +476,7 @@ impl BrowserWindow {
             return Ok(Vec::new());
         }
         if files.len() > 1 && !multiple {
-            return Err("Choose one file.".to_owned());
+            return Err(ox_core::i18n::gettext(CHOOSE_ONE));
         }
         files
             .iter()
@@ -496,9 +502,9 @@ impl BrowserWindow {
         let Some(name_box) = &picker.name else {
             return Ok(Vec::new());
         };
-        let typed = name_box.text().trim().to_owned();
+        let typed = name_box.text();
         // Enter with no name does what the Save button, off then, does.
-        if typed.is_empty() {
+        if typed.trim().is_empty() {
             return Ok(Vec::new());
         }
         let shown = self.picking_folder().ok_or_else(not_local)?;
@@ -586,20 +592,20 @@ impl BrowserWindow {
     /// the choice to the selection.
     fn typed_choice(&self, picker: &Picker, selected: &[Entry]) -> Option<Result<Vec<PathBuf>, String>> {
         let name_box = picker.name.as_ref()?;
-        let typed = name_box.text().trim().to_owned();
-        if typed.is_empty() {
+        let typed = name_box.text();
+        if typed.trim().is_empty() {
             return None;
         }
         // The selected file's own name: the selection, which a search
         // result's folder belongs to.
         if let [entry] = selected {
-            if !entry.is_dir && entry.name == typed {
+            if !entry.is_dir && entry.name == typed.as_str() {
                 return None;
             }
         }
         // The selected files' names, as the box lists them: the selection.
         let files: Vec<&Entry> = selected.iter().filter(|entry| !entry.is_dir).collect();
-        if files.len() > 1 && quoted_names(&files) == typed {
+        if files.len() > 1 && quoted_names(&files) == typed.as_str() {
             return None;
         }
         let Some(shown) = self.picking_folder() else {
@@ -864,17 +870,17 @@ fn attach_field(
 /// file is named.
 fn typed_files(picker: &Picker, shown: &Path, names: &[String]) -> Result<Vec<PathBuf>, String> {
     if names.len() > 1 && picker.chooses_one() {
-        return Err("Choose one file.".to_owned());
+        return Err(ox_core::i18n::gettext(CHOOSE_ONE));
     }
     names
         .iter()
         .map(|name| {
             let path = typed_path(name, shown).ok_or_else(not_local)?;
             if path.is_file() {
-                Ok(path)
-            } else {
-                Err(ox_core::i18n::format_message(NOT_FOUND, &[("name", name)]))
+                return Ok(path);
             }
+            let message = if path.is_dir() { NOT_A_FILE } else { NOT_FOUND };
+            Err(ox_core::i18n::format_message(message, &[("name", name)]))
         })
         .collect()
 }
@@ -1431,7 +1437,7 @@ mod tests {
     }
 
     /// A quoted list typed in File name opens every file in it; one that
-    /// is not there is named.
+    /// is not there, or is a folder, is named.
     ///
     /// parity: INT-032
     #[gtk::test]
@@ -1440,6 +1446,7 @@ mod tests {
         for name in ["letter.odt", "notes.md"] {
             fixture.write(name);
         }
+        fs::create_dir(fixture.path("Drafts")).expect("a folder");
         let portal = Portal::new();
         let answer = dialog_on(
             &portal,
@@ -1461,6 +1468,15 @@ mod tests {
         assert!(
             window.shown_message().contains("gone.txt"),
             "the missing file is named"
+        );
+        assert!(answer.borrow().is_none(), "no answer yet");
+
+        name.set_text("\"letter.odt\" \"Drafts\"");
+        name.emit_activate();
+        assert_eq!(
+            window.shown_message(),
+            "“Drafts” is a folder, not a file.",
+            "a folder is not reported missing"
         );
         assert!(answer.borrow().is_none(), "no answer yet");
 
@@ -1667,6 +1683,24 @@ mod tests {
         assert_eq!(saved("notes.md"), "notes.md");
         assert_eq!(saved(".bashrc"), ".bashrc");
         assert_eq!(super::saved_name("report", None), "report");
+    }
+
+    /// A selected name with spaces at either end is chosen as it is.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_name_with_spaces_at_its_ends_is_chosen_as_it_is() {
+        let fixture = Fixture::empty();
+        fixture.write(" notes.txt ");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        test.select_named(" notes.txt ");
+        settle();
+        test.window.picker().expect("a picker").accept.emit_clicked();
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of(" notes.txt ")]);
     }
 
     /// Alt+Up works from the File name box, where focus starts in Save;

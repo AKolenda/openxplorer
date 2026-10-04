@@ -4594,9 +4594,18 @@ msgstr ""
 msgid "Open all"
 msgstr ""
 
+#: crates/ox-app/src/window/picker.rs
+msgid "Choose one file."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
 msgid "The folder “{folder}” does not exist."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{name}” is a folder, not a file."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
