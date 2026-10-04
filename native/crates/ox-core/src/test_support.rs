@@ -37,7 +37,7 @@ pub(crate) fn make_fifo(path: &Path) {
 /// and mount namespace (`unshare`), checks that it passed there and returns
 /// `false`; in that namespace it returns `true`, and the test can bind-mount
 /// folders without root and without changing the machine's mounts. Where
-/// unprivileged user namespaces are blocked (Ubuntu's AppArmor setting
+/// unprivileged user namespaces are blocked (the `AppArmor` setting
 /// `kernel.apparmor_restrict_unprivileged_userns`), it says so and returns
 /// `false` without running the test.
 ///
