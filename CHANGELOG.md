@@ -1,3 +1,9 @@
+# Unreleased
+
+- Settings > Appearance > Layout > "Hide the folder tree's expand arrows"
+  takes the arrows off the folder tree in the navigation pane. Right and
+  Left still open and close folders. The arrows show by default.
+
 # 2.0.1 — 2026-10-02
 
 Most of the gaps left by 2.0.0 are closed: 635 of the tracked behaviours of

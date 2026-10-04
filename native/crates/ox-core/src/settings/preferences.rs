@@ -268,6 +268,10 @@ pub struct Preferences {
     /// two, so the Python app's file keeps its layout.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub show_full_path: bool,
+    /// The folder tree's rows show no expand arrows; Right and Left still
+    /// open and close folders. Shown by default; stored only when hidden.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_folder_tree_arrows: bool,
     /// New windows show the address as editable text instead of crumbs
     /// (Dolphin's `EditableUrl`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -423,6 +427,7 @@ impl Default for Preferences {
             column_widths: None,
             window_size: None,
             show_full_path: false,
+            hide_folder_tree_arrows: false,
             editable_location: false,
             external_folders_in_new_window: false,
             browse_archives: true,
@@ -490,6 +495,7 @@ impl Preferences {
         replace_if_some(&mut self.network_interval, network_interval);
         replace_if_some(&mut self.text_size, text_size);
         replace_if_some(&mut self.show_full_path, update.show_full_path);
+        replace_if_some(&mut self.hide_folder_tree_arrows, update.hide_folder_tree_arrows);
         replace_if_some(&mut self.editable_location, update.editable_location);
         replace_if_some(
             &mut self.external_folders_in_new_window,
@@ -643,6 +649,8 @@ pub struct PreferencesUpdate {
     pub window_size: Option<WindowSize>,
     /// Show the full path in the address bar, or start at the closest place.
     pub show_full_path: Option<bool>,
+    /// The folder tree's expand arrows hidden or shown.
+    pub hide_folder_tree_arrows: Option<bool>,
     /// Open new windows with an editable address.
     pub editable_location: Option<bool>,
     /// Open folders from other apps in a new window, or in a new tab.
@@ -738,6 +746,7 @@ impl PreferencesUpdate {
             network_interval: values.get("networkInterval").and_then(read_network_interval),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
             show_full_path: flag("showFullPath"),
+            hide_folder_tree_arrows: flag("hideFolderTreeArrows"),
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
             browse_archives: flag("browseArchives"),
@@ -865,6 +874,30 @@ mod tests {
         assert!(preferences.auto_index);
         assert!(preferences.show_details_pane);
         assert!(!preferences.show_hidden);
+    }
+
+    /// The folder tree's arrows are shown by default and the choice is
+    /// not stored then; hiding them is saved as `hideFolderTreeArrows`
+    /// and read back.
+    ///
+    /// parity: SIDE-032
+    #[test]
+    fn folder_tree_arrows_are_shown_by_default_and_hiding_them_is_stored() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.hide_folder_tree_arrows);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(
+            stored.get("hideFolderTreeArrows").is_none(),
+            "not stored while shown"
+        );
+
+        let hide = PreferencesUpdate::from_json(&json!({ "hideFolderTreeArrows": true }))
+            .expect("a valid preference");
+        preferences.apply(&hide);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["hideFolderTreeArrows"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.hide_folder_tree_arrows, Some(true));
     }
 
     /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`.

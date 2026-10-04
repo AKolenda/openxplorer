@@ -476,7 +476,8 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Remember each folder's view",
             "Selection marker",
             "Expandable folders",
-            "Sidebar and column widths"
+            "Sidebar and column widths",
+            "Hide the folder tree's expand arrows"
         ]
     );
 }
@@ -669,6 +670,25 @@ fn the_text_size_row_draws_and_saves_the_chosen_size() {
         python_preference(settings.test.settings_directory(), "textSize"),
         "125"
     );
+}
+
+/// "Hide the folder tree's expand arrows" is off by default and saves the
+/// choice, which the open window's folder tree then takes up (SIDE-032).
+///
+/// parity: SIDE-032
+#[gtk::test]
+fn the_folder_tree_arrows_switch_saves_the_choice() {
+    let settings = SettingsTest::open();
+    let switch = switch_of(&settings.row("Hide the folder tree's expand arrows"));
+    assert!(!switch.is_active(), "the arrows are shown by default");
+
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().hide_folder_tree_arrows
+    });
+    wait_until("the folder tree to follow", || {
+        settings.test.window.folder_tree_arrows_are_hidden()
+    });
 }
 
 /// The rows of preferences the Python app follows save its keys and
