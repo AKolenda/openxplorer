@@ -74,6 +74,6 @@ pub use member_names::{is_supported_archive, suggested_folder_name};
 pub fn is_safe_member_name(name: &str) -> bool {
     member_names::is_safe_member(name)
 }
-pub use preview::{PreviewCopy, PREVIEW_NOTICE};
+pub use preview::{remove_old_previews, remove_preview_copy, PreviewCopy, PREVIEW_LIFETIME, PREVIEW_NOTICE};
 pub use source::{ArchiveOpener, ArchiveStream, GioArchiveOpener};
 pub use zip::{Zip64Field, ZipFormatError};

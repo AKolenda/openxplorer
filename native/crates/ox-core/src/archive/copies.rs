@@ -74,6 +74,13 @@ pub fn copied_member(folder: &Path, member: &str) -> PathBuf {
 /// Only folders this module names are touched, and links are never
 /// followed.
 pub fn remove_old_copies(root: &Path, lifetime: Duration) {
+    remove_old_folders(root, COPY_PREFIX, lifetime);
+}
+
+/// Removes the folders in `root` named with `prefix` and older than
+/// `lifetime`, by their modification time. Best effort and blocking;
+/// links are never followed.
+pub(super) fn remove_old_folders(root: &Path, prefix: &str, lifetime: Duration) {
     let Ok(children) = fs::read_dir(root) else {
         return;
     };
@@ -82,7 +89,7 @@ pub fn remove_old_copies(root: &Path, lifetime: Duration) {
         let is_copy = child
             .file_name()
             .to_str()
-            .is_some_and(|name| name.starts_with(COPY_PREFIX));
+            .is_some_and(|name| name.starts_with(prefix));
         let Ok(metadata) = child.path().symlink_metadata() else {
             continue;
         };

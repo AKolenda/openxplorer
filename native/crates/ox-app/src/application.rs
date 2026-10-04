@@ -184,6 +184,9 @@ mod imp {
             }
             if let Launch::Interactive = app.launch() {
                 app.report_unfinished_operations();
+                // Copies opened from archives that an earlier run left in
+                // the runtime folder, which lives in memory (ARC-026).
+                super::sweep_archive_copies();
             }
         }
 
@@ -218,6 +221,9 @@ mod imp {
             if let Some(state) = self.state.get() {
                 state.shut_down();
             }
+            if let Launch::Interactive = self.obj().launch() {
+                super::sweep_archive_copies();
+            }
             self.parent_shutdown();
         }
 
@@ -228,6 +234,16 @@ mod imp {
     }
 
     impl GtkApplicationImpl for Application {}
+}
+
+/// Removes the copies opened from archives that are older than
+/// [`ox_core::archive::PREVIEW_LIFETIME`]; newer ones may still be on
+/// their way into an application, and go at the next start (ARC-026).
+fn sweep_archive_copies() {
+    ox_core::archive::remove_old_previews(
+        &ox_core::archive::default_preview_root(),
+        ox_core::archive::PREVIEW_LIFETIME,
+    );
 }
 
 glib::wrapper! {

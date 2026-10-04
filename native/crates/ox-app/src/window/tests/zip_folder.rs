@@ -310,3 +310,36 @@ fn the_menus_inside_a_zip_are_short() {
         ["Extract all…", "Refresh"]
     );
 }
+
+/// A file inside a ZIP opened with a double-click goes to its application
+/// as a private copy, which is removed once the application has had time
+/// to read it: the copies are in the runtime folder, in memory until
+/// logout, and every double-click left one behind before.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn a_copy_opened_from_a_zip_is_removed_later() {
+    let fixture = fixture_with_zip();
+    let test = opening_zips_as_folders(&fixture);
+    open_bundle(&test, &fixture);
+    crate::window::zip_folder::keep_copies_for_tests(Some(std::time::Duration::from_millis(300)));
+
+    test.select_named("readme.txt");
+    test.activate("open", None);
+    wait_until("the copy to be handed to its application", || {
+        !test.context.recorded_launches().is_empty()
+    });
+    let launched = test
+        .context
+        .recorded_launches()
+        .last()
+        .cloned()
+        .expect("a launch");
+    let copy = gio::File::for_uri(&launched).path().expect("a local copy");
+    let folder = copy.parent().expect("its private folder").to_path_buf();
+    let removed = || !folder.exists();
+    assert!(copy.is_file(), "the copy is there while its application opens it");
+
+    wait_until("the copy to be removed", removed);
+    crate::window::zip_folder::keep_copies_for_tests(None);
+}

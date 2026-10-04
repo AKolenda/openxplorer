@@ -159,7 +159,12 @@ impl BrowserWindow {
             open_copy: Rc::new(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |uri: String| window.open_externally(&uri)
+                move |uri: String| {
+                    window.open_externally(&uri);
+                    if let Some(path) = gio::File::for_uri(&uri).path() {
+                        super::zip_folder::remove_copy_later(path);
+                    }
+                }
             )),
         };
         let frame = archive_dialog(&archive, browser, &shown_path, actions);

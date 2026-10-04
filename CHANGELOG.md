@@ -20,6 +20,10 @@
   stays read-only. The default, In a pop-up window, keeps today's window.
 - Extract all appears in the command bar while a ZIP is selected, as in
   Windows Explorer.
+- A file opened from inside a ZIP no longer leaves its copy in memory until
+  logout: each copy is removed ten minutes after it was opened, and older
+  copies are swept when another is opened and when OpenXplorer starts and
+  quits.
 
 # 2.0.1 — 2026-10-02
 

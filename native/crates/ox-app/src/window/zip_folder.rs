@@ -97,7 +97,10 @@ impl BrowserWindow {
                     .preview_member_in_background(inside.archive_uri, inside.member, Cancellation::new())
                     .await;
                 match copy {
-                    Ok(copy) => window.open_externally(&copy.uri()),
+                    Ok(copy) => {
+                        window.open_externally(&copy.uri());
+                        remove_copy_later(copy.path);
+                    }
                     Err(ox_core::archive::ArchiveError::UnsafePreviewType) => {
                         window.show_message(ox_core::i18n::gettext_static(NOT_OPENABLE));
                     }
@@ -107,4 +110,37 @@ impl BrowserWindow {
         ));
         true
     }
+}
+
+/// Removes the copy at `path`, opened from an archive in another
+/// application, once that application has had time to read it
+/// ([`ox_core::archive::PREVIEW_LIFETIME`]). The copies are in the runtime
+/// folder, which lives in memory until logout; on Linux removing a file
+/// an application has open does not disturb it (ARC-026).
+pub(super) fn remove_copy_later(path: std::path::PathBuf) {
+    glib::timeout_add_local_once(copy_lifetime(), move || {
+        ox_core::archive::remove_preview_copy(&path);
+    });
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How long tests keep copies, `None` for the real lifetime.
+    static TEST_LIFETIME: std::cell::Cell<Option<std::time::Duration>> = const { std::cell::Cell::new(None) };
+}
+
+/// Keeps copies opened from archives for `lifetime` instead of the real
+/// lifetime, or the real one again with `None`, for tests.
+#[cfg(test)]
+pub(crate) fn keep_copies_for_tests(lifetime: Option<std::time::Duration>) {
+    TEST_LIFETIME.with(|shown| shown.set(lifetime));
+}
+
+/// How long a copy opened from an archive is kept.
+fn copy_lifetime() -> std::time::Duration {
+    #[cfg(test)]
+    if let Some(lifetime) = TEST_LIFETIME.with(std::cell::Cell::get) {
+        return lifetime;
+    }
+    ox_core::archive::PREVIEW_LIFETIME
 }

@@ -19,6 +19,7 @@ use std::fs::{self, DirBuilder, File, OpenOptions, Permissions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use gio::prelude::*;
 
@@ -44,6 +45,13 @@ const WRITABLE_COPY_MODE: u32 = 0o600;
 const READ_ONLY_COPY_MODE: u32 = 0o400;
 /// The start of each copy's private folder name.
 const PREVIEW_FOLDER_PREFIX: &str = "winspace-zip-";
+
+/// How long a copy opened from an archive is kept. The preview root is in
+/// the runtime folder, which lives in memory until logout, so copies are
+/// removed this long after they were made: by then the application that
+/// opened one has read it, and on Linux removing a file an application
+/// has open does not disturb it.
+pub const PREVIEW_LIFETIME: Duration = Duration::from_secs(10 * 60);
 
 /// The notice to show after opening a copy.
 pub const PREVIEW_NOTICE: &str =
@@ -91,6 +99,7 @@ impl ArchiveBrowser {
         let mut archive = open_archive(self.opener.as_ref(), uri, cancel)?;
         let index = unique_member(archive.members(), member)?;
         check_previewable(&archive.members()[index])?;
+        remove_old_previews(&self.preview_root, PREVIEW_LIFETIME);
         let folder = create_preview_folder(&self.preview_root)?;
         let copy_path = folder.join(file_name);
         match write_copy(&mut archive, index, &copy_path, cancel) {
@@ -204,6 +213,30 @@ fn create_copy_file(copy_path: &Path) -> Result<File, ArchiveError> {
         .open(copy_path)?;
     copy.set_permissions(Permissions::from_mode(WRITABLE_COPY_MODE))?;
     Ok(copy)
+}
+
+/// Removes the copies in the preview root `root` older than `lifetime`:
+/// at each new copy, and when the app starts and quits. Best effort and
+/// blocking; only preview folders are touched.
+pub fn remove_old_previews(root: &Path, lifetime: Duration) {
+    super::copies::remove_old_folders(root, PREVIEW_FOLDER_PREFIX, lifetime);
+}
+
+/// Removes the copy at `path` with its private folder, once the
+/// application it was opened in has had time to read it. Anything but a
+/// copy in a preview folder is left alone.
+pub fn remove_preview_copy(path: &Path) {
+    let Some(folder) = path.parent() else {
+        return;
+    };
+    let is_preview_folder = folder
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with(PREVIEW_FOLDER_PREFIX));
+    let is_folder = folder.symlink_metadata().is_ok_and(|metadata| metadata.is_dir());
+    if is_preview_folder && is_folder {
+        let _ = fs::remove_dir_all(folder);
+    }
 }
 
 /// Removes a failed copy and its folder. The first error is the one the
