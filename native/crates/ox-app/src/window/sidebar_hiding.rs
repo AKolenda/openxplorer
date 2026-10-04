@@ -29,7 +29,8 @@ use super::BrowserWindow;
 
 impl BrowserWindow {
     /// Adds `win.sidebar-show-all`, `win.hide-section`,
-    /// `win.show-section`, `win.hide-place` and `win.show-place`.
+    /// `win.show-section`, `win.hide-place`, `win.show-place` and
+    /// `win.toggle-sidebar-section`.
     pub(super) fn install_sidebar_hiding(&self) {
         self.add_action_entries([
             toggle_action(WindowAction::SidebarShowAll, false, |window, on| {
@@ -44,6 +45,9 @@ impl BrowserWindow {
             }),
             text_action(WindowAction::HidePlace, BrowserWindow::hide_place),
             text_action(WindowAction::ShowPlace, BrowserWindow::show_hidden_place),
+            text_action(WindowAction::ToggleSidebarSection, |window, key| {
+                window.sidebar().toggle_section(key);
+            }),
         ]);
     }
 
