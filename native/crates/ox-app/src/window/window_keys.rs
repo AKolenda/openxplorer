@@ -153,6 +153,10 @@ impl BrowserWindow {
         if self.dialog_layer().shown().is_some() {
             return false;
         }
+        // A file dialog opens no other window.
+        if command == KeyCommand::NewWindow && self.is_picking() {
+            return false;
+        }
         !self.focus_is_in_text_field()
     }
 

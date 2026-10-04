@@ -17,10 +17,14 @@
 use std::future::Future;
 
 use gtk::glib;
+use ox_core::archive::{ArchiveBrowser, ArchiveEntryKind, ArchiveError, ArchiveListing};
 use ox_core::entry::{self, Entry, EntryError};
+use ox_core::location::ArchiveLocation;
 use ox_core::location::RECENT_LOCATIONS_URI;
+use ox_core::transfer::Cancellation;
 
 use super::recent_locations::list_recent_locations;
+use crate::archive_view::{archive_browser, listing_notice};
 
 /// A running listing. Dropping it cancels the listing.
 #[derive(Debug)]
@@ -64,6 +68,110 @@ pub(crate) fn list_folder(
         };
         on_done(result);
     })
+}
+
+/// Cancels the archive reader's work when the listing that owns it is
+/// dropped (the reader runs on a worker thread, which aborting the task
+/// alone would not stop).
+struct CancelOnDrop(Cancellation);
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        self.0.cancel();
+    }
+}
+
+/// Lists the folder `location` inside a ZIP (ARC-026), as one batch of
+/// read-only rows, then calls `on_done`. The archive reader applies its
+/// usual rules: unsafe names and links are left out, and at most 5,000
+/// rows are listed; `on_done` gets the notice that says so, as the
+/// "Compressed folder" window shows it under its list, or an empty one.
+pub(crate) fn list_archive_folder(
+    location: &ArchiveLocation,
+    on_batch: impl Fn(Vec<Entry>) + 'static,
+    on_done: impl FnOnce(Result<String, EntryError>) + 'static,
+) -> Listing {
+    let location = location.clone();
+    Listing::spawn(async move {
+        let browser = archive_browser();
+        let guard = CancelOnDrop(Cancellation::new());
+        match archive_listing(&browser, &location, &guard.0).await {
+            Ok(listing) => {
+                let notice = listing_notice(&listing);
+                let rows = listing
+                    .entries
+                    .into_iter()
+                    .map(|member| {
+                        let (is_dir, size) = match member.kind {
+                            ArchiveEntryKind::Folder => (true, None),
+                            ArchiveEntryKind::File { size, .. } => (false, Some(size)),
+                        };
+                        let uri = location.member(&member.member).uri();
+                        Entry::archive_member(uri, member.name, is_dir, size, member.modified)
+                    })
+                    .collect();
+                on_batch(rows);
+                on_done(Ok(notice));
+            }
+            Err(error) => on_done(Err(error)),
+        }
+        drop(guard);
+    })
+}
+
+/// The listing of the folder `location`, or [`EntryError::NotDirectory`]
+/// when it names a file: a file's own location, or a path typed through
+/// the ZIP (which always ends in `/`) to a file. A folder typed without
+/// its `/` is listed as the folder. A name the ZIP does not have is
+/// [`EntryError::NotFound`], as for a folder on disk.
+async fn archive_listing(
+    browser: &ArchiveBrowser,
+    location: &ArchiveLocation,
+    cancel: &Cancellation,
+) -> Result<ArchiveListing, EntryError> {
+    let archive = location.archive_uri.clone();
+    let list = |prefix: String| browser.list_in_background(archive.clone(), prefix, cancel.clone());
+    let failure = |error: ArchiveError| match error {
+        ArchiveError::Cancelled => EntryError::Cancelled,
+        error => EntryError::Failed(error.to_string()),
+    };
+    let Some(parent) = location.parent() else {
+        return list(String::new()).await.map_err(failure);
+    };
+    let name = location
+        .segments()
+        .last()
+        .map(|name| (*name).to_owned())
+        .unwrap_or_default();
+    if location.is_folder() {
+        let listing = list(location.member.clone()).await.map_err(failure)?;
+        if !listing.entries.is_empty() {
+            return Ok(listing);
+        }
+        // An empty listing is an empty folder, a file, or nothing at all.
+        let siblings = list(parent.member).await.map_err(failure)?;
+        let kind = siblings
+            .entries
+            .iter()
+            .find(|entry| entry.name == name)
+            .map(|entry| entry.kind);
+        return match kind {
+            Some(ArchiveEntryKind::Folder) => Ok(listing),
+            Some(ArchiveEntryKind::File { .. }) => Err(EntryError::NotDirectory(name)),
+            None => Err(EntryError::NotFound(name)),
+        };
+    }
+    let siblings = list(parent.member).await.map_err(failure)?;
+    match siblings
+        .entries
+        .iter()
+        .find(|entry| entry.name == name)
+        .map(|entry| entry.kind)
+    {
+        Some(ArchiveEntryKind::Folder) => list(format!("{}/", location.member)).await.map_err(failure),
+        Some(ArchiveEntryKind::File { .. }) => Err(EntryError::NotDirectory(name)),
+        None => Err(EntryError::NotFound(name)),
+    }
 }
 
 #[cfg(test)]

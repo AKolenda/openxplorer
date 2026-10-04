@@ -30,7 +30,7 @@ const FALLBACK_FOLDER_NAME: &str = "Extracted files";
 ///
 /// Python's `safe_member` raised an `IndexError` for the names `.` and `./`,
 /// which made the whole listing fail; here they are simply unsafe.
-pub(crate) fn is_safe_member(name: &str) -> bool {
+pub fn is_safe_member(name: &str) -> bool {
     let has_forbidden_character =
         name.contains('\\') || name.chars().any(|character| character.is_ascii_control());
     let is_overlong = name.chars().count() > MAX_MEMBER_NAME_CHARS;

@@ -12,7 +12,9 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::location::{self, normalise_navigation, parent_location, LocationError, VirtualPlace};
+use ox_core::location::{
+    self, normalise_navigation, parent_location, ArchiveLocation, LocationError, VirtualPlace,
+};
 
 use crate::history::LeftView;
 use crate::locations::{self, Page};
@@ -80,7 +82,24 @@ impl BrowserWindow {
         if let Some(recycle_bin) = recycle_bin_location(typed)? {
             return Ok(recycle_bin);
         }
-        self.resolve_relative(address)
+        if let Some(inside) = ArchiveLocation::parse(typed)? {
+            return Ok(inside.uri());
+        }
+        let resolved = self.resolve_relative(address)?;
+        Ok(self.typed_path_through_zip(&resolved).unwrap_or(resolved))
+    }
+
+    /// The location inside a ZIP that the path `uri` runs through, as the
+    /// address bar shows a ZIP browsed as a folder:
+    /// `/home/ana/Downloads/tidewater.zip/tidewater` (ARC-026). Only while
+    /// ZIPs open like folders: "In a pop-up window" never shows a ZIP in
+    /// the tab, so the path stays a path, which names no folder.
+    pub(super) fn typed_path_through_zip(&self, uri: &str) -> Option<String> {
+        if self.opens_zips_as_folders() {
+            path_through_zip(uri)
+        } else {
+            None
+        }
     }
 
     /// The home folder or landing page whose title is `typed` ("Home",
@@ -106,7 +125,14 @@ impl BrowserWindow {
     /// Where a relative address starts: the current folder, or the home
     /// folder on a landing page and before the first tab.
     fn address_base(&self) -> String {
-        let folder = self.current_uri().filter(|uri| Page::from_uri(uri).is_none());
+        let folder = self
+            .current_uri()
+            .filter(|uri| Page::from_uri(uri).is_none())
+            .map(|uri| match ArchiveLocation::from_uri(&uri) {
+                // Inside a ZIP, relative to the folder that holds it.
+                Some(inside) => parent_location(&inside.archive_uri).unwrap_or(uri),
+                None => uri,
+            });
         folder.unwrap_or_else(|| self.imp().locations.borrow().home_uri())
     }
 
@@ -519,6 +545,34 @@ fn child_toward(ancestor: &str, descendant: &str) -> Option<String> {
         }
         child = parent;
     }
+}
+
+/// The location inside a ZIP that the local path `uri` runs through: the
+/// first ancestor that is a ZIP file, then the folders after it. `None`
+/// when no ancestor is a ZIP, or for anything but a local path (a share
+/// would answer slowly here, on the main thread).
+fn path_through_zip(uri: &str) -> Option<String> {
+    // A share mounted through GVfs has a local path too, which would be
+    // read over the network here.
+    if !uri.starts_with("file:") {
+        return None;
+    }
+    let path = gio::File::for_uri(uri).path()?;
+    let zip = path.ancestors().skip(1).find(|ancestor| {
+        let is_zip_name = ancestor
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.to_lowercase().ends_with(".zip"));
+        is_zip_name && ancestor.is_file()
+    })?;
+    let rest = path.strip_prefix(zip).ok()?;
+    let mut member = String::new();
+    for component in rest.components() {
+        member.push_str(component.as_os_str().to_str()?);
+        member.push('/');
+    }
+    let root = ArchiveLocation::root(&ox_core::location::file_uri(zip));
+    ox_core::archive::is_safe_member_name(&member).then(|| root.member(&member).uri())
 }
 
 /// The Recycle Bin by its title or URI, or a folder in it, for `typed`;

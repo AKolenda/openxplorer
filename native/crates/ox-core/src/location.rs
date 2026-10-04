@@ -39,10 +39,12 @@
 //! | `device_uri` | GIO's device URIs with bracketed bus identifiers |
 //! | `normalise` | One canonical URI for a typed or stored address |
 //! | `virtual_place` | The app's pages and GIO's virtual folders |
+//! | `archive_location` | Folders and files inside a ZIP (`ox-zip:`) |
 //! | `names` | File names, "Keep both" names and sidebar labels |
 //! | `display` | Titles, address bar text, breadcrumbs and Up |
 //! | `classify` | Writable, snapshot and network folders, SMB share roots |
 
+mod archive_location;
 mod classify;
 mod device_uri;
 mod display;
@@ -54,11 +56,13 @@ mod virtual_place;
 
 pub(crate) use text::{decode_uri_component, python_strip, unquote_lossy};
 
+pub use archive_location::{is_archive_location, ArchiveLocation, ARCHIVE_SCHEME};
 pub use classify::{is_network_filesystem, is_smb_share_root};
 pub use display::{crumb_divider, device_root, parent_location, same_location, DeviceLabel, LocationContext};
 pub use names::{new_copy_name, safe_label, validate_name, ItemKind, MAX_LABEL_CHARS};
 pub use normalise::{
-    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share, without_user,
+    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
+    typed_local_path, without_user,
 };
 pub use parts::{canonical_remote_scheme, split_location, LocationKind, LocationParts, REMOTE_SCHEMES};
 pub use virtual_place::{

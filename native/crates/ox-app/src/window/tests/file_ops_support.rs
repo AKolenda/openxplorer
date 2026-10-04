@@ -16,7 +16,7 @@ use crate::test_support::harness::{descendants, wait_until, TestWindow};
 /// # Panics
 ///
 /// When none opens in time.
-pub(super) fn open_dialog(test: &TestWindow) -> Dialog {
+pub(in crate::window) fn open_dialog(test: &TestWindow) -> Dialog {
     wait_until("a dialog to open", || dialog_over(test).is_some());
     dialog_over(test).expect("wait_until returned only once a dialog showed")
 }
@@ -32,7 +32,7 @@ pub(super) fn dialog_over(test: &TestWindow) -> Option<Dialog> {
 }
 
 /// Waits until no dialog shows over `test`'s window.
-pub(super) fn wait_for_no_dialog(test: &TestWindow) {
+pub(in crate::window) fn wait_for_no_dialog(test: &TestWindow) {
     wait_until("the dialog to close", || dialog_over(test).is_none());
 }
 
@@ -120,7 +120,7 @@ pub(super) fn press_shortcut_where_focused(
 }
 
 /// Every shortcut of the window's own shortcut controllers.
-pub(super) fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
+pub(in crate::window) fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
     let window = test.window.upcast_ref::<gtk::Widget>();
     let mut shortcuts = shortcuts_of(window, gtk::PropagationPhase::Capture);
     shortcuts.extend(shortcuts_of(window, gtk::PropagationPhase::Bubble));
@@ -148,7 +148,7 @@ pub(super) fn shortcuts_of(widget: &gtk::Widget, phase: gtk::PropagationPhase) -
 
 /// Whether `trigger`, or one of its alternatives, is `keyval` with exactly
 /// `modifiers`.
-pub(super) fn is_triggered_by(
+pub(in crate::window) fn is_triggered_by(
     trigger: &gtk::ShortcutTrigger,
     keyval: gdk::Key,
     modifiers: gdk::ModifierType,

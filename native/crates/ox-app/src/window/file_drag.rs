@@ -37,6 +37,7 @@ use crate::announcement::announce;
 use crate::folder_view::item::FileItem;
 use crate::icons::{Art, ArtImage};
 
+use super::zip_copies::ZipDragContent;
 use super::BrowserWindow;
 
 use payload::dragged_uris;
@@ -99,6 +100,19 @@ fn offered_actions(modifiers: gdk::ModifierType) -> gdk::DragAction {
     gdk::DragAction::COPY | gdk::DragAction::ASK | chosen
 }
 
+/// The actions a drag of `content` offers with `modifiers` held as it
+/// starts: [`offered_actions`], except that items inside a ZIP are only
+/// copied or moved. Their copies are removed after a day, so nothing may
+/// link to them, and asking would offer links (ARC-026).
+pub(super) fn drag_actions(content: &gdk::ContentProvider, modifiers: gdk::ModifierType) -> gdk::DragAction {
+    let offered = offered_actions(modifiers);
+    if content.is::<ZipDragContent>() {
+        offered & (gdk::DragAction::COPY | gdk::DragAction::MOVE)
+    } else {
+        offered
+    }
+}
+
 /// The icon that follows the pointer: the first item's art, with the
 /// number of items beside it when there are several.
 fn drag_icon(art: Art, count: usize) -> gtk::Widget {
@@ -145,7 +159,7 @@ impl BrowserWindow {
             move |source, x, y| {
                 let position = window.folder_pane().owners().position_at(&view, x, y)?;
                 let content = window.drag_content_for(position)?;
-                source.set_actions(offered_actions(source.current_event_state()));
+                source.set_actions(drag_actions(&content, source.current_event_state()));
                 Some(content)
             }
         ));
@@ -201,6 +215,24 @@ impl BrowserWindow {
         let items = model.selected_items();
         let entries: Vec<&Entry> = items.iter().map(FileItem::entry).collect();
         let art = items.first().map_or(Art::Folder, FileItem::art);
+        let uris: Vec<String> = entries.iter().map(|entry| entry.uri.clone()).collect();
+        // Inside a ZIP opened like a folder, the drop gets copies, made
+        // when it asks for them (ARC-026).
+        if let Some(inside) = super::zip_copies::zip_items(&uris) {
+            let content = self.zip_drag_content(inside);
+            // The drag's icon and feedback count the items; the drop reads
+            // only the copies the content makes.
+            let payload = DragPayload {
+                uris,
+                exported: Vec::new(),
+                text: String::new(),
+                remote_only: 0,
+            };
+            self.imp()
+                .outgoing_drag
+                .replace(Some(OutgoingDrag { payload, art }));
+            return Some(content);
+        }
         let prepared = dragged_uris(&entries).and_then(|uris| DragPayload::new(uris, local_path));
         self.offer_drag(prepared, art)
     }

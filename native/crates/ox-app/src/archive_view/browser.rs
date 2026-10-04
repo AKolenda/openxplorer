@@ -420,19 +420,21 @@ impl ArchiveBrowserView {
     }
 }
 
-/// The notices under the list: hidden unsafe members and truncation.
-fn listing_notice(listing: &ArchiveListing) -> String {
-    let mut notice = String::new();
+/// The notices under the list, also shown in the message line of a tab
+/// that lists a ZIP: hidden unsafe members and truncation. Empty when
+/// there is neither.
+pub(crate) fn listing_notice(listing: &ArchiveListing) -> String {
+    let mut notices = Vec::new();
     if listing.hidden_unsafe_count > 0 {
-        notice = ox_core::i18n::format_message(
+        notices.push(ox_core::i18n::format_message(
             "{hidden_unsafe_count} unsafe names or links are hidden.",
             &[("hidden_unsafe_count", &listing.hidden_unsafe_count.to_string())],
-        );
+        ));
     }
     if listing.is_truncated {
-        notice.push_str(" Showing the first 5,000 entries.");
+        notices.push(ox_core::i18n::gettext_static("Showing the first 5,000 entries.").to_owned());
     }
-    notice
+    notices.join(" ")
 }
 
 /// The folder above `prefix`: `a/b/` gives `a/`, `a/` gives the top.

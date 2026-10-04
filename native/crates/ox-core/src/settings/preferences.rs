@@ -11,7 +11,7 @@ use std::ops::RangeInclusive;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::choices::{ContextMenu, Theme, View};
+use super::choices::{ContextMenu, Theme, View, ZipOpening};
 use super::pane_options::DetailsPaneOptions;
 use super::tree_options::FolderTreeOptions;
 use super::view_options::ViewOptions;
@@ -283,6 +283,11 @@ pub struct Preferences {
     /// below.
     #[serde(skip_serializing_if = "is_true")]
     pub browse_archives: bool,
+    /// How a ZIP opens when [`Self::browse_archives`] is on: in the tab
+    /// like a folder, or in its own window as before (ARC-026). Stored
+    /// only when the folder is chosen.
+    #[serde(skip_serializing_if = "ZipOpening::is_window")]
+    pub zip_opening: ZipOpening,
     /// The details pane's own options; saved only once changed, so the
     /// settings of a new installation stay as the Python app writes them.
     #[serde(skip_serializing_if = "DetailsPaneOptions::is_default")]
@@ -443,6 +448,7 @@ impl Default for Preferences {
             editable_location: false,
             external_folders_in_new_window: false,
             browse_archives: true,
+            zip_opening: ZipOpening::Window,
             details_pane_options: DetailsPaneOptions::default(),
             view_options: ViewOptions::default(),
             full_path_in_title: false,
@@ -565,6 +571,7 @@ impl Preferences {
             self.window_size = Some(size);
         }
         replace_if_some(&mut self.browse_archives, update.browse_archives);
+        replace_if_some(&mut self.zip_opening, update.zip_opening);
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
@@ -695,6 +702,8 @@ pub struct PreferencesUpdate {
     pub external_folders_in_new_window: Option<bool>,
     /// Open archives as folders, or in their default application.
     pub browse_archives: Option<bool>,
+    /// Open ZIPs in the tab or in their own window.
+    pub zip_opening: Option<ZipOpening>,
     /// Replaces the details pane's options.
     pub details_pane_options: Option<DetailsPaneOptions>,
     /// Replaces the folder views' options.
@@ -794,6 +803,7 @@ impl PreferencesUpdate {
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
             browse_archives: flag("browseArchives"),
+            zip_opening: text("zipOpening").and_then(ZipOpening::from_key),
             details_pane_options: values
                 .get("detailsPaneOptions")
                 .and_then(DetailsPaneOptions::from_json),
