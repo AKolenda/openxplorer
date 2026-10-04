@@ -192,6 +192,10 @@ pub(crate) struct BrowserWindow {
     /// drive the isolated session does not have.
     #[cfg(test)]
     pub(super) test_volume: RefCell<Option<(String, String)>>,
+    /// In tests, whether Shift is held when a command runs, standing in
+    /// for the keyboard the isolated session cannot press.
+    #[cfg(test)]
+    pub(super) test_shift_held: Cell<bool>,
     /// Set while the window swaps or reloads the model, so the
     /// selection it restores is not saved over the tab's selection.
     pub(super) changing_model: Cell<bool>,

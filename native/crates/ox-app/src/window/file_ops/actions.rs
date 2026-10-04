@@ -146,8 +146,18 @@ impl BrowserWindow {
             task_action(WindowAction::Rename, |window| async move {
                 window.rename_selection().await;
             }),
-            task_action(WindowAction::Trash, |window| async move {
-                window.delete_selection().await;
+            // Shift held while Delete is clicked, in the command bar or a
+            // menu, deletes permanently, as Shift+Delete does (OPS-016).
+            // Shift is read on the click, not once the task runs.
+            task_action(WindowAction::Trash, |window| {
+                let permanently = window.shift_is_held();
+                async move {
+                    if permanently {
+                        window.delete_selection_permanently().await;
+                    } else {
+                        window.delete_selection().await;
+                    }
+                }
             }),
             task_action(WindowAction::DeletePermanently, |window| async move {
                 window.delete_selection_permanently().await;
@@ -175,8 +185,15 @@ impl BrowserWindow {
             location_task_action(WindowAction::RenameFolder, |window, uri| async move {
                 window.rename_folder_at(&uri).await;
             }),
-            location_task_action(WindowAction::TrashFolder, |window, uri| async move {
-                window.trash_dropped(vec![uri]).await;
+            location_task_action(WindowAction::TrashFolder, |window, uri| {
+                let permanently = window.shift_is_held();
+                async move {
+                    if permanently {
+                        window.delete_permanently_at(&uri).await;
+                    } else {
+                        window.trash_dropped(vec![uri]).await;
+                    }
+                }
             }),
             location_task_action(WindowAction::DeleteFolder, |window, uri| async move {
                 window.delete_permanently_at(&uri).await;
