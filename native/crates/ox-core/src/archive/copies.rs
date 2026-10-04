@@ -61,8 +61,8 @@ pub fn copy_folder_name() -> io::Result<String> {
     Ok(format!("{COPY_PREFIX}{}", random_hex(NAME_BYTES)?))
 }
 
-/// The file URI of `member` (as the archive browser names it) inside the
-/// copy folder `folder`.
+/// The path of `member` (as the archive browser names it) inside the copy
+/// folder `folder`.
 pub fn copied_member(folder: &Path, member: &str) -> PathBuf {
     member
         .trim_end_matches('/')

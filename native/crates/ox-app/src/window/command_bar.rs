@@ -326,8 +326,8 @@ impl CommandBar {
         }
     }
 
-    /// Shows Extract all while a ZIP is selected or the window shows the
-    /// inside of one.
+    /// Shows Extract all while an archive is selected or the window shows
+    /// the inside of a ZIP.
     pub(super) fn show_extract_all(&self, shown: bool) {
         if let Some(button) = self.imp().extract_button.get() {
             button.set_visible(shown);
@@ -387,14 +387,15 @@ fn text_menu_button(label: &str, glyph: Icon, css_class: &str, entries: Vec<Menu
 }
 
 /// Extract all, as Windows Explorer's command bar shows it while a ZIP is
-/// selected or open; hidden otherwise.
+/// selected or open; hidden otherwise. A selected TAR archive shows it
+/// too, as Extract all… in its menu does.
 fn extract_all_button() -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     content.append(&icons::image(Icon::FolderZip, TEXT_COMMAND_GLYPH));
     content.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Extract all"))));
     let button = gtk::Button::builder()
         .child(&content)
-        .tooltip_text(ox_core::i18n::gettext("Extract all files from this ZIP"))
+        .tooltip_text(ox_core::i18n::gettext("Extract all files from this archive"))
         .action_name(WindowAction::ExtractAll.detailed_name())
         .valign(gtk::Align::Center)
         .visible(false)

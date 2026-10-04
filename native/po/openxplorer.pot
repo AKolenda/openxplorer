@@ -3395,7 +3395,7 @@ msgid "Extract all"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
-msgid "Extract all files from this ZIP"
+msgid "Extract all files from this archive"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs

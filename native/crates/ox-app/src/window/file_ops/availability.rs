@@ -252,11 +252,9 @@ impl CommandFacts {
             {
                 ox_core::i18n::gettext_static("Items in the Recycle Bin can only be restored or deleted.")
             }
-            _ if selection.has_read_only && folder.is_zip => {
-                ox_core::i18n::gettext_static(ox_core::i18n::gettext_static(
-                    "Items in a ZIP are read-only. Copy them out or use Extract all.",
-                ))
-            }
+            _ if selection.has_read_only && folder.is_zip => ox_core::i18n::gettext_static(
+                "Items in a ZIP are read-only. Copy them out or use Extract all.",
+            ),
             _ if selection.has_read_only => ox_core::i18n::gettext_static("A previous version is read-only."),
             _ => ox_core::i18n::gettext_static("Rename one item at a time."),
         };
