@@ -14,7 +14,7 @@ Close every old Winspace/OpenXplorer window and finish file operations. Download
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_2.0.1_all.deb
+sudo apt install ./openxplorer_2.0.2_all.deb
 openxplorer --version
 openxplorer
 ```
@@ -64,4 +64,4 @@ A signed repository with a pre-indexed AppStream catalog can supply that informa
 
 ---
 
-OpenXplorer 2.0.1. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.2. Project-authored documentation: AGPL-3.0-only.

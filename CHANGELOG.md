@@ -1,5 +1,25 @@
 # Unreleased
 
+- Group by, as in Windows Explorer: Sort > Group by groups a folder apart
+  from its sort, so a folder grouped by date modified can be sorted by name
+  within each group. The choices are Name (A - H, I - P, Q - Z), Date
+  modified (Today, Yesterday, ... A long time ago), Type, Size, Date
+  created, Same as sort (the former Show in groups) and (None). Downloads
+  is grouped by date modified until another choice is made there. The Sort
+  menu now matches Explorer's: Name, Date modified and Type, with Size and
+  the further keys under More. The first group's heading is no longer
+  hidden when a grouped folder opens.
+- No more crash when Details columns change while groups are shown, such as
+  going Back from the Recycle Bin to Downloads grouped by date.
+- Group headings keep their counts right ("Today (3)") as files are added
+  or removed, and date groups move on at midnight: today's files become
+  Yesterday's without opening the folder again.
+
+# 2.0.2 — 2026-10-04
+
+More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
+dialogs, Delete, Compact view and the navigation pane.
+
 - Extract all works like Windows Explorer's: it appears in the command bar
   while a ZIP is selected, and its dialog is as short as Explorer's, with
   one field, "Files will be extracted to this folder", filled in with the
@@ -59,20 +79,6 @@
   show only while the pointer is over the pane or keyboard focus is in
   it. The arrows show by default. The file list's folder arrows stay
   with Settings > Appearance > Files and folders > "Expandable folders".
-- Group by, as in Windows Explorer: Sort > Group by groups a folder apart
-  from its sort, so a folder grouped by date modified can be sorted by name
-  within each group. The choices are Name (A - H, I - P, Q - Z), Date
-  modified (Today, Yesterday, ... A long time ago), Type, Size, Date
-  created, Same as sort (the former Show in groups) and (None). Downloads
-  is grouped by date modified until another choice is made there. The Sort
-  menu now matches Explorer's: Name, Date modified and Type, with Size and
-  the further keys under More. The first group's heading is no longer
-  hidden when a grouped folder opens.
-- No more crash when Details columns change while groups are shown, such as
-  going Back from the Recycle Bin to Downloads grouped by date.
-- Group headings keep their counts right ("Today (3)") as files are added
-  or removed, and date groups move on at midnight: today's files become
-  Yesterday's without opening the folder again.
 
 # 2.0.1 — 2026-10-02
 
