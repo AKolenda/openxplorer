@@ -664,14 +664,18 @@ impl BrowserWindow {
                         .set((selected.size() == 1).then(|| selected.minimum()));
                     return;
                 }
-                // The item just selected: in the changed range, and not the
-                // one kept so far.
+                // The item just selected: the end of the changed range away
+                // from the one kept so far, as Shift+click selects up or
+                // down to the item clicked.
                 let kept = picker.single.get();
-                let newest = (position..position.saturating_add(count))
-                    .rev()
-                    .find(|item| selected.contains(*item) && Some(*item) != kept)
-                    .or(kept);
-                if let Some(item) = newest {
+                let last = position + count.saturating_sub(1);
+                let newest = if kept.is_some_and(|kept| kept >= last) {
+                    position
+                } else {
+                    last
+                };
+                let item = Some(newest).filter(|item| selected.contains(*item)).or(kept);
+                if let Some(item) = item {
                     picker.single.set(Some(item));
                     selection.select_item(item, true);
                 }
@@ -1938,6 +1942,35 @@ mod tests {
         selection.select_item(test.position_of("b.txt"), false);
         settle();
         assert_eq!(test.selected_names(), ["b.txt"], "the newer one stays");
+    }
+
+    /// Shift+click in a dialog for one file keeps the item clicked,
+    /// upward and downward, not the one beside the item kept before.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn shift_click_in_a_dialog_for_one_file_keeps_the_item_clicked() {
+        let fixture = Fixture::empty();
+        for name in ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        let selection = test.window.folder_model().selection().clone();
+        // Shift+click selects from the item kept to the item clicked.
+        let shift_click = |from: &str, to: &str| {
+            let (from, to) = (test.position_of(from), test.position_of(to));
+            selection.select_range(from.min(to), from.abs_diff(to) + 1, false);
+            settle();
+        };
+        selection.select_item(test.position_of("e.txt"), true);
+        settle();
+
+        shift_click("e.txt", "b.txt");
+        assert_eq!(test.selected_names(), ["b.txt"], "upward");
+        shift_click("b.txt", "d.txt");
+        assert_eq!(test.selected_names(), ["d.txt"], "downward");
     }
 
     /// Closing the window answers Cancelled, once.
