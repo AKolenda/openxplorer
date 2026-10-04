@@ -51,6 +51,8 @@ pub(super) enum Preference {
     WindowSize(WindowSize),
     /// Crumbs from `/` rather than from the home folder (NAV-024).
     ShowFullPath(bool),
+    /// Compact view on or off (VIEW-067).
+    CompactView(bool),
     /// The details pane's own options (PROP-010).
     DetailsPaneOptions(DetailsPaneOptions),
     /// Show the navigation pane (SIDE-024).
@@ -72,6 +74,7 @@ impl Preference {
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
             Preference::WindowSize(size) => update.window_size = Some(size),
             Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
+            Preference::CompactView(on) => update.compact_view = Some(on),
             Preference::DetailsPaneOptions(options) => update.details_pane_options = Some(options),
             Preference::Sidebar(shown) => update.hide_sidebar = Some(!shown),
             Preference::SidebarIconSize(size) => update.sidebar_icon_size = Some(size),

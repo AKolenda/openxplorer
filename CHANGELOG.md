@@ -1,3 +1,10 @@
+# Unreleased
+
+- Compact view, as in Windows 11: View > Compact view, and the same switch
+  in Settings > Appearance > Files and folders, draws the Details rows and
+  the navigation pane's rows closer together, so more items fit. Off by
+  default. (Not the List layout, which Dolphin calls "Compact".)
+
 # 2.0.1 — 2026-10-02
 
 Most of the gaps left by 2.0.0 are closed: 635 of the tracked behaviours of

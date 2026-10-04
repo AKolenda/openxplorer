@@ -23,6 +23,7 @@ pub(crate) fn css_for_text_size(text_size: TextSize) -> String {
     rules.push(menu_rules(scale));
     rules.extend(IconSize::levels().map(|icon_size| tile_rule(icon_size, text_size)));
     rules.push(compact_rule(text_size));
+    rules.extend(compact_view_rules(scale, metrics.detail_row));
     rules.join("\n") + "\n"
 }
 
@@ -259,6 +260,28 @@ fn details_row_rule(detail_row: i32) -> String {
     format!("columnview.files > listview > row {{ min-height: {row}px; }}")
 }
 
+/// How much closer Compact view draws the details rows: 12 pixels, so
+/// rows 38 pixels apart at 100% stand 26 apart, as Windows 11's Compact
+/// view tightens Explorer's list (VIEW-067).
+const COMPACT_DETAIL_CLOSER: i32 = 12;
+
+/// The sidebar's rows in Compact view: 26 pixels at 100% instead of 35,
+/// growing with the text as the usual rows do.
+const COMPACT_SIDEBAR_ROW: ScaledHeight = grows("window.compact-density .sidebar list > row", 26, 20.0, 6.0);
+
+/// Compact view's rows (`window.compact-density`, set by
+/// `window/compact_view.rs`): the details rows and the sidebar's rows
+/// stand closer. The window class makes these rules win over the usual
+/// heights above. The folder tree's rows are in `skin/sidebar.css`, as
+/// their usual height is.
+fn compact_view_rules(scale: f64, detail_row: i32) -> [String; 2] {
+    let row = detail_row - COMPACT_DETAIL_CLOSER - 2;
+    [
+        format!("window.compact-density columnview.files > listview > row {{ min-height: {row}px; }}"),
+        COMPACT_SIDEBAR_ROW.rule(scale),
+    ]
+}
+
 /// Menu rows and width (`.menu button{min-height:calc(22px * s + 11px)}`
 /// and `.menu.win10{width:max(264px, calc(235px * s))}`). The width rule
 /// sets the contents box, inside 3px of padding and a 1px border. The
@@ -310,6 +333,26 @@ mod tests {
     /// The stylesheet at `percent`, one of the levels.
     fn css_at(percent: u32) -> String {
         css_for_text_size(TextSize::from_percent(percent))
+    }
+
+    /// Compact view's rows are 24 pixels in Details and 26 in the sidebar
+    /// at 100%, and still grow with larger text, staying closer than the
+    /// usual rows.
+    ///
+    /// parity: VIEW-067
+    #[test]
+    fn compact_view_rows_are_closer_and_grow_with_the_text() {
+        let css = css_at(100);
+        assert!(
+            css.contains("window.compact-density columnview.files > listview > row { min-height: 24px; }")
+        );
+        assert!(css.contains("window.compact-density .sidebar list > row { min-height: 26px; }"));
+        let larger = css_at(150);
+        assert!(
+            larger.contains("window.compact-density columnview.files > listview > row { min-height: 36px; }")
+        );
+        assert!(larger.contains("window.compact-density .sidebar list > row { min-height: 36px; }"));
+        assert!(larger.contains(".sidebar list > row { min-height: 45px; }"));
     }
 
     /// parity: VIEW-044

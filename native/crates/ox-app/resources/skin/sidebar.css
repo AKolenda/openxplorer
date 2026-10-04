@@ -91,6 +91,8 @@ window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
   outline: none;
   transition: background-color 83ms linear;
 }
+/* Compact view (VIEW-067, window/compact_view.rs): closer folder tree rows. */
+window.compact-density .folder-tree listview > row { min-height: 24px; }
 .folder-tree listview > row:hover { background-color: @ox_hover; }
 .folder-tree listview > row:selected { background-color: @ox_selected; color: @ox_text; }
 .folder-tree listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }

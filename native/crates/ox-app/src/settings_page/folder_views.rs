@@ -75,6 +75,12 @@ const PREVIEW_DOCUMENTS: RowText = RowText {
     keywords: "thumbnails types plugins pdf office fonts",
 };
 
+const COMPACT_VIEW: RowText = RowText {
+    title: "Compact view",
+    description: "Rows in the file list and the navigation pane stand closer, so more items fit.",
+    keywords: "density spacing padding rows tight dense smaller",
+};
+
 const ITEM_COUNTS: RowText = RowText {
     title: "Show the number of items in folders",
     description: "The Size column says how many items a folder on this computer holds.",
@@ -93,6 +99,16 @@ pub(super) fn group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Files and folders"));
     add_preview_rows(page, &group);
     let rows = [
+        (
+            COMPACT_VIEW,
+            PreferenceBinding {
+                read: |preferences| preferences.compact_view,
+                write: |on| PreferencesUpdate {
+                    compact_view: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
         (
             RELATIVE_DATES,
             PreferenceBinding {

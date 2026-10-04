@@ -156,6 +156,13 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
         MenuItem::toggle(&gettext("Show hidden files"), Icon::Eye, WindowAction::Hidden)
             .with_shortcut("Ctrl+H")
             .into(),
+        // With the panes and options Windows 11 lists under View > Show.
+        MenuItem::toggle(
+            &gettext("Compact view"),
+            Icon::TextBulletList,
+            WindowAction::CompactView,
+        )
+        .into(),
         MenuItem::toggle(
             &gettext("Details pane"),
             Icon::PanelRight,
