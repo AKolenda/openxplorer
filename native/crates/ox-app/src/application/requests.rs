@@ -119,16 +119,6 @@ impl AppState {
     /// files (`quit_safely`, TAB-052). Returns whether the application
     /// quits.
     pub(super) fn quit_safely(&self, app: &gtk::Application) -> bool {
-        // Ctrl+Q in a file dialog cancels the dialog, never the other
-        // windows the user has open.
-        if let Some(dialog) = app
-            .active_window()
-            .and_downcast::<BrowserWindow>()
-            .filter(BrowserWindow::is_picking)
-        {
-            dialog.cancel_picking();
-            return false;
-        }
         if let Some(refusal) = self.context().updates().quit_refusal() {
             report_in_every_window(app, &refusal);
             return false;

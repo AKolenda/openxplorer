@@ -120,7 +120,7 @@ pub(super) fn press_shortcut_where_focused(
 }
 
 /// Every shortcut of the window's own shortcut controllers.
-pub(super) fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
+pub(in crate::window) fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
     let window = test.window.upcast_ref::<gtk::Widget>();
     let mut shortcuts = shortcuts_of(window, gtk::PropagationPhase::Capture);
     shortcuts.extend(shortcuts_of(window, gtk::PropagationPhase::Bubble));
@@ -148,7 +148,7 @@ pub(super) fn shortcuts_of(widget: &gtk::Widget, phase: gtk::PropagationPhase) -
 
 /// Whether `trigger`, or one of its alternatives, is `keyval` with exactly
 /// `modifiers`.
-pub(super) fn is_triggered_by(
+pub(in crate::window) fn is_triggered_by(
     trigger: &gtk::ShortcutTrigger,
     keyval: gdk::Key,
     modifiers: gdk::ModifierType,

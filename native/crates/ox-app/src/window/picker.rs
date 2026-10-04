@@ -27,8 +27,8 @@
 //!   the folder shown, `~/…` or a full path: a folder opens, a file is
 //!   the choice. Save adds the chosen type's extension to a name without
 //!   one. A file typed in the address bar is the choice too, a dialog
-//!   for one file keeps one selected, and Escape, Ctrl+Q and Ctrl+N act
-//!   on the dialog alone.
+//!   for one file keeps one selected, Escape and Ctrl+Q cancel, and
+//!   nothing opens another window, tab or pane from the dialog.
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -42,6 +42,7 @@ use ox_core::integration::{
     checked_name, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest, FilterPattern,
 };
 
+use super::actions::QUIT_ACCELERATORS;
 use super::{BrowserWindow, ButtonStyle, WindowAction};
 use crate::dialog::Dialog;
 use crate::folder_view::filter::ChooserListing;
@@ -265,6 +266,7 @@ impl BrowserWindow {
             let _ = self.add_tab(&gio::File::for_path(glib::home_dir()).uri());
         }
         self.listen_for_escape();
+        self.cancel_on_quit_key();
         self.keep_one_selected();
         self.present();
         match &picker.name {
@@ -688,7 +690,7 @@ impl BrowserWindow {
     }
 
     /// Cancel, Escape, and Ctrl+Q in a dialog.
-    pub(crate) fn cancel_picking(&self) {
+    pub(super) fn cancel_picking(&self) {
         if let Some(picker) = self.picker() {
             picker.reply.send(&ChooserAnswer::Cancelled);
         }
@@ -714,6 +716,23 @@ impl BrowserWindow {
             }
         ));
         self.add_controller(keys);
+    }
+
+    /// Ctrl+Q cancels the dialog alone, never the other windows. The
+    /// window's own key runs before the application's Quit accelerator,
+    /// which still quits everything when `openxplorer --quit` asks.
+    fn cancel_on_quit_key(&self) {
+        let shortcuts = gtk::ShortcutController::new();
+        shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let trigger = gtk::ShortcutTrigger::parse_string(&QUIT_ACCELERATORS.join("|"));
+        let cancel = gtk::CallbackAction::new(|widget, _| {
+            if let Some(window) = widget.downcast_ref::<BrowserWindow>() {
+                window.cancel_picking();
+            }
+            glib::Propagation::Stop
+        });
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(cancel)));
+        self.add_controller(shortcuts);
     }
 
     /// Builds the bar for `request` and puts it under the status bar.
@@ -959,14 +978,16 @@ mod tests {
 
     use gtk::glib::translate::IntoGlib;
     use gtk::prelude::*;
-    use gtk::{gio, glib};
+    use gtk::{gdk, gio, glib};
     use ox_core::integration::{
         options_from_entries, path_variant, FileChooserBus, FILE_CHOOSER_INTERFACE, PORTAL_BACKEND_PATH,
         RESPONSE_CANCELLED, RESPONSE_SUCCESS,
     };
 
     use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow};
-    use crate::window::tests::file_ops_support::{open_dialog, wait_for_no_dialog};
+    use crate::window::tests::file_ops_support::{
+        is_triggered_by, open_dialog, wait_for_no_dialog, window_shortcuts,
+    };
 
     /// A `dbus-daemon` of the test's own, stopped when dropped.
     struct PrivateBus {
@@ -1827,45 +1848,76 @@ mod tests {
         assert!(!enabled("split-view"), "no second pane");
     }
 
-    /// Alt+Up works from the File name box, where focus starts in Save;
-    /// Ctrl+N and a search result's new window are off in a dialog.
+    /// Presses `keyval` with exactly `modifiers` wherever the keyboard
+    /// is, through the window's shortcut controllers in the order GTK runs
+    /// them, the application's accelerators among them: whether one took
+    /// the key.
+    fn press(test: &TestWindow, keyval: gdk::Key, modifiers: gdk::ModifierType) -> bool {
+        window_shortcuts(test)
+            .iter()
+            .filter(|shortcut| {
+                let trigger = shortcut.trigger();
+                trigger.is_some_and(|trigger| is_triggered_by(&trigger, keyval, modifiers))
+            })
+            .any(|shortcut| {
+                shortcut.action().is_some_and(|action| {
+                    action.activate(gtk::ShortcutActionFlags::empty(), &test.window, None)
+                })
+            })
+    }
+
+    /// Alt+Up, Alt+Left and Alt+Right work from the File name box, where
+    /// the keyboard starts; Ctrl+N opens no window, and Ctrl+Q cancels the
+    /// dialog alone instead of quitting every window.
     ///
     /// parity: INT-032
     #[gtk::test]
-    fn the_dialog_keys_work_from_the_name_box_and_open_no_window() {
+    fn the_dialog_keys_work_from_the_name_box() {
         let fixture = Fixture::empty();
-        fs::create_dir(fixture.path("Drafts")).expect("a folder");
         let portal = Portal::new();
-        let _answer = dialog_on(&portal, &fixture, "SaveFile", Vec::new());
-        let window = &portal.test.window;
+        let answer = dialog_on(&portal, &fixture, "SaveFile", Vec::new());
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
         let name = window
             .picker()
             .expect("a picker")
             .name
             .clone()
             .expect("a name box");
-        name.grab_focus();
-        settle();
-        assert!(window.focus_is_in_picker_name());
-
-        let handled = window.run_navigation_key(super::super::WindowAction::Up);
-        assert_eq!(handled, glib::Propagation::Stop, "Alt+Up acts from the name box");
-        let parent = gio::File::for_path(fixture.root())
+        let folder = fixture.uri();
+        let parent = gio::File::for_uri(&folder)
             .parent()
             .expect("the fixture has a parent")
             .uri()
             .to_string();
-        wait_until("the parent folder", || {
-            window.current_uri().as_deref() == Some(parent.as_str())
-        });
-        assert!(!window.new_window_key_applies(), "Ctrl+N opens no window");
+        let shows = |uri: &str| window.current_uri().as_deref() == Some(uri);
+        let press_in_name = |key: gdk::Key| {
+            name.grab_focus();
+            settle();
+            assert!(window.focus_is_in_picker_name());
+            press(test, key, gdk::ModifierType::ALT_MASK)
+        };
+
+        assert!(press_in_name(gdk::Key::Up), "Alt+Up acts from File name");
+        wait_until("the parent folder", || shows(&parent));
+        assert!(press_in_name(gdk::Key::Left), "Alt+Left acts from File name");
+        wait_until("the folder again", || shows(&folder));
+        assert!(press_in_name(gdk::Key::Right), "Alt+Right acts from File name");
+        wait_until("the parent folder again", || shows(&parent));
+
+        window.folder_pane().focus_view();
         assert!(
-            !window
-                .lookup_action("open-file-location-in-window")
-                .expect("the action")
-                .is_enabled(),
-            "no new window from a search result"
+            !press(test, gdk::Key::n, gdk::ModifierType::CONTROL_MASK),
+            "Ctrl+N opens no window"
         );
+
+        name.grab_focus();
+        assert!(press(test, gdk::Key::q, gdk::ModifierType::CONTROL_MASK));
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_CANCELLED, "Ctrl+Q cancels the dialog");
+        assert!(uris.is_empty());
+        wait_until("the picker to close", || !window.is_visible());
     }
 
     /// A dialog for one file keeps one selected: a second item selected

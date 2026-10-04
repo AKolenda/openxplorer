@@ -166,12 +166,6 @@ impl BrowserWindow {
         self.window_key_applies(KeyCommand::Window(WindowAction::NextTab))
     }
 
-    /// Whether Ctrl+N opens a window now, for tests.
-    #[cfg(test)]
-    pub(super) fn new_window_key_applies(&self) -> bool {
-        self.window_key_applies(KeyCommand::NewWindow)
-    }
-
     /// Whether Ctrl+T opens a tab now, for tests.
     #[cfg(test)]
     pub(super) fn new_tab_key_applies(&self) -> bool {
