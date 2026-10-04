@@ -10,8 +10,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use ox_core::archive::{
-    ArchiveBrowser, ArchiveEntryKind, ArchiveError, ArchiveListing, PreviewCopy, ZipFormatError,
-    MAX_LISTED_ENTRIES, PREVIEW_NOTICE,
+    remove_old_previews, remove_preview_copy, ArchiveBrowser, ArchiveEntryKind, ArchiveError, ArchiveListing,
+    PreviewCopy, ZipFormatError, MAX_LISTED_ENTRIES, PREVIEW_LIFETIME, PREVIEW_NOTICE,
 };
 use ox_core::transfer::Cancellation;
 
@@ -438,4 +438,73 @@ fn opening_a_member_twice_makes_two_copies() {
 
     assert_ne!(first.path, second.path);
     assert_eq!(files_below(&fixture.previews).len(), 2);
+}
+
+/// Copies opened from an archive do not pile up in memory until logout
+/// (they are in the runtime folder): a new copy removes the copies older
+/// than `PREVIEW_LIFETIME`, and leaves newer ones and anything else in
+/// the preview root alone.
+///
+/// parity: ARC-026
+#[test]
+fn a_new_preview_removes_old_copies_and_nothing_else() {
+    let fixture = BrowseFixture::bank(&[]);
+    let old = fixture.preview("readme.txt").expect("a first copy");
+    let fresh = fixture.preview("Documents/bank.txt").expect("a second copy");
+    let other = fixture.previews.join("notes");
+    fs::create_dir(&other).expect("another folder");
+    let old_folder = old.path.parent().expect("its folder").to_path_buf();
+    let long_ago = std::time::SystemTime::now() - (PREVIEW_LIFETIME + std::time::Duration::from_secs(60));
+    fs::File::open(&old_folder)
+        .and_then(|folder| folder.set_modified(long_ago))
+        .expect("aged");
+
+    let third = fixture.preview("readme.txt").expect("a third copy");
+
+    assert!(!old_folder.exists(), "the old copy is removed");
+    assert!(fresh.path.is_file(), "a newer copy stays");
+    assert!(third.path.is_file(), "the new copy is there");
+    assert!(other.is_dir(), "what is not a copy stays");
+}
+
+/// Removing a copy removes it with its private folder only; a path that is
+/// not a copy in a preview folder is left alone.
+///
+/// parity: ARC-026
+#[test]
+fn removing_a_copy_removes_its_folder_only() {
+    let fixture = BrowseFixture::bank(&[]);
+    let copy = fixture.preview("readme.txt").expect("a copy");
+    let kept = fixture.preview("Documents/bank.txt").expect("another copy");
+    let not_a_copy = fixture.previews.join("notes").join("readme.txt");
+    fs::create_dir(not_a_copy.parent().expect("a folder")).expect("a folder");
+    fs::write(&not_a_copy, b"mine").expect("a file");
+
+    remove_preview_copy(&copy.path);
+    remove_preview_copy(&not_a_copy);
+
+    assert!(!copy.path.parent().expect("its folder").exists());
+    assert!(kept.path.is_file(), "the other copy stays");
+    assert!(not_a_copy.is_file(), "a file outside a preview folder stays");
+}
+
+/// The sweep the app runs when it starts and quits removes only old
+/// copies.
+///
+/// parity: ARC-026
+#[test]
+fn the_start_and_quit_sweep_removes_only_old_copies() {
+    let fixture = BrowseFixture::bank(&[]);
+    let old = fixture.preview("readme.txt").expect("a copy");
+    let fresh = fixture.preview("Documents/bank.txt").expect("another copy");
+    let old_folder = old.path.parent().expect("its folder").to_path_buf();
+    let long_ago = std::time::SystemTime::now() - (PREVIEW_LIFETIME + std::time::Duration::from_secs(60));
+    fs::File::open(&old_folder)
+        .and_then(|folder| folder.set_modified(long_ago))
+        .expect("aged");
+
+    remove_old_previews(&fixture.previews, PREVIEW_LIFETIME);
+
+    assert!(!old_folder.exists());
+    assert!(fresh.path.is_file());
 }

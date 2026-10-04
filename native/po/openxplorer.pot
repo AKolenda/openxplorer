@@ -378,6 +378,10 @@ msgid "Reading ZIP directory…"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
+msgid "Showing the first 5,000 entries."
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
 msgid "This archive folder is empty."
 msgstr ""
 
@@ -418,6 +422,10 @@ msgstr ""
 msgid "{error}\n\nNo existing file was replaced."
 msgstr ""
 
+#: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/window/place_editor.rs
+msgid "Browse…"
+msgstr ""
+
 #: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/file_drop/action.rs
 msgid "Cancel"
 msgstr ""
@@ -430,21 +438,21 @@ msgstr ""
 msgid "Choose a writable folder outside Previous versions, not a server listing."
 msgstr ""
 
-#: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/properties/restore.rs
-msgid "Destination folder"
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Enter the folder to extract to."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
 msgid "Extract"
 msgstr ""
 
-#: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "Extract compressed folder"
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "Extract into: {trimmed}{separator}{name}"
+msgid "Extract {name}"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Files will be extracted to this folder"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
@@ -452,7 +460,11 @@ msgid "For SMB, open and sign in to the source and destination shares first. Pas
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "New folder name"
+msgid "More about extracting"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "Select a destination"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
@@ -460,11 +472,15 @@ msgid "Show extracted files when finished"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "The ZIP is kept unchanged. Files are unpacked into a new folder; existing files are never replaced."
+msgid "Still checking the ZIP. Try again in a moment."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "Wait for the ZIP check to finish. Unsupported archives need an external archive manager."
+msgid "The ZIP is kept unchanged. A folder that does not exist yet is created; in an existing folder you are asked before any file is replaced."
+msgstr ""
+
+#: crates/ox-app/src/archive_view/extract_dialog.rs
+msgid "This ZIP has a password, so OpenXplorer cannot extract it. Open it in the archive manager instead."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -1526,6 +1542,10 @@ msgstr ""
 
 #: crates/ox-app/src/properties/restore.rs
 msgid "Copy version"
+msgstr ""
+
+#: crates/ox-app/src/properties/restore.rs
+msgid "Destination folder"
 msgstr ""
 
 #: crates/ox-app/src/properties/restore.rs
@@ -2842,6 +2862,18 @@ msgid "Everything in it is deleted permanently."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "In a pop-up window (default)"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Like a folder (Windows)"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Like a folder opens a ZIP in the tab, as Windows Explorer does: browse it with the address bar, Back and Up, copy or drag files out, and Extract all from the bar. In a pop-up window shows it over the tab."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
 msgid "Make the address bar editable in new windows"
 msgstr ""
 
@@ -2886,6 +2918,10 @@ msgid "Off: the title is the folder's name, as in File Explorer."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "Open ZIP files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
 msgid "Open archives as folders"
 msgstr ""
 
@@ -2914,7 +2950,7 @@ msgid "Opens another window (Ctrl+N)."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/windows_tabs.rs
-msgid "Right-click a tab → Move tab to window… lets you pick an existing window without dragging. The original is kept until the destination accepts it. Close this tab's dialogs and finish file operations first. File drops never remove the source. ZIP contents must be extracted first; some apps need a mounted network path."
+msgid "Right-click a tab → Move tab to window… lets you pick an existing window without dragging. The original is kept until the destination accepts it. Close this tab's dialogs and finish file operations first. File drops never remove the source. Files can be dragged out of a ZIP opened like a folder; from the pop-up window, extract them first. Some apps need a mounted network path."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/windows_tabs.rs
@@ -3015,6 +3051,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/windows_tabs.rs
 msgid "xdg-open command line external new tab window"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/windows_tabs.rs
+msgid "zip open folder window pop-up compressed explorer browse"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/windows_tabs.rs
@@ -3263,7 +3303,7 @@ msgstr ""
 msgid "Preparing compression…"
 msgstr ""
 
-#: crates/ox-app/src/window/archive_actions.rs
+#: crates/ox-app/src/window/archive_actions.rs crates/ox-app/src/window/extract_into.rs
 msgid "Preparing extraction…"
 msgstr ""
 
@@ -3372,6 +3412,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Cut (Ctrl+X)"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Extract all"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Extract all files from this archive"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
@@ -3839,6 +3887,24 @@ msgstr ""
 msgid "Try again"
 msgstr ""
 
+#: crates/ox-app/src/window/extract_into.rs
+msgid "A file with that name is already there. Choose a folder to extract to."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/extract_into.rs
+msgid "Added {added} of {offered} items to {name}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/extract_into.rs
+msgid "Could not remove the extraction's temporary folder: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/extract_into.rs
+msgid "Extraction cancelled. Nothing was added to the folder."
+msgstr ""
+
 #: crates/ox-app/src/window/file_drag.rs
 msgid "Drag ended"
 msgstr ""
@@ -3891,6 +3957,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
 msgid "Finish the current operation before dropping files."
+msgstr ""
+
+#: crates/ox-app/src/window/file_drop.rs
+msgid "Items from a ZIP cannot be linked. Copy or move them instead."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
@@ -3949,6 +4019,10 @@ msgid "“{name}” is on a network share or a removable drive. Run it only if y
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
+msgid "A ZIP is read-only. Extract it to add items."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/availability.rs
 msgid "A previous version is read-only."
 msgstr ""
 
@@ -3958,6 +4032,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
 msgid "Drives, shares and virtual items cannot be changed here."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/availability.rs
+msgid "Items in a ZIP are read-only. Copy them out or use Extract all."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
@@ -4628,10 +4706,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/place_editor.rs
 msgid "Another folder is being pinned. Try again in a moment."
-msgstr ""
-
-#: crates/ox-app/src/window/place_editor.rs
-msgid "Browse…"
 msgstr ""
 
 #: crates/ox-app/src/window/place_editor.rs
@@ -5316,6 +5390,39 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/watch_state.rs
 msgid "{value1} minutes"
+msgstr ""
+
+#: crates/ox-app/src/window/zip_copies.rs
+msgid "Copy items from one ZIP at a time."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/zip_copies.rs
+msgid "Could not prepare the copies: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/zip_copies.rs
+msgid "Items in a ZIP are read-only. Use Copy, then Paste where you want them."
+msgstr ""
+
+#: crates/ox-app/src/window/zip_copies.rs
+msgid "Select the items to copy."
+msgstr ""
+
+#: crates/ox-app/src/window/zip_copies.rs
+msgid "The copies could not be made."
+msgstr ""
+
+#: crates/ox-app/src/window/zip_copies.rs
+msgid "The window closed."
+msgstr ""
+
+#: crates/ox-app/src/window/zip_folder.rs
+msgid "Files inside a ZIP cannot be chosen here. Extract the ZIP first."
+msgstr ""
+
+#: crates/ox-app/src/window/zip_folder.rs
+msgid "This file cannot be opened from the ZIP. Copy it out or use Extract all."
 msgstr ""
 
 #: crates/ox-app/src/write_inhibitor.rs
@@ -6023,6 +6130,10 @@ msgstr ""
 
 #: crates/ox-core/src/location.rs
 msgid "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+msgstr ""
+
+#: crates/ox-core/src/location/archive_location.rs
+msgid "This is not a location inside a ZIP."
 msgstr ""
 
 #: crates/ox-core/src/location/names.rs

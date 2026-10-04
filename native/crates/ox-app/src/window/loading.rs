@@ -34,7 +34,9 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::{Entry, EntryError};
 use ox_core::integration::FOLDER_CONTENT_TYPE;
-use ox_core::location::{is_smb_location, parent_location, RECENT_LOCATIONS_URI};
+use ox_core::location::{
+    is_archive_location, is_smb_location, parent_location, ArchiveLocation, RECENT_LOCATIONS_URI,
+};
 
 use crate::app_context::add_to_desktop_history;
 use crate::folder_view::item::FileItem;
@@ -123,7 +125,14 @@ impl BrowserWindow {
             self.refuse_listing(id, mode, EntryError::Failed(refusal.to_string()));
             return;
         }
-        self.keep_watching(id, &start.uri);
+        if is_archive_location(&start.uri) {
+            // Nothing to watch inside a ZIP; F5 reads it again.
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.watch = None;
+            }
+        } else {
+            self.keep_watching(id, &start.uri);
+        }
         if is_active && mode == LoadMode::Navigate {
             // The previous folder's free space is wrong here while a slow
             // folder lists; the end of the listing reads it again.
@@ -262,6 +271,25 @@ impl BrowserWindow {
             held_rows: RefCell::default(),
         });
         let batch_run = Rc::clone(&run);
+        if let Some(inside) = ArchiveLocation::from_uri(&start.uri) {
+            return loader::list_archive_folder(
+                &inside,
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |entries| window.receive_batch(&batch_run, entries)
+                ),
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |result: Result<String, EntryError>| {
+                        let notice = result.as_ref().ok().cloned().unwrap_or_default();
+                        window.finish_load(&run, result.map(|_| ()));
+                        window.show_listing_notice(&run, &notice);
+                    }
+                ),
+            );
+        }
         loader::list_folder(
             &start.uri,
             glib::clone!(
@@ -349,6 +377,18 @@ impl BrowserWindow {
         }
     }
 
+    /// Shows `notice`, what a ZIP's listing left out, in the message line
+    /// while the tab that listed it is in front, as the "Compressed
+    /// folder" window shows it under its list (ARC-004, ARC-026).
+    fn show_listing_notice(&self, run: &LoadRun, notice: &str) {
+        let session = self.imp().session.borrow();
+        let is_shown = session.is_active(run.tab) && session.accepts(run.tab, run.generation);
+        drop(session);
+        if is_shown && !notice.is_empty() {
+            self.show_message(notice);
+        }
+    }
+
     /// Merges a completed reload into the rows, keeping unchanged items.
     fn merge_rows(&self, id: TabId, entries: Vec<Entry>) {
         let Some(store) = self.tab_store(id) else { return };
@@ -433,6 +473,19 @@ impl BrowserWindow {
         };
         if self.imp().session.borrow().is_active(id) {
             self.render_navigation();
+        }
+        // A file inside a ZIP is selected in its folder, not opened
+        // (ARC-026).
+        if let Some(inside) = ArchiveLocation::from_uri(&file) {
+            // A path typed through the ZIP names the file like a folder
+            // (`Docs/a.txt/`); the row is the file's own location.
+            let item = inside.member(inside.member.trim_end_matches('/')).uri();
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.selected = vec![item];
+                tab.reveals_selection = true;
+            }
+            self.load_tab(id, LoadMode::Navigate);
+            return;
         }
         self.load_tab(id, LoadMode::Navigate);
         if mode == LoadMode::Navigate {

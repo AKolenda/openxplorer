@@ -221,6 +221,12 @@ impl DialogFrame {
         button
     }
 
+    /// Puts `widget` at the left of the footer, before the buttons, such
+    /// as the Extract dialog's information button.
+    pub(crate) fn add_footer_start(&self, widget: &impl IsA<gtk::Widget>) {
+        self.imp().actions.prepend(widget);
+    }
+
     /// Adds a button labelled `label` that closes the dialog, then runs
     /// `then` (Close, Cancel, OK, or a button that hands over to another
     /// dialog or application).
@@ -287,10 +293,11 @@ impl DialogFrame {
         })
     }
 
-    /// The labels of the footer's buttons, for tests.
+    /// The labels of the footer's shown buttons, for tests.
     #[cfg(test)]
     pub(crate) fn button_labels(&self) -> Vec<String> {
         crate::window::children(&self.imp().actions.get())
+            .filter(gtk::Widget::is_visible)
             .filter_map(|child| child.downcast::<gtk::Button>().ok())
             .filter_map(|button| button.label())
             .map(String::from)

@@ -220,6 +220,9 @@ pub fn normalise_navigation(address: &str, base: Option<&str>, home: &Path) -> R
     if let Some(folder) = VirtualFolder::parse(trimmed)? {
         return Ok(folder.uri());
     }
+    if let Some(inside) = super::ArchiveLocation::parse(trimmed)? {
+        return Ok(inside.uri());
+    }
     normalise_location(address, base, home)
 }
 

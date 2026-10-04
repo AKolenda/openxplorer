@@ -24,6 +24,8 @@
 //!   user holds them ([`action`]).
 //! - The drag has finished before any dialog or menu opens, and a drop
 //!   never touches the clipboard.
+//! - Items dragged out of a ZIP arrive as copies that are removed after a
+//!   day, so they are never linked to (ARC-026).
 
 mod action;
 mod launcher;
@@ -43,6 +45,7 @@ use super::activation::query_entry;
 use super::file_drag::{has_open_popover, DraggedItems};
 use super::file_ops::IncomingItems;
 use super::session::{TabPlacement, TabPosition};
+use super::zip_copies::{is_zip_copy, ZipDragContent};
 use super::BrowserWindow;
 
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
@@ -161,6 +164,17 @@ pub(crate) enum DropRefusal {
         ox_core::i18n::gettext("Drag items out of the Recycle Bin on their own.")
     )]
     MixedWithRecycleBin,
+    /// Links asked for copies taken out of a ZIP, which are removed after
+    /// a day (ARC-026).
+    #[error(
+        "{}",
+        ox_core::i18n::gettext("Items from a ZIP cannot be linked. Copy or move them instead.")
+    )]
+    LinkToZipCopy,
+    /// The copies of items dragged out of a ZIP could not be made: the
+    /// reason, already translated.
+    #[error("{0}")]
+    NotCopied(String),
 }
 
 /// The items of a drop of `uris`: canonical, in order and without
@@ -223,6 +237,12 @@ fn own_dragged_items(drop: &gdk::Drop) -> Option<Vec<String>> {
     Some(items.0)
 }
 
+/// The content of `drop` when it is a drag of this process out of a ZIP
+/// opened like a folder (ARC-026).
+fn own_zip_drag(drop: &gdk::Drop) -> Option<ZipDragContent> {
+    drop.drag()?.content().downcast().ok()
+}
+
 /// The URIs `drop` brings: its own items for a drag of this process, else
 /// its file list, waiting at most [`READ_TIMEOUT`].
 async fn read_dropped_uris(drop: &gdk::Drop) -> Result<Vec<String>, DropRefusal> {
@@ -275,6 +295,15 @@ impl BrowserWindow {
     /// finishes it, then runs `action` on them.
     async fn receive_drop(&self, drop: gdk::Drop, destination: DropDestination, action: DropAction) {
         let shown = self.current_uri();
+        if let Some(content) = own_zip_drag(&drop) {
+            // Items dragged out of a ZIP in this app: nothing more is read
+            // from the drop, and their copies are made without the
+            // timeout, as a large member can take longer to extract.
+            drop.finish(finish_action(&drop));
+            let read = content.copies().await.map_err(DropRefusal::NotCopied);
+            self.take_read_drop(shown.as_deref(), read, destination, action);
+            return;
+        }
         let read = read_dropped_uris(&drop).await;
         // Safety rule "the source never deletes": finished, as a copy when
         // the source allows one, or refused, before anything runs.
@@ -453,6 +482,9 @@ impl BrowserWindow {
         let mode = match action {
             DropAction::Copy => TransferMode::Copy,
             DropAction::Move => TransferMode::Move,
+            DropAction::Link if uris.iter().any(|uri| is_zip_copy(uri)) => {
+                return Err(DropRefusal::LinkToZipCopy);
+            }
             DropAction::Link => {
                 self.spawn_links(LinkRequest {
                     uris,

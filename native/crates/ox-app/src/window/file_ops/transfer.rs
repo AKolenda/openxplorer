@@ -163,14 +163,36 @@ impl BrowserWindow {
     /// outcome of a run that finished; `None` when another operation runs,
     /// the check failed or the user cancelled.
     pub(crate) async fn transfer_with_conflicts(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
+        self.transfer_checked(incoming, true).await
+    }
+
+    /// [`Self::transfer_with_conflicts`] for a move that is one step of a
+    /// larger operation, which Undo cannot reverse on its own: the items
+    /// of an extraction into an existing folder come from a private folder
+    /// that is removed afterwards, so the journal does not record it.
+    pub(crate) async fn transfer_without_undo(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
+        self.transfer_checked(incoming, false).await
+    }
+
+    /// Checks, asks, runs and reports `incoming`; the journal records it
+    /// when `undoable`.
+    async fn transfer_checked(&self, incoming: IncomingItems, undoable: bool) -> Option<TransferOutcome> {
         let origin = self.current_uri();
         let answers = self.plan_transfer(&incoming).await?;
         let mode = incoming.mode;
         let plan = TransferPlan::new(incoming, &answers);
         let outcome = self.run_plan(&plan).await?;
-        let finished = outcome
-            .clone()
-            .map(|outcome| FinishedOperation::of_transfer(mode, outcome));
+        let finished = outcome.clone().map(|outcome| {
+            let finished = FinishedOperation::of_transfer(mode, outcome);
+            if undoable {
+                finished
+            } else {
+                FinishedOperation {
+                    undo: None,
+                    ..finished
+                }
+            }
+        });
         self.conclude_operation_in(finished, origin.as_deref()).await;
         outcome.ok()
     }
