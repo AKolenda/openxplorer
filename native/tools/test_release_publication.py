@@ -31,10 +31,10 @@ def step_index(lines: list[str], text: str) -> int:
 
 
 def publish_step(lines: list[str]) -> str:
-    """Return the run script of the step that publishes the release."""
+    """Return the run script of the step that publishes the release, which may be the last."""
     start = step_index(lines, '- name: Publish a new desktop version')
-    end = next(index for index in range(start + 1, len(lines))
-               if re.match(r'\s+- name: ', lines[index]))
+    end = next((index for index in range(start + 1, len(lines))
+                if re.match(r'\s+- name: ', lines[index])), len(lines))
     return '\n'.join(lines[start:end])
 
 
