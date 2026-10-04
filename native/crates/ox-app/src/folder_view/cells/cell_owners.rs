@@ -30,6 +30,7 @@ use super::row_tooltip::RowTooltip;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
 use crate::thumbnails::PreviewPolicy;
+use crate::window::widget_tree::toggle_class;
 
 /// The CSS class of a cell whose item a cut put on the clipboard. The
 /// stylesheet draws such cells at half opacity (`.file-row.cut{opacity:.5}`
@@ -94,15 +95,6 @@ fn bound_position(list_item: &gtk::ListItem) -> Option<u32> {
     let position = list_item.position();
     let is_bound = position != gtk::INVALID_LIST_POSITION && list_item.item().is_some();
     is_bound.then_some(position)
-}
-
-/// Adds `class` to `widget` when `shown`, and removes it otherwise.
-fn toggle_class(widget: &impl IsA<gtk::Widget>, class: &str, shown: bool) {
-    if shown {
-        widget.add_css_class(class);
-    } else {
-        widget.remove_css_class(class);
-    }
 }
 
 /// The row or tile widget GTK wraps `cell` in.
