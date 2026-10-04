@@ -86,9 +86,20 @@ impl BrowserWindow {
             return Ok(inside.uri());
         }
         let resolved = self.resolve_relative(address)?;
-        // A path through a ZIP, as the address bar shows a ZIP browsed as a
-        // folder: `/home/ana/Downloads/tidewater.zip/tidewater` (ARC-026).
-        Ok(path_through_zip(&resolved).unwrap_or(resolved))
+        Ok(self.typed_path_through_zip(&resolved).unwrap_or(resolved))
+    }
+
+    /// The location inside a ZIP that the path `uri` runs through, as the
+    /// address bar shows a ZIP browsed as a folder:
+    /// `/home/ana/Downloads/tidewater.zip/tidewater` (ARC-026). Only while
+    /// ZIPs open like folders: "In a pop-up window" never shows a ZIP in
+    /// the tab, so the path stays a path, which names no folder.
+    pub(super) fn typed_path_through_zip(&self, uri: &str) -> Option<String> {
+        if self.opens_zips_as_folders() {
+            path_through_zip(uri)
+        } else {
+            None
+        }
     }
 
     /// The home folder or landing page whose title is `typed` ("Home",

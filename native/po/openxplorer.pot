@@ -378,6 +378,10 @@ msgid "Reading ZIP directory…"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/browser.rs
+msgid "Showing the first 5,000 entries."
+msgstr ""
+
+#: crates/ox-app/src/archive_view/browser.rs
 msgid "This archive folder is empty."
 msgstr ""
 

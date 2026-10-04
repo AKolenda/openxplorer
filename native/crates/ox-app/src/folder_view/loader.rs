@@ -27,6 +27,7 @@ use ox_core::location::RECENT_LOCATIONS_URI;
 use ox_core::transfer::Cancellation;
 
 use super::recent_locations::list_recent_locations;
+use crate::archive_view::listing_notice;
 
 /// A running listing. Dropping it cancels the listing.
 #[derive(Debug)]
@@ -86,11 +87,12 @@ impl Drop for CancelOnDrop {
 /// Lists the folder `location` inside a ZIP (ARC-026), as one batch of
 /// read-only rows, then calls `on_done`. The archive reader applies its
 /// usual rules: unsafe names and links are left out, and at most 5,000
-/// rows are listed.
+/// rows are listed; `on_done` gets the notice that says so, as the
+/// "Compressed folder" window shows it under its list, or an empty one.
 pub(crate) fn list_archive_folder(
     location: &ArchiveLocation,
     on_batch: impl Fn(Vec<Entry>) + 'static,
-    on_done: impl FnOnce(Result<(), EntryError>) + 'static,
+    on_done: impl FnOnce(Result<String, EntryError>) + 'static,
 ) -> Listing {
     let location = location.clone();
     Listing::spawn(async move {
@@ -98,6 +100,7 @@ pub(crate) fn list_archive_folder(
         let guard = CancelOnDrop(Cancellation::new());
         match archive_listing(&browser, &location, &guard.0).await {
             Ok(listing) => {
+                let notice = listing_notice(&listing);
                 let rows = listing
                     .entries
                     .into_iter()
@@ -111,7 +114,7 @@ pub(crate) fn list_archive_folder(
                     })
                     .collect();
                 on_batch(rows);
-                on_done(Ok(()));
+                on_done(Ok(notice));
             }
             Err(error) => on_done(Err(error)),
         }
@@ -122,7 +125,8 @@ pub(crate) fn list_archive_folder(
 /// The listing of the folder `location`, or [`EntryError::NotDirectory`]
 /// when it names a file: a file's own location, or a path typed through
 /// the ZIP (which always ends in `/`) to a file. A folder typed without
-/// its `/` is listed as the folder.
+/// its `/` is listed as the folder. A name the ZIP does not have is
+/// [`EntryError::NotFound`], as for a folder on disk.
 async fn archive_listing(
     browser: &ArchiveBrowser,
     location: &ArchiveLocation,
@@ -147,15 +151,17 @@ async fn archive_listing(
         if !listing.entries.is_empty() {
             return Ok(listing);
         }
+        // An empty listing is an empty folder, a file, or nothing at all.
         let siblings = list(parent.member).await.map_err(failure)?;
-        let is_file = siblings
+        let kind = siblings
             .entries
             .iter()
-            .any(|entry| entry.name == name && matches!(entry.kind, ArchiveEntryKind::File { .. }));
-        return if is_file {
-            Err(EntryError::NotDirectory(name))
-        } else {
-            Ok(listing)
+            .find(|entry| entry.name == name)
+            .map(|entry| entry.kind);
+        return match kind {
+            Some(ArchiveEntryKind::Folder) => Ok(listing),
+            Some(ArchiveEntryKind::File { .. }) => Err(EntryError::NotDirectory(name)),
+            None => Err(EntryError::NotFound(name)),
         };
     }
     let siblings = list(parent.member).await.map_err(failure)?;

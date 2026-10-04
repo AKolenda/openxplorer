@@ -10,6 +10,7 @@
 //! section's paragraph about dragging tabs and files becomes three rows
 //! and a note with the rest.
 
+use gtk::glib;
 use gtk::prelude::*;
 use ox_core::settings::{PreferencesUpdate, ZipOpening};
 
@@ -401,10 +402,14 @@ fn archives_group(page: &SettingsPage) -> SettingsGroup {
             ..PreferencesUpdate::default()
         },
     };
-    opening.add_control(
-        &page.preference_choice(&ZIP_OPENINGS, binding),
-        ControlName::RowTitle,
-    );
+    let choice = page.preference_choice(&ZIP_OPENINGS, binding);
+    // Only a ZIP that is browsed opens one way or the other.
+    page.follow_preferences(glib::clone!(
+        #[weak]
+        choice,
+        move |preferences| choice.set_sensitive(preferences.browse_archives)
+    ));
+    opening.add_control(&choice, ControlName::RowTitle);
     group.add_row(&opening);
     group
 }

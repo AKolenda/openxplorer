@@ -333,7 +333,7 @@ fn a_path_through_the_zip_opens_the_folder_inside() {
     let test = opening_zips_as_folders(&fixture);
     let typed = format!("{}/Bundle.zip/Docs", fixture.root().display());
 
-    test.window.navigate(&typed).expect("a path through the ZIP");
+    test.window.submit_address(&typed);
 
     let docs = ArchiveLocation::root(&fixture.uri_of("Bundle.zip")).member("Docs/");
     wait_until("the folder inside", || {
@@ -341,6 +341,81 @@ fn a_path_through_the_zip_opens_the_folder_inside() {
     });
     test.wait_for_listing("the folder's listing");
     assert_eq!(test.names(), ["a.txt"]);
+}
+
+/// A folder the ZIP does not have is not found, as a missing folder on
+/// disk is, rather than listed as an empty folder.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn a_folder_the_zip_does_not_have_is_not_found() {
+    let fixture = fixture_with_zip();
+    let test = opening_zips_as_folders(&fixture);
+    let typed = format!("{}/Bundle.zip/Nope", fixture.root().display());
+
+    test.window.navigate(&typed).expect("a path through the ZIP");
+
+    let missing = ArchiveLocation::root(&fixture.uri_of("Bundle.zip")).member("Nope/");
+    assert_eq!(test.window.current_uri(), Some(missing.uri()));
+    test.wait_for_listing("the listing");
+    assert_eq!(
+        test.window.load_error(),
+        Some(ox_core::entry::EntryError::NotFound("Nope".to_owned()).to_string())
+    );
+}
+
+/// A ZIP listing that leaves out unsafe names says so in the message
+/// line, as the Compressed folder window says it under its list.
+///
+/// parity: ARC-004, ARC-026
+#[gtk::test]
+fn hidden_members_are_announced_in_the_message_line() {
+    let fixture = fixture_with_zip();
+    let sources = tempfile::tempdir().expect("a folder for the sources");
+    let unsafe_name = sources.path().join("back\\slash.txt");
+    fs::write(&unsafe_name, b"hidden").expect("a source file");
+    let request = ox_core::archive::CompressionRequest {
+        uris: vec![ox_core::location::file_uri(&unsafe_name)],
+        destination_uri: fixture.uri(),
+        archive_name: "Unsafe.zip".to_owned(),
+    };
+    ox_core::archive::ZipCompressor::new()
+        .compress(&request, &ox_core::transfer::Cancellation::new())
+        .expect("the ZIP is written");
+    let test = opening_zips_as_folders(&fixture);
+
+    let root = ArchiveLocation::root(&fixture.uri_of("Unsafe.zip"));
+    test.window.navigate(&root.uri()).expect("the ZIP");
+    test.wait_for_listing("the ZIP's listing");
+
+    assert!(test.names().is_empty());
+    assert_eq!(test.window.shown_message(), "1 unsafe names or links are hidden.");
+}
+
+/// A ZIP another app hands to this one is browsed even with "Open
+/// archives as folders" off, so it opens like a folder when ZIPs do.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn a_zip_handed_in_opens_like_a_folder_when_zips_do() {
+    let fixture = fixture_with_zip();
+    let test = opening_zips_as_folders(&fixture);
+    let browse_off = PreferencesUpdate {
+        browse_archives: Some(false),
+        ..PreferencesUpdate::default()
+    };
+    test.context
+        .update_preferences(browse_off, |result| result.expect("saved"));
+    wait_until("the preference", || {
+        !test.context.settings_data().preferences.browse_archives
+    });
+
+    test.window.open_locations(vec![fixture.uri_of("Bundle.zip")]);
+
+    let root = ArchiveLocation::root(&fixture.uri_of("Bundle.zip"));
+    wait_until("the ZIP in the tab", || {
+        test.window.current_uri() == Some(root.uri())
+    });
 }
 
 /// "In a pop-up window", the default, keeps the Compressed folder window.
@@ -357,6 +432,23 @@ fn the_pop_up_window_stays_the_default() {
     test.select_named("Bundle.zip");
     test.activate("open", None);
     test.wait_for_dialog("the Compressed folder window");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+}
+
+/// With "In a pop-up window" a path typed through a ZIP stays a path,
+/// which names no folder: the tab stays where it was.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn a_path_through_a_zip_stays_a_path_with_the_pop_up_window() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the folder");
+    let typed = format!("{}/Bundle.zip/Docs", fixture.root().display());
+
+    test.window.submit_address(&typed);
+
+    wait_until("the refusal", || !test.window.shown_message().is_empty());
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }
 

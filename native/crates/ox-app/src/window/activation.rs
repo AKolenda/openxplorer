@@ -432,6 +432,11 @@ impl BrowserWindow {
                 return;
             }
         };
+        if let Some(inside) = self.typed_path_through_zip(&folder) {
+            self.accept_address(typed, source);
+            self.navigate_or_report(&inside);
+            return;
+        }
         let typed = typed.to_owned();
         let Some(tab) = self.imp().session.borrow().active_id() else {
             return;
@@ -546,8 +551,9 @@ impl BrowserWindow {
             Activation::Folder(folder) => self.open_incoming_folder(&folder, tab),
             Activation::File => self.open_file(&entry),
             // The user handed the archive to this app, which may be its
-            // default application: it is browsed whatever the setting.
-            Activation::Archive if self.opens_zip_as_folder(&entry) => {
+            // default application: it is browsed whatever "Open archives as
+            // folders" says, in the tab when ZIPs open like folders.
+            Activation::Archive if self.browses_zip_as_folder(&entry) => {
                 self.open_incoming_folder(&Self::zip_root_of(&entry), tab);
             }
             Activation::Archive => self.open_archive(&entry),

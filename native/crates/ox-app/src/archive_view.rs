@@ -32,7 +32,7 @@ use crate::icons::Art;
 
 #[cfg(test)]
 pub(crate) use browser::ArchiveBrowserView;
-pub(crate) use browser::{archive_dialog, ArchiveDialogActions};
+pub(crate) use browser::{archive_dialog, listing_notice, ArchiveDialogActions};
 pub(crate) use compress::{
     compressed_file_name, compression_failure_text, compression_success_text, COMPRESSION_STOPPED,
 };

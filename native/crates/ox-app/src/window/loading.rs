@@ -282,7 +282,11 @@ impl BrowserWindow {
                 glib::clone!(
                     #[weak(rename_to = window)]
                     self,
-                    move |result| window.finish_load(&run, result)
+                    move |result: Result<String, EntryError>| {
+                        let notice = result.as_ref().ok().cloned().unwrap_or_default();
+                        window.finish_load(&run, result.map(|_| ()));
+                        window.show_listing_notice(&run, &notice);
+                    }
                 ),
             );
         }
@@ -370,6 +374,18 @@ impl BrowserWindow {
         }
         if end == ListingEnd::ListAgain {
             self.folder_changed(id);
+        }
+    }
+
+    /// Shows `notice`, what a ZIP's listing left out, in the message line
+    /// while the tab that listed it is in front, as the "Compressed
+    /// folder" window shows it under its list (ARC-004, ARC-026).
+    fn show_listing_notice(&self, run: &LoadRun, notice: &str) {
+        let session = self.imp().session.borrow();
+        let is_shown = session.is_active(run.tab) && session.accepts(run.tab, run.generation);
+        drop(session);
+        if is_shown && !notice.is_empty() {
+            self.show_message(notice);
         }
     }
 

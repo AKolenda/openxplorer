@@ -25,6 +25,7 @@ use gtk::glib;
 use gtk::subclass::prelude::*;
 
 use crate::archive_view::ArchiveTarget;
+use crate::icons;
 
 use super::BrowserWindow;
 
@@ -36,13 +37,9 @@ const NOT_OPENABLE: &str =
 const NOT_IN_DIALOGS: &str =
     crate::i18n::message_id("Files inside a ZIP cannot be chosen here. Extract the ZIP first.");
 
-/// Whether `entry` is a ZIP (by name or type), the one archive type that
-/// opens like a folder; TAR archives keep the window.
+/// Whether `entry` is a ZIP, by name or type.
 fn is_zip(entry: &Entry) -> bool {
-    entry.name.to_lowercase().ends_with(".zip")
-        || entry.content_type.as_deref().is_some_and(|content_type| {
-            matches!(content_type, "application/zip" | "application/x-zip-compressed")
-        })
+    icons::is_zip(&entry.name, entry.content_type.as_deref())
 }
 
 /// The location inside a ZIP that `uri` names, if it is one.
@@ -51,11 +48,30 @@ pub(super) fn archive_location(uri: &str) -> Option<ArchiveLocation> {
 }
 
 impl BrowserWindow {
-    /// Whether opening `entry` shows it in the tab like a folder: a ZIP,
-    /// with "Open ZIP files" set to "Like a folder".
+    /// Whether opening a ZIP shows it in the tab like a folder: "Open
+    /// archives as folders" is on and "Open ZIP files" is "Like a folder".
+    pub(super) fn opens_zips_as_folders(&self) -> bool {
+        self.context().settings_data().preferences.browse_archives && self.browses_zips_as_folders()
+    }
+
+    /// Whether opening `entry` shows it in the tab like a folder: a ZIP
+    /// (by name or type, the one archive type that opens like a folder;
+    /// TAR archives keep the window), with [`Self::opens_zips_as_folders`].
     pub(super) fn opens_zip_as_folder(&self, entry: &Entry) -> bool {
-        let preferences = self.context().settings_data().preferences;
-        preferences.browse_archives && preferences.zip_opening == ZipOpening::Folder && is_zip(entry)
+        self.opens_zips_as_folders() && is_zip(entry)
+    }
+
+    /// Whether the ZIP `entry`, browsed whatever "Open archives as
+    /// folders" says because another app handed it to this one, shows in
+    /// the tab like a folder: "Open ZIP files" is "Like a folder".
+    pub(super) fn browses_zip_as_folder(&self, entry: &Entry) -> bool {
+        self.browses_zips_as_folders() && is_zip(entry)
+    }
+
+    /// Whether a browsed ZIP shows in the tab: "Open ZIP files" is "Like a
+    /// folder".
+    fn browses_zips_as_folders(&self) -> bool {
+        self.context().settings_data().preferences.zip_opening == ZipOpening::Folder
     }
 
     /// The location of the root of the ZIP `entry`, to navigate to.
