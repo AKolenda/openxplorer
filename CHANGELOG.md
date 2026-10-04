@@ -1,5 +1,10 @@
 # Unreleased
 
+- Holding Shift while clicking Delete, in the command bar, the right-click
+  menu or the folder tree's menu, deletes permanently after asking, as in
+  Windows Explorer. Before, only the Shift+Delete key did.
+- The note at the bottom of the Details pane ("Select an item to see its
+  properties…") uses the pane's whole width instead of a narrow column.
 - The arrows beside This PC and Network in the sidebar now collapse and
   expand those sections, as in Windows, with their own highlight.
   Clicking the name still opens the place.
