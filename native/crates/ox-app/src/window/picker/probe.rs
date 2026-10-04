@@ -127,7 +127,7 @@ mod tests {
     }
 
     /// parity: INT-032
-    #[test]
+    #[gtk::test]
     fn a_path_is_a_folder_a_file_missing_or_not_answering() {
         let folder = tempfile::tempdir().expect("temporary folder");
         let file = folder.path().join("notes.txt");
@@ -146,7 +146,7 @@ mod tests {
     /// anything unknown, or on a share that does not answer, is read-only.
     ///
     /// parity: INT-032
-    #[test]
+    #[gtk::test]
     fn writable_means_every_choice_answered_that_it_may_be_written() {
         use std::os::unix::fs::PermissionsExt;
 
