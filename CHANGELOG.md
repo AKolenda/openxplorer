@@ -1,5 +1,11 @@
 # Unreleased
 
+- Deleting permanently (Shift+Delete, or Delete where there is no Recycle
+  Bin) never goes into another drive. A folder where a drive, share or bind
+  mount is mounted is refused with "… is where a drive or share is mounted",
+  and a folder with one mounted inside it is refused before anything is
+  deleted, naming the mount. Before, the deletion went into the mounted
+  drive, deleted its files and only failed at the end with "Device busy".
 - Extract all works like Windows Explorer's: it appears in the command bar
   while a ZIP is selected, and its dialog is as short as Explorer's, with
   one field, "Files will be extracted to this folder", filled in with the
