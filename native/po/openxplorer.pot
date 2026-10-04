@@ -3932,6 +3932,10 @@ msgid "Finish the current operation before dropping files."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drop.rs
+msgid "Items from a ZIP cannot be linked. Copy or move them instead."
+msgstr ""
+
+#: crates/ox-app/src/window/file_drop.rs
 msgid "Open a writable destination folder before dropping files."
 msgstr ""
 

@@ -91,6 +91,7 @@ fn a_zip_opens_in_the_tab_like_a_folder() {
     wait_until("out of the ZIP", || {
         test.window.current_uri() == Some(fixture.uri())
     });
+    test.wait_for_listing("the folder");
     test.select_named("Notes 2.txt");
     assert!(!extract_button(&test).is_visible(), "no ZIP selected or open");
 }
@@ -176,8 +177,20 @@ fn a_drag_offers_copies_made_when_the_drop_asks() {
     open_bundle(&test, &fixture);
     let position = test.position_of("Docs");
 
+    let before = copy_folders();
     let content: gdk::ContentProvider = test.window.drag_content_for(position).expect("a drag");
     assert!(content.formats().contain_mime_type("text/uri-list"));
+    assert_eq!(
+        copy_folders(),
+        before,
+        "nothing is extracted before the drop asks"
+    );
+    let every_modifier = gdk::ModifierType::SHIFT_MASK | gdk::ModifierType::CONTROL_MASK;
+    assert_eq!(
+        crate::window::file_drag::drag_actions(&content, every_modifier),
+        gdk::DragAction::COPY,
+        "never a link to a copy that lasts a day, nor the menu that offers one"
+    );
 
     // Two requests at once, as a drop target that reads on hover and on
     // drop may make: one extraction answers both.
@@ -208,6 +221,65 @@ fn a_drag_offers_copies_made_when_the_drop_asks() {
         crate::window::zip_copies::is_zip_copy(&uri),
         "a copy, never pinned"
     );
+    assert_eq!(copy_folders().len(), before.len() + 1, "one extraction");
+}
+
+/// A drop of items dragged out of a ZIP in this app takes the copies
+/// straight from the drag, and refuses to link to them.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn a_drop_in_the_app_copies_out_of_a_zip_and_never_links() {
+    let fixture = fixture_with_zip();
+    let test = opening_zips_as_folders(&fixture);
+    open_bundle(&test, &fixture);
+    let content = test
+        .window
+        .drag_content_for(test.position_of("readme.txt"))
+        .expect("a drag")
+        .downcast::<crate::window::zip_copies::ZipDragContent>()
+        .expect("the drag of items inside a ZIP");
+    let copies = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let made = std::rc::Rc::clone(&copies);
+    gtk::glib::spawn_future_local(async move {
+        made.replace(Some(content.copies().await));
+    });
+    wait_until("the copies", || copies.borrow().is_some());
+    let copies = copies.take().expect("made").expect("the copies");
+    test.window.end_file_drag();
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("Documents");
+
+    let linked = test
+        .window
+        .drop_files(&copies, None, crate::window::file_drop::DropAction::Link);
+    assert!(!linked);
+    assert_eq!(
+        test.window.shown_message(),
+        "Items from a ZIP cannot be linked. Copy or move them instead."
+    );
+    assert!(test
+        .window
+        .drop_files(&copies, None, crate::window::file_drop::DropAction::Copy));
+    let dropped = fixture.path("Documents/readme.txt");
+    wait_until("the copied file", || dropped.exists());
+    assert!(!dropped.is_symlink());
+    assert_eq!(fs::read(&dropped).expect("copied"), b"read me");
+}
+
+/// The names of the folders of copies taken out of ZIPs so far.
+fn copy_folders() -> std::collections::BTreeSet<String> {
+    fs::read_dir(ox_core::archive::copies_root())
+        .map(|children| {
+            children
+                .filter_map(Result::ok)
+                .map(|child| child.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with("copy-"))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// A ZIP whose name GIO and the canonical form escape differently opens

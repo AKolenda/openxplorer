@@ -12,7 +12,9 @@
 //!   Paste anywhere then copies them as any files.
 //! - A drag offers `text/uri-list` lazily ([`ZipDragContent`]): nothing is
 //!   extracted until a folder or an application accepts the drop and asks
-//!   for the files.
+//!   for the files. A window of this app takes the copies straight from
+//!   the content, without the timeout other apps' drops have. The drag
+//!   offers Copy and Move only: nothing may link to the copies.
 //!
 //! Cut is refused: the ZIP is read-only. Copies older than a day are
 //! removed when the app starts and at the next copy.
@@ -226,17 +228,17 @@ mod imp {
             io_priority: glib::Priority,
         ) -> Pin<Box<dyn Future<Output = Result<(), glib::Error>> + 'static>> {
             let is_uri_list = mime_type == URI_LIST;
-            let materialise = self.materialise.borrow().clone();
-            let copies = std::rc::Rc::clone(&self.copies);
+            let content = self.obj().clone();
             let stream = stream.clone();
             Box::pin(async move {
-                let unsupported =
-                    || glib::Error::new(gio::IOErrorEnum::NotSupported, "Only a file list is offered.");
                 if !is_uri_list {
-                    return Err(unsupported());
+                    return Err(glib::Error::new(
+                        gio::IOErrorEnum::NotSupported,
+                        "Only a file list is offered.",
+                    ));
                 }
-                let materialise = materialise.ok_or_else(unsupported)?;
-                let uris = super::shared_copies(&copies, &materialise)
+                let uris = content
+                    .copies()
                     .await
                     .map_err(|message| glib::Error::new(gio::IOErrorEnum::Failed, &message))?;
                 let text = super::uri_list(&uris);
@@ -263,6 +265,24 @@ impl ZipDragContent {
         let content: Self = glib::Object::new();
         content.imp().materialise.replace(Some(materialise));
         content
+    }
+
+    /// The file URIs of the copies, extracted at the first request (see
+    /// [`shared_copies`]). A drop in this process reads them here, with no
+    /// timeout, as extracting a large member can take a while.
+    ///
+    /// # Errors
+    ///
+    /// The message to show when the copies could not be made.
+    pub(crate) async fn copies(&self) -> Result<Vec<String>, String> {
+        let materialise = self
+            .imp()
+            .materialise
+            .borrow()
+            .clone()
+            .ok_or_else(|| ox_core::i18n::gettext_static("The copies could not be made.").to_owned())?;
+        let copies = Rc::clone(&self.imp().copies);
+        shared_copies(&copies, &materialise).await
     }
 }
 
