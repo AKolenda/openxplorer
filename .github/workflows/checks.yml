@@ -118,14 +118,16 @@ jobs:
           path: io.winspace.Development.flatpak
           if-no-files-found: error
 
-  release:
-    # Public pull requests and non-main dispatches must not run on the LAN host.
+  website:
+    # The website deploys on its own, so a failed package release (or one that
+    # is not due) never leaves the site behind. Its download button opens
+    # GitHub's latest release, so it needs no release to exist first. Public
+    # pull requests and non-main dispatches must not run on the LAN host.
     if: github.ref == 'refs/heads/main'
-    needs: [native-package, native-flatpak]
     runs-on: [self-hosted, Linux, X64, openxplorer]
     timeout-minutes: 45
     permissions:
-      contents: write
+      contents: read
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       TMPDIR: /var/tmp/openxplorer-runner
@@ -161,6 +163,38 @@ jobs:
         run: '"$RUNNER_TEMP/browser-tests/bin/python" tests/test_launch_production.py'
       - name: Verify generated documentation
         run: git diff --exit-code -- docs apps/web/public/docs-markdown apps/web/public/assets/markdown.json
+      - name: Verify release source and public-data policies
+        run: |
+          /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'
+          /usr/bin/python3 -m unittest discover -s tests -p 'test_public_data.py'
+      - run: /usr/bin/python3 tools/security_sweep.py
+      - name: Deploy the verified website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          pnpm exec wrangler deploy --dry-run
+          pnpm exec wrangler deploy
+
+  release:
+    # Public pull requests and non-main dispatches must not run on the LAN host.
+    if: github.ref == 'refs/heads/main'
+    needs: [native-package, native-flatpak]
+    runs-on: [self-hosted, Linux, X64, openxplorer]
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      TMPDIR: /var/tmp/openxplorer-runner
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
       - name: Verify release source and public-data policies
         run: |
           /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'
@@ -211,12 +245,3 @@ jobs:
               --title "OpenXplorer $version" --notes-file "$RUNNER_TEMP/release-notes.md" \
               "${assets[@]}" dist/SHA256SUMS
           fi
-      - name: Deploy the verified website
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          test -n "$CLOUDFLARE_API_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-          pnpm exec wrangler deploy --dry-run
-          pnpm exec wrangler deploy

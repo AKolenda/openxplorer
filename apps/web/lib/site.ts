@@ -11,8 +11,8 @@ export const site = {
   repository: 'https://github.com/AKolenda/openxplorer',
   releases: 'https://github.com/AKolenda/openxplorer/releases',
 };
-/** The download button names a version, so it opens that exact release. */
-export const releaseUrl = `${site.releases}/tag/v${site.version}`;
+/** GitHub redirects this to the newest release, so the button never goes stale. */
+export const releaseUrl = `${site.releases}/latest`;
 export const issuesUrl = `${site.repository}/issues`;
 
 export function pageMetadata(title:string,description:string,path:string):Metadata{
