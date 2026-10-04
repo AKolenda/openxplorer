@@ -197,11 +197,22 @@ impl BrowserWindow {
     /// restart; otherwise says why, as one operation runs at a time
     /// (OPS-024) and writes wait for the restart (UPD-006).
     pub(super) fn may_start_archive_operation(&self) -> bool {
-        if self.is_writing_files() {
-            self.show_message(ox_core::i18n::gettext_static(OPERATION_RUNNING));
-            return false;
+        match self.archive_operation_refusal() {
+            Some(refusal) => {
+                self.show_message(&refusal);
+                false
+            }
+            None => true,
         }
-        !self.refuses_writes_during_update()
+    }
+
+    /// Why an archive operation cannot start now (see
+    /// [`Self::may_start_archive_operation`]), or `None` when it can.
+    pub(super) fn archive_operation_refusal(&self) -> Option<String> {
+        if self.is_writing_files() {
+            return Some(ox_core::i18n::gettext_static(OPERATION_RUNNING).to_owned());
+        }
+        self.context().updates().file_refusal()
     }
 
     /// Asks where to extract `archive` (Extract all…).

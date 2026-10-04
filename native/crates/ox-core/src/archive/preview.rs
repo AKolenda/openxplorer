@@ -51,7 +51,7 @@ const PREVIEW_FOLDER_PREFIX: &str = "winspace-zip-";
 /// removed this long after they were made: by then the application that
 /// opened one has read it, and on Linux removing a file an application
 /// has open does not disturb it.
-pub const PREVIEW_LIFETIME: Duration = Duration::from_secs(10 * 60);
+pub const PREVIEW_LIFETIME: Duration = Duration::from_mins(10);
 
 /// The notice to show after opening a copy.
 pub const PREVIEW_NOTICE: &str =
@@ -219,7 +219,7 @@ fn create_copy_file(copy_path: &Path) -> Result<File, ArchiveError> {
 /// at each new copy, and when the app starts and quits. Best effort and
 /// blocking; only preview folders are touched.
 pub fn remove_old_previews(root: &Path, lifetime: Duration) {
-    super::copies::remove_old_folders(root, PREVIEW_FOLDER_PREFIX, lifetime);
+    super::copies::remove_old_folders(root, |name| name.starts_with(PREVIEW_FOLDER_PREFIX), lifetime);
 }
 
 /// Removes the copy at `path` with its private folder, once the

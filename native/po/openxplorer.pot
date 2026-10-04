@@ -4054,7 +4054,7 @@ msgstr ""
 msgid "This is not the Recycle Bin."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs crates/ox-app/src/window/zip_copies.rs
+#: crates/ox-app/src/window/file_ops/availability.rs
 msgid "Wait for the running file operation to finish."
 msgstr ""
 
@@ -5369,6 +5369,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/zip_copies.rs
 msgid "The copies could not be made."
+msgstr ""
+
+#: crates/ox-app/src/window/zip_copies.rs
+msgid "The window closed."
 msgstr ""
 
 #: crates/ox-app/src/window/zip_folder.rs

@@ -15,7 +15,7 @@
 //!   for the files.
 //!
 //! Cut is refused: the ZIP is read-only. Copies older than a day are
-//! removed at the next copy.
+//! removed when the app starts and at the next copy.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -63,10 +63,8 @@ impl BrowserWindow {
         {
             return Err(ox_core::i18n::gettext_static("Copy items from one ZIP at a time.").to_owned());
         }
-        if !self.may_start_archive_operation() {
-            return Err(
-                ox_core::i18n::gettext_static("Wait for the running file operation to finish.").to_owned(),
-            );
+        if let Some(refusal) = self.archive_operation_refusal() {
+            return Err(refusal);
         }
         let archive_uri = first.archive_uri.clone();
         let root = copies_root();
@@ -144,7 +142,7 @@ impl BrowserWindow {
             let locations = locations.clone();
             Box::pin(async move {
                 let Some(window) = window.upgrade() else {
-                    return Err("The window closed.".to_owned());
+                    return Err(ox_core::i18n::gettext_static("The window closed.").to_owned());
                 };
                 window.copy_out_of_zip(locations).await
             })

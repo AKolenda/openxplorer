@@ -53,6 +53,7 @@ use crate::transfer::{
     Cancellation, Node, NodeFactory, NodeKind, Progress, ProgressScope, TransferError, WriteGuard,
 };
 use plan::{plan, ExtractionPlan};
+pub(super) use staging::is_staging_name;
 use staging::ExtractionStaging;
 use unpack::Unpacking;
 

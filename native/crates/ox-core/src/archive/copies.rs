@@ -8,17 +8,19 @@
 //! the clipboard or the drag hands over those files, as Explorer hands
 //! over files it extracts to its temporary folder. Copies are left for
 //! the paste or drop to read and are removed a day later
-//! ([`remove_old_copies`]), at the next start or copy.
+//! ([`remove_old_copies`]), when the app next starts or copies, with
+//! what an extraction stopped by a crash left there.
 
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use super::extract::is_staging_name;
 use crate::random::{random_hex, NAME_BYTES};
 
 /// How long copies are kept for a later paste or drop.
-pub const COPY_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
+pub const COPY_LIFETIME: Duration = Duration::from_hours(24);
 
 /// The prefix of each copy's folder name.
 const COPY_PREFIX: &str = "copy-";
@@ -69,27 +71,29 @@ pub fn copied_member(folder: &Path, member: &str) -> PathBuf {
         .fold(folder.to_path_buf(), |path, segment| path.join(segment))
 }
 
-/// Removes the copies in `root` older than `lifetime`. Best effort and
-/// blocking: a copy that cannot be removed is left for the next time.
-/// Only folders this module names are touched, and links are never
-/// followed.
+/// Removes the copies in `root` older than `lifetime`, and the staging
+/// folders of extractions into `root` that never finished. Best effort
+/// and blocking: a copy that cannot be removed is left for the next
+/// time. Only folders this module or the extractor names are touched,
+/// and links are never followed.
 pub fn remove_old_copies(root: &Path, lifetime: Duration) {
-    remove_old_folders(root, COPY_PREFIX, lifetime);
+    remove_old_folders(
+        root,
+        |name| name.starts_with(COPY_PREFIX) || is_staging_name(name),
+        lifetime,
+    );
 }
 
-/// Removes the folders in `root` named with `prefix` and older than
-/// `lifetime`, by their modification time. Best effort and blocking;
-/// links are never followed.
-pub(super) fn remove_old_folders(root: &Path, prefix: &str, lifetime: Duration) {
+/// Removes the folders in `root` whose names `is_ours` accepts and that
+/// are older than `lifetime`, by their modification time. Best effort and
+/// blocking; links are never followed.
+pub(super) fn remove_old_folders(root: &Path, is_ours: impl Fn(&str) -> bool, lifetime: Duration) {
     let Ok(children) = fs::read_dir(root) else {
         return;
     };
     let now = SystemTime::now();
     for child in children.flatten() {
-        let is_copy = child
-            .file_name()
-            .to_str()
-            .is_some_and(|name| name.starts_with(prefix));
+        let is_copy = child.file_name().to_str().is_some_and(&is_ours);
         let Ok(metadata) = child.path().symlink_metadata() else {
             continue;
         };
@@ -112,28 +116,31 @@ mod tests {
 
     /// parity: ARC-026
     #[test]
-    fn old_copies_are_removed_and_nothing_else() {
+    fn old_copies_and_staging_folders_are_removed_and_nothing_else() {
         let root = tempfile::tempdir().expect("a folder");
         let copies = root.path().join("zip-copies");
         prepare_copies_root(&copies).expect("created");
         let old = copies.join(copy_folder_name().expect("random"));
         let fresh = copies.join(copy_folder_name().expect("random"));
         let other = copies.join("notes");
-        for folder in [&old, &fresh, &other] {
+        let old_staging = copies.join(format!(".openxplorer-extract-{}.part", "0a".repeat(NAME_BYTES)));
+        let fresh_staging = copies.join(format!(".openxplorer-extract-{}.part", "1b".repeat(NAME_BYTES)));
+        for folder in [&old, &fresh, &other, &old_staging, &fresh_staging] {
             fs::create_dir_all(folder.join("inner")).expect("a folder");
         }
-        let long_ago = SystemTime::now() - Duration::from_secs(3 * 24 * 60 * 60);
-        fs::File::open(&old)
-            .and_then(|folder| folder.set_modified(long_ago))
-            .expect("aged");
-        fs::File::open(&other)
-            .and_then(|folder| folder.set_modified(long_ago))
-            .expect("aged");
+        let long_ago = SystemTime::now() - Duration::from_hours(3 * 24);
+        for folder in [&old, &other, &old_staging] {
+            fs::File::open(folder)
+                .and_then(|folder| folder.set_modified(long_ago))
+                .expect("aged");
+        }
 
         remove_old_copies(&copies, COPY_LIFETIME);
 
         assert!(!old.exists());
         assert!(fresh.exists());
+        assert!(!old_staging.exists(), "an extraction stopped by a crash");
+        assert!(fresh_staging.exists(), "an extraction that may still run");
         assert!(other.exists(), "only the copies' own folders");
         assert_eq!(
             copied_member(&fresh, "tidewater/maps/"),
