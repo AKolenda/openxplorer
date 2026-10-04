@@ -15,19 +15,16 @@
 //! an unmounted share.
 
 use std::future::Future;
-use std::sync::Arc;
 
 use gtk::glib;
-use ox_core::archive::{
-    default_preview_root, ArchiveBrowser, ArchiveEntryKind, ArchiveError, ArchiveListing, GioArchiveOpener,
-};
+use ox_core::archive::{ArchiveBrowser, ArchiveEntryKind, ArchiveError, ArchiveListing};
 use ox_core::entry::{self, Entry, EntryError};
 use ox_core::location::ArchiveLocation;
 use ox_core::location::RECENT_LOCATIONS_URI;
 use ox_core::transfer::Cancellation;
 
 use super::recent_locations::list_recent_locations;
-use crate::archive_view::listing_notice;
+use crate::archive_view::{archive_browser, listing_notice};
 
 /// A running listing. Dropping it cancels the listing.
 #[derive(Debug)]
@@ -96,7 +93,7 @@ pub(crate) fn list_archive_folder(
 ) -> Listing {
     let location = location.clone();
     Listing::spawn(async move {
-        let browser = ArchiveBrowser::new(Arc::new(GioArchiveOpener), default_preview_root());
+        let browser = archive_browser();
         let guard = CancelOnDrop(Cancellation::new());
         match archive_listing(&browser, &location, &guard.0).await {
             Ok(listing) => {

@@ -31,6 +31,7 @@
 //! |---|---|---|
 //! | `browse` | Listing an archive folder | `archives.py` |
 //! | `preview` | Opening one member as a private copy | `archives.py` |
+//! | `copies` | Copies of members taken out of a ZIP browsed as a folder | new (Explorer) |
 //! | `extract` | Checking and extracting a whole archive | `zip_extraction.py`, `winspace.py` |
 //! | `create` | Compressing items into a new ZIP | new (Dolphin, Explorer) |
 //! | `member_names` | Safe member names, previewable types, suggested folder names | `archives.py`, `zip_extraction.py` |
@@ -66,14 +67,7 @@ pub use extract::{
     ExtractionOutput, ExtractionRequest, ExtractionSummary, GioExtractionOutput, OutputFile, ZipExtractor,
 };
 pub use gio_reader::GioArchiveReader;
-pub use member_names::{is_supported_archive, suggested_folder_name};
-
-/// Whether `name` is a member name the archive reader treats as safe: no
-/// absolute path, no `.` or `..` or empty component, no backslash or
-/// control character (a folder's trailing `/` is allowed).
-pub fn is_safe_member_name(name: &str) -> bool {
-    member_names::is_safe_member(name)
-}
+pub use member_names::{is_safe_member as is_safe_member_name, is_supported_archive, suggested_folder_name};
 pub use preview::{remove_old_previews, remove_preview_copy, PreviewCopy, PREVIEW_LIFETIME, PREVIEW_NOTICE};
 pub use source::{ArchiveOpener, ArchiveStream, GioArchiveOpener};
 pub use zip::{Zip64Field, ZipFormatError};

@@ -18,8 +18,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::archive::{
-    default_preview_root, lift_single_folder, ArchiveBrowser, ArchiveError, CompressionRequest,
-    ExtractionRequest, GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
+    lift_single_folder, ArchiveError, CompressionRequest, ExtractionRequest, GioArchiveOpener,
+    GioExtractionOutput, ZipCompressor, ZipExtractor,
 };
 use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;
@@ -30,9 +30,10 @@ use ox_core::transfer::{Cancellation, Node, NodeFactory, Progress};
 use ox_core::versions::snapshot_location;
 
 use crate::archive_view::{
-    archive_dialog, compressed_file_name, compression_failure_text, compression_success_text, extract_dialog,
-    extraction_failure_text, extraction_success_text, unique_folder_names, ArchiveDialogActions,
-    ArchiveTarget, ExtractDialogSetup, COMPRESSION_STOPPED, EXTRACTION_STOPPED,
+    archive_browser, archive_dialog, compressed_file_name, compression_failure_text,
+    compression_success_text, extract_dialog, extraction_failure_text, extraction_success_text,
+    unique_folder_names, ArchiveDialogActions, ArchiveTarget, ExtractDialogSetup, COMPRESSION_STOPPED,
+    EXTRACTION_STOPPED,
 };
 use crate::locations::Page;
 
@@ -140,7 +141,7 @@ impl BrowserWindow {
             return;
         };
         let shown_path = self.imp().locations.borrow().display_location(&archive.uri);
-        let browser = ArchiveBrowser::new(Arc::new(GioArchiveOpener), default_preview_root());
+        let browser = archive_browser();
         let actions = ArchiveDialogActions {
             extract_all: Box::new(glib::clone!(
                 #[weak(rename_to = window)]

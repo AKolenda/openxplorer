@@ -13,7 +13,7 @@
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::entry::{enumerate_folder, EntryKind};
-use ox_core::location::{parent_location, same_location};
+use ox_core::location::{parent_location, same_location, ArchiveLocation};
 
 use crate::folder_view::sorting::SortKey;
 use crate::icons::Icon;
@@ -39,7 +39,7 @@ pub(super) struct Subfolder {
 /// `show_hidden`. A folder that cannot be listed has none.
 pub(super) async fn list_subfolders(uri: &str, show_hidden: bool) -> Vec<Subfolder> {
     let mut folders = Vec::new();
-    if let Some(inside) = super::zip_folder::archive_location(uri) {
+    if let Some(inside) = ArchiveLocation::from_uri(uri) {
         // Inside a ZIP opened like a folder, the archive reader lists them.
         let browser = ox_core::archive::ArchiveBrowser::new(
             std::sync::Arc::new(ox_core::archive::GioArchiveOpener),

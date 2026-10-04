@@ -68,7 +68,7 @@ impl ArchiveLocation {
     /// When the text is an `ox-zip:` location whose archive is not a
     /// location the app accepts, or whose member path is not a safe
     /// member name.
-    pub fn parse(uri: &str, home: &Path) -> Result<Option<Self>, LocationError> {
+    pub fn parse(uri: &str) -> Result<Option<Self>, LocationError> {
         let Some(rest) = uri.strip_prefix(ARCHIVE_SCHEME) else {
             return Ok(None);
         };
@@ -79,8 +79,9 @@ impl ArchiveLocation {
         }
         let archive = unquote_without_controls(escaped_archive)?;
         // Only a canonical location: a relative path would depend on the
-        // folder the address was typed in.
-        let archive_uri = normalise_location(&archive, None, home)?;
+        // folder the address was typed in. A canonical location is
+        // absolute, so no home folder is needed: `~` never stays as typed.
+        let archive_uri = normalise_location(&archive, None, Path::new("/"))?;
         if archive_uri != archive {
             return Err(invalid());
         }
@@ -97,6 +98,12 @@ impl ArchiveLocation {
             return Err(invalid());
         }
         Ok(Some(Self { archive_uri, member }))
+    }
+
+    /// The location inside a ZIP that `uri` names; `None` for any other
+    /// location and for a malformed `ox-zip:` one (see [`Self::parse`]).
+    pub fn from_uri(uri: &str) -> Option<Self> {
+        Self::parse(uri).ok().flatten()
     }
 
     /// The canonical `ox-zip:` URI.
@@ -161,7 +168,7 @@ mod tests {
     const ZIP: &str = "file:///home/ana/Downloads/tide%20water.zip";
 
     fn parse(uri: &str) -> Result<Option<ArchiveLocation>, LocationError> {
-        ArchiveLocation::parse(uri, Path::new("/home/ana"))
+        ArchiveLocation::parse(uri)
     }
 
     /// parity: ARC-026

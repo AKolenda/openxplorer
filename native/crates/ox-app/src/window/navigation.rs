@@ -82,7 +82,7 @@ impl BrowserWindow {
         if let Some(recycle_bin) = recycle_bin_location(typed)? {
             return Ok(recycle_bin);
         }
-        if let Some(inside) = ArchiveLocation::parse(typed, &glib::home_dir())? {
+        if let Some(inside) = ArchiveLocation::parse(typed)? {
             return Ok(inside.uri());
         }
         let resolved = self.resolve_relative(address)?;
@@ -128,10 +128,10 @@ impl BrowserWindow {
         let folder = self
             .current_uri()
             .filter(|uri| Page::from_uri(uri).is_none())
-            .map(|uri| match ArchiveLocation::parse(&uri, &glib::home_dir()) {
+            .map(|uri| match ArchiveLocation::from_uri(&uri) {
                 // Inside a ZIP, relative to the folder that holds it.
-                Ok(Some(inside)) => parent_location(&inside.archive_uri).unwrap_or(uri),
-                _ => uri,
+                Some(inside) => parent_location(&inside.archive_uri).unwrap_or(uri),
+                None => uri,
             });
         folder.unwrap_or_else(|| self.imp().locations.borrow().home_uri())
     }

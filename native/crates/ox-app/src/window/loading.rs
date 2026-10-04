@@ -271,7 +271,7 @@ impl BrowserWindow {
             held_rows: RefCell::default(),
         });
         let batch_run = Rc::clone(&run);
-        if let Ok(Some(inside)) = ArchiveLocation::parse(&start.uri, &glib::home_dir()) {
+        if let Some(inside) = ArchiveLocation::from_uri(&start.uri) {
             return loader::list_archive_folder(
                 &inside,
                 glib::clone!(
@@ -476,7 +476,9 @@ impl BrowserWindow {
         }
         // A file inside a ZIP is selected in its folder, not opened
         // (ARC-026).
-        if let Ok(Some(inside)) = ArchiveLocation::parse(&file, &glib::home_dir()) {
+        if let Some(inside) = ArchiveLocation::from_uri(&file) {
+            // A path typed through the ZIP names the file like a folder
+            // (`Docs/a.txt/`); the row is the file's own location.
             let item = inside.member(inside.member.trim_end_matches('/')).uri();
             if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
                 tab.selected = vec![item];

@@ -34,7 +34,6 @@ use ox_core::archive::{
 use ox_core::clipboard::{ClipboardFiles, ClipboardMode};
 use ox_core::location::{file_uri, ArchiveLocation};
 
-use super::zip_folder::archive_location;
 use super::BrowserWindow;
 
 /// Cut inside a ZIP.
@@ -163,7 +162,7 @@ pub(crate) fn is_zip_copy(uri: &str) -> bool {
 
 /// The locations inside a ZIP of `uris`, if every one is inside one.
 pub(super) fn zip_items(uris: &[String]) -> Option<Vec<ArchiveLocation>> {
-    uris.iter().map(|uri| archive_location(uri)).collect()
+    uris.iter().map(|uri| ArchiveLocation::from_uri(uri)).collect()
 }
 
 mod imp {

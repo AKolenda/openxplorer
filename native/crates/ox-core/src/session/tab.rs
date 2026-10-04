@@ -224,12 +224,11 @@ fn navigation_location(value: &Value) -> Result<String, WindowStateError> {
 /// message as in Python.
 fn item_location(value: &Value) -> Result<String, WindowStateError> {
     let text = value.as_str().unwrap_or_default();
-    let home = glib::home_dir();
     // An item inside a ZIP the tab browses (ARC-026).
-    if let Some(inside) = location::ArchiveLocation::parse(text, &home)? {
+    if let Some(inside) = location::ArchiveLocation::parse(text)? {
         return Ok(inside.uri());
     }
-    Ok(location::normalise_location(text, None, &home)?)
+    Ok(location::normalise_location(text, None, &glib::home_dir())?)
 }
 
 /// The history: 1 to [`MAX_HISTORY_ENTRIES`] navigable locations.

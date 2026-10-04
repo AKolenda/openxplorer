@@ -13,9 +13,6 @@
 //! the selected items (see `zip_copies.rs`). The other choice, "In a
 //! pop-up window", keeps the "Compressed folder" window.
 
-use std::sync::Arc;
-
-use ox_core::archive::{default_preview_root, ArchiveBrowser, GioArchiveOpener};
 use ox_core::entry::Entry;
 use ox_core::location::ArchiveLocation;
 use ox_core::settings::ZipOpening;
@@ -24,7 +21,7 @@ use ox_core::transfer::Cancellation;
 use gtk::glib;
 use gtk::subclass::prelude::*;
 
-use crate::archive_view::ArchiveTarget;
+use crate::archive_view::{archive_browser, ArchiveTarget};
 use crate::icons;
 
 use super::BrowserWindow;
@@ -40,11 +37,6 @@ const NOT_IN_DIALOGS: &str =
 /// Whether `entry` is a ZIP, by name or type.
 fn is_zip(entry: &Entry) -> bool {
     icons::is_zip(&entry.name, entry.content_type.as_deref())
-}
-
-/// The location inside a ZIP that `uri` names, if it is one.
-pub(super) fn archive_location(uri: &str) -> Option<ArchiveLocation> {
-    ArchiveLocation::parse(uri, &glib::home_dir()).ok().flatten()
 }
 
 impl BrowserWindow {
@@ -81,7 +73,7 @@ impl BrowserWindow {
 
     /// The ZIP whose contents the active tab shows, if it shows one.
     pub(super) fn shown_zip(&self) -> Option<ArchiveTarget> {
-        let inside = archive_location(&self.current_uri()?)?;
+        let inside = ArchiveLocation::from_uri(&self.current_uri()?)?;
         let name = self.imp().locations.borrow().base_name(&inside.archive_uri);
         Some(ArchiveTarget {
             uri: inside.archive_uri,
@@ -93,7 +85,7 @@ impl BrowserWindow {
     /// file as a read-only private copy in its application. True when
     /// `entry` is such an item and was handled here.
     pub(super) fn activate_zip_member(&self, entry: &Entry) -> bool {
-        let Some(inside) = archive_location(&entry.uri) else {
+        let Some(inside) = ArchiveLocation::from_uri(&entry.uri) else {
             return false;
         };
         if inside.is_folder() {
@@ -104,7 +96,7 @@ impl BrowserWindow {
             self.show_message(ox_core::i18n::gettext_static(NOT_IN_DIALOGS));
             return true;
         }
-        let browser = ArchiveBrowser::new(Arc::new(GioArchiveOpener), default_preview_root());
+        let browser = archive_browser();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,

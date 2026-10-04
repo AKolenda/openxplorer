@@ -88,7 +88,7 @@ impl LocationContext {
         if let Some(place) = VirtualPlace::from_uri(uri) {
             return place.title().to_string();
         }
-        if let Some(inside) = archive_location(uri) {
+        if let Some(inside) = ArchiveLocation::from_uri(uri) {
             return match inside.segments().last() {
                 Some(name) => (*name).to_owned(),
                 None => self.base_name(&inside.archive_uri),
@@ -129,7 +129,7 @@ impl LocationContext {
         if let Some(place) = VirtualPlace::from_uri(uri) {
             return place.title().to_string();
         }
-        if let Some(inside) = archive_location(uri) {
+        if let Some(inside) = ArchiveLocation::from_uri(uri) {
             // As Explorer shows it: the ZIP's path, then the folders in it.
             let archive = self.display_location(&inside.archive_uri);
             let separator = if location_kind(&inside.archive_uri) == LocationKind::Smb {
@@ -185,7 +185,7 @@ impl LocationContext {
         if let Ok(Some(folder)) = VirtualFolder::parse(uri) {
             return virtual_crumbs(&folder);
         }
-        if let Some(inside) = archive_location(uri) {
+        if let Some(inside) = ArchiveLocation::from_uri(uri) {
             return self.archive_crumbs(&inside);
         }
         self.folder_crumbs(uri)
@@ -263,7 +263,7 @@ impl LocationContext {
 /// the web UI's `renderNavigation`. The scheme decides, as app.js's
 /// `startsWith('smb:')` does for the canonical URIs the window shows.
 pub fn crumb_divider(uri: &str, index: usize) -> Option<&'static str> {
-    if let Some(inside) = archive_location(uri) {
+    if let Some(inside) = ArchiveLocation::from_uri(uri) {
         return crumb_divider(&inside.archive_uri, index);
     }
     match (location_kind(uri), index) {
@@ -280,7 +280,7 @@ pub fn parent_location(uri: &str) -> Option<String> {
     if VirtualPlace::from_uri(uri).is_some() {
         return None;
     }
-    if let Some(inside) = archive_location(uri) {
+    if let Some(inside) = ArchiveLocation::from_uri(uri) {
         // Up from the ZIP's root leaves it for the folder that holds it.
         return match inside.parent() {
             Some(parent) => Some(parent.uri()),
@@ -315,14 +315,6 @@ pub fn same_location(a: &str, b: &str) -> bool {
 pub fn device_root(uri: &str) -> Option<String> {
     let device = DeviceUriMatch::parse(uri)?.to_parts();
     device.is_device().then(|| root_uri(&device))
-}
-
-/// The location inside a ZIP that `uri` names, if it is one. Archive
-/// locations are absolute, so no home folder is needed to read them.
-fn archive_location(uri: &str) -> Option<ArchiveLocation> {
-    ArchiveLocation::parse(uri, std::path::Path::new("/"))
-        .ok()
-        .flatten()
 }
 
 /// Splits a `scheme://` location for display, like the web UI's
