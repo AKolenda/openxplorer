@@ -324,6 +324,12 @@ pub struct Preferences {
     /// Explorer's View > Show > Navigation pane off).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hide_sidebar: bool,
+    /// The navigation pane's expand arrows (beside This PC and Network,
+    /// and in the folder tree) show only while the pointer is over the
+    /// pane or keyboard focus is in it, as in Windows Explorer. Off by
+    /// default, so they always show; stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_expand_arrows: bool,
     /// The sidebar's icon size in pixels (16, 22, 32 or 48), or 0 for the
     /// automatic size (Dolphin's Places panel Icon Size). Stored only when
     /// chosen.
@@ -379,6 +385,11 @@ pub struct Preferences {
     /// `ExpandableFolders`). Stored only when off.
     #[serde(skip_serializing_if = "is_true")]
     pub expandable_folders: bool,
+    /// Windows 11's Compact view: the file list's and the navigation
+    /// pane's rows stand closer, so more items fit. Off by default, as in
+    /// Windows. Stored as `compactView`, only when on.
+    #[serde(rename = "compactView", skip_serializing_if = "std::ops::Not::not")]
+    pub compact_density: bool,
     /// The display style of every folder without its own, once the user
     /// changed it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -443,6 +454,7 @@ impl Default for Preferences {
             enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,
+            hide_expand_arrows: false,
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
@@ -456,6 +468,7 @@ impl Default for Preferences {
             per_folder_views: false,
             selection_marker: true,
             expandable_folders: true,
+            compact_density: false,
             view_defaults: None,
             folder_views: Vec::new(),
             downloads_group_by: None,
@@ -511,6 +524,7 @@ impl Preferences {
         self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
+        replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
         let icon_size = update
             .sidebar_icon_size
             .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
@@ -570,6 +584,7 @@ impl Preferences {
         replace_if_some(&mut self.per_folder_views, update.per_folder_views);
         replace_if_some(&mut self.selection_marker, update.selection_marker);
         replace_if_some(&mut self.expandable_folders, update.expandable_folders);
+        replace_if_some(&mut self.compact_density, update.compact_density);
         if let Some(defaults) = &update.view_defaults {
             self.view_defaults = Some(defaults.clone());
         }
@@ -696,6 +711,9 @@ pub struct PreferencesUpdate {
     pub desktop_font: Option<bool>,
     /// Hide or show the navigation pane.
     pub hide_sidebar: Option<bool>,
+    /// Hide the navigation pane's expand arrows until it is pointed at, or
+    /// always show them.
+    pub hide_expand_arrows: Option<bool>,
     /// New sidebar icon size; one of [`SIDEBAR_ICON_SIZES`] or ignored.
     pub sidebar_icon_size: Option<u32>,
     /// Replaces the hidden sidebar sections; up to 16 short ASCII keys,
@@ -725,6 +743,8 @@ pub struct PreferencesUpdate {
     pub selection_marker: Option<bool>,
     /// Let folders expand in place in the details view.
     pub expandable_folders: Option<bool>,
+    /// Turn Compact view on or off.
+    pub compact_density: Option<bool>,
     /// Replaces the shared display style.
     pub view_defaults: Option<ViewProperties>,
     /// Replaces the folders' own styles; read from the file only, as
@@ -781,6 +801,7 @@ impl PreferencesUpdate {
             enabled_service_actions: values.get("enabledServiceActions").and_then(read_keys),
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
+            hide_expand_arrows: flag("hideExpandArrows"),
             sidebar_icon_size: values
                 .get("sidebarIconSize")
                 .and_then(Value::as_u64)
@@ -797,6 +818,7 @@ impl PreferencesUpdate {
             per_folder_views: flag("perFolderViews"),
             selection_marker: flag("selectionMarker"),
             expandable_folders: flag("expandableFolders"),
+            compact_density: flag("compactView"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
             folder_views: values.get("folderViews").and_then(read_folder_views),
             downloads_group_by: values
@@ -1139,5 +1161,54 @@ mod tests {
             (update.theme, update.view, update.context_menu),
             (None, None, None)
         );
+    }
+
+    /// Compact view is off by default and not stored then; once on it is
+    /// saved as `compactView` and read back, and turning it off again
+    /// takes the key away.
+    ///
+    /// parity: VIEW-067
+    #[test]
+    fn compact_view_is_off_by_default_and_stored_only_when_on() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.compact_density);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("compactView").is_none(), "not stored while off");
+
+        let on = PreferencesUpdate::from_json(&json!({ "compactView": true })).expect("a valid preference");
+        preferences.apply(&on);
+        assert!(preferences.compact_density);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["compactView"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.compact_density, Some(true));
+
+        preferences.apply(&PreferencesUpdate {
+            compact_density: Some(false),
+            ..PreferencesUpdate::default()
+        });
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("compactView").is_none(), "off again, not stored");
+    }
+
+    /// The expand arrows are shown by default and the choice is not
+    /// stored then; hiding them is saved as `hideExpandArrows` and read
+    /// back.
+    ///
+    /// parity: SIDE-032
+    #[test]
+    fn expand_arrows_are_shown_by_default_and_hiding_them_is_stored() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.hide_expand_arrows);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("hideExpandArrows").is_none(), "not stored while shown");
+
+        let hide =
+            PreferencesUpdate::from_json(&json!({ "hideExpandArrows": true })).expect("a valid preference");
+        preferences.apply(&hide);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["hideExpandArrows"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.hide_expand_arrows, Some(true));
     }
 }

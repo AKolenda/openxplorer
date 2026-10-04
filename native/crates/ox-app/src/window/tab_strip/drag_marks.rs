@@ -15,6 +15,7 @@ use gtk::subclass::prelude::*;
 use super::{tab_icon, TabStrip};
 use crate::window::menu_popover::MenuEntry;
 use crate::window::session::TabId;
+use crate::window::widget_tree::toggle_class;
 
 /// The strip's class while a tab drag is over it (`.tabs.tab-drop-active`).
 const STRIP_DROP_CLASS: &str = "tab-drop-active";
@@ -50,15 +51,6 @@ impl TabInsertion {
     /// Before `tab`, or at the end without one.
     pub(in crate::window) fn before(tab: Option<TabId>) -> Self {
         tab.map_or(TabInsertion::AtEnd, TabInsertion::Before)
-    }
-}
-
-/// Adds `class` to `widget` when `shown`, and removes it otherwise.
-fn toggle_class(widget: &impl IsA<gtk::Widget>, class: &str, shown: bool) {
-    if shown {
-        widget.add_css_class(class);
-    } else {
-        widget.remove_css_class(class);
     }
 }
 

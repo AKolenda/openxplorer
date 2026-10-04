@@ -294,6 +294,14 @@ mod imp {
 
         fn dispose(&self) {
             self.obj().cancel_resize_report();
+            // The rows go first, while every column and header is still
+            // there to take its cells back: the column view lets go of
+            // its columns only when it is finalized, which may come later
+            // than its window (a task holding the window ends after it
+            // closed), and GTK 4.22 was seen to crash there removing a
+            // column's cells.
+            self.column_view.set_header_factory(None::<&gtk::ListItemFactory>);
+            self.column_view.set_model(None::<&gtk::SelectionModel>);
             self.scroller.unparent();
         }
     }

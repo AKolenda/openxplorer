@@ -1,5 +1,24 @@
 # Unreleased
 
+- Holding Shift while clicking Delete, in the command bar, the right-click
+  menu or the folder tree's menu, deletes permanently after asking, as in
+  Windows Explorer. Before, only the Shift+Delete key did.
+- The note at the bottom of the Details pane ("Select an item to see its
+  properties…") uses the pane's whole width instead of a narrow column.
+- Compact view, as in Windows 11: View > Compact view, and the same switch
+  in Settings > Appearance > Files and folders, draws the Details rows and
+  the navigation pane's rows closer together, so more items fit. Off by
+  default. (Not the List layout, which Dolphin calls "Compact".)
+- The arrows beside This PC and Network in the sidebar now collapse and
+  expand those sections, as in Windows, with their own highlight; Left
+  and Right on the section's row do the same from the keyboard. Clicking
+  the name still opens the place. While the open place is inside a
+  collapsed section, the section's row is highlighted.
+- Settings > Appearance > Layout > "Hide expand arrows", as in Windows:
+  the navigation pane's arrows (This PC, Network and the folder tree)
+  show only while the pointer is over the pane or keyboard focus is in
+  it. The arrows show by default. The file list's folder arrows stay
+  with Settings > Appearance > Files and folders > "Expandable folders".
 - Group by, as in Windows Explorer: Sort > Group by groups a folder apart
   from its sort, so a folder grouped by date modified can be sorted by name
   within each group. The choices are Name (A - H, I - P, Q - Z), Date
