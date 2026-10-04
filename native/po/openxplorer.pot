@@ -3865,6 +3865,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/extract_into.rs
+msgid "Added {added} of {offered} items to {name}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/extract_into.rs
 msgid "Could not remove the extraction's temporary folder: {error}"
 msgstr ""
 

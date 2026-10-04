@@ -182,7 +182,9 @@ impl BrowserWindow {
 
     /// Extracts into a private folder inside the chosen one, then moves
     /// the items in with the name-conflict question. Returns the folder
-    /// to show and the message, or `None` when the user cancelled.
+    /// to show and the message, or `None` when the user cancelled. The
+    /// message counts the extracted files only when every top-level item
+    /// was moved in; otherwise it says how many were.
     async fn extract_into_existing_folder(
         &self,
         archive: &ArchiveTarget,
@@ -204,23 +206,35 @@ impl BrowserWindow {
         let items = gio::spawn_blocking(move || children_of(&listed))
             .await
             .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
-        let moved = match items {
-            Ok(uris) if uris.is_empty() => Some(()),
-            Ok(uris) => self
-                .transfer_without_undo(IncomingItems {
-                    mode: TransferMode::Move,
-                    uris,
-                    destination_folder: target.clone(),
-                })
-                .await
-                .map(|_| ()),
+        let uris = match items {
+            Ok(uris) => uris,
             Err(error) => {
                 self.discard_private_folder(staging).await;
                 return Err(error.to_string());
             }
         };
+        let offered = uris.len();
+        let added = if uris.is_empty() {
+            Some(0)
+        } else {
+            self.transfer_without_undo(IncomingItems {
+                mode: TransferMode::Move,
+                uris,
+                destination_folder: target.clone(),
+            })
+            .await
+            .map(|outcome| outcome.result.done.len())
+        };
         self.discard_private_folder(staging).await;
-        Ok(moved.map(|()| (target.clone(), existing_folder_text(&extracted, &target))))
+        let name = last_name(&target).unwrap_or_else(|| target.clone());
+        Ok(added.map(|added| {
+            let text = if added == offered {
+                extraction_success_text(&ExtractedFolder { name, ..extracted })
+            } else {
+                partly_added_text(added, offered, &name)
+            };
+            (target, text)
+        }))
     }
 
     /// Removes the private folder of an extraction into an existing
@@ -290,13 +304,16 @@ impl BrowserWindow {
     }
 }
 
-/// "Extracted 63 files into Downloads." for an extraction into the
-/// existing folder `target`.
-fn existing_folder_text(extracted: &ExtractedFolder, target: &str) -> String {
-    let name = last_name(target).unwrap_or_else(|| target.to_owned());
-    let folder = ExtractedFolder {
-        name,
-        ..extracted.clone()
-    };
-    extraction_success_text(&folder)
+/// "Added 40 of 63 items to Downloads.": an extraction into the existing
+/// folder `name` whose move skipped, failed or was stopped for some of the
+/// archive's top-level items.
+fn partly_added_text(added: usize, offered: usize, name: &str) -> String {
+    ox_core::i18n::format_message(
+        "Added {added} of {offered} items to {name}.",
+        &[
+            ("added", &added.to_string()),
+            ("offered", &offered.to_string()),
+            ("name", name),
+        ],
+    )
 }

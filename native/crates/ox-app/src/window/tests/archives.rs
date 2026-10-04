@@ -289,7 +289,7 @@ fn extract_refuses_an_empty_folder_and_keeps_the_dialog_open() {
 /// replaced only after asking; a missing folder is created with its
 /// parents, and a lone folder of the same name is not nested.
 ///
-/// parity: ARC-009, ARC-011
+/// parity: ARC-009, ARC-011, ARC-012
 #[gtk::test]
 fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
     let fixture = fixture_with_zip();
@@ -316,7 +316,7 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
     });
     super::file_ops_support::open_dialog(&test).press("OK");
     wait_until("the message", || {
-        test.window.shown_message() == format!("Extracted 2 files into {}.", "Example projects")
+        test.window.shown_message() == "Added 1 of 2 items to Example projects."
     });
     assert_eq!(
         fs::read(fixture.path("readme.txt")).expect("kept"),
@@ -343,6 +343,30 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
         !fixture.path("Bundle").exists(),
         "no folder named after the archive"
     );
+}
+
+/// An extraction into an existing folder that takes in every item counts
+/// the extracted files, as one into a new folder does.
+///
+/// parity: ARC-009, ARC-011, ARC-012
+#[gtk::test]
+fn extract_all_into_an_existing_folder_counts_its_files_when_nothing_is_left_out() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.wait_for_dialog("the Extract dialog");
+    wait_until("the check", || {
+        texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+    });
+    descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.path("Documents").display().to_string());
+    press(&frame, "Extract");
+
+    wait_until("the message", || {
+        test.window.shown_message() == "Extracted 2 files into Documents."
+    });
+    assert!(fixture.path("Documents/Docs/a.txt").exists());
+    assert!(fixture.path("Documents/readme.txt").exists());
 }
 
 /// parity: ARC-009
