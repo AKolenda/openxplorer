@@ -1915,7 +1915,7 @@ msgid "The app, menus, and network sign-in use the same theme."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "The arrows next to folders in the navigation pane. Right and Left still open and close folders."
+msgid "The arrows next to folders in the navigation pane. Right and Left still open and close folders. A folder tree that is already open may keep its arrows until it shows another folder."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs

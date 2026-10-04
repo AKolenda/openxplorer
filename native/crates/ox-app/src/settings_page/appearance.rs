@@ -57,7 +57,7 @@ const RIGHT_CLICK_MENU: RowText = RowText {
 const HIDE_TREE_ARROWS: RowText = RowText {
     title: "Hide the folder tree's expand arrows",
     description:
-        "The arrows next to folders in the navigation pane. Right and Left still open and close folders.",
+        "The arrows next to folders in the navigation pane. Right and Left still open and close folders. A folder tree that is already open may keep its arrows until it shows another folder.",
     keywords: "chevron expander triangle sidebar navigation pane tree folders",
 };
 
