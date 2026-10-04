@@ -51,9 +51,9 @@ use crate::locations::Page;
 /// explorer's.
 const DEFAULT_SIZE: (i32, i32) = (980, 640);
 
-/// The window commands that make no sense while choosing a file: more tabs
-/// or windows, and Settings.
-const DISABLED_ACTIONS: [WindowAction; 12] = [
+/// The window commands that make no sense while choosing a file: more tabs,
+/// windows or panes, and Settings.
+const DISABLED_ACTIONS: [WindowAction; 14] = [
     WindowAction::NewTab,
     WindowAction::OpenTab,
     WindowAction::OpenTabBackground,
@@ -65,7 +65,9 @@ const DISABLED_ACTIONS: [WindowAction; 12] = [
     WindowAction::MoveTabToWindow,
     WindowAction::Settings,
     WindowAction::DefaultFileExplorer,
+    WindowAction::OpenFileLocationInTab,
     WindowAction::OpenFileLocationInWindow,
+    WindowAction::SplitView,
 ];
 
 /// Shown when the File name box names nothing that exists.
@@ -1794,6 +1796,35 @@ mod tests {
             test.names().contains(&"plan.txt".to_owned())
         });
         assert!(answer.borrow().is_none(), "letter.odt is not sent");
+    }
+
+    /// Nothing opens another tab, window or pane from a dialog: a search
+    /// result's folder opens in the dialog, but not in a new tab or
+    /// window, and Split is off.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_dialog_opens_no_other_tab_window_or_pane() {
+        let fixture = Fixture::empty();
+        fixture.write("letter.odt");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        let window = &test.window;
+        test.start_search_cache();
+        window.search_box().entry().set_text("letter");
+        wait_until("the search's result", || {
+            window.is_searching() && test.names() == ["letter.odt"]
+        });
+        // Selecting a result offers the location actions again.
+        window.folder_model().select_only(0);
+        settle();
+
+        let enabled = |name: &str| window.lookup_action(name).expect("the action").is_enabled();
+        assert!(enabled("open-file-location"), "the result's folder opens here");
+        assert!(!enabled("open-file-location-in-tab"), "no second tab");
+        assert!(!enabled("open-file-location-in-window"), "no new window");
+        assert!(!enabled("split-view"), "no second pane");
     }
 
     /// Alt+Up works from the File name box, where focus starts in Save;
