@@ -6880,7 +6880,7 @@ bridge = ["operate"]
 dolphin = "deletefile: Shift+Delete; Shift+Delete (KStandardAction::deleteFile)"
 gnome = "Nautilus Shift+Delete"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (shift_delete_deletes_permanently_after_its_own_confirmation); native/crates/ox-core/src/ops/delete_plan.rs words the confirmation."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (shift_delete_deletes_permanently_after_its_own_confirmation); native/crates/ox-core/src/ops/delete_plan.rs words the confirmation. As in Windows Explorer, Delete clicked with Shift held, in the command bar, the right-click menu or the folder tree's menu, deletes permanently after the same confirmation (shift_clicking_delete_in_the_bar_deletes_permanently_after_asking, shift_choosing_delete_in_the_right_click_menu_asks_to_delete_permanently, shift_with_the_folder_trees_move_to_trash_asks_to_delete_permanently; without Shift, clicking_delete_in_the_bar_without_shift_moves_to_the_trash)."
 
 [[feature]]
 id = "OPS-017"

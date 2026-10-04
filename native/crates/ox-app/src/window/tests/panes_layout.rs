@@ -115,6 +115,29 @@ fn the_details_pane_spaces_its_parts_as_the_current_app() {
     );
 }
 
+/// The note at the bottom of the pane wraps across the pane's width, not
+/// in a narrow column beside its glyph.
+#[gtk::test]
+fn the_details_note_fills_the_pane_width() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let pane = test.window.details_pane();
+    let preview = bounds(
+        &test,
+        descendants::<gtk::CenterBox>(pane).first().expect("the preview"),
+    );
+    let note = descendants::<gtk::Box>(pane)
+        .into_iter()
+        .find(|row| row.has_css_class("detail-note"))
+        .expect("the note");
+    let label = descendants::<gtk::Label>(&note).remove(0);
+    let text = bounds(&test, &label);
+    assert!(
+        preview.right() - text.right() <= 12,
+        "the note reaches the right side: {text:?} in {preview:?}"
+    );
+}
+
 /// parity: VIEW-006
 #[gtk::test]
 fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted() {
