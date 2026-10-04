@@ -183,6 +183,7 @@ impl BrowserWindow {
         }
         self.render_landing_with(&places);
         self.follow_full_path_preference();
+        self.follow_compact_density_preference();
         self.render_title();
         self.render_tabs();
         self.update_details_pane();

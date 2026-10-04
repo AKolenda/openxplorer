@@ -383,6 +383,11 @@ pub struct Preferences {
     /// `ExpandableFolders`). Stored only when off.
     #[serde(skip_serializing_if = "is_true")]
     pub expandable_folders: bool,
+    /// Windows 11's Compact view: the file list's and the navigation
+    /// pane's rows stand closer, so more items fit. Off by default, as in
+    /// Windows. Stored as `compactView`, only when on.
+    #[serde(rename = "compactView", skip_serializing_if = "std::ops::Not::not")]
+    pub compact_density: bool,
     /// The display style of every folder without its own, once the user
     /// changed it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -456,6 +461,7 @@ impl Default for Preferences {
             per_folder_views: false,
             selection_marker: true,
             expandable_folders: true,
+            compact_density: false,
             view_defaults: None,
             folder_views: Vec::new(),
         }
@@ -570,6 +576,7 @@ impl Preferences {
         replace_if_some(&mut self.per_folder_views, update.per_folder_views);
         replace_if_some(&mut self.selection_marker, update.selection_marker);
         replace_if_some(&mut self.expandable_folders, update.expandable_folders);
+        replace_if_some(&mut self.compact_density, update.compact_density);
         if let Some(defaults) = &update.view_defaults {
             self.view_defaults = Some(defaults.clone());
         }
@@ -709,6 +716,8 @@ pub struct PreferencesUpdate {
     pub selection_marker: Option<bool>,
     /// Let folders expand in place in the details view.
     pub expandable_folders: Option<bool>,
+    /// Turn Compact view on or off.
+    pub compact_density: Option<bool>,
     /// Replaces the shared display style.
     pub view_defaults: Option<ViewProperties>,
     /// Replaces the folders' own styles; read from the file only, as
@@ -780,6 +789,7 @@ impl PreferencesUpdate {
             per_folder_views: flag("perFolderViews"),
             selection_marker: flag("selectionMarker"),
             expandable_folders: flag("expandableFolders"),
+            compact_density: flag("compactView"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
             folder_views: values.get("folderViews").and_then(read_folder_views),
         })
@@ -1079,5 +1089,33 @@ mod tests {
             (update.theme, update.view, update.context_menu),
             (None, None, None)
         );
+    }
+
+    /// Compact view is off by default and not stored then; once on it is
+    /// saved as `compactView` and read back, and turning it off again
+    /// takes the key away.
+    ///
+    /// parity: VIEW-067
+    #[test]
+    fn compact_view_is_off_by_default_and_stored_only_when_on() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.compact_density);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("compactView").is_none(), "not stored while off");
+
+        let on = PreferencesUpdate::from_json(&json!({ "compactView": true })).expect("a valid preference");
+        preferences.apply(&on);
+        assert!(preferences.compact_density);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["compactView"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.compact_density, Some(true));
+
+        preferences.apply(&PreferencesUpdate {
+            compact_density: Some(false),
+            ..PreferencesUpdate::default()
+        });
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("compactView").is_none(), "off again, not stored");
     }
 }

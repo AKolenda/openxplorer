@@ -4200,6 +4200,22 @@ dolphin = "ContentDisplaySettings::UsePermissionsFormat (Settings › View › C
 native = "todo"
 
 [[feature]]
+id = "VIEW-067"
+area = "VIEW"
+title = "Compact view: closer rows in the file list and the navigation pane"
+behaviour = "View › Compact view, and the same switch in Settings › Appearance › Files and folders, draws the Details rows and the navigation pane's rows (places and the folder tree) closer together, as Windows 11 File Explorer's Compact view does, so more items fit; the Details and places rows still grow with the text size, and the folder tree's keep a fixed minimum height, as they do outside Compact view. Off by default, as in Windows. The choice is saved and every open window follows it at once."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "docs/interface.md (Choose a folder view)",
+]
+python_tests = []
+bridge = ["preferences"]
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/compact_density.rs (compact_view_draws_closer_rows_and_is_saved: Details rows 24 px and sidebar rows 26 px at 100% instead of 36 and 35, saved as compactView, back to the usual heights when off; a_compact_view_saved_elsewhere_is_taken_up_at_once); native/crates/ox-app/src/settings_page/tests.rs (the_compact_view_switch_saves_the_choice); native/crates/ox-app/src/theme/fonts.rs (compact_view_rows_are_closer_and_grow_with_the_text; the_selection_bar_stays_centred_on_the_sidebar_row: the selected row's accent bar 5 px down a 26 px row); native/crates/ox-core/src/settings/preferences.rs (compact_view_is_off_by_default_and_stored_only_when_on). Inside the app this is the compact density (WindowAction::CompactDensity, Preferences::compact_density), as compact already names the List layout; the window class is compact-density; the folder tree's rows are 24 px in resources/skin/sidebar.css. The Icons and List layouts keep their spacing: the List layout counts its rows per column from its row height in code."
+
+[[feature]]
 id = "SEL-001"
 area = "SEL"
 title = "Mouse selection: click, Ctrl+click, Shift+click"

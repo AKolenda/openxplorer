@@ -472,6 +472,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Preview videos",
             "Preview documents and other files",
             "Show the number of items in folders",
+            "Compact view",
             "Relative dates",
             "Remember each folder's view",
             "Selection marker",
@@ -688,6 +689,25 @@ fn the_expand_arrows_switch_saves_the_choice() {
     });
     wait_until("the window to follow", || {
         settings.test.window.hides_expand_arrows()
+    });
+}
+
+/// The Compact view switch is off by default and saves the choice
+/// (VIEW-067), which the open window then takes up.
+///
+/// parity: VIEW-067
+#[gtk::test]
+fn the_compact_view_switch_saves_the_choice() {
+    let settings = SettingsTest::open();
+    let switch = switch_of(&settings.row("Compact view"));
+    assert!(!switch.is_active(), "off by default");
+
+    switch.set_active(true);
+    wait_until("Compact view to be saved", || {
+        settings.saved_preferences().compact_density
+    });
+    wait_until("the window to follow", || {
+        settings.test.window.shows_compact_density()
     });
 }
 
