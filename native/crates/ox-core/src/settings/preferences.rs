@@ -488,6 +488,16 @@ impl Preferences {
         }
     }
 
+    /// The questions asked before trashing, deleting, emptying the Trash,
+    /// closing several tabs and running programs (SET-010).
+    fn apply_confirmations(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(&mut self.confirm_trash, update.confirm_trash);
+        replace_if_some(&mut self.confirm_delete, update.confirm_delete);
+        replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
+        replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
+        replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
+    }
+
     /// Applies every valid value in `update` and silently ignores the rest,
     /// exactly like `update_preferences` in the Python app. A present
     /// `column_widths` replaces all saved column widths.
@@ -516,11 +526,7 @@ impl Preferences {
             update.external_folders_in_new_window,
         );
         replace_if_some(&mut self.full_path_in_title, update.full_path_in_title);
-        replace_if_some(&mut self.confirm_trash, update.confirm_trash);
-        replace_if_some(&mut self.confirm_delete, update.confirm_delete);
-        replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
-        replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
-        replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
+        self.apply_confirmations(update);
         self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
