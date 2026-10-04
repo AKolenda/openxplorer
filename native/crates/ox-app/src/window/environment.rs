@@ -98,7 +98,6 @@ impl BrowserWindow {
         self.apply_view_options();
         // Settings may have changed how items are shown.
         self.follow_item_preferences();
-        self.follow_compact_view_preference();
         if self.current_uri().as_deref() == Some(ox_core::location::RECENT_LOCATIONS_URI) {
             self.refresh();
         }
@@ -183,6 +182,7 @@ impl BrowserWindow {
         }
         self.render_landing_with(&places);
         self.follow_full_path_preference();
+        self.follow_compact_density_preference();
         self.render_title();
         self.render_tabs();
         self.update_details_pane();

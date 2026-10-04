@@ -140,8 +140,8 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 }
 
 /// The View menu: the views (Details, List and Explorer's four icon
-/// sizes), the hidden-files, details-pane and navigation-pane toggles,
-/// Dolphin's display style dialog, then the text size.
+/// sizes), the hidden-files toggle, the pane toggles, Compact view and the
+/// terminal, Dolphin's display style dialog, then the text size.
 pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details);
     let compact = view_item(&gettext("List"), Icon::Table, FolderView::Compact);
@@ -156,13 +156,6 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
         MenuItem::toggle(&gettext("Show hidden files"), Icon::Eye, WindowAction::Hidden)
             .with_shortcut("Ctrl+H")
             .into(),
-        // With the panes and options Windows 11 lists under View > Show.
-        MenuItem::toggle(
-            &gettext("Compact view"),
-            Icon::TextBulletList,
-            WindowAction::CompactView,
-        )
-        .into(),
         MenuItem::toggle(
             &gettext("Details pane"),
             Icon::PanelRight,
@@ -186,6 +179,13 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
             WindowAction::FolderTree,
         )
         .with_shortcut("F7")
+        .into(),
+        // After the panes, as Windows 11 lists it under View > Show.
+        MenuItem::toggle(
+            &gettext("Compact view"),
+            Icon::TextBulletList,
+            WindowAction::CompactDensity,
+        )
         .into(),
         // Dolphin's Terminal panel embeds Konsole; VTE for GTK 4 is not
         // available everywhere the app ships, so this opens the desktop's

@@ -60,7 +60,7 @@ mod caption_buttons;
 mod card_grid;
 mod closing;
 mod command_bar;
-mod compact_view;
+mod compact_density;
 mod compress_dialog;
 mod connections;
 mod context_menu;

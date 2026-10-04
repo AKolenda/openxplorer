@@ -268,11 +268,6 @@ pub struct Preferences {
     /// two, so the Python app's file keeps its layout.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub show_full_path: bool,
-    /// Windows 11's Compact view: the file list's and the sidebar's rows
-    /// stand closer, so more items fit. Off by default, as in Windows, and
-    /// stored only when on.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub compact_view: bool,
     /// New windows show the address as editable text instead of crumbs
     /// (Dolphin's `EditableUrl`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -383,6 +378,11 @@ pub struct Preferences {
     /// `ExpandableFolders`). Stored only when off.
     #[serde(skip_serializing_if = "is_true")]
     pub expandable_folders: bool,
+    /// Windows 11's Compact view: the file list's and the navigation
+    /// pane's rows stand closer, so more items fit. Off by default, as in
+    /// Windows. Stored as `compactView`, only when on.
+    #[serde(rename = "compactView", skip_serializing_if = "std::ops::Not::not")]
+    pub compact_density: bool,
     /// The display style of every folder without its own, once the user
     /// changed it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -428,7 +428,6 @@ impl Default for Preferences {
             column_widths: None,
             window_size: None,
             show_full_path: false,
-            compact_view: false,
             editable_location: false,
             external_folders_in_new_window: false,
             browse_archives: true,
@@ -456,6 +455,7 @@ impl Default for Preferences {
             per_folder_views: false,
             selection_marker: true,
             expandable_folders: true,
+            compact_density: false,
             view_defaults: None,
             folder_views: Vec::new(),
         }
@@ -496,7 +496,6 @@ impl Preferences {
         replace_if_some(&mut self.network_interval, network_interval);
         replace_if_some(&mut self.text_size, text_size);
         replace_if_some(&mut self.show_full_path, update.show_full_path);
-        replace_if_some(&mut self.compact_view, update.compact_view);
         replace_if_some(&mut self.editable_location, update.editable_location);
         replace_if_some(
             &mut self.external_folders_in_new_window,
@@ -570,6 +569,7 @@ impl Preferences {
         replace_if_some(&mut self.per_folder_views, update.per_folder_views);
         replace_if_some(&mut self.selection_marker, update.selection_marker);
         replace_if_some(&mut self.expandable_folders, update.expandable_folders);
+        replace_if_some(&mut self.compact_density, update.compact_density);
         if let Some(defaults) = &update.view_defaults {
             self.view_defaults = Some(defaults.clone());
         }
@@ -650,8 +650,6 @@ pub struct PreferencesUpdate {
     pub window_size: Option<WindowSize>,
     /// Show the full path in the address bar, or start at the closest place.
     pub show_full_path: Option<bool>,
-    /// Compact view on or off.
-    pub compact_view: Option<bool>,
     /// Open new windows with an editable address.
     pub editable_location: Option<bool>,
     /// Open folders from other apps in a new window, or in a new tab.
@@ -709,6 +707,8 @@ pub struct PreferencesUpdate {
     pub selection_marker: Option<bool>,
     /// Let folders expand in place in the details view.
     pub expandable_folders: Option<bool>,
+    /// Turn Compact view on or off.
+    pub compact_density: Option<bool>,
     /// Replaces the shared display style.
     pub view_defaults: Option<ViewProperties>,
     /// Replaces the folders' own styles; read from the file only, as
@@ -747,7 +747,6 @@ impl PreferencesUpdate {
             network_interval: values.get("networkInterval").and_then(read_network_interval),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
             show_full_path: flag("showFullPath"),
-            compact_view: flag("compactView"),
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
             browse_archives: flag("browseArchives"),
@@ -780,6 +779,7 @@ impl PreferencesUpdate {
             per_folder_views: flag("perFolderViews"),
             selection_marker: flag("selectionMarker"),
             expandable_folders: flag("expandableFolders"),
+            compact_density: flag("compactView"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
             folder_views: values.get("folderViews").and_then(read_folder_views),
         })
@@ -875,34 +875,6 @@ mod tests {
         assert!(preferences.auto_index);
         assert!(preferences.show_details_pane);
         assert!(!preferences.show_hidden);
-    }
-
-    /// Compact view is off by default and not stored then; once on it is
-    /// saved as `compactView` and read back, and turning it off again
-    /// takes the key away.
-    ///
-    /// parity: VIEW-067
-    #[test]
-    fn compact_view_is_off_by_default_and_stored_only_when_on() {
-        let mut preferences = Preferences::default();
-        assert!(!preferences.compact_view);
-        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
-        assert!(stored.get("compactView").is_none(), "not stored while off");
-
-        let on = PreferencesUpdate::from_json(&json!({ "compactView": true })).expect("a valid preference");
-        preferences.apply(&on);
-        assert!(preferences.compact_view);
-        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
-        assert_eq!(stored["compactView"], json!(true));
-        let read = PreferencesUpdate::from_json(&stored).expect("read back");
-        assert_eq!(read.compact_view, Some(true));
-
-        preferences.apply(&PreferencesUpdate {
-            compact_view: Some(false),
-            ..PreferencesUpdate::default()
-        });
-        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
-        assert!(stored.get("compactView").is_none(), "off again, not stored");
     }
 
     /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`.
@@ -1086,5 +1058,33 @@ mod tests {
             (update.theme, update.view, update.context_menu),
             (None, None, None)
         );
+    }
+
+    /// Compact view is off by default and not stored then; once on it is
+    /// saved as `compactView` and read back, and turning it off again
+    /// takes the key away.
+    ///
+    /// parity: VIEW-067
+    #[test]
+    fn compact_view_is_off_by_default_and_stored_only_when_on() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.compact_density);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("compactView").is_none(), "not stored while off");
+
+        let on = PreferencesUpdate::from_json(&json!({ "compactView": true })).expect("a valid preference");
+        preferences.apply(&on);
+        assert!(preferences.compact_density);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["compactView"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.compact_density, Some(true));
+
+        preferences.apply(&PreferencesUpdate {
+            compact_density: Some(false),
+            ..PreferencesUpdate::default()
+        });
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("compactView").is_none(), "off again, not stored");
     }
 }

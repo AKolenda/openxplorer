@@ -81,7 +81,7 @@ pub(crate) enum WindowAction {
     ShowFullPath,
     /// Windows 11's Compact view: closer rows in the file list and the
     /// sidebar (VIEW-067).
-    CompactView,
+    CompactDensity,
     /// Opens the subfolder menu of a crumb; the target is the folder, the
     /// subfolder shown in bold and the first one listed (NAV-020).
     CrumbSubfolders,
@@ -456,7 +456,7 @@ impl WindowAction {
             WindowAction::PasteAddress => "paste-address",
             WindowAction::EditableLocation => "editable-location",
             WindowAction::ShowFullPath => "show-full-path",
-            WindowAction::CompactView => "compact-view",
+            WindowAction::CompactDensity => "compact-density",
             WindowAction::CrumbSubfolders => "crumb-subfolders",
             WindowAction::CrumbSibling => "crumb-sibling",
             WindowAction::Search => "search",

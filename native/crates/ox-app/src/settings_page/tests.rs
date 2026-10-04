@@ -684,10 +684,10 @@ fn the_compact_view_switch_saves_the_choice() {
 
     switch.set_active(true);
     wait_until("Compact view to be saved", || {
-        settings.saved_preferences().compact_view
+        settings.saved_preferences().compact_density
     });
     wait_until("the window to follow", || {
-        settings.test.window.shows_compact_view()
+        settings.test.window.shows_compact_density()
     });
 }
 
