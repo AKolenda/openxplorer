@@ -316,12 +316,12 @@ impl BrowserWindow {
     }
 
     /// Escape, Backspace and Space, which act on a typed prefix first:
-    /// Escape clears the prefix, and only without one the selection;
-    /// Backspace erases a typed character, and only without a prefix goes
-    /// back, as in Dolphin and Explorer (NAV-004), once the input method
-    /// did not take it for text it is composing; Space is prefix text, and
-    /// only without one selects the current item. `None` for every other
-    /// key.
+    /// Escape clears the prefix, and only without one closes Quick Look,
+    /// cancels a file dialog or clears the selection; Backspace erases a
+    /// typed character, and only without a prefix goes back, as in
+    /// Dolphin and Explorer (NAV-004), once the input method did not take
+    /// it for text it is composing; Space is prefix text, and only without
+    /// one selects the current item. `None` for every other key.
     fn prefix_editing_key(
         &self,
         controller: &gtk::EventControllerKey,

@@ -8,12 +8,15 @@
     file list.
   - Open dialogs have a File name box too; File name takes a path from the
     folder shown, `~/...` or a full path, and a folder typed there opens.
-  - Save adds the chosen type's extension to a name without one.
+  - Save adds the chosen type's extension to a name without one, Chrome's
+    types included; a name that ends in a dot is saved without one.
   - A file typed in the address bar is chosen instead of being opened in
-    another application.
+    another application; in a Save dialog, that file or one double-clicked
+    is replaced after asking.
   - Alt+Left, Alt+Right and Alt+Up work from the File name box.
-  - Ctrl+Q cancels the dialog instead of closing every window, and Ctrl+N
-    and Open file location in new window open no window from it.
+  - Ctrl+Q cancels the dialog instead of closing every window. Ctrl+N,
+    Open file location in new tab or new window, and Split view open
+    nothing from it.
   - A dialog for one file keeps one item selected.
   - Several files selected in an Open dialog for several are all chosen:
     File name lists them in quotes (`"a.txt" "b.txt"`), and a quoted list
