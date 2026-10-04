@@ -122,17 +122,13 @@ impl Picker {
         }
     }
 
-    /// The extension of the type chosen in the list: its first pattern
-    /// when that is a plain `*.ext`, as Windows adds it to a name saved
-    /// without one.
+    /// The extension of the type chosen in the list: that of its first
+    /// pattern that is a plain extension, as Windows adds it to a name
+    /// saved without one.
     fn chosen_extension(&self) -> Option<String> {
         let filter = self.request.filters.get(self.chosen_filter()?)?;
         filter.patterns.iter().find_map(|pattern| match pattern {
-            FilterPattern::Glob(glob) => {
-                let extension = glob.strip_prefix("*.")?;
-                (!extension.is_empty() && extension.chars().all(char::is_alphanumeric))
-                    .then(|| extension.to_owned())
-            }
+            FilterPattern::Glob(glob) => glob_extension(glob),
             FilterPattern::MimeType(_) => None,
         })
     }
@@ -185,9 +181,43 @@ fn typed_path(typed: &str, folder: &Path) -> Option<PathBuf> {
     ox_core::location::typed_local_path(typed).map(|path| folder.join(path))
 }
 
-/// Whether `name` has an extension: a dot after its first character.
-fn has_extension(name: &str) -> bool {
-    name.char_indices().skip(1).any(|(_, c)| c == '.') && !name.ends_with('.')
+/// The extension a type's `glob` stands for: what follows `*.`, letters
+/// and digits in parts between dots (`*.txt`, `*.tar.gz`), where a class
+/// of one letter in both cases, as Chrome writes them (`*.[tT][xX][tT]`),
+/// is that letter. `None` for any other pattern.
+fn glob_extension(glob: &str) -> Option<String> {
+    let mut extension = String::new();
+    let mut rest = glob.strip_prefix("*.")?.chars();
+    while let Some(c) = rest.next() {
+        if c == '[' {
+            let (first, second) = (rest.next()?, rest.next()?);
+            let same_letter = first != second && first.to_lowercase().eq(second.to_lowercase());
+            if rest.next()? != ']' || !first.is_alphabetic() || !same_letter {
+                return None;
+            }
+            extension.extend(first.to_lowercase());
+        } else if c.is_alphanumeric() || c == '.' {
+            extension.push(c);
+        } else {
+            return None;
+        }
+    }
+    let plain = extension.split('.').all(|part| !part.is_empty());
+    plain.then_some(extension)
+}
+
+/// The name a Save dialog saves `written` as. As in Windows, a name
+/// without a dot gets the chosen type's `extension`, and a name that ends
+/// in a dot is saved without that dot and without an extension. A hidden
+/// file's name (`.bashrc`) is kept as written.
+fn saved_name(written: &str, extension: Option<String>) -> String {
+    if let Some(name) = written.strip_suffix('.') {
+        return name.to_owned();
+    }
+    match extension {
+        Some(extension) if !written.contains('.') => format!("{written}.{extension}"),
+        _ => written.to_owned(),
+    }
 }
 
 impl BrowserWindow {
@@ -467,6 +497,10 @@ impl BrowserWindow {
             return Ok(Vec::new());
         };
         let typed = name_box.text().trim().to_owned();
+        // Enter with no name does what the Save button, off then, does.
+        if typed.is_empty() {
+            return Ok(Vec::new());
+        }
         let shown = self.picking_folder().ok_or_else(not_local)?;
         let path = typed_path(&typed, &shown).ok_or_else(not_local)?;
         if path.is_dir() {
@@ -474,25 +508,27 @@ impl BrowserWindow {
             self.navigate_or_report(&gio::File::for_path(&path).uri());
             return Ok(Vec::new());
         }
+        let missing = |folder: &Path| {
+            ox_core::i18n::format_message(
+                "The folder “{folder}” does not exist.",
+                &[("folder", &folder.display().to_string())],
+            )
+        };
+        // A path that ends in a slash names a folder, never a file.
+        if typed.ends_with('/') {
+            return Err(missing(&path));
+        }
         let bad_name =
             || ox_core::i18n::format_message("“{name}” is not a valid file name.", &[("name", &typed)]);
         let folder = path.parent().map(Path::to_path_buf).ok_or_else(bad_name)?;
         if !folder.is_dir() {
-            return Err(ox_core::i18n::format_message(
-                "The folder “{folder}” does not exist.",
-                &[("folder", &folder.display().to_string())],
-            ));
+            return Err(missing(&folder));
         }
         let written = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let mut name = checked_name(&written).map_err(|_| bad_name())?;
-        if !has_extension(&name) {
-            if let Some(extension) = picker.chosen_extension() {
-                name = format!("{name}.{extension}");
-            }
-        }
+        let name = checked_name(&saved_name(&written, picker.chosen_extension())).map_err(|_| bad_name())?;
         let target = folder.join(&name);
         if target.is_dir() {
             name_box.set_text("");
@@ -1547,6 +1583,90 @@ mod tests {
             Some((0, 6)),
             "the name is selected without its extension"
         );
+    }
+
+    /// The filter list of one type, "Text", with `patterns`.
+    fn text_type(patterns: &[&str]) -> glib::Variant {
+        let patterns: Vec<(u32, String)> = patterns.iter().map(|glob| (0, (*glob).to_owned())).collect();
+        let text = ("Text".to_owned(), patterns).to_variant();
+        glib::Variant::array_from_iter_with_type(text.type_(), [text.clone()])
+    }
+
+    /// File name in a Save dialog, as Windows reads it: Enter with no name
+    /// does nothing, a path that ends in a slash names a folder, and a
+    /// pasted `file:` URI is a path. The type's extension is added from a
+    /// case-insensitive glob, as Chrome sends them.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_save_dialog_reads_file_name_as_windows_does() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("filters", text_type(&["*.[tT][xX][tT]"]))],
+        );
+        let window = &portal.test.window;
+        let name = window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+
+        name.set_text("");
+        name.emit_activate();
+        assert!(window.is_listed(), "the folder is not listed again");
+        assert!(answer.borrow().is_none());
+
+        name.set_text("New/");
+        name.emit_activate();
+        assert!(window.shown_message().contains("does not exist"));
+        assert!(answer.borrow().is_none(), "no New.txt in the folder shown");
+
+        name.set_text(&fixture.uri_of("draft"));
+        name.emit_activate();
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("draft.txt")]);
+    }
+
+    /// The extension a type's glob stands for, Chrome's case-insensitive
+    /// classes and several parts included; anything else has none.
+    #[test]
+    fn a_types_extension_comes_from_a_plain_glob() {
+        let extension = super::glob_extension;
+        assert_eq!(extension("*.txt").as_deref(), Some("txt"));
+        assert_eq!(extension("*.[tT][xX][tT]").as_deref(), Some("txt"));
+        assert_eq!(extension("*.[Mm][Pp]4").as_deref(), Some("mp4"));
+        assert_eq!(extension("*.tar.gz").as_deref(), Some("tar.gz"));
+        for other in [
+            "*",
+            "*.*",
+            "*.",
+            "*.[ab]",
+            "*.[tt]",
+            "*.[tT",
+            "*.t?t",
+            "*.tar..gz",
+            "notes.txt",
+        ] {
+            assert_eq!(extension(other), None, "{other}");
+        }
+    }
+
+    /// A Save dialog adds the type's extension to a name without a dot;
+    /// a trailing dot is dropped instead, and a hidden file's name kept.
+    #[test]
+    fn a_saved_name_gets_the_types_extension_as_in_windows() {
+        let saved = |written: &str| super::saved_name(written, Some("txt".to_owned()));
+        assert_eq!(saved("report"), "report.txt");
+        assert_eq!(saved("report."), "report");
+        assert_eq!(saved("notes.md"), "notes.md");
+        assert_eq!(saved(".bashrc"), ".bashrc");
+        assert_eq!(super::saved_name("report", None), "report");
     }
 
     /// Alt+Up works from the File name box, where focus starts in Save;
