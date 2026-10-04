@@ -149,20 +149,20 @@ paned.workspace > separator.keyboard-focus {
 }
 
 /* Settings > Appearance > Layout > Hide expand arrows (SIDE-032,
-   window/expand_arrows.rs), as Windows Explorer: the sidebar's chevrons
-   (This PC, Network, the folder tree) stay hidden until the pointer is
-   over the sidebar, then fade in; the file list's folder arrows stay
-   hidden, as Explorer's file list has none. Hidden arrows keep their
-   room, so nothing moves. Without animations GTK skips the fade. */
-window.hide-expand-arrows .sidebar .expand,
-window.hide-expand-arrows .folder-tree treeexpander expander {
+   window/expand_arrows.rs), as Windows Explorer's navigation pane: the
+   chevrons of This PC and Network and the folder tree's arrows stay
+   hidden until the pointer is over the pane or keyboard focus is in it,
+   then fade in. Hidden arrows keep their room, so nothing moves. Without
+   animations GTK skips the fade. The file list's folder arrows are the
+   Expandable folders switch's. */
+window.hide-expand-arrows .sidebar .side-expander,
+window.hide-expand-arrows .sidebar .folder-tree treeexpander expander {
   opacity: 0;
   transition: opacity 150ms ease-out;
 }
-window.hide-expand-arrows .sidebar:hover .expand,
-window.hide-expand-arrows .sidebar:hover .folder-tree treeexpander expander {
+window.hide-expand-arrows .sidebar:hover .side-expander,
+window.hide-expand-arrows .sidebar:hover .folder-tree treeexpander expander,
+window.hide-expand-arrows .sidebar:focus-within .side-expander,
+window.hide-expand-arrows .sidebar:focus-within .folder-tree treeexpander expander {
   opacity: 1;
-}
-window.hide-expand-arrows columnview.files .folder-expander {
-  opacity: 0;
 }

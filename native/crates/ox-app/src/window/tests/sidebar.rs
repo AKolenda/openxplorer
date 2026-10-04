@@ -22,7 +22,7 @@ use crate::window::sidebar::SidebarDropSpot;
 use crate::window::{gestures, WindowAction};
 
 /// The sidebar row labelled `label`.
-fn row_named(test: &TestWindow, label: &str) -> gtk::ListBoxRow {
+pub(super) fn row_named(test: &TestWindow, label: &str) -> gtk::ListBoxRow {
     let labels = test.window.sidebar().labels();
     let index = labels.iter().position(|shown| shown == label);
     let index = index.unwrap_or_else(|| panic!("{label} is in the sidebar: {labels:?}"));
@@ -82,60 +82,11 @@ fn quick_access_has_no_heading_and_this_pc_opens_from_its_name() {
 }
 
 /// The chevron button of the group head labelled `group`.
-fn section_chevron(test: &TestWindow, group: &str) -> gtk::Button {
+pub(super) fn section_chevron(test: &TestWindow, group: &str) -> gtk::Button {
     descendants::<gtk::Button>(&row_named(test, group))
         .into_iter()
         .find(|button| button.has_css_class("side-expander"))
         .unwrap_or_else(|| panic!("{group} has a chevron button"))
-}
-
-/// The labels of the sidebar rows shown, hidden ones left out.
-fn shown_labels(test: &TestWindow) -> Vec<String> {
-    let sidebar = test.window.sidebar();
-    let labels = sidebar.labels();
-    descendants::<gtk::ListBoxRow>(sidebar.list())
-        .into_iter()
-        .zip(labels)
-        .filter(|(row, _)| row.is_visible())
-        .map(|(_, label)| label)
-        .collect()
-}
-
-/// Clicking This PC's chevron collapses the section, as Windows
-/// Explorer's navigation pane does: its drives are hidden and the chevron
-/// points right, while the window stays where it was. Clicking it again
-/// shows them. The collapse holds when the sidebar's rows are rebuilt.
-///
-/// parity: SIDE-033
-#[gtk::test]
-fn the_this_pc_chevron_collapses_and_expands_its_section() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    let shown = || shown_labels(&test);
-    assert!(shown().contains(&"Local Disk".to_owned()));
-    let folder = test.window.current_uri();
-    let chevron = section_chevron(&test, "This PC");
-    assert!(!chevron.has_css_class("collapsed"));
-
-    chevron.emit_clicked();
-    wait_until("This PC to collapse", || {
-        !shown().contains(&"Local Disk".to_owned())
-    });
-    let chevron = section_chevron(&test, "This PC");
-    assert!(chevron.has_css_class("collapsed"), "the chevron points right");
-    assert!(shown().contains(&"This PC".to_owned()), "the head stays");
-    assert!(shown().contains(&"Network".to_owned()), "other sections stay");
-    assert_eq!(test.window.current_uri(), folder, "the chevron opens nothing");
-    assert!(test.window.sidebar().section_is_collapsed("thisPc"));
-
-    // Rows rebuilt (a drive coming or going) keep the section collapsed.
-    test.window.render_places();
-    wait_for_frames(&test.window, 2);
-    assert!(!shown().contains(&"Local Disk".to_owned()));
-
-    section_chevron(&test, "This PC").emit_clicked();
-    wait_until("This PC to expand", || shown().contains(&"Local Disk".to_owned()));
-    assert!(!section_chevron(&test, "This PC").has_css_class("collapsed"));
 }
 
 /// parity: SIDE-002

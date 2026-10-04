@@ -255,34 +255,40 @@ mod tests {
         }
     }
 
-    /// The rule that starts with `selector`, up to its closing brace.
-    fn rule_starting(selector: &str) -> &'static str {
-        let start = RULES
+    /// The rule in `code` that starts with `selector`, up to its closing
+    /// brace.
+    fn rule_starting<'a>(code: &'a str, selector: &str) -> &'a str {
+        let start = code
             .find(selector)
             .unwrap_or_else(|| panic!("a rule for {selector}"));
-        let end = RULES[start..].find('}').expect("the rule ends");
-        &RULES[start..start + end]
+        let end = code[start..].find('}').expect("the rule ends");
+        &code[start..start + end]
     }
 
-    /// "Hide expand arrows" (SIDE-032) hides the sidebar's chevrons and
-    /// the folder tree's arrows until the pointer is over the sidebar, as
-    /// Windows does, and the file list's folder arrows always.
+    /// "Hide expand arrows" (SIDE-032) hides the navigation pane's arrows,
+    /// the chevrons of This PC and Network and the folder tree's, until
+    /// the pointer is over the pane or keyboard focus is in it, as Windows
+    /// does. The file list's arrows are the Expandable folders switch's.
     ///
     /// parity: SIDE-032
     #[test]
-    fn the_skin_hides_every_kind_of_expand_arrow() {
-        let hidden = rule_starting("window.hide-expand-arrows .sidebar .expand,");
-        assert!(hidden.contains("window.hide-expand-arrows .folder-tree treeexpander expander {"));
+    fn the_skin_hides_the_navigation_panes_expand_arrows() {
+        let code = without_comments(RULES);
+        let hidden = rule_starting(&code, "window.hide-expand-arrows .sidebar .side-expander,");
+        assert!(hidden.contains("window.hide-expand-arrows .sidebar .folder-tree treeexpander expander {"));
         assert!(hidden.contains("opacity: 0;"));
-        let revealed = rule_starting("window.hide-expand-arrows .sidebar:hover .expand,");
-        assert!(revealed
-            .contains("window.hide-expand-arrows .sidebar:hover .folder-tree treeexpander expander {"));
+        let revealed = rule_starting(&code, "window.hide-expand-arrows .sidebar:hover .side-expander,");
+        for selector in [
+            "window.hide-expand-arrows .sidebar:hover .folder-tree treeexpander expander,",
+            "window.hide-expand-arrows .sidebar:focus-within .side-expander,",
+            "window.hide-expand-arrows .sidebar:focus-within .folder-tree treeexpander expander {",
+        ] {
+            assert!(revealed.contains(selector), "{selector}");
+        }
         assert!(revealed.contains("opacity: 1;"));
-        let list = rule_starting("window.hide-expand-arrows columnview.files .folder-expander {");
-        assert!(list.contains("opacity: 0;"));
         assert!(
-            !RULES.contains(":hover columnview.files .folder-expander"),
-            "the file list's arrows never come back"
+            !code.contains("window.hide-expand-arrows columnview"),
+            "the file list keeps its arrows"
         );
     }
 
@@ -292,7 +298,8 @@ mod tests {
     /// parity: SIDE-033
     #[test]
     fn the_section_chevrons_have_their_own_highlight() {
-        let hover = rule_starting("window.ox .sidebar button.side-expander:hover {");
+        let code = without_comments(RULES);
+        let hover = rule_starting(&code, "window.ox .sidebar button.side-expander:hover {");
         assert!(hover.contains("background-color: @ox_pressed;"));
     }
 }

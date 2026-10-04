@@ -653,11 +653,11 @@ msgstr ""
 msgid "Folder contents — type a filename prefix to select"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/cells/expander.rs crates/ox-app/src/window/sidebar/row.rs
+#: crates/ox-app/src/folder_view/cells/expander.rs
 msgid "Collapse"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/cells/expander.rs crates/ox-app/src/window/sidebar/row.rs
+#: crates/ox-app/src/folder_view/cells/expander.rs
 msgid "Expand"
 msgstr ""
 
@@ -1859,7 +1859,7 @@ msgid "update version release upgrade software updates install restart flatpak"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "As in Windows, the arrows beside This PC, Network and the folder tree show only while the pointer is over the navigation pane, and the file list shows none. Right and Left still open and close folders in place."
+msgid "As in Windows, the navigation pane's arrows (This PC, Network and the folder tree) show only while you point at the pane or move through it with the keyboard."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -1943,7 +1943,7 @@ msgid "appearance dark light system colour color mode"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "chevron expander triangle sidebar navigation pane tree folders details windows"
+msgid "chevron expander triangle sidebar navigation pane tree folders windows"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -5037,6 +5037,16 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/sidebar/menu.rs
 msgid "{verb} section “{name}”"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/sidebar/row.rs
+msgid "Collapse {section}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/sidebar/row.rs
+msgid "Expand {section}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

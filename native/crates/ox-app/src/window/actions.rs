@@ -131,7 +131,6 @@ impl BrowserWindow {
         self.install_tab_move_actions();
         self.install_navigation_actions();
         self.install_address_actions();
-        self.follow_expand_arrows_preference();
         self.install_compact_density_action();
         self.install_crumb_actions();
         self.install_selection_actions();

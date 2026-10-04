@@ -268,11 +268,6 @@ pub struct Preferences {
     /// two, so the Python app's file keeps its layout.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub show_full_path: bool,
-    /// No expand arrows are drawn: beside This PC and Network in the
-    /// sidebar, in the folder tree and beside folders in the file list.
-    /// Shown by default; stored only when hidden.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub hide_expand_arrows: bool,
     /// New windows show the address as editable text instead of crumbs
     /// (Dolphin's `EditableUrl`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -328,6 +323,12 @@ pub struct Preferences {
     /// Explorer's View > Show > Navigation pane off).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hide_sidebar: bool,
+    /// The navigation pane's expand arrows (beside This PC and Network,
+    /// and in the folder tree) show only while the pointer is over the
+    /// pane or keyboard focus is in it, as in Windows Explorer. Off by
+    /// default, so they always show; stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_expand_arrows: bool,
     /// The sidebar's icon size in pixels (16, 22, 32 or 48), or 0 for the
     /// automatic size (Dolphin's Places panel Icon Size). Stored only when
     /// chosen.
@@ -433,7 +434,6 @@ impl Default for Preferences {
             column_widths: None,
             window_size: None,
             show_full_path: false,
-            hide_expand_arrows: false,
             editable_location: false,
             external_folders_in_new_window: false,
             browse_archives: true,
@@ -448,6 +448,7 @@ impl Default for Preferences {
             enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,
+            hide_expand_arrows: false,
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
@@ -502,7 +503,6 @@ impl Preferences {
         replace_if_some(&mut self.network_interval, network_interval);
         replace_if_some(&mut self.text_size, text_size);
         replace_if_some(&mut self.show_full_path, update.show_full_path);
-        replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
         replace_if_some(&mut self.editable_location, update.editable_location);
         replace_if_some(
             &mut self.external_folders_in_new_window,
@@ -517,6 +517,7 @@ impl Preferences {
         self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
+        replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
         let icon_size = update
             .sidebar_icon_size
             .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
@@ -657,8 +658,6 @@ pub struct PreferencesUpdate {
     pub window_size: Option<WindowSize>,
     /// Show the full path in the address bar, or start at the closest place.
     pub show_full_path: Option<bool>,
-    /// The expand arrows hidden or shown.
-    pub hide_expand_arrows: Option<bool>,
     /// Open new windows with an editable address.
     pub editable_location: Option<bool>,
     /// Open folders from other apps in a new window, or in a new tab.
@@ -687,6 +686,9 @@ pub struct PreferencesUpdate {
     pub desktop_font: Option<bool>,
     /// Hide or show the navigation pane.
     pub hide_sidebar: Option<bool>,
+    /// Hide the navigation pane's expand arrows until it is pointed at, or
+    /// always show them.
+    pub hide_expand_arrows: Option<bool>,
     /// New sidebar icon size; one of [`SIDEBAR_ICON_SIZES`] or ignored.
     pub sidebar_icon_size: Option<u32>,
     /// Replaces the hidden sidebar sections; up to 16 short ASCII keys,
@@ -756,7 +758,6 @@ impl PreferencesUpdate {
             network_interval: values.get("networkInterval").and_then(read_network_interval),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
             show_full_path: flag("showFullPath"),
-            hide_expand_arrows: flag("hideExpandArrows"),
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
             browse_archives: flag("browseArchives"),
@@ -773,6 +774,7 @@ impl PreferencesUpdate {
             enabled_service_actions: values.get("enabledServiceActions").and_then(read_keys),
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
+            hide_expand_arrows: flag("hideExpandArrows"),
             sidebar_icon_size: values
                 .get("sidebarIconSize")
                 .and_then(Value::as_u64)
@@ -885,27 +887,6 @@ mod tests {
         assert!(preferences.auto_index);
         assert!(preferences.show_details_pane);
         assert!(!preferences.show_hidden);
-    }
-
-    /// The expand arrows are shown by default and the choice is not
-    /// stored then; hiding them is saved as `hideExpandArrows` and read
-    /// back.
-    ///
-    /// parity: SIDE-032
-    #[test]
-    fn expand_arrows_are_shown_by_default_and_hiding_them_is_stored() {
-        let mut preferences = Preferences::default();
-        assert!(!preferences.hide_expand_arrows);
-        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
-        assert!(stored.get("hideExpandArrows").is_none(), "not stored while shown");
-
-        let hide =
-            PreferencesUpdate::from_json(&json!({ "hideExpandArrows": true })).expect("a valid preference");
-        preferences.apply(&hide);
-        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
-        assert_eq!(stored["hideExpandArrows"], json!(true));
-        let read = PreferencesUpdate::from_json(&stored).expect("read back");
-        assert_eq!(read.hide_expand_arrows, Some(true));
     }
 
     /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`.
@@ -1117,5 +1098,26 @@ mod tests {
         });
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
         assert!(stored.get("compactView").is_none(), "off again, not stored");
+    }
+
+    /// The expand arrows are shown by default and the choice is not
+    /// stored then; hiding them is saved as `hideExpandArrows` and read
+    /// back.
+    ///
+    /// parity: SIDE-032
+    #[test]
+    fn expand_arrows_are_shown_by_default_and_hiding_them_is_stored() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.hide_expand_arrows);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("hideExpandArrows").is_none(), "not stored while shown");
+
+        let hide =
+            PreferencesUpdate::from_json(&json!({ "hideExpandArrows": true })).expect("a valid preference");
+        preferences.apply(&hide);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["hideExpandArrows"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.hide_expand_arrows, Some(true));
     }
 }

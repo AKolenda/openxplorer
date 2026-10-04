@@ -17,8 +17,9 @@
 //! [`Sidebar`] is a `GtkBox` subclass that keeps the entries its rows show,
 //! so the list's header function and its middle-click and right-click
 //! handlers read them through the pane itself. Where a drop on it goes is
-//! [`drop_spots`]'s.
+//! [`drop_spots`]'s; collapsing This PC and Network is [`collapsing`]'s.
 
+mod collapsing;
 mod drop_spots;
 pub(super) mod entries;
 mod menu;
@@ -69,7 +70,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{FolderTree, HiddenRow, MenuPopover, SidebarEntry};
+    use super::{FolderTree, HiddenRow, MenuPopover, Section, SidebarEntry};
 
     /// Private state of [`super::Sidebar`].
     #[derive(Debug, Default)]
@@ -88,8 +89,12 @@ mod imp {
         pub(super) hidden_rows: RefCell<Vec<HiddenRow>>,
         /// Whether anything is hidden, which "Show all entries" lists.
         pub(super) anything_hidden: Cell<bool>,
-        /// The sections collapsed with their chevron (SIDE-033).
-        pub(super) collapsed: RefCell<Vec<super::entries::Section>>,
+        /// The sections collapsed with their chevron or the arrow keys
+        /// (SIDE-033).
+        pub(super) collapsed: RefCell<Vec<Section>>,
+        /// The location last given to `select`, whose closest place is
+        /// highlighted.
+        pub(super) location: RefCell<Option<String>>,
     }
 
     #[glib::object_subclass]
@@ -155,6 +160,7 @@ impl Sidebar {
         self.open_places_on_middle_click(&list);
         self.open_places_in_tabs_on_ctrl_click(&list);
         self.open_menus_on_right_click(&list);
+        self.collapse_sections_with_arrow_keys(&list);
         let scroller = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
             // The list is never narrower than the narrowest saved sidebar.
@@ -211,8 +217,8 @@ impl Sidebar {
         let gesture = gestures::middle_click(glib::clone!(
             #[weak(rename_to = sidebar)]
             self,
-            move |gesture, _, y| {
-                let Some(uri) = sidebar.location_at(y) else {
+            move |gesture, x, y| {
+                let Some(uri) = sidebar.clicked_location(x, y) else {
                     return;
                 };
                 let action = gestures::open_action(gesture.current_event_state());
@@ -236,9 +242,9 @@ impl Sidebar {
             self,
             #[strong]
             pending,
-            move |gesture, _, _, y| {
+            move |gesture, _, x, y| {
                 let action = tab_action_for_click(gestures::held_modifiers(gesture));
-                let target = action.zip(sidebar.location_at(y));
+                let target = action.zip(sidebar.clicked_location(x, y));
                 if target.is_none() {
                     gesture.set_state(gtk::EventSequenceState::Denied);
                 }
@@ -353,6 +359,17 @@ impl Sidebar {
         }
     }
 
+    /// The location a click at (`x`, `y`) in the list opens: its row's,
+    /// unless it lands on a chevron, which only collapses or expands its
+    /// section (SIDE-033).
+    pub(super) fn clicked_location(&self, x: f64, y: f64) -> Option<String> {
+        let picked = self.list().pick(x, y, gtk::PickFlags::DEFAULT);
+        if picked.is_some_and(|widget| row::is_on_chevron(&widget)) {
+            return None;
+        }
+        self.location_at(y)
+    }
+
     /// Replaces the rows.
     pub(super) fn set_entries(&self, entries: Vec<SidebarEntry>) {
         let list = self.list();
@@ -362,7 +379,8 @@ impl Sidebar {
             .enumerate()
             .map(|(index, entry)| {
                 let edges = entries::section_edges(&entries, index);
-                row::sidebar_row(entry, edges, self.imp().icon_size.get())
+                let collapsed = self.is_collapsed(entry.section);
+                row::sidebar_row(entry, edges, self.imp().icon_size.get(), collapsed)
             })
             .collect();
         // The header function reads the entries as the rows are added.
@@ -371,67 +389,6 @@ impl Sidebar {
         for row in &rows {
             list.append(row);
         }
-        self.show_collapsed_sections();
-    }
-
-    /// Collapses the section whose key is `key` (This PC or Network), or
-    /// expands it again, as its chevron does (SIDE-033). The rows stay;
-    /// only the section's own rows are hidden.
-    pub(in crate::window) fn toggle_section(&self, key: &str) {
-        let Some(section) = self
-            .imp()
-            .entries
-            .borrow()
-            .iter()
-            .map(|entry| entry.section)
-            .find(|section| section.hiding().is_some_and(|(shown, _)| shown == key))
-        else {
-            return;
-        };
-        {
-            let mut collapsed = self.imp().collapsed.borrow_mut();
-            if let Some(position) = collapsed.iter().position(|shown| *shown == section) {
-                collapsed.remove(position);
-            } else {
-                collapsed.push(section);
-            }
-        }
-        self.show_collapsed_sections();
-    }
-
-    /// Hides the rows inside collapsed sections, shows the others, and
-    /// turns each section's chevron to match.
-    fn show_collapsed_sections(&self) {
-        let collapsed = self.imp().collapsed.borrow().clone();
-        let entries = self.imp().entries.borrow();
-        for (index, entry) in entries.iter().enumerate() {
-            let Some(row) = i32::try_from(index)
-                .ok()
-                .and_then(|index| self.list().row_at_index(index))
-            else {
-                continue;
-            };
-            let closed = collapsed.contains(&entry.section);
-            match entry.level {
-                entries::RowLevel::Child => row.set_visible(!closed),
-                entries::RowLevel::Group => {
-                    if let Some(expander) = row::expander_of(&row) {
-                        row::show_expanded(&expander, !closed);
-                    }
-                }
-                entries::RowLevel::Place => {}
-            }
-        }
-    }
-
-    /// Whether the section whose key is `key` is collapsed, for tests.
-    #[cfg(test)]
-    pub(in crate::window) fn section_is_collapsed(&self, key: &str) -> bool {
-        self.imp()
-            .collapsed
-            .borrow()
-            .iter()
-            .any(|section| section.hiding().is_some_and(|(shown, _)| shown == key))
     }
 
     /// Replaces the rows with `rows`, dimming the hidden ones shown, and
@@ -465,8 +422,14 @@ impl Sidebar {
         imp.entries.borrow_mut()[index] = entry;
         let row = {
             let entries = imp.entries.borrow();
+            let entry = &entries[index];
             let edges = entries::section_edges(&entries, index);
-            row::sidebar_row(&entries[index], edges, imp.icon_size.get())
+            row::sidebar_row(
+                entry,
+                edges,
+                imp.icon_size.get(),
+                self.is_collapsed(entry.section),
+            )
         };
         let hidden = imp.hidden_rows.borrow().get(index).copied().unwrap_or_default();
         if hidden != HiddenRow::Shown {
@@ -476,7 +439,6 @@ impl Sidebar {
         let list = self.list();
         list.remove(&old);
         list.insert(&row, position);
-        self.show_collapsed_sections();
         if selected {
             list.select_row(Some(&row));
         }
@@ -515,9 +477,22 @@ impl Sidebar {
     }
 
     /// Highlights the row for `uri`, else the closest place that holds it
-    /// (Dolphin's Places panel), or none.
+    /// (Dolphin's Places panel), or none. While that place's section is
+    /// collapsed, its head is highlighted instead, as Explorer highlights
+    /// the collapsed parent (SIDE-033).
     pub(super) fn select(&self, uri: &str) {
-        let index = closest_place(&self.imp().entries.borrow(), uri);
+        self.imp().location.replace(Some(uri.to_owned()));
+        self.highlight_location();
+    }
+
+    /// Highlights the place for the location last given to [`Self::select`].
+    fn highlight_location(&self) {
+        let index = {
+            let entries = self.imp().entries.borrow();
+            let location = self.imp().location.borrow();
+            let closest = location.as_deref().and_then(|uri| closest_place(&entries, uri));
+            closest.map(|index| self.shown_holder(&entries, index))
+        };
         let row = index
             .and_then(|index| i32::try_from(index).ok())
             .and_then(|index| self.list().row_at_index(index));

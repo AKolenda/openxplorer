@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! "Hide expand arrows" in a real window (SIDE-032): the three kinds of
-//! arrow the skin hides are where it looks for them, and the window takes
-//! up the choice at once, also when it is flipped in the Settings tab.
+//! "Hide expand arrows" in a real window (SIDE-032): the navigation pane's
+//! arrows draw nothing until keyboard focus is in the pane (or the pointer
+//! over it), the file list keeps its own, and the window takes up the
+//! choice at once, also when it is flipped in the Settings tab.
 
 use std::fs;
 
@@ -57,43 +58,77 @@ fn window_with_every_arrow(fixture: &Fixture) -> TestWindow {
     test
 }
 
-/// The arrows the skin hides are where its selectors look: the chevrons
-/// of This PC and Network (`.sidebar .expand`), the folder tree's arrows
-/// (`.folder-tree treeexpander expander`) and the file list's folder
-/// arrows (`columnview.files .folder-expander`). Shown by default.
-///
-/// parity: SIDE-032
-#[gtk::test]
-fn every_kind_of_expand_arrow_is_where_the_skin_hides_it() {
-    let fixture = Fixture::standard();
-    let test = window_with_every_arrow(&fixture);
-    assert!(!test.window.hides_expand_arrows(), "shown by default");
-    let widgets = descendants::<gtk::Widget>(&test.window);
+/// Whether `widget` draws anything: an arrow the skin hides draws
+/// nothing, as GTK skips a widget whose CSS opacity is 0.
+fn draws(widget: &gtk::Widget) -> bool {
+    let picture = gtk::WidgetPaintable::new(Some(widget));
+    let snapshot = gtk::Snapshot::new();
+    picture.snapshot(&snapshot, f64::from(widget.width()), f64::from(widget.height()));
+    snapshot.to_node().is_some()
+}
 
-    let chevrons = widgets
-        .iter()
-        .filter(|widget| widget.has_css_class("expand") && inside_class(widget, "sidebar"))
-        .count();
-    assert_eq!(chevrons, 2, "This PC and Network");
-
-    let tree_arrows = widgets
-        .iter()
+/// The navigation pane's arrows: the chevrons of This PC and Network and
+/// the folder tree's.
+fn navigation_arrows(test: &TestWindow) -> Vec<gtk::Widget> {
+    descendants::<gtk::Widget>(test.window.sidebar())
+        .into_iter()
         .filter(|widget| {
-            widget.css_name() == "expander"
+            let chevron = widget.has_css_class("side-expander");
+            let tree_arrow = widget.css_name() == "expander"
                 && widget
                     .parent()
                     .is_some_and(|parent| parent.css_name() == "treeexpander")
-                && inside_class(widget, "folder-tree")
+                && inside_class(widget, "folder-tree");
+            chevron || tree_arrow
         })
-        .count();
-    assert!(tree_arrows > 0, "the folder tree draws arrows");
+        .filter(WidgetExt::is_mapped)
+        .collect()
+}
 
+/// The file list's folder arrows.
+fn file_list_arrows(test: &TestWindow) -> Vec<gtk::Widget> {
     let view = test.window.folder_pane().details().column_view();
-    let list_arrows = descendants::<gtk::Widget>(view)
+    descendants::<gtk::Widget>(view)
         .into_iter()
-        .filter(|widget| widget.has_css_class("folder-expander") && widget.is_visible())
+        .filter(|widget| widget.has_css_class("folder-expander") && widget.is_mapped())
+        .collect()
+}
+
+/// With the setting on, the navigation pane's arrows (This PC's and
+/// Network's chevrons, the folder tree's) draw nothing while keyboard
+/// focus is elsewhere and show once it is in the pane, as the pointer
+/// over the pane shows them; the file list's folder arrows stay, as the
+/// Expandable folders switch decides those. Off, every arrow shows.
+///
+/// parity: SIDE-032
+#[gtk::test]
+fn hidden_navigation_arrows_show_with_focus_in_the_pane() {
+    let fixture = Fixture::standard();
+    let test = window_with_every_arrow(&fixture);
+    assert!(!test.window.hides_expand_arrows(), "shown by default");
+    let arrows = navigation_arrows(&test);
+    let chevrons = arrows
+        .iter()
+        .filter(|widget| widget.has_css_class("side-expander"))
         .count();
-    assert!(list_arrows > 0, "the file list draws folder arrows");
+    assert_eq!(chevrons, 2, "This PC and Network");
+    assert!(arrows.len() > chevrons, "the folder tree draws arrows");
+    assert!(arrows.iter().all(draws), "shown by default");
+
+    test.window.folder_pane().grab_focus();
+    save_arrows_hidden(&test, true);
+    wait_until("the navigation pane's arrows to hide", || {
+        test.window.hides_expand_arrows() && !navigation_arrows(&test).iter().any(draws)
+    });
+    let list_arrows = file_list_arrows(&test);
+    assert!(!list_arrows.is_empty(), "the file list draws folder arrows");
+    assert!(list_arrows.iter().all(draws), "and keeps them");
+
+    let row = test.window.sidebar().list().row_at_index(0).expect("a first row");
+    row.grab_focus();
+    wait_until("focus in the pane to show its arrows", || {
+        navigation_arrows(&test).iter().all(draws)
+    });
 }
 
 /// Flipping the setting in the Settings tab and going back to the folder
