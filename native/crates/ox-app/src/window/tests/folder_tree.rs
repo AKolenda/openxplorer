@@ -52,7 +52,17 @@ fn arrows_shown(tree: &crate::window::folder_tree::FolderTree) -> Option<bool> {
         .filter(|expander| expander.list_row().is_some())
         .collect();
     assert!(!expanders.is_empty(), "the tree has rows");
+    // GTK draws an arrow (CSS name `expander`) only on rows that have
+    // subfolders, so the property is what every row must agree on; the
+    // drawn arrows must follow it.
     let shown = |expander: &gtk::TreeExpander| !expander.hides_expander();
+    let drawn = descendants::<gtk::Widget>(tree)
+        .into_iter()
+        .filter(|widget| widget.css_name() == "expander" && widget.is_visible())
+        .count();
+    if expanders.iter().any(shown) != (drawn > 0) {
+        return None;
+    }
     if expanders.iter().all(shown) {
         Some(true)
     } else if expanders.iter().any(shown) {
@@ -108,4 +118,43 @@ fn the_folder_trees_arrows_can_be_hidden_and_shown_again() {
 
     save_arrows_hidden(&test, false);
     wait_until("the arrows to come back", || arrows_shown(tree) == Some(true));
+}
+
+/// Flipping the setting in the Settings tab and going back to the folder
+/// tab, again and again, takes the drawn arrows off and brings them back
+/// each time, without the tab showing another folder.
+///
+/// parity: SIDE-032
+#[gtk::test]
+fn flipping_the_setting_from_the_settings_tab_hides_and_brings_back_the_arrows() {
+    let fixture = Fixture::standard();
+    let reports = fixture.path("Documents").join("Reports");
+    fs::create_dir(&reports).expect("fixture subfolder");
+    let test = TestWindow::open(&file_uri(&reports));
+    test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
+    test.activate("folder-tree", None);
+    let tree = test.window.folder_tree();
+    let reports = file_uri(&reports);
+    wait_until("the tree selects the folder shown", || {
+        tree.selected_uri()
+            .is_some_and(|uri| same_location(&uri, &reports))
+    });
+    assert_eq!(arrows_shown(tree), Some(true));
+    let folder = test.window.current_uri();
+
+    for hidden in [true, false, true, false] {
+        test.activate("settings", None);
+        wait_for_frames(&test.window, 2);
+        save_arrows_hidden(&test, hidden);
+        wait_for_frames(&test.window, 2);
+        test.activate("next-tab", None);
+        wait_for_frames(&test.window, 3);
+        assert_eq!(test.window.current_uri(), folder, "back on the same folder");
+        assert_eq!(
+            arrows_shown(tree),
+            Some(!hidden),
+            "after turning the setting {}",
+            if hidden { "on" } else { "off" }
+        );
+    }
 }

@@ -155,12 +155,13 @@ impl FolderTree {
         if self.imp().arrows_hidden.replace(hidden) == hidden {
             return;
         }
-        let shown = self.imp().bound.borrow();
-        let expanders = shown
-            .iter()
-            .filter_map(|row| row.item.upgrade())
-            .filter_map(|item| item.child().and_downcast::<gtk::TreeExpander>());
-        for expander in expanders {
+        // Every row widget the list holds, bound or kept for reuse. The
+        // rows recorded at bind time missed some on GTK 4.22, which kept
+        // their arrows until the tree was built again.
+        let Some(view) = self.imp().view.get() else {
+            return;
+        };
+        for expander in super::widget_tree::descendants::<gtk::TreeExpander>(view) {
             expander.set_hide_expander(hidden);
         }
     }
