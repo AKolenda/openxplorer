@@ -54,11 +54,10 @@ const RIGHT_CLICK_MENU: RowText = RowText {
     keywords: "context menu style windows 10 11 classic compact",
 };
 
-const HIDE_TREE_ARROWS: RowText = RowText {
-    title: "Hide the folder tree's expand arrows",
-    description:
-        "The arrows next to folders in the navigation pane. Right and Left still open and close folders. A folder tree that is already open may keep its arrows until it shows another folder.",
-    keywords: "chevron expander triangle sidebar navigation pane tree folders",
+const HIDE_EXPAND_ARROWS: RowText = RowText {
+    title: "Hide expand arrows",
+    description: "No arrows beside This PC and Network, in the folder tree or beside folders in the file list, as in Windows. Right and Left still open and close folders in place.",
+    keywords: "chevron expander triangle sidebar navigation pane tree folders details windows",
 };
 
 const PANE_WIDTHS: RowText = RowText {
@@ -333,11 +332,11 @@ fn layout_group(page: &SettingsPage) -> SettingsGroup {
     WindowAction::ResetLayout.assign_to(&reset);
     row.add_control(&reset, ControlName::OwnLabel);
     group.add_row(&row);
-    let arrows = SettingRow::new(HIDE_TREE_ARROWS);
+    let arrows = SettingRow::new(HIDE_EXPAND_ARROWS);
     let binding = PreferenceBinding {
-        read: |preferences| preferences.hide_folder_tree_arrows,
+        read: |preferences| preferences.hide_expand_arrows,
         write: |hidden| PreferencesUpdate {
-            hide_folder_tree_arrows: Some(hidden),
+            hide_expand_arrows: Some(hidden),
             ..PreferencesUpdate::default()
         },
     };

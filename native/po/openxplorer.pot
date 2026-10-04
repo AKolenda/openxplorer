@@ -1867,7 +1867,7 @@ msgid "Dark"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Hide the folder tree's expand arrows"
+msgid "Hide expand arrows"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -1876,6 +1876,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/theme/appearance_button.rs
 msgid "Light"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "No arrows beside This PC and Network, in the folder tree or beside folders in the file list, as in Windows. Right and Left still open and close folders in place."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs
@@ -1915,10 +1919,6 @@ msgid "The app, menus, and network sign-in use the same theme."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "The arrows next to folders in the navigation pane. Right and Left still open and close folders. A folder tree that is already open may keep its arrows until it shows another folder."
-msgstr ""
-
-#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Theme"
 msgstr ""
 
@@ -1943,7 +1943,7 @@ msgid "appearance dark light system colour color mode"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "chevron expander triangle sidebar navigation pane tree folders"
+msgid "chevron expander triangle sidebar navigation pane tree folders details windows"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs

@@ -69,8 +69,6 @@ mod imp {
         /// The tree row each shown row draws, with the handler that reads
         /// its subfolders when it is expanded.
         pub(super) bound: RefCell<Vec<super::BoundRow>>,
-        /// The rows show no expand arrows (SIDE-032).
-        pub(super) arrows_hidden: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -147,31 +145,6 @@ impl FolderTree {
         imp.view.set(view).expect("constructed runs once");
     }
 
-    /// Hides the rows' expand arrows, or shows them again (SIDE-032). Only
-    /// the arrows go: Right and Left still open and close folders, and the
-    /// tree still opens the folders down to the one shown. GTK keeps the
-    /// rows indented by depth.
-    pub(in crate::window) fn hide_arrows(&self, hidden: bool) {
-        if self.imp().arrows_hidden.replace(hidden) == hidden {
-            return;
-        }
-        // Every row widget the list holds, bound or kept for reuse. The
-        // rows recorded at bind time missed some on GTK 4.22, which kept
-        // their arrows until the tree was built again.
-        let Some(view) = self.imp().view.get() else {
-            return;
-        };
-        for expander in super::widget_tree::descendants::<gtk::TreeExpander>(view) {
-            expander.set_hide_expander(hidden);
-        }
-    }
-
-    /// Whether the rows' expand arrows are hidden, for tests.
-    #[cfg(test)]
-    pub(in crate::window) fn arrows_are_hidden(&self) -> bool {
-        self.imp().arrows_hidden.get()
-    }
-
     /// The tree's rows: a chevron, the folder's icon and its name.
     fn row_factory(&self) -> gtk::SignalListItemFactory {
         let factory = gtk::SignalListItemFactory::new();
@@ -191,10 +164,7 @@ impl FolderTree {
                         .build(),
                 );
                 tree.handle_clicks(&content, item);
-                let expander = gtk::TreeExpander::builder()
-                    .child(&content)
-                    .hide_expander(tree.imp().arrows_hidden.get())
-                    .build();
+                let expander = gtk::TreeExpander::builder().child(&content).build();
                 item.set_child(Some(&expander));
             }
         ));
@@ -239,7 +209,6 @@ impl FolderTree {
             .and_then(model::row_file)
             .map(|file| file.parse_name());
         expander.set_tooltip_text(path.as_deref());
-        expander.set_hide_expander(self.imp().arrows_hidden.get());
         item.set_accessible_label(&name);
         expander.set_list_row(row.as_ref());
         let Some(row) = row else {

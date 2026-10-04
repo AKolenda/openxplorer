@@ -254,4 +254,19 @@ mod tests {
             assert!(errors.is_empty(), "{errors:#?}");
         }
     }
+
+    /// "Hide expand arrows" (SIDE-032) draws every kind of expand arrow
+    /// transparent under the window's class.
+    ///
+    /// parity: SIDE-032
+    #[test]
+    fn the_skin_hides_every_kind_of_expand_arrow() {
+        let start = RULES
+            .find("window.hide-expand-arrows .sidebar .expand,")
+            .expect("the rule");
+        let rule = &RULES[start..start + RULES[start..].find('}').expect("its end")];
+        assert!(rule.contains("window.hide-expand-arrows .folder-tree treeexpander expander,"));
+        assert!(rule.contains("window.hide-expand-arrows columnview.files .folder-expander"));
+        assert!(rule.contains("opacity: 0;"));
+    }
 }

@@ -1,10 +1,9 @@
 # Unreleased
 
-- Settings > Appearance > Layout > "Hide the folder tree's expand arrows"
-  takes the arrows off the folder tree in the navigation pane. Right and
-  Left still open and close folders. The arrows show by default. A folder
-  tree that is already open may keep its arrows until it shows another
-  folder.
+- Settings > Appearance > Layout > "Hide expand arrows", as in Windows:
+  no arrows beside This PC and Network, in the folder tree or beside
+  folders in the file list. Right and Left still open and close folders
+  in place. The arrows show by default.
 
 # 2.0.1 — 2026-10-02
 

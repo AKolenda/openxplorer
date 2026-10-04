@@ -5807,8 +5807,8 @@ native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (add_entry_pins_
 [[feature]]
 id = "SIDE-032"
 area = "SIDE"
-title = "Hide the folder tree's expand arrows"
-behaviour = "Settings › Appearance › Layout › 'Hide the folder tree's expand arrows' takes the expand arrows off the folder tree's rows in the navigation pane, in every open window at once; Right and Left still open and close folders, the tree still opens the folders down to the one shown, and the rows stay indented by depth. Off by default, so the arrows show."
+title = "Hide expand arrows"
+behaviour = "Settings › Appearance › Layout › 'Hide expand arrows' stops drawing expand arrows, as Windows Explorer's file list has none: the chevrons beside This PC and Network in the sidebar, the folder tree's arrows and the arrows beside folders in the file list. Every open window follows at once, rows built later too, and nothing moves sideways. Right and Left still open and close folders in place. Off by default, so the arrows show."
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
@@ -5818,7 +5818,7 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/folder_tree.rs (the_folder_trees_arrows_can_be_hidden_and_shown_again: every row's GtkTreeExpander hides its arrow once the preference is saved, rows built afterwards too, and shows it again when turned off); native/crates/ox-app/src/settings_page/tests.rs (the_folder_tree_arrows_switch_saves_the_choice); native/crates/ox-core/src/settings/preferences.rs (folder_tree_arrows_are_shown_by_default_and_hiding_them_is_stored). Saved as hideFolderTreeArrows, a preference of its own rather than part of folderTree, so the Settings switch never rewrites the tree's other options. GtkTreeExpander:hide-expander only hides the arrow; its expand and collapse keys stay. On GTK 4.22 (KDE Plasma, Wayland) a folder tree already open was seen keeping its arrows until it showed another folder, which the 4.14 tests do not reproduce; the Settings row says so rather than reloading tabs to force it."
+native_note = "native/crates/ox-app/src/window/tests/expand_arrows.rs (every_kind_of_expand_arrow_is_where_the_skin_hides_it: the sidebar's .expand chevrons, the folder tree's treeexpander arrows and the file list's .folder-expander buttons; flipping_the_setting_from_the_settings_tab_hides_and_shows_the_arrows: four flips from the Settings tab, the folder tab following each time); native/crates/ox-app/src/theme/stylesheets.rs (the_skin_hides_every_kind_of_expand_arrow); native/crates/ox-app/src/settings_page/tests.rs (the_expand_arrows_switch_saves_the_choice); native/crates/ox-core/src/settings/preferences.rs (expand_arrows_are_shown_by_default_and_hiding_them_is_stored). Saved as hideExpandArrows. The window carries hide-expand-arrows and resources/skin/sidebar.css draws the three kinds of arrow transparent, keeping their room. A class on the window rather than a property set on each row: setting each folder tree row's hide-expander missed rows on GTK 4.22, which kept their arrows until the tree was built again. This PC and Network never fold, so their chevrons were only drawn."
 [[feature]]
 id = "CMD-001"
 area = "CMD"

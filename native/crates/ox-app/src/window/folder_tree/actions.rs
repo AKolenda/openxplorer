@@ -40,20 +40,6 @@ impl BrowserWindow {
             }),
         ]);
         self.apply_folder_tree(options);
-        self.follow_folder_tree_arrows_preference();
-    }
-
-    /// Hides or shows the tree's expand arrows as the preferences say,
-    /// also when Settings or another window changed them (SIDE-032).
-    pub(in crate::window) fn follow_folder_tree_arrows_preference(&self) {
-        let hidden = self.context().settings_data().preferences.hide_folder_tree_arrows;
-        self.folder_tree().hide_arrows(hidden);
-    }
-
-    /// Whether the folder tree's expand arrows are hidden, for tests.
-    #[cfg(test)]
-    pub(crate) fn folder_tree_arrows_are_hidden(&self) -> bool {
-        self.folder_tree().arrows_are_hidden()
     }
 
     /// Applies and saves the tree's `options`.

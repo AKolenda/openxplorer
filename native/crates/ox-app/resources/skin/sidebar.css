@@ -129,3 +129,13 @@ paned.workspace > separator.keyboard-focus {
   background-color: @ox_selected;
   box-shadow: inset 2px 0 @ox_selected, inset 4px 0 @ox_accent;
 }
+
+/* Settings > Appearance > Layout > Hide expand arrows (SIDE-032,
+   window/expand_arrows.rs): the chevrons of This PC and Network, the
+   folder tree's arrows and the file list's folder arrows are drawn fully
+   transparent, keeping their room, so nothing moves. */
+window.hide-expand-arrows .sidebar .expand,
+window.hide-expand-arrows .folder-tree treeexpander expander,
+window.hide-expand-arrows columnview.files .folder-expander {
+  opacity: 0;
+}

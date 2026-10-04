@@ -22,6 +22,7 @@ mod details_preview;
 mod devices;
 mod drag_and_drop;
 mod environment;
+mod expand_arrows;
 mod file_operations;
 mod file_ops_captures;
 mod file_ops_support;
