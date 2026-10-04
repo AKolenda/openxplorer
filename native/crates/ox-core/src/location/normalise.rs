@@ -9,8 +9,9 @@
 
 use std::borrow::Cow;
 use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use gio::prelude::FileExt;
 use percent_encoding::percent_encode;
 
 mod remote;
@@ -209,7 +210,9 @@ fn is_windows_drive_path(address: &str) -> bool {
 /// An address without a scheme: `~`, an absolute path, or a path relative
 /// to `base` (SMB, device or local) or to `home`.
 fn normalise_plain_path(address: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
-    let expanded = expand_home(address, home);
+    let expanded = expand_home(address, home).map_or(Cow::Borrowed(address), |path| {
+        Cow::Owned(path.to_string_lossy().into_owned())
+    });
     if expanded.starts_with('/') {
         return local_path_uri(&expanded);
     }
@@ -228,15 +231,27 @@ fn normalise_plain_path(address: &str, base: Option<&str>, home: &Path) -> Resul
     local_path_uri(&join_path(&base_path, &expanded))
 }
 
-/// Expands `~` and `~/rest` like `str(home)` and `str(home / rest)`.
-fn expand_home(address: &str, home: &Path) -> String {
-    if address == "~" {
-        return home.to_string_lossy().into_owned();
+/// The path `~` or `~/rest` stands for, `home` or `home/rest`, like
+/// Python's `str(home)` and `str(home / rest)`; `None` for other text.
+fn expand_home(typed: &str, home: &Path) -> Option<PathBuf> {
+    if typed == "~" {
+        return Some(home.to_path_buf());
     }
-    match address.strip_prefix("~/") {
-        Some(rest) => join_path(&home.to_string_lossy(), rest),
-        None => address.to_string(),
+    typed.strip_prefix("~/").map(|rest| home.join(rest))
+}
+
+/// The local path typed or pasted text names: a `file:` URI's path, `~`
+/// and `~/…` below the home folder, else the text itself, relative or
+/// absolute. `None` for a URI of another scheme, or a `file:` URI with no
+/// local path.
+pub fn typed_local_path(typed: &str) -> Option<PathBuf> {
+    if typed.starts_with("file:") {
+        return gio::File::for_uri(typed).path();
     }
+    if typed.contains("://") {
+        return None;
+    }
+    Some(expand_home(typed, &gio::glib::home_dir()).unwrap_or_else(|| PathBuf::from(typed)))
 }
 
 /// True when relative paths should be appended to `base` as a URL: SMB
@@ -502,6 +517,24 @@ mod tests {
             Ok("file:///home/test/Docs")
         );
         assert_eq!(resolve("Docs", "ox:pc").as_deref(), Ok("file:///home/test/Docs"));
+    }
+
+    /// Typed or pasted text names a local path: a `file:` URI's, `~/…`
+    /// below the home folder, or the text itself; another URI names none.
+    #[test]
+    fn typed_text_names_a_local_path() {
+        assert_eq!(expand_home("~", &home()), Some(home()));
+        assert_eq!(expand_home("~/Docs", &home()), Some(home().join("Docs")));
+        assert_eq!(expand_home("~user", &home()), None);
+        assert_eq!(
+            typed_local_path("file:///tmp/a%20b.txt"),
+            Some(PathBuf::from("/tmp/a b.txt"))
+        );
+        assert_eq!(
+            typed_local_path("Drafts/plan.txt"),
+            Some(PathBuf::from("Drafts/plan.txt"))
+        );
+        assert_eq!(typed_local_path("smb://nas/share"), None);
     }
 
     /// parity: NAV-034

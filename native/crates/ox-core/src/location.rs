@@ -61,7 +61,8 @@ pub use classify::{is_network_filesystem, is_smb_share_root};
 pub use display::{crumb_divider, device_root, parent_location, same_location, DeviceLabel, LocationContext};
 pub use names::{new_copy_name, safe_label, validate_name, ItemKind, MAX_LABEL_CHARS};
 pub use normalise::{
-    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share, without_user,
+    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
+    typed_local_path, without_user,
 };
 pub use parts::{canonical_remote_scheme, split_location, LocationKind, LocationParts, REMOTE_SCHEMES};
 pub use virtual_place::{

@@ -402,7 +402,7 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 12] = [
 ];
 
 /// Ctrl+Q: quit the application, from any window and any focus (TAB-058).
-const QUIT_ACCELERATORS: &[&str] = &["<Primary>q"];
+pub(super) const QUIT_ACCELERATORS: &[&str] = &["<Primary>q"];
 
 /// Alt+Enter: Properties of the selection or the folder (`onKey`).
 const PROPERTIES_ACCELERATORS: &[&str] = &["<Alt>Return", "<Alt>KP_Enter"];

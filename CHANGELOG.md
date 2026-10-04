@@ -19,6 +19,27 @@
   longer leaves its copy in memory until logout (it is removed ten minutes
   after it was opened), and items copied or dragged out are removed after a
   day, when OpenXplorer starts or copies again.
+- Open and Save dialogs behave more like Windows':
+  - Escape closes the dialog while a file is selected in the list,
+    instead of only clearing the selection.
+  - The keyboard starts in File name with the name selected (without its
+    extension), so typing replaces it instead of jumping through the
+    file list.
+  - Open dialogs have a File name box too; File name takes a path from the
+    folder shown, `~/...` or a full path, and a folder typed there opens.
+  - Save adds the chosen type's extension to a name without one, Chrome's
+    types included; a name that ends in a dot is saved without one.
+  - A file typed in the address bar is chosen instead of being opened in
+    another application; in a Save dialog, that file or one double-clicked
+    is replaced after asking.
+  - Alt+Left, Alt+Right and Alt+Up work from the File name box.
+  - Ctrl+Q cancels the dialog instead of closing every window. Ctrl+N,
+    Open file location in new tab or new window, and Split view open
+    nothing from it.
+  - A dialog for one file keeps one item selected.
+  - Several files selected in an Open dialog for several are all chosen:
+    File name lists them in quotes (`"a.txt" "b.txt"`), and a quoted list
+    typed there opens every file in it.
 - Holding Shift while clicking Delete, in the command bar, the right-click
   menu or the folder tree's menu, deletes permanently after asking, as in
   Windows Explorer. Before, only the Shift+Delete key did.

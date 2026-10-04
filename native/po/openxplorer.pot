@@ -4696,6 +4696,30 @@ msgstr ""
 msgid "Open all"
 msgstr ""
 
+#: crates/ox-app/src/window/picker.rs
+msgid "Choose one file."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "The folder “{folder}” does not exist."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{name}” is a folder, not a file."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{name}” is not a valid file name."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{name}” was not found. Check the file name and try again."
+msgstr ""
+
 #: crates/ox-app/src/window/place_editor.rs
 msgid "Add a folder or network location to Quick access."
 msgstr ""
