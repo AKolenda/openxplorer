@@ -281,9 +281,16 @@ impl BrowserWindow {
             return;
         };
         if let Some(name) = &picker.name {
-            if let [entry] = self.selected_entries().as_slice() {
-                if !entry.is_dir && !self.imp().changing_model.get() {
-                    name.set_text(&entry.name);
+            let selected = self.selected_entries();
+            let files: Vec<&Entry> = selected.iter().filter(|entry| !entry.is_dir).collect();
+            if !self.imp().changing_model.get() {
+                match (selected.as_slice(), files.as_slice()) {
+                    ([entry], [_]) => name.set_text(&entry.name),
+                    // Several files: every one, in quotes, as Windows'
+                    // dialog lists them, so the box never holds only the
+                    // first and wins over the others.
+                    (_, [_, _, ..]) => name.set_text(&quoted_names(&files)),
+                    _ => {}
                 }
             }
         }
@@ -564,9 +571,17 @@ impl BrowserWindow {
                 return None;
             }
         }
+        // The selected files' names, as the box lists them: the selection.
+        let files: Vec<&Entry> = selected.iter().filter(|entry| !entry.is_dir).collect();
+        if files.len() > 1 && quoted_names(&files) == typed {
+            return None;
+        }
         let Some(shown) = self.picking_folder() else {
             return Some(Err(not_local()));
         };
+        if let Some(names) = parse_quoted_names(&typed) {
+            return Some(typed_files(picker, &shown, &names));
+        }
         let path = typed_path(&typed, &shown);
         if path.is_dir() {
             name_box.set_text("");
@@ -814,6 +829,51 @@ fn attach_field(
     control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
     fields.attach(&label, 0, row, 1, 1);
     fields.attach(control, 1, row, 1, 1);
+}
+
+/// The files of a quoted list typed in an Open dialog's File name, each
+/// from the folder shown or a path of its own; the first that is not a
+/// file is named.
+fn typed_files(picker: &Picker, shown: &Path, names: &[String]) -> Result<Vec<PathBuf>, String> {
+    if names.len() > 1 && picker.chooses_one() {
+        return Err("Choose one file.".to_owned());
+    }
+    names
+        .iter()
+        .map(|name| {
+            let path = typed_path(name, shown);
+            if path.is_file() {
+                Ok(path)
+            } else {
+                Err(ox_core::i18n::format_message(NOT_FOUND, &[("name", name)]))
+            }
+        })
+        .collect()
+}
+
+/// `files`' names in quotes, separated by spaces, as Windows' File name
+/// box lists several selected files: `"a.txt" "b.txt"`.
+fn quoted_names(files: &[&Entry]) -> String {
+    let quoted: Vec<String> = files.iter().map(|entry| format!("\"{}\"", entry.name)).collect();
+    quoted.join(" ")
+}
+
+/// The names of a quoted list such as `"a.txt" "b.txt"`, `None` for text
+/// that is not one (a plain name or path). A file name cannot hold a
+/// quote here, as in Windows.
+fn parse_quoted_names(text: &str) -> Option<Vec<String>> {
+    let mut names = Vec::new();
+    let mut rest = text.trim();
+    while !rest.is_empty() {
+        let inside = rest.strip_prefix('"')?;
+        let end = inside.find('"')?;
+        let name = inside[..end].trim();
+        if !name.is_empty() {
+            names.push(name.to_owned());
+        }
+        rest = inside[end + 1..].trim_start();
+    }
+    (!names.is_empty()).then_some(names)
 }
 
 /// Selects the name without its extension, as Windows does, so typing
@@ -1268,6 +1328,119 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("letter.odt")]);
+    }
+
+    /// Several files selected in an Open dialog for several files are all
+    /// the choice, as in Windows: File name lists them in quotes, which the
+    /// accept button sends, instead of keeping the first file's name. A
+    /// quoted list typed in the box is the choice too.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn several_selected_files_are_all_sent() {
+        let fixture = Fixture::empty();
+        for name in ["letter.odt", "notes.md", "plan.txt"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "OpenFile",
+            vec![("multiple", true.to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("Open has a File name box");
+
+        portal.test.select_named("letter.odt");
+        settle();
+        assert_eq!(name.text(), "letter.odt");
+        let model = window.folder_model();
+        let notes = (0..model.n_items())
+            .find(|position| model.name_at(*position).as_deref() == Some("notes.md"))
+            .expect("notes.md is listed");
+        model.selection().select_item(notes, false);
+        settle();
+        assert_eq!(
+            name.text(),
+            "\"letter.odt\" \"notes.md\"",
+            "the box lists every selected file"
+        );
+
+        picker.accept.emit_clicked();
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        let mut uris = uris;
+        uris.sort();
+        assert_eq!(
+            uris,
+            [fixture.uri_of("letter.odt"), fixture.uri_of("notes.md")],
+            "both files are sent, not only the first"
+        );
+    }
+
+    /// A quoted list reads as its names; anything else is no list.
+    #[test]
+    fn quoted_lists_read_as_their_names() {
+        assert_eq!(
+            super::parse_quoted_names("\"a.txt\" \"my notes.md\""),
+            Some(vec!["a.txt".to_owned(), "my notes.md".to_owned()])
+        );
+        assert_eq!(
+            super::parse_quoted_names(" \"one\" "),
+            Some(vec!["one".to_owned()])
+        );
+        assert_eq!(super::parse_quoted_names("plain.txt"), None, "a plain name");
+        assert_eq!(super::parse_quoted_names("\"open"), None, "an unclosed quote");
+        assert_eq!(
+            super::parse_quoted_names("\"a\" b"),
+            None,
+            "a name outside quotes"
+        );
+        assert_eq!(super::parse_quoted_names("\"\""), None, "no name");
+    }
+
+    /// A quoted list typed in File name opens every file in it; one that
+    /// is not there is named.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_typed_quoted_list_opens_every_file_in_it() {
+        let fixture = Fixture::empty();
+        for name in ["letter.odt", "notes.md"] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "OpenFile",
+            vec![("multiple", true.to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let name = window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("Open has a File name box");
+
+        name.set_text("\"letter.odt\" \"gone.txt\"");
+        name.emit_activate();
+        assert!(
+            window.shown_message().contains("gone.txt"),
+            "the missing file is named"
+        );
+        assert!(answer.borrow().is_none(), "no answer yet");
+
+        name.set_text("\"notes.md\" \"letter.odt\"");
+        name.emit_activate();
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("notes.md"), fixture.uri_of("letter.odt")]);
     }
 
     /// Save takes a path from the folder shown and adds the chosen type's

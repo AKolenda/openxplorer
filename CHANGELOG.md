@@ -15,6 +15,9 @@
   - Ctrl+Q cancels the dialog instead of closing every window, and Ctrl+N
     and Open file location in new window open no window from it.
   - A dialog for one file keeps one item selected.
+  - Several files selected in an Open dialog for several are all chosen:
+    File name lists them in quotes (`"a.txt" "b.txt"`), and a quoted list
+    typed there opens every file in it.
 
 # 2.0.1 — 2026-10-02
 
