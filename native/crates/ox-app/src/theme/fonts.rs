@@ -23,6 +23,8 @@ pub(crate) fn css_for_text_size(text_size: TextSize) -> String {
     rules.push(menu_rules(scale));
     rules.extend(IconSize::levels().map(|icon_size| tile_rule(icon_size, text_size)));
     rules.push(compact_rule(text_size));
+    rules.extend(compact_density_rules(scale, text_size));
+    rules.extend(selection_bar_rules(scale));
     rules.join("\n") + "\n"
 }
 
@@ -199,6 +201,13 @@ const fn grows(selector: &'static str, floor: i32, per_scale: f64, fixed: f64) -
     }
 }
 
+/// A sidebar row (`.side-entry`).
+const SIDEBAR_ROW: ScaledHeight = grows(".sidebar list > row", 35, 20.0, 15.0);
+
+/// A sidebar row in Compact view: 26 pixels at 100% instead of 35, growing
+/// with the text as the usual rows do.
+const COMPACT_SIDEBAR_ROW: ScaledHeight = grows("window.compact-density .sidebar list > row", 26, 20.0, 6.0);
+
 /// Every bar and control height that follows the text size: the title
 /// bar and tabs, the sidebar rows (`.side-entry`), the command bar and its
 /// commands, the column titles (`#column-head`), the status bar and the
@@ -209,7 +218,7 @@ const fn grows(selector: &'static str, floor: i32, per_scale: f64, fixed: f64) -
 const SCALED_HEIGHTS: &[ScaledHeight] = &[
     TITLE_BAR,
     TAB,
-    grows(".sidebar list > row", 35, 20.0, 15.0),
+    SIDEBAR_ROW,
     grows(".commandbar", 54, 30.0, 12.0),
     grows(
         ".commandbar button.command, .commandbar menubutton.command > button",
@@ -259,6 +268,39 @@ fn details_row_rule(detail_row: i32) -> String {
     format!("columnview.files > listview > row {{ min-height: {row}px; }}")
 }
 
+/// Compact view's rows (`window.compact-density`, set by
+/// `window/compact_density.rs`, VIEW-067): the sidebar's rows stand
+/// closer, and the details rows as close as the List layout's items
+/// ([`compact_row`]), less the 1-pixel margin above and below each, so
+/// rows 38 pixels apart at 100% stand 26 apart. The window class makes
+/// these rules win over the usual heights above. The folder tree's rows
+/// are in `skin/sidebar.css`, as their usual height is.
+fn compact_density_rules(scale: f64, text_size: TextSize) -> [String; 2] {
+    let row = compact_row(text_size) - 2;
+    [
+        format!("window.compact-density columnview.files > listview > row {{ min-height: {row}px; }}"),
+        COMPACT_SIDEBAR_ROW.rule(scale),
+    ]
+}
+
+/// The height of the accent bar that marks the selected sidebar row
+/// (`.pill` in `resources/skin/sidebar.css`).
+const SELECTION_BAR_HEIGHT: i32 = 16;
+
+/// The accent bar's place on the selected sidebar row, in the usual rows
+/// and in Compact view's: centred on the row, the odd pixel above it, so
+/// 10 pixels down a 35-pixel row as Chromium drew the web's bar.
+fn selection_bar_rules(scale: f64) -> [String; 2] {
+    let rule = |selector: &str, row: &ScaledHeight| {
+        let margin = (row.height(scale) - SELECTION_BAR_HEIGHT + 1) / 2;
+        format!("{selector} {{ margin-top: {margin}px; }}")
+    };
+    [
+        rule(".sidebar .pill", &SIDEBAR_ROW),
+        rule("window.compact-density .sidebar .pill", &COMPACT_SIDEBAR_ROW),
+    ]
+}
+
 /// Menu rows and width (`.menu button{min-height:calc(22px * s + 11px)}`
 /// and `.menu.win10{width:max(264px, calc(235px * s))}`). The width rule
 /// sets the contents box, inside 3px of padding and a 1px border. The
@@ -296,7 +338,7 @@ fn tile_rule(icon_size: IconSize, text_size: TextSize) -> String {
     format!("gridview.files.{class} > child {{ min-width: {width}px; min-height: {height}px; }}")
 }
 
-/// The height of the compact view's items at `text_size`
+/// The height of the List layout's items at `text_size`
 /// ([`compact_row`]), less the 1-pixel gap below each.
 fn compact_rule(text_size: TextSize) -> String {
     let height = compact_row(text_size) - 1;
@@ -310,6 +352,41 @@ mod tests {
     /// The stylesheet at `percent`, one of the levels.
     fn css_at(percent: u32) -> String {
         css_for_text_size(TextSize::from_percent(percent))
+    }
+
+    /// Compact view's rows are 24 pixels in Details and 26 in the sidebar
+    /// at 100%, and still grow with larger text, staying closer than the
+    /// usual rows.
+    ///
+    /// parity: VIEW-067
+    #[test]
+    fn compact_view_rows_are_closer_and_grow_with_the_text() {
+        let css = css_at(100);
+        assert!(
+            css.contains("window.compact-density columnview.files > listview > row { min-height: 24px; }")
+        );
+        assert!(css.contains("window.compact-density .sidebar list > row { min-height: 26px; }"));
+        let larger = css_at(150);
+        assert!(
+            larger.contains("window.compact-density columnview.files > listview > row { min-height: 36px; }")
+        );
+        assert!(larger.contains("window.compact-density .sidebar list > row { min-height: 36px; }"));
+        assert!(larger.contains(".sidebar list > row { min-height: 45px; }"));
+    }
+
+    /// The selected sidebar row's 16-pixel accent bar stays centred on the
+    /// row, 10 pixels down a 35-pixel row, 5 down Compact view's 26-pixel
+    /// one, and further down the taller rows of larger text.
+    ///
+    /// parity: LOOK-014, VIEW-067
+    #[test]
+    fn the_selection_bar_stays_centred_on_the_sidebar_row() {
+        let css = css_at(100);
+        assert!(css.contains(".sidebar .pill { margin-top: 10px; }"));
+        assert!(css.contains("window.compact-density .sidebar .pill { margin-top: 5px; }"));
+        let larger = css_at(150);
+        assert!(larger.contains(".sidebar .pill { margin-top: 15px; }"));
+        assert!(larger.contains("window.compact-density .sidebar .pill { margin-top: 10px; }"));
     }
 
     /// parity: VIEW-044

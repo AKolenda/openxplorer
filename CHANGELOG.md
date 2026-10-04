@@ -5,6 +5,10 @@
   Windows Explorer. Before, only the Shift+Delete key did.
 - The note at the bottom of the Details pane ("Select an item to see its
   properties…") uses the pane's whole width instead of a narrow column.
+- Compact view, as in Windows 11: View > Compact view, and the same switch
+  in Settings > Appearance > Files and folders, draws the Details rows and
+  the navigation pane's rows closer together, so more items fit. Off by
+  default. (Not the List layout, which Dolphin calls "Compact".)
 
 # 2.0.1 — 2026-10-02
 

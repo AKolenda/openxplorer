@@ -369,7 +369,7 @@
         "id": "folder-views",
         "title": "Choose a folder view",
         "paragraphs": [
-          "View offers Details, List and icon sizes. Use Ctrl+mouse wheel or the status-bar slider to change icon size. Details can expand folders in place; drag from empty space to select items, hold Ctrl to toggle them or Shift to add them.",
+          "View offers Details, List and icon sizes. Use Ctrl+mouse wheel or the status-bar slider to change icon size. Details can expand folders in place; drag from empty space to select items, hold Ctrl to toggle them or Shift to add them. View → Compact view, also in Settings → Appearance → Files and folders, draws the Details rows and the navigation pane closer together, as in Windows 11, so more items fit.",
           "Right-click a Details heading to choose columns, then drag headings to reorder them. The Recycle Bin includes Original location and Date deleted. Sort offers additional file properties, grouping and a Folders first switch. Relative dates include the time; Settings → Appearance → Files and folders can show absolute dates instead."
         ]
       },

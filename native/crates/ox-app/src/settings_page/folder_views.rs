@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The Appearance page's "Files and folders" group: previews (VIEW-058),
-//! as Dolphin's Previews settings offer them, and item counts in a
-//! folder's Size (VIEW-037), as its "Number of items". Each switch saves
-//! the folder views' options at once, and every window follows.
+//! as Dolphin's Previews settings offer them, Windows 11's Compact view
+//! (VIEW-067), Dolphin's view options, and item counts in a folder's Size
+//! (VIEW-037), as its "Number of items". Each switch saves its preference
+//! or the folder views' options at once, and every window follows.
 
 use gtk::glib;
 use ox_core::settings::{PreferencesUpdate, ViewOptions};
@@ -75,6 +76,12 @@ const PREVIEW_DOCUMENTS: RowText = RowText {
     keywords: "thumbnails types plugins pdf office fonts",
 };
 
+const COMPACT_DENSITY: RowText = RowText {
+    title: "Compact view",
+    description: "Rows in the file list and the navigation pane stand closer, so more items fit.",
+    keywords: "density spacing padding rows tight dense smaller",
+};
+
 const ITEM_COUNTS: RowText = RowText {
     title: "Show the number of items in folders",
     description: "The Size column says how many items a folder on this computer holds.",
@@ -93,6 +100,16 @@ pub(super) fn group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Files and folders"));
     add_preview_rows(page, &group);
     let rows = [
+        (
+            COMPACT_DENSITY,
+            PreferenceBinding {
+                read: |preferences| preferences.compact_density,
+                write: |on| PreferencesUpdate {
+                    compact_density: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
         (
             RELATIVE_DATES,
             PreferenceBinding {

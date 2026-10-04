@@ -2184,6 +2184,10 @@ msgstr ""
 msgid "A frame of each video, made by the desktop's thumbnailer."
 msgstr ""
 
+#: crates/ox-app/src/settings_page/folder_views.rs crates/ox-app/src/window/command_bar/menus.rs
+msgid "Compact view"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/folder_views.rs
 msgid "Each folder keeps its own layout, sorting and grouping; off, every folder shares one."
 msgstr ""
@@ -2245,6 +2249,10 @@ msgid "Remember each folder's view"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Rows in the file list and the navigation pane stand closer, so more items fit."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
 msgid "Selection marker"
 msgstr ""
 
@@ -2278,6 +2286,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/folder_views.rs
 msgid "date modified time today yesterday absolute short format column"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
+msgid "density spacing padding rows tight dense smaller"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/folder_views.rs
