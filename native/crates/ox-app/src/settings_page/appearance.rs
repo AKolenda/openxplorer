@@ -56,7 +56,7 @@ const RIGHT_CLICK_MENU: RowText = RowText {
 
 const HIDE_EXPAND_ARROWS: RowText = RowText {
     title: "Hide expand arrows",
-    description: "No arrows beside This PC and Network, in the folder tree or beside folders in the file list, as in Windows. Right and Left still open and close folders in place.",
+    description: "As in Windows, the arrows beside This PC, Network and the folder tree show only while the pointer is over the navigation pane, and the file list shows none. Right and Left still open and close folders in place.",
     keywords: "chevron expander triangle sidebar navigation pane tree folders details windows",
 };
 

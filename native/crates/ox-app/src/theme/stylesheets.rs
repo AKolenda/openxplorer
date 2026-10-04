@@ -255,18 +255,44 @@ mod tests {
         }
     }
 
-    /// "Hide expand arrows" (SIDE-032) draws every kind of expand arrow
-    /// transparent under the window's class.
+    /// The rule that starts with `selector`, up to its closing brace.
+    fn rule_starting(selector: &str) -> &'static str {
+        let start = RULES
+            .find(selector)
+            .unwrap_or_else(|| panic!("a rule for {selector}"));
+        let end = RULES[start..].find('}').expect("the rule ends");
+        &RULES[start..start + end]
+    }
+
+    /// "Hide expand arrows" (SIDE-032) hides the sidebar's chevrons and
+    /// the folder tree's arrows until the pointer is over the sidebar, as
+    /// Windows does, and the file list's folder arrows always.
     ///
     /// parity: SIDE-032
     #[test]
     fn the_skin_hides_every_kind_of_expand_arrow() {
-        let start = RULES
-            .find("window.hide-expand-arrows .sidebar .expand,")
-            .expect("the rule");
-        let rule = &RULES[start..start + RULES[start..].find('}').expect("its end")];
-        assert!(rule.contains("window.hide-expand-arrows .folder-tree treeexpander expander,"));
-        assert!(rule.contains("window.hide-expand-arrows columnview.files .folder-expander"));
-        assert!(rule.contains("opacity: 0;"));
+        let hidden = rule_starting("window.hide-expand-arrows .sidebar .expand,");
+        assert!(hidden.contains("window.hide-expand-arrows .folder-tree treeexpander expander {"));
+        assert!(hidden.contains("opacity: 0;"));
+        let revealed = rule_starting("window.hide-expand-arrows .sidebar:hover .expand,");
+        assert!(revealed
+            .contains("window.hide-expand-arrows .sidebar:hover .folder-tree treeexpander expander {"));
+        assert!(revealed.contains("opacity: 1;"));
+        let list = rule_starting("window.hide-expand-arrows columnview.files .folder-expander {");
+        assert!(list.contains("opacity: 0;"));
+        assert!(
+            !RULES.contains(":hover columnview.files .folder-expander"),
+            "the file list's arrows never come back"
+        );
+    }
+
+    /// The chevrons of This PC and Network have their own highlight, a
+    /// step past the row's (SIDE-033).
+    ///
+    /// parity: SIDE-033
+    #[test]
+    fn the_section_chevrons_have_their_own_highlight() {
+        let hover = rule_starting("window.ox .sidebar button.side-expander:hover {");
+        assert!(hover.contains("background-color: @ox_pressed;"));
     }
 }

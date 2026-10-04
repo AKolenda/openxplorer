@@ -86,9 +86,9 @@ fn row_content(entry: &SidebarEntry, icon_size: u32) -> gtk::Box {
     // resources/skin/sidebar.css), so no box spacing.
     let content = gtk::Box::builder().css_classes(["side-entry"]).build();
     if entry.level == RowLevel::Group {
-        let expander = icons::image(Icon::ChevronDown16, EXPANDER_SIZE);
-        expander.add_css_class("expand");
-        content.append(&expander);
+        if let Some(expander) = section_expander(entry.section) {
+            content.append(&expander);
+        }
     }
     let icon = row_icon(entry.icon, icon_size);
     if matches!(entry.icon, Art::Network(_)) {
@@ -120,6 +120,55 @@ fn eject_button(eject: &EjectButton) -> gtk::Button {
     button.update_property(&[gtk::accessible::Property::Label(eject.label)]);
     removal_action(eject.removal).assign_with_target_to(&button, &eject.uri.to_variant());
     button
+}
+
+/// The chevron of This PC or Network: a button of its own that collapses
+/// and expands the section, as in Windows Explorer's navigation pane,
+/// with its own highlight; clicking the name still opens the place
+/// (SIDE-033). The sidebar sets its glyph and state ([`show_expanded`]).
+fn section_expander(section: Section) -> Option<gtk::Button> {
+    let (key, _) = section.hiding()?;
+    let button = gtk::Button::builder()
+        .child(&icons::image(Icon::ChevronDown16, EXPANDER_SIZE))
+        .css_classes(["expand", "side-expander"])
+        .valign(gtk::Align::Center)
+        .focus_on_click(false)
+        .can_focus(false)
+        .build();
+    WindowAction::ToggleSidebarSection.assign_with_target_to(&button, &key.to_variant());
+    show_expanded(&button, true);
+    Some(button)
+}
+
+/// Draws the chevron `button` open (pointing down) or closed (pointing
+/// right), names what a click does, and tells screen readers.
+pub(super) fn show_expanded(button: &gtk::Button, expanded: bool) {
+    let glyph = if expanded {
+        Icon::ChevronDown16
+    } else {
+        Icon::ChevronRight16
+    };
+    button.set_child(Some(&icons::image(glyph, EXPANDER_SIZE)));
+    if expanded {
+        button.remove_css_class("collapsed");
+    } else {
+        button.add_css_class("collapsed");
+    }
+    let label = if expanded {
+        ox_core::i18n::gettext("Collapse")
+    } else {
+        ox_core::i18n::gettext("Expand")
+    };
+    button.set_tooltip_text(Some(&label));
+    button.update_property(&[gtk::accessible::Property::Label(&label)]);
+    button.update_state(&[gtk::accessible::State::Expanded(Some(expanded))]);
+}
+
+/// The chevron button of the group head `row`, if it is one.
+pub(super) fn expander_of(row: &gtk::ListBoxRow) -> Option<gtk::Button> {
+    crate::window::widget_tree::descendants::<gtk::Button>(row)
+        .into_iter()
+        .find(|button| button.has_css_class("side-expander"))
 }
 
 /// The accent bar that marks the selected row.

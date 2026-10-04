@@ -653,11 +653,11 @@ msgstr ""
 msgid "Folder contents — type a filename prefix to select"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/cells/expander.rs
+#: crates/ox-app/src/folder_view/cells/expander.rs crates/ox-app/src/window/sidebar/row.rs
 msgid "Collapse"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/cells/expander.rs
+#: crates/ox-app/src/folder_view/cells/expander.rs crates/ox-app/src/window/sidebar/row.rs
 msgid "Expand"
 msgstr ""
 
@@ -1859,6 +1859,10 @@ msgid "update version release upgrade software updates install restart flatpak"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "As in Windows, the arrows beside This PC, Network and the folder tree show only while the pointer is over the navigation pane, and the file list shows none. Right and Left still open and close folders in place."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Ctrl + and Ctrl − change it anywhere; Ctrl 0 resets. Desktop scaling is unchanged."
 msgstr ""
 
@@ -1876,10 +1880,6 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/theme/appearance_button.rs
 msgid "Light"
-msgstr ""
-
-#: crates/ox-app/src/settings_page/appearance.rs
-msgid "No arrows beside This PC and Network, in the folder tree or beside folders in the file list, as in Windows. Right and Left still open and close folders in place."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs

@@ -1,9 +1,13 @@
 # Unreleased
 
+- The arrows beside This PC and Network in the sidebar now collapse and
+  expand those sections, as in Windows, with their own highlight.
+  Clicking the name still opens the place.
 - Settings > Appearance > Layout > "Hide expand arrows", as in Windows:
-  no arrows beside This PC and Network, in the folder tree or beside
-  folders in the file list. Right and Left still open and close folders
-  in place. The arrows show by default.
+  the sidebar's arrows (This PC, Network and the folder tree) show only
+  while the pointer is over the sidebar, and the file list shows no
+  folder arrows. Right and Left still open and close folders in place.
+  The arrows show by default.
 
 # 2.0.1 — 2026-10-02
 

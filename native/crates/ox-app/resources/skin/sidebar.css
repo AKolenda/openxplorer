@@ -57,7 +57,22 @@
 .sidebar list > row.indent .side-entry { padding-left: 32px; }
 /* This PC and Network: the 9px chevron starts 5px in and the icon 19px. */
 .sidebar list > row.group .side-entry { padding-left: 5px; }
-.sidebar .expand { margin-right: 5px; }
+/* The chevron of This PC and Network (SIDE-033): a 17px button of its
+   own around the 9px glyph, which stays where it was (5px in, 5px before
+   the icon), with its own highlight, a step past the row's, as the eject
+   button has. */
+window.ox .sidebar button.side-expander {
+  min-width: 17px;
+  min-height: 17px;
+  padding: 0;
+  margin: 0 1px 0 -4px;
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+  background: none;
+  color: @ox_text;
+}
+window.ox .sidebar button.side-expander:hover { background-color: @ox_pressed; }
 .sidebar .side-glyph { margin: 1px 13px 0 1px; }
 .sidebar .side-art { margin: 0 12px 0 1px; }
 .sidebar .pin { color: @ox_text_tertiary; margin-left: 12px; }
@@ -131,11 +146,20 @@ paned.workspace > separator.keyboard-focus {
 }
 
 /* Settings > Appearance > Layout > Hide expand arrows (SIDE-032,
-   window/expand_arrows.rs): the chevrons of This PC and Network, the
-   folder tree's arrows and the file list's folder arrows are drawn fully
-   transparent, keeping their room, so nothing moves. */
+   window/expand_arrows.rs), as Windows Explorer: the sidebar's chevrons
+   (This PC, Network, the folder tree) stay hidden until the pointer is
+   over the sidebar, then fade in; the file list's folder arrows stay
+   hidden, as Explorer's file list has none. Hidden arrows keep their
+   room, so nothing moves. Without animations GTK skips the fade. */
 window.hide-expand-arrows .sidebar .expand,
-window.hide-expand-arrows .folder-tree treeexpander expander,
+window.hide-expand-arrows .folder-tree treeexpander expander {
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+window.hide-expand-arrows .sidebar:hover .expand,
+window.hide-expand-arrows .sidebar:hover .folder-tree treeexpander expander {
+  opacity: 1;
+}
 window.hide-expand-arrows columnview.files .folder-expander {
   opacity: 0;
 }

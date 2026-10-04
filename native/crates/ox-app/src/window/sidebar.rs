@@ -88,6 +88,8 @@ mod imp {
         pub(super) hidden_rows: RefCell<Vec<HiddenRow>>,
         /// Whether anything is hidden, which "Show all entries" lists.
         pub(super) anything_hidden: Cell<bool>,
+        /// The sections collapsed with their chevron (SIDE-033).
+        pub(super) collapsed: RefCell<Vec<super::entries::Section>>,
     }
 
     #[glib::object_subclass]
@@ -369,6 +371,67 @@ impl Sidebar {
         for row in &rows {
             list.append(row);
         }
+        self.show_collapsed_sections();
+    }
+
+    /// Collapses the section whose key is `key` (This PC or Network), or
+    /// expands it again, as its chevron does (SIDE-033). The rows stay;
+    /// only the section's own rows are hidden.
+    pub(in crate::window) fn toggle_section(&self, key: &str) {
+        let Some(section) = self
+            .imp()
+            .entries
+            .borrow()
+            .iter()
+            .map(|entry| entry.section)
+            .find(|section| section.hiding().is_some_and(|(shown, _)| shown == key))
+        else {
+            return;
+        };
+        {
+            let mut collapsed = self.imp().collapsed.borrow_mut();
+            if let Some(position) = collapsed.iter().position(|shown| *shown == section) {
+                collapsed.remove(position);
+            } else {
+                collapsed.push(section);
+            }
+        }
+        self.show_collapsed_sections();
+    }
+
+    /// Hides the rows inside collapsed sections, shows the others, and
+    /// turns each section's chevron to match.
+    fn show_collapsed_sections(&self) {
+        let collapsed = self.imp().collapsed.borrow().clone();
+        let entries = self.imp().entries.borrow();
+        for (index, entry) in entries.iter().enumerate() {
+            let Some(row) = i32::try_from(index)
+                .ok()
+                .and_then(|index| self.list().row_at_index(index))
+            else {
+                continue;
+            };
+            let closed = collapsed.contains(&entry.section);
+            match entry.level {
+                entries::RowLevel::Child => row.set_visible(!closed),
+                entries::RowLevel::Group => {
+                    if let Some(expander) = row::expander_of(&row) {
+                        row::show_expanded(&expander, !closed);
+                    }
+                }
+                entries::RowLevel::Place => {}
+            }
+        }
+    }
+
+    /// Whether the section whose key is `key` is collapsed, for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn section_is_collapsed(&self, key: &str) -> bool {
+        self.imp()
+            .collapsed
+            .borrow()
+            .iter()
+            .any(|section| section.hiding().is_some_and(|(shown, _)| shown == key))
     }
 
     /// Replaces the rows with `rows`, dimming the hidden ones shown, and
@@ -413,6 +476,7 @@ impl Sidebar {
         let list = self.list();
         list.remove(&old);
         list.insert(&row, position);
+        self.show_collapsed_sections();
         if selected {
             list.select_row(Some(&row));
         }

@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Settings > Appearance > Layout > "Hide expand arrows" (SIDE-032), as
-//! Windows Explorer draws no expand arrows in its file list: no arrow is
-//! drawn beside This PC and Network in the sidebar, in the folder tree or
-//! beside folders in the file list. Off by default.
+//! Windows Explorer draws them: the chevrons of This PC and Network and
+//! the folder tree's arrows show only while the pointer is over the
+//! sidebar, and the file list draws no folder arrows. Off by default.
 //!
 //! On, the window carries the [`HIDE_CLASS`] class and
-//! `resources/skin/sidebar.css` draws the three kinds of arrow fully
-//! transparent, keeping their room so nothing moves. A class on the window
-//! reaches every arrow at once, whichever rows are shown or built later,
-//! and nothing is reloaded. Folders still open and close in place with
-//! Right and Left. This PC and Network do not fold, so their chevrons
-//! were only drawn.
+//! `resources/skin/sidebar.css` draws those arrows transparent, keeping
+//! their room so nothing moves, and fades the sidebar's in on hover. A
+//! class on the window reaches every arrow at once, whichever rows are
+//! shown or built later, and nothing is reloaded. Folders still open and
+//! close in place with Right and Left.
 
 use gtk::prelude::*;
 

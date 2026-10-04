@@ -51,7 +51,7 @@ fn with_fixture_pinned(fixture: &Fixture) -> TestWindow {
 
 /// parity: SIDE-001
 #[gtk::test]
-fn the_group_chevrons_never_collapse_and_quick_access_has_no_heading() {
+fn quick_access_has_no_heading_and_this_pc_opens_from_its_name() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let sidebar = test.window.sidebar();
@@ -66,8 +66,12 @@ fn the_group_chevrons_never_collapse_and_quick_access_has_no_heading() {
         "{texts:?}"
     );
     for group in ["This PC", "Network"] {
-        let buttons = descendants::<gtk::Button>(&row_named(&test, group));
-        assert!(buttons.is_empty(), "{group}'s chevron is no button");
+        let chevron = section_chevron(&test, group);
+        assert_eq!(
+            chevron.action_name().as_deref(),
+            Some("win.toggle-sidebar-section"),
+            "{group}'s chevron collapses its section, not the row's place"
+        );
     }
 
     assert!(row_named(&test, "This PC").activate());
@@ -75,6 +79,63 @@ fn the_group_chevrons_never_collapse_and_quick_access_has_no_heading() {
 
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::ThisPc.uri()));
     assert!(sidebar.labels().contains(&"Local Disk".to_owned()));
+}
+
+/// The chevron button of the group head labelled `group`.
+fn section_chevron(test: &TestWindow, group: &str) -> gtk::Button {
+    descendants::<gtk::Button>(&row_named(test, group))
+        .into_iter()
+        .find(|button| button.has_css_class("side-expander"))
+        .unwrap_or_else(|| panic!("{group} has a chevron button"))
+}
+
+/// The labels of the sidebar rows shown, hidden ones left out.
+fn shown_labels(test: &TestWindow) -> Vec<String> {
+    let sidebar = test.window.sidebar();
+    let labels = sidebar.labels();
+    descendants::<gtk::ListBoxRow>(sidebar.list())
+        .into_iter()
+        .zip(labels)
+        .filter(|(row, _)| row.is_visible())
+        .map(|(_, label)| label)
+        .collect()
+}
+
+/// Clicking This PC's chevron collapses the section, as Windows
+/// Explorer's navigation pane does: its drives are hidden and the chevron
+/// points right, while the window stays where it was. Clicking it again
+/// shows them. The collapse holds when the sidebar's rows are rebuilt.
+///
+/// parity: SIDE-033
+#[gtk::test]
+fn the_this_pc_chevron_collapses_and_expands_its_section() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let shown = || shown_labels(&test);
+    assert!(shown().contains(&"Local Disk".to_owned()));
+    let folder = test.window.current_uri();
+    let chevron = section_chevron(&test, "This PC");
+    assert!(!chevron.has_css_class("collapsed"));
+
+    chevron.emit_clicked();
+    wait_until("This PC to collapse", || {
+        !shown().contains(&"Local Disk".to_owned())
+    });
+    let chevron = section_chevron(&test, "This PC");
+    assert!(chevron.has_css_class("collapsed"), "the chevron points right");
+    assert!(shown().contains(&"This PC".to_owned()), "the head stays");
+    assert!(shown().contains(&"Network".to_owned()), "other sections stay");
+    assert_eq!(test.window.current_uri(), folder, "the chevron opens nothing");
+    assert!(test.window.sidebar().section_is_collapsed("thisPc"));
+
+    // Rows rebuilt (a drive coming or going) keep the section collapsed.
+    test.window.render_places();
+    wait_for_frames(&test.window, 2);
+    assert!(!shown().contains(&"Local Disk".to_owned()));
+
+    section_chevron(&test, "This PC").emit_clicked();
+    wait_until("This PC to expand", || shown().contains(&"Local Disk".to_owned()));
+    assert!(!section_chevron(&test, "This PC").has_css_class("collapsed"));
 }
 
 /// parity: SIDE-002
