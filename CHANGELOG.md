@@ -3,6 +3,8 @@
 - Holding Shift while clicking Delete, in the command bar, the right-click
   menu or the folder tree's menu, deletes permanently after asking, as in
   Windows Explorer. Before, only the Shift+Delete key did.
+- The note at the bottom of the Details pane ("Select an item to see its
+  properties…") uses the pane's whole width instead of a narrow column.
 
 # 2.0.1 — 2026-10-02
 
