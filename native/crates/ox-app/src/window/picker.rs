@@ -300,8 +300,10 @@ impl BrowserWindow {
         picker.as_ref().map(|picker| picker.request.window_title())
     }
 
-    /// Follows a new location or selection: the accept button, and in a
-    /// Save dialog the name of a selected file.
+    /// Follows a new location or selection: the accept button, and in
+    /// File name the selected files' names. A folder selected in an Open
+    /// dialog empties File name, so Open opens the folder rather than the
+    /// name typed or selected before.
     pub(super) fn picker_selection_changed(&self) {
         let Some(picker) = self.picker() else {
             return;
@@ -309,6 +311,7 @@ impl BrowserWindow {
         if let Some(name) = &picker.name {
             let selected = self.selected_entries();
             let files: Vec<&Entry> = selected.iter().filter(|entry| !entry.is_dir).collect();
+            let opens = matches!(picker.request.mode, ChooserMode::Open { .. });
             if !self.imp().changing_model.get() {
                 match (selected.as_slice(), files.as_slice()) {
                     ([entry], [_]) => name.set_text(&entry.name),
@@ -316,6 +319,7 @@ impl BrowserWindow {
                     // dialog lists them, so the box never holds only the
                     // first and wins over the others.
                     (_, [_, _, ..]) => name.set_text(&quoted_names(&files)),
+                    ([entry], []) if entry.is_dir && opens => name.set_text(""),
                     _ => {}
                 }
             }
@@ -1760,6 +1764,36 @@ mod tests {
             [fixture.uri_of("Drafts/plan.txt")],
             "the file typed, not plan.txt in the folder shown"
         );
+    }
+
+    /// A folder selected after a file in an Open dialog is what Open
+    /// opens: File name empties, so the file selected before is not sent.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn open_opens_a_folder_selected_after_a_file() {
+        let fixture = Fixture::empty();
+        fixture.write("letter.odt");
+        fs::create_dir(fixture.path("Drafts")).expect("a folder");
+        fs::write(fixture.path("Drafts/plan.txt"), b"x").expect("a file");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        let picker = test.window.picker().expect("a picker");
+        let name = picker.name.clone().expect("Open has a File name box");
+
+        test.select_named("letter.odt");
+        settle();
+        assert_eq!(name.text(), "letter.odt");
+        test.select_named("Drafts");
+        settle();
+        assert_eq!(name.text(), "", "a folder empties File name");
+
+        picker.accept.emit_clicked();
+        wait_until("the folder to open", || {
+            test.names().contains(&"plan.txt".to_owned())
+        });
+        assert!(answer.borrow().is_none(), "letter.odt is not sent");
     }
 
     /// Alt+Up works from the File name box, where focus starts in Save;
