@@ -92,11 +92,6 @@ impl GroupClock {
         })
     }
 
-    /// The clock of the present moment.
-    pub(crate) fn now() -> Option<Self> {
-        Self::at(&glib::DateTime::now_local().ok()?)
-    }
-
     /// The period of `seconds`: its title and the rank that orders the
     /// periods oldest first.
     fn period(&self, seconds: Option<u64>) -> Group {
@@ -150,11 +145,43 @@ pub(crate) struct GroupClocks {
 impl GroupClocks {
     /// The clocks of the present moment.
     pub(crate) fn now() -> Option<Self> {
+        let now = local_now()?;
+        let today = ox_core::grouping::CivilDate::new(
+            now.year(),
+            u32::try_from(now.month()).ok()?,
+            u32::try_from(now.day_of_month()).ok()?,
+        )?;
+        let calendar = Calendar {
+            today,
+            ..Calendar::now()?
+        };
         Some(Self {
-            clock: GroupClock::now()?,
-            dates: Calendar::now()?.date_ranges(),
+            clock: GroupClock::at(&now)?,
+            dates: calendar.date_ranges(),
         })
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The time tests pretend it is, `None` for the real time.
+    static TEST_NOW: std::cell::RefCell<Option<glib::DateTime>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Makes the groups count from `now` instead of the real time, or from the
+/// real time again with `None`, for tests.
+#[cfg(test)]
+pub(crate) fn set_clock_for_tests(now: Option<glib::DateTime>) {
+    TEST_NOW.with(|shown| shown.replace(now));
+}
+
+/// The local time the groups count from.
+fn local_now() -> Option<glib::DateTime> {
+    #[cfg(test)]
+    if let Some(now) = TEST_NOW.with(|shown| shown.borrow().clone()) {
+        return Some(now);
+    }
+    glib::DateTime::now_local().ok()
 }
 
 /// The group `item` falls in under `grouping`.

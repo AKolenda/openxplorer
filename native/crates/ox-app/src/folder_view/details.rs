@@ -247,6 +247,12 @@ mod imp {
         pub(super) arranging: Cell<bool>,
         /// What the cells share, set by [`super::DetailsView::new`].
         pub(super) cells: OnceCell<super::CellContext>,
+        /// The group headers on screen, whose counts follow the model.
+        pub(super) headers: RefCell<Vec<glib::WeakRef<gtk::ListHeader>>>,
+        /// Set while a recount of the headers waits for the main loop.
+        pub(super) recount_pending: Cell<bool>,
+        /// Names the group of an item while the groups are headed.
+        pub(super) header_title: RefCell<super::group_headers::HeaderTitle>,
     }
 
     #[glib::object_subclass]
@@ -336,6 +342,7 @@ impl DetailsView {
         column_keys::make_titles_keyboard_operable(&view);
         view.describe_rows(model);
         view.start_grouped_lists_at_the_top(model);
+        view.follow_group_counts(model);
         view.sort_by(SortOrder::DEFAULT);
         view
     }

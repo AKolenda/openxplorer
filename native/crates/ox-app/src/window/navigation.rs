@@ -420,6 +420,9 @@ impl BrowserWindow {
     /// scroll position, and re-reads the shared settings. While searching
     /// it refreshes the search instead ([`Self::refresh_search`]).
     pub(super) fn refresh(&self) {
+        // A folder grouped by date counts from today, also after a night
+        // the computer slept through.
+        self.follow_the_day();
         if self.refresh_search() {
             return;
         }

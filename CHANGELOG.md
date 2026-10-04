@@ -11,6 +11,9 @@
   hidden when a grouped folder opens.
 - No more crash when Details columns change while groups are shown, such as
   going Back from the Recycle Bin to Downloads grouped by date.
+- Group headings keep their counts right ("Today (3)") as files are added
+  or removed, and date groups move on at midnight: today's files become
+  Yesterday's without opening the folder again.
 
 # 2.0.1 — 2026-10-02
 

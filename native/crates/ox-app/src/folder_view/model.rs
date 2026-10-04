@@ -184,6 +184,18 @@ impl FolderModel {
         }
     }
 
+    /// Groups the items again when the day has changed since they were
+    /// grouped, so "Today" and the other periods count from the new day.
+    /// Does nothing on the same day, or while the items are not grouped.
+    pub(crate) fn follow_the_day(&self) {
+        let Some((grouping, clocks)) = self.sort_options.get().grouping else {
+            return;
+        };
+        if GroupClocks::now().is_some_and(|now| now != clocks) {
+            self.set_grouping(Some(grouping));
+        }
+    }
+
     /// What the items are grouped by, if they are grouped.
     pub(crate) fn grouping(&self) -> Option<Grouping> {
         self.sort_options.get().grouping.map(|(grouping, _)| grouping)

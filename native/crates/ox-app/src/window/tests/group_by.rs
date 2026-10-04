@@ -11,6 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use gtk::glib;
 use gtk::prelude::*;
 use ox_core::grouping::GroupBy;
 use ox_core::location::file_uri;
@@ -151,6 +152,55 @@ fn names_fall_in_explorers_letter_ranges() {
     test.activate("group-by", Some("size"));
     assert_eq!(headings(&test), ["Folders (1)", "Tiny (0 – 16 KB) (3)"]);
     assert_eq!(test.selected_names(), ["Notes 2.txt"], "and regrouping again");
+}
+
+/// A group's count follows the files: one added or removed shows in its
+/// heading at the next listing (F5), without the folder being opened
+/// again. Before, "Today (2)" kept its first count.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn group_counts_follow_files_added_and_removed() {
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+    let new_file = home.home.join("Downloads").join("receipt.pdf");
+
+    fs::write(&new_file, "x").expect("a new file");
+    test.activate("refresh", None);
+    wait_until("the new file", || {
+        test.names().contains(&"receipt.pdf".to_owned())
+    });
+    assert_eq!(headings(&test), ["Today (3)", "A long time ago (1)"]);
+
+    fs::remove_file(&new_file).expect("the file goes");
+    test.activate("refresh", None);
+    wait_until("the file to go", || {
+        !test.names().contains(&"receipt.pdf".to_owned())
+    });
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+}
+
+/// Date groups follow the calendar past midnight: when the day changes,
+/// today's files move to Yesterday without the folder being opened again.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn date_groups_move_on_when_the_day_changes() {
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+
+    let tomorrow = glib::DateTime::now_local()
+        .and_then(|now| now.add_days(1))
+        .expect("tomorrow");
+    crate::folder_view::groups::set_clock_for_tests(Some(tomorrow));
+    test.window.follow_the_day();
+    let shown = headings(&test);
+    crate::folder_view::groups::set_clock_for_tests(None);
+    assert_eq!(shown, ["Yesterday (2)", "A long time ago (1)"]);
 }
 
 /// Columns shown, hidden or moved while the groups are headed: Downloads
