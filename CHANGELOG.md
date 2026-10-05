@@ -1,3 +1,12 @@
+# Unreleased
+
+- Settings' small grey text is no longer cut off at the top or bottom
+  (#34). With GTK 4.22's Vulkan and NGL renderers, Segoe UI drawn at a
+  fractional size such as 12.5 pixels could lose the tops or bottoms of
+  its letters. Settings' descriptions and notes are now 12 pixels and its
+  titles 14, and every font size is rounded to a whole pixel at every text
+  size.
+
 # 2.0.2 — 2026-10-04
 
 More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
