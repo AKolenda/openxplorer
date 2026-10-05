@@ -428,6 +428,9 @@ impl FolderPane {
 
     /// Moves to `position` with `flags`, scrolling as `scroll` allows.
     fn scroll_to(&self, position: u32, flags: gtk::ListScrollFlags, scroll: Option<gtk::ScrollInfo>) {
+        if scroll.is_none() {
+            self.details().note_scroll_to(position);
+        }
         match self.view() {
             FolderView::Details => self
                 .details()

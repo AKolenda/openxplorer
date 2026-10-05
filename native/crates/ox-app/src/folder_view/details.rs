@@ -236,10 +236,17 @@ mod imp {
         pub(super) columns: Cell<DetailsColumns>,
         /// Whether the view lists a folder or search results.
         pub(super) listing: Cell<DetailsListing>,
-        /// Counts the scroll positions the window restored, so a grouped
-        /// list filled from empty does not override one restored
+        /// Counts the scroll positions the window restored or scrolled to,
+        /// so a grouped list kept at its top does not override one set
         /// meanwhile.
         pub(super) scroll_restores: Cell<u64>,
+        /// While a grouped list that changed at its top is laid out again:
+        /// the count of [`Self::scroll_restores`] when it changed.
+        pub(super) keep_top: Cell<Option<u64>>,
+        /// The frames drawn since the list last changed at its top.
+        pub(super) keep_top_frames: Cell<u32>,
+        /// The frame clock counting those frames, and its handler.
+        pub(super) keep_top_watch: RefCell<Option<(gtk::gdk::FrameClock, glib::SignalHandlerId)>>,
         /// The columns the user chose to show after Name, in their order.
         pub(super) chosen: RefCell<Vec<SortColumn>>,
         /// Set while the view puts its own columns in order, which is not
@@ -349,7 +356,7 @@ impl DetailsView {
         view.follow_column_drags();
         column_keys::make_titles_keyboard_operable(&view);
         view.describe_rows(model);
-        view.start_grouped_lists_at_the_top(model);
+        view.keep_grouped_lists_at_the_top(model);
         view.follow_group_counts(model);
         view.sort_by(SortOrder::DEFAULT);
         view

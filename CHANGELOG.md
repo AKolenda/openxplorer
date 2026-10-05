@@ -18,6 +18,11 @@
   ("gtk_list_item_manager_ensure_items"), so (None) is saved and the groups
   go away. The headings now come off before the list changes and go back on
   after, whenever the grouping changes.
+- A grouped list at its top stays at its top, with the first heading in
+  sight, when it changes: a file dialog opening on Downloads or showing
+  another file type, another sort or grouping, files added or removed.
+  GTK kept the row that was at the top edge there, which scrolled "Today"
+  out of sight or cut it in half.
 
 # 2.0.2 — 2026-10-04
 

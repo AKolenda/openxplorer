@@ -214,41 +214,122 @@ impl DetailsView {
         self.column_view().header_factory().is_some()
     }
 
-    /// Notes that the window restores a scroll position now, which a list
-    /// shown from its top must not override.
+    /// Notes that the window restores a scroll position now, or scrolls
+    /// to an item, which a list kept at its top must not override.
     pub(crate) fn note_scroll_restore(&self) {
         let restores = &self.imp().scroll_restores;
         restores.set(restores.get().wrapping_add(1));
+        self.imp().keep_top.set(None);
     }
 
-    /// Shows a grouped list filled from empty (a folder's first items)
-    /// from its top. GTK keeps the first row at the top edge, which leaves
-    /// the first group's header above it, scrolled out of sight. A scroll
-    /// position the window restores (Back, a tab switch) still wins, even
-    /// one restored before this runs.
-    pub(super) fn start_grouped_lists_at_the_top(&self, model: &FolderModel) {
+    /// Keeps a grouped list that changes while it is at its top at its
+    /// top, with the first group's header in sight: a folder's first
+    /// items, another sort or grouping, another file type in a file
+    /// dialog, or files added or removed.
+    ///
+    /// GTK keeps the row at the top edge where it was, not the top of the
+    /// list. Its header is above it, and rows that come before it (the
+    /// files another type shows) push the list down; either way the first
+    /// heading ended up out of sight or cut in half. So when the list was
+    /// at its top, the view goes back there each time GTK lays it out
+    /// again, until two frames have drawn the change. A scroll position
+    /// the window restores (Back, a tab switch) or an item it scrolls to
+    /// still wins, and so does a list the user scrolled down first.
+    pub(super) fn keep_grouped_lists_at_the_top(&self, model: &FolderModel) {
         model.selection().connect_items_changed(glib::clone!(
             #[weak(rename_to = view)]
             self,
-            move |list, position, removed, added| {
-                let filled = position == 0 && removed == 0 && added > 0 && list.n_items() == added;
-                if !filled || !view.shows_group_headers() {
-                    return;
+            move |_, _, _, _| {
+                // The change is not laid out yet, so the adjustment still
+                // says where the user was.
+                if view.shows_group_headers() && view.vadjustment().value() < 0.5 {
+                    view.keep_the_top_until_drawn();
                 }
-                let adjustment = view.vadjustment();
-                let restores = view.imp().scroll_restores.get();
-                glib::idle_add_local_once(glib::clone!(
-                    #[weak]
-                    view,
-                    move || {
-                        let restored = view.imp().scroll_restores.get() != restores;
-                        if !restored && adjustment.value() > 0.0 {
-                            adjustment.set_value(0.0);
-                        }
-                    }
-                ));
             }
         ));
+        let back_to_the_top = glib::clone!(
+            #[weak(rename_to = view)]
+            self,
+            move |adjustment: &gtk::Adjustment| {
+                let kept = view.imp().keep_top.get();
+                if kept.is_some_and(|restores| restores == view.imp().scroll_restores.get())
+                    && adjustment.value() > 0.0
+                {
+                    adjustment.set_value(0.0);
+                }
+            }
+        );
+        let adjustment = self.vadjustment();
+        adjustment.connect_changed(back_to_the_top.clone());
+        adjustment.connect_value_changed(back_to_the_top);
+    }
+
+    /// Scrolls to the first item's group header, not to the item: GTK
+    /// puts the item itself at the top edge, with its header above it out
+    /// of sight. Any other scroll the window asks for wins over a list
+    /// kept at its top.
+    pub(crate) fn note_scroll_to(&self, position: u32) {
+        self.note_scroll_restore();
+        if position == 0 && self.shows_group_headers() {
+            self.keep_the_top_until_drawn();
+        }
+    }
+
+    /// Keeps the list at its top through the layouts of a change, until
+    /// two frames have drawn it; another change starts the count again.
+    /// Unshown, the list waits until it is.
+    fn keep_the_top_until_drawn(&self) {
+        let imp = self.imp();
+        imp.keep_top.set(Some(imp.scroll_restores.get()));
+        imp.keep_top_frames.set(0);
+        if imp.keep_top_watch.borrow().is_some() {
+            return;
+        }
+        let view = self.column_view();
+        if let Some(clock) = view.frame_clock() {
+            self.count_drawn_frames(&clock);
+            return;
+        }
+        let handler: Rc<std::cell::Cell<Option<glib::SignalHandlerId>>> = Rc::default();
+        let first = Rc::clone(&handler);
+        let realized = view.connect_realize(glib::clone!(
+            #[weak(rename_to = details)]
+            self,
+            move |view| {
+                if let Some(id) = first.take() {
+                    view.disconnect(id);
+                }
+                if let (Some(clock), Some(_)) = (view.frame_clock(), details.imp().keep_top.get()) {
+                    details.count_drawn_frames(&clock);
+                }
+            }
+        ));
+        handler.set(Some(realized));
+    }
+
+    /// Lets the list go from its top once `clock` has drawn two frames
+    /// since the last change. GTK lays a change out in the first and lays
+    /// it out again, where it was put back, in the second.
+    fn count_drawn_frames(&self, clock: &gtk::gdk::FrameClock) {
+        let painted = clock.connect_after_paint(glib::clone!(
+            #[weak(rename_to = view)]
+            self,
+            move |clock| {
+                let imp = view.imp();
+                let frames = imp.keep_top_frames.get() + 1;
+                imp.keep_top_frames.set(frames);
+                if frames < 2 && imp.keep_top.get().is_some() {
+                    clock.request_phase(gtk::gdk::FrameClockPhase::PAINT);
+                    return;
+                }
+                imp.keep_top.set(None);
+                if let Some((clock, id)) = imp.keep_top_watch.take() {
+                    clock.disconnect(id);
+                }
+            }
+        ));
+        self.imp().keep_top_watch.replace(Some((clock.clone(), painted)));
+        clock.request_phase(gtk::gdk::FrameClockPhase::PAINT);
     }
 }
 
