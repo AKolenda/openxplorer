@@ -5955,7 +5955,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (enter_on_a_command_opens_its_menu_below_it_and_not_the_selection: every command bar menu drops down below its button, and Enter on a focused button opens its menu without opening the selected file; the_menus_list_the_current_items_between_the_same_dividers for New, Sort and More options; the_view_menu_keeps_the_text_size_items_and_checks_the_current_view). The View menu lists every icon size the native app has, not only Large icons."
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (enter_on_a_command_opens_its_menu_below_it_and_not_the_selection: every command bar menu drops down below its button, and Enter on a focused button opens its menu without opening the selected file; the_menus_list_the_current_items_between_the_same_dividers for New, Sort and More options; the_view_menu_keeps_the_text_size_items_and_checks_the_current_view). The View menu lists every icon size the native app has, not only Large icons. While a command bar menu is open, a click on another menu button of the bar opens that menu at once, as in Windows Explorer (native/crates/ox-app/src/window/command_bar/menu_switch.rs; window/tests/command_bar.rs clicking_another_menu_while_one_is_open_opens_it, closing_a_menu_without_a_click_on_another_opens_nothing)."
 
 [[feature]]
 id = "CMD-006"

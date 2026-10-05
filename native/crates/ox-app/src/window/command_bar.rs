@@ -15,6 +15,7 @@
 //! its right; the file commands come from [`EDIT_COMMANDS`] and the menus
 //! of [`menus`].
 
+pub(super) mod menu_switch;
 mod menus;
 
 use gtk::glib;
@@ -173,6 +174,7 @@ mod imp {
             let bar = self.obj();
             bar.add_file_commands();
             bar.finish_right_commands();
+            bar.switch_menus_on_click();
         }
     }
 
@@ -188,6 +190,16 @@ glib::wrapper! {
 }
 
 impl CommandBar {
+    /// New to More options, for [`menu_switch`].
+    fn imp_file_commands(&self) -> gtk::Widget {
+        self.imp().file_commands.get().upcast()
+    }
+
+    /// The appearance toggle, for [`menu_switch`].
+    fn imp_appearance_button(&self) -> gtk::MenuButton {
+        self.imp().appearance_button.get()
+    }
+
     /// New ▾ │ Cut … Move to Trash │ Sort ▾, View ▾ and More options,
     /// remembering the commands a compact window hides.
     fn add_file_commands(&self) {

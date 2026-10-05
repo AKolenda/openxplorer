@@ -1,3 +1,11 @@
+# Unreleased
+
+- While a command bar menu is open (New, Sort, View, More options or the
+  appearance menu), clicking another of those buttons opens its menu
+  straight away, as in Windows Explorer, instead of only closing the first
+  one. Escape, choosing an item or clicking anywhere else still just closes
+  the menu.
+
 # 2.0.2 — 2026-10-04
 
 More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save

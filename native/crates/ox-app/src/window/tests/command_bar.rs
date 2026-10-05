@@ -505,3 +505,63 @@ fn copy_path_runs_on_explorers_and_dolphins_keys() {
         "Path copied. Sharing permissions are unchanged."
     );
 }
+
+/// Opens `name`'s menu, puts the pointer over `next` and closes the menu
+/// as a click would, with the primary button `held` or not; returns
+/// `next`'s button.
+fn close_menu_over(test: &TestWindow, name: &str, next: &str, held: bool) -> (MenuPopover, gtk::MenuButton) {
+    let bar = test.window.command_bar();
+    let open = menu_button(test, name);
+    let target = menu_button(test, next);
+    open.popup();
+    let menu = menu_of(test, name);
+    wait_until("the first menu", || menu.is_visible());
+    let (x, y) = super::support::middle_of(&target, bar);
+    let motion = bar
+        .observe_controllers()
+        .into_iter()
+        .find_map(|controller| controller.ok().and_downcast::<gtk::EventControllerMotion>())
+        .expect("the bar follows the pointer");
+    motion.emit_by_name::<()>("motion", &[&x, &y]);
+    crate::window::command_bar::menu_switch::tests::HELD.set(Some(held));
+    menu.popdown();
+    wait_until("the first menu to close", || !menu.is_visible());
+    wait_for_frames(&test.window, 3);
+    crate::window::command_bar::menu_switch::tests::HELD.set(None);
+    (menu, target)
+}
+
+/// As in Windows Explorer, a click on another menu of the command bar
+/// while one is open closes it and opens the one clicked.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn clicking_another_menu_while_one_is_open_opens_it() {
+    let test = laid_out(Page::ThisPc.uri());
+
+    let (sort, view) = close_menu_over(&test, "Sort", "View", true);
+
+    let view_menu = menu_of(&test, "View");
+    wait_until("the View menu", || view_menu.is_visible());
+    assert!(!sort.is_visible());
+    assert!(view.is_active());
+    view_menu.popdown();
+}
+
+/// A menu closed by Escape or an item chosen, with the pointer resting
+/// over another menu, opens nothing; nor does clicking the open menu's
+/// own button.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn closing_a_menu_without_a_click_on_another_opens_nothing() {
+    let test = laid_out(Page::ThisPc.uri());
+
+    let (_, view) = close_menu_over(&test, "Sort", "View", false);
+    let (_, sort) = close_menu_over(&test, "Sort", "Sort", true);
+
+    assert!(!menu_of(&test, "View").is_visible());
+    assert!(!view.is_active());
+    assert!(!menu_of(&test, "Sort").is_visible());
+    assert!(!sort.is_active());
+}
