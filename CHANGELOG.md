@@ -1,7 +1,4 @@
-# 2.0.2 — 2026-10-04
-
-More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
-dialogs, Delete, Compact view and the navigation pane.
+# Unreleased
 
 - Deleting permanently (Shift+Delete, or Delete where there is no Recycle
   Bin) never goes into another drive. A folder where a drive, share or bind
@@ -9,6 +6,12 @@ dialogs, Delete, Compact view and the navigation pane.
   and a folder with one mounted inside it is refused before anything is
   deleted, naming the mount. Before, the deletion went into the mounted
   drive, deleted its files and only failed at the end with "Device busy".
+
+# 2.0.2 — 2026-10-04
+
+More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
+dialogs, Delete, Compact view and the navigation pane.
+
 - Extract all works like Windows Explorer's: it appears in the command bar
   while a ZIP is selected, and its dialog is as short as Explorer's, with
   one field, "Files will be extracted to this folder", filled in with the
