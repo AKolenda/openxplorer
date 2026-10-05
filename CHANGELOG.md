@@ -1,3 +1,12 @@
+# Unreleased
+
+- A file list at its top stays at its top when files come before the one
+  at the top edge, in every view: in an Open or Save dialog switching
+  from one file type to more (`*.svg`, then All files) no longer scrolls
+  the list down past its first files. GTK kept the row that was at the
+  top edge there. A position restored by Back or a tab switch, a file the
+  window scrolls to and a list scrolled down by hand are left alone.
+
 # 2.0.2 — 2026-10-04
 
 More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save

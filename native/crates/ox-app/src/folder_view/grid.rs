@@ -173,6 +173,13 @@ impl IconView {
         }
     }
 
+    /// Both adjustments of the scroller, down and sideways: the compact
+    /// layout scrolls along the one, the icons along the other.
+    pub(crate) fn both_scroll_adjustments(&self) -> [gtk::Adjustment; 2] {
+        let scroller = &self.imp().scroller;
+        [scroller.vadjustment(), scroller.hadjustment()]
+    }
+
     /// How the items are laid out.
     pub(crate) fn layout(&self) -> GridLayout {
         self.imp().layout.get()
