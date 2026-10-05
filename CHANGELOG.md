@@ -1,4 +1,7 @@
-# Unreleased
+# 2.0.2 — 2026-10-04
+
+More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
+dialogs, Delete, Compact view and the navigation pane.
 
 - The right-click menu of a This PC or Network card no longer crashes the
   app when the page is drawn again while it is open (a drive or share

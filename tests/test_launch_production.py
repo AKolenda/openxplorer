@@ -65,9 +65,9 @@ def main():
                   page.locator('.tour-frame img').get_attribute('fetchpriority')=='high')
             check('Header links to the public repository',page.locator('.header-nav a[href="https://github.com/AKolenda/openxplorer"]').count()==1)
             download=page.locator('.hero .button.primary')
-            check('Download button names and opens the current release',
-                  download.inner_text().strip()=='Download v'+VERSION and
-                  download.get_attribute('href')=='https://github.com/AKolenda/openxplorer/releases/tag/v'+VERSION)
+            check('Download button opens the latest release',
+                  download.inner_text().strip()=='Download' and
+                  download.get_attribute('href')=='https://github.com/AKolenda/openxplorer/releases/latest')
             check('Native file dragging links to its compatibility guide',page.locator('.details a[href="/docs/interface/#file-drag-drop"]').count()==1)
             check('Homepage runs no embedded explorer',page.locator('iframe').count()==0)
             for width in [320,390,768,959]:

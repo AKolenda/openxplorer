@@ -35,7 +35,7 @@ pnpm preview
 python3 native/tools/check.py
 python3 native/parity/check.py
 python3 native/tools/build_deb.py --app-id io.winspace.Development
-python3 native/tools/verify_deb.py dist/native/openxplorer_2.0.1_all.deb
+python3 native/tools/verify_deb.py dist/native/openxplorer_2.0.2_all.deb
 ```
 
 ## Make a focused contribution
@@ -67,4 +67,4 @@ Documentation search opens from its named button. The site does not intercept Co
 
 ---
 
-OpenXplorer 2.0.1. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.2. Project-authored documentation: AGPL-3.0-only.
