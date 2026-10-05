@@ -14,6 +14,10 @@
 - Group headings keep their counts right ("Today (3)") as files are added
   or removed, and date groups move on at midnight: today's files become
   Yesterday's without opening the folder again.
+- Turning groups off in a long Details list no longer crashes with GTK 4.22
+  ("gtk_list_item_manager_ensure_items"), so (None) is saved and the groups
+  go away. The headings now come off before the list changes and go back on
+  after, whenever the grouping changes.
 
 # 2.0.2 — 2026-10-04
 

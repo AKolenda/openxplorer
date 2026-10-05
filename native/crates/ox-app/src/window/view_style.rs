@@ -67,10 +67,10 @@ impl BrowserWindow {
         let state = self.sort_state();
         self.set_action_state(WindowAction::Sort, &state.by.as_str().to_variant());
         self.set_action_state(WindowAction::Direction, &state.direction.as_str().to_variant());
-        let model = self.folder_pane().model();
-        if let Some(grouping) = model.grouping() {
+        let pane = self.folder_pane();
+        if let Some(grouping) = pane.model().grouping() {
             // Grouped by the sort key, the groups follow the new sort.
-            model.set_grouping(Grouping::of(grouping.by, state));
+            group_pane(pane, Grouping::of(grouping.by, state));
         }
     }
 
@@ -96,10 +96,7 @@ impl BrowserWindow {
     /// key, or stops grouping it, without saving it.
     pub(super) fn show_group_by(&self, by: GroupBy) {
         let pane = self.folder_pane();
-        let model = pane.model();
-        model.set_grouping(Grouping::of(by, self.sort_state()));
-        let titles: Option<GroupTitle> = by.is_grouped().then(|| model.group_titles());
-        pane.details().show_group_headers(titles);
+        group_pane(pane, Grouping::of(by, self.sort_state()));
         self.set_action_state(WindowAction::GroupBy, &by.as_str().to_variant());
         self.update_expandability();
     }
@@ -185,10 +182,7 @@ impl BrowserWindow {
             },
         };
         show_pane_sort(pane, state);
-        let grouping = style.grouping();
-        model.set_grouping(Grouping::of(grouping, state));
-        pane.details()
-            .show_group_headers(grouping.is_grouped().then(|| model.group_titles()));
+        group_pane(pane, Grouping::of(style.grouping(), state));
         model.set_show_hidden(style.show_hidden);
         pane.set_previews_enabled(style.show_previews.unwrap_or(true));
         if let Some(columns) = &style.details_columns {
@@ -329,6 +323,32 @@ fn pane_sort_state(pane: &FolderPane) -> SortState {
 }
 
 /// Changes one pane's sorting without touching window action state.
+/// Groups `pane`'s items by `grouping`, or stops grouping them with
+/// `None`, with the details view's group headings to match.
+///
+/// The headings come off before the items change and go back on after.
+/// GTK's list keeps a heading for each group it has shown; when its model
+/// changes under the headings, between the grouped sort model and the
+/// ungrouped tree or from one set of groups to another, GTK 4.22 aborts
+/// in `gtk_list_item_manager_ensure_items` on a long list scrolled into
+/// its groups. Nothing changes when the grouping, its day and the
+/// headings already match.
+pub(super) fn group_pane(pane: &FolderPane, grouping: Option<Grouping>) {
+    let model = pane.model();
+    let details = pane.details();
+    let has_headings = details.column_view().header_factory().is_some();
+    let unchanged = model.grouping() == grouping && !model.day_changed();
+    if unchanged && has_headings == grouping.is_some() {
+        return;
+    }
+    details.show_group_headers(None);
+    model.set_grouping(grouping);
+    if grouping.is_some() {
+        let titles: GroupTitle = model.group_titles();
+        details.show_group_headers(Some(titles));
+    }
+}
+
 fn show_pane_sort(pane: &FolderPane, state: SortState) {
     let details = pane.details();
     match state.by {

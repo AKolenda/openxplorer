@@ -20,7 +20,9 @@ impl BrowserWindow {
     /// were grouped.
     pub(crate) fn follow_the_day(&self) {
         for pane in self.folder_panes() {
-            pane.model().follow_the_day();
+            if pane.model().day_changed() {
+                super::view_style::group_pane(pane, pane.model().grouping());
+            }
         }
     }
 

@@ -548,34 +548,150 @@ fn hovering_group_by_opens_its_submenu_beside_the_menu() {
     );
 }
 
-/// Turning groups on and off again in Details, as often as the user
-/// likes, keeps the list and saves the choice. In 2.0.2, turning "Show in
-/// groups" off aborted in `FolderModel::set_grouping`, so the choice was
-/// never saved and the groups could not be turned off.
-///
-/// parity: VIEW-022
-#[gtk::test]
-fn groups_turn_on_and_off_again_in_details() {
-    let fixture = Fixture::standard();
-    // Shown and laid out: GTK builds group headings only for a list on screen.
+/// A folder of many more files than fit on screen, with one subfolder,
+/// shown in Details and scrolled to the middle.
+fn long_folder_scrolled_to_the_middle(fixture: &Fixture) -> TestWindow {
+    long_folder_of(fixture, 400)
+}
+
+/// A folder of `files` files spread over many groups and one subfolder,
+/// shown in Details and scrolled to the middle.
+fn long_folder_of(fixture: &Fixture, files: usize) -> TestWindow {
+    fs::create_dir(fixture.path("Archive")).expect("a subfolder");
+    for number in 0..40 {
+        fs::write(fixture.path(&format!("Archive/old {number:02}.txt")), b"x").expect("a file");
+    }
+    // Spread over many groups, so headings fall all through the list:
+    // names from A to Z, dates from today to long ago, several sizes.
+    let days = [0_u64, 1, 3, 9, 40, 200, 1200];
+    for number in 0..files {
+        let letter = char::from(b'a' + u8::try_from(number % 26).expect("a letter"));
+        let name = format!("{letter} file {number:04}.txt");
+        fs::write(fixture.path(&name), vec![b'x'; (number % 5) * 40_000]).expect("a file");
+        age(
+            &fixture.path(&name),
+            Duration::from_secs(days[number % days.len()] * 86_400 + 60),
+        );
+    }
+    // Shown and laid out: GTK makes rows and headings only for a list on
+    // screen.
     let test = super::geometry::laid_out(&fixture.uri());
     test.activate("view", Some("details"));
     test.wait_for_listing("the folder");
-    let listed = test.names();
+    scroll_to_the_middle(&test);
+    test
+}
 
+/// Scrolls the details view halfway down and lets it draw.
+fn scroll_to_the_middle(test: &TestWindow) {
+    let adjustment = test.window.folder_pane().details().vadjustment();
+    wait_until("a list longer than the view", || {
+        adjustment.upper() > adjustment.page_size() * 4.0
+    });
+    adjustment.set_value((adjustment.upper() - adjustment.page_size()) / 2.0);
+    wait_for_frames(&test.window, 3);
+}
+
+/// Groups by each of `choices` and turns the groups off again, three times
+/// over, scrolled to the middle of a long list each time: the headings
+/// come and go, the list is whole again and "none" is saved.
+fn turn_groups_on_and_off(test: &TestWindow, choices: &[&str]) {
+    // At least the folder's own items: 400 files and the subfolder.
+    let listed = 401;
     for round in 0..3 {
-        for by in ["sort", "modified", "name"] {
+        for by in choices {
             test.activate("group-by", Some(by));
-            assert!(!headings(&test).is_empty(), "round {round}: grouped by {by}");
+            scroll_to_the_middle(test);
+            if *by == "sort" {
+                // A heading every few rows, so several are on screen.
+                assert!(
+                    !headings(test).is_empty(),
+                    "round {round}: headings in the middle, by {by}"
+                );
+            }
+            let details = test.window.folder_pane().details().column_view().clone();
+            assert!(
+                details.header_factory().is_some(),
+                "round {round}: grouped by {by}"
+            );
+            assert_eq!(test.action_state("group-by").as_deref(), Some(*by));
 
             test.activate("group-by", Some("none"));
-            assert!(headings(&test).is_empty(), "round {round}: {by} turned off");
-            assert_eq!(test.names(), listed, "round {round}: the list is whole again");
+            wait_for_frames(&test.window, 3);
+            assert!(headings(test).is_empty(), "round {round}: {by} turned off");
+            assert!(details.header_factory().is_none(), "round {round}: no headings");
+            let shown = test.names().len();
+            assert!(
+                shown >= listed,
+                "round {round}: the list is whole again ({shown} items)"
+            );
             assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
             wait_until("groups off to be saved", || {
                 let saved = test.context.settings_data().preferences.view_defaults;
                 saved.is_some_and(|style| style.grouping() == GroupBy::None)
             });
+            scroll_to_the_middle(test);
         }
     }
+}
+
+/// Turning groups off in a long Details list scrolled to its middle no
+/// longer aborts GTK (in `gtk_list_item_manager_ensure_items`), so the choice is saved and the groups go away. The
+/// list used to keep its group headings while it went back to the
+/// ungrouped tree.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn groups_turn_off_in_a_long_details_list() {
+    let fixture = Fixture::empty();
+    let test = long_folder_scrolled_to_the_middle(&fixture);
+
+    turn_groups_on_and_off(&test, &["sort", "modified", "name", "size"]);
+}
+
+/// The same with a subfolder expanded in the tree before grouping.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn groups_turn_off_in_a_long_details_list_with_a_folder_expanded() {
+    let fixture = Fixture::empty();
+    let test = long_folder_scrolled_to_the_middle(&fixture);
+    let model = test.window.folder_pane().model();
+    model.tree().set_expandable(true);
+    let archive = model.tree().row(0).expect("Archive comes first");
+    model.tree().set_expanded(&archive, true);
+    wait_until("the subfolder to list", || test.names().len() > 401);
+    scroll_to_the_middle(&test);
+
+    turn_groups_on_and_off(&test, &["sort", "modified"]);
+}
+
+/// A long folder that opens already grouped, as Downloads opens grouped
+/// by date, turns its groups off, and every other choice turns on and off
+/// again after it.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_long_folder_opened_grouped_turns_its_groups_off() {
+    let fixture = Fixture::empty();
+    let test = long_folder_of(&fixture, 1500);
+    test.activate("group-by", Some("modified"));
+    scroll_to_the_middle(&test);
+    test.window.navigate(&fixture.uri_of("Archive")).expect("Archive");
+    test.wait_for_listing("Archive");
+    test.activate("back", None);
+    test.wait_for_listing("the long folder again");
+    assert_eq!(
+        test.action_state("group-by").as_deref(),
+        Some("modified"),
+        "it opens grouped"
+    );
+    scroll_to_the_middle(&test);
+
+    test.activate("group-by", Some("none"));
+    wait_for_frames(&test.window, 3);
+
+    assert!(headings(&test).is_empty());
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+    turn_groups_on_and_off(&test, &["sort", "size", "type"]);
 }
