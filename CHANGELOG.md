@@ -1,7 +1,4 @@
-# 2.0.2 — 2026-10-04
-
-More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
-dialogs, Delete, Compact view and the navigation pane.
+# Unreleased
 
 - Open and Save dialogs no longer freeze the app when their folder is on a
   network share that stopped answering. The dialog checks the caller's
@@ -9,6 +6,12 @@ dialogs, Delete, Compact view and the navigation pane.
   waits at most three seconds: a folder that does not answer opens the
   dialog in the home folder, and Save or Open says the share is not
   answering. A file opened from such a share is sent as read-only.
+
+# 2.0.2 — 2026-10-04
+
+More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
+dialogs, Delete, Compact view and the navigation pane.
+
 - Extract all works like Windows Explorer's: it appears in the command bar
   while a ZIP is selected, and its dialog is as short as Explorer's, with
   one field, "Files will be extracted to this folder", filled in with the
