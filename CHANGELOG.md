@@ -1,11 +1,14 @@
+# Unreleased
+
+- The right-click menu of a This PC or Network card no longer crashes the
+  app when the page is drawn again while it is open (a drive or share
+  connecting, a server being found, or the menu's own Remove or Sign out).
+
 # 2.0.2 — 2026-10-04
 
 More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
 dialogs, Delete, Compact view and the navigation pane.
 
-- The right-click menu of a This PC or Network card no longer crashes the
-  app when the page is drawn again while it is open (a drive or share
-  connecting, a server being found, or the menu's own Remove or Sign out).
 - Extract all works like Windows Explorer's: it appears in the command bar
   while a ZIP is selected, and its dialog is as short as Explorer's, with
   one field, "Files will be extracted to this folder", filled in with the
