@@ -1587,7 +1587,7 @@ msgstr ""
 msgid "Allow guests (no account needed)"
 msgstr ""
 
-#: crates/ox-app/src/properties/sharing_panel.rs
+#: crates/ox-app/src/properties/sharing_panel.rs crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Apply"
 msgstr ""
 
@@ -1902,7 +1902,7 @@ msgstr ""
 msgid "Light"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs
+#: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Reset"
 msgstr ""
 
@@ -5359,6 +5359,14 @@ msgid "All folders"
 msgstr ""
 
 #: crates/ox-app/src/window/view_properties_dialog.rs
+msgid "Apply this view to all folders?"
+msgstr ""
+
+#: crates/ox-app/src/window/view_properties_dialog.rs
+msgid "Apply to all folders"
+msgstr ""
+
+#: crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Change"
 msgstr ""
 
@@ -5371,6 +5379,14 @@ msgid "Choose how the items of this folder are shown."
 msgstr ""
 
 #: crates/ox-app/src/window/view_properties_dialog.rs
+msgid "Every folder will forget its layout, sorting, grouping and other view settings, and show the default view."
+msgstr ""
+
+#: crates/ox-app/src/window/view_properties_dialog.rs
+msgid "Every folder will show this folder's layout, sorting, grouping and other view settings. Folders that kept a view of their own will lose it."
+msgstr ""
+
+#: crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Folders that kept a display style of their own will show this one instead."
 msgstr ""
 
@@ -5380,6 +5396,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Order"
+msgstr ""
+
+#: crates/ox-app/src/window/view_properties_dialog.rs
+msgid "Reset all folders to the default view?"
+msgstr ""
+
+#: crates/ox-app/src/window/view_properties_dialog.rs
+msgid "Reset folders"
 msgstr ""
 
 #: crates/ox-app/src/window/view_properties_dialog.rs

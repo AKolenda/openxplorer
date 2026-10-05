@@ -1,3 +1,12 @@
+# Unreleased
+
+- Folder views, as in Windows' Folder Options: the view display style
+  dialog (View > Adjust view display style…) has "Apply to all folders",
+  which makes every folder show the current folder's view and forget its
+  own, and "Reset folders", which makes every folder forget its view and
+  show the default one. Both ask first, and every open window follows at
+  once.
+
 # 2.0.2 — 2026-10-04
 
 More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save

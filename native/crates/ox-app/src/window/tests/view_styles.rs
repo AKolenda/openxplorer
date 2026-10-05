@@ -7,7 +7,7 @@ use std::fs;
 use gtk::prelude::*;
 use ox_core::settings::{ColumnWidths, PreferencesUpdate, Settings};
 
-use super::file_ops_support::open_dialog;
+use super::file_ops_support::{open_dialog, wait_for_no_dialog};
 use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::folder_pane::FolderView;
@@ -188,6 +188,129 @@ fn the_display_style_dialog_applies_its_choices() {
                     .is_some_and(|columns| columns.contains(&"owner".to_owned()))
         })
     });
+}
+
+/// With each folder keeping its own view: the folder shown sorted by size,
+/// Documents by type and the shared view by date.
+fn three_saved_views(test: &TestWindow, fixture: &Fixture) {
+    use ox_core::settings::{ViewProperties, ViewScope};
+    let sorted_by = |key: &str| ViewProperties {
+        sort: key.to_owned(),
+        ..ViewProperties::default()
+    };
+    let mut settings = Settings::open(test.settings_directory());
+    settings
+        .update_preferences(&PreferencesUpdate {
+            per_folder_views: Some(true),
+            view_defaults: Some(sorted_by("modified")),
+            ..PreferencesUpdate::default()
+        })
+        .expect("the settings file takes the change");
+    settings
+        .remember_view(&fixture.uri(), sorted_by("size"), ViewScope::Folder)
+        .expect("a folder's view");
+    settings
+        .remember_view(&fixture.uri_of("Documents"), sorted_by("type"), ViewScope::Folder)
+        .expect("a folder's view");
+    test.context.reload_settings();
+    wait_until("the saved views", || {
+        test.context.settings_data().preferences.folder_views.len() == 2
+    });
+    test.window.follow_folder_style(&fixture.uri());
+    assert_eq!(test.action_state("sort").as_deref(), Some("size"));
+}
+
+/// Opens the display style dialog, presses `button` and returns the
+/// question it asks.
+fn ask_from_the_display_style_dialog(test: &TestWindow, button: &str) -> crate::dialog::Dialog {
+    test.activate("view-properties", None);
+    let dialog = open_dialog(test);
+    dialog.press(button);
+    wait_until("the question", || {
+        open_dialog(test).title_text() != dialog.title_text()
+    });
+    open_dialog(test)
+}
+
+/// Folder views > Apply to all folders, as in Windows' Folder Options:
+/// after asking, every folder shows this folder's view and keeps none of
+/// its own. Cancel changes nothing.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn apply_to_all_folders_shows_this_folders_view_everywhere_after_asking() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    three_saved_views(&test, &fixture);
+
+    let question = ask_from_the_display_style_dialog(&test, "Apply to all folders");
+    assert_eq!(question.title_text(), "Apply this view to all folders?");
+    assert_eq!(question.button_labels(), ["Cancel", "Apply"]);
+    question.press("Cancel");
+    wait_for_no_dialog(&test);
+    let unchanged = test.context.settings_data().preferences;
+    assert_eq!(
+        unchanged.folder_views.len(),
+        2,
+        "Cancel keeps every folder's view"
+    );
+
+    ask_from_the_display_style_dialog(&test, "Apply to all folders").press("Apply");
+    wait_until("one view for every folder", || {
+        let saved = test.context.settings_data().preferences;
+        saved.folder_views.is_empty() && saved.view_defaults.is_some_and(|style| style.sort == "size")
+    });
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("Documents");
+
+    assert_eq!(
+        test.action_state("sort").as_deref(),
+        Some("size"),
+        "Documents shows the applied view, not its own"
+    );
+}
+
+/// Folder views > Reset folders: after asking, every folder forgets its
+/// view and the shared one, and the window shows the default at once.
+/// Cancel changes nothing.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn reset_folders_shows_the_default_view_everywhere_after_asking() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    three_saved_views(&test, &fixture);
+
+    let question = ask_from_the_display_style_dialog(&test, "Reset folders");
+    assert_eq!(question.title_text(), "Reset all folders to the default view?");
+    assert_eq!(question.button_labels(), ["Cancel", "Reset"]);
+    question.press("Cancel");
+    wait_for_no_dialog(&test);
+    let unchanged = test.context.settings_data().preferences;
+    assert_eq!(
+        unchanged.folder_views.len(),
+        2,
+        "Cancel keeps every folder's view"
+    );
+    assert!(unchanged.view_defaults.is_some());
+
+    ask_from_the_display_style_dialog(&test, "Reset folders").press("Reset");
+    wait_until("every view forgotten", || {
+        let saved = test.context.settings_data().preferences;
+        saved.folder_views.is_empty() && saved.view_defaults.is_none()
+    });
+    wait_until("the default view shown", || {
+        test.action_state("sort").as_deref() == Some("name")
+    });
+    let saved = Settings::open(test.settings_directory());
+    assert!(saved.data().preferences.folder_views.is_empty(), "saved to disk");
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("Documents");
+    assert_eq!(test.action_state("sort").as_deref(), Some("name"));
 }
 
 /// Saved styles and header callbacks belong to their respective split
