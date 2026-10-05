@@ -245,6 +245,8 @@ mod imp {
         pub(super) keep_top: Cell<Option<u64>>,
         /// The frames drawn since the list last changed at its top.
         pub(super) keep_top_frames: Cell<u32>,
+        /// Set while GTK waits to be told the list is at its top again.
+        pub(super) reanchor_pending: Cell<bool>,
         /// The frame clock counting those frames, and its handler.
         pub(super) keep_top_watch: RefCell<Option<(gtk::gdk::FrameClock, glib::SignalHandlerId)>>,
         /// The columns the user chose to show after Name, in their order.

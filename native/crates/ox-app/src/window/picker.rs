@@ -2010,10 +2010,16 @@ mod tests {
     }
 
     /// The first group heading on screen and how far the list is
-    /// scrolled, once the window has drawn.
+    /// scrolled, once the window has drawn and laid the list out again.
     fn top_of_the_list(window: &crate::window::BrowserWindow) -> (Option<String>, f64) {
         crate::test_support::harness::wait_for_frames(window, 4);
         let column_view = window.folder_pane().details().column_view().clone();
+        // GTK lays the list out again later for reasons of its own, such as
+        // KWin sizing the window: the list must stay where it was.
+        for list in crate::test_support::harness::descendants::<gtk::ListView>(&column_view) {
+            list.queue_allocate();
+        }
+        crate::test_support::harness::wait_for_frames(window, 4);
         let mut headings: Vec<(f32, String)> =
             crate::test_support::harness::descendants::<gtk::Label>(&column_view)
                 .into_iter()
@@ -2062,6 +2068,13 @@ mod tests {
             fixture.write(&name);
             modified_ago(&fixture.path(&name), 1_300 * 86_400);
         }
+        // Enough old drawings that the SVG files alone fill more than the
+        // view, as in a real Downloads folder.
+        for number in 0..14 {
+            let name = format!("sketch {number:02}.svg");
+            fixture.write(&name);
+            modified_ago(&fixture.path(&name), 1_300 * 86_400);
+        }
         let portal = Portal::new();
         let filters = [
             ("SVG".to_owned(), vec![(0_u32, "*.svg".to_owned())]).to_variant(),
@@ -2087,7 +2100,6 @@ mod tests {
         test.activate("group-by", Some("modified"));
         assert_eq!(test.names().first().map(String::as_str), Some("drawing.svg"));
 
-        window.folder_pane().details().vadjustment().set_value(0.0);
         let (heading, scrolled) = top_of_the_list(window);
         assert!(scrolled < 0.5, "the SVG files from their top: {scrolled}");
         assert!(heading.is_some_and(|heading| heading.starts_with("Today")));
@@ -2099,7 +2111,7 @@ mod tests {
             .clone()
             .expect("a type list");
         types.set_selected(1);
-        wait_until("every file", || test.names().len() == files.len() + 24);
+        wait_until("every file", || test.names().len() == files.len() + 24 + 14);
         let (heading, scrolled) = top_of_the_list(window);
         assert!(scrolled < 0.5, "All files from their top, not {scrolled} down");
         assert_eq!(heading.as_deref(), Some("Today (4)"), "the first heading shows");
@@ -2112,7 +2124,7 @@ mod tests {
         adjustment.set_value(0.0);
         let (heading, scrolled) = top_of_the_list(window);
         assert!(scrolled < 0.5 && heading.as_deref() == Some("Today (4)"));
-        for (shown, files, first) in [(0, 3, "Today (1)"), (1, files.len() + 24, "Today (4)")] {
+        for (shown, files, first) in [(0, 3 + 14, "Today (1)"), (1, files.len() + 24 + 14, "Today (4)")] {
             types.set_selected(shown);
             wait_until("the type's files", || test.names().len() == files);
             let (heading, scrolled) = top_of_the_list(window);

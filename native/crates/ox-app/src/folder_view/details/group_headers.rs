@@ -123,8 +123,22 @@ impl DetailsView {
         if title.is_none() {
             self.imp().header_title.replace(HeaderTitle(None));
         }
-        let factory = title.map(|title| header_factory(self, title));
-        self.column_view().set_header_factory(factory.as_ref());
+        let factory = title.map(|title| header_factory(self, title).upcast::<gtk::ListItemFactory>());
+        self.put_headers_on(factory.as_ref());
+    }
+
+    /// Sets the header factory, `None` for no headers. Headers put on a
+    /// list at its top keep it at its top: each goes above its group's
+    /// first row, and GTK keeps the first row at the top edge, which hid
+    /// the first heading when a dialog opened grouped. A grouping turns on
+    /// with the headers off while the rows are sorted again, so no change
+    /// of the rows has done this yet.
+    fn put_headers_on(&self, factory: Option<&gtk::ListItemFactory>) {
+        let at_top = self.vadjustment().value() < 0.5;
+        self.column_view().set_header_factory(factory);
+        if factory.is_some() && at_top {
+            self.keep_the_top_until_drawn();
+        }
     }
 
     /// How many items each group of the list holds, by title, read from
@@ -205,7 +219,7 @@ impl DetailsView {
         }
         change();
         if let Some(headers) = headers {
-            view.set_header_factory(Some(&headers));
+            self.put_headers_on(Some(&headers));
         }
     }
 
@@ -256,12 +270,45 @@ impl DetailsView {
                     && adjustment.value() > 0.0
                 {
                     adjustment.set_value(0.0);
+                    view.reanchor_at_the_top(adjustment);
                 }
             }
         );
         let adjustment = self.vadjustment();
         adjustment.connect_changed(back_to_the_top.clone());
         adjustment.connect_value_changed(back_to_the_top);
+    }
+
+    /// Makes GTK keep the list at its top from now on, not only show it
+    /// there. The list moves back here while GTK is setting its scroll
+    /// position, when GTK does not listen to the position (it blocks its
+    /// own `value-changed` handler in `gtk_list_base_set_adjustment_values`),
+    /// so it still keeps the row that was at the top edge where it was and
+    /// put the list back there at its next layout: the first heading was
+    /// scrolled away again on KDE Plasma with GTK 4.22, once the frames
+    /// that kept the top had passed. Once GTK has finished, the position is
+    /// announced again, and GTK keeps the top of the list where it is.
+    fn reanchor_at_the_top(&self, adjustment: &gtk::Adjustment) {
+        if self.imp().reanchor_pending.replace(true) {
+            return;
+        }
+        let adjustment = adjustment.clone();
+        glib::idle_add_local_full(
+            glib::Priority::HIGH,
+            glib::clone!(
+                #[weak(rename_to = view)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    view.imp().reanchor_pending.set(false);
+                    if adjustment.value() < 0.5 {
+                        adjustment.emit_by_name::<()>("value-changed", &[]);
+                    }
+                    glib::ControlFlow::Break
+                }
+            ),
+        );
     }
 
     /// Scrolls to the first item's group header, not to the item: GTK
