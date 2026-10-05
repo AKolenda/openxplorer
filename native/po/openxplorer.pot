@@ -7623,6 +7623,10 @@ msgstr ""
 msgid "Preview build of OpenXplorer 2.0.1 under its own application ID."
 msgstr ""
 
+#: packaging/data/io.winspace.Development.Native.metainfo.xml
+msgid "Preview build of OpenXplorer 2.0.2 under its own application ID."
+msgstr ""
+
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "SMB"
 msgstr ""
@@ -7697,4 +7701,8 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.metainfo.xml
 msgid "Show connected Android, camera/PTP and iPhone devices in the sidebar and This PC, with native GIO browsing and hot-plug refresh."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.metainfo.xml
+msgid "ZIPs can open like folders, and Extract all, the Open and Save dialogs and Shift with Delete work as in Windows. Adds Windows 11's Compact view, collapsible This PC and Network sections and an option to hide the navigation pane's expand arrows."
 msgstr ""

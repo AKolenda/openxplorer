@@ -1,4 +1,7 @@
-# Unreleased
+# 2.0.2 — 2026-10-04
+
+More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
+dialogs, Delete, Compact view and the navigation pane.
 
 - Open and Save dialogs no longer freeze the app when their folder is on a
   network share that stopped answering. The dialog checks the caller's

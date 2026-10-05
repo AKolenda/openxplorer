@@ -55,6 +55,7 @@
     "Publishing on Flathub", lists the remaining steps.
   -->
   <releases>
+    <release version="2.0.2" date="2026-10-04" type="development"><description><p>Preview build of OpenXplorer 2.0.2 under its own application ID.</p></description></release>
     <release version="2.0.1" date="2026-10-02" type="development"><description><p>Preview build of OpenXplorer 2.0.1 under its own application ID.</p></description></release>
     <release version="2.0.0" date="2026-09-28" type="development"><description><p>Preview build of OpenXplorer 2.0.0 under its own application ID.</p></description></release>
     <release version="0.1.0" date="2026-09-28" type="development"><description><p>First packaged native preview of the GTK 4 interface, for trying it beside the current OpenXplorer.</p></description></release>
