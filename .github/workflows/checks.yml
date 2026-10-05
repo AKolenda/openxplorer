@@ -89,6 +89,8 @@ jobs:
           name: release-${{ matrix.family }}-${{ matrix.format }}
           path: dist/native/
           if-no-files-found: error
+          # Only the release job of this run downloads it.
+          retention-days: 1
 
   native-flatpak:
     if: github.ref == 'refs/heads/main'
@@ -117,6 +119,8 @@ jobs:
           name: release-flatpak
           path: io.winspace.Development.flatpak
           if-no-files-found: error
+          # Only the release job of this run downloads it.
+          retention-days: 1
 
   website:
     # The website deploys on its own, so a failed package release (or one that

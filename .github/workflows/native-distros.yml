@@ -21,6 +21,11 @@ on:
     branches: [main]
     paths: *packaged-paths
   workflow_dispatch:
+# A new push to a pull request cancels the run it replaces, so superseded
+# packages are never built or stored.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 # The jobs only read the repository.
 permissions:
   contents: read
@@ -101,6 +106,9 @@ jobs:
           name: openxplorer-native-${{ matrix.family }}-${{ matrix.format }}
           path: dist/native/
           if-no-files-found: error
+          # Preview packages are for trying a change, not for keeping; the
+          # release packages come from checks.yml.
+          retention-days: ${{ github.event_name == 'pull_request' && 3 || 7 }}
 
   flatpak:
     name: Flatpak
@@ -117,11 +125,20 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Build the preview Flatpak and publish its bundle
+      - name: Build the preview Flatpak
         # Builds offline from native/packaging/flatpak/cargo-sources.json and
-        # uploads io.winspace.Development.Native.flatpak as an artifact.
+        # leaves io.winspace.Development.Native.flatpak for the next step,
+        # since the action's own upload cannot shorten the retention.
         uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
         with:
           manifest-path: native/packaging/flatpak/io.winspace.Development.Native.yml
           bundle: io.winspace.Development.Native.flatpak
           cache-key: flatpak-builder-${{ hashFiles('native/Cargo.lock') }}
+          upload-artifact: false
+      - name: Publish the bundle as a workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: io.winspace.Development.Native-x86_64.flatpak
+          path: io.winspace.Development.Native.flatpak
+          if-no-files-found: error
+          retention-days: ${{ github.event_name == 'pull_request' && 3 || 7 }}
