@@ -554,7 +554,12 @@ impl MenuPopover {
         while let Some(parent) = first.parent_menu() {
             first = parent;
         }
-        self.popdown();
+        // Every menu of the chain closes, the deepest first, and each
+        // submenu is let go of, its surface gone, before the menu it hangs
+        // from closes, so no submenu outlives the menu it hangs from. On
+        // KDE Plasma the Sort menu once stayed on screen after Group by ›
+        // Date modified; [`close_menus_on_press`] is the other half.
+        first.close_submenu();
         first.popdown();
         // GTK fails only when no ancestor has the action. Every browser
         // window and the application register them all, so that is a menu
@@ -651,11 +656,14 @@ impl MenuPopover {
         }
     }
 
-    /// Closes the submenu open beside a row, if one is.
+    /// Closes the submenu open beside a row, and any submenu of its own,
+    /// if one is.
     fn close_submenu(&self) {
         let Some((menu, index)) = self.imp().submenu.take() else {
             return;
         };
+        // A submenu of the submenu closes first.
+        menu.close_submenu();
         menu.popdown();
         menu.unparent();
         if let Some(row) = self.list().row_at_index(index) {
@@ -741,6 +749,68 @@ impl MenuPopover {
                 CheckMark::checked_if(state.as_ref() == Some(&expected))
             }
         }
+    }
+}
+
+/// Closes every menu of `window` when a mouse button is pressed anywhere
+/// in it but on a menu. A menu normally closes itself on such a press, but
+/// on KDE Plasma a press in the app's own window is the app's to handle,
+/// and the Sort menu once stayed on screen until a window of another app
+/// was clicked. The press goes on to whatever it is on.
+pub(super) fn close_menus_on_press(window: &impl IsA<gtk::Widget>) {
+    let gesture = gtk::GestureClick::new();
+    gesture.set_button(0);
+    gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
+    gesture.connect_pressed(|gesture, _, _, _| {
+        // Only watching: the press is not taken from the widgets under it.
+        gesture.set_state(gtk::EventSequenceState::Denied);
+        let pressed = gesture.current_event().and_then(|event| event.surface());
+        if let Some(window) = gesture.widget() {
+            close_menus_in(&window, pressed.as_ref());
+        }
+    });
+    window.as_ref().add_controller(gesture);
+}
+
+/// Closes the menus of `root` for a press on `pressed`: all of them, the
+/// deepest first, unless the press is on one of them. A menu that is
+/// closed but whose surface is still on screen is taken off it.
+pub(super) fn close_menus_in(root: &gtk::Widget, pressed: Option<&gdk::Surface>) {
+    let mut menus = Vec::new();
+    collect_menus(root, &mut menus);
+    let on_a_menu = pressed.is_some_and(|pressed| {
+        menus
+            .iter()
+            .any(|menu| menu.is_visible() && gtk::prelude::NativeExt::surface(menu).as_ref() == Some(pressed))
+    });
+    if on_a_menu {
+        return;
+    }
+    for menu in &menus {
+        if menu.is_visible() && menu.parent_menu().is_none() {
+            menu.close_submenu();
+            menu.popdown();
+        }
+    }
+    for menu in &menus {
+        let left_on_screen =
+            gtk::prelude::NativeExt::surface(menu).is_some_and(|surface| surface.is_mapped());
+        if !menu.is_visible() && left_on_screen {
+            WidgetExt::unrealize(menu);
+        }
+    }
+}
+
+/// Adds the menus among `widget`'s descendants to `menus`, parents before
+/// the submenus that hang from them.
+fn collect_menus(widget: &gtk::Widget, menus: &mut Vec<MenuPopover>) {
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        if let Some(menu) = current.downcast_ref::<MenuPopover>() {
+            menus.push(menu.clone());
+        }
+        collect_menus(&current, menus);
+        child = current.next_sibling();
     }
 }
 

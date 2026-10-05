@@ -23,6 +23,10 @@
   another file type, another sort or grouping, files added or removed.
   GTK kept the row that was at the top edge there, which scrolled "Today"
   out of sight or cut it in half.
+- Choosing an item in a side menu, such as Sort > Group by > Date
+  modified, closes every menu, and a click anywhere in the window closes
+  any menu still open. On KDE Plasma the Sort menu could stay on screen
+  until a window of another app was clicked.
 
 # 2.0.2 — 2026-10-04
 

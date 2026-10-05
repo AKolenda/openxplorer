@@ -29,6 +29,11 @@ impl MenuPopover {
         self.rest_at_surface_point(x, y);
     }
 
+    /// The labels of the menu's items, drawn or not, for tests.
+    pub(crate) fn items_labels(&self) -> Vec<String> {
+        self.items().into_iter().map(|item| item.label).collect()
+    }
+
     /// Presses `key` in the rows' list, as the keyboard does, for tests.
     pub(crate) fn press_in_list(&self, key: gtk::gdk::Key) -> bool {
         let keys = self
