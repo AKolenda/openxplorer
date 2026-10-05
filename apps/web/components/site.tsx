@@ -23,7 +23,7 @@ function CodeBlock({code,label='Terminal'}:{code:string;label?:string}){return <
 export function Home(){
  return <div className="site"><Header/><main id="main">
   <section className="hero"><div className="hero-inner wrap">
-   <div className="hero-copy"><h1>Familiar by design.<br/>Built for Linux.</h1><p className="lead">Browse local folders and SMB shares the way you did on Windows. Type a share path, pin the folders you use, and drag files into the apps that accept them.</p><div className="hero-actions"><a className="button primary" href={releaseUrl}><Icon name="download" size={21}/>Download v{site.version}</a><a className="text-link" href={site.repository}>View source <External/></a></div><p className="release-note">Zorin OS and compatible Ubuntu or Debian · <span className="nowrap">GNU AGPL v3.0</span><br/>Package, checksum, and release notes on GitHub.</p></div>
+   <div className="hero-copy"><h1>Familiar by design.<br/>Built for Linux.</h1><p className="lead">Browse local folders and SMB shares the way you did on Windows. Type a share path, pin the folders you use, and drag files into the apps that accept them.</p><div className="hero-actions"><a className="button primary" href={releaseUrl}><Icon name="download" size={21}/>Download</a><a className="text-link" href={site.repository}>View source <External/></a></div><p className="release-note">Zorin OS and compatible Ubuntu or Debian · <span className="nowrap">GNU AGPL v3.0</span><br/>Latest release on GitHub, with package, checksum, and release notes.</p></div>
    <ProductTour/>
   </div></section>
   <section className="screens wrap" id="screenshots">

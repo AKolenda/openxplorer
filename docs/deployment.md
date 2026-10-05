@@ -44,7 +44,7 @@ pnpm cf:deploy
 
 ## Automatic releases
 
-Changes merged into main run on the dedicated OpenXplorer self-hosted GitHub Actions runner. The workflow checks the website and desktop, verifies native file transport, packages matching installer and source archives, publishes a new version to GitHub Releases, and deploys the verified website to Cloudflare. Existing release assets are not overwritten.
+Changes merged into main run on the dedicated OpenXplorer self-hosted GitHub Actions runner. The workflow checks the website and desktop, verifies native file transport, packages matching installer and source archives, and publishes a new version to GitHub Releases; existing release assets are not overwritten. A separate job checks and deploys the website to Cloudflare, so a failed or skipped package release does not hold the site back. The website's download button opens GitHub's latest release and names no version.
 
 Pull requests do not execute on this runner. Cloudflare uses a dedicated repository secret; local OAuth credentials are not copied to CI. Runner setup and recovery are documented in docs/SELF-HOSTED-RUNNER.md.
 
@@ -60,4 +60,4 @@ Dependency installation, pnpm check, the real pnpm build and production-export b
 
 ---
 
-OpenXplorer 2.0.1. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.2. Project-authored documentation: AGPL-3.0-only.

@@ -16,6 +16,8 @@ on:
       - 'tools/audit-public-data.py'
       - 'tests/test_release_source.py'
       - 'tests/test_public_data.py'
+      # Read by native/tools/test_release_publication.py.
+      - '.github/workflows/checks.yml'
       - '.github/workflows/native-checks.yml'
   push:
     branches: [main]

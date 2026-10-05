@@ -1,4 +1,7 @@
-# Unreleased
+# 2.0.2 — 2026-10-04
+
+More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
+dialogs, Delete, Compact view and the navigation pane.
 
 - Deleting permanently (Shift+Delete, or Delete where there is no Recycle
   Bin) never goes into another drive. A folder where a drive, share or bind
