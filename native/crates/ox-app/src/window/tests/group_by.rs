@@ -576,6 +576,11 @@ fn long_folder_of(fixture: &Fixture, files: usize) -> TestWindow {
     // Shown and laid out: GTK makes rows and headings only for a list on
     // screen.
     let test = super::geometry::laid_out(&fixture.uri());
+    // The same size on every machine, so about as many rows show.
+    test.window.set_default_size(1100, 760);
+    wait_until("the test window's size", || {
+        (test.window.width() - 1100).abs() <= 8 && (test.window.height() - 760).abs() <= 8
+    });
     test.activate("view", Some("details"));
     test.wait_for_listing("the folder");
     scroll_to_the_middle(&test);
@@ -592,6 +597,31 @@ fn scroll_to_the_middle(test: &TestWindow) {
     wait_for_frames(&test.window, 3);
 }
 
+/// Scrolls the grouped details view so that a group's heading near the
+/// middle of the list is in the middle of the screen, then waits until
+/// headings are drawn. Found from
+/// the list's own groups, so it does not depend on the window's size, the
+/// row height or how many rows a group has.
+fn scroll_to_a_heading_in_the_middle(test: &TestWindow, by: &str) {
+    let column_view = test.window.folder_pane().details().column_view().clone();
+    let model = column_view.model().expect("the details view lists the folder");
+    let sections = model
+        .dynamic_cast_ref::<gtk::SectionModel>()
+        .expect("a grouped list has sections");
+    let middle = model.n_items() / 2;
+    let (start, end) = sections.section(middle);
+    let group_start = if end < model.n_items() { end } else { start };
+    column_view.scroll_to(group_start, None, gtk::ListScrollFlags::NONE, None);
+    wait_for_frames(&test.window, 3);
+    // Then up by half a view, so the heading sits in the middle of the
+    // screen between rows of two groups.
+    let adjustment = test.window.folder_pane().details().vadjustment();
+    adjustment.set_value((adjustment.value() - adjustment.page_size() / 2.0).max(0.0));
+    wait_until(&format!("headings in the middle, by {by}"), || {
+        !headings(test).is_empty()
+    });
+}
+
 /// Groups by each of `choices` and turns the groups off again, three times
 /// over, scrolled to the middle of a long list each time: the headings
 /// come and go, the list is whole again and "none" is saved.
@@ -601,14 +631,9 @@ fn turn_groups_on_and_off(test: &TestWindow, choices: &[&str]) {
     for round in 0..3 {
         for by in choices {
             test.activate("group-by", Some(by));
-            scroll_to_the_middle(test);
-            if *by == "sort" {
-                // A heading every few rows, so several are on screen.
-                assert!(
-                    !headings(test).is_empty(),
-                    "round {round}: headings in the middle, by {by}"
-                );
-            }
+            // Headings on screen in the middle of the list: what GTK 4.22
+            // needs to abort when the groups are turned off.
+            scroll_to_a_heading_in_the_middle(test, by);
             let details = test.window.folder_pane().details().column_view().clone();
             assert!(
                 details.header_factory().is_some(),
@@ -676,7 +701,7 @@ fn a_long_folder_opened_grouped_turns_its_groups_off() {
     let fixture = Fixture::empty();
     let test = long_folder_of(&fixture, 1500);
     test.activate("group-by", Some("modified"));
-    scroll_to_the_middle(&test);
+    scroll_to_a_heading_in_the_middle(&test, "modified");
     test.window.navigate(&fixture.uri_of("Archive")).expect("Archive");
     test.wait_for_listing("Archive");
     test.activate("back", None);
@@ -686,7 +711,7 @@ fn a_long_folder_opened_grouped_turns_its_groups_off() {
         Some("modified"),
         "it opens grouped"
     );
-    scroll_to_the_middle(&test);
+    scroll_to_a_heading_in_the_middle(&test, "modified");
 
     test.activate("group-by", Some("none"));
     wait_for_frames(&test.window, 3);
