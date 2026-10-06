@@ -56,6 +56,15 @@ pub enum ArchiveError {
         crate::i18n::gettext("The archive has more than 100,000 members. Use an archive manager.")
     )]
     TooManyMembers,
+    /// ARC-005: a TAR's member names add up to more than 32 MiB, the size
+    /// of the largest ZIP directory the viewer reads.
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "The archive's file names are too long for the built-in viewer. Use an archive manager."
+        )
+    )]
+    TarNamesTooLarge,
     /// ARC-007: the share cannot seek, which reading a ZIP needs.
     #[error(
         "{}",
