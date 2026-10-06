@@ -6,6 +6,27 @@
   own, and "Reset folders", which makes every folder forget its view and
   show the default one. Both ask first, and every open window follows at
   once.
+- Open and Save dialogs no longer freeze the app when their folder is on a
+  network share that stopped answering. The dialog checks the caller's
+  folder, typed names and files it would replace off the main thread and
+  waits at most three seconds: a folder that does not answer opens the
+  dialog in the home folder, and Save or Open says the share is not
+  answering. A file opened from such a share is sent as read-only.
+- The right-click menu of a This PC or Network card no longer crashes the
+  app when the page is drawn again while it is open (a drive or share
+  connecting, a server being found, or the menu's own Remove or Sign out).
+- Deleting permanently (Shift+Delete, or Delete where there is no Recycle
+  Bin) never goes into another drive. A folder where a drive, share or bind
+  mount is mounted is refused with "… is where a drive or share is mounted",
+  and a folder with one mounted inside it is refused before anything is
+  deleted, naming the mount. Before, the deletion went into the mounted
+  drive, deleted its files and only failed at the end with "Device busy".
+- Settings' small grey text is no longer cut off at the top or bottom
+  (#34). With GTK 4.22's Vulkan and NGL renderers, Segoe UI drawn at a
+  fractional size such as 12.5 pixels could lose the tops or bottoms of
+  its letters. Settings' descriptions and notes are now 12 pixels and its
+  titles 14, and every font size is rounded to a whole pixel at every text
+  size.
 
 # 2.0.2 — 2026-10-04
 

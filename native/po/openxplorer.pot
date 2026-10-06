@@ -4720,6 +4720,11 @@ msgstr ""
 msgid "“{name}” was not found. Check the file name and try again."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{path}” is not answering. Its network share may have stopped responding."
+msgstr ""
+
 #: crates/ox-app/src/window/place_editor.rs
 msgid "Add a folder or network location to Quick access."
 msgstr ""
@@ -5882,6 +5887,16 @@ msgstr ""
 msgid "Filesystem roots cannot be changed as items."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/gio_node/local_delete.rs
+msgid "A drive or share is mounted at {path}, inside the item being deleted. Nothing was deleted. Unmount it first."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/gio_node/local_delete.rs
+msgid "A drive or share is mounted at {path}. Deleting never goes into another drive, so it stopped there. Unmount it first."
+msgstr ""
+
 #: crates/ox-core/src/gio_node/local_delete.rs
 msgid "Another item now has the staging folder's name. It was left in place."
 msgstr ""
@@ -5900,6 +5915,11 @@ msgstr ""
 
 #: crates/ox-core/src/gio_node/local_delete.rs
 msgid "The folder changed during deletion. Remaining items were left in place."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/gio_node/local_delete.rs
+msgid "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first."
 msgstr ""
 
 #: crates/ox-core/src/gio_node/move_item.rs

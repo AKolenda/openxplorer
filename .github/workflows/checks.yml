@@ -89,6 +89,9 @@ jobs:
           name: release-${{ matrix.family }}-${{ matrix.format }}
           path: dist/native/
           if-no-files-found: error
+          # Only the release job of this run downloads it. Its self-hosted runner
+          # can leave it queued for a day, and a failed release can be re-run.
+          retention-days: 3
 
   native-flatpak:
     if: github.ref == 'refs/heads/main'
@@ -117,6 +120,9 @@ jobs:
           name: release-flatpak
           path: io.winspace.Development.flatpak
           if-no-files-found: error
+          # Only the release job of this run downloads it. Its self-hosted runner
+          # can leave it queued for a day, and a failed release can be re-run.
+          retention-days: 3
 
   website:
     # The website deploys on its own, so a failed package release (or one that

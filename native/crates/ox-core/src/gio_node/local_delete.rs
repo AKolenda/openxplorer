@@ -22,14 +22,18 @@
 //!   folder the engine created, and makes each of its folders owner-only
 //!   before emptying it (a copied read-only mode must not block cleanup).
 //!   It ignores cancellation: it runs after a cancelled copy.
+//! - A deletion never leaves the drive the item is on. A mount point (a
+//!   drive, share or bind mount) is refused as the item, and a mount inside
+//!   the item stops the deletion before anything is removed when the mount
+//!   table shows it, or before the walk enters it otherwise.
 
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use gio::prelude::*;
 use rustix::fd::{AsFd, BorrowedFd, OwnedFd};
-use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat};
+use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat, StatxFlags};
 
 use crate::transfer::{
     check_cancelled, nesting_error, Cancellation, ItemIdentity, TransferError, WriteGuard, MAX_DEPTH,
@@ -48,12 +52,14 @@ pub(super) fn delete_tree(
     guard: Option<&WriteGuard>,
 ) -> Result<(), TransferError> {
     cancel.check()?;
-    let deletion = Deletion {
+    refuse_mounts_in(path)?;
+    let mut deletion = Deletion {
         cancel: Some(cancel),
         guard,
         max_depth: MAX_DEPTH,
         folders: FolderAccess::AsFound,
         root_identity: None,
+        drive: None,
     };
     deletion.delete_path(path)
 }
@@ -67,13 +73,14 @@ pub(super) fn delete_tree(
 /// The first item that cannot be removed, or a staging name that now leads
 /// to another item; the rest stays for the caller to report.
 pub(super) fn delete_staging(path: &Path, created: Option<ItemIdentity>) -> Result<(), TransferError> {
-    let deletion = Deletion {
+    let mut deletion = Deletion {
         cancel: None,
         guard: None,
         // The staging folder and its payload add two levels to the tree.
         max_depth: MAX_DEPTH + STAGING_LEVELS,
         folders: FolderAccess::MadePrivate,
         root_identity: created,
+        drive: None,
     };
     deletion.delete_path(path)
 }
@@ -123,11 +130,14 @@ struct Deletion<'a> {
     folders: FolderAccess,
     /// The identity the deleted item itself must have, when known.
     root_identity: Option<ItemIdentity>,
+    /// The mount of the folder that holds the item, once it is opened;
+    /// nothing on another mount is deleted.
+    drive: Option<Mount>,
 }
 
 impl Deletion<'_> {
     /// Deletes the item at the absolute `path`.
-    fn delete_path(&self, path: &Path) -> Result<(), TransferError> {
+    fn delete_path(&mut self, path: &Path) -> Result<(), TransferError> {
         let parent = path.parent().ok_or_else(|| {
             TransferError::failed(crate::i18n::gettext("Filesystem roots cannot be deleted."))
         })?;
@@ -135,6 +145,7 @@ impl Deletion<'_> {
             TransferError::failed(crate::i18n::gettext("Choose a file or folder to delete."))
         })?;
         let parent_folder = open_parent(parent)?;
+        self.drive = Some(mount_of(parent_folder.as_fd(), c"", AtFlags::EMPTY_PATH)?);
         self.delete_at(parent_folder.as_fd(), name, path, 0)
     }
 
@@ -159,6 +170,8 @@ impl Deletion<'_> {
             // XFER-002: cleanup refuses a folder moved in under the staging
             // name; only the folder the engine created is removed.
             self.require_root_identity(&seen)?;
+            // A file can be a mount point too (a bind mount of a file).
+            self.require_same_drive(parent, name, path, depth)?;
         }
         if FileType::from_raw_mode(seen.st_mode) == FileType::Directory {
             return self.delete_folder(parent, name, path, &seen, depth);
@@ -186,6 +199,10 @@ impl Deletion<'_> {
         // XFER-015: the name was swapped for another folder between the
         // `lstat` and the open; stop before touching anything inside it.
         require_same_item(seen, &opened)?;
+        // A drive mounted on this folder (also one mounted after the mount
+        // table was read): the descriptor is on that drive, so stop before
+        // reading anything inside it.
+        self.require_drive(mount_of(folder.as_fd(), c"", AtFlags::EMPTY_PATH)?, path, depth)?;
         if self.folders == FolderAccess::MadePrivate {
             // Through the pinned descriptor, so the mode lands on this folder.
             fs::fchmod(&folder, Mode::from_raw_mode(PRIVATE_DIRECTORY_MODE))?;
@@ -209,6 +226,32 @@ impl Deletion<'_> {
         Ok(())
     }
 
+    /// Refuses to go on when `name` in `parent` is on another mount than
+    /// the folder that holds the deleted item: it is a mount point.
+    fn require_same_drive(
+        &self,
+        parent: BorrowedFd<'_>,
+        name: &OsStr,
+        path: &Path,
+        depth: usize,
+    ) -> Result<(), TransferError> {
+        let mount = mount_of(parent, name, AtFlags::SYMLINK_NOFOLLOW)?;
+        self.require_drive(mount, path, depth)
+    }
+
+    /// Refuses `mount`, the mount of the item at `path`, unless it is the
+    /// drive the deletion started on.
+    fn require_drive(&self, mount: Mount, path: &Path, depth: usize) -> Result<(), TransferError> {
+        match self.drive {
+            Some(drive) if !drive.is_same_as(mount) => Err(if depth == 0 {
+                mount_point_refusal(path)
+            } else {
+                contained_mount_refusal(path)
+            }),
+            _ => Ok(()),
+        }
+    }
+
     /// Refuses an item other than the one the engine recorded, for example
     /// another folder moved in under the staging name by someone who can
     /// write to the destination.
@@ -220,6 +263,119 @@ impl Deletion<'_> {
             _ => Ok(()),
         }
     }
+}
+
+/// The mount an item is on: the kernel's mount ID where `statx` reports it
+/// (Linux 5.8 and later), which also tells apart a bind mount of a folder
+/// on the same filesystem, and the filesystem's device number otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Mount {
+    /// The mount ID, when the kernel reports it.
+    id: Option<u64>,
+    /// The device number of the filesystem.
+    device: (u32, u32),
+}
+
+impl Mount {
+    /// Whether both describe the same mount. Mount IDs decide when both
+    /// have one: on one mount, a Btrfs subvolume has its own device number.
+    fn is_same_as(self, other: Mount) -> bool {
+        match (self.id, other.id) {
+            (Some(own), Some(theirs)) => own == theirs,
+            _ => self.device == other.device,
+        }
+    }
+}
+
+/// The mount of `name` in `dir` (with [`AtFlags::EMPTY_PATH`] and an empty
+/// name, of `dir` itself). Never triggers an automount. Where `statx` is
+/// unavailable (before Linux 4.11, or blocked by a container's seccomp
+/// filter), only the device number is known.
+fn mount_of<P: rustix::path::Arg + Copy>(
+    dir: BorrowedFd<'_>,
+    name: P,
+    flags: AtFlags,
+) -> Result<Mount, TransferError> {
+    let flags = flags | AtFlags::NO_AUTOMOUNT;
+    match fs::statx(dir, name, flags, StatxFlags::MNT_ID) {
+        Ok(status) => {
+            let has_id = status.stx_mask & StatxFlags::MNT_ID.bits() != 0;
+            Ok(Mount {
+                id: has_id.then_some(status.stx_mnt_id),
+                device: (status.stx_dev_major, status.stx_dev_minor),
+            })
+        }
+        Err(rustix::io::Errno::NOSYS | rustix::io::Errno::PERM) => {
+            let status = fs::statat(dir, name, flags)?;
+            Ok(Mount {
+                id: None,
+                device: (fs::major(status.st_dev), fs::minor(status.st_dev)),
+            })
+        }
+        Err(errno) => Err(errno.into()),
+    }
+}
+
+/// Refuses to delete the item at `path` when the mount table shows that it
+/// is a mount point or that something is mounted inside it. Nothing has
+/// been deleted yet. When the mount table cannot be read, the walk's own
+/// checks still keep the deletion on its drive.
+fn refuse_mounts_in(path: &Path) -> Result<(), TransferError> {
+    let Ok(mount_points) = crate::sizes::mounts::read_mount_points() else {
+        return Ok(());
+    };
+    let Some(item) = resolved_item_path(path) else {
+        return Ok(());
+    };
+    match first_mount_in(&item, &mount_points) {
+        Some(mount_point) if *mount_point == item => Err(mount_point_refusal(path)),
+        Some(mount_point) => {
+            let inside = mount_point.strip_prefix(&item).unwrap_or(mount_point);
+            Err(TransferError::failed(crate::i18n::format_message(
+                "A drive or share is mounted at {path}, inside the item being deleted. Nothing was \
+                 deleted. Unmount it first.",
+                &[("path", &path.join(inside).display().to_string())],
+            )))
+        }
+        None => Ok(()),
+    }
+}
+
+/// `path` with the symbolic links of its folder resolved, as the mount
+/// table names mount points. The item itself is not followed: a link is
+/// deleted as a link.
+fn resolved_item_path(path: &Path) -> Option<PathBuf> {
+    let folder = std::fs::canonicalize(path.parent()?).ok()?;
+    Some(folder.join(path.file_name()?))
+}
+
+/// The mount point that is `item` itself, or else the first one inside it
+/// in path order.
+fn first_mount_in<'m>(
+    item: &Path,
+    mount_points: impl IntoIterator<Item = &'m PathBuf>,
+) -> Option<&'m PathBuf> {
+    mount_points
+        .into_iter()
+        .filter(|mount_point| mount_point.starts_with(item))
+        .min()
+}
+
+/// The refusal to delete a mount point.
+fn mount_point_refusal(path: &Path) -> TransferError {
+    TransferError::failed(crate::i18n::format_message(
+        "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first.",
+        &[("path", &path.display().to_string())],
+    ))
+}
+
+/// The refusal to enter the mount point at `path` inside the deleted item.
+fn contained_mount_refusal(path: &Path) -> TransferError {
+    TransferError::failed(crate::i18n::format_message(
+        "A drive or share is mounted at {path}. Deleting never goes into another drive, so it \
+         stopped there. Unmount it first.",
+        &[("path", &path.display().to_string())],
+    ))
 }
 
 /// The device and inode `stat` describes.
@@ -247,6 +403,9 @@ fn require_same_item(expected: &Stat, actual: &Stat) -> Result<(), TransferError
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod mount_tests;
 
 #[cfg(test)]
 mod tests {
