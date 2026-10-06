@@ -1459,6 +1459,144 @@ mod tests {
         assert_eq!(uris, [fixture.uri_of("letter.odt")]);
     }
 
+    /// Sets the modification time of `name` in `fixture` to `seconds` ago.
+    fn date_file(fixture: &Fixture, name: &str, seconds: u64) {
+        fs::File::options()
+            .write(true)
+            .open(fixture.path(name))
+            .and_then(|file| {
+                file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(seconds))
+            })
+            .expect("the date is set");
+    }
+
+    /// How far the visible view is scrolled once the window has drawn it
+    /// and GTK has laid the list out again, as it does later for reasons
+    /// of its own (the compositor sizing the window, a row measured again).
+    fn scrolled_after_a_relayout(window: &crate::window::BrowserWindow) -> f64 {
+        use crate::test_support::harness::{descendants, wait_for_frames};
+        use crate::window::folder_pane::FolderView;
+        wait_for_frames(window, 4);
+        let pane = window.folder_pane();
+        let (lists, adjustment): (Vec<gtk::Widget>, gtk::Adjustment) = match pane.view() {
+            FolderView::Details => {
+                let details = pane.details();
+                let lists = descendants::<gtk::ListView>(details.column_view())
+                    .into_iter()
+                    .map(Cast::upcast)
+                    .collect();
+                (lists, details.vadjustment())
+            }
+            FolderView::Compact | FolderView::Icons(_) => {
+                let icons = pane.icon_view();
+                (vec![icons.grid().clone().upcast()], icons.scroll_adjustment())
+            }
+        };
+        for list in lists {
+            list.queue_allocate();
+        }
+        wait_for_frames(window, 4);
+        adjustment.value()
+    }
+
+    /// A dialog's list at its top stays there when another file type
+    /// shows more files, in Details, the icons and Compact: the files the
+    /// type had hidden come before the one at the top edge, and GTK kept
+    /// that one there, so the list slid down (Chrome's Save dialog in
+    /// Downloads, `*.svg` then All files, not grouped).
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_dialog_list_at_its_top_stays_there_when_the_type_changes() {
+        use crate::folder_view::icon_size::IconSize;
+        use crate::window::folder_pane::FolderView;
+        let fixture = Fixture::empty();
+        // Newest first: the drawings come after newer files of other
+        // types, and alone they fill more than the view.
+        let mut svgs = 0;
+        for number in 0..240_u64 {
+            let svg = number % 3 == 2;
+            let name = if svg {
+                svgs += 1;
+                format!("drawing {number:03}.svg")
+            } else {
+                format!("file {number:03}.txt")
+            };
+            fixture.write(&name);
+            date_file(&fixture, &name, 60 + number * 3_600);
+        }
+        let portal = Portal::new();
+        let filters = [
+            ("SVG".to_owned(), vec![(0_u32, "*.svg".to_owned())]).to_variant(),
+            ("All files".to_owned(), vec![(0_u32, "*".to_owned())]).to_variant(),
+        ];
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "picture.svg".to_variant()),
+                (
+                    "filters",
+                    glib::Variant::array_from_iter_with_type(filters[0].type_(), filters.clone()),
+                ),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        let types = window
+            .picker()
+            .expect("a picker")
+            .types
+            .clone()
+            .expect("a type list");
+        test.activate("sort", Some("modified"));
+        test.activate("direction", Some("descending"));
+        for view in [
+            FolderView::Details,
+            FolderView::Icons(IconSize::MEDIUM),
+            FolderView::Compact,
+        ] {
+            test.activate("view", Some(view.as_str()));
+            types.set_selected(0);
+            wait_until("the drawings", || test.names().len() == svgs);
+            // Down the list and back to its top, as the user scrolls.
+            let pane = window.folder_pane();
+            let adjustment = match view {
+                FolderView::Details => pane.details().vadjustment(),
+                _ => pane.icon_view().scroll_adjustment(),
+            };
+            wait_until(&format!("a list longer than {}", view.as_str()), || {
+                adjustment.upper() > adjustment.page_size() + 1.0
+            });
+            adjustment.set_value(adjustment.upper() - adjustment.page_size());
+            scrolled_after_a_relayout(window);
+            adjustment.set_value(0.0);
+            let view_name = view.as_str();
+            let scrolled = scrolled_after_a_relayout(window);
+            assert!(
+                scrolled < 0.5,
+                "{view_name}: the drawings from their top: {scrolled}"
+            );
+
+            types.set_selected(1);
+            wait_until("every file", || test.names().len() == 240);
+            let scrolled = scrolled_after_a_relayout(window);
+            assert!(
+                scrolled < 0.5,
+                "{view_name}: All files from their top, not {scrolled} along"
+            );
+
+            types.set_selected(0);
+            wait_until("the drawings again", || test.names().len() == svgs);
+            let scrolled = scrolled_after_a_relayout(window);
+            assert!(
+                scrolled < 0.5,
+                "{view_name}: the drawings again from their top, not {scrolled}"
+            );
+        }
+    }
+
     /// A folder dialog lists only folders and answers the selected one.
     ///
     /// parity: INT-032

@@ -316,6 +316,7 @@ impl FolderPane {
     /// its new items; set straight after a model change, the position
     /// would be clamped to the old, shorter list.
     pub(super) fn restore_scroll_position(&self, position: f64) {
+        self.parts().top_keeper.let_go();
         let adjustment = self.visible_vadjustment();
         adjustment.set_value(position);
         glib::idle_add_local_once(move || adjustment.set_value(position));
@@ -399,6 +400,10 @@ impl FolderPane {
 
     /// Moves to `position` with `flags`, scrolling as `scroll` allows.
     fn scroll_to(&self, position: u32, flags: gtk::ListScrollFlags, scroll: Option<gtk::ScrollInfo>) {
+        if scroll.is_none() {
+            // Scrolling to an item wins over a list kept at its top.
+            self.parts().top_keeper.let_go();
+        }
         match self.view() {
             FolderView::Details => self
                 .details()
