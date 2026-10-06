@@ -1,5 +1,11 @@
 # Unreleased
 
+- Open and Save dialogs no longer freeze the app when their folder is on a
+  network share that stopped answering. The dialog checks the caller's
+  folder, typed names and files it would replace off the main thread and
+  waits at most three seconds: a folder that does not answer opens the
+  dialog in the home folder, and Save or Open says the share is not
+  answering. A file opened from such a share is sent as read-only.
 - The right-click menu of a This PC or Network card no longer crashes the
   app when the page is drawn again while it is open (a drive or share
   connecting, a server being found, or the menu's own Remove or Sign out).
