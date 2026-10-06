@@ -3754,7 +3754,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "Zoom in/out (Ctrl+wheel, Ctrl +/−)"
 native = "done"
-native_note = "native/crates/ox-app/src/text_size.rs (supported_levels_are_kept, stepping_is_bounded, large_text_keeps_row_clearance); native/crates/ox-app/src/theme/fonts.rs (larger_text_scales_fonts_and_rows); native/crates/ox-app/src/window/tests/views.rs (text_size_steps_stay_between_80_and_200_percent)."
+native_note = "native/crates/ox-app/src/text_size.rs (supported_levels_are_kept, stepping_is_bounded, large_text_keeps_row_clearance); native/crates/ox-app/src/theme/fonts.rs (larger_text_scales_fonts_and_rows); native/crates/ox-app/src/window/tests/views.rs (text_size_steps_stay_between_80_and_200_percent). Every generated font size is a whole number of pixels at every text size, because GTK 4.22's GPU renderers can cut glyphs drawn at fractional sizes (issue #34; native/crates/ox-app/src/theme/fonts.rs every_font_size_is_a_whole_pixel_at_every_text_size)."
 
 [[feature]]
 id = "VIEW-045"

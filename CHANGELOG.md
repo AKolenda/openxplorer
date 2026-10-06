@@ -6,6 +6,12 @@
   and a folder with one mounted inside it is refused before anything is
   deleted, naming the mount. Before, the deletion went into the mounted
   drive, deleted its files and only failed at the end with "Device busy".
+- Settings' small grey text is no longer cut off at the top or bottom
+  (#34). With GTK 4.22's Vulkan and NGL renderers, Segoe UI drawn at a
+  fractional size such as 12.5 pixels could lose the tops or bottoms of
+  its letters. Settings' descriptions and notes are now 12 pixels and its
+  titles 14, and every font size is rounded to a whole pixel at every text
+  size.
 
 # 2.0.2 — 2026-10-04
 
