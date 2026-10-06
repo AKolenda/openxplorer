@@ -1,5 +1,8 @@
 # Unreleased
 
+- The right-click menu of a This PC or Network card no longer crashes the
+  app when the page is drawn again while it is open (a drive or share
+  connecting, a server being found, or the menu's own Remove or Sign out).
 - Deleting permanently (Shift+Delete, or Delete where there is no Recycle
   Bin) never goes into another drive. A folder where a drive, share or bind
   mount is mounted is refused with "… is where a drive or share is mounted",
