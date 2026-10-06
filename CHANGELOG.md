@@ -1,5 +1,15 @@
 # Unreleased
 
+- Copying or moving a folder no longer fails as a whole when one file
+  inside it cannot be read (a locked or protected file, a socket, a pipe
+  or another special file). As in Windows Explorer, OpenXplorer asks about
+  that file by its path inside the folder: Retry copies only it again,
+  Skip or Skip all leave only it out, and the rest of the folder is
+  copied. The files left out are listed at the end, and a move keeps them,
+  with their folders, where they were.
+
+# Unreleased
+
 - A file list at its top stays at its top when files come before the one
   at the top edge, in every view: in an Open or Save dialog switching
   from one file type to more (`*.svg`, then All files) no longer scrolls

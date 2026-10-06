@@ -7352,6 +7352,12 @@ msgid_plural "{count} items changed during the move and were"
 msgstr[0] ""
 msgstr[1] ""
 
+#: crates/ox-core/src/transfer/source_removal.rs
+msgid "1 item could not be moved and was"
+msgid_plural "{count} items could not be moved and were"
+msgstr[0] ""
+msgstr[1] ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/transfer/source_removal.rs
 msgid "{items} kept at {location}."
