@@ -52,7 +52,7 @@ use crate::location::{is_smb_server, normalise, validate_name};
 use crate::transfer::{
     Cancellation, Node, NodeFactory, NodeKind, Progress, ProgressScope, TransferError, WriteGuard,
 };
-use plan::{plan, ExtractionPlan};
+use plan::{plan, plan_selected, ExtractionPlan};
 pub(super) use staging::is_staging_name;
 use staging::ExtractionStaging;
 use unpack::Unpacking;
@@ -144,8 +144,10 @@ impl ZipExtractor {
     /// Extracts only `members` (as the archive browser names them: `Docs/`
     /// for a folder and everything in it, `Docs/a.txt` for a file), at
     /// their paths inside the new folder, for copying items out of a ZIP
-    /// (ARC-026). The whole archive is still checked with every rule
-    /// first.
+    /// (ARC-026). Only those members are checked, with every rule; a
+    /// link, special file or unsafe name inside them, which the archive
+    /// browser hides, is left out and counted in
+    /// [`ExtractionSummary::left_out`].
     #[must_use]
     pub fn with_selection(mut self, members: &[String]) -> Self {
         let selected = members
@@ -241,10 +243,11 @@ impl ZipExtractor {
         let name = request.folder_name.clone();
         self.report("Checking ZIP contents…".to_owned(), 0.0);
         let mut archive = open_archive(self.opener.as_ref(), &archive_uri, cancel)?;
-        let mut plan = plan(archive.members(), &self.limits, cancel)?;
-        if let Some(selected) = &self.selection {
-            plan.keep_selected(selected, archive.members());
-        }
+        // ARC-026: a copy out of the archive checks only what it copies.
+        let plan = match &self.selection {
+            Some(selected) => plan_selected(archive.members(), selected, &self.limits, cancel)?,
+            None => plan(archive.members(), &self.limits, cancel)?,
+        };
         self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)?;
         cancel.check()?;
         let mut staging = ExtractionStaging::create(destination.folder.as_ref(), cancel)?;

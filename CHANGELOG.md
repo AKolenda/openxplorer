@@ -1,5 +1,13 @@
 # Unreleased
 
+- Copying files out of a ZIP opened like a folder no longer fails because
+  of one bad item elsewhere in the ZIP, such as a symbolic link: only the
+  items you copy are checked. A link or special file inside a copied
+  folder, which the folder view hides, is left out, and the message says
+  so. Extract all still refuses a ZIP with such items.
+
+# Unreleased
+
 - A file list at its top stays at its top when files come before the one
   at the top edge, in every view: in an Open or Save dialog switching
   from one file type to more (`*.svg`, then All files) no longer scrolls

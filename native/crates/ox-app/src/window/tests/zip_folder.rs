@@ -392,6 +392,71 @@ fn hidden_members_are_announced_in_the_message_line() {
     assert_eq!(test.window.shown_message(), "1 unsafe names or links are hidden.");
 }
 
+/// Writes `Linked.zip` into `fixture` with Python's `zipfile`: a folder
+/// `Docs` holding `a.txt` and a link to it, and a link at the top, the
+/// way `zip --symlinks` stores them.
+fn write_zip_with_links(fixture: &Fixture) {
+    let script = "import sys, zipfile\n\
+                  def link(archive, name, target):\n\
+                  \x20   info = zipfile.ZipInfo(name); info.create_system = 3\n\
+                  \x20   info.external_attr = (0o120777 << 16)\n\
+                  \x20   archive.writestr(info, target)\n\
+                  with zipfile.ZipFile(sys.argv[1], 'w') as archive:\n\
+                  \x20   archive.writestr('Docs/a.txt', 'first')\n\
+                  \x20   link(archive, 'Docs/shortcut', 'a.txt')\n\
+                  \x20   link(archive, 'top-link', '/etc/passwd')\n\
+                  \x20   archive.writestr('notes.txt', 'notes')\n";
+    let status = std::process::Command::new("python3")
+        .args(["-c", script])
+        .arg(fixture.path("Linked.zip"))
+        .status()
+        .expect("Python 3 writes the fixture archive");
+    assert!(status.success());
+}
+
+/// A link elsewhere in a ZIP no longer stops copying other files out of
+/// it, and a link inside a copied folder is left out with a note; the
+/// rest pastes as real files (ARC-026).
+///
+/// parity: ARC-026
+#[gtk::test]
+fn a_link_in_the_zip_does_not_stop_copying_other_items_out() {
+    let fixture = fixture_with_zip();
+    write_zip_with_links(&fixture);
+    let test = opening_zips_as_folders(&fixture);
+    let root = ArchiveLocation::root(&fixture.uri_of("Linked.zip"));
+    test.window.navigate(&root.uri()).expect("the ZIP");
+    test.wait_for_listing("the ZIP's listing");
+    assert_eq!(test.names(), ["Docs", "notes.txt"], "the links are hidden");
+
+    test.select_named("notes.txt");
+    test.activate("copy", None);
+    wait_until("the copy on the clipboard", || {
+        test.window.shown_message().contains("copied")
+    });
+    assert!(!test.window.shown_message().contains("left out"));
+
+    test.select_named("Docs");
+    test.activate("copy", None);
+    wait_until("the copies on the clipboard, with a note", || {
+        test.window.shown_message().contains("left out")
+    });
+    assert_eq!(
+        test.window.shown_message(),
+        "1 item(s) copied — ready to paste in another window. 1 link or special file inside was left out."
+    );
+
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("Documents");
+    test.activate("paste", None);
+    let pasted = fixture.path("Documents/Docs/a.txt");
+    wait_until("the pasted folder", || pasted.exists());
+    assert_eq!(fs::read(&pasted).expect("pasted"), b"first");
+    assert!(fs::symlink_metadata(fixture.path("Documents/Docs/shortcut")).is_err());
+}
+
 /// A ZIP another app hands to this one is browsed even with "Open
 /// archives as folders" off, so it opens like a folder when ZIPs do.
 ///
