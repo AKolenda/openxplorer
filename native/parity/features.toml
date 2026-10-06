@@ -11491,6 +11491,25 @@ native = "todo"
 native_note = "Google Drive and OneDrive schemes and their GNOME Online Accounts workflows have no native implementation or test. The app now supports ordinary SFTP, FTP, WebDAV and NFS locations (NET-029 to NET-033), including a plain session-only user name for SFTP/FTP/WebDAV while saved/displayed addresses strip it (SAFE-010); the earlier file/SMB-only limitation no longer describes the native app. Generic WebDAV support does not prove discovery, browsing and copying through a GOA-managed Nextcloud mount. Account-specific URI handling and the persistence/privacy policy for account identities remain to be designed and verified."
 
 [[feature]]
+id = "DEV-014"
+area = "DEV"
+title = "A folder whose drive or share goes away says so"
+behaviour = "When the drive or share a tab shows is unplugged, unmounted or disconnected by something else, the tab (in front, behind, or a split pane) drops its old rows and shows 'This location is unavailable' with 'The drive or network share that holds this folder was disconnected.' and Try again, instead of keeping the old files. Try again lists the folder again once the drive or share is back. Tabs the window itself moved off the drive or marked to list again are left alone."
+origin = ["dolphin"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/dolphinviewcontainer.cpp:911-922",
+  "dolphin:src/dolphinviewcontainer.cpp:953-960",
+]
+python_tests = []
+bridge = ["list"]
+dolphin = "KDirLister drops the items of an unmounted folder and DolphinViewContainer shows the error"
+gnome = "GVolumeMonitor::mount-removed and the GFileMonitor G_FILE_MONITOR_EVENT_UNMOUNTED event"
+native = "done"
+native_note = "native/crates/ox-app/src/window/loading/disconnected.rs: the volume monitor's mount-removed signal (for every tab inside the mount) and a folder watch's unmount event (native/crates/ox-app/src/folder_view/watch.rs, Watch::when_gone) stop the tab's listing and watch, drop its rows and show the unavailable page; Try again lists as F5 does, mounting a share again. Tested in native/crates/ox-app/src/window/tests/disconnected.rs."
+
+[[feature]]
 id = "OPEN-001"
 area = "OPEN"
 title = "Activating items: folder, archive or application"

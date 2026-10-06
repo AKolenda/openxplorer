@@ -1,5 +1,11 @@
 # Unreleased
 
+- A tab showing a USB drive that was unplugged, or a share or disk that
+  was unmounted by another program, no longer keeps showing the old
+  files. Every tab and split pane on it drops them and says "This
+  location is unavailable: the drive or network share that holds this
+  folder was disconnected", with Try again, which lists the folder once
+  the drive or share is back.
 - A file list at its top stays at its top when files come before the one
   at the top edge, in every view: in an Open or Save dialog switching
   from one file type to more (`*.svg`, then All files) no longer scrolls

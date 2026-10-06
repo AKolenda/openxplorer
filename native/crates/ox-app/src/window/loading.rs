@@ -22,7 +22,10 @@
 //!   list (NET-016).
 //! - A folder that disappears while shown gives way to the nearest
 //!   existing folder above it (NAV-039).
+//! - A folder whose drive or share goes away drops its rows and says the
+//!   drive or share was disconnected.
 
+mod disconnected;
 mod mount_retry;
 mod removed_folder;
 
@@ -222,6 +225,11 @@ impl BrowserWindow {
             ),
         );
         self.follow_watch_health(&watch);
+        watch.when_gone(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.folder_unmounted(id)
+        ));
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.watch = Some(watch);
         }
