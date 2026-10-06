@@ -1,5 +1,12 @@
 # Unreleased
 
+- A drive Linux mounted read-only, such as the Windows drive of a
+  dual-boot computer while Windows is hibernated or used Fast startup,
+  is noticed: New, Paste, Cut, Rename, Duplicate and Delete are turned
+  off there and say why, Copy still works, and the status bar shows
+  "Read-only drive" with what to do (shut Windows down fully, then mount
+  the drive again). A write that still fails there says the drive is
+  read-only instead of the bare "Read-only file system".
 - A file list at its top stays at its top when files come before the one
   at the top edge, in every view: in an Open or Save dialog switching
   from one file type to more (`*.svg`, then All files) no longer scrolls

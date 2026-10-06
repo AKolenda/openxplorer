@@ -253,6 +253,10 @@ msgstr ""
 msgid "Not updated live"
 msgstr ""
 
+#: crates/ox-app/resources/ui/status-bar.ui
+msgid "Read-only drive"
+msgstr ""
+
 #: crates/ox-app/resources/ui/tab-strip.ui
 msgid "Folder tabs"
 msgstr ""
@@ -6978,6 +6982,26 @@ msgstr ""
 
 #: crates/ox-core/src/private_storage.rs
 msgid "The settings file is not valid UTF-8 text."
+msgstr ""
+
+#: crates/ox-core/src/read_only.rs
+msgid "The drive is read-only, so nothing on it can be changed. If it is a Windows drive, Windows is hibernated or used Fast startup: shut Windows down fully, then mount the drive again."
+msgstr ""
+
+#: crates/ox-core/src/read_only.rs
+msgid "This drive is mounted read-only, so files on it cannot be created, changed or deleted."
+msgstr ""
+
+#: crates/ox-core/src/read_only.rs
+msgid "This drive is read-only."
+msgstr ""
+
+#: crates/ox-core/src/read_only.rs
+msgid "Windows is hibernated or used Fast startup, so this drive is read-only."
+msgstr ""
+
+#: crates/ox-core/src/read_only.rs
+msgid "Windows was hibernated or shut down with Fast startup, so Linux mounted this drive read-only to keep its files safe. Start Windows and shut it down fully (hold Shift while choosing Shut down, or turn off Fast startup), then mount the drive again."
 msgstr ""
 
 #: crates/ox-core/src/search/error.rs
