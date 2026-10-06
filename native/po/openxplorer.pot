@@ -4483,6 +4483,10 @@ msgstr ""
 msgid "Topic"
 msgstr ""
 
+#: crates/ox-app/src/window/imp.rs
+msgid "Wait until the files are written, or cancel that, before closing this dialog."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/integration_actions.rs
 msgid "Are you sure you want to open {len} terminals?"

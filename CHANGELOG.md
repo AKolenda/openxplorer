@@ -1,3 +1,20 @@
+# Unreleased
+
+- An Open or Save dialog can no longer get stuck with Save, Cancel and
+  Escape doing nothing:
+  - "Replace it?" is asked inside the dialog, not in a window of its own
+    that could open out of sight and take every click and key.
+  - The dialog answers only once its window really closes. A window that
+    refused to close (an update installing, files being written in it)
+    used to keep a dead dialog after answering; now it says why and the
+    dialog stays usable.
+  - No tab can be moved into a dialog, which made closing it ask about
+    tabs.
+  - Escape cancels with Caps Lock or Num Lock on.
+  - Opening a window no longer waits for the Recycle Bin's watch, which
+    could hold the whole app, an open dialog included, while a network
+    share or drive stopped answering.
+
 # 2.0.2 — 2026-10-04
 
 More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save

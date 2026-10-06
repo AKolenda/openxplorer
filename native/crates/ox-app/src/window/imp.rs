@@ -330,11 +330,23 @@ impl WindowImpl for BrowserWindow {
         // window closes while an update installs (closing.rs).
         if let Some(refusal) = self.obj().close_refusal() {
             self.obj().show_message(&refusal);
+            self.obj().picking_close_refused();
             return glib::Propagation::Stop;
         }
-        // Nor while it writes files: it asks whether to cancel first
-        // (TAB-049).
-        if !self.obj().may_close_now() {
+        // A file dialog asks nothing before it closes: a question over it
+        // could end up out of sight and leave it unanswerable. While it
+        // writes files it says so and stays usable (INT-032).
+        if self.obj().is_picking() {
+            if self.obj().is_writing_files() {
+                self.obj().show_message(&ox_core::i18n::gettext(
+                    "Wait until the files are written, or cancel that, before closing this dialog.",
+                ));
+                self.obj().picking_close_refused();
+                return glib::Propagation::Stop;
+            }
+        } else if !self.obj().may_close_now() {
+            // Nor while it writes files: it asks whether to cancel first
+            // (TAB-049).
             return glib::Propagation::Stop;
         }
         // Let go of keyboard focus first. On Wayland, GTK's input method

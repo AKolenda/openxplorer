@@ -44,7 +44,7 @@ use ox_core::integration::{
 
 use super::actions::QUIT_ACCELERATORS;
 use super::{BrowserWindow, ButtonStyle, WindowAction};
-use crate::dialog::Dialog;
+use crate::dialog::{DialogFrame, DialogWidth};
 use crate::folder_view::filter::ChooserListing;
 use crate::locations::Page;
 
@@ -113,9 +113,12 @@ pub(crate) struct Picker {
     types: Option<gtk::DropDown>,
     choices: Vec<ChoiceControl>,
     accept: gtk::Button,
-    /// Set while the replace question is open, so the answer is not given
-    /// twice.
+    /// Set while the replace question is open or the window is closing
+    /// with a choice, so the answer is not given twice.
     asking: Cell<bool>,
+    /// The choice to answer with once the window really closes; the
+    /// window answers Cancelled without one.
+    pending: RefCell<Option<ChooserAnswer>>,
     /// The one item selected, in a dialog that chooses one, so a second
     /// item clicked with Ctrl or Shift takes its place.
     single: Cell<Option<u32>>,
@@ -374,10 +377,25 @@ impl BrowserWindow {
         true
     }
 
-    /// Answers Cancelled when the window closes without a choice.
+    /// Answers with the choice made when the window closes, or Cancelled
+    /// without one. The answer waits for the close: answered first, a
+    /// window that then refused to close (an update installing, files
+    /// being written) kept a dead dialog whose Save, Cancel and Escape
+    /// did nothing.
     pub(super) fn end_picking_on_close(&self) {
         if let Some(picker) = self.imp().picker.borrow().as_ref() {
-            picker.reply.send(&ChooserAnswer::Cancelled);
+            let answer = picker.pending.take().unwrap_or(ChooserAnswer::Cancelled);
+            picker.reply.send(&answer);
+        }
+    }
+
+    /// The window refused to close: the dialog stays usable, its choice
+    /// not sent.
+    pub(super) fn picking_close_refused(&self) {
+        if let Some(picker) = self.picker() {
+            picker.pending.take();
+            picker.asking.set(false);
+            self.update_picker();
         }
     }
 
@@ -430,7 +448,9 @@ impl BrowserWindow {
                         .is_some_and(|name| !name.text().trim().is_empty())
             }
         };
-        picker.accept.set_sensitive(ready && !picker.asking.get());
+        picker
+            .accept
+            .set_sensitive(ready && !picker.asking.get() && !picker.reply.is_answered());
     }
 
     /// The accept button: works out the choice and answers, asking first
@@ -563,6 +583,12 @@ impl BrowserWindow {
     }
 
     /// Asks whether to replace `names`, then answers with `locations`.
+    ///
+    /// The question is part of the dialog window, on its dialog layer, not
+    /// a window of its own: a separate modal window took every click and
+    /// key from the dialog, so when it opened behind the dialog or on
+    /// another screen, Save, Cancel, Escape and the close button all did
+    /// nothing, and the dialog could only be ended by stopping `OpenXplorer`.
     fn confirm_replace(&self, picker: &Rc<Picker>, locations: Vec<PathBuf>, names: &[String]) {
         picker.asking.set(true);
         self.update_picker();
@@ -579,25 +605,35 @@ impl BrowserWindow {
                 ),
             ),
         };
-        let picker = Rc::clone(picker);
-        glib::spawn_future_local(glib::clone!(
+        let frame = DialogFrame::new(title, DialogWidth::Standard);
+        frame.set_message(&question);
+        let locations = Rc::new(locations);
+        let replace = frame.add_closing_button(
+            "Replace",
+            ButtonStyle::Accent,
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[strong]
+                picker,
+                move || window.finish_picking(&picker, locations.as_ref().clone())
+            ),
+        );
+        frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
+        // However the question ends: a button, Escape, or the dialog
+        // closing under it.
+        frame.connect_closed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            async move {
-                let dialog = Dialog::new(&window, title, &question);
-                let replace = dialog.add_button("Replace", ButtonStyle::Accent);
-                dialog.add_cancel_button();
-                dialog.open();
-                let answer = dialog.next_response().await;
-                dialog.finish();
+            #[strong]
+            picker,
+            move |_| {
                 picker.asking.set(false);
-                if answer == Some(replace) {
-                    window.finish_picking(&picker, locations);
-                } else {
-                    window.update_picker();
-                }
+                window.update_picker();
             }
         ));
+        self.present_window_dialog(&frame);
+        replace.grab_focus();
     }
 
     /// What the File name box of an Open dialog chooses, when it names
@@ -683,20 +719,22 @@ impl BrowserWindow {
         ));
     }
 
-    /// Answers with `locations` and closes the window.
+    /// Closes the window, which answers with `locations`.
     fn finish_picking(&self, picker: &Picker, locations: Vec<PathBuf>) {
-        picker.reply.send(&ChooserAnswer::Chosen {
+        picker.pending.replace(Some(ChooserAnswer::Chosen {
             locations,
             filter: picker.chosen_filter(),
             choices: picker.choice_values(),
-        });
+        }));
+        picker.asking.set(true);
         self.close();
     }
 
-    /// Cancel, Escape, and Ctrl+Q in a dialog.
+    /// Cancel, Escape, and Ctrl+Q in a dialog: closes the window, which
+    /// answers Cancelled.
     pub(super) fn cancel_picking(&self) {
         if let Some(picker) = self.picker() {
-            picker.reply.send(&ChooserAnswer::Cancelled);
+            picker.pending.take();
         }
         self.close();
     }
@@ -712,7 +750,15 @@ impl BrowserWindow {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, key, _, modifiers| {
-                if key == gtk::gdk::Key::Escape && modifiers.is_empty() {
+                // Caps Lock and Num Lock do not make it another key: with
+                // Caps Lock on, Escape in File name did nothing.
+                let held = gtk::gdk::ModifierType::CONTROL_MASK
+                    | gtk::gdk::ModifierType::SHIFT_MASK
+                    | gtk::gdk::ModifierType::ALT_MASK
+                    | gtk::gdk::ModifierType::SUPER_MASK
+                    | gtk::gdk::ModifierType::HYPER_MASK
+                    | gtk::gdk::ModifierType::META_MASK;
+                if key == gtk::gdk::Key::Escape && !modifiers.intersects(held) {
                     window.cancel_picking();
                     return glib::Propagation::Stop;
                 }
@@ -809,6 +855,7 @@ impl BrowserWindow {
             choices,
             accept,
             asking: Cell::new(false),
+            pending: RefCell::new(None),
             single: Cell::new(None),
         }
     }
@@ -989,9 +1036,7 @@ mod tests {
     };
 
     use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow};
-    use crate::window::tests::file_ops_support::{
-        is_triggered_by, open_dialog, wait_for_no_dialog, window_shortcuts,
-    };
+    use crate::window::tests::file_ops_support::{is_triggered_by, window_shortcuts};
 
     /// A `dbus-daemon` of the test's own, stopped when dropped.
     struct PrivateBus {
@@ -1240,6 +1285,147 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("letter.odt")]);
+    }
+
+    /// The replace question, once the dialog shows it on its own layer.
+    fn replace_question(test: &TestWindow) -> crate::dialog::DialogFrame {
+        wait_until("the replace question", || {
+            test.window.dialog_layer().shown().is_some()
+        });
+        test.window.dialog_layer().shown().expect("the question")
+    }
+
+    /// Clicks the button labelled `label` in `frame`.
+    fn press_in(frame: &crate::dialog::DialogFrame, label: &str) {
+        crate::test_support::harness::descendants::<gtk::Button>(frame)
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some(label))
+            .unwrap_or_else(|| panic!("the question has {label}"))
+            .emit_clicked();
+    }
+
+    /// Escape cancels with Caps Lock or Num Lock on, from File name where
+    /// the keyboard starts; before, the lock made it another key there.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn escape_cancels_with_caps_lock_on() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "notes.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        let locks = gdk::ModifierType::LOCK_MASK | gdk::ModifierType::from_bits_truncate(1 << 4);
+        let handled = window
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+            .filter(|controller| controller.propagation_phase() == gtk::PropagationPhase::Bubble)
+            .any(|controller| {
+                controller
+                    .emit_by_name::<bool>("key-pressed", &[&gdk::Key::Escape.into_glib(), &0_u32, &locks])
+            });
+        assert!(handled, "Escape is taken");
+        let (response, _) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_CANCELLED);
+    }
+
+    /// A dialog whose window refuses to close, here while it writes files,
+    /// stays usable and unanswered, and says why, for Save and for Cancel:
+    /// answered first, it used to stay open dead, with Save, Cancel and
+    /// Escape doing nothing. Once the writing ends, Save answers.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_dialog_that_cannot_close_yet_stays_usable() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "notes.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        assert!(window.begin_test_write());
+
+        picker.accept.emit_clicked();
+        settle();
+        assert!(window.is_visible() && answer.borrow().is_none(), "Save waits");
+        assert!(window
+            .shown_message()
+            .contains("Wait until the files are written"));
+        assert!(picker.accept.is_sensitive(), "Save works again");
+        window.cancel_picking();
+        settle();
+        assert!(
+            window.is_visible() && answer.borrow().is_none(),
+            "Cancel waits too"
+        );
+
+        window.end_test_write();
+        picker.accept.emit_clicked();
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("notes.txt")]);
+        wait_until("the dialog to close", || !window.is_visible());
+    }
+
+    /// No tab moves into or out of a dialog: "Move tab to window" in
+    /// another window does not offer it, and it takes no tab, which would
+    /// make closing it ask about tabs.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn no_tab_moves_into_a_dialog() {
+        let fixture = Fixture::empty();
+        let other = TestWindow::open(&fixture.uri());
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let dialog = &portal.test.window;
+        assert!(
+            !other.window.tab_move_window_ids().contains(&dialog.id()),
+            "the dialog is not offered"
+        );
+        assert!(dialog.is_busy_for_tab_moves(), "the dialog takes no tab");
+    }
+
+    /// The replace question is part of the dialog window, not a window of
+    /// its own that could open out of sight and take every click and key
+    /// from the dialog; while it is open, the dialog can still be ended.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_replace_question_is_part_of_the_dialog() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "notes.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        let toplevels = gtk::Window::list_toplevels().len();
+        window.picker().expect("a picker").accept.emit_clicked();
+        let question = replace_question(&portal.test);
+        assert!(question.is_ancestor(window), "inside the dialog window");
+        assert_eq!(
+            gtk::Window::list_toplevels().len(),
+            toplevels,
+            "no window of its own"
+        );
+
+        window.cancel_picking();
+        let (response, _) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_CANCELLED);
     }
 
     /// A folder dialog lists only folders and answers the selected one.
@@ -1769,21 +1955,23 @@ mod tests {
             .expect("a name box");
 
         window.activate_item(test.position_of("README"));
-        let question = open_dialog(test);
+        let question = replace_question(test);
         assert_eq!(
-            question.message_text(),
+            question.message().as_str(),
             "“README” already exists. Do you want to replace it?",
             "README itself, not a new README.txt"
         );
         assert_eq!(name.text(), "README");
-        question.press("Cancel");
-        wait_for_no_dialog(test);
+        press_in(&question, "Cancel");
+        wait_until("the question to close", || {
+            window.dialog_layer().shown().is_none()
+        });
         assert!(answer.borrow().is_none(), "Cancel keeps the dialog open");
 
         window.submit_address(&fixture.path("Drafts/plan.txt").display().to_string());
-        let question = open_dialog(test);
+        let question = replace_question(test);
         assert_eq!(name.text(), "plan.txt");
-        question.press("Replace");
+        press_in(&question, "Replace");
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(
