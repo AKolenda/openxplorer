@@ -119,6 +119,9 @@ pub(crate) struct Picker {
     /// The one item selected, in a dialog that chooses one, so a second
     /// item clicked with Ctrl or Shift takes its place.
     single: Cell<Option<u32>>,
+    /// Set once the dialog is a modal child of the caller's window
+    /// ([`super::caller_window`]).
+    attached_to_caller: Rc<Cell<bool>>,
 }
 
 impl Picker {
@@ -232,9 +235,16 @@ fn saved_name(written: &str, extension: Option<String>) -> String {
 impl BrowserWindow {
     /// Turns this new window into the dialog for `call` and shows it.
     pub(crate) fn begin_picking(&self, call: ChooserCall) {
-        let ChooserCall { request, reply, .. } = call;
+        let ChooserCall {
+            request,
+            reply,
+            parent_window,
+            ..
+        } = call;
         let start = gio::File::for_path(start_folder(&request)).uri();
-        let picker = Rc::new(self.build_picker_bar(request, reply.clone()));
+        let mut picker = self.build_picker_bar(request, reply.clone());
+        picker.attached_to_caller = super::caller_window::attach_to_caller(self.upcast_ref(), &parent_window);
+        let picker = Rc::new(picker);
         self.imp().picker.replace(Some(Rc::clone(&picker)));
         reply.connect_closed(glib::clone!(
             #[weak(rename_to = window)]
@@ -257,8 +267,6 @@ impl BrowserWindow {
         for action in DISABLED_ACTIONS {
             self.set_action_enabled(action, false);
         }
-        // Not modal: with no parent of its own, a modal window would block
-        // every other OpenXplorer window while the caller waits.
         self.set_default_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1);
         self.folder_pane().model().set_chooser_listing(picker.listing());
         if self.add_tab(&start).is_err() {
@@ -810,6 +818,7 @@ impl BrowserWindow {
             accept,
             asking: Cell::new(false),
             single: Cell::new(None),
+            attached_to_caller: Rc::default(),
         }
     }
 
@@ -1121,13 +1130,24 @@ mod tests {
             method: &str,
             entries: &[(&str, glib::Variant)],
         ) -> Rc<RefCell<Option<(u32, glib::VariantDict)>>> {
+            self.call_from("", method, entries)
+        }
+
+        /// Starts `method` with `entries` for the caller's window
+        /// `parent`, as the portal names it (`wayland:<handle>`).
+        fn call_from(
+            &self,
+            parent: &str,
+            method: &str,
+            entries: &[(&str, glib::Variant)],
+        ) -> Rc<RefCell<Option<(u32, glib::VariantDict)>>> {
             let handle =
                 glib::variant::ObjectPath::try_from("/org/freedesktop/portal/desktop/request/1_1/picker")
                     .expect("a path");
             let parameters = glib::Variant::tuple_from_iter([
                 handle.to_variant(),
                 "org.example.Editor".to_variant(),
-                "".to_variant(),
+                parent.to_variant(),
                 "".to_variant(),
                 options_from_entries(entries).end(),
             ]);
@@ -1240,6 +1260,98 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("letter.odt")]);
+    }
+
+    /// A dialog has a window group of its own, so that while it is modal
+    /// the other `OpenXplorer` windows stay usable. A caller's window it
+    /// cannot become a child of (an X11 window, or any window when the
+    /// app runs on X11) leaves it a window of its own, not modal.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_dialog_it_cannot_attach_stays_a_window_of_its_own() {
+        let fixture = Fixture::empty();
+        let other = TestWindow::open(&fixture.uri());
+        let portal = Portal::new();
+        let on_wayland = WidgetExt::display(&portal.test.window).type_().name() == "GdkWaylandDisplay";
+        let parent = if on_wayland {
+            "x11:4c0000a"
+        } else {
+            "wayland:handle-from-another-session"
+        };
+        let _answer = portal.call_from(
+            parent,
+            "OpenFile",
+            &[(
+                "current_folder",
+                path_variant(&fixture.root().display().to_string()),
+            )],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        assert!(!picker.attached_to_caller.get());
+        assert!(!window.is_modal());
+        assert_ne!(window.group(), other.window.group(), "a window group of its own");
+    }
+
+    /// On Wayland a dialog becomes a modal child of the window the caller
+    /// exported, as KDE's own dialog does: the compositor keeps it above
+    /// that window and sends clicks on the window to it. The other
+    /// `OpenXplorer` windows are in other window groups, so stay usable.
+    /// Under X11, as check.py runs the tests, there is no exported window
+    /// to attach to; the test then only checks the window group.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn on_wayland_a_dialog_is_a_modal_child_of_its_callers_window() {
+        let fixture = Fixture::empty();
+        let caller = gtk::Window::builder().title("Editor").build();
+        caller.present();
+        wait_until("the caller's window", || caller.is_mapped());
+        let handle: Rc<RefCell<Option<String>>> = Rc::default();
+        let exporting = caller
+            .surface()
+            .and_downcast::<gdk_wayland::WaylandToplevel>()
+            .is_some_and(|toplevel| {
+                let slot = Rc::clone(&handle);
+                toplevel.export_handle(move |_, result| {
+                    slot.replace(Some(result.map(ToString::to_string).unwrap_or_default()));
+                })
+            });
+        if exporting {
+            wait_until("the exported handle", || handle.borrow().is_some());
+        }
+        // A compositor without xdg-foreign exports nothing to attach to.
+        let parent = handle
+            .borrow()
+            .clone()
+            .filter(|handle| !handle.is_empty())
+            .map(|handle| format!("wayland:{handle}"))
+            .unwrap_or_default();
+        let portal = Portal::new();
+        let _answer = portal.call_from(
+            &parent,
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("current_name", "notes.txt".to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        assert_ne!(
+            GtkWindowExt::group(window),
+            GtkWindowExt::group(&caller),
+            "a window group of its own"
+        );
+        if !parent.is_empty() {
+            assert!(picker.attached_to_caller.get(), "a child of the caller's window");
+            assert!(window.is_modal(), "modal while the caller waits");
+        }
+        caller.destroy();
     }
 
     /// A folder dialog lists only folders and answers the selected one.

@@ -1,3 +1,13 @@
+# Unreleased
+
+- An Open or Save dialog opened by another application now belongs to that
+  application's window on Wayland, as Windows' dialog and KDE's own do: it
+  stays above the window, and the window cannot be used until the dialog
+  is answered or cancelled. The other OpenXplorer windows stay usable. This
+  needs a compositor with xdg-foreign and xdg-dialog (KDE Plasma 6.1 or
+  newer) and GTK 4.22 or newer; under X11 the dialog is a window of its
+  own, as before.
+
 # 2.0.2 — 2026-10-04
 
 More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
