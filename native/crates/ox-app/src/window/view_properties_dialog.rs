@@ -202,13 +202,19 @@ impl BrowserWindow {
             &gettext("Choose how the items of this folder are shown."),
         );
         let form = StyleForm::add_to(&dialog, &shown, per_folder);
+        // Windows' Folder Options > View > Folder views.
+        let apply_to_all = dialog.add_button(&gettext("Apply to all folders"), ButtonStyle::Bordered);
+        let reset_all = dialog.add_button(&gettext("Reset folders"), ButtonStyle::Bordered);
         dialog.add_cancel_button();
         dialog.add_button(&gettext("OK"), ButtonStyle::Accent);
         dialog.open_on_first_button();
         let answer = dialog.next_response().await;
         dialog.finish();
-        if answer.is_none() {
-            return;
+        match answer {
+            None => return,
+            Some(button) if button == apply_to_all => return self.apply_view_to_all_folders(shown).await,
+            Some(button) if button == reset_all => return self.reset_folder_views().await,
+            Some(_) => {}
         }
         let style = form.style(&shown);
         let scope = per_folder.then(|| form.scope());
@@ -218,6 +224,54 @@ impl BrowserWindow {
         self.apply_style(&style);
         self.folder_pane().restore_scroll_position(0.0);
         self.save_chosen_style(style, scope, form.as_default.is_active());
+    }
+
+    /// Folder views > Apply to all folders: after asking, every folder
+    /// shows `shown`, this folder's view, and keeps no style of its own.
+    async fn apply_view_to_all_folders(&self, shown: ViewProperties) {
+        let asked = self
+            .confirm(
+                message_id("Apply this view to all folders?"),
+                message_id(
+                    "Every folder will show this folder's layout, sorting, grouping and other view settings. \
+                     Folders that kept a view of their own will lose it.",
+                ),
+                message_id("Apply"),
+            )
+            .await;
+        if asked {
+            self.context()
+                .apply_view_to_all_folders(shown, self.preference_failure_reply());
+        }
+    }
+
+    /// Folder views > Reset folders: after asking, every folder forgets
+    /// its view and shows the default one.
+    async fn reset_folder_views(&self) {
+        let asked = self
+            .confirm(
+                message_id("Reset all folders to the default view?"),
+                message_id(
+                    "Every folder will forget its layout, sorting, grouping and other view settings, and show \
+                     the default view.",
+                ),
+                message_id("Reset"),
+            )
+            .await;
+        if asked {
+            self.context().reset_folder_views(self.preference_failure_reply());
+        }
+    }
+
+    /// Asks `title` with `message`; true when `action` was chosen.
+    async fn confirm(&self, title: &str, message: &str, action: &str) -> bool {
+        let dialog = Dialog::new(self, &gettext(title), &gettext(message));
+        dialog.add_cancel_button();
+        dialog.add_button(&gettext(action), ButtonStyle::Accent);
+        dialog.open_on_first_button();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        answer.is_some()
     }
 
     /// Asks before a style replaces those of other folders, as Dolphin's

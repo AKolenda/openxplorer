@@ -289,6 +289,7 @@ impl ChooserRequest {
             locations,
             filter,
             choices,
+            writable,
         } = answer
         else {
             let response = match answer {
@@ -327,25 +328,10 @@ impl ChooserRequest {
         if let ChooserMode::Open { .. } = self.mode {
             // Whether the caller may write what was chosen; a sandboxed
             // caller gets read-only access when this is false.
-            results.insert_value("writable", &all_writable(locations).to_variant());
+            results.insert_value("writable", &writable.to_variant());
         }
         (RESPONSE_SUCCESS, results.end())
     }
-}
-
-/// Whether the user may write every one of `locations`, as GIO reports
-/// it (`access::can-write`); false when that cannot be read.
-fn all_writable(locations: &[PathBuf]) -> bool {
-    !locations.is_empty()
-        && locations.iter().all(|location| {
-            gio::File::for_path(location)
-                .query_info(
-                    gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
-                    gio::FileQueryInfoFlags::NONE,
-                    gio::Cancellable::NONE,
-                )
-                .is_ok_and(|info| info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE))
-        })
 }
 
 /// How the dialog ended.
@@ -361,6 +347,11 @@ pub enum ChooserAnswer {
         filter: Option<usize>,
         /// The values of the caller's choices.
         choices: Vec<(String, String)>,
+        /// Whether the user may write every location, for an Open
+        /// dialog's reply. The dialog finds this out before it answers,
+        /// off the main thread: a share that stopped answering must not
+        /// freeze the app while the reply is built.
+        writable: bool,
     },
     /// The user pressed Cancel or closed the window.
     Cancelled,
