@@ -1,5 +1,13 @@
 # Unreleased
 
+- Smaller fixes to Open and Save dialogs: browsing a network share in a
+  dialog no longer waits on GVfs on the main thread, since the share's
+  local path is looked up in the background; Save stays on where nothing
+  can be saved (This PC, Network, a share without a local path) and
+  pressing it says why, instead of being greyed out with no reason; a
+  split pane in a dialog lists only the chosen file type, as the first
+  pane does; and only the desktop portal that opened a dialog can close
+  it, not any program on the session bus.
 - A file list at its top stays at its top when files come before the one
   at the top edge, in every view: in an Open or Save dialog switching
   from one file type to more (`*.svg`, then All files) no longer scrolls

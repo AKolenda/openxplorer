@@ -15,6 +15,9 @@
 //! Safety rule "only the portal may ask": a call is served only when its
 //! sender owns `org.freedesktop.portal.Desktop`, so another program on the
 //! session bus cannot pop up dialogs or read back what the user chose.
+//! Likewise a handle's `Close` is accepted only from the portal connection
+//! that made the request, so another program that guesses the handle path
+//! cannot close the user's dialog.
 //!
 //! **The bus is answered from a thread of its own.** `GDBus` answers an
 //! object's calls, its `Properties.GetAll` included, on the main context
@@ -74,6 +77,9 @@ const ACCESS_DENIED_ERROR: &str = "org.freedesktop.DBus.Error.AccessDenied";
 
 /// The D-Bus error for a refused call.
 const INVALID_ARGS_ERROR: &str = "org.freedesktop.DBus.Error.InvalidArgs";
+
+/// The D-Bus error for a method a handle object does not have.
+const UNKNOWN_METHOD_ERROR: &str = "org.freedesktop.DBus.Error.UnknownMethod";
 
 /// The D-Bus error for a call the app could not show.
 const FAILED_ERROR: &str = "org.freedesktop.DBus.Error.Failed";
@@ -135,6 +141,9 @@ impl fmt::Debug for ChooserReply {
 struct ReplyState {
     request: ChooserRequest,
     connection: gio::DBusConnection,
+    /// The unique bus name of the portal connection that made the request,
+    /// the only one whose `Close` is accepted.
+    requester: String,
     /// Takes the reply back to the dispatch thread, until it is sent.
     responder: RefCell<Option<oneshot::Sender<Outcome>>>,
     handle: RefCell<Option<gio::RegistrationId>>,
@@ -383,14 +392,17 @@ async fn answer(connection: gio::DBusConnection, call: IncomingCall, handler: Rc
     let refuse = |responder: oneshot::Sender<Outcome>, name: &'static str, message: String| {
         let _ = responder.send(Err((name, message)));
     };
-    if !comes_from_portal(&connection, sender.as_deref()).await {
-        refuse(
-            responder,
-            ACCESS_DENIED_ERROR,
-            "Only the desktop portal may open OpenXplorer's file dialogs.".to_owned(),
-        );
-        return;
-    }
+    let requester = match sender {
+        Some(sender) if comes_from_portal(&connection, Some(&sender)).await => sender,
+        _ => {
+            refuse(
+                responder,
+                ACCESS_DENIED_ERROR,
+                "Only the desktop portal may open OpenXplorer's file dialogs.".to_owned(),
+            );
+            return;
+        }
+    };
     // GDBus has already checked the argument types against INTERFACE_XML.
     let Some((handle, app_id, parent_window, title, options)) = parameters.get::<(
         glib::variant::ObjectPath,
@@ -412,6 +424,7 @@ async fn answer(connection: gio::DBusConnection, call: IncomingCall, handler: Rc
     let state = Rc::new(ReplyState {
         request: request.clone(),
         connection: connection.clone(),
+        requester,
         responder: RefCell::new(Some(responder)),
         handle: RefCell::new(None),
         on_close: RefCell::new(None),
@@ -470,8 +483,9 @@ async fn comes_from_portal(connection: &gio::DBusConnection, sender: Option<&str
 }
 
 /// Exports the call's `Request` object at `handle`; its `Close` ends the
-/// call. The object holds the state weakly, so it never keeps a finished
-/// call alive.
+/// call when it comes from the portal connection that made the request,
+/// and is refused with an access error from anyone else. The object holds
+/// the state weakly, so it never keeps a finished call alive.
 fn export_handle(
     connection: &gio::DBusConnection,
     handle: &str,
@@ -484,11 +498,24 @@ fn export_handle(
     let state = Rc::downgrade(state);
     connection
         .register_object(handle, &interface)
-        .method_call(move |_, _, _, _, _, _, invocation| {
-            invocation.return_value(None);
-            if let Some(state) = state.upgrade() {
-                state.close();
+        .method_call(move |_, sender, _, _, method, _, invocation| {
+            if method != "Close" {
+                invocation.return_dbus_error(UNKNOWN_METHOD_ERROR, "The request has no such method.");
+                return;
             }
+            let Some(state) = state.upgrade() else {
+                invocation.return_value(None);
+                return;
+            };
+            if sender != Some(state.requester.as_str()) {
+                invocation.return_dbus_error(
+                    ACCESS_DENIED_ERROR,
+                    "Only the desktop portal that opened this dialog may close it.",
+                );
+                return;
+            }
+            invocation.return_value(None);
+            state.close();
         })
         .build()
 }
