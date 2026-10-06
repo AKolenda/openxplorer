@@ -13,6 +13,7 @@ use gtk::prelude::*;
 use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
 use crate::folder_view::grid::{IconSize, IconView};
+use crate::folder_view::keep_top::TopKeeper;
 use crate::folder_view::model::FolderModel;
 use crate::window::empty_page::EmptyPage;
 use crate::window::loading_line::LoadingLine;
@@ -47,6 +48,8 @@ pub(super) struct PaneParts {
     pub(super) rubber_band: gtk::Box,
     /// The requested preview visibility before remote-file policy is applied.
     pub(super) previews_enabled: Cell<bool>,
+    /// Keeps the visible view at its top when its items change there.
+    pub(super) top_keeper: TopKeeper,
 }
 
 impl PaneParts {
@@ -57,6 +60,7 @@ impl PaneParts {
         let details = DetailsView::new(&model, &owners);
         let icon_view = IconView::new(&owners);
         let views = view_stack(&details, &icon_view);
+        let top_keeper = keep_views_at_their_top(&model, &views, &details, &icon_view);
         let empty = EmptyPage::new();
         let (landing, landing_scroll) = landing_page();
         let stack = page_stack(&views, &empty, &landing_scroll);
@@ -73,6 +77,7 @@ impl PaneParts {
             drag_hint: drag_hint(),
             rubber_band: rubber_band(),
             previews_enabled: Cell::new(true),
+            top_keeper,
         }
     }
 }
@@ -103,6 +108,31 @@ fn rubber_band() -> gtk::Box {
 }
 
 /// The details and icon views, one of them shown.
+/// Keeps whichever of the views is shown at its top when the items change
+/// while it is there: the details view scrolls down, the icons down too
+/// and the compact list sideways.
+fn keep_views_at_their_top(
+    model: &FolderModel,
+    views: &gtk::Stack,
+    details: &DetailsView,
+    icon_view: &IconView,
+) -> TopKeeper {
+    let grid = icon_view.both_scroll_adjustments();
+    let mut adjustments = vec![details.vadjustment()];
+    adjustments.extend(grid);
+    let shown = views.downgrade();
+    let details = details.downgrade();
+    let icon_view = icon_view.downgrade();
+    TopKeeper::follow(views, model.selection(), &adjustments, move || {
+        let name = shown.upgrade()?.visible_child_name()?;
+        if name == FolderView::Details.stack_name() {
+            Some(details.upgrade()?.vadjustment())
+        } else {
+            Some(icon_view.upgrade()?.scroll_adjustment())
+        }
+    })
+}
+
 fn view_stack(details: &DetailsView, icon_view: &IconView) -> gtk::Stack {
     let views = gtk::Stack::new();
     views.add_named(details, Some(FolderView::Details.stack_name()));

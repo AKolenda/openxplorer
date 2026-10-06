@@ -36,10 +36,13 @@ struct FontSize {
 }
 
 impl FontSize {
-    /// The rule for this font at `scale`.
+    /// The rule for this font at `scale`, in whole pixels. GTK 4.22's GPU
+    /// renderers (Vulkan, NGL) can cut the tops or bottoms off glyphs drawn
+    /// at a fractional size, such as Segoe UI at 12.5 pixels (issue #34);
+    /// Cairo and whole sizes draw them whole.
     fn rule(&self, scale: f64) -> String {
-        let size = self.pixels * scale;
-        format!("{} {{ font-size: {size:.2}px; }}", self.selector)
+        let size = (self.pixels * scale).round();
+        format!("{} {{ font-size: {size:.0}px; }}", self.selector)
     }
 }
 
@@ -120,15 +123,15 @@ const FONT_SIZES: &[FontSize] = &[
     font("list.settings-categories > row", 13.0),
     font(".settings-categories .category-count", 11.0),
     font(".settings .page-title", 24.0),
-    font(".settings .page-lead", 13.5),
+    font(".settings .page-lead", 14.0),
     font(".settings .group-title", 13.0),
-    font(".settings .setting-title", 13.5),
-    font(".settings .setting-description", 12.5),
+    font(".settings .setting-title", 14.0),
+    font(".settings .setting-description", 12.0),
     font(".settings .setting-notice", 12.0),
-    font(".settings .setting-value", 12.5),
+    font(".settings .setting-value", 12.0),
     font(".settings .status-title", 15.0),
-    font(".settings .status-text", 12.5),
-    font(".settings .note-text", 12.5),
+    font(".settings .status-text", 12.0),
+    font(".settings .note-text", 12.0),
     font(".settings .settings-paragraph", 13.0),
     font(".settings .settings-no-matches", 13.0),
     font("popover.choice-list list > row", 13.0),
@@ -392,8 +395,8 @@ mod tests {
     #[test]
     fn the_default_text_size_draws_13_pixel_text_and_36_pixel_rows() {
         let css = css_at(100);
-        assert!(css.contains("window.ox { font-size: 13.00px; }"));
-        assert!(css.contains(".statusbar { font-size: 11.00px; }"));
+        assert!(css.contains("window.ox { font-size: 13px; }"));
+        assert!(css.contains(".statusbar { font-size: 11px; }"));
         assert!(css.contains("columnview.files > listview > row { min-height: 36px; }"));
         assert!(css.contains("gridview.files.icons-large > child { min-width: 56px; min-height: 104px; }"));
         assert!(css
@@ -405,11 +408,35 @@ mod tests {
         assert!(css.contains("popover.ox-menu.compact > contents { min-width: 274px; }"));
     }
 
+    /// Every font size is a whole number of pixels at every text size: GTK
+    /// 4.22's GPU renderers can cut Segoe UI's glyphs drawn at 12.5 pixels
+    /// (issue #34). Settings' small grey text is 12 pixels and its titles
+    /// 14 at 100%.
+    ///
+    /// parity: VIEW-044
+    #[test]
+    fn every_font_size_is_a_whole_pixel_at_every_text_size() {
+        for percent in ox_core::settings::TEXT_SIZES {
+            let css = css_at(percent);
+            for rule in css.lines().filter(|rule| rule.contains("font-size:")) {
+                let size = rule
+                    .split("font-size: ")
+                    .nth(1)
+                    .and_then(|rest| rest.split("px").next())
+                    .unwrap_or_else(|| panic!("a size in pixels: {rule}"));
+                assert!(size.parse::<u32>().is_ok(), "{percent}%: {rule}");
+            }
+        }
+        let css = css_at(100);
+        assert!(css.contains(".settings .setting-description { font-size: 12px; }"));
+        assert!(css.contains(".settings .setting-title { font-size: 14px; }"));
+    }
+
     /// parity: VIEW-044
     #[test]
     fn larger_text_scales_fonts_and_rows() {
         let css = css_at(200);
-        assert!(css.contains("window.ox { font-size: 26.00px; }"));
+        assert!(css.contains("window.ox { font-size: 26px; }"));
         assert!(css.contains("row { min-height: 60px; }"));
     }
 

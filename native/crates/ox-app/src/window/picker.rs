@@ -47,6 +47,9 @@ use super::{BrowserWindow, ButtonStyle, WindowAction};
 use crate::dialog::Dialog;
 use crate::folder_view::filter::ChooserListing;
 use crate::locations::Page;
+use probe::{all_writable, probe, Probe};
+
+mod probe;
 
 /// The size a picker window opens at; it never saves its size over the
 /// explorer's.
@@ -116,12 +119,21 @@ pub(crate) struct Picker {
     /// Set while the replace question is open, so the answer is not given
     /// twice.
     asking: Cell<bool>,
+    /// Set while the accept button's choice is checked on disk, off the
+    /// main thread.
+    checking: Cell<bool>,
     /// The one item selected, in a dialog that chooses one, so a second
     /// item clicked with Ctrl or Shift takes its place.
     single: Cell<Option<u32>>,
 }
 
 impl Picker {
+    /// Whether the dialog is answering or asking, so accepting again does
+    /// nothing.
+    fn is_busy(&self) -> bool {
+        self.asking.get() || self.checking.get()
+    }
+
     /// Whether the dialog chooses one item: a file or a folder, not
     /// several.
     fn chooses_one(&self) -> bool {
@@ -172,14 +184,12 @@ fn local_path(uri: &str) -> Option<PathBuf> {
     gio::File::for_uri(uri).path()
 }
 
-/// The folder a dialog opens in: the caller's, if it exists, else the
-/// home folder.
-fn start_folder(request: &ChooserRequest) -> PathBuf {
-    request
-        .current_folder
-        .clone()
-        .filter(|folder| folder.is_dir())
-        .unwrap_or_else(glib::home_dir)
+/// The message for a folder or file on a share that stopped answering.
+fn not_answering(path: &Path) -> String {
+    ox_core::i18n::format_message(
+        "“{path}” is not answering. Its network share may have stopped responding.",
+        &[("path", &path.display().to_string())],
+    )
 }
 
 /// The path the File name box's `typed` text names, from `folder`: a
@@ -233,7 +243,7 @@ impl BrowserWindow {
     /// Turns this new window into the dialog for `call` and shows it.
     pub(crate) fn begin_picking(&self, call: ChooserCall) {
         let ChooserCall { request, reply, .. } = call;
-        let start = gio::File::for_path(start_folder(&request)).uri();
+        let wanted_folder = request.current_folder.clone();
         let picker = Rc::new(self.build_picker_bar(request, reply.clone()));
         self.imp().picker.replace(Some(Rc::clone(&picker)));
         reply.connect_closed(glib::clone!(
@@ -261,10 +271,7 @@ impl BrowserWindow {
         // every other OpenXplorer window while the caller waits.
         self.set_default_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1);
         self.folder_pane().model().set_chooser_listing(picker.listing());
-        if self.add_tab(&start).is_err() {
-            // The home folder always opens.
-            let _ = self.add_tab(&gio::File::for_path(glib::home_dir()).uri());
-        }
+        self.open_start_folder(wanted_folder);
         self.listen_for_escape();
         self.cancel_on_quit_key();
         self.keep_one_selected();
@@ -281,6 +288,44 @@ impl BrowserWindow {
             None => self.focus_new_file_list(),
         }
         self.update_picker();
+    }
+
+    /// Opens the folder the dialog starts in: the caller's `wanted` folder
+    /// if it is one, else the home folder. The caller's folder is checked
+    /// off the main thread: on a share that stopped answering, the check
+    /// would freeze every window. The dialog then opens in the home folder
+    /// and says so.
+    fn open_start_folder(&self, wanted: Option<PathBuf>) {
+        let Some(wanted) = wanted else {
+            self.open_first_tab(&glib::home_dir());
+            return;
+        };
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let found = probe(&wanted).await;
+                if window.picker().is_none_or(|picker| picker.reply.is_answered()) {
+                    return;
+                }
+                if found == Probe::Folder {
+                    window.open_first_tab(&wanted);
+                    return;
+                }
+                window.open_first_tab(&glib::home_dir());
+                if found == Probe::NoAnswer {
+                    window.show_message(&not_answering(&wanted));
+                }
+            }
+        ));
+    }
+
+    /// Opens the dialog's first tab at `folder`, else the home folder.
+    fn open_first_tab(&self, folder: &Path) {
+        if self.add_tab(&gio::File::for_path(folder).uri()).is_err() {
+            // The home folder always opens.
+            let _ = self.add_tab(&gio::File::for_path(glib::home_dir()).uri());
+        }
     }
 
     /// Whether the keyboard is in the File name box, from which Alt+Left,
@@ -342,7 +387,7 @@ impl BrowserWindow {
             ChooserMode::Open { directory: false, .. } => {
                 // The activated file is the choice, selected or not.
                 match local_path(&entry.uri) {
-                    Some(path) if !picker.asking.get() && !picker.reply.is_answered() => {
+                    Some(path) if !picker.is_busy() && !picker.reply.is_answered() => {
                         self.finish_picking(&picker, vec![path]);
                     }
                     Some(_) => {}
@@ -356,7 +401,7 @@ impl BrowserWindow {
                 if let Some(name) = &picker.name {
                     name.set_text(&entry.name);
                 }
-                if !picker.asking.get() && !picker.reply.is_answered() {
+                if !picker.is_busy() && !picker.reply.is_answered() {
                     self.confirm_replace(&picker, vec![path], std::slice::from_ref(&entry.name));
                 }
             }
@@ -430,50 +475,73 @@ impl BrowserWindow {
                         .is_some_and(|name| !name.text().trim().is_empty())
             }
         };
-        picker.accept.set_sensitive(ready && !picker.asking.get());
+        picker.accept.set_sensitive(ready && !picker.is_busy());
     }
 
     /// The accept button: works out the choice and answers, asking first
     /// before replacing files.
+    ///
+    /// What is on disk is checked off the main thread ([`probe`]), and
+    /// the accept button waits meanwhile, so a share that stopped
+    /// answering cannot freeze the app.
     fn accept_choice(&self) {
         let Some(picker) = self.picker() else {
             return;
         };
-        if picker.asking.get() || picker.reply.is_answered() {
+        if picker.is_busy() || picker.reply.is_answered() {
             return;
         }
+        picker.checking.set(true);
+        self.update_picker();
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let outcome = window.work_out_choice(&picker).await;
+                picker.checking.set(false);
+                window.update_picker();
+                match outcome {
+                    Ok(locations) if !locations.is_empty() => window.finish_picking(&picker, locations),
+                    Err(message) if !message.is_empty() => window.show_message(&message),
+                    // Nothing to answer yet: a folder opened, or a question is open.
+                    Ok(_) | Err(_) => {}
+                }
+            }
+        ));
+    }
+
+    /// The locations the accept button chooses, as [`Self::accept_choice`]
+    /// describes.
+    async fn work_out_choice(&self, picker: &Rc<Picker>) -> Result<Vec<PathBuf>, String> {
         let selected = self.selected_entries();
-        let outcome = match &picker.request.mode {
+        match &picker.request.mode {
             ChooserMode::Open {
                 directory: false,
                 multiple,
-            } => match self.typed_choice(&picker, &selected) {
+            } => match self.typed_choice(picker, &selected).await {
                 Some(typed) => typed,
                 None => self.chosen_files(&selected, *multiple),
             },
             ChooserMode::Open { directory: true, .. } => {
                 self.chosen_folder(&selected).map(|folder| vec![folder])
             }
-            ChooserMode::Save { .. } => self.chosen_save(&picker),
-            ChooserMode::SaveFiles { names } => self.chosen_folder(&selected).map(|folder| {
-                let existing: Vec<String> = names
-                    .iter()
-                    .filter(|name| folder.join(name).exists())
-                    .cloned()
-                    .collect();
-                if existing.is_empty() {
-                    vec![folder]
-                } else {
-                    self.confirm_replace(&picker, vec![folder], &existing);
-                    Vec::new()
+            ChooserMode::Save { .. } => self.chosen_save(picker).await,
+            ChooserMode::SaveFiles { names } => {
+                let folder = self.chosen_folder(&selected)?;
+                let mut existing = Vec::new();
+                for name in names {
+                    match probe(&folder.join(name)).await {
+                        Probe::NoAnswer => return Err(not_answering(&folder)),
+                        found if found.exists() => existing.push(name.clone()),
+                        _ => {}
+                    }
                 }
-            }),
-        };
-        match outcome {
-            Ok(locations) if !locations.is_empty() => self.finish_picking(&picker, locations),
-            Err(message) if !message.is_empty() => self.show_message(&message),
-            // Nothing to answer yet: a folder opened, or a question is open.
-            Ok(_) | Err(_) => {}
+                if existing.is_empty() {
+                    return Ok(vec![folder]);
+                }
+                self.confirm_replace(picker, vec![folder], &existing);
+                Ok(Vec::new())
+            }
         }
     }
 
@@ -512,7 +580,7 @@ impl BrowserWindow {
     /// The file of a Save dialog: the name in the current folder. A name
     /// of a folder there opens that folder; an existing file is replaced
     /// only after asking.
-    fn chosen_save(&self, picker: &Rc<Picker>) -> Result<Vec<PathBuf>, String> {
+    async fn chosen_save(&self, picker: &Rc<Picker>) -> Result<Vec<PathBuf>, String> {
         let Some(name_box) = &picker.name else {
             return Ok(Vec::new());
         };
@@ -523,7 +591,11 @@ impl BrowserWindow {
         }
         let shown = self.picking_folder().ok_or_else(not_local)?;
         let path = typed_path(&typed, &shown).ok_or_else(not_local)?;
-        if path.is_dir() {
+        let found = probe(&path).await;
+        if found == Probe::NoAnswer {
+            return Err(not_answering(&path));
+        }
+        if found == Probe::Folder {
             name_box.set_text("");
             self.navigate_or_report(&gio::File::for_path(&path).uri());
             return Ok(Vec::new());
@@ -541,8 +613,10 @@ impl BrowserWindow {
         let bad_name =
             || ox_core::i18n::format_message("“{name}” is not a valid file name.", &[("name", &typed)]);
         let folder = path.parent().map(Path::to_path_buf).ok_or_else(bad_name)?;
-        if !folder.is_dir() {
-            return Err(missing(&folder));
+        match probe(&folder).await {
+            Probe::Folder => {}
+            Probe::NoAnswer => return Err(not_answering(&folder)),
+            Probe::File | Probe::Missing => return Err(missing(&folder)),
         }
         let written = path
             .file_name()
@@ -550,12 +624,16 @@ impl BrowserWindow {
             .unwrap_or_default();
         let name = checked_name(&saved_name(&written, picker.chosen_extension())).map_err(|_| bad_name())?;
         let target = folder.join(&name);
-        if target.is_dir() {
+        let found = probe(&target).await;
+        if found == Probe::NoAnswer {
+            return Err(not_answering(&folder));
+        }
+        if found == Probe::Folder {
             name_box.set_text("");
             self.navigate_or_report(&gio::File::for_path(&target).uri());
             return Ok(Vec::new());
         }
-        if target.exists() {
+        if found.exists() {
             self.confirm_replace(picker, vec![target], &[name]);
             return Ok(Vec::new());
         }
@@ -604,7 +682,11 @@ impl BrowserWindow {
     /// something other than the one file selected: a folder opens, a file
     /// is the choice, and a name that names nothing says so. `None` leaves
     /// the choice to the selection.
-    fn typed_choice(&self, picker: &Picker, selected: &[Entry]) -> Option<Result<Vec<PathBuf>, String>> {
+    async fn typed_choice(
+        &self,
+        picker: &Picker,
+        selected: &[Entry],
+    ) -> Option<Result<Vec<PathBuf>, String>> {
         let name_box = picker.name.as_ref()?;
         let typed = name_box.text();
         if typed.trim().is_empty() {
@@ -626,18 +708,20 @@ impl BrowserWindow {
             return Some(Err(not_local()));
         };
         if let Some(names) = parse_quoted_names(&typed) {
-            return Some(typed_files(picker, &shown, &names));
+            return Some(typed_files(picker, &shown, &names).await);
         }
         let Some(path) = typed_path(&typed, &shown) else {
             return Some(Err(not_local()));
         };
-        if path.is_dir() {
-            name_box.set_text("");
-            self.navigate_or_report(&gio::File::for_path(&path).uri());
-            return Some(Ok(Vec::new()));
-        }
-        if path.is_file() {
-            return Some(Ok(vec![path]));
+        match probe(&path).await {
+            Probe::Folder => {
+                name_box.set_text("");
+                self.navigate_or_report(&gio::File::for_path(&path).uri());
+                return Some(Ok(Vec::new()));
+            }
+            Probe::File => return Some(Ok(vec![path])),
+            Probe::NoAnswer => return Some(Err(not_answering(&path))),
+            Probe::Missing => {}
         }
         Some(Err(ox_core::i18n::format_message(NOT_FOUND, &[("name", &typed)])))
     }
@@ -683,14 +767,29 @@ impl BrowserWindow {
         ));
     }
 
-    /// Answers with `locations` and closes the window.
-    fn finish_picking(&self, picker: &Picker, locations: Vec<PathBuf>) {
-        picker.reply.send(&ChooserAnswer::Chosen {
-            locations,
-            filter: picker.chosen_filter(),
-            choices: picker.choice_values(),
-        });
-        self.close();
+    /// Answers with `locations` and closes the window. An Open dialog
+    /// first finds out, off the main thread, whether the caller may write
+    /// them; the dialog waits for that, never longer than [`probe`]
+    /// allows.
+    fn finish_picking(&self, picker: &Rc<Picker>, locations: Vec<PathBuf>) {
+        let is_open = matches!(picker.request.mode, ChooserMode::Open { .. });
+        picker.asking.set(true);
+        self.update_picker();
+        let picker = Rc::clone(picker);
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let writable = is_open && all_writable(&locations).await;
+                picker.reply.send(&ChooserAnswer::Chosen {
+                    locations,
+                    filter: picker.chosen_filter(),
+                    choices: picker.choice_values(),
+                    writable,
+                });
+                window.close();
+            }
+        ));
     }
 
     /// Cancel, Escape, and Ctrl+Q in a dialog.
@@ -809,6 +908,7 @@ impl BrowserWindow {
             choices,
             accept,
             asking: Cell::new(false),
+            checking: Cell::new(false),
             single: Cell::new(None),
         }
     }
@@ -903,21 +1003,25 @@ fn attach_field(
 /// The files of a quoted list typed in an Open dialog's File name, each
 /// from the folder shown or a path of its own; the first that is not a
 /// file is named.
-fn typed_files(picker: &Picker, shown: &Path, names: &[String]) -> Result<Vec<PathBuf>, String> {
+async fn typed_files(picker: &Picker, shown: &Path, names: &[String]) -> Result<Vec<PathBuf>, String> {
     if names.len() > 1 && picker.chooses_one() {
         return Err(ox_core::i18n::gettext(CHOOSE_ONE));
     }
-    names
-        .iter()
-        .map(|name| {
-            let path = typed_path(name, shown).ok_or_else(not_local)?;
-            if path.is_file() {
-                return Ok(path);
+    let mut files = Vec::with_capacity(names.len());
+    for name in names {
+        let path = typed_path(name, shown).ok_or_else(not_local)?;
+        let message = match probe(&path).await {
+            Probe::File => {
+                files.push(path);
+                continue;
             }
-            let message = if path.is_dir() { NOT_A_FILE } else { NOT_FOUND };
-            Err(ox_core::i18n::format_message(message, &[("name", name)]))
-        })
-        .collect()
+            Probe::NoAnswer => return Err(not_answering(&path)),
+            Probe::Folder => NOT_A_FILE,
+            Probe::Missing => NOT_FOUND,
+        };
+        return Err(ox_core::i18n::format_message(message, &[("name", name)]));
+    }
+    Ok(files)
 }
 
 /// `files`' names in quotes, separated by spaces, as Windows' File name
@@ -1149,6 +1253,9 @@ mod tests {
             });
             let window = self.test.window.clone();
             wait_until("the picker", move || window.is_picking() && window.is_mapped());
+            // The start folder opens once it is checked, off the main thread.
+            let window = self.test.window.clone();
+            wait_until("the start folder", move || window.current_uri().is_some());
             self.test.wait_for_listing("the picker's folder");
             answer
         }
@@ -1160,6 +1267,19 @@ mod tests {
             let uris: Vec<String> = results.lookup("uris").ok().flatten().unwrap_or_default();
             (response, uris)
         }
+    }
+
+    /// Presses Enter in File name and waits until the dialog has checked
+    /// what it names, which happens off the main thread.
+    fn enter(name: &gtk::Entry) {
+        name.emit_activate();
+        let window = name
+            .root()
+            .and_downcast::<super::BrowserWindow>()
+            .expect("the box is in a dialog");
+        wait_until("the name to be checked", || {
+            window.picker().is_none_or(|picker| !picker.checking.get())
+        });
     }
 
     /// Save: the caller's folder and name, the type list narrows the
@@ -1219,6 +1339,103 @@ mod tests {
         wait_until("the picker to close", || !window.is_visible());
     }
 
+    /// A caller's folder on a share that stopped answering does not
+    /// freeze the app: the dialog opens in the home folder and says so.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_folder_that_does_not_answer_opens_the_dialog_at_home() {
+        let fixture = Fixture::empty();
+        let share = fixture.path("Share");
+        fs::create_dir(&share).expect("a folder");
+        super::probe::stop_answering(&share);
+        let portal = Portal::new();
+
+        let answer = portal.call(
+            "OpenFile",
+            &[("current_folder", path_variant(&share.display().to_string()))],
+        );
+
+        let window = &portal.test.window;
+        let home = gio::File::for_path(glib::home_dir()).uri().to_string();
+        assert_eq!(window.current_uri().as_deref(), Some(home.as_str()));
+        assert!(
+            window.shown_message().contains("is not answering"),
+            "{}",
+            window.shown_message()
+        );
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// Saving into a folder whose share stopped answering says so and
+    /// answers nothing; the dialog stays usable.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn saving_where_the_share_stopped_answering_says_so() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let answer = portal.call(
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("current_name", "report.txt".to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        super::probe::stop_answering(fixture.root());
+
+        picker.accept.emit_clicked();
+        let accept_waits = !picker.accept.is_sensitive();
+        wait_until("the dialog to say so", || {
+            window.shown_message().contains("is not answering")
+        });
+
+        assert!(accept_waits, "Save waits while the folder is checked");
+        assert!(answer.borrow().is_none(), "nothing is answered");
+        assert!(picker.accept.is_sensitive(), "Save can be pressed again");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// A file opened from a share that stopped answering is answered as
+    /// read-only: whether it may be written is not known.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_file_on_a_share_that_stopped_answering_opens_read_only() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let answer = portal.call(
+            "OpenFile",
+            &[(
+                "current_folder",
+                path_variant(&fixture.root().display().to_string()),
+            )],
+        );
+        super::probe::stop_answering(fixture.root());
+
+        portal
+            .test
+            .window
+            .activate_item(portal.test.position_of("notes.txt"));
+        wait_until("the answer", || answer.borrow().is_some());
+
+        let (response, results) = answer.borrow_mut().take().expect("answered");
+        let uris: Vec<String> = results.lookup("uris").ok().flatten().unwrap_or_default();
+        let writable: Option<bool> = results.lookup("writable").ok().flatten();
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("notes.txt")]);
+        assert_eq!(writable, Some(false));
+    }
+
     /// Open: activating a file chooses it.
     ///
     /// parity: INT-032
@@ -1240,6 +1457,144 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("letter.odt")]);
+    }
+
+    /// Sets the modification time of `name` in `fixture` to `seconds` ago.
+    fn date_file(fixture: &Fixture, name: &str, seconds: u64) {
+        fs::File::options()
+            .write(true)
+            .open(fixture.path(name))
+            .and_then(|file| {
+                file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(seconds))
+            })
+            .expect("the date is set");
+    }
+
+    /// How far the visible view is scrolled once the window has drawn it
+    /// and GTK has laid the list out again, as it does later for reasons
+    /// of its own (the compositor sizing the window, a row measured again).
+    fn scrolled_after_a_relayout(window: &crate::window::BrowserWindow) -> f64 {
+        use crate::test_support::harness::{descendants, wait_for_frames};
+        use crate::window::folder_pane::FolderView;
+        wait_for_frames(window, 4);
+        let pane = window.folder_pane();
+        let (lists, adjustment): (Vec<gtk::Widget>, gtk::Adjustment) = match pane.view() {
+            FolderView::Details => {
+                let details = pane.details();
+                let lists = descendants::<gtk::ListView>(details.column_view())
+                    .into_iter()
+                    .map(Cast::upcast)
+                    .collect();
+                (lists, details.vadjustment())
+            }
+            FolderView::Compact | FolderView::Icons(_) => {
+                let icons = pane.icon_view();
+                (vec![icons.grid().clone().upcast()], icons.scroll_adjustment())
+            }
+        };
+        for list in lists {
+            list.queue_allocate();
+        }
+        wait_for_frames(window, 4);
+        adjustment.value()
+    }
+
+    /// A dialog's list at its top stays there when another file type
+    /// shows more files, in Details, the icons and Compact: the files the
+    /// type had hidden come before the one at the top edge, and GTK kept
+    /// that one there, so the list slid down (Chrome's Save dialog in
+    /// Downloads, `*.svg` then All files, not grouped).
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_dialog_list_at_its_top_stays_there_when_the_type_changes() {
+        use crate::folder_view::icon_size::IconSize;
+        use crate::window::folder_pane::FolderView;
+        let fixture = Fixture::empty();
+        // Newest first: the drawings come after newer files of other
+        // types, and alone they fill more than the view.
+        let mut svgs = 0;
+        for number in 0..240_u64 {
+            let svg = number % 3 == 2;
+            let name = if svg {
+                svgs += 1;
+                format!("drawing {number:03}.svg")
+            } else {
+                format!("file {number:03}.txt")
+            };
+            fixture.write(&name);
+            date_file(&fixture, &name, 60 + number * 3_600);
+        }
+        let portal = Portal::new();
+        let filters = [
+            ("SVG".to_owned(), vec![(0_u32, "*.svg".to_owned())]).to_variant(),
+            ("All files".to_owned(), vec![(0_u32, "*".to_owned())]).to_variant(),
+        ];
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "picture.svg".to_variant()),
+                (
+                    "filters",
+                    glib::Variant::array_from_iter_with_type(filters[0].type_(), filters.clone()),
+                ),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        let types = window
+            .picker()
+            .expect("a picker")
+            .types
+            .clone()
+            .expect("a type list");
+        test.activate("sort", Some("modified"));
+        test.activate("direction", Some("descending"));
+        for view in [
+            FolderView::Details,
+            FolderView::Icons(IconSize::MEDIUM),
+            FolderView::Compact,
+        ] {
+            test.activate("view", Some(view.as_str()));
+            types.set_selected(0);
+            wait_until("the drawings", || test.names().len() == svgs);
+            // Down the list and back to its top, as the user scrolls.
+            let pane = window.folder_pane();
+            let adjustment = match view {
+                FolderView::Details => pane.details().vadjustment(),
+                _ => pane.icon_view().scroll_adjustment(),
+            };
+            wait_until(&format!("a list longer than {}", view.as_str()), || {
+                adjustment.upper() > adjustment.page_size() + 1.0
+            });
+            adjustment.set_value(adjustment.upper() - adjustment.page_size());
+            scrolled_after_a_relayout(window);
+            adjustment.set_value(0.0);
+            let view_name = view.as_str();
+            let scrolled = scrolled_after_a_relayout(window);
+            assert!(
+                scrolled < 0.5,
+                "{view_name}: the drawings from their top: {scrolled}"
+            );
+
+            types.set_selected(1);
+            wait_until("every file", || test.names().len() == 240);
+            let scrolled = scrolled_after_a_relayout(window);
+            assert!(
+                scrolled < 0.5,
+                "{view_name}: All files from their top, not {scrolled} along"
+            );
+
+            types.set_selected(0);
+            wait_until("the drawings again", || test.names().len() == svgs);
+            let scrolled = scrolled_after_a_relayout(window);
+            assert!(
+                scrolled < 0.5,
+                "{view_name}: the drawings again from their top, not {scrolled}"
+            );
+        }
     }
 
     /// A folder dialog lists only folders and answers the selected one.
@@ -1384,19 +1739,19 @@ mod tests {
         assert_eq!(name.text(), "letter.odt", "a selected file fills it in");
 
         name.set_text("Drafts");
-        name.emit_activate();
+        enter(&name);
         wait_until("the folder typed", || {
             portal.test.names().contains(&"plan.txt".to_owned())
         });
         assert_eq!(name.text(), "", "the box is cleared for the next name");
 
         name.set_text("missing.txt");
-        name.emit_activate();
+        enter(&name);
         assert!(window.shown_message().contains("was not found"));
         assert!(answer.borrow().is_none(), "no answer yet");
 
         name.set_text(&fixture.path("letter.odt").display().to_string());
-        name.emit_activate();
+        enter(&name);
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("letter.odt")]);
@@ -1502,7 +1857,7 @@ mod tests {
             .expect("Open has a File name box");
 
         name.set_text("\"letter.odt\" \"gone.txt\"");
-        name.emit_activate();
+        enter(&name);
         assert!(
             window.shown_message().contains("gone.txt"),
             "the missing file is named"
@@ -1510,7 +1865,7 @@ mod tests {
         assert!(answer.borrow().is_none(), "no answer yet");
 
         name.set_text("\"letter.odt\" \"Drafts\"");
-        name.emit_activate();
+        enter(&name);
         assert_eq!(
             window.shown_message(),
             "“Drafts” is a folder, not a file.",
@@ -1519,7 +1874,7 @@ mod tests {
         assert!(answer.borrow().is_none(), "no answer yet");
 
         name.set_text("\"notes.md\" \"letter.odt\"");
-        name.emit_activate();
+        enter(&name);
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("notes.md"), fixture.uri_of("letter.odt")]);
@@ -1552,12 +1907,12 @@ mod tests {
         let name = picker.name.clone().expect("a name box");
 
         name.set_text("Missing/report");
-        name.emit_activate();
+        enter(&name);
         assert!(window.shown_message().contains("does not exist"));
         assert!(answer.borrow().is_none());
 
         name.set_text("Drafts/report");
-        name.emit_activate();
+        enter(&name);
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(
@@ -1593,7 +1948,7 @@ mod tests {
             .clone()
             .expect("a name box");
         name.set_text("notes.md");
-        name.emit_activate();
+        enter(&name);
         let (_, uris) = Portal::finish(&answer);
         assert_eq!(uris, [fixture.uri_of("notes.md")]);
     }
@@ -1671,17 +2026,17 @@ mod tests {
             .expect("a name box");
 
         name.set_text("");
-        name.emit_activate();
+        enter(&name);
         assert!(window.is_listed(), "the folder is not listed again");
         assert!(answer.borrow().is_none());
 
         name.set_text("New/");
-        name.emit_activate();
+        enter(&name);
         assert!(window.shown_message().contains("does not exist"));
         assert!(answer.borrow().is_none(), "no New.txt in the folder shown");
 
         name.set_text(&fixture.uri_of("draft"));
-        name.emit_activate();
+        enter(&name);
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("draft.txt")]);

@@ -34,7 +34,7 @@
 mod error;
 mod gio_provider;
 mod local_provider;
-mod mounts;
+pub(crate) mod mounts;
 mod provider;
 mod result;
 mod run;

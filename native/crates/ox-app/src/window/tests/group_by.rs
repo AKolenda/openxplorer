@@ -830,3 +830,44 @@ fn a_press_in_the_window_closes_every_menu_and_a_press_on_a_menu_none() {
     wait_past_the_submenu_delay(&test);
     assert_eq!(open_menus(&test), Vec::<String>::new(), "no menu opens again");
 }
+
+/// Showing or hiding a column in a grouped list at its top keeps the
+/// list at its top: the headings come off and go back on around the
+/// change, with no change of the rows, and GTK kept the first row at the
+/// top edge with its heading above it, out of sight.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_column_shown_in_a_grouped_list_keeps_its_first_heading() {
+    let home = TestHome::new();
+    for number in 0..40 {
+        fs::write(
+            home.home.join("Downloads").join(format!("file {number}.txt")),
+            "x",
+        )
+        .expect("a file");
+    }
+    let test = TestWindow::open_with_standard_folders(&home.downloads(), home.locations(), |_| {});
+    let details = test.window.folder_pane().details();
+    let adjustment = details.vadjustment();
+    wait_until("a list longer than the view", || {
+        adjustment.upper() > adjustment.page_size() + 1.0
+    });
+    wait_for_frames(&test.window, 4);
+    assert!(adjustment.value() < 0.5, "Downloads opens at its top");
+    let before = details.chosen_columns();
+    let mut more = before.clone();
+    more.push(SortColumn::Created);
+    for columns in [more, before] {
+        details.show_chosen_columns(columns);
+        // Laid out again later, as a compositor or a row measured again
+        // makes GTK do.
+        wait_for_frames(&test.window, 4);
+        for list in descendants::<gtk::ListView>(details.column_view()) {
+            list.queue_allocate();
+        }
+        wait_for_frames(&test.window, 4);
+        assert!(adjustment.value() < 0.5, "at its top, not {}", adjustment.value());
+        assert_eq!(headings(&test).first().map(String::as_str), Some("Today (42)"));
+    }
+}

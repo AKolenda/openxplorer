@@ -58,6 +58,9 @@ const PLACES_CHANGED: &str = "places-changed";
 /// Emitted when every window returns its sidebar and columns to their
 /// default widths ("Reset sidebar and column widths" in Settings).
 const LAYOUT_RESET: &str = "layout-reset";
+/// Every folder's display style changed at once: applied to all folders
+/// or reset.
+const FOLDER_VIEWS_CHANGED: &str = "folder-views-changed";
 
 /// Emitted when Undo or Redo would now do something else, so every window
 /// relabels the commands.
@@ -81,7 +84,7 @@ mod imp {
     use ox_core::places::Place;
     use ox_core::versions::PreviousVersions;
 
-    use super::{JOURNAL_CHANGED, LAYOUT_RESET, PLACES_CHANGED, SERVER_SIGNED_OUT};
+    use super::{FOLDER_VIEWS_CHANGED, JOURNAL_CHANGED, LAYOUT_RESET, PLACES_CHANGED, SERVER_SIGNED_OUT};
     use crate::integration::DesktopIntegration;
     use crate::network::NetworkServices;
     use crate::search::SearchCache;
@@ -158,6 +161,7 @@ mod imp {
                 vec![
                     Signal::builder(PLACES_CHANGED).build(),
                     Signal::builder(LAYOUT_RESET).build(),
+                    Signal::builder(FOLDER_VIEWS_CHANGED).build(),
                     Signal::builder(JOURNAL_CHANGED).build(),
                     Signal::builder(SERVER_SIGNED_OUT)
                         .param_types([String::static_type(), bool::static_type()])
@@ -361,6 +365,55 @@ impl AppContext {
             settings.remember_view(&uri, properties, scope).map(|_| ())
         });
         self.change_settings(change, reply);
+    }
+
+    /// Forgets every folder's display style and the shared one; `reply`
+    /// hears the outcome, after which every window shows the default.
+    pub(crate) fn reset_folder_views(&self, reply: impl FnOnce(Result<(), SettingsError>) + 'static) {
+        let change: Change = Box::new(|settings: &mut Settings| settings.reset_folder_views().map(|_| ()));
+        self.change_settings(change, self.announcing_folder_views(reply));
+    }
+
+    /// Makes `properties` the style of every folder (Windows' Apply to
+    /// Folders); `reply` hears the outcome, after which every window shows
+    /// it.
+    pub(crate) fn apply_view_to_all_folders(
+        &self,
+        properties: ViewProperties,
+        reply: impl FnOnce(Result<(), SettingsError>) + 'static,
+    ) {
+        let change: Change = Box::new(move |settings: &mut Settings| {
+            settings
+                .remember_view("", properties, ViewScope::AllFolders)
+                .map(|_| ())
+        });
+        self.change_settings(change, self.announcing_folder_views(reply));
+    }
+
+    /// `reply`, then, once saved, [`FOLDER_VIEWS_CHANGED`] for every window.
+    fn announcing_folder_views(
+        &self,
+        reply: impl FnOnce(Result<(), SettingsError>) + 'static,
+    ) -> impl FnOnce(Result<(), SettingsError>) + 'static {
+        let context = self.downgrade();
+        move |result: Result<(), SettingsError>| {
+            let saved = result.is_ok();
+            reply(result);
+            if let (true, Some(context)) = (saved, context.upgrade()) {
+                context.emit_by_name::<()>(FOLDER_VIEWS_CHANGED, &[]);
+            }
+        }
+    }
+
+    /// Calls `callback` whenever every folder's display style changed.
+    pub(crate) fn connect_folder_views_changed(
+        &self,
+        callback: impl Fn() + 'static,
+    ) -> glib::SignalHandlerId {
+        self.connect_local(FOLDER_VIEWS_CHANGED, false, move |_| {
+            callback();
+            None
+        })
     }
 
     /// Tells every window to return its sidebar and columns to their

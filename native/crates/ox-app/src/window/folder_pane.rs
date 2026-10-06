@@ -329,7 +329,7 @@ impl FolderPane {
     /// first relayout, if it comes within [`RELAYOUT_WINDOW`]. Later
     /// relayouts and the user's own scrolling are left alone.
     pub(super) fn restore_scroll_position(&self, position: f64) {
-        self.details().note_scroll_restore();
+        self.parts().top_keeper.let_go();
         let adjustment = self.visible_vadjustment();
         adjustment.set_value(position);
         let again = adjustment.clone();
@@ -429,7 +429,8 @@ impl FolderPane {
     /// Moves to `position` with `flags`, scrolling as `scroll` allows.
     fn scroll_to(&self, position: u32, flags: gtk::ListScrollFlags, scroll: Option<gtk::ScrollInfo>) {
         if scroll.is_none() {
-            self.details().note_scroll_to(position);
+            // Scrolling to an item wins over a list kept at its top.
+            self.parts().top_keeper.let_go();
         }
         match self.view() {
             FolderView::Details => self

@@ -286,6 +286,16 @@ pub(super) fn remember(
     folder_views.drain(..excess);
 }
 
+/// Forgets every folder's own style and the shared style, so that every
+/// folder shows the default again, as Windows' Folder Options > Reset
+/// Folders does. Returns whether anything was saved.
+pub(super) fn reset(folder_views: &mut Vec<FolderView>, defaults: &mut Option<ViewProperties>) -> bool {
+    let had_any = !folder_views.is_empty() || defaults.is_some();
+    folder_views.clear();
+    *defaults = None;
+    had_any
+}
+
 /// Whether `uri` is inside `folder`, at any depth.
 fn is_below(uri: &str, folder: &str) -> bool {
     let mut above = parent_location(uri);
@@ -402,5 +412,41 @@ mod tests {
         );
         assert!(views.is_empty());
         assert_eq!(defaults.map(|style| style.sort).as_deref(), Some("size"));
+    }
+
+    /// Reset Folders forgets every folder's own style and the shared one;
+    /// it reports whether anything was saved.
+    ///
+    /// parity: VIEW-020
+    #[test]
+    fn resetting_forgets_every_folders_style_and_the_shared_one() {
+        let mut views = Vec::new();
+        let mut defaults = Some(sorted_by("type"));
+        remember(
+            &mut views,
+            &mut defaults,
+            "file:///a",
+            sorted_by("size"),
+            ViewScope::Folder,
+        );
+        remember(
+            &mut views,
+            &mut defaults,
+            "file:///b",
+            sorted_by("modified"),
+            ViewScope::FolderAndSubfolders,
+        );
+
+        let changed = reset(&mut views, &mut defaults);
+        let again = reset(&mut views, &mut defaults);
+
+        assert!(changed);
+        assert!(!again, "nothing left to reset");
+        assert!(views.is_empty());
+        assert_eq!(defaults, None);
+        assert_eq!(
+            style_for(&views, &ViewProperties::default(), "file:///b/c").sort,
+            "name"
+        );
     }
 }
