@@ -357,6 +357,20 @@ impl Settings {
         })
     }
 
+    /// Forgets every folder's display style and the shared one, so every
+    /// folder shows the default style (Windows' Reset Folders).
+    ///
+    /// # Errors
+    ///
+    /// The settings cannot be written.
+    pub fn reset_folder_views(&mut self) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let preferences = &mut data.preferences;
+            view_properties::reset(&mut preferences.folder_views, &mut preferences.view_defaults);
+            Ok(preferences.clone())
+        })
+    }
+
     /// Locks, re-reads, changes a copy of the data, saves it, and only then
     /// keeps it. The Python app's `settings_mutation` protocol.
     ///

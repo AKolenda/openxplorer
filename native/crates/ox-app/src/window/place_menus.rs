@@ -18,7 +18,7 @@
 //! Format… where GNOME Disks is installed.
 
 use gtk::prelude::*;
-use gtk::{gdk, glib};
+use gtk::{gdk, glib, graphene};
 use ox_core::location::{
     is_device_location, is_remote_location, is_smb_location, is_smb_server, RECENT_LOCATIONS_URI, RECENT_URI,
     TRASH_URI,
@@ -31,6 +31,7 @@ use crate::icons::Icon;
 use crate::volumes::{MountControls, VolumeKind};
 
 use super::cache_folder::cache_item;
+use super::folder_pane::FolderPane;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -440,6 +441,11 @@ impl PlaceMenu {
 /// Opens `menu` at `x`, `y` in `anchor`, as `openMenu` does at the
 /// pointer. A menu without items opens nothing, as a This PC card that
 /// cannot be removed has no menu.
+///
+/// The menu belongs to the folder pane around `anchor`, not to the card:
+/// This PC and Network are drawn again whenever a drive, a share or a
+/// found server changes, which destroys their cards, also while a menu is
+/// open or its item runs. The pane stays.
 pub(super) fn popup_place_menu(
     menu: &PlaceMenu,
     anchor: &impl IsA<gtk::Widget>,
@@ -450,12 +456,18 @@ pub(super) fn popup_place_menu(
     if entries.is_empty() {
         return None;
     }
-    let popover = MenuPopover::new(entries);
-    popover.set_parent(anchor);
+    let anchor = anchor.upcast_ref::<gtk::Widget>();
+    let owner = menu_owner(anchor);
     #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
-    let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
-    popover.set_pointing_to(Some(&point));
-    // A menu belongs to one right-click; it lets go of its anchor once it
+    let point = anchor
+        .compute_point(&owner, &graphene::Point::new(x as f32, y as f32))
+        .unwrap_or_else(|| graphene::Point::new(x as f32, y as f32));
+    let popover = MenuPopover::new(entries);
+    popover.set_parent(&owner);
+    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+    let pointing_to = gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
+    popover.set_pointing_to(Some(&pointing_to));
+    // A menu belongs to one right-click; it lets go of the pane once it
     // closes and its item has run.
     popover.connect_closed(|popover| {
         let closed = popover.clone();
@@ -463,6 +475,13 @@ pub(super) fn popup_place_menu(
     });
     popover.popup();
     Some(popover)
+}
+
+/// The widget a card's menu is parented to: the folder pane the card is
+/// drawn in, which outlives the card, or the card itself outside a pane.
+fn menu_owner(card: &gtk::Widget) -> gtk::Widget {
+    card.ancestor(FolderPane::static_type())
+        .unwrap_or_else(|| card.clone())
 }
 
 /// Whether the place of `menu` is cached for search, as the window of

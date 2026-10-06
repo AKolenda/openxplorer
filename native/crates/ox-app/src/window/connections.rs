@@ -28,6 +28,8 @@ pub(super) struct ExternalHandlers {
     pub(super) places: Option<glib::SignalHandlerId>,
     /// On the application's `layout-reset` signal.
     pub(super) layout: Option<glib::SignalHandlerId>,
+    /// On the application's `folder-views-changed` signal.
+    pub(super) folder_views: Option<glib::SignalHandlerId>,
     /// On the volume monitor's mount and volume signals.
     pub(super) volumes: Vec<glib::SignalHandlerId>,
     /// On the application's `journal-changed` signal, which relabels Undo
@@ -81,9 +83,14 @@ impl BrowserWindow {
         for handler in handlers.skin {
             self.skin().disconnect(handler);
         }
-        for handler in [handlers.places, handlers.layout, handlers.journal]
-            .into_iter()
-            .flatten()
+        for handler in [
+            handlers.places,
+            handlers.layout,
+            handlers.folder_views,
+            handlers.journal,
+        ]
+        .into_iter()
+        .flatten()
         {
             self.context().disconnect(handler);
         }

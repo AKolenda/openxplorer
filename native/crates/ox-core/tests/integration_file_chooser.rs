@@ -229,6 +229,7 @@ fn replies_carry_uris_filter_and_choices() {
         locations: vec![PathBuf::from("/home/someone/a b.txt")],
         filter: Some(0),
         choices: Vec::new(),
+        writable: false,
     });
     assert_eq!(response, RESPONSE_SUCCESS);
     let results = glib::VariantDict::new(Some(&results));
@@ -241,54 +242,30 @@ fn replies_carry_uris_filter_and_choices() {
     assert_eq!(request.reply(&ChooserAnswer::Ended).0, RESPONSE_OTHER);
 }
 
-/// An Open reply says whether the user may write what was chosen, so a
-/// sandboxed caller gets write access to a writable file and only then.
+/// An Open reply passes on whether the user may write what was chosen,
+/// which the dialog found out, so a sandboxed caller gets write access to
+/// a writable file and only then; a Save reply carries no such flag.
 ///
 /// parity: INT-032
 #[test]
 fn open_replies_say_whether_the_choice_is_writable() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let folder = tempfile::tempdir().expect("temporary folder");
-    let writable = folder.path().join("notes.txt");
-    let read_only = folder.path().join("signed.pdf");
-    fs::write(&writable, "x").expect("a file");
-    fs::write(&read_only, "x").expect("a file");
-    fs::set_permissions(&read_only, fs::Permissions::from_mode(0o444)).expect("read-only");
-    let request = request("OpenFile", &[("multiple", true.to_variant())]).expect("a valid call");
-    let writable_flag = |locations: Vec<PathBuf>| -> Option<bool> {
+    let open = request("OpenFile", &[]).expect("a valid call");
+    let save = request("SaveFile", &[]).expect("a valid call");
+    let writable_flag = |request: &ChooserRequest, writable: bool| -> Option<bool> {
         let (_, results) = request.reply(&ChooserAnswer::Chosen {
-            locations,
+            locations: vec![PathBuf::from("/home/someone/notes.txt")],
             filter: None,
             choices: Vec::new(),
+            writable,
         });
         glib::VariantDict::new(Some(&results))
             .lookup("writable")
             .expect("typed")
     };
-    assert_eq!(writable_flag(vec![writable.clone()]), Some(true));
-    assert_eq!(
-        writable_flag(vec![folder.path().to_owned()]),
-        Some(true),
-        "a folder"
-    );
-    // root may write anything, so the read-only cases hold for users only.
-    if !is_root() {
-        assert_eq!(writable_flag(vec![writable, read_only]), Some(false));
-    }
-    assert_eq!(
-        writable_flag(vec![folder.path().join("missing")]),
-        Some(false),
-        "unknown is not writable"
-    );
-}
 
-/// Whether the tests run as root.
-fn is_root() -> bool {
-    fs::metadata("/proc/self").is_ok_and(|metadata| {
-        use std::os::unix::fs::MetadataExt;
-        metadata.uid() == 0
-    })
+    assert_eq!(writable_flag(&open, true), Some(true));
+    assert_eq!(writable_flag(&open, false), Some(false));
+    assert_eq!(writable_flag(&save, true), None);
 }
 
 /// `SaveFiles` answers one URI per name, in the folder the user chose.
@@ -310,6 +287,7 @@ fn save_files_answers_each_name_in_the_chosen_folder() {
         locations: vec![PathBuf::from("/srv/out")],
         filter: None,
         choices: Vec::new(),
+        writable: false,
     });
     let uris: Vec<String> = glib::VariantDict::new(Some(&results))
         .lookup("uris")
@@ -878,6 +856,7 @@ fn the_portal_gets_the_users_choice() {
         locations: vec![PathBuf::from("/tmp/one"), PathBuf::from("/tmp/two")],
         filter: None,
         choices: Vec::new(),
+        writable: false,
     });
     call.reply.send(&ChooserAnswer::Cancelled);
     let reply = fixture.finish(reply).expect("joined").expect("answered");
