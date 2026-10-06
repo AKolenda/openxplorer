@@ -1,5 +1,11 @@
 # Unreleased
 
+- Folder views, as in Windows' Folder Options: the view display style
+  dialog (View > Adjust view display style…) has "Apply to all folders",
+  which makes every folder show the current folder's view and forget its
+  own, and "Reset folders", which makes every folder forget its view and
+  show the default one. Both ask first, and every open window follows at
+  once.
 - Open and Save dialogs no longer freeze the app when their folder is on a
   network share that stopped answering. The dialog checks the caller's
   folder, typed names and files it would replace off the main thread and
