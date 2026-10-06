@@ -3446,7 +3446,7 @@ msgstr ""
 msgid "Paste files (Ctrl+V)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/conflict_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/conflict_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Rename"
 msgstr ""
 
@@ -4408,6 +4408,10 @@ msgid "Link not supported"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
+msgid "Name Windows cannot use"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
 msgid "Name not supported"
 msgstr ""
 
@@ -4418,6 +4422,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
 msgid "“{name}” has characters the destination file system does not allow (\" * : < > ? \\ | and control characters)."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
+msgid "“{name}” is a name Windows cannot use on this drive: it is a device name such as CON, PRN, AUX, NUL, COM1 or LPT1 (with any extension), or it ends with a dot or a space. Rename it to “{storable}”, or skip it."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
