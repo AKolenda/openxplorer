@@ -399,12 +399,6 @@ impl SettingsPage {
         if let Some(page) = self.imp().pages.visible_child() {
             page.child_focus(gtk::DirectionType::TabForward);
         }
-        let focus = self.root().and_then(|root| root.focus());
-        glib::g_debug!(
-            ox_core::LOG_DOMAIN,
-            "Settings page entered with Enter: keyboard focus on {}",
-            focus.map_or_else(|| "nothing".to_owned(), |focus| focus.type_().name().to_owned())
-        );
     }
 }
 
