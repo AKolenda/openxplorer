@@ -331,7 +331,7 @@ fn the_search_filters_rows_across_every_category() {
         assert_eq!(settings.result_categories(), case.categories, "{}", case.typed);
         assert_eq!(settings.shown_rows(), case.shown, "{}", case.typed);
     }
-    let count = &settings.page.imp().match_count;
+    let count = settings.page.imp().match_count();
     assert!(count.is_visible());
     assert_eq!(count.text(), "5 matching settings");
 }
@@ -415,7 +415,7 @@ fn enter_on_a_status_card_match_jumps_to_the_card() {
         .next()
         .expect("Search has a status card");
     assert!(card.has_css_class("jump-target"));
-    assert_eq!(settings.page.imp().match_count.text(), "3 matching settings");
+    assert_eq!(settings.page.imp().match_count().text(), "3 matching settings");
 }
 
 /// parity: SET-019
@@ -424,7 +424,7 @@ fn a_search_that_matches_nothing_says_so() {
     let settings = SettingsTest::open();
     settings.page.search("no such setting");
     let imp = settings.page.imp();
-    assert_eq!(imp.match_count.text(), "No matching settings");
+    assert_eq!(imp.match_count().text(), "No matching settings");
     assert_eq!(imp.pages.visible_child_name().as_deref(), Some("no-matches"));
     assert_eq!(settings.listed_categories(), Category::ALL);
     assert_eq!(settings.chosen_category(), None);
@@ -492,7 +492,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
     settings.page.imp().search_entry.emit_stop_search();
 
     assert_eq!(settings.page.imp().search_entry.text(), "");
-    assert!(!settings.page.imp().match_count.is_visible());
+    assert!(!settings.page.imp().match_count().is_visible());
     assert_eq!(settings.listed_categories(), Category::ALL);
     assert_eq!(
         settings.shown_rows(),

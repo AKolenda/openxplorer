@@ -336,7 +336,19 @@ fn the_search_shows_results_from_every_page() {
         let titles = descendants::<gtk::Label>(&section);
         assert!(titles.iter().any(|label| label.text() == category.title()));
     }
-    assert!(imp.match_count.is_visible());
+    assert!(imp.match_count().is_visible());
+    assert!(
+        imp.match_count().is_ancestor(&*imp.pages),
+        "the count heads the results, not the left side"
+    );
+    for row in settings.page.category_rows() {
+        let shown: Vec<String> = descendants::<gtk::Label>(&row)
+            .into_iter()
+            .filter(WidgetExt::is_visible)
+            .map(|label| label.text().to_string())
+            .collect();
+        assert_eq!(shown, [row.category().title()], "no count beside a page's name");
+    }
 
     settings.page.search("");
 
@@ -399,7 +411,7 @@ fn choosing_a_page_during_a_search_ends_it_and_opens_the_page() {
     imp.category_list.select_row(Some(&row));
 
     assert_eq!(imp.search_entry.text(), "", "the search is emptied");
-    assert!(!imp.match_count.is_visible());
+    assert!(!imp.match_count().is_visible());
     assert_eq!(
         settings.page.view(),
         SettingsView::Category(Category::Confirmations)
@@ -411,4 +423,37 @@ fn choosing_a_page_during_a_search_ends_it_and_opens_the_page() {
     );
     let results = imp.results.get().expect("a results page");
     assert!(results.first_child().is_none(), "every page is back on its own");
+}
+
+/// A bubble open when its page is left, the pointer still on its ⓘ, is
+/// closed then, so it does not come back on its own when the page shows
+/// again, with no pointer on it to close it.
+///
+/// parity: SET-019
+#[gtk::test]
+fn a_bubble_closes_when_its_page_is_left() {
+    let settings = SettingsTest::open();
+    settings.page.show_view(SettingsView::Category(Category::General));
+    let row = settings.row("Tab key switches between split panes");
+    assert!(row.is_ancestor(&settings.page.category_section(Category::General)));
+    let info = row.info().expect("the row has details");
+    let controllers = info.widget().observe_controllers();
+    let motion = controllers
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .find_map(|controller| controller.downcast::<gtk::EventControllerMotion>().ok())
+        .expect("the ⓘ follows the pointer");
+    motion.emit_by_name::<()>("enter", &[&5.0_f64, &5.0_f64]);
+    wait_until("the bubble to open on hover", || info.is_open());
+
+    settings
+        .page
+        .show_view(SettingsView::Category(Category::Appearance));
+    settings.page.show_view(SettingsView::Category(Category::General));
+    crate::test_support::harness::wait_for_frames(&settings.test.window, 4);
+
+    assert!(
+        !info.is_open(),
+        "the bubble stays closed when General shows again"
+    );
 }

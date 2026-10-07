@@ -6,10 +6,10 @@
 //! `v2.0.0:desktop/ui/app.js`. The search filters the rows of every category at
 //! once and shows the matches of all of them on one page of results, each
 //! category's under its name, as the settings mockup does, so nobody has
-//! to look for matches category by category; "N matching settings" shows
-//! under the search box. The category list stays, with no category chosen
-//! and each one's number of matches: choosing one ends the search and opens
-//! it. Enter jumps to the first match, Escape leaves the search, and arrow
+//! to look for matches category by category; "N matching settings" heads
+//! the results. Of the left side only the search box changes: the category
+//! list stays as it is, with no category chosen, and choosing one ends the
+//! search and opens it. Enter jumps to the first match, Escape leaves the search, and arrow
 //! keys move through the categories. Escape on a sub-page goes back to its
 //! category.
 
@@ -47,16 +47,32 @@ impl SettingsPage {
             .css_classes(["settings-no-matches"])
             .build();
         imp.pages.add_named(&no_matches, Some(NO_MATCHES_PAGE));
+        // The results page: "N matching settings", then the matches.
+        let match_count = gtk::Label::builder()
+            .xalign(0.0)
+            .accessible_role(gtk::AccessibleRole::Status)
+            .css_classes(["settings-match-count"])
+            .visible(false)
+            .build();
         let results = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .css_classes(["settings-content", "settings-results"])
+            .css_classes(["settings-results"])
             .build();
+        let content = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["settings-content"])
+            .build();
+        content.append(&match_count);
+        content.append(&results);
         let scrolled = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
-            .child(&results)
+            .child(&content)
             .build();
         imp.pages.add_named(&scrolled, Some(RESULTS_PAGE));
         imp.results.set(results).expect("the navigation is built once");
+        imp.match_count
+            .set(match_count)
+            .expect("the navigation is built once");
         self.connect_category_list();
         self.connect_search_entry();
         self.go_back_on_escape();
@@ -259,14 +275,14 @@ impl SettingsPage {
         for category_row in self.category_rows() {
             let section = self.category_section(category_row.category());
             let matches = section.apply_query(&query);
-            category_row.show_matches(matches, &query);
+            category_row.set_matches(matches);
             // Among the results, a category without matches leaves out
             // its title too.
             section.set_visible(query.is_empty() || matches > 0);
             total += matches;
         }
-        imp.match_count.set_text(&match_count_text(total));
-        imp.match_count.set_visible(!query.is_empty());
+        imp.match_count().set_text(&match_count_text(total));
+        imp.match_count().set_visible(!query.is_empty());
         imp.query.replace(query);
         self.mark_chosen_category();
         self.show_search_results();

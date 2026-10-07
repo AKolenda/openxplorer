@@ -6,9 +6,12 @@
   an ⓘ bubble that shows while the pointer (or the keyboard) is on it,
   rarely changed settings folded away (Previews and thumbnails, Dragging
   tabs and files, Undo and troubleshooting), and a search that shows the
-  matching settings of every page on one page. The page list stays during
-  a search, with no page chosen, and choosing a page ends the search and
-  opens it. Every setting is still there, with the same options and
+  matching settings of every page on one page, headed by how many match.
+  The page list stays as it is during a search, with no page chosen, and
+  choosing a page ends the search and opens it. Settings opened again
+  after Back to files or after its tab was closed starts with an empty
+  search, and an ⓘ bubble closes when its page is left instead of showing
+  again with it. Every setting is still there, with the same options and
   defaults, and a search for its earlier name still finds it.
 
 # 2.0.3 — 2026-10-06

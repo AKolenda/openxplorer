@@ -4,9 +4,10 @@
 //!
 //! Each row of the settings mockup is one short line; what it used to say
 //! under its name now shows in a bubble while the pointer rests on the ⓘ,
-//! or while the keyboard is on it, and closes when either leaves. A click
-//! neither opens it nor keeps it open: the ⓘ does not take the keyboard
-//! from a click, so only Tab brings the keyboard there. The bubble is a
+//! or while the keyboard is on it, and closes when either leaves or the
+//! page is left. A click neither opens it nor keeps it open: the ⓘ does
+//! not take the keyboard from a click, so only Tab brings the keyboard
+//! there. The bubble is a
 //! `GtkPopover`, a surface of its own that the compositor places where it
 //! fits, flipping above the ⓘ near the bottom of the screen, so the page's
 //! scrolled area or the window's edge never cuts it off. Screen readers
@@ -207,5 +208,13 @@ impl InfoBubble {
             }
         ));
         self.button.add_controller(keys);
+        // Leaving the page hides the ⓘ without the pointer leaving it, and
+        // a bubble left open would show again with its page, with nothing
+        // to close it: it closes with the ⓘ instead.
+        self.button.connect_unmap(glib::clone!(
+            #[weak]
+            popover,
+            move |_| popover.popdown()
+        ));
     }
 }

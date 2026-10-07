@@ -29,7 +29,8 @@ window.ox entry.settings-search {
 /* The accent line under a focused field, drawn inside so nothing moves. */
 window.ox entry.settings-search:focus-within { box-shadow: inset 0 -2px @ox_accent; }
 window.ox entry.settings-search > image { color: @ox_muted; }
-.settings-match-count { color: @ox_muted; margin: 8px 6px 0 6px; }
+/* "N matching settings", at the top of the search results. */
+.settings-match-count { color: @ox_muted; margin-bottom: 20px; }
 list.settings-categories { background: none; margin-top: 16px; }
 list.settings-categories > row {
   min-height: 40px;
@@ -48,13 +49,6 @@ list.settings-categories > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_f
 /* The accent bar of the chosen category, 3 x 18 as the sidebar's. */
 .settings-categories .pill { min-width: 3px; min-height: 18px; border-radius: 2px; }
 list.settings-categories > row:selected .pill { background-color: @ox_accent; }
-.settings-categories .category-count {
-  min-height: 18px;
-  padding: 0 7px;
-  border-radius: 9px;
-  background-color: @ox_hover;
-  color: @ox_muted;
-}
 /* Each category's glyph in the mockup's colour. */
 .settings-categories image.category-general { color: @ox_category_general; }
 .settings-categories image.category-appearance { color: @ox_category_appearance; }

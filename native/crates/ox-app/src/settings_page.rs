@@ -126,9 +126,6 @@ mod imp {
         /// "Search settings".
         #[template_child]
         pub(super) search_entry: TemplateChild<gtk::SearchEntry>,
-        /// "3 matching settings", while a search is typed.
-        #[template_child]
-        pub(super) match_count: TemplateChild<gtk::Label>,
         /// The categories.
         #[template_child]
         pub(super) category_list: TemplateChild<gtk::ListBox>,
@@ -157,6 +154,8 @@ mod imp {
         /// The page of search results, where every category's section is
         /// while a search is typed.
         pub(super) results: OnceCell<gtk::Box>,
+        /// "3 matching settings", at the top of the search results.
+        pub(super) match_count: OnceCell<gtk::Label>,
         /// The sub-pages.
         pub(super) subpages: RefCell<HashMap<Subpage, SettingsSection>>,
         /// What the right side shows.
@@ -186,6 +185,19 @@ mod imp {
                 .field("view", &self.view.get())
                 .field("query", &self.query.borrow())
                 .finish_non_exhaustive()
+        }
+    }
+
+    impl SettingsPage {
+        /// "3 matching settings", at the top of the search results.
+        ///
+        /// # Panics
+        ///
+        /// Before the navigation is built with the page.
+        pub(super) fn match_count(&self) -> &gtk::Label {
+            self.match_count
+                .get()
+                .expect("the navigation is built with the page")
         }
     }
 
@@ -326,6 +338,12 @@ impl SettingsPage {
             self.show_view(view);
         }
         self.focus_chosen_category();
+    }
+
+    /// What the settings search box holds, for tests.
+    #[cfg(test)]
+    pub(crate) fn search_text(&self) -> String {
+        self.imp().search_entry.text().to_string()
     }
 
     /// "Back to files", for tests.
