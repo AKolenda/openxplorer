@@ -25,6 +25,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format;
 use ox_core::i18n::{gettext, ngettext};
+use ox_core::read_only::ReadOnlyDrive;
 
 use crate::announcement::announce;
 use crate::config::BUILD_NAME;
@@ -156,6 +157,9 @@ mod imp {
         /// The type-to-select hint.
         #[template_child]
         pub(super) typeahead_hint: TemplateChild<gtk::Label>,
+        /// Says the folder's drive is mounted read-only.
+        #[template_child]
+        pub(super) drive_state: TemplateChild<gtk::Label>,
         /// Says the folder cannot be watched for changes.
         #[template_child]
         pub(super) watch_state: TemplateChild<gtk::Label>,
@@ -360,6 +364,27 @@ impl StatusBar {
     /// tools.
     pub(super) fn free_space_widget(&self) -> gtk::Widget {
         self.imp().free_space_box.get().upcast()
+    }
+
+    /// Says the folder shown is on `drive`, a drive mounted read-only, with
+    /// what to do about it as the tooltip, or hides the note for `None`.
+    pub(super) fn show_read_only(&self, drive: Option<ReadOnlyDrive>) {
+        let label = &*self.imp().drive_state;
+        label.set_visible(drive.is_some());
+        let explanation = drive.map(ReadOnlyDrive::explanation);
+        label.set_tooltip_text(explanation);
+        label.update_property(&[gtk::accessible::Property::Description(
+            explanation.unwrap_or_default(),
+        )]);
+    }
+
+    /// Whether the read-only note shows, and its tooltip, for tests.
+    #[cfg(test)]
+    pub(super) fn read_only_note(&self) -> Option<String> {
+        let label = &*self.imp().drive_state;
+        label
+            .is_visible()
+            .then(|| label.tooltip_text().unwrap_or_default().to_string())
     }
 
     /// Says the folder shown is checked for changes only every `interval`

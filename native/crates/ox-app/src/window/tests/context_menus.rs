@@ -238,7 +238,13 @@ fn the_folder_menu_sorts_and_changes_the_view_in_place() {
     wait_until("the Sort menu", || {
         menu.is_visible() && menu.row_labels().first().map(String::as_str) == Some("Name")
     });
-    menu.row("Size").emit_activate();
+    // Size is under More, as in Explorer's Sort menu, which opens beside.
+    menu.row("More").emit_activate();
+    let more = menu.open_submenu_menu().expect("More opens beside the menu");
+    wait_until("the More submenu", || {
+        more.is_visible() && more.row_labels().first().map(String::as_str) == Some("Size")
+    });
+    more.row("Size").emit_activate();
 
     let sort = test
         .window

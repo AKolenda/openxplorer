@@ -19,7 +19,7 @@ use std::fs;
 
 use ox_core::archive::{ArchiveError, ExtractionRequest};
 
-use archive_support::{file_uri, ExtractionFixture, TestMember};
+use archive_support::{file_type, file_uri, ExtractionFixture, TestMember, ENCRYPTED_FLAG};
 use transfer_support::versions::{PreviousVersions, READ_ONLY};
 
 /// The `archiveExtract` branch of `dispatch` in `v2.0.0:desktop/winspace.py`
@@ -178,8 +178,8 @@ fn an_existing_output_folder_fails_without_merging() {
     assert!(!out.join("data").exists());
 }
 
-/// Copying items out of a ZIP extracts only them, at their paths, after
-/// the whole archive passed the checks (ARC-026).
+/// Copying items out of a ZIP extracts only them, at their paths
+/// (ARC-026).
 ///
 /// parity: ARC-026
 #[test]
@@ -217,4 +217,108 @@ fn a_selection_extracts_only_the_chosen_members() {
     assert!(!copy.join("top.txt").exists());
     assert_eq!(extracted.summary.file_count, 3);
     assert_eq!(extracted.summary.unpacked_bytes, 7);
+}
+
+/// The request of a copy out of the fixture's archive into `copy`.
+fn copy_request(fixture: &ExtractionFixture) -> ExtractionRequest {
+    ExtractionRequest {
+        archive_uri: fixture.archive_uri(),
+        destination_uri: fixture.destination_uri(),
+        folder_name: "copy".to_owned(),
+    }
+}
+
+/// A link, a FIFO, an encrypted member or an unsafe name elsewhere in the
+/// archive does not stop a copy of other members: only what is copied is
+/// checked (ARC-026). "Extract all" still refuses the archive.
+///
+/// parity: ARC-026, ARC-016
+#[test]
+fn a_bad_member_elsewhere_does_not_stop_a_copy_out_of_the_zip() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_zip(&[
+        TestMember::file("tidewater/maps/a.txt", b"a"),
+        TestMember::with_unix_mode("tidewater/link", file_type::SYMLINK | 0o777, b"maps"),
+        TestMember::with_unix_mode("pipe", file_type::FIFO | 0o644, b""),
+        TestMember::file("secret.txt", b"s").with_flags(ENCRYPTED_FLAG),
+        TestMember::file("../outside.txt", b"o"),
+    ]);
+
+    let extracted = fixture
+        .extractor()
+        .with_selection(&["tidewater/maps/".to_owned()])
+        .extract(&copy_request(&fixture), &fixture.cancel)
+        .expect("copied");
+
+    let copy = fixture.destination.join("copy");
+    assert_eq!(fs::read(copy.join("tidewater/maps/a.txt")).expect("a"), b"a");
+    assert_eq!(extracted.summary.file_count, 1);
+    assert_eq!(extracted.summary.left_out, 0);
+    assert!(!copy.join("tidewater/link").exists());
+
+    let everything = ExtractionRequest {
+        folder_name: "all".to_owned(),
+        ..copy_request(&fixture)
+    };
+    let refused = fixture.extractor().extract(&everything, &fixture.cancel);
+    assert!(refused.is_err(), "Extract all still checks every member");
+    assert!(!fixture.destination.join("all").exists());
+}
+
+/// A link or special file inside a copied folder, which the archive
+/// browser hides, is left out and counted; the rest of the folder is
+/// copied (ARC-026).
+///
+/// parity: ARC-026
+#[test]
+fn links_inside_a_copied_folder_are_left_out_and_counted() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_zip(&[
+        TestMember::file("tidewater/a.txt", b"a"),
+        TestMember::with_unix_mode("tidewater/link", file_type::SYMLINK | 0o777, b"a.txt"),
+        TestMember::with_unix_mode("tidewater/deep/pipe", file_type::FIFO | 0o644, b""),
+        TestMember::file("tidewater/deep/b.txt", b"bb"),
+    ]);
+
+    let extracted = fixture
+        .extractor()
+        .with_selection(&["tidewater/".to_owned()])
+        .extract(&copy_request(&fixture), &fixture.cancel)
+        .expect("copied");
+
+    let copy = fixture.destination.join("copy").join("tidewater");
+    assert_eq!(fs::read(copy.join("a.txt")).expect("a"), b"a");
+    assert_eq!(fs::read(copy.join("deep/b.txt")).expect("b"), b"bb");
+    assert!(
+        fs::symlink_metadata(copy.join("link")).is_err(),
+        "no link is made"
+    );
+    assert!(!copy.join("deep/pipe").exists());
+    assert_eq!(extracted.summary.file_count, 2);
+    assert_eq!(extracted.summary.left_out, 2);
+}
+
+/// A copied member that breaks a rule the browser does not hide it for,
+/// here an encrypted file, still refuses the copy, and nothing is left
+/// behind (ARC-016, ARC-026).
+///
+/// parity: ARC-026, ARC-016
+#[test]
+fn a_copied_member_that_breaks_a_rule_refuses_the_copy() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_zip(&[
+        TestMember::file("tidewater/a.txt", b"a"),
+        TestMember::file("tidewater/secret.txt", b"s").with_flags(ENCRYPTED_FLAG),
+    ]);
+
+    let refused = fixture
+        .extractor()
+        .with_selection(&["tidewater/".to_owned()])
+        .extract(&copy_request(&fixture), &fixture.cancel);
+
+    assert!(
+        matches!(refused, Err(ArchiveError::PasswordProtected)),
+        "{refused:?}"
+    );
+    assert!(!fixture.destination.join("copy").exists());
 }

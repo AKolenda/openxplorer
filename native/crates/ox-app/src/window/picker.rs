@@ -44,7 +44,7 @@ use ox_core::integration::{
 
 use super::actions::QUIT_ACCELERATORS;
 use super::{BrowserWindow, ButtonStyle, WindowAction};
-use crate::dialog::Dialog;
+use crate::dialog::{DialogFrame, DialogWidth};
 use crate::folder_view::filter::ChooserListing;
 use crate::locations::Page;
 use probe::{all_writable, probe, Probe};
@@ -119,12 +119,18 @@ pub(crate) struct Picker {
     /// Set while the replace question is open, so the answer is not given
     /// twice.
     asking: Cell<bool>,
+    /// The choice to answer with once the window really closes; the
+    /// window answers Cancelled without one.
+    pending: RefCell<Option<ChooserAnswer>>,
     /// Set while the accept button's choice is checked on disk, off the
     /// main thread.
     checking: Cell<bool>,
     /// The one item selected, in a dialog that chooses one, so a second
     /// item clicked with Ctrl or Shift takes its place.
     single: Cell<Option<u32>>,
+    /// Set once the dialog is a modal child of the caller's window
+    /// ([`super::caller_window`]).
+    attached_to_caller: Rc<Cell<bool>>,
 }
 
 impl Picker {
@@ -242,9 +248,16 @@ fn saved_name(written: &str, extension: Option<String>) -> String {
 impl BrowserWindow {
     /// Turns this new window into the dialog for `call` and shows it.
     pub(crate) fn begin_picking(&self, call: ChooserCall) {
-        let ChooserCall { request, reply, .. } = call;
+        let ChooserCall {
+            request,
+            reply,
+            parent_window,
+            ..
+        } = call;
         let wanted_folder = request.current_folder.clone();
-        let picker = Rc::new(self.build_picker_bar(request, reply.clone()));
+        let mut picker = self.build_picker_bar(request, reply.clone());
+        picker.attached_to_caller = super::caller_window::attach_to_caller(self.upcast_ref(), &parent_window);
+        let picker = Rc::new(picker);
         self.imp().picker.replace(Some(Rc::clone(&picker)));
         reply.connect_closed(glib::clone!(
             #[weak(rename_to = window)]
@@ -267,8 +280,6 @@ impl BrowserWindow {
         for action in DISABLED_ACTIONS {
             self.set_action_enabled(action, false);
         }
-        // Not modal: with no parent of its own, a modal window would block
-        // every other OpenXplorer window while the caller waits.
         self.set_default_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1);
         self.folder_pane().model().set_chooser_listing(picker.listing());
         self.open_start_folder(wanted_folder);
@@ -419,10 +430,25 @@ impl BrowserWindow {
         true
     }
 
-    /// Answers Cancelled when the window closes without a choice.
+    /// Answers with the choice made when the window closes, or Cancelled
+    /// without one. The answer waits for the close: answered first, a
+    /// window that then refused to close (an update installing, files
+    /// being written) kept a dead dialog whose Save, Cancel and Escape
+    /// did nothing.
     pub(super) fn end_picking_on_close(&self) {
         if let Some(picker) = self.imp().picker.borrow().as_ref() {
-            picker.reply.send(&ChooserAnswer::Cancelled);
+            let answer = picker.pending.take().unwrap_or(ChooserAnswer::Cancelled);
+            picker.reply.send(&answer);
+        }
+    }
+
+    /// The window refused to close: the dialog stays usable, its choice
+    /// not sent.
+    pub(super) fn picking_close_refused(&self) {
+        if let Some(picker) = self.picker() {
+            picker.pending.take();
+            picker.asking.set(false);
+            self.update_picker();
         }
     }
 
@@ -475,7 +501,9 @@ impl BrowserWindow {
                         .is_some_and(|name| !name.text().trim().is_empty())
             }
         };
-        picker.accept.set_sensitive(ready && !picker.is_busy());
+        picker
+            .accept
+            .set_sensitive(ready && !picker.is_busy() && !picker.reply.is_answered());
     }
 
     /// The accept button: works out the choice and answers, asking first
@@ -641,6 +669,12 @@ impl BrowserWindow {
     }
 
     /// Asks whether to replace `names`, then answers with `locations`.
+    ///
+    /// The question is part of the dialog window, on its dialog layer, not
+    /// a window of its own: a separate modal window took every click and
+    /// key from the dialog, so when it opened behind the dialog or on
+    /// another screen, Save, Cancel, Escape and the close button all did
+    /// nothing, and the dialog could only be ended by stopping `OpenXplorer`.
     fn confirm_replace(&self, picker: &Rc<Picker>, locations: Vec<PathBuf>, names: &[String]) {
         picker.asking.set(true);
         self.update_picker();
@@ -657,25 +691,35 @@ impl BrowserWindow {
                 ),
             ),
         };
-        let picker = Rc::clone(picker);
-        glib::spawn_future_local(glib::clone!(
+        let frame = DialogFrame::new(title, DialogWidth::Standard);
+        frame.set_message(&question);
+        let locations = Rc::new(locations);
+        let replace = frame.add_closing_button(
+            "Replace",
+            ButtonStyle::Accent,
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[strong]
+                picker,
+                move || window.finish_picking(&picker, locations.as_ref().clone())
+            ),
+        );
+        frame.add_closing_button("Cancel", ButtonStyle::Bordered, || {});
+        // However the question ends: a button, Escape, or the dialog
+        // closing under it.
+        frame.connect_closed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            async move {
-                let dialog = Dialog::new(&window, title, &question);
-                let replace = dialog.add_button("Replace", ButtonStyle::Accent);
-                dialog.add_cancel_button();
-                dialog.open();
-                let answer = dialog.next_response().await;
-                dialog.finish();
+            #[strong]
+            picker,
+            move |_| {
                 picker.asking.set(false);
-                if answer == Some(replace) {
-                    window.finish_picking(&picker, locations);
-                } else {
-                    window.update_picker();
-                }
+                window.update_picker();
             }
         ));
+        self.present_window_dialog(&frame);
+        replace.grab_focus();
     }
 
     /// What the File name box of an Open dialog chooses, when it names
@@ -767,7 +811,7 @@ impl BrowserWindow {
         ));
     }
 
-    /// Answers with `locations` and closes the window. An Open dialog
+    /// Closes the window, which answers with `locations`. An Open dialog
     /// first finds out, off the main thread, whether the caller may write
     /// them; the dialog waits for that, never longer than [`probe`]
     /// allows.
@@ -781,21 +825,24 @@ impl BrowserWindow {
             self,
             async move {
                 let writable = is_open && all_writable(&locations).await;
-                picker.reply.send(&ChooserAnswer::Chosen {
+                // The answer waits for the window to close
+                // ([`BrowserWindow::end_picking_on_close`]).
+                picker.pending.replace(Some(ChooserAnswer::Chosen {
                     locations,
                     filter: picker.chosen_filter(),
                     choices: picker.choice_values(),
                     writable,
-                });
+                }));
                 window.close();
             }
         ));
     }
 
-    /// Cancel, Escape, and Ctrl+Q in a dialog.
+    /// Cancel, Escape, and Ctrl+Q in a dialog: closes the window, which
+    /// answers Cancelled.
     pub(super) fn cancel_picking(&self) {
         if let Some(picker) = self.picker() {
-            picker.reply.send(&ChooserAnswer::Cancelled);
+            picker.pending.take();
         }
         self.close();
     }
@@ -811,7 +858,15 @@ impl BrowserWindow {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, key, _, modifiers| {
-                if key == gtk::gdk::Key::Escape && modifiers.is_empty() {
+                // Caps Lock and Num Lock do not make it another key: with
+                // Caps Lock on, Escape in File name did nothing.
+                let held = gtk::gdk::ModifierType::CONTROL_MASK
+                    | gtk::gdk::ModifierType::SHIFT_MASK
+                    | gtk::gdk::ModifierType::ALT_MASK
+                    | gtk::gdk::ModifierType::SUPER_MASK
+                    | gtk::gdk::ModifierType::HYPER_MASK
+                    | gtk::gdk::ModifierType::META_MASK;
+                if key == gtk::gdk::Key::Escape && !modifiers.intersects(held) {
                     window.cancel_picking();
                     return glib::Propagation::Stop;
                 }
@@ -908,8 +963,10 @@ impl BrowserWindow {
             choices,
             accept,
             asking: Cell::new(false),
+            pending: RefCell::new(None),
             checking: Cell::new(false),
             single: Cell::new(None),
+            attached_to_caller: Rc::default(),
         }
     }
 
@@ -1093,9 +1150,7 @@ mod tests {
     };
 
     use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow};
-    use crate::window::tests::file_ops_support::{
-        is_triggered_by, open_dialog, wait_for_no_dialog, window_shortcuts,
-    };
+    use crate::window::tests::file_ops_support::{is_triggered_by, window_shortcuts};
 
     /// A `dbus-daemon` of the test's own, stopped when dropped.
     struct PrivateBus {
@@ -1225,13 +1280,24 @@ mod tests {
             method: &str,
             entries: &[(&str, glib::Variant)],
         ) -> Rc<RefCell<Option<(u32, glib::VariantDict)>>> {
+            self.call_from("", method, entries)
+        }
+
+        /// Starts `method` with `entries` for the caller's window
+        /// `parent`, as the portal names it (`wayland:<handle>`).
+        fn call_from(
+            &self,
+            parent: &str,
+            method: &str,
+            entries: &[(&str, glib::Variant)],
+        ) -> Rc<RefCell<Option<(u32, glib::VariantDict)>>> {
             let handle =
                 glib::variant::ObjectPath::try_from("/org/freedesktop/portal/desktop/request/1_1/picker")
                     .expect("a path");
             let parameters = glib::Variant::tuple_from_iter([
                 handle.to_variant(),
                 "org.example.Editor".to_variant(),
-                "".to_variant(),
+                parent.to_variant(),
                 "".to_variant(),
                 options_from_entries(entries).end(),
             ]);
@@ -1595,6 +1661,240 @@ mod tests {
                 "{view_name}: the drawings again from their top, not {scrolled}"
             );
         }
+    }
+
+    /// A dialog has a window group of its own, so that while it is modal
+    /// the other `OpenXplorer` windows stay usable. A caller's window it
+    /// cannot become a child of (an X11 window, or any window when the
+    /// app runs on X11) leaves it a window of its own, not modal.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_dialog_it_cannot_attach_stays_a_window_of_its_own() {
+        let fixture = Fixture::empty();
+        let other = TestWindow::open(&fixture.uri());
+        let portal = Portal::new();
+        let on_wayland = WidgetExt::display(&portal.test.window).type_().name() == "GdkWaylandDisplay";
+        let parent = if on_wayland {
+            "x11:4c0000a"
+        } else {
+            "wayland:handle-from-another-session"
+        };
+        let _answer = portal.call_from(
+            parent,
+            "OpenFile",
+            &[(
+                "current_folder",
+                path_variant(&fixture.root().display().to_string()),
+            )],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        assert!(!picker.attached_to_caller.get());
+        assert!(!window.is_modal());
+        assert_ne!(window.group(), other.window.group(), "a window group of its own");
+    }
+
+    /// On Wayland a dialog becomes a modal child of the window the caller
+    /// exported, as KDE's own dialog does: the compositor keeps it above
+    /// that window and sends clicks on the window to it. The other
+    /// `OpenXplorer` windows are in other window groups, so stay usable.
+    /// Under X11, as check.py runs the tests, there is no exported window
+    /// to attach to; the test then only checks the window group.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn on_wayland_a_dialog_is_a_modal_child_of_its_callers_window() {
+        let fixture = Fixture::empty();
+        let caller = gtk::Window::builder().title("Editor").build();
+        caller.present();
+        wait_until("the caller's window", || caller.is_mapped());
+        let handle: Rc<RefCell<Option<String>>> = Rc::default();
+        let exporting = caller
+            .surface()
+            .and_downcast::<gdk_wayland::WaylandToplevel>()
+            .is_some_and(|toplevel| {
+                let slot = Rc::clone(&handle);
+                toplevel.export_handle(move |_, result| {
+                    slot.replace(Some(result.map(ToString::to_string).unwrap_or_default()));
+                })
+            });
+        if exporting {
+            wait_until("the exported handle", || handle.borrow().is_some());
+        }
+        // A compositor without xdg-foreign exports nothing to attach to.
+        let parent = handle
+            .borrow()
+            .clone()
+            .filter(|handle| !handle.is_empty())
+            .map(|handle| format!("wayland:{handle}"))
+            .unwrap_or_default();
+        let portal = Portal::new();
+        let _answer = portal.call_from(
+            &parent,
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("current_name", "notes.txt".to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        assert_ne!(
+            GtkWindowExt::group(window),
+            GtkWindowExt::group(&caller),
+            "a window group of its own"
+        );
+        if !parent.is_empty() {
+            assert!(picker.attached_to_caller.get(), "a child of the caller's window");
+            assert!(window.is_modal(), "modal while the caller waits");
+        }
+        caller.destroy();
+    }
+
+    /// The replace question, once the dialog shows it on its own layer.
+    fn replace_question(test: &TestWindow) -> crate::dialog::DialogFrame {
+        wait_until("the replace question", || {
+            test.window.dialog_layer().shown().is_some()
+        });
+        test.window.dialog_layer().shown().expect("the question")
+    }
+
+    /// Clicks the button labelled `label` in `frame`.
+    fn press_in(frame: &crate::dialog::DialogFrame, label: &str) {
+        crate::test_support::harness::descendants::<gtk::Button>(frame)
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some(label))
+            .unwrap_or_else(|| panic!("the question has {label}"))
+            .emit_clicked();
+    }
+
+    /// Escape cancels with Caps Lock or Num Lock on, from File name where
+    /// the keyboard starts; before, the lock made it another key there.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn escape_cancels_with_caps_lock_on() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "notes.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        let locks = gdk::ModifierType::LOCK_MASK | gdk::ModifierType::from_bits_truncate(1 << 4);
+        let handled = window
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+            .filter(|controller| controller.propagation_phase() == gtk::PropagationPhase::Bubble)
+            .any(|controller| {
+                controller
+                    .emit_by_name::<bool>("key-pressed", &[&gdk::Key::Escape.into_glib(), &0_u32, &locks])
+            });
+        assert!(handled, "Escape is taken");
+        let (response, _) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_CANCELLED);
+    }
+
+    /// A dialog whose window refuses to close, here while it writes files,
+    /// stays usable and unanswered, and says why, for Save and for Cancel:
+    /// answered first, it used to stay open dead, with Save, Cancel and
+    /// Escape doing nothing. Once the writing ends, Save answers.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_dialog_that_cannot_close_yet_stays_usable() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "notes.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        assert!(window.begin_test_write());
+
+        picker.accept.emit_clicked();
+        wait_until("the reason", || {
+            window
+                .shown_message()
+                .contains("Wait until the files are written")
+        });
+        assert!(window.is_visible() && answer.borrow().is_none(), "Save waits");
+        assert!(picker.accept.is_sensitive(), "Save works again");
+        window.cancel_picking();
+        settle();
+        assert!(
+            window.is_visible() && answer.borrow().is_none(),
+            "Cancel waits too"
+        );
+
+        window.end_test_write();
+        picker.accept.emit_clicked();
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("notes.txt")]);
+        wait_until("the dialog to close", || !window.is_visible());
+    }
+
+    /// No tab moves into or out of a dialog: "Move tab to window" in
+    /// another window does not offer it, and it takes no tab, which would
+    /// make closing it ask about tabs.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn no_tab_moves_into_a_dialog() {
+        let fixture = Fixture::empty();
+        let other = TestWindow::open(&fixture.uri());
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let dialog = &portal.test.window;
+        assert!(
+            !other.window.tab_move_window_ids().contains(&dialog.id()),
+            "the dialog is not offered"
+        );
+        assert!(dialog.is_busy_for_tab_moves(), "the dialog takes no tab");
+    }
+
+    /// The replace question is part of the dialog window, not a window of
+    /// its own that could open out of sight and take every click and key
+    /// from the dialog; while it is open, the dialog can still be ended.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_replace_question_is_part_of_the_dialog() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "notes.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        let toplevels = gtk::Window::list_toplevels().len();
+        window.picker().expect("a picker").accept.emit_clicked();
+        let question = replace_question(&portal.test);
+        assert!(question.is_ancestor(window), "inside the dialog window");
+        assert_eq!(
+            gtk::Window::list_toplevels().len(),
+            toplevels,
+            "no window of its own"
+        );
+
+        window.cancel_picking();
+        let (response, _) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_CANCELLED);
     }
 
     /// A folder dialog lists only folders and answers the selected one.
@@ -2124,21 +2424,23 @@ mod tests {
             .expect("a name box");
 
         window.activate_item(test.position_of("README"));
-        let question = open_dialog(test);
+        let question = replace_question(test);
         assert_eq!(
-            question.message_text(),
+            question.message().as_str(),
             "“README” already exists. Do you want to replace it?",
             "README itself, not a new README.txt"
         );
         assert_eq!(name.text(), "README");
-        question.press("Cancel");
-        wait_for_no_dialog(test);
+        press_in(&question, "Cancel");
+        wait_until("the question to close", || {
+            window.dialog_layer().shown().is_none()
+        });
         assert!(answer.borrow().is_none(), "Cancel keeps the dialog open");
 
         window.submit_address(&fixture.path("Drafts/plan.txt").display().to_string());
-        let question = open_dialog(test);
+        let question = replace_question(test);
         assert_eq!(name.text(), "plan.txt");
-        question.press("Replace");
+        press_in(&question, "Replace");
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(
@@ -2351,5 +2653,144 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_CANCELLED);
         assert!(uris.is_empty());
+    }
+
+    /// Sets the modification time of `path` to `seconds` ago.
+    fn modified_ago(path: &std::path::Path, seconds: u64) {
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .and_then(|file| {
+                file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(seconds))
+            })
+            .expect("the date is set");
+    }
+
+    /// The first group heading on screen and how far the list is
+    /// scrolled, once the window has drawn and laid the list out again.
+    fn top_of_the_list(window: &crate::window::BrowserWindow) -> (Option<String>, f64) {
+        crate::test_support::harness::wait_for_frames(window, 4);
+        let column_view = window.folder_pane().details().column_view().clone();
+        // GTK lays the list out again later for reasons of its own, such as
+        // KWin sizing the window: the list must stay where it was.
+        for list in crate::test_support::harness::descendants::<gtk::ListView>(&column_view) {
+            list.queue_allocate();
+        }
+        crate::test_support::harness::wait_for_frames(window, 4);
+        let mut headings: Vec<(f32, String)> =
+            crate::test_support::harness::descendants::<gtk::Label>(&column_view)
+                .into_iter()
+                .filter(|label| label.has_css_class("group-title") && label.is_mapped())
+                .filter_map(|label| {
+                    let point = label.compute_point(&column_view, &gtk::graphene::Point::new(0.0, 0.0))?;
+                    Some((point.y(), label.text().to_string()))
+                })
+                .collect();
+        headings.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let first = headings.into_iter().next().map(|(_, text)| text);
+        (first, window.folder_pane().details().vadjustment().value())
+    }
+
+    /// A Save dialog on a folder grouped and sorted by date modified
+    /// shows the list from its first heading, also after another file
+    /// type shows more files: the files the type hid come before the one
+    /// that was at the top, which GTK kept at the top edge, scrolling
+    /// "Today" out of sight (Chrome's Save dialog in Downloads, `*.svg`
+    /// then All files).
+    ///
+    /// parity: INT-032, VIEW-022
+    #[gtk::test]
+    fn a_grouped_dialog_list_stays_at_its_top_when_the_type_changes() {
+        let fixture = Fixture::empty();
+        // Newest first: today's files, the drawing among them, then
+        // older periods, a little more than the dialog shows.
+        let files = [
+            ("notes.txt", 60),
+            ("photo.png", 120),
+            ("drawing.svg", 180),
+            ("setup.deb", 240),
+            ("logo.svg", 2 * 86_400),
+            ("report.pdf", 3 * 86_400),
+            ("music.ogg", 40 * 86_400),
+            ("map.svg", 40 * 86_400 + 60),
+            ("letter.odt", 400 * 86_400),
+            ("old.zip", 1_200 * 86_400),
+        ];
+        for (name, age) in files {
+            fixture.write(name);
+            modified_ago(&fixture.path(name), age);
+        }
+        for number in 0..24 {
+            let name = format!("archive {number:02}.tar");
+            fixture.write(&name);
+            modified_ago(&fixture.path(&name), 1_300 * 86_400);
+        }
+        // Enough old drawings that the SVG files alone fill more than the
+        // view, as in a real Downloads folder.
+        for number in 0..14 {
+            let name = format!("sketch {number:02}.svg");
+            fixture.write(&name);
+            modified_ago(&fixture.path(&name), 1_300 * 86_400);
+        }
+        let portal = Portal::new();
+        let filters = [
+            ("SVG".to_owned(), vec![(0_u32, "*.svg".to_owned())]).to_variant(),
+            ("All files".to_owned(), vec![(0_u32, "*".to_owned())]).to_variant(),
+        ];
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "picture.svg".to_variant()),
+                (
+                    "filters",
+                    glib::Variant::array_from_iter_with_type(filters[0].type_(), filters.clone()),
+                ),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        test.activate("view", Some("details"));
+        test.activate("sort", Some("modified"));
+        test.activate("direction", Some("descending"));
+        test.activate("group-by", Some("modified"));
+        assert_eq!(test.names().first().map(String::as_str), Some("drawing.svg"));
+
+        let (heading, scrolled) = top_of_the_list(window);
+        assert!(scrolled < 0.5, "the SVG files from their top: {scrolled}");
+        assert!(heading.is_some_and(|heading| heading.starts_with("Today")));
+
+        let types = window
+            .picker()
+            .expect("a picker")
+            .types
+            .clone()
+            .expect("a type list");
+        types.set_selected(1);
+        wait_until("every file", || test.names().len() == files.len() + 24 + 14);
+        let (heading, scrolled) = top_of_the_list(window);
+        assert!(scrolled < 0.5, "All files from their top, not {scrolled} down");
+        assert_eq!(heading.as_deref(), Some("Today (4)"), "the first heading shows");
+
+        // Down the list and back up to its top, by the scroll bar, then
+        // the SVG files and All files again.
+        let adjustment = window.folder_pane().details().vadjustment();
+        adjustment.set_value(adjustment.upper() - adjustment.page_size());
+        top_of_the_list(window);
+        adjustment.set_value(0.0);
+        let (heading, scrolled) = top_of_the_list(window);
+        assert!(scrolled < 0.5 && heading.as_deref() == Some("Today (4)"));
+        for (shown, files, first) in [(0, 3 + 14, "Today (1)"), (1, files.len() + 24 + 14, "Today (4)")] {
+            types.set_selected(shown);
+            wait_until("the type's files", || test.names().len() == files);
+            let (heading, scrolled) = top_of_the_list(window);
+            assert!(scrolled < 0.5, "type {shown} from its top, not {scrolled} down");
+            assert_eq!(
+                heading.as_deref(),
+                Some(first),
+                "type {shown} shows its first heading"
+            );
+        }
     }
 }

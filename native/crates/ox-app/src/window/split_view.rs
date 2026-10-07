@@ -451,7 +451,10 @@ impl BrowserWindow {
         self.set_action_state(WindowAction::View, &view.as_str().to_variant());
         self.show_sort_state();
         let model = self.folder_pane().model();
-        self.set_action_state(WindowAction::Groups, &model.grouping().is_some().to_variant());
+        let group_by = model
+            .grouping()
+            .map_or(ox_core::grouping::GroupBy::None, |grouping| grouping.by);
+        self.set_action_state(WindowAction::GroupBy, &group_by.as_str().to_variant());
         self.set_action_state(WindowAction::FoldersFirst, &model.folders_first().to_variant());
         self.set_action_state(WindowAction::Hidden, &model.shows_hidden().to_variant());
     }

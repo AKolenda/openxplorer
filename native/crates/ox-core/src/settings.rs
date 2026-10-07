@@ -61,7 +61,9 @@ pub use preferences::{
 pub use view_options::{ViewOptions, DEFAULT_DETAILS_COLUMNS, PREVIEW_SIZE_LIMIT};
 
 pub use tree_options::FolderTreeOptions;
-pub use view_properties::{may_remember, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS};
+pub use view_properties::{
+    may_remember, saved_style_for, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS,
+};
 
 use crate::location::same_location;
 use save::{replace_private_file, OldFile, SettingsLock};

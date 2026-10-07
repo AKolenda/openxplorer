@@ -864,6 +864,33 @@ fn cancel_scan_stops_the_run_and_says_so() {
     );
 }
 
+/// Closing the window ends its size scan: the folder being measured
+/// stops and the folders still waiting are not measured.
+///
+/// parity: PROP-029
+#[gtk::test]
+fn closing_the_window_ends_its_size_scan() {
+    let fixture = Fixture::standard();
+    for number in 0..5 {
+        fs::create_dir(fixture.path(&format!("Folder {number}"))).expect("fixture folder");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("calculate-folder-sizes", None);
+    let cancel = test.window.size_run_cancellation().expect("a run");
+
+    test.window.close();
+
+    assert!(cancel.is_cancelled(), "the scan stops with its window");
+    wait_until("the run to end", || test.window.size_run_cancellation().is_none());
+    let measured = (0..5)
+        .filter(|number| {
+            let uri = fixture.uri_of(&format!("Folder {number}"));
+            test.window.measured_folder_size(&uri).is_some()
+        })
+        .count();
+    assert!(measured < 5, "the folders still waiting are not measured");
+}
+
 /// parity: PROP-023
 #[gtk::test]
 fn the_snapshot_source_form_saves_a_mapping_and_lists_again() {

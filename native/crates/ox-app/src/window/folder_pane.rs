@@ -14,6 +14,9 @@
 mod parts;
 mod view;
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -28,6 +31,10 @@ use super::empty_page::EmptyState;
 
 use parts::PaneParts;
 pub(crate) use view::FolderView;
+
+/// How long after a scroll position is restored a relayout may still
+/// move it; see [`FolderPane::restore_scroll_position`].
+const RELAYOUT_WINDOW: std::time::Duration = std::time::Duration::from_millis(250);
 
 /// What the folder pane shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -315,11 +322,32 @@ impl FolderPane {
     /// Scrolls the visible view to `position` once the view has measured
     /// its new items; set straight after a model change, the position
     /// would be clamped to the old, shorter list.
+    ///
+    /// In a grouped list (VIEW-022) GTK lays the rows out again a moment
+    /// later, with the group headers, and would move the view to wherever
+    /// its scroll anchor went; so the position is set once more at that
+    /// first relayout, if it comes within [`RELAYOUT_WINDOW`]. Later
+    /// relayouts and the user's own scrolling are left alone.
     pub(super) fn restore_scroll_position(&self, position: f64) {
         self.parts().top_keeper.let_go();
         let adjustment = self.visible_vadjustment();
         adjustment.set_value(position);
-        glib::idle_add_local_once(move || adjustment.set_value(position));
+        let again = adjustment.clone();
+        glib::idle_add_local_once(move || again.set_value(position));
+        let handler: Rc<Cell<Option<glib::SignalHandlerId>>> = Rc::default();
+        let first = Rc::clone(&handler);
+        let relayout = adjustment.connect_changed(move |adjustment| {
+            adjustment.set_value(position);
+            if let Some(id) = first.take() {
+                adjustment.disconnect(id);
+            }
+        });
+        handler.set(Some(relayout));
+        glib::timeout_add_local_once(RELAYOUT_WINDOW, move || {
+            if let Some(id) = handler.take() {
+                adjustment.disconnect(id);
+            }
+        });
     }
 
     /// Scrolls to the first item without moving focus or selecting it.

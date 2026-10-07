@@ -14,7 +14,7 @@ Resize the sidebar and column edges. Double-click an edge to reset or fit it, de
 
 View offers Details, List and icon sizes. Use Ctrl+mouse wheel or the status-bar slider to change icon size. Details can expand folders in place; drag from empty space to select items, hold Ctrl to toggle them or Shift to add them. View → Compact view, also in Settings → Appearance → Files and folders, draws the Details rows and the navigation pane closer together, as in Windows 11, so more items fit.
 
-Right-click a Details heading to choose columns, then drag headings to reorder them. The Recycle Bin includes Original location and Date deleted. Sort offers additional file properties, grouping and a Folders first switch. Relative dates include the time; Settings → Appearance → Files and folders can show absolute dates instead.
+Right-click a Details heading to choose columns, then drag headings to reorder them. The Recycle Bin includes Original location and Date deleted. Sort is laid out like Windows Explorer’s: Name, Date modified and Type, with Size and the other file properties under More. Sort › Group by groups the folder apart from its sort, so a folder grouped by date modified can be sorted by name within each group: choose Name (A – H, I – P, Q – Z), Date modified, Type, Size, Date created, Same as sort (groups that follow the sort), or (None). Downloads is grouped by date modified until you choose otherwise there. Sort also has a Folders first switch. Relative dates include the time; Settings → Appearance → Files and folders can show absolute dates instead.
 
 ## Two folders in one tab
 
@@ -38,7 +38,7 @@ More options → Keyboard shortcuts (Ctrl+?) lists the available keys. F1 opens 
 
 Copy, move and delete jobs have their own progress panels. Pause, Resume and Cancel apply to the chosen job. Speed is shown while transferring bytes; estimated time remaining appears when the total is known.
 
-Up to four independent jobs can run while you browse. A job that overlaps an active source or destination must wait for that job to finish. Rename, archive operations, restore and Undo run on their own. If an item fails, Retry, Skip and Skip all let you choose how to continue.
+Up to four independent jobs can run while you browse. A job that overlaps an active source or destination must wait for that job to finish. Rename, archive operations, restore and Undo run on their own. If an item fails, Retry, Skip and Skip all let you choose how to continue. Inside a folder, only the file that fails is asked about, and the rest of the folder is still copied.
 
 ## Add installed service actions
 
