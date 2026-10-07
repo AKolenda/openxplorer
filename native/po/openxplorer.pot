@@ -5589,6 +5589,10 @@ msgid "The archive has too many paths for the built-in extractor."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
+msgid "The archive's file names are too long for the built-in viewer. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
 msgid "The archive's nesting exceeds the 128-level safety limit."
 msgstr ""
 

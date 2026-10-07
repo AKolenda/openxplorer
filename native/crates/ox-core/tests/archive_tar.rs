@@ -87,3 +87,42 @@ fn a_tar_is_browsed_like_a_zip() {
         .expect("a text member previews");
     assert_eq!(fs::read(copy.path).expect("the private copy"), b"hello world");
 }
+
+/// A compressed TAR that unpacks to far more than it takes, a TAR bomb, is
+/// refused before anything is written, as such a ZIP is; one that
+/// compresses ordinarily extracts.
+///
+/// parity: ARC-017
+#[test]
+fn a_tar_bomb_is_refused_before_anything_is_written() {
+    let script = "import io, sys, tarfile\n\
+                  with tarfile.open(sys.argv[1], 'w:xz') as archive:\n\
+                  \x20   data = bytes(int(sys.argv[2]))\n\
+                  \x20   member = tarfile.TarInfo('zeros.bin'); member.size = len(data)\n\
+                  \x20   archive.addfile(member, io.BytesIO(data))\n";
+    let write = |path: &Path, size: usize| {
+        let output = Command::new("python3")
+            .args(["-c", script])
+            .arg(path)
+            .arg(size.to_string())
+            .output()
+            .expect("Python 3 is required to write reference archives");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    let fixture = ExtractionFixture::new();
+    write(&fixture.archive, 64 * 1024 * 1024);
+    let packed = fs::metadata(&fixture.archive).expect("written").len();
+    assert!(packed * 1000 < 64 * 1024 * 1024, "{packed} bytes is no bomb");
+
+    let refused = fixture.extract("Unpacked");
+
+    assert_eq!(refused.unwrap_err(), ArchiveError::MemberTooLarge);
+    fixture.assert_no_output();
+    let cancel = ox_core::transfer::Cancellation::new();
+    let inspected = fixture.extractor().inspect(&fixture.archive_uri(), &cancel);
+    assert_eq!(inspected.unwrap_err(), ArchiveError::MemberTooLarge);
+}
