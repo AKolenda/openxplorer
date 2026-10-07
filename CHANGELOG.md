@@ -1,5 +1,10 @@
 # Unreleased
 
+- The Checksums tab no longer hangs on a named pipe (FIFO): a pipe, a
+  device or a socket is refused at once with a message, since it has no
+  contents to sum and reading a pipe waits forever for a writer, which
+  Cancel could not stop. Closing a window now also stops its folder-size
+  scan and the work of its Properties dialogs, which kept running.
 - Copying or moving a folder no longer fails as a whole when one file
   inside it cannot be read (a locked or protected file, a socket, a pipe
   or another special file). As in Windows Explorer, OpenXplorer asks about
