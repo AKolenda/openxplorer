@@ -59,7 +59,7 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("open-with-dialog.ui", "status_label", "label", false, "Loading…"),
     ("open-with-dialog.ui", "terminal_check", "label", false, "Run in terminal"),
     ("search-box.ui", "entry", "label", true, "Search filenames and paths"),
-    ("search-box.ui", "entry", "tooltip-text", false, "Search cached filenames and paths. Enable folders in Settings → Search & indexing."),
+    ("search-box.ui", "entry", "tooltip-text", false, "Search cached filenames and paths. Enable folders in Settings → Search."),
     ("search-info-strip.ui", ".", "label", true, "Search information"),
     ("search-info-strip.ui", "cache_button", "label", true, "Cache this folder"),
     ("search-info-strip.ui", "cache_button", "tooltip-text", false, "Cache this folder for search"),

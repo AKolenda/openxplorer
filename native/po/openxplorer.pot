@@ -198,7 +198,7 @@ msgid "Such as gimp %f (%f is the file, %u its address)"
 msgstr ""
 
 #: crates/ox-app/resources/ui/search-box.ui
-msgid "Search cached filenames and paths. Enable folders in Settings → Search & indexing."
+msgid "Search cached filenames and paths. Enable folders in Settings → Search."
 msgstr ""
 
 #: crates/ox-app/resources/ui/search-box.ui
