@@ -119,6 +119,14 @@ impl DirectoryModes {
         self.pending.remove(uri)
     }
 
+    /// Forgets the modes of the staged folder `uri` and the folders inside
+    /// it, which were removed.
+    pub(crate) fn forget_below(&mut self, uri: &str) {
+        let inside = format!("{}/", uri.trim_end_matches('/'));
+        self.pending
+            .retain(|pending, _| pending != uri && !pending.starts_with(&inside));
+    }
+
     /// True when `uri` waits for its final mode.
     fn contains(&self, uri: &str) -> bool {
         self.pending.contains_key(uri)

@@ -156,26 +156,19 @@ const NEW_MENU: [&str; 12] = [
     "Link to file or folder…",
 ];
 
-/// The Sort menu: the columns and the further keys, one item per
-/// direction, then grouping and folders first.
-const SORT_MENU: [&str; 18] = [
+/// The Sort menu, laid out as Windows Explorer's: three keys, More,
+/// one item per direction, Group by, then folders first.
+const SORT_MENU: [&str; 11] = [
     "Name",
     "Date modified",
     "Type",
-    "Size",
-    "-",
-    "Date created",
-    "Date accessed",
-    "File extension",
-    "Permissions",
-    "Owner",
-    "User group",
-    "Link destination",
+    "More",
     "-",
     "Ascending",
     "Descending",
     "-",
-    "Show in groups",
+    "Group by",
+    "-",
     "Folders first",
 ];
 

@@ -184,13 +184,23 @@ impl BrowserWindow {
 
     /// Makes `files` the desktop's clipboard and says so.
     pub(crate) fn put_files_on_clipboard(&self, files: ClipboardFiles) {
+        self.put_files_on_clipboard_noting(files, None);
+    }
+
+    /// Makes `files` the desktop's clipboard and says so, followed by
+    /// `note` when there is one.
+    pub(crate) fn put_files_on_clipboard_noting(&self, files: ClipboardFiles, note: Option<&str>) {
         if publish(&self.clipboard(), &files).is_err() {
             self.show_message(ox_core::i18n::gettext_static(
                 "The desktop clipboard could not be claimed.",
             ));
             return;
         }
-        let message = published_message(files.mode(), files.uris().len());
+        let mut message = published_message(files.mode(), files.uris().len());
+        if let Some(note) = note {
+            message.push(' ');
+            message.push_str(note);
+        }
         self.remember_clipboard(Some(files));
         self.show_message(&message);
     }
