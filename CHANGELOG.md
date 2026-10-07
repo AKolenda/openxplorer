@@ -1,5 +1,10 @@
 # Unreleased
 
+- The Checksums tab no longer hangs on a named pipe (FIFO): a pipe, a
+  device or a socket is refused at once with a message, since it has no
+  contents to sum and reading a pipe waits forever for a writer, which
+  Cancel could not stop. Closing a window now also stops its folder-size
+  scan and the work of its Properties dialogs, which kept running.
 - Copying to a Windows drive (NTFS), or to a FAT or exFAT stick, no
   longer creates names Windows cannot use. A device name such as CON,
   PRN, AUX, NUL, COM1 or LPT1 (also with an extension, like `nul.txt`)
