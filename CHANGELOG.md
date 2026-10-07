@@ -1,5 +1,10 @@
 # Unreleased
 
+- Copying files out of a ZIP opened like a folder no longer fails because
+  of one bad item elsewhere in the ZIP, such as a symbolic link: only the
+  items you copy are checked. A link or special file inside a copied
+  folder, which the folder view hides, is left out, and the message says
+  so. Extract all still refuses a ZIP with such items.
 - TAR archives get the ZIP safety limits they were missing. A compressed
   TAR that unpacks to over 1,000 times its size (a "TAR bomb") is refused
   before anything is extracted, as such a ZIP is: each file counts its
