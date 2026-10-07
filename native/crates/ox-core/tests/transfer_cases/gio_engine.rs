@@ -310,3 +310,109 @@ fn a_failed_item_is_retried_or_skipped_as_answered() {
     assert_eq!(list(&fixture.destination_folder), ["a.txt", "c.txt"]);
     fixture.assert_no_staging();
 }
+
+/// An entry inside a folder that cannot be copied is asked about by
+/// itself, by its path, as in Windows Explorer: Retry copies it again once
+/// it can be read, Skip leaves only it out, and the rest of the folder is
+/// still copied and published; what was left out is reported.
+///
+/// parity: OPS-047
+#[test]
+fn an_entry_inside_a_folder_is_asked_about_by_itself() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::{Arc, Mutex};
+
+    use ox_core::transfer::{FailedItem, FailureAnswer};
+
+    let fixture = Fixture::new();
+    let tree = fixture.source_folder.join("tree");
+    fs::create_dir_all(tree.join("inner")).expect("folders");
+    write(&tree.join("a.txt"), "a");
+    write(&tree.join("locked.txt"), "locked");
+    write(&tree.join("inner").join("c.txt"), "c");
+    make_fifo(&tree.join("inner").join("pipe"));
+    let locked = tree.join("locked.txt");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).expect("chmod");
+    // As root, which reads anything, only the pipe is asked about.
+    let as_root = fs::read(&locked).is_ok();
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&asked);
+    let unlock = locked.clone();
+    let mut engine = gio_engine().with_failure_question(move |item: &FailedItem| {
+        log.lock().expect("question log").push(item.name.clone());
+        if item.name.ends_with("locked.txt") {
+            fs::set_permissions(&unlock, fs::Permissions::from_mode(0o644)).expect("chmod");
+            FailureAnswer::Retry
+        } else {
+            FailureAnswer::Skip
+        }
+    });
+
+    let result = fixture.run(&mut engine, &[&tree], Request::Copy(ConflictPolicy::Skip));
+
+    let mut asked = asked.lock().expect("question log").clone();
+    asked.sort();
+    let expected: &[&str] = if as_root {
+        &["tree/inner/pipe"]
+    } else {
+        &["tree/inner/pipe", "tree/locked.txt"]
+    };
+    assert_eq!(asked, expected);
+    assert_eq!(result.done, [file_uri(&tree)], "{result:?}");
+    assert!(!result.cancelled);
+    assert_eq!(result.errors.len(), 1, "{result:?}");
+    assert!(result.errors[0].starts_with("tree/inner/pipe: "), "{result:?}");
+    let copy = fixture.destination_folder.join("tree");
+    assert_eq!(list(&copy), ["a.txt", "inner", "locked.txt"]);
+    assert_eq!(read(&copy.join("locked.txt")), "locked");
+    assert_eq!(list(&copy.join("inner")), ["c.txt"]);
+    fixture.assert_no_staging();
+}
+
+/// "Skip all" about an entry inside a folder leaves out every later entry
+/// that cannot be copied without asking again, and "Cancel" stops the run:
+/// nothing of the cancelled folder is published and its staging is gone.
+///
+/// parity: OPS-047
+#[test]
+fn skip_all_and_cancel_about_an_entry_inside_a_folder() {
+    use std::sync::{Arc, Mutex};
+
+    use ox_core::transfer::{FailedItem, FailureAnswer};
+
+    let fixture = Fixture::new();
+    let tree = fixture.source_folder.join("tree");
+    fs::create_dir(&tree).expect("folder");
+    write(&tree.join("a.txt"), "a");
+    for pipe in ["one", "two", "three"] {
+        make_fifo(&tree.join(pipe));
+    }
+    let asked = Arc::new(Mutex::new(0));
+    let count = Arc::clone(&asked);
+    let mut engine = gio_engine().with_failure_question(move |_: &FailedItem| {
+        *count.lock().expect("count") += 1;
+        FailureAnswer::SkipAll
+    });
+    let result = fixture.run(&mut engine, &[&tree], Request::Copy(ConflictPolicy::Skip));
+    assert_eq!(*asked.lock().expect("count"), 1, "asked once");
+    assert_eq!(result.errors.len(), 3, "{result:?}");
+    assert_eq!(list(&fixture.destination_folder.join("tree")), ["a.txt"]);
+    fixture.assert_no_staging();
+
+    let cancelled = Fixture::new();
+    let tree = cancelled.source_folder.join("tree");
+    fs::create_dir(&tree).expect("folder");
+    write(&tree.join("a.txt"), "a");
+    make_fifo(&tree.join("pipe"));
+    let later = cancelled.source_folder.join("later.txt");
+    write(&later, "later");
+    let mut engine = gio_engine().with_failure_question(|_: &FailedItem| FailureAnswer::Cancel);
+    let result = cancelled.run(&mut engine, &[&tree, &later], Request::Copy(ConflictPolicy::Skip));
+    assert!(result.cancelled, "{result:?}");
+    assert!(result.done.is_empty(), "{result:?}");
+    assert!(
+        list(&cancelled.destination_folder).is_empty(),
+        "nothing published, not even later.txt"
+    );
+    cancelled.assert_no_staging();
+}

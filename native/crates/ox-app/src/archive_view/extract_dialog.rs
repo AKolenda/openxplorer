@@ -436,12 +436,14 @@ mod tests {
             folder_count: 1,
             unpacked_bytes: 912,
             entry_count: 2,
+            left_out: 0,
         };
         let several = ExtractionSummary {
             file_count: 3,
             folder_count: 0,
             unpacked_bytes: 1280,
             entry_count: 3,
+            left_out: 0,
         };
 
         assert_eq!(summary_text(&one_each), "1 file · 1 folder · 912 bytes unpacked");
