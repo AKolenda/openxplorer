@@ -13,9 +13,8 @@
 use std::cell::{Cell, OnceCell};
 use std::time::Duration;
 
-use gtk::prelude::*;
+use gtk::glib;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
 use ox_core::location::TRASH_URI;
 use ox_core::ops::list_recycle_bin;
 use ox_core::transfer::Cancellation;
@@ -28,8 +27,8 @@ const SETTLE_TIME: Duration = Duration::from_millis(300);
 /// The watch on the Recycle Bin of one window.
 #[derive(Debug, Default)]
 pub(super) struct RecycleBinWatch {
-    /// The directory monitor on `trash:///`.
-    monitor: OnceCell<gio::FileMonitor>,
+    /// The watch on `trash:///`, whose monitor is made off the GTK thread.
+    watch: OnceCell<crate::folder_view::watch::Watch>,
     /// A listing is due once the changes settle.
     scheduled: Cell<bool>,
     /// A listing runs.
@@ -41,17 +40,30 @@ pub(super) struct RecycleBinWatch {
 impl BrowserWindow {
     /// Counts the Recycle Bin now and again whenever it changes. Without
     /// a trash backend the row stays empty.
+    ///
+    /// The monitor is made off the GTK thread, as a folder's is
+    /// ([`crate::folder_view::watch`]): for `trash:///` `GVfs` answers over
+    /// D-Bus and looks at the trash folder of every mount, so a share that
+    /// stopped answering held the whole app, an open file dialog
+    /// included, each time a window opened.
     pub(super) fn watch_recycle_bin(&self) {
-        let trash = gio::File::for_uri(TRASH_URI);
-        if let Ok(monitor) = trash.monitor_directory(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE) {
-            monitor.connect_changed(glib::clone!(
+        let watch = crate::folder_view::watch::watch_folder(
+            TRASH_URI,
+            glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |_, _, _, _| window.recycle_bin_changed()
-            ));
-            let _ = self.imp().recycle_bin_watch.monitor.set(monitor);
-        }
+                move || window.recycle_bin_changed()
+            ),
+        );
+        let _ = self.imp().recycle_bin_watch.watch.set(watch);
         self.count_recycle_bin();
+    }
+
+    /// The Recycle Bin row's count, `None` while a count runs, for tests.
+    #[cfg(test)]
+    pub(super) fn recycle_bin_row_count(&self) -> Option<u32> {
+        let imp = self.imp();
+        (!imp.recycle_bin_watch.counting.get()).then(|| imp.trash_items.get())
     }
 
     /// Lists the Recycle Bin once its changes settle.
