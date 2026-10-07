@@ -1,5 +1,11 @@
 # Unreleased
 
+- A tab showing a USB drive that was unplugged, or a share or disk that
+  was unmounted by another program, no longer keeps showing the old
+  files. Every tab and split pane on it drops them and says "This
+  location is unavailable: the drive or network share that holds this
+  folder was disconnected", with Try again, which lists the folder once
+  the drive or share is back.
 - The Checksums tab no longer hangs on a named pipe (FIFO): a pipe, a
   device or a socket is refused at once with a message, since it has no
   contents to sum and reading a pipe waits forever for a writer, which

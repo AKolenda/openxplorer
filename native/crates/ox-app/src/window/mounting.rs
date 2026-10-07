@@ -32,7 +32,7 @@ const DISCONNECT_NOTE: &str = crate::i18n::message_id(
 
 /// True when `uri` is the mount root `root` or a location inside it, as
 /// GIO compares files.
-fn is_inside(uri: &str, root: &str) -> bool {
+pub(super) fn is_inside(uri: &str, root: &str) -> bool {
     let file = gio::File::for_uri(uri);
     let root = gio::File::for_uri(root);
     file.equal(&root) || file.has_prefix(&root)
