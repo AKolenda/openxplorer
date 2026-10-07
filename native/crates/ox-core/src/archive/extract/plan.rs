@@ -14,6 +14,11 @@
 //! - ARC-016: links, special files, encrypted members, exotic compression
 //!   and folders carrying data are refused.
 //! - ARC-017: the [`ExtractionLimits`] against ZIP bombs.
+//!
+//! Copying items out of a ZIP (ARC-026) checks only the members it
+//! copies, with the same rules ([`plan_selected`]): a link or a broken
+//! name elsewhere in the archive does not stop the copy, and one the
+//! archive browser hides inside a copied folder is left out and counted.
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
@@ -47,6 +52,10 @@ pub struct ExtractionSummary {
     pub unpacked_bytes: u64,
     /// The members of the archive, folder entries included.
     pub entry_count: usize,
+    /// Members inside the items copied out of the archive that were left
+    /// out because the archive browser hides them: links, special files
+    /// and names that are not safe (ARC-026).
+    pub left_out: usize,
 }
 
 /// Whether a path is a file or a folder.
@@ -86,22 +95,6 @@ pub(super) struct PlannedMember {
 pub(super) struct ExtractionPlan {
     pub(super) members: Vec<PlannedMember>,
     pub(super) summary: ExtractionSummary,
-}
-
-impl ExtractionPlan {
-    /// Keeps only the members at or below one of `selected` (path
-    /// segments) and counts the files and bytes again; the folders that
-    /// hold them are created as the files need them.
-    pub(super) fn keep_selected(&mut self, selected: &[Vec<String>], members: &[ZipMember]) {
-        self.members
-            .retain(|planned| selected.iter().any(|chosen| planned.segments.starts_with(chosen)));
-        let files = self
-            .members
-            .iter()
-            .filter(|planned| planned.kind == PathKind::File);
-        self.summary.file_count = files.clone().count();
-        self.summary.unpacked_bytes = files.map(|planned| members[planned.index].size).sum();
-    }
 }
 
 /// Checks every member of an archive and summarises it (`plan`).
@@ -145,6 +138,70 @@ pub(super) fn plan(
     Ok(ExtractionPlan {
         members: planned,
         summary,
+    })
+}
+
+/// Checks the members at or below one of `selected` (path segments, as
+/// the archive browser names them) and summarises them, for copying items
+/// out of the archive (ARC-026). Members elsewhere are not looked at; a
+/// member inside the selection that the browser hides (a link, a special
+/// file, an unsafe name) is left out and counted; every other selected
+/// member must pass every rule of [`plan`], or the copy is refused.
+///
+/// # Errors
+///
+/// The first refusal of the rules in the module documentation for a
+/// copied member, or [`ArchiveError::Cancelled`].
+pub(super) fn plan_selected(
+    members: &[ZipMember],
+    selected: &[Vec<String>],
+    limits: &ExtractionLimits,
+    cancel: &Cancellation,
+) -> Result<ExtractionPlan, ArchiveError> {
+    if members.len() > limits.max_entries {
+        return Err(ArchiveError::TooManyEntries);
+    }
+    let mut paths = ArchivePaths::default();
+    let mut planned = Vec::new();
+    let mut summary = ExtractionSummary::default();
+    for (index, member) in members.iter().enumerate() {
+        cancel.check()?;
+        if !is_selected(&member.name, selected) {
+            continue;
+        }
+        if !crate::archive::browse::is_listable(member) {
+            summary.left_out += 1;
+            continue;
+        }
+        let segments = member_segments(member, limits)?;
+        let kind = PathKind::of(member);
+        paths.add(&segments, kind)?;
+        if paths.count() > limits.max_paths {
+            return Err(ArchiveError::TooManyPaths);
+        }
+        if kind == PathKind::File {
+            count_file(&mut summary, member.size, limits)?;
+        }
+        planned.push(PlannedMember {
+            index,
+            segments,
+            kind,
+        });
+    }
+    summary.entry_count = planned.len();
+    summary.folder_count = paths.folder_count();
+    Ok(ExtractionPlan {
+        members: planned,
+        summary,
+    })
+}
+
+/// Whether the member `name` is at or below one of `selected`, compared
+/// segment by segment as the archive browser splits names.
+fn is_selected(name: &str, selected: &[Vec<String>]) -> bool {
+    let segments: Vec<&str> = name.trim_end_matches('/').split('/').collect();
+    selected.iter().any(|chosen| {
+        chosen.len() <= segments.len() && chosen.iter().zip(&segments).all(|(want, have)| want == have)
     })
 }
 

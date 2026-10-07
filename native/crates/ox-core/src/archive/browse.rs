@@ -163,7 +163,7 @@ fn folder_prefix(prefix: &str) -> Result<String, ArchiveError> {
 
 /// ARC-004: true for a member the browser may show: a safe name the
 /// archive records unaltered, and a regular file, a folder or no type.
-fn is_listable(member: &ZipMember) -> bool {
+pub(crate) fn is_listable(member: &ZipMember) -> bool {
     is_safe_member(&member.name)
         && member.has_unaltered_name()
         && member.file_type() != MemberFileType::LinkOrSpecial
