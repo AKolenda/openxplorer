@@ -1,5 +1,13 @@
 # Unreleased
 
+- Settings is laid out anew, as the owner's mockup: eight pages (General,
+  Appearance, Files & folders, ZIP & archives, Confirmations, Search,
+  Default apps, About), one short line per setting with its details in
+  an ⓘ bubble, rarely changed settings folded away (Previews and
+  thumbnails, Dragging tabs and files, Undo and troubleshooting), and a
+  search that shows the matching settings of every page at once. Every
+  setting is still there, with the same options and defaults, and a
+  search for its earlier name still finds it.
 - A file list at its top stays at its top when files come before the one
   at the top edge, in every view: in an Open or Save dialog switching
   from one file type to more (`*.svg`, then All files) no longer scrolls

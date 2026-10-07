@@ -2,7 +2,7 @@
 //! A ZIP opened like a folder, as Windows Explorer opens a "Compressed
 //! (zipped) Folder" (ARC-026).
 //!
-//! With Settings › Windows & tabs › "Open ZIP files" set to "Like a
+//! With Settings › ZIP & archives › "Double-clicking a ZIP" set to "Like a
 //! folder", opening a ZIP shows it in the tab at an `ox-zip:` location
 //! (see [`ox_core::location::ArchiveLocation`]): the address bar, Back,
 //! Forward and Up, tabs and views work as in any folder; the folder model

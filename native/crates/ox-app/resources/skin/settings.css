@@ -56,11 +56,13 @@ list.settings-categories > row:selected .pill { background-color: @ox_accent; }
   color: @ox_muted;
 }
 /* Each category's glyph in the mockup's colour. */
+.settings-categories image.category-general { color: @ox_category_general; }
 .settings-categories image.category-appearance { color: @ox_category_appearance; }
+.settings-categories image.category-files { color: @ox_category_files; }
+.settings-categories image.category-archives { color: @ox_category_archives; }
+.settings-categories image.category-confirmations { color: @ox_category_confirmations; }
 .settings-categories image.category-search { color: @ox_category_search; }
 .settings-categories image.category-default-apps { color: @ox_category_default_apps; }
-.settings-categories image.category-windows { color: @ox_category_windows; }
-.settings-categories image.category-brave { color: @ox_category_brave; }
 .settings-categories image.category-about { color: @ox_category_about; }
 window.ox button.settings-back { padding: 8px 12px; color: @ox_muted; }
 window.ox button.settings-back:hover { color: @ox_text; }
@@ -93,6 +95,44 @@ window.ox button.page-chevron image { color: @ox_muted; }
 .group-rows > .setting-row.search-match { box-shadow: inset 3px 0 @ox_accent; }
 .group-rows > .setting-row.jump-target { background-color: @ox_selected; }
 .settings-note { color: @ox_muted; margin: 0 2px 22px 2px; }
+
+/* ---- The ⓘ after a setting's name, and its bubble ---- */
+window.ox button.info-button {
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border-radius: 11px;
+  background: none;
+  box-shadow: none;
+}
+window.ox button.info-button image { color: @ox_muted; }
+window.ox button.info-button:hover image,
+window.ox button.info-button:focus-visible image { color: @ox_accent; }
+popover.info-bubble > contents {
+  padding: 10px 12px;
+  border: 1px solid @ox_flyout_stroke;
+  border-radius: 8px;
+  background-color: @ox_flyout;
+  box-shadow: 0 5px 16px @ox_menu_shadow;
+}
+popover.info-bubble .info-bubble-text { color: @ox_text; }
+
+/* ---- A folded group: its title opens and closes it ---- */
+window.ox button.group-fold {
+  padding: 11px 16px;
+  border: 1px solid @ox_border;
+  border-radius: 10px;
+  background-color: @ox_card;
+  box-shadow: none;
+}
+window.ox button.group-fold:hover { background-color: @ox_hover; }
+.settings .group-fold .fold-title { font-weight: 600; }
+.settings .group-fold image { color: @ox_muted; }
+.folded-group > button.group-fold { margin-bottom: 8px; }
+
+/* ---- The search results: every category's matches under its name ---- */
+.settings-results > .in-results { margin-bottom: 12px; }
+.settings-results > .in-results .page-title { margin-bottom: 10px; }
 .settings .settings-paragraph { margin: 0 2px 16px 2px; }
 .settings-note image { color: @ox_muted; margin-top: 2px; }
 

@@ -5,13 +5,16 @@
 //! `v2.0.0:desktop/ui/app.js`, laid out as the owner asked (SET-019 and the
 //! settings mockup its note names): a list of categories with a
 //! settings search at its top, and only the chosen category on the right,
-//! as flat groups of rows. [`SettingsPage`] is a `GtkBox` subclass whose
-//! frame is the template `resources/ui/settings-page.ui`; each category
-//! builds its page in a module of its own ([`appearance`], [`indexing`],
-//! [`default_apps`], [`windows_tabs`], [`brave`], [`about`]) as a
-//! [`section::SettingsSection`], from the pieces in [`row`], [`group`],
-//! [`parts`] and [`choice_list`]. The list and the search are in
-//! [`navigation`].
+//! as flat groups of one-line rows, the details of each in an ⓘ bubble
+//! ([`info_bubble`]) and the rarely changed ones folded away. A search
+//! shows the matching settings of every category on one page of results.
+//! [`SettingsPage`] is a `GtkBox` subclass whose frame is the template
+//! `resources/ui/settings-page.ui`; each category builds its page in a
+//! module of its own ([`general`], [`appearance`], [`files_folders`],
+//! [`archives`], [`confirmations`], [`indexing`], [`default_apps`] with
+//! [`brave`], [`about`]) as a [`section::SettingsSection`], from the
+//! pieces in [`row`], [`group`], [`parts`] and [`choice_list`]. The list
+//! and the search are in [`navigation`].
 //!
 //! A window builds the page the first time Settings is shown
 //! ([`building`]). Every row reads and writes the shared settings file
@@ -20,16 +23,20 @@
 
 mod about;
 mod appearance;
+mod archives;
 mod bindings;
 mod brave;
 mod building;
 mod category_row;
 mod choice_list;
+mod confirmations;
 mod default_apps;
-mod folder_views;
+mod files_folders;
+mod general;
 mod group;
 mod indexed_folders;
 mod indexing;
+mod info_bubble;
 mod navigation;
 mod pages;
 mod parts;
@@ -39,7 +46,6 @@ mod section;
 mod startup;
 mod status_card;
 mod troubleshooting;
-mod windows_tabs;
 
 #[cfg(test)]
 mod tests;
@@ -145,6 +151,12 @@ mod imp {
         pub(super) page_width: Cell<PageWidth>,
         /// The categories' pages.
         pub(super) category_sections: RefCell<HashMap<Category, SettingsSection>>,
+        /// The box on each category's own page that holds its section
+        /// while no search is typed.
+        pub(super) category_hosts: RefCell<HashMap<Category, gtk::Box>>,
+        /// The page of search results, where every category's section is
+        /// while a search is typed.
+        pub(super) results: OnceCell<gtk::Box>,
         /// The sub-pages.
         pub(super) subpages: RefCell<HashMap<Subpage, SettingsSection>>,
         /// What the right side shows.
