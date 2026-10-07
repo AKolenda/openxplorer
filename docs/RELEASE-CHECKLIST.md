@@ -1,6 +1,6 @@
 # Release checklist
 
-**Current status: this source tree prepares 2.0.2 of the native GTK 4 app
+**Current status: this source tree prepares 2.0.3 of the native GTK 4 app
 (`native/`) that replaces the retired Python app (last released as tag
 v1.1.4, no longer in the tree or shipped).** The remaining parity items, known gaps and owed hardware
 acceptance are in [native/BACKLOG.md](../native/BACKLOG.md). Built packages,
@@ -89,7 +89,7 @@ checksums via a trusted channel; checksums alone are not a signature. Create a
 signing/release process without embedding keys in the repo. Re-run current
 upstream advisories/system package updates before signing.
 
-The release version is `2.0.2`. For each later release, bump every version
+The release version is `2.0.3`. For each later release, bump every version
 listed above, rebuild, verify source correspondence, and publish the packages,
 the corresponding-source archive and `SHA256SUMS` together. Do not present this
 checklist or a limited source sweep as independent security certification.

@@ -1,4 +1,8 @@
-# Unreleased
+# 2.0.3 — 2026-10-06
+
+Windows Explorer's Group by, safer copies and archives, drives that are
+read-only or gone, and Open and Save dialogs that no longer freeze or get
+stuck.
 
 - Group by, as in Windows Explorer: Sort > Group by groups a folder apart
   from its sort, so a folder grouped by date modified can be sorted by name
