@@ -5,7 +5,7 @@
 //! was one long page of sections. The native page shows one [`Category`]
 //! at a time, chosen in a list on the left, as the `ChatGPT` and T3 Code
 //! settings do (SET-019), and long lists open as a [`Subpage`] of their
-//! own. The categories follow the owner's settings mockup, grouped by what
+//! own. The categories follow the 2026-10 settings mockup, grouped by what
 //! the user wants to change; every setting of the Python sections is on
 //! one of them:
 //!

@@ -1,6 +1,6 @@
 # Unreleased
 
-- Settings is laid out anew, as the owner's mockup: eight pages (General,
+- Settings is laid out anew, from a settings mockup: eight pages (General,
   Appearance, Files & folders, ZIP & archives, Confirmations, Search,
   Default apps, About), one short line per setting with its details in
   an ⓘ bubble, rarely changed settings folded away (Previews and

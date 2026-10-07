@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The settings layout of the owner's mockup: eight pages, one line per
+//! The settings layout of the 2026-10 mockup: eight pages, one line per
 //! setting with its details in an ⓘ bubble, folded groups for what is
 //! rarely changed, and a search that shows the matches of every page.
 //! The layout moves the settings; it adds and removes none.
