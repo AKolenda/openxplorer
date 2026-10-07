@@ -33,12 +33,6 @@ const MAX_NAME_CHARS: usize = 4096;
 /// The longest path segment, in UTF-8 bytes: the limit of Linux file
 /// systems and SMB.
 const MAX_SEGMENT_BYTES: usize = 255;
-/// ARC-014: Windows device names, which Windows and SMB servers refuse or
-/// misinterpret whatever their extension (`NUL.txt` is the device too).
-const RESERVED_DEVICE_NAMES: [&str; 22] = [
-    "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
-    "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
-];
 
 /// What an archive holds, as the Extract dialog summarises it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -277,10 +271,7 @@ fn check_segment(segment: &str) -> Result<(), ArchiveError> {
     if is_relative || is_altered_by_smb || segment.len() > MAX_SEGMENT_BYTES {
         return Err(ArchiveError::PathUnsafeForShares);
     }
-    let base_name = segment
-        .split_once('.')
-        .map_or(segment, |(base, _extensions)| base);
-    if RESERVED_DEVICE_NAMES.contains(&glib::casefold(base_name).as_str()) {
+    if crate::location::is_reserved_device_name(segment) {
         return Err(ArchiveError::ReservedDeviceName);
     }
     Ok(())

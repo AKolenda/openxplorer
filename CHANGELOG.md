@@ -1,5 +1,12 @@
 # Unreleased
 
+- Copying to a Windows drive (NTFS), or to a FAT or exFAT stick, no
+  longer creates names Windows cannot use. A device name such as CON,
+  PRN, AUX, NUL, COM1 or LPT1 (also with an extension, like `nul.txt`)
+  and a name ending in a dot or a space are asked about like names with
+  forbidden characters: Rename gives the item a name Windows opens
+  (`_nul.txt`, `notes_`), Skip leaves it out, and "Do this for all such
+  items" covers the rest of the copy.
 - Copying or moving a folder no longer fails as a whole when one file
   inside it cannot be read (a locked or protected file, a socket, a pipe
   or another special file). As in Windows Explorer, OpenXplorer asks about

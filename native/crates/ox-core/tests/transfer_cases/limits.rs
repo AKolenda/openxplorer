@@ -32,6 +32,81 @@ impl Provider for FatStick {
     }
 }
 
+/// The Windows drive of a dual-boot computer, mounted with ntfs3.
+struct WindowsDrive;
+
+impl Provider for WindowsDrive {
+    fn filesystem(&self, _node: &LocalNode) -> Option<FilesystemInfo> {
+        Some(FilesystemInfo {
+            kind: Some("ntfs3".into()),
+            free: None,
+            id: None,
+        })
+    }
+}
+
+/// Names Windows cannot use on its drive (device names with any
+/// extension, a dot or space at the end) are asked about, at the top and
+/// inside folders; Rename gives each a name Windows opens, ordinary names
+/// are copied as they are, and Skip leaves an item out.
+///
+/// parity: XFER-028
+#[test]
+fn names_windows_cannot_use_are_renamed_or_left_out_on_its_drive() {
+    let fixture = Fixture::new();
+    let folder = fixture.source_folder.join("backup");
+    fs::create_dir(&folder).unwrap();
+    for name in ["CON", "nul.txt", "notes.", "draft ", "console.txt"] {
+        write(&folder.join(name), name);
+    }
+    let left_out = fixture.source_folder.join("aux.log");
+    write(&left_out, "aux");
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let questions = Arc::clone(&asked);
+    let mut engine = fixture
+        .engine(Arc::new(WindowsDrive))
+        .with_unstorable_question(move |item| {
+            questions.lock().unwrap().push((item.name.clone(), item.reason));
+            if item.name == "aux.log" {
+                UnstorableAnswer::Skip
+            } else {
+                UnstorableAnswer::Replace
+            }
+        });
+
+    let result = fixture.run(
+        &mut engine,
+        &[&folder, &left_out],
+        Request::Copy(ConflictPolicy::Skip),
+    );
+
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert_eq!(
+        list(&fixture.destination_folder),
+        ["backup"],
+        "aux.log was skipped"
+    );
+    let copied = fixture.destination_folder.join("backup");
+    assert_eq!(
+        list(&copied),
+        ["_CON", "_nul.txt", "console.txt", "draft_", "notes_"]
+    );
+    assert_eq!(read(&copied.join("_nul.txt")), "nul.txt");
+    let mut asked: Vec<String> = asked
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+    asked.sort();
+    assert_eq!(asked, ["CON", "aux.log", "draft ", "notes.", "nul.txt"]);
+    assert!(
+        asked.iter().all(|name| name != "console.txt"),
+        "an ordinary name is not asked about"
+    );
+    fixture.assert_no_staging();
+}
+
 /// parity: XFER-028
 #[test]
 fn a_copy_that_does_not_fit_is_refused_before_anything_is_written() {
@@ -90,7 +165,7 @@ fn names_and_links_fat_cannot_store_are_renamed_or_left_out_as_answered() {
             questions.lock().unwrap().push((item.name.clone(), item.reason));
             match item.reason {
                 UnstorableReason::InvalidCharacters => UnstorableAnswer::ReplaceAll,
-                UnstorableReason::SymbolicLink => UnstorableAnswer::Skip,
+                UnstorableReason::WindowsName | UnstorableReason::SymbolicLink => UnstorableAnswer::Skip,
             }
         });
 
