@@ -15,6 +15,7 @@ use crate::icons::{Art, Connection, Icon};
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::landing;
+use crate::window::menu_popover::MenuPopover;
 
 /// The labels `widget` shows, in order.
 fn texts_in(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
@@ -206,4 +207,69 @@ fn a_server_card_shows_the_server_in_the_share_blue_on_the_network_bar() {
         .expect("the card shows the server glyph");
     assert_eq!(glyph.icon_name().as_deref(), Some(Icon::Server.name()));
     assert_eq!(glyph.color().to_str(), "rgb(75,150,192)");
+}
+
+/// Right-clicks the card that shows `art` on the landing page and returns
+/// its menu.
+fn open_card_menu(test: &TestWindow, art: Art) -> MenuPopover {
+    let landing = test.window.folder_pane().landing();
+    wait_until("the card", || art_image_showing(landing, art).is_some());
+    wait_for_frames(&test.window, 2);
+    let card = art_image_showing(landing, art)
+        .and_then(|image| image.ancestor(gtk::Button::static_type()))
+        .expect("the art is on a card");
+    let right_click = card
+        .observe_controllers()
+        .into_iter()
+        .filter_map(|controller| controller.ok().and_downcast::<gtk::GestureClick>())
+        .find(|click| click.button() == gtk::gdk::BUTTON_SECONDARY)
+        .expect("the card opens its menu on a right-click");
+    right_click.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &5.0_f64]);
+    let pane = test.window.folder_pane();
+    let menu = descendants::<MenuPopover>(pane)
+        .into_iter()
+        .find(gtk::prelude::WidgetExt::is_visible)
+        .expect("the card's menu is open in the folder pane");
+    wait_for_frames(&test.window, 2);
+    menu
+}
+
+/// Drawing the page again while a card's menu is open, as a drive or a
+/// found server does, destroys the card; the menu belongs to the pane, so
+/// it stays usable and closes cleanly.
+fn redraw_with_the_menu_open(test: &TestWindow, menu: &MenuPopover) {
+    let pane = test.window.folder_pane().clone();
+    assert_eq!(menu.parent().as_ref(), Some(pane.upcast_ref::<gtk::Widget>()));
+
+    test.window.render_places();
+    wait_for_frames(&test.window, 2);
+    let still_open = menu.is_visible();
+    menu.popdown();
+    wait_until("the menu to let go of the pane", || menu.parent().is_none());
+
+    assert!(still_open, "the redraw does not close the menu");
+}
+
+/// parity: SIDE-017
+#[gtk::test]
+fn a_this_pc_card_menu_survives_the_page_being_drawn_again() {
+    let test = laid_out(Page::ThisPc.uri());
+    test.save_share("smb://nas/media", "Media (M:)");
+    let share = Art::for_network_location(NetworkKind::Share, "Media (M:)", Connection::Disconnected);
+
+    let menu = open_card_menu(&test, share);
+
+    redraw_with_the_menu_open(&test, &menu);
+}
+
+/// parity: SIDE-020
+#[gtk::test]
+fn a_network_card_menu_survives_the_page_being_drawn_again() {
+    let test = laid_out(Page::Network.uri());
+    test.window.context().remember_network("smb://nas/");
+    let server = Art::for_network_location(NetworkKind::Server, "nas", Connection::Disconnected);
+
+    let menu = open_card_menu(&test, server);
+
+    redraw_with_the_menu_open(&test, &menu);
 }

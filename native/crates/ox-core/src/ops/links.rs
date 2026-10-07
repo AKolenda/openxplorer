@@ -28,7 +28,7 @@ use super::create::name_taken_or;
 use super::error::OpsError;
 use super::run_transfer::TransferOutcome;
 use super::undo::UndoRecord;
-use crate::location::{file_uri, normalise, validate_name};
+use crate::location::{file_uri, normalise, typed_local_path, validate_name};
 use crate::transfer::{TransferResult, MAX_ITEMS};
 
 /// Why the folder takes no links.
@@ -119,21 +119,7 @@ fn link_target(typed: &str) -> Result<PathBuf, OpsError> {
     if typed.is_empty() {
         return Err(OpsError::failed(crate::i18n::gettext(NO_TARGET)));
     }
-    if typed.starts_with("file:") {
-        return gio::File::for_uri(typed)
-            .path()
-            .ok_or_else(|| OpsError::failed(crate::i18n::gettext(NOT_LOCAL_ITEM)));
-    }
-    if typed.contains("://") {
-        return Err(OpsError::failed(crate::i18n::gettext(NOT_LOCAL_ITEM)));
-    }
-    if typed == "~" {
-        return Ok(glib::home_dir());
-    }
-    if let Some(below_home) = typed.strip_prefix("~/") {
-        return Ok(glib::home_dir().join(below_home));
-    }
-    Ok(PathBuf::from(typed))
+    typed_local_path(typed).ok_or_else(|| OpsError::failed(crate::i18n::gettext(NOT_LOCAL_ITEM)))
 }
 
 /// The name a link gets when none was typed: the name of what it points

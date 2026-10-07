@@ -44,6 +44,13 @@
       </object>
     </child>
     <child>
+      <!-- Shown while the folder's drive is mounted read-only. -->
+      <object class="GtkLabel" id="drive_state">
+        <property name="visible">false</property>
+        <property name="label" translatable="yes">Read-only drive</property>
+      </object>
+    </child>
+    <child>
       <!-- Shown while the folder cannot be watched for changes. -->
       <object class="GtkLabel" id="watch_state">
         <property name="visible">false</property>

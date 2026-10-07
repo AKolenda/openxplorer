@@ -33,6 +33,9 @@ pub(crate) struct KeptItems {
     pub(crate) appeared: usize,
     /// Copied items that changed after the copy read them.
     pub(crate) changed: usize,
+    /// Items the copy left out because they could not be copied
+    /// (OPS-047).
+    pub(crate) left_out: usize,
 }
 
 impl KeptItems {
@@ -40,6 +43,16 @@ impl KeptItems {
     /// `location`, or `None` when nothing was kept.
     pub(crate) fn notice(&self, location: &str) -> Option<String> {
         let mut parts = Vec::new();
+        if self.left_out > 0 {
+            parts.push(
+                crate::i18n::ngettext(
+                    "1 item could not be moved and was",
+                    "{count} items could not be moved and were",
+                    self.left_out as u64,
+                )
+                .replace("{count}", &self.left_out.to_string()),
+            );
+        }
         if self.changed > 0 {
             parts.push(
                 crate::i18n::ngettext(
@@ -70,8 +83,10 @@ impl KeptItems {
 }
 
 /// Removes the source `top`, which was `top_info` before the copy, of a
-/// published copy, limited to the `copied` items below it. `guard` is
-/// asked about each item before it is removed.
+/// published copy, limited to the `copied` items below it. The items at
+/// the `left_out` URIs, which could not be copied, stay with their
+/// folders (OPS-047). `guard` is asked about each item before it is
+/// removed.
 ///
 /// # Errors
 ///
@@ -81,12 +96,16 @@ pub(crate) fn remove_copied_source(
     top: &dyn Node,
     top_info: &NodeInfo,
     copied: &[CopiedItem],
+    left_out: &HashSet<String>,
     guard: Option<&WriteGuard>,
 ) -> Result<KeptItems, TransferError> {
-    let mut kept_items = KeptItems::default();
+    let mut kept_items = KeptItems {
+        left_out: left_out.len(),
+        ..KeptItems::default()
+    };
     // The items kept so far, so the entries of a kept folder that are
     // already counted are not counted again as having appeared.
-    let mut kept: HashSet<String> = HashSet::new();
+    let mut kept: HashSet<String> = left_out.clone();
     let items = copied
         .iter()
         .map(|item| (item.node.as_ref(), &item.info))

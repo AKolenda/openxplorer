@@ -54,6 +54,13 @@ const RIGHT_CLICK_MENU: RowText = RowText {
     keywords: "context menu style windows 10 11 classic compact",
 };
 
+const HIDE_EXPAND_ARROWS: RowText = RowText {
+    title: "Hide expand arrows",
+    description: "As in Windows, the navigation pane's arrows (This PC, Network and the folder tree) \
+                  show only while you point at the pane or move through it with the keyboard.",
+    keywords: "chevron expander triangle sidebar navigation pane tree folders windows",
+};
+
 const PANE_WIDTHS: RowText = RowText {
     title: "Sidebar and column widths",
     description: "Restore the default widths in every window.",
@@ -108,7 +115,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     appearance.append_group(&theme_group());
     appearance.append_group(&text_and_menus_group(page));
     appearance.append_group(&super::folder_views::group(page));
-    appearance.append_group(&layout_group());
+    appearance.append_group(&layout_group(page));
     appearance
 }
 
@@ -319,13 +326,23 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
     });
 }
 
-fn layout_group() -> SettingsGroup {
+fn layout_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Layout"));
     let row = SettingRow::new(PANE_WIDTHS);
     let reset = parts::button_with_glyph(&ox_core::i18n::gettext("Reset"), Icon::ArrowClockwise);
     WindowAction::ResetLayout.assign_to(&reset);
     row.add_control(&reset, ControlName::OwnLabel);
     group.add_row(&row);
+    let arrows = SettingRow::new(HIDE_EXPAND_ARROWS);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.hide_expand_arrows,
+        write: |hidden| PreferencesUpdate {
+            hide_expand_arrows: Some(hidden),
+            ..PreferencesUpdate::default()
+        },
+    };
+    arrows.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&arrows);
     group
 }
 

@@ -18,6 +18,9 @@
 
 use gtk::gio;
 use gtk::gio::prelude::*;
+use gtk::prelude::*;
+#[cfg(test)]
+use gtk::subclass::prelude::*;
 use ox_core::ops::{
     permanent_delete_confirmation, plan_delete, DeleteConfirmation, DeleteItem, TransferRequest,
 };
@@ -61,6 +64,31 @@ impl BrowserWindow {
                 name: item.entry().name.clone(),
             })
             .collect()
+    }
+
+    /// Whether Shift is held now. A button or a menu item runs its action
+    /// with no key event to read, so this asks the keyboard, as Windows
+    /// Explorer does when Delete is clicked with Shift held.
+    pub(super) fn shift_is_held(&self) -> bool {
+        #[cfg(test)]
+        if self.imp().test_shift_held.get() {
+            return true;
+        }
+        let keyboard = WidgetExt::display(self)
+            .default_seat()
+            .and_then(|seat| seat.keyboard());
+        keyboard.is_some_and(|keyboard| {
+            keyboard
+                .modifier_state()
+                .contains(gtk::gdk::ModifierType::SHIFT_MASK)
+        })
+    }
+
+    /// Holds Shift, or lets go of it, for the commands run next, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn hold_shift_for_tests(&self, held: bool) {
+        self.imp().test_shift_held.set(held);
     }
 
     /// Delete: asks, then moves each selected item to its folder's Trash,

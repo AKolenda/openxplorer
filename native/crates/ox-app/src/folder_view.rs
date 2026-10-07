@@ -24,6 +24,7 @@ pub(crate) mod grid;
 pub(crate) mod groups;
 pub(crate) mod icon_size;
 pub(crate) mod item;
+pub(crate) mod keep_top;
 pub(crate) mod loader;
 pub(crate) mod model;
 pub(crate) mod recent_locations;

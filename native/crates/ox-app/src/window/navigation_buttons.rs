@@ -121,11 +121,12 @@ impl BrowserWindow {
         self.add_controller(shortcuts);
     }
 
-    /// Runs `action` for its key, unless a text field keeps the key or a
-    /// dialog is open. At either end of the history the action is
-    /// disabled, so nothing happens.
+    /// Runs `action` for its key, unless a text field other than a file
+    /// dialog's File name keeps the key, or a dialog is open. At either
+    /// end of the history the action is disabled, so nothing happens.
     fn run_navigation_key(&self, action: WindowAction) -> glib::Propagation {
-        if self.focus_is_in_text_field() || !self.takes_navigation_input() {
+        let in_text_field = self.focus_is_in_text_field() && !self.focus_is_in_picker_name();
+        if in_text_field || !self.takes_navigation_input() {
             return glib::Propagation::Proceed;
         }
         action.activate_from(self, None);

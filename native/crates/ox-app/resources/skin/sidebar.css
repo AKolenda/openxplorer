@@ -57,7 +57,22 @@
 .sidebar list > row.indent .side-entry { padding-left: 32px; }
 /* This PC and Network: the 9px chevron starts 5px in and the icon 19px. */
 .sidebar list > row.group .side-entry { padding-left: 5px; }
-.sidebar .expand { margin-right: 5px; }
+/* The chevron of This PC and Network (SIDE-033): a 17px button of its
+   own around the 9px glyph, which stays where it was (5px in, 5px before
+   the icon), with its own highlight, a step past the row's, as the eject
+   button has. */
+window.ox .sidebar button.side-expander {
+  min-width: 17px;
+  min-height: 17px;
+  padding: 0;
+  margin: 0 1px 0 -4px;
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+  background: none;
+  color: @ox_text;
+}
+window.ox .sidebar button.side-expander:hover { background-color: @ox_pressed; }
 .sidebar .side-glyph { margin: 1px 13px 0 1px; }
 .sidebar .side-art { margin: 0 12px 0 1px; }
 .sidebar .pin { color: @ox_text_tertiary; margin-left: 12px; }
@@ -66,8 +81,9 @@
 window.ox .sidebar button.side-eject { min-width: 24px; min-height: 24px; margin-left: 6px; color: @ox_muted; }
 window.ox .sidebar button.side-eject:hover { background-color: @ox_pressed; color: @ox_text; }
 /* The accent bar of the selected row: 3 x 16 with 2px corners, centred
-   on the row (§4.4; the web's .side-entry.selected:before is 3 x 15). */
-.sidebar .pill { min-width: 3px; min-height: 16px; margin-top: 10px; border-radius: 2px; }
+   on the row (§4.4; the web's .side-entry.selected:before is 3 x 15) by
+   a top margin that follows the row's height (theme/fonts.rs). */
+.sidebar .pill { min-width: 3px; min-height: 16px; border-radius: 2px; }
 .sidebar list > row:selected .pill { background-color: @ox_accent; }
 .sidebar .side-separator { min-height: 1px; background-color: @ox_border; margin: 12px 13px 11px 13px; }
 
@@ -91,6 +107,8 @@ window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
   outline: none;
   transition: background-color 83ms linear;
 }
+/* Compact view (VIEW-067, window/compact_density.rs): closer folder tree rows. */
+window.compact-density .folder-tree listview > row { min-height: 24px; }
 .folder-tree listview > row:hover { background-color: @ox_hover; }
 .folder-tree listview > row:selected { background-color: @ox_selected; color: @ox_text; }
 .folder-tree listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
@@ -128,4 +146,23 @@ paned.workspace > separator:hover,
 paned.workspace > separator.keyboard-focus {
   background-color: @ox_selected;
   box-shadow: inset 2px 0 @ox_selected, inset 4px 0 @ox_accent;
+}
+
+/* Settings > Appearance > Layout > Hide expand arrows (SIDE-032,
+   window/expand_arrows.rs), as Windows Explorer's navigation pane: the
+   chevrons of This PC and Network and the folder tree's arrows stay
+   hidden until the pointer is over the pane or keyboard focus is in it,
+   then fade in. Hidden arrows keep their room, so nothing moves. Without
+   animations GTK skips the fade. The file list's folder arrows are the
+   Expandable folders switch's. */
+window.hide-expand-arrows .sidebar .side-expander,
+window.hide-expand-arrows .sidebar .folder-tree treeexpander expander {
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+window.hide-expand-arrows .sidebar:hover .side-expander,
+window.hide-expand-arrows .sidebar:hover .folder-tree treeexpander expander,
+window.hide-expand-arrows .sidebar:focus-within .side-expander,
+window.hide-expand-arrows .sidebar:focus-within .folder-tree treeexpander expander {
+  opacity: 1;
 }

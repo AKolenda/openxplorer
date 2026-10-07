@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Items the destination's file system cannot store (XFER-028): names with
-//! characters FAT, exFAT and NTFS forbid, and symbolic links on FAT and
-//! exFAT. The engine asks the app about each one, as KIO's
+//! characters FAT, exFAT and NTFS forbid, names Windows cannot use there
+//! (a device name such as `CON` or `nul.txt`, or a dot or space at the
+//! end), and symbolic links on FAT and exFAT. The engine asks the app about each one, as KIO's
 //! `handleMsdosFsQuirks` asks Dolphin's user: "Replace invalid characters"
 //! (with `_`), "Replace all", "Skip", "Skip all" or "Cancel". Without a
 //! question installed, the item is attempted as it is and the backend's
@@ -11,7 +12,7 @@ use std::ffi::{OsStr, OsString};
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
-use super::limits::{replace_forbidden_characters, StorageRules};
+use super::limits::{storable_name, StorageRules};
 use super::node::{Node, NodeKind};
 
 /// Why an item cannot be stored as it is.
@@ -19,6 +20,9 @@ use super::node::{Node, NodeKind};
 pub enum UnstorableReason {
     /// Its name has characters the file system forbids.
     InvalidCharacters,
+    /// Windows cannot use its name: a device name such as `CON` or
+    /// `nul.txt`, or a name ending in a dot or a space.
+    WindowsName,
     /// It is a symbolic link, which the file system cannot store.
     SymbolicLink,
 }
@@ -35,7 +39,8 @@ pub struct UnstorableItem {
 /// The user's answer about an [`UnstorableItem`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnstorableAnswer {
-    /// Replace the forbidden characters of this name with `_`.
+    /// Make this name storable: forbidden characters and a dot or space at
+    /// its end become `_`, and a device name gets `_` in front.
     Replace,
     /// Do that for every such name of the run.
     ReplaceAll,
@@ -62,7 +67,7 @@ pub(crate) enum Fix {
 /// The "all" answers that apply to the rest of an operation.
 #[derive(Debug, Default)]
 struct RunAnswers {
-    /// Replace all: every forbidden name gets `_` instead.
+    /// Replace all: every name that cannot be stored is made storable.
     replace_all: bool,
     /// Skip all for names.
     skip_all_names: bool,
@@ -153,22 +158,23 @@ impl Unstorable {
                 return Ok(Fix::Skip);
             }
         }
-        if !self.rules.forbids_name(&name) || self.question.is_none() {
+        let problem = self.rules.name_problem(&name);
+        let Some(reason) = problem.filter(|_| self.question.is_some()) else {
             return Ok(Fix::Name(name));
-        }
+        };
         if self.answers.replace_all {
-            return Ok(Fix::Name(replace_forbidden_characters(&name)));
+            return Ok(Fix::Name(storable_name(&name)));
         }
         if self.answers.skip_all_names {
             self.skipped += 1;
             return Ok(Fix::Skip);
         }
-        match self.ask(&name, UnstorableReason::InvalidCharacters, cancel)? {
+        match self.ask(&name, reason, cancel)? {
             UnstorableAnswer::ReplaceAll => {
                 self.answers.replace_all = true;
-                Ok(Fix::Name(replace_forbidden_characters(&name)))
+                Ok(Fix::Name(storable_name(&name)))
             }
-            UnstorableAnswer::Replace => Ok(Fix::Name(replace_forbidden_characters(&name))),
+            UnstorableAnswer::Replace => Ok(Fix::Name(storable_name(&name))),
             answer => {
                 self.answers.skip_all_names |= answer == UnstorableAnswer::SkipAll;
                 self.skipped += 1;

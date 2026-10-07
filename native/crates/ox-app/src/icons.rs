@@ -34,6 +34,7 @@ use gtk::prelude::*;
 pub(crate) use art::{Art, Connection, Storage};
 pub(crate) use art_image::ArtImage;
 pub(crate) use emblem::Emblems;
+pub(crate) use file_type::is_zip;
 #[cfg(test)]
 pub(crate) use file_type::FileType;
 pub(crate) use icon::Icon;

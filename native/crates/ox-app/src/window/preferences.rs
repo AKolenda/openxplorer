@@ -51,6 +51,8 @@ pub(super) enum Preference {
     WindowSize(WindowSize),
     /// Crumbs from `/` rather than from the home folder (NAV-024).
     ShowFullPath(bool),
+    /// Compact view on or off (VIEW-067).
+    CompactDensity(bool),
     /// The details pane's own options (PROP-010).
     DetailsPaneOptions(DetailsPaneOptions),
     /// Show the navigation pane (SIDE-024).
@@ -72,6 +74,7 @@ impl Preference {
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
             Preference::WindowSize(size) => update.window_size = Some(size),
             Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
+            Preference::CompactDensity(compact) => update.compact_density = Some(compact),
             Preference::DetailsPaneOptions(options) => update.details_pane_options = Some(options),
             Preference::Sidebar(shown) => update.hide_sidebar = Some(!shown),
             Preference::SidebarIconSize(size) => update.sidebar_icon_size = Some(size),
@@ -188,6 +191,7 @@ impl BrowserWindow {
         self.install_sidebar_toggle();
         self.install_folder_tree();
         self.follow_layout_reset();
+        self.follow_folder_views_changed();
     }
 
     /// Settings > "Reset sidebar and column widths": saves the default
@@ -213,6 +217,26 @@ impl BrowserWindow {
             move || window.show_default_layout()
         ));
         self.imp().handlers.borrow_mut().layout = Some(handler);
+    }
+
+    /// Shows every folder in its saved style again whenever any window
+    /// applies one style to all folders or resets them.
+    fn follow_folder_views_changed(&self) {
+        let handler = self.context().connect_folder_views_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.show_saved_folder_views()
+        ));
+        self.imp().handlers.borrow_mut().folder_views = Some(handler);
+    }
+
+    /// Shows the folder of each pane in the style now saved for it.
+    fn show_saved_folder_views(&self) {
+        let preferences = self.context().settings_data().preferences;
+        for (side, uri) in self.shown_panes() {
+            self.apply_style_to(self.pane_on(side), &preferences.view_for(&uri));
+        }
+        self.show_pane_view_state();
     }
 
     /// Shows the 210-pixel sidebar and the columns' default widths, without

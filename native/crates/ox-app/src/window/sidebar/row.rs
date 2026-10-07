@@ -13,6 +13,7 @@ use gtk::prelude::*;
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::window::landing;
 use crate::window::place_menus::{removal_action, PlaceMenu};
+use crate::window::widget_tree::descendants;
 use crate::window::window_action::WindowAction;
 
 use super::super::saved_search::saved_search_target;
@@ -24,6 +25,9 @@ const ART_SIZE: i32 = 19;
 
 /// The expander chevron of This PC and Network (`icon('down')` at 9px).
 const EXPANDER_SIZE: i32 = 9;
+
+/// The class of the chevron of This PC and Network.
+const CHEVRON_CLASS: &str = "side-expander";
 
 /// The pin of a Quick access row.
 const PIN_SIZE: i32 = 11;
@@ -80,15 +84,15 @@ fn name_and_capacity(entry: &SidebarEntry) -> gtk::Widget {
 }
 
 /// The chevron, icon, name and pin of `entry`, its icon `icon_size`
-/// pixels or automatic for 0.
-fn row_content(entry: &SidebarEntry, icon_size: u32) -> gtk::Box {
+/// pixels or automatic for 0, and the chevron as `collapsed` says.
+fn row_content(entry: &SidebarEntry, icon_size: u32, collapsed: bool) -> gtk::Box {
     // The gaps are CSS margins on the parts (see `.side-entry` in
     // resources/skin/sidebar.css), so no box spacing.
     let content = gtk::Box::builder().css_classes(["side-entry"]).build();
     if entry.level == RowLevel::Group {
-        let expander = icons::image(Icon::ChevronDown16, EXPANDER_SIZE);
-        expander.add_css_class("expand");
-        content.append(&expander);
+        if let Some(chevron) = section_chevron(entry.section, !collapsed) {
+            content.append(&chevron);
+        }
     }
     let icon = row_icon(entry.icon, icon_size);
     if matches!(entry.icon, Art::Network(_)) {
@@ -122,6 +126,64 @@ fn eject_button(eject: &EjectButton) -> gtk::Button {
     button
 }
 
+/// The chevron of This PC or Network, `expanded` or collapsed: a button
+/// of its own that collapses and expands the section, as in Windows
+/// Explorer's navigation pane, with its own highlight; clicking the name
+/// still opens the place (SIDE-033). It takes no focus: Left and Right on
+/// the row collapse and expand the section from the keyboard
+/// (`collapsing.rs`).
+fn section_chevron(section: Section, expanded: bool) -> Option<gtk::Button> {
+    let (key, _) = section.hiding()?;
+    let button = gtk::Button::builder()
+        .css_classes([CHEVRON_CLASS])
+        .valign(gtk::Align::Center)
+        .focus_on_click(false)
+        .can_focus(false)
+        .build();
+    WindowAction::ToggleSidebarSection.assign_with_target_to(&button, &key.to_variant());
+    draw_chevron(&button, section, expanded);
+    Some(button)
+}
+
+/// Points `chevron` down while `section` is expanded and right while it
+/// is collapsed, and names what a click on it does.
+fn draw_chevron(chevron: &gtk::Button, section: Section, expanded: bool) {
+    let name = section.hiding().map_or("", |(_, name)| name);
+    let (glyph, label) = if expanded {
+        (
+            Icon::ChevronDown16,
+            ox_core::i18n::format_message("Collapse {section}", &[("section", name)]),
+        )
+    } else {
+        (
+            Icon::ChevronRight16,
+            ox_core::i18n::format_message("Expand {section}", &[("section", name)]),
+        )
+    };
+    chevron.set_child(Some(&icons::image(glyph, EXPANDER_SIZE)));
+    chevron.set_tooltip_text(Some(&label));
+    chevron.update_property(&[gtk::accessible::Property::Label(&label)]);
+}
+
+/// Shows the head `row` of `section` expanded or collapsed: its chevron,
+/// and the state screen readers announce.
+pub(super) fn show_expanded(row: &gtk::ListBoxRow, section: Section, expanded: bool) {
+    let chevron = descendants::<gtk::Button>(row)
+        .into_iter()
+        .find(|button| button.has_css_class(CHEVRON_CLASS));
+    if let Some(chevron) = chevron {
+        draw_chevron(&chevron, section, expanded);
+    }
+    row.update_state(&[gtk::accessible::State::Expanded(Some(expanded))]);
+}
+
+/// Whether `widget` is a row's chevron or inside one.
+pub(super) fn is_on_chevron(widget: &gtk::Widget) -> bool {
+    std::iter::successors(Some(widget.clone()), WidgetExt::parent)
+        .take_while(|widget| !widget.is::<gtk::ListBoxRow>())
+        .any(|widget| widget.has_css_class(CHEVRON_CLASS))
+}
+
 /// The accent bar that marks the selected row.
 fn selection_bar() -> gtk::Box {
     gtk::Box::builder()
@@ -153,10 +215,17 @@ fn placement_classes(entry: &SidebarEntry, edges: SectionEdges) -> Vec<&'static 
     classes
 }
 
-/// The row for `entry`, which runs `win.go-to` or `win.mount-volume`.
-pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges, icon_size: u32) -> gtk::ListBoxRow {
+/// The row for `entry`, which runs `win.go-to` or `win.mount-volume`,
+/// drawn for its section `collapsed` or expanded: a head shows it, and
+/// the rows inside a collapsed section are hidden (SIDE-033).
+pub(super) fn sidebar_row(
+    entry: &SidebarEntry,
+    edges: SectionEdges,
+    icon_size: u32,
+    collapsed: bool,
+) -> gtk::ListBoxRow {
     let overlay = gtk::Overlay::builder()
-        .child(&row_content(entry, icon_size))
+        .child(&row_content(entry, icon_size, collapsed))
         .build();
     overlay.add_overlay(&selection_bar());
     let row = gtk::ListBoxRow::builder()
@@ -169,6 +238,11 @@ pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges, icon_size: 
         gtk::accessible::Property::Label(&entry.label),
         gtk::accessible::Property::Description(&entry.tooltip),
     ]);
+    match entry.level {
+        RowLevel::Place => {}
+        RowLevel::Group => row.update_state(&[gtk::accessible::State::Expanded(Some(!collapsed))]),
+        RowLevel::Child => row.set_visible(!collapsed),
+    }
     let (action, target) = match &entry.target {
         RowTarget::Location(uri) => (WindowAction::GoTo, uri.to_variant()),
         RowTarget::MountVolume(id) => (WindowAction::MountVolume, id.to_variant()),

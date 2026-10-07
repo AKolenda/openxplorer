@@ -18,27 +18,27 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::archive::{
-    default_preview_root, lift_single_folder, ArchiveBrowser, ArchiveError, CompressionRequest,
-    ExtractionRequest, GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
+    lift_single_folder, ArchiveError, CompressionRequest, ExtractionRequest, GioArchiveOpener,
+    GioExtractionOutput, ZipCompressor, ZipExtractor,
 };
 use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;
 use ox_core::integration::Activation;
-use ox_core::location::{is_smb_server, parent_location};
+use ox_core::location::{is_archive_location, is_smb_server, parent_location};
 use ox_core::ops::OperationSummary;
 use ox_core::transfer::{Cancellation, Node, NodeFactory, Progress};
 use ox_core::versions::snapshot_location;
 
 use crate::archive_view::{
-    archive_dialog, compressed_file_name, compression_failure_text, compression_success_text, extract_dialog,
-    extraction_failure_text, extraction_success_text, unique_folder_names, ArchiveDialogActions,
-    ArchiveTarget, ExtractDialogSetup, ExtractionChoice, COMPRESSION_STOPPED, EXTRACTION_STOPPED,
+    archive_browser, archive_dialog, compressed_file_name, compression_failure_text,
+    compression_success_text, extract_dialog, extraction_failure_text, extraction_success_text,
+    unique_folder_names, ArchiveDialogActions, ArchiveTarget, ExtractDialogSetup, COMPRESSION_STOPPED,
+    EXTRACTION_STOPPED,
 };
 use crate::locations::Page;
 
 use super::actions::plain_action;
 use super::background_notice::Destination;
-use super::session::TabId;
 use super::transfer_panel::TransferKind;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -71,6 +71,14 @@ impl BrowserWindow {
         for (action, refusal) in self.archive_command_refusals() {
             self.set_action_enabled(action, refusal.is_none());
         }
+        self.show_extract_button();
+    }
+
+    /// Shows Extract all in the command bar, as Explorer does, while one
+    /// ZIP is selected or the tab shows the inside of one.
+    pub(super) fn show_extract_button(&self) {
+        self.command_bar()
+            .show_extract_all(self.selected_archive().is_some());
     }
 
     /// Why the archive command `action` is disabled, when it is one.
@@ -109,13 +117,16 @@ impl BrowserWindow {
         ]
     }
 
-    /// The one selected item, when it is a ZIP archive.
+    /// The one selected item, when it is a ZIP archive, else the ZIP the
+    /// tab shows the inside of (ARC-026). A ZIP inside a ZIP is not one
+    /// here: it has no file of its own to extract.
     fn selected_archive(&self) -> Option<ArchiveTarget> {
         let selected = self.folder_pane().model().selected_items();
-        let [item] = selected.as_slice() else {
-            return None;
+        let one = match selected.as_slice() {
+            [item] if !is_archive_location(&item.entry().uri) => archive_target(item.entry()),
+            _ => None,
         };
-        archive_target(item.entry())
+        one.or_else(|| self.shown_zip())
     }
 
     /// True for a folder the user may write into: not a page, a server
@@ -130,7 +141,7 @@ impl BrowserWindow {
             return;
         };
         let shown_path = self.imp().locations.borrow().display_location(&archive.uri);
-        let browser = ArchiveBrowser::new(Arc::new(GioArchiveOpener), default_preview_root());
+        let browser = archive_browser();
         let actions = ArchiveDialogActions {
             extract_all: Box::new(glib::clone!(
                 #[weak(rename_to = window)]
@@ -149,7 +160,12 @@ impl BrowserWindow {
             open_copy: Rc::new(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |uri: String| window.open_externally(&uri)
+                move |uri: String| {
+                    window.open_externally(&uri);
+                    if let Some(path) = gio::File::for_uri(&uri).path() {
+                        super::zip_folder::remove_copy_later(path);
+                    }
+                }
             )),
         };
         let frame = archive_dialog(&archive, browser, &shown_path, actions);
@@ -158,24 +174,46 @@ impl BrowserWindow {
 
     /// Opens `uri` in the desktop's application for its type: an archive
     /// in the archive manager, a member's private copy in its viewer.
-    fn open_externally(&self, uri: &str) {
-        let on_error = glib::clone!(
+    /// `OpenXplorer` is never chosen, even when it is the default for
+    /// ZIPs: asking the desktop for the default would reopen the archive
+    /// here (ARC-021).
+    pub(super) fn open_externally(&self, uri: &str) {
+        let uri = uri.to_owned();
+        glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |error: glib::Error| window.show_message(&error.to_string())
-        );
-        self.context().open_uri(uri, self.upcast_ref(), on_error);
+            async move {
+                let opened = window
+                    .context()
+                    .open_uri_in_application(uri, window.upcast_ref())
+                    .await;
+                if let Err(message) = opened {
+                    window.show_message(&message);
+                }
+            }
+        ));
     }
 
     /// True when no write runs in this window and no update waits for its
     /// restart; otherwise says why, as one operation runs at a time
     /// (OPS-024) and writes wait for the restart (UPD-006).
     pub(super) fn may_start_archive_operation(&self) -> bool {
-        if self.is_writing_files() {
-            self.show_message(ox_core::i18n::gettext_static(OPERATION_RUNNING));
-            return false;
+        match self.archive_operation_refusal() {
+            Some(refusal) => {
+                self.show_message(&refusal);
+                false
+            }
+            None => true,
         }
-        !self.refuses_writes_during_update()
+    }
+
+    /// Why an archive operation cannot start now (see
+    /// [`Self::may_start_archive_operation`]), or `None` when it can.
+    pub(super) fn archive_operation_refusal(&self) -> Option<String> {
+        if self.is_writing_files() {
+            return Some(ox_core::i18n::gettext_static(OPERATION_RUNNING).to_owned());
+        }
+        self.context().updates().file_refusal()
     }
 
     /// Asks where to extract `archive` (Extract all…).
@@ -233,79 +271,10 @@ impl BrowserWindow {
     }
 
     /// An extractor over GIO that the write guard protects (ARC-020).
-    fn zip_extractor(&self) -> ZipExtractor {
+    pub(super) fn zip_extractor(&self) -> ZipExtractor {
         let factory: NodeFactory = Arc::new(|uri: &str| Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>));
         ZipExtractor::new(Arc::new(GioArchiveOpener), factory, Arc::new(GioExtractionOutput))
             .with_write_guard(self.context().previous_versions().write_guard())
-    }
-
-    /// Extracts `archive` as the user chose, with the transfer panel, then
-    /// shows the result in `origin` if it is still in front, else in a new
-    /// tab, or lists the destination again (ARC-011).
-    fn extract_archive(&self, archive: &ArchiveTarget, choice: ExtractionChoice, origin: Option<TabId>) {
-        // The dialog may have stayed open while another write or an
-        // update began.
-        if !self.may_start_archive_operation() {
-            return;
-        }
-        let cancel = Cancellation::new();
-        self.transfer_panel().start(
-            TransferKind::Archive,
-            ox_core::i18n::gettext_static(PREPARING),
-            cancel.clone(),
-        );
-        self.update_archive_actions();
-        let request = ExtractionRequest {
-            archive_uri: archive.uri.clone(),
-            destination_uri: choice.destination_uri.clone(),
-            folder_name: choice.folder_name.clone(),
-        };
-        let extractor = self
-            .zip_extractor()
-            .with_progress(self.operation_progress_sender());
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            async move {
-                let extracted = extractor.extract_in_background(request, cancel).await;
-                window.finish_archive_operation();
-                match extracted {
-                    Ok(folder) => {
-                        // Listing a folder hides the toast, so it comes last.
-                        window.show_extracted(&folder.uri, &choice, origin);
-                        let text = extraction_success_text(&folder);
-                        let destination = Destination::items(vec![folder.uri.clone()]);
-                        window.notify_if_in_background(&OperationSummary::Toast(text.clone()), destination);
-                        window.show_message(&text);
-                    }
-                    Err(error) => {
-                        let text = extraction_failure_text(&error);
-                        window.notify_if_in_background(
-                            &OperationSummary::Report(text.clone()),
-                            Destination::default(),
-                        );
-                        window.show_result_dialog(ox_core::i18n::gettext_static(EXTRACTION_STOPPED), &text);
-                    }
-                }
-            }
-        ));
-    }
-
-    /// Shows the extracted folder, or lists its destination again.
-    fn show_extracted(&self, folder_uri: &str, choice: &ExtractionChoice, origin: Option<TabId>) {
-        if !choice.show_result {
-            self.reload_tabs_showing(&choice.destination_uri);
-            return;
-        }
-        let active = self.imp().session.borrow().active_id();
-        let opened = if origin.is_some() && origin == active {
-            self.navigate(folder_uri)
-        } else {
-            self.add_tab(folder_uri)
-        };
-        if let Err(error) = opened {
-            self.show_message(&error.to_string());
-        }
     }
 
     /// Extract here: into a new folder beside the archive, named after it,
@@ -494,6 +463,10 @@ fn archive_target(entry: &Entry) -> Option<ArchiveTarget> {
 /// True for a location the user may extract into (`writableLocation`):
 /// not a page, a server listing or a previous version.
 fn is_writable_location(uri: &str, snapshot_roots: &[String]) -> bool {
+    if is_archive_location(uri) {
+        // A ZIP opened like a folder is read-only (ARC-026).
+        return false;
+    }
     let is_page = Page::from_uri(uri).is_some();
     let is_previous_version = snapshot_location(uri, snapshot_roots).is_some();
     !is_page && !is_smb_server(uri) && !is_previous_version

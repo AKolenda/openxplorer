@@ -472,11 +472,13 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Preview videos",
             "Preview documents and other files",
             "Show the number of items in folders",
+            "Compact view",
             "Relative dates",
             "Remember each folder's view",
             "Selection marker",
             "Expandable folders",
-            "Sidebar and column widths"
+            "Sidebar and column widths",
+            "Hide expand arrows"
         ]
     );
 }
@@ -671,6 +673,44 @@ fn the_text_size_row_draws_and_saves_the_chosen_size() {
     );
 }
 
+/// "Hide expand arrows" is off by default and saves the choice, which
+/// the open window then takes up (SIDE-032).
+///
+/// parity: SIDE-032
+#[gtk::test]
+fn the_expand_arrows_switch_saves_the_choice() {
+    let settings = SettingsTest::open();
+    let switch = switch_of(&settings.row("Hide expand arrows"));
+    assert!(!switch.is_active(), "the arrows are shown by default");
+
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().hide_expand_arrows
+    });
+    wait_until("the window to follow", || {
+        settings.test.window.hides_expand_arrows()
+    });
+}
+
+/// The Compact view switch is off by default and saves the choice
+/// (VIEW-067), which the open window then takes up.
+///
+/// parity: VIEW-067
+#[gtk::test]
+fn the_compact_view_switch_saves_the_choice() {
+    let settings = SettingsTest::open();
+    let switch = switch_of(&settings.row("Compact view"));
+    assert!(!switch.is_active(), "off by default");
+
+    switch.set_active(true);
+    wait_until("Compact view to be saved", || {
+        settings.saved_preferences().compact_density
+    });
+    wait_until("the window to follow", || {
+        settings.test.window.shows_compact_density()
+    });
+}
+
 /// The rows of preferences the Python app follows save its keys and
 /// values, so a change made here reaches it.
 ///
@@ -690,6 +730,23 @@ fn the_menu_watch_and_interval_rows_save_the_python_keys() {
     assert_eq!(python_preference(directory, "contextMenu"), "win11");
     assert_eq!(python_preference(directory, "autoIndex"), "False");
     assert_eq!(python_preference(directory, "networkInterval"), "300");
+}
+
+/// "Open ZIP files" says how a browsed ZIP opens, so it is off while
+/// "Open archives as folders" is off.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn open_zip_files_waits_for_open_archives_as_folders() {
+    let settings = SettingsTest::open();
+    let opening = settings.row("Open ZIP files");
+    let is_usable = || opening.controls().iter().all(WidgetExt::is_sensitive);
+    assert!(is_usable());
+
+    switch_of(&settings.row("Open archives as folders")).set_active(false);
+    wait_until("the row to be off", || !is_usable());
+    switch_of(&settings.row("Open archives as folders")).set_active(true);
+    wait_until("the row to be on again", is_usable);
 }
 
 /// parity: SET-019, SET-015
