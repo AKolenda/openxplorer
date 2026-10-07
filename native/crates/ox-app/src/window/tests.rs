@@ -31,6 +31,7 @@ pub(super) mod file_ops_support;
 mod folder_location;
 mod folder_tree;
 mod geometry;
+mod group_by;
 mod history;
 mod icons;
 mod input;

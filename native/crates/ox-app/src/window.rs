@@ -90,6 +90,7 @@ mod folder_tree;
 mod free_space;
 mod gestures;
 mod grid_keys;
+mod group_day;
 mod help;
 mod history_menu;
 mod imp;
@@ -232,6 +233,7 @@ impl BrowserWindow {
         window.watch_recycle_bin();
         window.apply_preferences();
         window.install_sidebar_resizer();
+        window.install_day_changes();
         window.focus_file_list_once_shown();
         window
     }
