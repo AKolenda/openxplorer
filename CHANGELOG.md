@@ -1,5 +1,13 @@
 # Unreleased
 
+- TAR archives get the ZIP safety limits they were missing. A compressed
+  TAR that unpacks to over 1,000 times its size (a "TAR bomb") is refused
+  before anything is extracted, as such a ZIP is: each file counts its
+  share of the archive's compressed size. A crafted size near the largest
+  number a header can hold is a damaged archive instead of a crash in
+  debug builds. And a TAR's file names are kept only up to 32 MiB, as for
+  a ZIP's directory, so a 1.3 MB archive of long names no longer takes
+  2.4 GB of memory to list; it says its names are too long instead.
 - A file list at its top stays at its top when files come before the one
   at the top edge, in every view: in an Open or Save dialog switching
   from one file type to more (`*.svg`, then All files) no longer scrolls
