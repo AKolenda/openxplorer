@@ -312,6 +312,8 @@ impl ObjectImpl for BrowserWindow {
     }
 
     fn dispose(&self) {
+        self.obj().end_size_scans();
+        self.obj().end_properties_work();
         self.obj().end_band();
         self.obj().disconnect_external_handlers();
         self.obj().close_network();
@@ -353,6 +355,10 @@ impl WindowImpl for BrowserWindow {
         self.session
             .borrow_mut()
             .change_panes(super::session::Tab::stop_reading);
+        // So do its folder-size scans and the work of its Properties
+        // dialogs (PROP-029).
+        self.obj().end_size_scans();
+        self.obj().end_properties_work();
         // A file dialog closed without a choice answers Cancelled
         // (INT-032).
         self.obj().end_picking_on_close();

@@ -414,6 +414,19 @@ impl BrowserWindow {
             .any(|entry| entry.tab == active && entry.frame == shown)
     }
 
+    /// Stops the work of every open Properties dialog, as its window
+    /// closes: checksums being calculated, previous versions being looked
+    /// up and the folders of a selection being measured.
+    pub(super) fn end_properties_work(&self) {
+        let properties = self.item_dialogs().properties.borrow();
+        for entry in properties.iter() {
+            match &entry.body {
+                PropertiesBody::Item(view) => view.cancel_work(),
+                PropertiesBody::Selection(selection) => selection.cancel_work(),
+            }
+        }
+    }
+
     /// Every open Properties view, for updates such as a measured size.
     pub(super) fn properties_views(&self) -> Vec<PropertiesView> {
         let properties = self.item_dialogs().properties.borrow();
