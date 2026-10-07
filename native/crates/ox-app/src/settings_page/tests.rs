@@ -17,6 +17,7 @@ use super::category_row::CategoryRow;
 use super::choice_list::ChoiceList;
 use super::pages::{Category, SettingsView, Subpage};
 use super::row::SettingRow;
+use super::section::SettingsSection;
 use super::status_card::StatusCard;
 use super::SettingsPage;
 use crate::test_support::harness::{descendants, skin, wait_until, Fixture, TestWindow, ThemeGuard};
@@ -75,10 +76,23 @@ impl SettingsTest {
     /// The titles of the rows the category page shown now shows, or
     /// would show with its folded groups open: the rows the search keeps.
     fn shown_rows(&self) -> Vec<&'static str> {
-        let category = self.page.view().category();
-        let rows = self.page.category_section(category).rows();
-        let shown = rows.into_iter().filter(WidgetExt::get_visible);
+        let sections = self.shown_sections().into_iter();
+        let rows = sections.flat_map(|section| section.rows());
+        let shown = rows.filter(WidgetExt::get_visible);
         shown.map(|row| row.text().title).collect()
+    }
+
+    /// The category pages shown now: every one with matches among the
+    /// search results, else the chosen one.
+    fn shown_sections(&self) -> Vec<SettingsSection> {
+        if self.page.imp().search_entry.text().is_empty() {
+            let category = self.page.view().category();
+            return vec![self.page.category_section(category)];
+        }
+        let results = self.result_categories().into_iter();
+        results
+            .map(|category| self.page.category_section(category))
+            .collect()
     }
 
     /// The radio button of the theme card `name`, such as "Dark".
@@ -92,17 +106,27 @@ impl SettingsTest {
 
     /// Whether the category page shown now shows its status card.
     fn shows_status_card(&self) -> bool {
-        let category = self.page.view().category();
-        let section = self.page.category_section(category);
-        let cards = descendants::<StatusCard>(&section);
-        cards.iter().any(WidgetExt::is_visible)
+        let sections = self.shown_sections().into_iter();
+        let cards = sections.flat_map(|section| descendants::<StatusCard>(&section));
+        cards.into_iter().any(|card| card.is_visible())
     }
 
-    /// The categories the list shows now.
+    /// The categories the list shows now: none while it is hidden.
     fn listed_categories(&self) -> Vec<Category> {
+        if !self.page.imp().category_list.is_visible() {
+            return Vec::new();
+        }
         let rows = self.page.category_rows().into_iter();
         let listed = rows.filter(WidgetExt::is_child_visible);
         listed.map(|row| row.category()).collect()
+    }
+
+    /// The categories whose matches the search results show, in order.
+    fn result_categories(&self) -> Vec<Category> {
+        let shown = Category::ALL.into_iter();
+        shown
+            .filter(|category| self.page.category_section(*category).get_visible())
+            .collect()
     }
 
     /// The category the list shows as chosen.
@@ -302,7 +326,8 @@ fn the_search_filters_rows_across_every_category() {
     ];
     for case in cases {
         settings.page.search(case.typed);
-        assert_eq!(settings.listed_categories(), case.categories, "{}", case.typed);
+        assert!(settings.listed_categories().is_empty(), "no list while searching");
+        assert_eq!(settings.result_categories(), case.categories, "{}", case.typed);
         assert_eq!(settings.shown_rows(), case.shown, "{}", case.typed);
     }
     let count = &settings.page.imp().match_count;
@@ -361,8 +386,8 @@ fn the_search_finds_what_buttons_options_and_headings_show() {
     ];
     for case in cases {
         settings.page.search(case.typed);
-        let view = settings.page.view();
-        assert_eq!(view, SettingsView::Category(case.category), "{}", case.typed);
+        let results = settings.result_categories();
+        assert_eq!(results, [case.category], "{}", case.typed);
         assert_eq!(
             settings.shows_status_card(),
             case.shows_status_card,
@@ -456,6 +481,9 @@ fn enter_in_the_search_jumps_to_the_first_match() {
 #[gtk::test]
 fn escape_leaves_the_search_and_shows_every_row_again() {
     let settings = SettingsTest::open();
+    settings
+        .page
+        .show_view(SettingsView::Category(Category::Appearance));
     settings.page.search("zoom");
 
     settings.page.imp().search_entry.emit_stop_search();

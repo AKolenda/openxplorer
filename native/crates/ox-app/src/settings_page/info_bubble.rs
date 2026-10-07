@@ -3,8 +3,10 @@
 //! the row's one line leaves out.
 //!
 //! Each row of the settings mockup is one short line; what it used to say
-//! under its name now shows in a bubble when the pointer rests on the ⓘ,
-//! when the keyboard reaches it, or when it is clicked. The bubble is a
+//! under its name now shows in a bubble while the pointer rests on the ⓘ,
+//! or while the keyboard is on it, and closes when either leaves. A click
+//! neither opens it nor keeps it open: the ⓘ does not take the keyboard
+//! from a click, so only Tab brings the keyboard there. The bubble is a
 //! `GtkPopover`, a surface of its own that the compositor places where it
 //! fits, flipping above the ⓘ near the bottom of the screen, so the page's
 //! scrolled area or the window's edge never cuts it off. Screen readers
@@ -101,6 +103,9 @@ impl InfoBubble {
         let button: InfoButton = glib::Object::new();
         button.set_child(Some(&icons::image(Icon::Info, INFO_GLYPH)));
         button.set_valign(gtk::Align::Center);
+        // A click must not leave the keyboard here, which would keep the
+        // bubble open after the pointer has gone.
+        button.set_focus_on_click(false);
         button.add_css_class("info-button");
         popover.set_parent(&button);
         button
@@ -152,9 +157,9 @@ impl InfoBubble {
         &self.popover
     }
 
-    /// Opens the bubble while the pointer is on the ⓘ or the keyboard is,
-    /// and when the ⓘ is clicked or tapped; it closes when both have left,
-    /// and on Escape.
+    /// Opens the bubble while the pointer is on the ⓘ or the keyboard is;
+    /// it closes when both have left, and on Escape. Clicking does
+    /// nothing.
     fn open_on_hover_and_focus(&self) {
         let popover = &self.popover;
         let motion = gtk::EventControllerMotion::new();
@@ -187,11 +192,6 @@ impl InfoBubble {
             move |_| popover.popdown()
         ));
         self.button.add_controller(focus);
-        self.button.connect_clicked(glib::clone!(
-            #[weak]
-            popover,
-            move |_| popover.popup()
-        ));
         let keys = gtk::EventControllerKey::new();
         keys.connect_key_pressed(glib::clone!(
             #[weak]

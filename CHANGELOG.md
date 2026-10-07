@@ -3,9 +3,11 @@
 - Settings is laid out anew, from a settings mockup: eight pages (General,
   Appearance, Files & folders, ZIP & archives, Confirmations, Search,
   Default apps, About), one short line per setting with its details in
-  an ⓘ bubble, rarely changed settings folded away (Previews and
-  thumbnails, Dragging tabs and files, Undo and troubleshooting), and a
-  search that shows the matching settings of every page at once. Every
+  an ⓘ bubble that shows while the pointer (or the keyboard) is on it,
+  rarely changed settings folded away (Previews and thumbnails, Dragging
+  tabs and files, Undo and troubleshooting), and a search that shows the
+  matching settings of every page on one page, hiding the page list
+  meanwhile. Every
   setting is still there, with the same options and defaults, and a
   search for its earlier name still finds it.
 - A file list at its top stays at its top when files come before the one

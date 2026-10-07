@@ -156,6 +156,12 @@ impl SettingsGroup {
             return;
         };
         imp.rows.set_visible(shown);
+        // Open, the title and its rows are one frame.
+        if shown {
+            self.add_css_class("open");
+        } else {
+            self.remove_css_class("open");
+        }
         let glyph = if shown {
             Icon::ChevronDown16
         } else {

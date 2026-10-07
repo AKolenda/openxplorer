@@ -25,10 +25,14 @@
           <object class="GtkGrid" id="title_line">
             <property name="column-spacing">4</property>
             <child>
+              <!-- One line that ends in "…" when the row is too narrow: a
+                   label that wraps beside the ⓘ is asked, by some GTK
+                   versions, how tall it is at its narrowest, one word a
+                   line, and the row takes that much room. -->
               <object class="GtkLabel" id="title_label">
                 <property name="xalign">0</property>
                 <property name="valign">center</property>
-                <property name="wrap">true</property>
+                <property name="ellipsize">end</property>
                 <style>
                   <class name="setting-title"/>
                 </style>

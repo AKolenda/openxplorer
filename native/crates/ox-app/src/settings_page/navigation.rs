@@ -5,10 +5,10 @@
 //! Ports `settingsSearch` and the section links of `renderSettingsPage` in
 //! `v2.0.0:desktop/ui/app.js`. The search filters the rows of every category at
 //! once and shows the matches of all of them on one page of results, each
-//! category's under its name, as the settings mockup does; the list then
-//! shows only the categories with matches, each with its count, and
-//! choosing one scrolls to its matches. "N matching settings" shows under
-//! the search box. Enter jumps to the first match, Escape leaves the
+//! category's under its name, as the settings mockup does. The category
+//! list hides while a search is typed, so nobody has to look for matches
+//! category by category; "N matching settings" shows under the search box
+//! instead. Enter jumps to the first match, Escape leaves the
 //! search, and arrow keys move through the categories. Escape on a
 //! sub-page goes back to its category.
 
@@ -250,34 +250,29 @@ impl SettingsPage {
         }
         imp.match_count.set_text(&match_count_text(total));
         imp.match_count.set_visible(!query.is_empty());
+        // Every match shows on one page of results, so the categories
+        // are not offered while searching.
+        imp.category_list.set_visible(query.is_empty());
         imp.query.replace(query);
         imp.category_list.invalidate_filter();
         self.show_search_results();
     }
 
-    /// Shows the results from the top, keeping the category chosen in the
-    /// list when it has matches and else choosing the first that has, or
-    /// says that none has.
+    /// Shows the results from the top, or says that nothing matches. The
+    /// page the user was on stays chosen, so ending the search returns to
+    /// it.
     fn show_search_results(&self) {
         let imp = self.imp();
         if !self.is_searching() {
             imp.pages.set_visible_child_name(self.view().as_str());
             return;
         }
-        let current = self.view().category();
-        let has_matches = |category: Category| self.matches_in(category) > 0;
-        let chosen = if has_matches(current) {
-            Some(current)
-        } else {
-            Category::ALL.into_iter().find(|category| has_matches(*category))
-        };
-        let Some(chosen) = chosen else {
+        let any_match = Category::ALL
+            .into_iter()
+            .any(|category| self.matches_in(category) > 0);
+        if !any_match {
             imp.pages.set_visible_child_name(NO_MATCHES_PAGE);
             return;
-        };
-        imp.view.set(SettingsView::Category(chosen));
-        if let Some(row) = self.category_list_row(chosen).filter(|row| !row.is_selected()) {
-            imp.category_list.select_row(Some(&row));
         }
         imp.pages.set_visible_child_name(RESULTS_PAGE);
         if let Some(scrolled) = self.shown_scroller() {

@@ -128,7 +128,16 @@ window.ox button.group-fold {
 window.ox button.group-fold:hover { background-color: @ox_hover; }
 .settings .group-fold .fold-title { font-weight: 600; }
 .settings .group-fold image { color: @ox_muted; }
-.folded-group > button.group-fold { margin-bottom: 8px; }
+/* Open, the title and its rows are one frame, the title its top row. */
+.folded-group.open > button.group-fold {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.settings .folded-group.open > .group-rows {
+  border-top-width: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
 
 /* ---- The search results: every category's matches under its name ---- */
 .settings-results > .in-results { margin-bottom: 12px; }

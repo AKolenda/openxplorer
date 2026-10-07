@@ -217,7 +217,7 @@ fn each_setting_is_one_line_with_its_details_in_the_info_bubble() {
 ///
 /// parity: SET-019
 #[gtk::test]
-fn the_info_bubble_opens_from_the_keyboard_and_a_click_on_its_own_surface() {
+fn the_info_bubble_opens_on_hover_and_from_the_keyboard_on_its_own_surface() {
     let settings = SettingsTest::open();
     let row = settings.row("Tab key switches between split panes");
     let info = row.info().expect("the row has details");
@@ -246,8 +246,23 @@ fn the_info_bubble_opens_from_the_keyboard_and_a_click_on_its_own_surface() {
     }
     wait_until("Escape to close the bubble", || !info.is_open());
 
+    // The pointer, with the keyboard elsewhere.
+    settings.page.focus_search();
     info.widget().emit_clicked();
-    wait_until("the bubble to open on a click", || info.is_open());
+    assert!(!info.is_open(), "a click does not open the bubble");
+    assert!(
+        !info.widget().gets_focus_on_click(),
+        "a click leaves the keyboard alone"
+    );
+    let motion = controllers
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .find_map(|controller| controller.downcast::<gtk::EventControllerMotion>().ok())
+        .expect("the ⓘ follows the pointer");
+    motion.emit_by_name::<()>("enter", &[&5.0_f64, &5.0_f64]);
+    wait_until("the bubble to open on hover", || info.is_open());
+    motion.emit_by_name::<()>("leave", &[]);
+    wait_until("the bubble to close when the pointer leaves", || !info.is_open());
     let text = descendants::<gtk::Label>(popover);
     assert!(text
         .iter()
@@ -286,24 +301,33 @@ fn rarely_changed_settings_are_folded_until_opened_or_found() {
 }
 
 /// A search shows the matches of every page on one page of results, each
-/// under its page's name; choosing a page in the list keeps the results
-/// and moves to its matches, and ending the search puts every page back.
+/// under its page's name, and the list of pages hides meanwhile, so
+/// nobody has to go through the pages to find them; ending the search
+/// brings the list back and puts every page back.
 ///
 /// parity: SET-019, SET-004
 #[gtk::test]
 fn the_search_shows_results_from_every_page() {
     let settings = SettingsTest::open();
-    let pages = &settings.page.imp().pages;
+    let imp = settings.page.imp();
+    let pages = &imp.pages;
+    settings
+        .page
+        .show_view(SettingsView::Category(Category::Appearance));
 
     settings.page.search("breadcrumbs");
 
     assert_eq!(pages.visible_child_name().as_deref(), Some("search-results"));
-    assert_eq!(settings.listed_categories(), [Category::General]);
+    assert!(
+        !imp.category_list.is_visible(),
+        "no list of pages while searching"
+    );
+    assert_eq!(settings.result_categories(), [Category::General]);
     settings.page.search("show");
-    let listed = settings.listed_categories();
-    assert!(listed.len() > 1, "matches on several pages: {listed:?}");
-    let results = settings.page.imp().results.get().expect("a results page").clone();
-    for category in &listed {
+    let found = settings.result_categories();
+    assert!(found.len() > 1, "matches on several pages: {found:?}");
+    let results = imp.results.get().expect("a results page").clone();
+    for category in &found {
         let section = settings.page.category_section(*category);
         assert!(
             section.is_ancestor(&results),
@@ -313,17 +337,12 @@ fn the_search_shows_results_from_every_page() {
         let titles = descendants::<gtk::Label>(&section);
         assert!(titles.iter().any(|label| label.text() == category.title()));
     }
-    let second = settings
-        .page
-        .category_list_row(listed[1])
-        .expect("the list shows the page");
-    settings.page.imp().category_list.select_row(Some(&second));
-    assert_eq!(pages.visible_child_name().as_deref(), Some("search-results"));
-    assert_eq!(settings.page.view(), SettingsView::Category(listed[1]));
+    assert!(imp.match_count.is_visible());
 
     settings.page.search("");
 
-    assert_eq!(pages.visible_child_name().as_deref(), Some(listed[1].as_str()));
+    assert!(imp.category_list.is_visible(), "the list is back");
+    assert_eq!(pages.visible_child_name().as_deref(), Some("appearance"));
     for category in Category::ALL {
         let section = settings.page.category_section(category);
         assert!(
@@ -331,5 +350,31 @@ fn the_search_shows_results_from_every_page() {
             "{} is on its own page",
             category.title()
         );
+    }
+}
+
+/// A row is one line high however long its title, with room to spare:
+/// a title too long for the row ends in "…" rather than taking a line a
+/// word.
+///
+/// parity: SET-019
+#[gtk::test]
+fn a_row_is_one_line_high_whatever_its_title() {
+    let settings = SettingsTest::open();
+    let short = settings.row("New window");
+    let long = settings.row("Folders from other apps open in a new window");
+    let (short_height, ..) = short.measure(gtk::Orientation::Vertical, 760);
+    let (long_height, ..) = long.measure(gtk::Orientation::Vertical, 760);
+    assert!(
+        long_height <= short_height,
+        "a long title takes no more room: {long_height} > {short_height}"
+    );
+    for row in every_row(&settings) {
+        let titles = descendants::<gtk::Label>(&row);
+        let title = titles
+            .iter()
+            .find(|label| label.has_css_class("setting-title"))
+            .expect("a row has a title");
+        assert!(!title.wraps(), "{} stays on one line", row.text().title);
     }
 }
