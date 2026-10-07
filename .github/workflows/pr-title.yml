@@ -1,0 +1,31 @@
+name: Pull request title
+# A pull request is squash-merged under its title, so the title must follow
+# Conventional Commits: type(scope): description, for example
+# "fix(dialogs): Keep an Open dialog answerable until it closes". Branch
+# protection on main requires this check.
+on:
+  pull_request:
+    # edited: a corrected title is checked again. synchronize: a new push
+    # needs the check on its own commit.
+    types: [opened, edited, reopened, synchronize]
+permissions: {}
+jobs:
+  title:
+    name: PR title
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check the title is type(scope) and a description
+        env:
+          # Through the environment, never pasted into the script.
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert'
+          scope='[A-Za-z0-9._/-]+'
+          pattern="^($types)\\($scope(,$scope)*\\)!?: [^[:space:]](.*[^[:space:]])?\$"
+          if [[ "$TITLE" =~ $pattern ]]; then
+            echo "OK: $TITLE"
+          else
+            echo "::error title=Pull request title::\"$TITLE\" is not type(scope): description. Use one of the types ${types//|/, } and a scope, for example: fix(dialogs): Keep an Open dialog answerable until it closes"
+            exit 1
+          fi
