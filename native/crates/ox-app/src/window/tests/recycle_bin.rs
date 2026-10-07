@@ -75,6 +75,29 @@ fn the_recycle_bin_lists_trashed_items_and_restore_puts_them_back() {
     });
 }
 
+/// The Recycle Bin row counts a file trashed while the window is open:
+/// its watch, now made off the GTK thread so a stalled trash backend
+/// cannot hold a new window (and an open file dialog with it), still
+/// follows the Recycle Bin.
+///
+/// parity: INT-032
+#[gtk::test]
+fn the_recycle_bin_row_follows_files_trashed_while_a_window_is_open() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    // The first count, made as the window opens.
+    wait_until("the first count", || {
+        test.window.recycle_bin_row_count().is_some()
+    });
+    let before = test.window.recycle_bin_row_count().expect("counted");
+    fixture.write("Trashed while open.txt");
+    trash(&fixture.path("Trashed while open.txt"));
+    wait_until("the row to count it", || {
+        test.window.recycle_bin_row_count() == Some(before + 1)
+    });
+}
+
 /// The details view of the Recycle Bin shows where each item was
 /// deleted from and when, in place of Date modified, and sorts by them.
 ///

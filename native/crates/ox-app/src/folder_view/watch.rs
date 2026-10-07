@@ -18,6 +18,12 @@
 //! as an SMB share through `GVfs`) is reported (VIEW-056): the watch then
 //! lists the folder again every so often instead ([`Watch::when_unwatched`]),
 //! and says so, so the window can tell the user changes are not live.
+//!
+//! A folder whose drive or share is unmounted under it (a USB stick pulled
+//! out, a share disconnected by another program) cannot be listed again
+//! from the monitor's events: the monitor ends with that event. The watch
+//! reports it apart ([`Watch::when_gone`]), so the window can say the
+//! folder is no longer there instead of keeping the old rows.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -60,6 +66,8 @@ struct Subscriber {
     fallback: Option<(Duration, Rc<dyn Fn()>)>,
     /// Lists the folder again while it cannot be watched.
     fallback_timer: Option<glib::SourceId>,
+    /// Told once the folder's drive or share was unmounted.
+    on_gone: Option<Rc<dyn Fn()>>,
 }
 
 thread_local! {
@@ -81,6 +89,35 @@ fn changes_listing(event: gio::FileMonitorEvent) -> bool {
             | gio::FileMonitorEvent::ChangesDoneHint
             | gio::FileMonitorEvent::AttributeChanged
     )
+}
+
+/// True for the monitor event that says the watched folder's drive or
+/// share was unmounted. GIO sends it for the watched folder itself, and
+/// no other event follows it.
+fn unmounts_folder(event: gio::FileMonitorEvent) -> bool {
+    event == gio::FileMonitorEvent::Unmounted
+}
+
+/// On the main thread: the drive or share of watch `id`'s folder was
+/// unmounted. Pending changes no longer matter; the owner is told at once.
+fn folder_gone(id: WatchId) {
+    let on_gone = SUBSCRIBERS.with_borrow_mut(|subscribers| {
+        let subscriber = subscribers.get_mut(&id)?;
+        if let Some(timer) = subscriber.debounce_timer.take() {
+            timer.remove();
+        }
+        subscriber.on_gone.clone()
+    });
+    if let Some(on_gone) = on_gone {
+        on_gone();
+    }
+}
+
+/// Reports the folder of watch `id` unmounted, as the monitor thread
+/// does, for tests that cannot unmount a drive.
+#[cfg(test)]
+pub(crate) fn report_gone(id: WatchId) {
+    folder_gone(id);
 }
 
 /// On the main thread: a watched folder changed. Restarts the debounce
@@ -185,6 +222,16 @@ impl Watch {
         }
     }
 
+    /// Calls `on_gone` when the drive or share holding the folder is
+    /// unmounted while it is watched.
+    pub(crate) fn when_gone(&self, on_gone: impl Fn() + 'static) {
+        SUBSCRIBERS.with_borrow_mut(|subscribers| {
+            if let Some(subscriber) = subscribers.get_mut(&self.id) {
+                subscriber.on_gone = Some(Rc::new(on_gone));
+            }
+        });
+    }
+
     /// Tells watches apart, for tests that a watch was kept.
     #[cfg(test)]
     pub(crate) fn id(&self) -> WatchId {
@@ -246,7 +293,9 @@ impl MonitorThread {
         };
         let main_context = self.main_context.clone();
         monitor.connect_changed(move |_, _, _, event| {
-            if changes_listing(event) {
+            if unmounts_folder(event) {
+                main_context.invoke(move || folder_gone(id));
+            } else if changes_listing(event) {
                 main_context.invoke(move || folder_changed(id));
             }
         });
@@ -270,6 +319,7 @@ pub(crate) fn watch_folder(uri: &str, on_change: impl Fn() + 'static) -> Watch {
         unwatched: Rc::clone(&unwatched),
         fallback: None,
         fallback_timer: None,
+        on_gone: None,
     };
     SUBSCRIBERS.with_borrow_mut(|subscribers| subscribers.insert(id, subscriber));
     let watch = Watch {
@@ -322,6 +372,33 @@ mod tests {
         assert!(changes_listing(gio::FileMonitorEvent::MovedOut));
         assert!(!changes_listing(gio::FileMonitorEvent::PreUnmount));
         assert!(!changes_listing(gio::FileMonitorEvent::Unmounted));
+    }
+
+    #[test]
+    fn only_an_unmount_says_the_folder_is_gone() {
+        assert!(unmounts_folder(gio::FileMonitorEvent::Unmounted));
+        assert!(!unmounts_folder(gio::FileMonitorEvent::PreUnmount));
+        assert!(!unmounts_folder(gio::FileMonitorEvent::Deleted));
+    }
+
+    /// An unmount is reported at once, and drops a change still waiting
+    /// for its debounce.
+    #[gtk::test]
+    fn an_unmount_is_reported_at_once_instead_of_pending_changes() {
+        let folder = tempfile::tempdir().expect("the test home has room for a folder");
+        let changes = Rc::new(Cell::new(0));
+        let counter = Rc::clone(&changes);
+        let watch = watch_folder(&file_uri(folder.path()), move || counter.set(counter.get() + 1));
+        let gone = Rc::new(Cell::new(false));
+        let report = Rc::clone(&gone);
+        watch.when_gone(move || report.set(true));
+
+        folder_changed(watch.id());
+        report_gone(watch.id());
+
+        assert!(gone.get(), "the unmount is reported without waiting");
+        wait_for(CHANGE_DEBOUNCE * 2);
+        assert_eq!(changes.get(), 0, "the pending change was dropped");
     }
 
     /// parity: PERF-003

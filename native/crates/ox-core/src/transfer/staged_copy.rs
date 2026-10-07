@@ -31,6 +31,7 @@ use super::cancellation::Cancellation;
 use super::commit::{commit_replace, publish_staged, verify_installation};
 use super::copy::Copier;
 use super::error::TransferError;
+use super::item_failure::ItemFailures;
 use super::modes::{secure_local_staging, DirectoryModes};
 use super::names::{child_node, staging_name, PAYLOAD_NAME};
 use super::node::{ItemIdentity, Node, NodeKind, WriteGuard};
@@ -134,6 +135,9 @@ pub(crate) struct StagedCopy<'a> {
     /// What the destination cannot store, and the user's answers about it
     /// (XFER-028).
     pub(crate) unstorable: &'a mut Unstorable,
+    /// Asks about an entry inside a folder that cannot be copied
+    /// (OPS-047).
+    pub(crate) failures: &'a mut ItemFailures,
     /// Receives byte progress.
     pub(crate) emit: &'a mut dyn FnMut(Progress),
     /// Receives every copied source item below `source` when the copy
@@ -220,7 +224,8 @@ impl StagedCopy<'_> {
             &mut *self.unstorable,
             &mut *self.emit,
         )
-        .recording(self.copied.as_deref_mut());
+        .recording(self.copied.as_deref_mut())
+        .asking(&mut *self.failures);
         if self.source_kind == NodeKind::Directory {
             // XFER-002: a failed exclusive folder creation grants no right to
             // clean up this path.
@@ -272,7 +277,8 @@ impl StagedCopy<'_> {
             &mut *self.unstorable,
             &mut *self.emit,
         )
-        .recording(self.copied.as_deref_mut());
+        .recording(self.copied.as_deref_mut())
+        .asking(&mut *self.failures);
         copier.copy(self.source, stage.item(), 0)?;
         if layout == Layout::SameDeviceCopy {
             self.rename_device_copy(stage)?;
