@@ -179,6 +179,9 @@ pub(crate) struct BrowserWindow {
     pub(super) service_actions: RefCell<Vec<ox_core::service_actions::ServiceAction>>,
     /// The drives and devices the volume monitor reported last.
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
+    /// The folder shown last whose drive is mounted read-only, and why
+    /// (DEV-015); see [`super::read_only_drive`].
+    pub(super) read_only_drive: RefCell<Option<(String, ox_core::read_only::ReadOnlyDrive)>>,
     /// The type-to-select prefix of the folder views.
     pub(super) typeahead: RefCell<Typeahead>,
     /// The column Up and Down keep to in the icon grid, across rows of

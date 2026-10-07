@@ -1,5 +1,12 @@
 # Unreleased
 
+- A drive Linux mounted read-only, such as the Windows drive of a
+  dual-boot computer while Windows is hibernated or used Fast startup,
+  is noticed: New, Paste, Cut, Rename, Duplicate and Delete are turned
+  off there and say why, Copy still works, and the status bar shows
+  "Read-only drive" with what to do (shut Windows down fully, then mount
+  the drive again). A write that still fails there says the drive is
+  read-only instead of the bare "Read-only file system".
 - Copying to a Windows drive (NTFS), or to a FAT or exFAT stick, no
   longer creates names Windows cannot use. A device name such as CON,
   PRN, AUX, NUL, COM1 or LPT1 (also with an extension, like `nul.txt`)
