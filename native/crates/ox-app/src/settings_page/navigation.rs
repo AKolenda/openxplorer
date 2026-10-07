@@ -101,7 +101,10 @@ impl SettingsPage {
                 }
             }
         ));
-        // Enter on a category moves into its page.
+        // Enter on a category moves into its page. A click only chooses
+        // it (activate-on-single-click is off in the template), so the
+        // keyboard stays in the list rather than landing on the page's
+        // first ⓘ, whose bubble no pointer would then close.
         list.connect_row_activated(glib::clone!(
             #[weak(rename_to = page)]
             self,
@@ -390,11 +393,18 @@ impl SettingsPage {
         }
     }
 
-    /// Moves keyboard focus to the first control of the page shown.
+    /// Moves keyboard focus to the first control of the page shown, when
+    /// Enter is pressed on its category.
     fn focus_page(&self) {
         if let Some(page) = self.imp().pages.visible_child() {
             page.child_focus(gtk::DirectionType::TabForward);
         }
+        let focus = self.root().and_then(|root| root.focus());
+        glib::g_debug!(
+            ox_core::LOG_DOMAIN,
+            "Settings page entered with Enter: keyboard focus on {}",
+            focus.map_or_else(|| "nothing".to_owned(), |focus| focus.type_().name().to_owned())
+        );
     }
 }
 

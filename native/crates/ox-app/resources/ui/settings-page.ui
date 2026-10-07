@@ -54,6 +54,7 @@
         <child>
           <object class="GtkListBox" id="category_list">
             <property name="selection-mode">browse</property>
+            <property name="activate-on-single-click">false</property>
             <style>
               <class name="settings-categories"/>
             </style>

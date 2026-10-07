@@ -167,7 +167,7 @@ impl InfoBubble {
         motion.connect_enter(glib::clone!(
             #[weak]
             popover,
-            move |_, _, _| popover.popup()
+            move |_, _, _| open(&popover, "the pointer entered the ⓘ")
         ));
         motion.connect_leave(glib::clone!(
             #[weak(rename_to = button)]
@@ -176,21 +176,32 @@ impl InfoBubble {
             popover,
             move |_| {
                 if !button.has_focus() {
-                    popover.popdown();
+                    close(&popover, "the pointer left the ⓘ");
                 }
             }
         ));
         self.button.add_controller(motion);
         let focus = gtk::EventControllerFocus::new();
         focus.connect_enter(glib::clone!(
+            #[weak(rename_to = button)]
+            self.button,
             #[weak]
             popover,
-            move |_| popover.popup()
+            move |_| {
+                // Only the keyboard (Tab) opens it: focus the app moves
+                // here itself, such as into a page chosen with a click,
+                // would leave a bubble that no pointer is on to close.
+                if moved_by_keyboard(&button) {
+                    open(&popover, "the keyboard reached the ⓘ");
+                } else {
+                    debug(&popover, "not opened: focus reached the ⓘ without the keyboard");
+                }
+            }
         ));
         focus.connect_leave(glib::clone!(
             #[weak]
             popover,
-            move |_| popover.popdown()
+            move |_| close(&popover, "the keyboard left the ⓘ")
         ));
         self.button.add_controller(focus);
         let keys = gtk::EventControllerKey::new();
@@ -201,7 +212,7 @@ impl InfoBubble {
             glib::Propagation::Proceed,
             move |_, key, _, _| {
                 if key == gdk::Key::Escape && popover.is_visible() {
-                    popover.popdown();
+                    close(&popover, "Escape");
                     return glib::Propagation::Stop;
                 }
                 glib::Propagation::Proceed
@@ -214,7 +225,41 @@ impl InfoBubble {
         self.button.connect_unmap(glib::clone!(
             #[weak]
             popover,
-            move |_| popover.popdown()
+            move |_| close(&popover, "the ⓘ left the screen")
         ));
     }
+}
+
+/// Whether keyboard focus reached `button` by the keyboard: GTK shows a
+/// window's focus once the keyboard moves it, and hides it again on a
+/// click.
+fn moved_by_keyboard(button: &InfoButton) -> bool {
+    let window = button.root().and_downcast::<gtk::Window>();
+    window.is_some_and(|window| window.gets_focus_visible())
+}
+
+/// Opens `popover`, saying why in the debug log.
+fn open(popover: &gtk::Popover, why: &str) {
+    debug(popover, &format!("opened: {why}"));
+    popover.popup();
+}
+
+/// Closes `popover`, saying why in the debug log.
+fn close(popover: &gtk::Popover, why: &str) {
+    if popover.is_visible() {
+        debug(popover, &format!("closed: {why}"));
+    }
+    popover.popdown();
+}
+
+/// Logs `what` happened to the bubble `popover`, named by its first words.
+/// Shown with `G_MESSAGES_DEBUG=openxplorer`.
+fn debug(popover: &gtk::Popover, what: &str) {
+    let text = popover.child().and_downcast::<gtk::Label>();
+    let text = text.map(|label| label.text().chars().take(40).collect::<String>());
+    glib::g_debug!(
+        ox_core::LOG_DOMAIN,
+        "Settings bubble \"{}…\" {what}",
+        text.unwrap_or_default()
+    );
 }

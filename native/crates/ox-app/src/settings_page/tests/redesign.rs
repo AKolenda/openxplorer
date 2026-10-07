@@ -230,6 +230,13 @@ fn the_info_bubble_opens_on_hover_and_from_the_keyboard_on_its_own_surface() {
     );
     assert!(!info.is_open());
 
+    // Focus moved by the app, not the keyboard, opens nothing.
+    settings.test.window.set_focus_visible(false);
+    assert!(info.widget().grab_focus());
+    assert!(!info.is_open(), "only the keyboard opens it");
+    settings.page.focus_search();
+    // Tab: the keyboard brings the focus here.
+    settings.test.window.set_focus_visible(true);
     assert!(info.widget().grab_focus());
     wait_until("the bubble to open on focus", || info.is_open());
     let escape = gtk::gdk::Key::Escape;
@@ -456,4 +463,62 @@ fn a_bubble_closes_when_its_page_is_left() {
         !info.is_open(),
         "the bubble stays closed when General shows again"
     );
+}
+
+/// A page chosen with a click in the list opens no ⓘ bubble. A click used
+/// to activate the row too, which moved the keyboard onto the page's
+/// first ⓘ (Appearance's Text size) and opened a bubble that stayed until
+/// the window lost focus. Now a click only chooses the page, and even
+/// Enter, which does move the keyboard into the page, opens a bubble only
+/// when the keyboard is in use.
+///
+/// parity: SET-019
+#[gtk::test]
+fn choosing_a_page_with_a_click_opens_no_bubble() {
+    let settings = SettingsTest::open();
+    settings.page.show_view(SettingsView::Category(Category::General));
+    let imp = settings.page.imp();
+    assert!(
+        !imp.category_list.activates_on_single_click(),
+        "a click only chooses a page"
+    );
+    let open_bubbles = |category: Category| -> Vec<String> {
+        settings
+            .page
+            .category_section(category)
+            .rows()
+            .iter()
+            .filter(|row| {
+                row.info()
+                    .is_some_and(super::super::info_bubble::InfoBubble::is_open)
+            })
+            .map(|row| row.text().title.to_owned())
+            .collect()
+    };
+    for category in [Category::Appearance, Category::FilesAndFolders, Category::General] {
+        let row = settings.page.category_list_row(category).expect("listed");
+        settings.test.window.set_focus_visible(false);
+        // What a click does now: choose the row.
+        row.grab_focus();
+        imp.category_list.select_row(Some(&row));
+        crate::test_support::harness::wait_for_frames(&settings.test.window, 4);
+        assert_eq!(settings.page.view(), SettingsView::Category(category));
+        let focus = GtkWindowExt::focus(&settings.test.window).expect("something has focus");
+        assert!(
+            focus.is_ancestor(&*imp.category_list) || focus == row.clone().upcast::<gtk::Widget>(),
+            "{}: the keyboard stays in the list",
+            category.title()
+        );
+        assert!(open_bubbles(category).is_empty(), "{}", category.title());
+
+        // A double click, or focus moved in without the keyboard.
+        row.emit_activate();
+        crate::test_support::harness::wait_for_frames(&settings.test.window, 4);
+        assert!(
+            open_bubbles(category).is_empty(),
+            "{}: {:?}",
+            category.title(),
+            open_bubbles(category)
+        );
+    }
 }

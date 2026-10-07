@@ -10,8 +10,10 @@
   The page list stays as it is during a search, with no page chosen, and
   choosing a page ends the search and opens it. Settings opened again
   after Back to files or after its tab was closed starts with an empty
-  search, and an ⓘ bubble closes when its page is left instead of showing
-  again with it. Every setting is still there, with the same options and
+  search. An ⓘ bubble opens only for the pointer or the keyboard: a page
+  chosen with a click no longer opens one that stayed until the window
+  lost focus, and one open when its page is left no longer comes back
+  with the page. Every setting is still there, with the same options and
   defaults, and a search for its earlier name still finds it.
 
 # 2.0.3 — 2026-10-06
