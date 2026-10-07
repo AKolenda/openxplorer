@@ -5755,6 +5755,10 @@ msgstr ""
 msgid "zipfiles that span multiple disks are not supported"
 msgstr ""
 
+#: crates/ox-core/src/checksums.rs
+msgid "Checksums can only be calculated for ordinary files, not for pipes, devices or sockets."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/clipboard.rs
 msgid "Copy or cut between 1 and {max} items at a time."

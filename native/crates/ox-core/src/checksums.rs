@@ -4,8 +4,18 @@
 //! demand, and an expected checksum pasted by the user checked against the
 //! algorithm its length names.
 //!
-//! The file is read through GIO in 64 KiB blocks, so a file on a share is
-//! read in place, and a cancelled read stops between two blocks.
+//! The file is read in 64 KiB blocks, through GIO for a file on a share,
+//! so it is read in place, and a cancelled read stops between two blocks.
+//!
+//! Only an ordinary file is read. Opening a named pipe (FIFO) waits in the
+//! kernel until a program writes to it, which Cancel cannot interrupt, and
+//! a device or a socket has no contents to sum, so those are refused at
+//! once: GIO is asked what the item is first, and a local file is opened
+//! without waiting (`O_NONBLOCK`) and checked again once it is open, so a
+//! file replaced by a pipe in between is refused too.
+
+use std::io::Read;
+use std::os::unix::fs::OpenOptionsExt;
 
 use gio::prelude::*;
 
@@ -86,22 +96,79 @@ pub fn matches(expected: &str, computed: &str) -> bool {
 /// Why the file could not be read, or [`EntryError::Cancelled`].
 pub fn compute(uri: &str, kind: ChecksumKind, cancel: &Cancellation) -> Result<String, EntryError> {
     let file = gio::File::for_uri(&normalise(uri)?);
-    let stream = file.read(Some(cancel.cancellable()))?;
+    let info = file.query_info(
+        gio::FILE_ATTRIBUTE_STANDARD_TYPE,
+        gio::FileQueryInfoFlags::NONE,
+        Some(cancel.cancellable()),
+    )?;
+    if info.file_type() != gio::FileType::Regular {
+        return Err(not_a_file());
+    }
     let Some(mut checksum) = glib::Checksum::new(kind.glib_type()) else {
         return Err(EntryError::Failed(format!("{} is not available.", kind.label())));
     };
     let mut block = vec![0; BLOCK_BYTES];
+    if let Some(path) = file.path().filter(|_| file.is_native()) {
+        let mut local = open_local_file(&path)?;
+        sum_blocks(&mut checksum, &mut block, cancel, |block| {
+            local
+                .read(block)
+                .map_err(|error| EntryError::Failed(error.to_string()))
+        })?;
+    } else {
+        let stream = file.read(Some(cancel.cancellable()))?;
+        sum_blocks(&mut checksum, &mut block, cancel, |block| {
+            Ok(stream.read(block, Some(cancel.cancellable()))?)
+        })?;
+    }
+    Ok(checksum.string().unwrap_or_default())
+}
+
+/// Why an item that is not an ordinary file has no checksum.
+fn not_a_file() -> EntryError {
+    EntryError::NotSupported(crate::i18n::gettext(
+        "Checksums can only be calculated for ordinary files, not for pipes, devices or sockets.",
+    ))
+}
+
+/// Opens the local file at `path` without waiting on a pipe, and refuses
+/// it unless it is an ordinary file. An ordinary file reads as usual
+/// with `O_NONBLOCK`.
+fn open_local_file(path: &std::path::Path) -> Result<std::fs::File, EntryError> {
+    let failed = |error: std::io::Error| EntryError::Failed(error.to_string());
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(rustix::fs::OFlags::NONBLOCK.bits().cast_signed())
+        .open(path)
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::NotFound => EntryError::NotFound(error.to_string()),
+            std::io::ErrorKind::PermissionDenied => EntryError::PermissionDenied(error.to_string()),
+            _ => failed(error),
+        })?;
+    if !file.metadata().map_err(failed)?.is_file() {
+        return Err(not_a_file());
+    }
+    Ok(file)
+}
+
+/// Adds every block `read` gives to `checksum`, stopping between two
+/// blocks when `cancel` is cancelled.
+fn sum_blocks(
+    checksum: &mut glib::Checksum,
+    block: &mut [u8],
+    cancel: &Cancellation,
+    mut read: impl FnMut(&mut [u8]) -> Result<usize, EntryError>,
+) -> Result<(), EntryError> {
     loop {
         if cancel.is_cancelled() {
             return Err(EntryError::Cancelled);
         }
-        let read = stream.read(&mut block, Some(cancel.cancellable()))?;
-        if read == 0 {
-            break;
+        let count = read(block)?;
+        if count == 0 {
+            return Ok(());
         }
-        checksum.update(&block[..read]);
+        checksum.update(&block[..count]);
     }
-    Ok(checksum.string().unwrap_or_default())
 }
 
 /// [`compute`] on a GIO worker thread, for the main loop to await.
@@ -165,5 +232,47 @@ mod tests {
         let result = compute(&file_uri(&path), ChecksumKind::Sha256, &cancel);
 
         assert!(result.is_err());
+    }
+
+    /// A named pipe, which would wait for a writer forever, and a device
+    /// are refused at once instead of being read.
+    ///
+    /// parity: PROP-014
+    #[test]
+    fn a_pipe_or_a_device_is_refused_at_once() {
+        let folder = tempfile::tempdir().expect("a folder");
+        let pipe = folder.path().join("pipe");
+        crate::test_support::make_fifo(&pipe);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let uri = file_uri(&pipe);
+        std::thread::spawn(move || {
+            let _ = sender.send(compute(&uri, ChecksumKind::Sha256, &Cancellation::new()));
+        });
+
+        let result = receiver
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("a pipe never blocks the checksum");
+        assert!(matches!(result, Err(EntryError::NotSupported(_))), "{result:?}");
+        let device = compute("file:///dev/null", ChecksumKind::Md5, &Cancellation::new());
+        assert!(matches!(device, Err(EntryError::NotSupported(_))), "{device:?}");
+    }
+
+    /// A local file opened without waiting is refused when it turns out
+    /// not to be an ordinary file, as a file replaced by a pipe after it
+    /// was checked would be.
+    ///
+    /// parity: PROP-014
+    #[test]
+    fn a_file_replaced_by_a_pipe_is_refused_once_open() {
+        let folder = tempfile::tempdir().expect("a folder");
+        let pipe = folder.path().join("pipe");
+        crate::test_support::make_fifo(&pipe);
+
+        let opened = open_local_file(&pipe);
+
+        assert!(matches!(opened, Err(EntryError::NotSupported(_))), "{opened:?}");
+        let plain = folder.path().join("plain.txt");
+        std::fs::write(&plain, b"abc").expect("a file");
+        assert!(open_local_file(&plain).is_ok());
     }
 }

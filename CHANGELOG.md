@@ -1,5 +1,10 @@
 # Unreleased
 
+- The Checksums tab no longer hangs on a named pipe (FIFO): a pipe, a
+  device or a socket is refused at once with a message, since it has no
+  contents to sum and reading a pipe waits forever for a writer, which
+  Cancel could not stop. Closing a window now also stops its folder-size
+  scan and the work of its Properties dialogs, which kept running.
 - A file list at its top stays at its top when files come before the one
   at the top edge, in every view: in an Open or Save dialog switching
   from one file type to more (`*.svg`, then All files) no longer scrolls
