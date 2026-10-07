@@ -11510,6 +11510,21 @@ native = "done"
 native_note = "native/crates/ox-app/src/window/loading/disconnected.rs: the volume monitor's mount-removed signal (for every tab inside the mount) and a folder watch's unmount event (native/crates/ox-app/src/folder_view/watch.rs, Watch::when_gone) stop the tab's listing and watch, drop its rows and show the unavailable page; Try again lists as F5 does, mounting a share again. Tested in native/crates/ox-app/src/window/tests/disconnected.rs."
 
 [[feature]]
+id = "DEV-015"
+area = "DEV"
+title = "A drive mounted read-only says so and why"
+behaviour = "When the folder shown is on a drive the kernel mounted read-only, New, Paste, Paste into folder, Cut, Rename, Duplicate and Delete are turned off and their tooltips say why, while Copy keeps working; the status bar shows 'Read-only drive' with what to do about it. For an NTFS drive (Windows hibernated or shut down with Fast startup) the reason names Windows and says to shut it down fully, then mount the drive again. A write that still fails on a read-only drive says the drive is read-only instead of the bare 'Read-only file system'."
+origin = ["gnome"]
+priority = "should"
+openxplorer = "missing"
+sources = ["v2.0.0:desktop/gio_backend.py:49-60"]
+python_tests = []
+bridge = []
+gnome = "g_file_query_filesystem_info with filesystem::readonly and filesystem::type; G_IO_ERROR_READ_ONLY"
+native = "done"
+native_note = "native/crates/ox-core/src/read_only.rs (ReadOnlyDrive: ntfs, ntfs3 and fuseblk are Windows drives; the plain-words failure for G_IO_ERROR_READ_ONLY and EROFS in ops/error.rs and transfer/error.rs), native/crates/ox-app/src/window/read_only_drive.rs (asked off the main thread whenever the free space is read; a reply for a folder the tab left is dropped) and native/crates/ox-app/src/window/file_ops/availability.rs. Tests: read_only.rs, ops/error.rs and transfer/error.rs (a_read_only_file_system_says_what_to_do), availability.rs (a_read_only_drive_allows_only_copying), read_only_drive.rs (a_writable_drive_keeps_its_commands, a_hibernated_windows_drive_turns_off_the_commands_that_change_it). A test cannot mount a drive read-only, so the window test gives the window GIO's answer directly."
+
+[[feature]]
 id = "OPEN-001"
 area = "OPEN"
 title = "Activating items: folder, archive or application"

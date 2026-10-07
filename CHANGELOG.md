@@ -1,5 +1,12 @@
 # Unreleased
 
+- A drive Linux mounted read-only, such as the Windows drive of a
+  dual-boot computer while Windows is hibernated or used Fast startup,
+  is noticed: New, Paste, Cut, Rename, Duplicate and Delete are turned
+  off there and say why, Copy still works, and the status bar shows
+  "Read-only drive" with what to do (shut Windows down fully, then mount
+  the drive again). A write that still fails there says the drive is
+  read-only instead of the bare "Read-only file system".
 - A tab showing a USB drive that was unplugged, or a share or disk that
   was unmounted by another program, no longer keeps showing the old
   files. Every tab and split pane on it drops them and says "This
