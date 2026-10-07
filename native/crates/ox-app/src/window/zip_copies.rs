@@ -45,7 +45,10 @@ type Materialise = Rc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Vec<String>
 
 impl BrowserWindow {
     /// Extracts the items at `locations` (all inside one ZIP) into a new
-    /// folder of copies and returns the copies' file URIs, in order.
+    /// folder of copies and returns the copies' file URIs, in order, and
+    /// what to tell the user about members left out of them: links,
+    /// special files and unsafe names, which the archive browser hides
+    /// (ARC-026).
     ///
     /// # Errors
     ///
@@ -54,7 +57,7 @@ impl BrowserWindow {
     pub(super) async fn copy_out_of_zip(
         &self,
         locations: Vec<ArchiveLocation>,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<(Vec<String>, Option<String>), String> {
         let first = locations
             .first()
             .ok_or_else(|| ox_core::i18n::gettext_static("Select the items to copy.").to_owned())?;
@@ -96,10 +99,11 @@ impl BrowserWindow {
         let folder: PathBuf = gio::File::for_uri(&extracted.uri)
             .path()
             .unwrap_or_else(|| root.join(folder_name));
-        Ok(members
+        let copies = members
             .iter()
             .map(|member| file_uri(&copied_member(&folder, member)))
-            .collect())
+            .collect();
+        Ok((copies, left_out_note(extracted.summary.left_out)))
     }
 
     /// Copy inside a ZIP: extracts the selection, then puts the copies on
@@ -114,8 +118,8 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                let copies = match window.copy_out_of_zip(locations).await {
-                    Ok(copies) => copies,
+                let (copies, note) = match window.copy_out_of_zip(locations).await {
+                    Ok(copied) => copied,
                     Err(message) => {
                         window.show_message(&message);
                         return;
@@ -127,7 +131,7 @@ impl BrowserWindow {
                     return;
                 }
                 match ClipboardFiles::new(ClipboardMode::Copy, &copies) {
-                    Ok(files) => window.put_files_on_clipboard(files),
+                    Ok(files) => window.put_files_on_clipboard_noting(files, note.as_deref()),
                     Err(error) => window.show_message(&error.to_string()),
                 }
             }
@@ -145,11 +149,28 @@ impl BrowserWindow {
                 let Some(window) = window.upgrade() else {
                     return Err(ox_core::i18n::gettext_static("The window closed.").to_owned());
                 };
-                window.copy_out_of_zip(locations).await
+                let (copies, note) = window.copy_out_of_zip(locations).await?;
+                if let Some(note) = note {
+                    window.show_message(&note);
+                }
+                Ok(copies)
             })
         });
         ZipDragContent::new(materialise).upcast()
     }
+}
+
+/// What to tell the user about `count` members left out of copies taken
+/// out of a ZIP, which the archive browser hides; `None` for none.
+fn left_out_note(count: usize) -> Option<String> {
+    (count > 0).then(|| {
+        ox_core::i18n::ngettext(
+            "1 link or special file inside was left out.",
+            "{count} links or special files inside were left out.",
+            count as u64,
+        )
+        .replace("{count}", &count.to_string())
+    })
 }
 
 /// Whether `uri` is one of the copies taken out of a ZIP, which last a day

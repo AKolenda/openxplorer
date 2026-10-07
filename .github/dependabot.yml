@@ -1,11 +1,20 @@
 version: 2
 updates:
+  # Titles follow the pull request title check (.github/workflows/pr-title.yml):
+  # "chore(deps): bump ..." and "chore(deps-dev): bump ...".
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+  # "ci(deps): bump ...".
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    commit-message:
+      prefix: ci
+      include: scope

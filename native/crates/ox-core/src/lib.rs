@@ -16,6 +16,7 @@
 //! | [`network`] | SMB sign-in, credentials, mounts, sign-out and discovery | `session_credentials.py`, `auth_bridge.py`, `mount_support.py`, `winspace.py` |
 //! | [`clipboard`] | File clipboard formats shared with GNOME and KDE | `file_clipboard.py` |
 //! | [`format`](mod@format) | Size and date text | `ui/app.js` |
+//! | [`grouping`] | Explorer's Group by: the choice, and the groups of names and dates | (new, after Windows Explorer) |
 //! | [`folder_locations`] | Moving a standard folder safely | `folder_locations.py` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
@@ -38,6 +39,7 @@ pub mod entry;
 pub mod folder_locations;
 pub mod format;
 pub mod gio_node;
+pub mod grouping;
 pub mod i18n;
 pub mod integration;
 pub mod location;
@@ -45,6 +47,7 @@ pub mod network;
 pub mod ops;
 pub mod permissions;
 pub mod places;
+pub mod read_only;
 pub mod search;
 pub mod service_actions;
 pub mod session;

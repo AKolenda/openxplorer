@@ -243,6 +243,12 @@ mod imp {
         pub(super) arranging: Cell<bool>,
         /// What the cells share, set by [`super::DetailsView::new`].
         pub(super) cells: OnceCell<super::CellContext>,
+        /// The group headers on screen, whose counts follow the model.
+        pub(super) headers: RefCell<Vec<glib::WeakRef<gtk::ListHeader>>>,
+        /// Set while a recount of the headers waits for the main loop.
+        pub(super) recount_pending: Cell<bool>,
+        /// Names the group of an item while the groups are headed.
+        pub(super) header_title: RefCell<super::group_headers::HeaderTitle>,
     }
 
     #[glib::object_subclass]
@@ -339,6 +345,7 @@ impl DetailsView {
         view.follow_column_drags();
         column_keys::make_titles_keyboard_operable(&view);
         view.describe_rows(model);
+        view.follow_group_counts(model);
         view.sort_by(SortOrder::DEFAULT);
         view
     }
@@ -493,9 +500,22 @@ impl DetailsView {
         let columns = self.imp().columns.get();
         let listing = self.imp().listing.get();
         let chosen = self.imp().chosen.borrow().clone();
-        for (column, view_column) in self.view_columns() {
-            view_column.set_visible(is_column_shown(column, columns, listing, &chosen));
+        let changes: Vec<(gtk::ColumnViewColumn, bool)> = self
+            .view_columns()
+            .map(|(column, view_column)| {
+                let shown = is_column_shown(column, columns, listing, &chosen);
+                (view_column, shown)
+            })
+            .filter(|(view_column, shown)| view_column.is_visible() != *shown)
+            .collect();
+        if changes.is_empty() {
+            return;
         }
+        self.change_columns_without_headers(|| {
+            for (view_column, shown) in changes {
+                view_column.set_visible(shown);
+            }
+        });
     }
 
     /// Applies saved column widths. Name keeps expanding until the user

@@ -89,6 +89,7 @@ impl BrowserWindow {
             move || window.finish_address()
         ));
         self.install_focus_regions();
+        super::menu_popover::close_menus_on_press(self);
     }
 
     /// Focuses the file list once GTK has finished showing the window,

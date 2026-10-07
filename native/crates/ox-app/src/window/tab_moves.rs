@@ -145,8 +145,10 @@ impl OtherWindow {
 impl BrowserWindow {
     /// True while the window writes files or shows a dialog: its tabs
     /// stay, and it takes no tab (TAB-031, TAB-037).
-    fn is_busy_for_tab_moves(&self) -> bool {
-        self.is_writing_files() || self.shows_dialog()
+    pub(super) fn is_busy_for_tab_moves(&self) -> bool {
+        // A file dialog keeps its one tab: a second one would make closing
+        // it ask about tabs, behind the caller's back (INT-032).
+        self.is_writing_files() || self.shows_dialog() || self.is_picking()
     }
 
     /// True when tab `id` must stay here: the window is busy, or the tab
@@ -312,7 +314,7 @@ impl BrowserWindow {
         windows
             .into_iter()
             .filter_map(|window| window.downcast::<BrowserWindow>().ok())
-            .filter(|window| window != self)
+            .filter(|window| window != self && !window.is_picking())
             .map(|window| OtherWindow {
                 id: window.id(),
                 title: window.title().map_or_else(
@@ -322,6 +324,12 @@ impl BrowserWindow {
                 is_ready: !window.is_busy_for_tab_moves(),
             })
             .collect()
+    }
+
+    /// The ids of the windows "Move tab to window" offers, for tests.
+    #[cfg(test)]
+    pub(super) fn tab_move_window_ids(&self) -> Vec<u32> {
+        self.other_windows().iter().map(|window| window.id).collect()
     }
 
     /// Adds the tab-moving actions: the tab menu's two items and the

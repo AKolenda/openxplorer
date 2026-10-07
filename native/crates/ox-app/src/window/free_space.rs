@@ -35,6 +35,7 @@ impl BrowserWindow {
     /// bar, or hides it on a landing page. A reply for a folder the tab
     /// has left is dropped.
     pub(super) fn refresh_free_space(&self) {
+        self.refresh_drive_access();
         let folder = self.current_uri().filter(|uri| Page::from_uri(uri).is_none());
         let Some(uri) = folder else {
             self.status_bar().show_free_space(None);

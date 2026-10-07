@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Groups of the listing by its sort key: "Show in groups" (VIEW-022).
+//! Groups of the listing (VIEW-022): by a key of their own, as Windows
+//! Explorer's Group by, or by the sort key, as Dolphin's "Show in groups".
 //!
-//! Ports the group roles of Dolphin's `KFileItemModel::groups()`
+//! A [`Grouping`] says which. Grouped by a key of its own, the listing is
+//! sorted by its sort key within each group, so a folder grouped by date
+//! modified can list each period by name. Names then fall in Explorer's
+//! letter ranges and dates in its calendar periods, down to "A long time
+//! ago" ([`ox_core::grouping`]); types and sizes in the groups below, in a
+//! fixed order (dates newest first, the rest ascending).
+//!
+//! By the sort key, it ports the group roles of Dolphin's `KFileItemModel::groups()`
 //! (`nameRoleGroups`, `sizeRoleGroups`, `timeRoleGroups`, `permissionRoleGroups`
 //! and the generic role groups): a name groups by its first letter, a size by
 //! Windows Explorer's size buckets, a date by period ("Today", "Yesterday",
@@ -14,8 +22,10 @@ use std::cmp::Ordering;
 use gtk::glib;
 use ox_core::i18n::{gettext, gettext_static};
 
+use ox_core::grouping::{Calendar, DateRanges, GroupBy, NameGroup};
+
 use crate::folder_view::item::FileItem;
-use crate::folder_view::sort_roles::{extension, SortBy, SortRole};
+use crate::folder_view::sort_roles::{extension, SortBy, SortRole, SortState};
 use crate::folder_view::sorting::{SortColumn, SortKey};
 use crate::i18n::message_id;
 
@@ -82,11 +92,6 @@ impl GroupClock {
         })
     }
 
-    /// The clock of the present moment.
-    pub(crate) fn now() -> Option<Self> {
-        Self::at(&glib::DateTime::now_local().ok()?)
-    }
-
     /// The period of `seconds`: its title and the rank that orders the
     /// periods oldest first.
     fn period(&self, seconds: Option<u64>) -> Group {
@@ -108,6 +113,106 @@ impl GroupClock {
         }
         let year = glib::DateTime::from_unix_local(time).map_or(0, |date| date.year());
         Group::numbered(&year.to_string(), i64::from(year) - i64::from(i32::MAX))
+    }
+}
+
+/// What the listing is grouped by, and the sort it is grouped within.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Grouping {
+    /// The key; never [`GroupBy::None`].
+    pub by: GroupBy,
+    /// The sort; the groups follow it with [`GroupBy::SortKey`].
+    pub sort: SortState,
+}
+
+impl Grouping {
+    /// The grouping by `by` within `sort`; `None` for no groups.
+    pub(crate) fn of(by: GroupBy, sort: SortState) -> Option<Self> {
+        by.is_grouped().then_some(Self { by, sort })
+    }
+}
+
+/// Everything grouping by date depends on, worked out once when the
+/// listing is grouped: the sort key's periods and Explorer's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GroupClocks {
+    /// The periods of [`GroupBy::SortKey`].
+    pub clock: GroupClock,
+    /// Explorer's periods of [`GroupBy::Modified`] and [`GroupBy::Created`].
+    pub dates: DateRanges,
+}
+
+impl GroupClocks {
+    /// The clocks of the present moment.
+    pub(crate) fn now() -> Option<Self> {
+        let now = local_now()?;
+        let today = ox_core::grouping::CivilDate::new(
+            now.year(),
+            u32::try_from(now.month()).ok()?,
+            u32::try_from(now.day_of_month()).ok()?,
+        )?;
+        let calendar = Calendar {
+            today,
+            ..Calendar::now()?
+        };
+        Some(Self {
+            clock: GroupClock::at(&now)?,
+            dates: calendar.date_ranges(),
+        })
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The time tests pretend it is, `None` for the real time.
+    static TEST_NOW: std::cell::RefCell<Option<glib::DateTime>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Makes the groups count from `now` instead of the real time, or from the
+/// real time again with `None`, for tests.
+#[cfg(test)]
+pub(crate) fn set_clock_for_tests(now: Option<glib::DateTime>) {
+    TEST_NOW.with(|shown| shown.replace(now));
+}
+
+/// The local time the groups count from.
+fn local_now() -> Option<glib::DateTime> {
+    #[cfg(test)]
+    if let Some(now) = TEST_NOW.with(|shown| shown.borrow().clone()) {
+        return Some(now);
+    }
+    glib::DateTime::now_local().ok()
+}
+
+/// The group `item` falls in under `grouping`.
+pub(crate) fn group_in(grouping: Grouping, item: &FileItem, clocks: &GroupClocks) -> Group {
+    let entry = item.entry();
+    let period = |time: Option<u64>| {
+        let group = clocks.dates.group_of_time(time);
+        Group::numbered(gettext_static(group.label()), group as i64)
+    };
+    match grouping.by {
+        GroupBy::None | GroupBy::SortKey => group_of(grouping.sort.by, item, &clocks.clock),
+        GroupBy::Name => {
+            let group = NameGroup::of(&entry.name);
+            Group::numbered(gettext_static(group.label()), group as i64)
+        }
+        GroupBy::Modified => period(entry.modified),
+        GroupBy::Created => period(entry.meta.created),
+        GroupBy::Type => Group::texted(&entry.type_label, 1),
+        GroupBy::Size => size_group(item),
+    }
+}
+
+/// Orders the groups of two items under `grouping`: the sort key's as its
+/// sort runs, Explorer's in their own order.
+pub(crate) fn compare_groups(grouping: Grouping, a: &Group, b: &Group) -> Ordering {
+    let order = a.compare(b);
+    match (grouping.by, grouping.sort.direction) {
+        (GroupBy::None | GroupBy::SortKey, crate::folder_view::sorting::SortDirection::Descending) => {
+            order.reverse()
+        }
+        _ => order,
     }
 }
 
