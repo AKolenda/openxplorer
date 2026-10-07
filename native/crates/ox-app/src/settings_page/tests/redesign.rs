@@ -301,9 +301,9 @@ fn rarely_changed_settings_are_folded_until_opened_or_found() {
 }
 
 /// A search shows the matches of every page on one page of results, each
-/// under its page's name, and the list of pages hides meanwhile, so
-/// nobody has to go through the pages to find them; ending the search
-/// brings the list back and puts every page back.
+/// under its page's name, so nobody has to go through the pages to find
+/// them. The list of pages stays, with no page chosen; ending the search
+/// chooses the page shown before and puts every page back.
 ///
 /// parity: SET-019, SET-004
 #[gtk::test]
@@ -318,10 +318,9 @@ fn the_search_shows_results_from_every_page() {
     settings.page.search("breadcrumbs");
 
     assert_eq!(pages.visible_child_name().as_deref(), Some("search-results"));
-    assert!(
-        !imp.category_list.is_visible(),
-        "no list of pages while searching"
-    );
+    assert!(imp.category_list.is_visible(), "the pages stay listed");
+    assert_eq!(settings.listed_categories(), Category::ALL);
+    assert_eq!(settings.chosen_category(), None, "no page is chosen");
     assert_eq!(settings.result_categories(), [Category::General]);
     settings.page.search("show");
     let found = settings.result_categories();
@@ -341,7 +340,7 @@ fn the_search_shows_results_from_every_page() {
 
     settings.page.search("");
 
-    assert!(imp.category_list.is_visible(), "the list is back");
+    assert_eq!(settings.chosen_category(), Some(Category::Appearance));
     assert_eq!(pages.visible_child_name().as_deref(), Some("appearance"));
     for category in Category::ALL {
         let section = settings.page.category_section(category);
@@ -377,4 +376,39 @@ fn a_row_is_one_line_high_whatever_its_title() {
             .expect("a row has a title");
         assert!(!title.wraps(), "{} stays on one line", row.text().title);
     }
+}
+
+/// Choosing a page in the list during a search ends the search and opens
+/// that page, so nobody has to empty the search box first.
+///
+/// parity: SET-019
+#[gtk::test]
+fn choosing_a_page_during_a_search_ends_it_and_opens_the_page() {
+    let settings = SettingsTest::open();
+    let imp = settings.page.imp();
+    settings
+        .page
+        .show_view(SettingsView::Category(Category::Appearance));
+    settings.page.search("zoom");
+    assert_eq!(settings.chosen_category(), None);
+
+    let row = settings
+        .page
+        .category_list_row(Category::Confirmations)
+        .expect("Confirmations is listed");
+    imp.category_list.select_row(Some(&row));
+
+    assert_eq!(imp.search_entry.text(), "", "the search is emptied");
+    assert!(!imp.match_count.is_visible());
+    assert_eq!(
+        settings.page.view(),
+        SettingsView::Category(Category::Confirmations)
+    );
+    assert_eq!(settings.chosen_category(), Some(Category::Confirmations));
+    assert_eq!(
+        imp.pages.visible_child_name().as_deref(),
+        Some(Category::Confirmations.as_str())
+    );
+    let results = imp.results.get().expect("a results page");
+    assert!(results.first_child().is_none(), "every page is back on its own");
 }

@@ -5,12 +5,13 @@
 //! Ports `settingsSearch` and the section links of `renderSettingsPage` in
 //! `v2.0.0:desktop/ui/app.js`. The search filters the rows of every category at
 //! once and shows the matches of all of them on one page of results, each
-//! category's under its name, as the settings mockup does. The category
-//! list hides while a search is typed, so nobody has to look for matches
-//! category by category; "N matching settings" shows under the search box
-//! instead. Enter jumps to the first match, Escape leaves the
-//! search, and arrow keys move through the categories. Escape on a
-//! sub-page goes back to its category.
+//! category's under its name, as the settings mockup does, so nobody has
+//! to look for matches category by category; "N matching settings" shows
+//! under the search box. The category list stays, with no category chosen
+//! and each one's number of matches: choosing one ends the search and opens
+//! it. Enter jumps to the first match, Escape leaves the search, and arrow
+//! keys move through the categories. Escape on a sub-page goes back to its
+//! category.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -70,6 +71,13 @@ impl SettingsPage {
                 let Some(category) = row.and_then(category_of) else {
                     return;
                 };
+                // A category chosen during a search ends it and opens
+                // that category.
+                if page.is_searching() {
+                    page.imp().view.set(SettingsView::Category(category));
+                    page.imp().search_entry.set_text("");
+                    return;
+                }
                 // Selecting the row of the category shown already, as a
                 // sub-page does, keeps the page.
                 if page.view().category() != category {
@@ -82,13 +90,6 @@ impl SettingsPage {
             #[weak(rename_to = page)]
             self,
             move |_, _| page.focus_page()
-        ));
-        list.set_filter_func(glib::clone!(
-            #[weak(rename_to = page)]
-            self,
-            #[upgrade_or]
-            true,
-            move |row| page.lists_category(row)
         ));
     }
 
@@ -154,7 +155,7 @@ impl SettingsPage {
 
     /// Shows `view` on the right and highlights its category on the left.
     /// While a search is typed, a category is shown as its matches among
-    /// the results.
+    /// the results, and no category is highlighted.
     pub(super) fn show_view(&self, view: SettingsView) {
         let imp = self.imp();
         imp.view.set(view);
@@ -165,10 +166,26 @@ impl SettingsPage {
             }
             _ => imp.pages.set_visible_child_name(view.as_str()),
         }
-        let row = self.category_list_row(view.category());
-        if let Some(row) = row.filter(|row| !row.is_selected()) {
-            imp.category_list.select_row(Some(&row));
+        self.mark_chosen_category();
+    }
+
+    /// Highlights the category shown in the list, or none while a search
+    /// is typed: the results are of every category, and choosing one ends
+    /// the search.
+    fn mark_chosen_category(&self) {
+        let list = &self.imp().category_list;
+        // Browse keeps a category chosen at all times; while searching,
+        // Single lets the list have none.
+        if self.is_searching() {
+            list.set_selection_mode(gtk::SelectionMode::Single);
+            list.unselect_all();
+            return;
         }
+        let row = self.category_list_row(self.view().category());
+        if let Some(row) = row.filter(|row| !row.is_selected()) {
+            list.select_row(Some(&row));
+        }
+        list.set_selection_mode(gtk::SelectionMode::Browse);
     }
 
     /// Whether a search is typed.
@@ -250,11 +267,8 @@ impl SettingsPage {
         }
         imp.match_count.set_text(&match_count_text(total));
         imp.match_count.set_visible(!query.is_empty());
-        // Every match shows on one page of results, so the categories
-        // are not offered while searching.
-        imp.category_list.set_visible(query.is_empty());
         imp.query.replace(query);
-        imp.category_list.invalidate_filter();
+        self.mark_chosen_category();
         self.show_search_results();
     }
 
@@ -307,15 +321,6 @@ impl SettingsPage {
         rows.into_iter().find(|row| row.category() == category)
     }
 
-    /// Whether the list shows `row`: always, or while searching only when
-    /// its category has matches.
-    fn lists_category(&self, row: &gtk::ListBoxRow) -> bool {
-        if self.imp().query.borrow().is_empty() {
-            return true;
-        }
-        category_of(row).is_some_and(|category| self.matches_in(category) > 0)
-    }
-
     /// Shows the first setting, a status card or a row, that matches the
     /// search and gives its control keyboard focus, as Enter in the Python
     /// app's search clicked the first result. False when nothing matches.
@@ -355,8 +360,8 @@ impl SettingsPage {
         });
     }
 
-    /// Empties the search, which shows every row again, and puts keyboard
-    /// focus back on the category list.
+    /// Empties the search, which shows every row again and highlights the
+    /// category shown, and puts keyboard focus back on the category list.
     fn leave_search(&self) {
         self.imp().search_entry.set_text("");
         self.focus_chosen_category();

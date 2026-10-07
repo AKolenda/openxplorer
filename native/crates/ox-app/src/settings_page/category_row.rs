@@ -113,6 +113,7 @@ impl CategoryRow {
         let imp = self.imp();
         imp.matches.set(matches);
         imp.count.set_text(&matches.to_string());
-        imp.count.set_visible(!query.is_empty());
+        // While searching, a category with no matches shows no count.
+        imp.count.set_visible(!query.is_empty() && matches > 0);
     }
 }

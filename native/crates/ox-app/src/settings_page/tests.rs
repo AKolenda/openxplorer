@@ -326,7 +326,8 @@ fn the_search_filters_rows_across_every_category() {
     ];
     for case in cases {
         settings.page.search(case.typed);
-        assert!(settings.listed_categories().is_empty(), "no list while searching");
+        assert_eq!(settings.listed_categories(), Category::ALL, "{}", case.typed);
+        assert_eq!(settings.chosen_category(), None, "{}", case.typed);
         assert_eq!(settings.result_categories(), case.categories, "{}", case.typed);
         assert_eq!(settings.shown_rows(), case.shown, "{}", case.typed);
     }
@@ -425,7 +426,8 @@ fn a_search_that_matches_nothing_says_so() {
     let imp = settings.page.imp();
     assert_eq!(imp.match_count.text(), "No matching settings");
     assert_eq!(imp.pages.visible_child_name().as_deref(), Some("no-matches"));
-    assert!(settings.listed_categories().is_empty());
+    assert_eq!(settings.listed_categories(), Category::ALL);
+    assert_eq!(settings.chosen_category(), None);
 }
 
 /// More > Default file explorer… names its category, so it shows all of
@@ -471,6 +473,7 @@ fn enter_in_the_search_jumps_to_the_first_match() {
     settings.page.imp().search_entry.emit_activate();
 
     assert_eq!(settings.page.view(), SettingsView::Category(Category::Search));
+    assert_eq!(settings.chosen_category(), None, "the search goes on");
     let row = settings.row("Check network and unwatched folders every");
     assert!(row.has_css_class("jump-target"));
     let focus = GtkWindowExt::focus(&settings.test.window).expect("a control has focus");
