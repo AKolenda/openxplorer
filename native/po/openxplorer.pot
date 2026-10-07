@@ -4565,6 +4565,10 @@ msgstr ""
 msgid "“{name}” is not a link."
 msgstr ""
 
+#: crates/ox-app/src/window/loading/disconnected.rs
+msgid "The drive or network share that holds this folder was disconnected."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/loading/removed_folder.rs
 msgid "Current location changed, {path} is no longer accessible."

@@ -13,9 +13,9 @@
 
 use std::path::PathBuf;
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::places::{NetworkLocation, Place};
 
 use crate::locations::{self, Page};
@@ -67,6 +67,24 @@ impl BrowserWindow {
                 ),
             )
         });
+        // A mount that went away also takes the folders the tabs show on
+        // it: they say so rather than keep their old rows.
+        let removed = monitor.connect_local(
+            "mount-removed",
+            false,
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[upgrade_or_default]
+                move |arguments| {
+                    let mount = arguments.get(1).and_then(|value| value.get::<gio::Mount>().ok());
+                    if let Some(mount) = mount {
+                        window.mount_removed(&mount.root().uri());
+                    }
+                    None
+                }
+            ),
+        );
         let places = self.context().connect_places_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -74,6 +92,7 @@ impl BrowserWindow {
         ));
         let mut external = self.imp().handlers.borrow_mut();
         external.volumes.extend(handlers);
+        external.volumes.push(removed);
         external.places = Some(places);
     }
 
