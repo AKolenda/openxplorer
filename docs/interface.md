@@ -126,4 +126,4 @@ The website tour shows pictures and cannot drag files. Compatibility with a part
 
 ---
 
-OpenXplorer 2.0.2. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.3. Project-authored documentation: AGPL-3.0-only.
