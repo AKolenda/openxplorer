@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 async-channel.workspace = true
 gtk.workspace = true
+gdk-wayland.workspace = true
 gio.workspace = true
 glib.workspace = true
 ox-core.workspace = true

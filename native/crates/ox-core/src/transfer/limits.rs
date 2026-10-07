@@ -17,7 +17,9 @@ use super::guard::MAX_DEPTH;
 use super::names::child_node;
 use super::node::{Node, NodeFactory, NodeKind};
 use super::types::{ConflictPolicy, TransferMode};
+use super::unstorable::UnstorableReason;
 use crate::format::pretty_bytes;
+use crate::location::{ends_like_windows_drops, is_reserved_device_name};
 
 /// The largest file FAT can store: 4 GiB less one byte.
 pub const FAT_MAX_FILE_SIZE: u64 = 4 * 1024 * 1024 * 1024 - 1;
@@ -100,9 +102,27 @@ impl StorageRules {
         }
     }
 
+    /// Why `name` cannot be stored here as it is, if it cannot: it has a
+    /// character the file system forbids, or Windows cannot use it (a
+    /// device name such as `CON` or `nul.txt`, or a dot or space at its
+    /// end). FAT, exFAT and NTFS are Windows' own file systems, and a name
+    /// Windows cannot open there is as good as lost to it.
+    pub(crate) fn name_problem(&self, name: &OsStr) -> Option<UnstorableReason> {
+        if !self.restricts_names {
+            return None;
+        }
+        if name.as_bytes().iter().copied().any(is_forbidden) {
+            return Some(UnstorableReason::InvalidCharacters);
+        }
+        let text = name.to_string_lossy();
+        (is_reserved_device_name(&text) || ends_like_windows_drops(&text))
+            .then_some(UnstorableReason::WindowsName)
+    }
+
     /// True when `name` cannot be stored here as it is.
+    #[cfg(test)]
     pub(crate) fn forbids_name(&self, name: &OsStr) -> bool {
-        self.restricts_names && name.as_bytes().iter().copied().any(is_forbidden)
+        self.name_problem(name).is_some()
     }
 }
 
@@ -112,13 +132,23 @@ fn is_forbidden(byte: u8) -> bool {
     byte < 0x20 || byte == 0x7f || FORBIDDEN_CHARACTERS.contains(&byte)
 }
 
-/// `name` with every forbidden character replaced by `_`.
-pub(crate) fn replace_forbidden_characters(name: &OsStr) -> OsString {
-    let bytes = name
+/// `name` made storable on FAT, exFAT and NTFS: every forbidden
+/// character becomes `_`, so does every dot or space at its end, and a
+/// Windows device name gets `_` in front (`nul.txt` becomes `_nul.txt`).
+pub fn storable_name(name: &OsStr) -> OsString {
+    let mut bytes: Vec<u8> = name
         .as_bytes()
         .iter()
         .map(|&byte| if is_forbidden(byte) { b'_' } else { byte })
         .collect();
+    let kept = bytes
+        .iter()
+        .rposition(|byte| !matches!(byte, b'.' | b' '))
+        .map_or(0, |last| last + 1);
+    bytes[kept..].fill(b'_');
+    if is_reserved_device_name(&String::from_utf8_lossy(&bytes)) {
+        bytes.insert(0, b'_');
+    }
     OsString::from_vec(bytes)
 }
 
@@ -261,9 +291,47 @@ mod tests {
             "big.iso is too large for the destination file system, which only supports files up to 4 GiB."
         );
         assert!(exfat.check_file_size("big.iso", u64::MAX).is_ok());
+        assert_eq!(storable_name(OsStr::new("a:b*c?.txt")), OsStr::new("a_b_c_.txt"));
+    }
+
+    /// Windows' device names and names ending in a dot or a space cannot
+    /// be stored on its file systems; each gets a name Windows can open.
+    ///
+    /// parity: XFER-028
+    #[test]
+    fn names_windows_cannot_use_are_refused_and_made_storable() {
+        let ntfs = StorageRules::of(Some("ntfs3"));
+        let ext4 = StorageRules::of(Some("ext4"));
+        for name in ["CON", "nul.txt", "Com1.tar.gz", "notes.", "draft ", "AUX .log"] {
+            assert_eq!(
+                ntfs.name_problem(OsStr::new(name)),
+                Some(UnstorableReason::WindowsName),
+                "{name}"
+            );
+            assert_eq!(ext4.name_problem(OsStr::new(name)), None, "{name}");
+        }
+        for name in ["console.txt", "com10", "nulled.txt", ".hidden", "a.b"] {
+            assert_eq!(ntfs.name_problem(OsStr::new(name)), None, "{name}");
+        }
         assert_eq!(
-            replace_forbidden_characters(OsStr::new("a:b*c?.txt")),
-            OsStr::new("a_b_c_.txt")
+            ntfs.name_problem(OsStr::new("con?.txt")),
+            Some(UnstorableReason::InvalidCharacters),
+            "a forbidden character is named first"
         );
+        let cases = [
+            ("CON", "_CON"),
+            ("nul.txt", "_nul.txt"),
+            ("notes.", "notes_"),
+            ("draft  ", "draft__"),
+            ("AUX .log", "_AUX .log"),
+            ("con.", "con_"),
+            ("a:b.", "a_b_"),
+            ("...", "___"),
+        ];
+        for (name, storable) in cases {
+            let fixed = storable_name(OsStr::new(name));
+            assert_eq!(fixed, OsStr::new(storable), "{name}");
+            assert_eq!(ntfs.name_problem(&fixed), None, "{name} becomes storable");
+        }
     }
 }

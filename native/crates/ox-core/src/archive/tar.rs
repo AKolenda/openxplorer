@@ -24,6 +24,10 @@ use header::{is_end, parse, pax_path_and_size, HeaderKind, BLOCK};
 
 /// The most bytes of a GNU long name or pax record set.
 const MAX_METADATA_BYTES: u64 = 1024 * 1024;
+/// ARC-005: the most bytes of member names kept, as many as the largest
+/// ZIP directory the viewer reads holds. A compressed TAR of long names
+/// is tiny, but every name is kept while it is browsed.
+const MAX_NAME_BYTES: usize = 32 * 1024 * 1024;
 /// The Unix file type bits of a regular file and a folder, as a ZIP
 /// records them.
 const REGULAR_FILE: u32 = 0o100_000;
@@ -71,6 +75,15 @@ impl Read for SharedStream {
 }
 
 impl SharedStream {
+    /// How many bytes the archive has.
+    fn length(&self) -> io::Result<u64> {
+        let mut stream = self.0.borrow_mut();
+        let position = stream.stream_position()?;
+        let end = stream.seek(SeekFrom::End(0))?;
+        stream.seek(SeekFrom::Start(position))?;
+        Ok(end)
+    }
+
     /// Whether every byte has been read.
     fn is_at_end(&self) -> io::Result<bool> {
         let mut stream = self.0.borrow_mut();
@@ -149,8 +162,8 @@ impl TarArchive {
     /// # Errors
     ///
     /// [`ArchiveError::DamagedArchive`] for a stream that is not a TAR,
-    /// [`ArchiveError::TooManyMembers`], the source's read error or
-    /// [`ArchiveError::Cancelled`].
+    /// [`ArchiveError::TooManyMembers`], [`ArchiveError::TarNamesTooLarge`],
+    /// the source's read error or [`ArchiveError::Cancelled`].
     pub(crate) fn open(
         source: Box<dyn ArchiveStream>,
         compression: TarCompression,
@@ -169,6 +182,7 @@ impl TarArchive {
             cancel: cancel.clone(),
         };
         archive.read_headers(max_members)?;
+        archive.share_compressed_size()?;
         Ok(archive)
     }
 
@@ -205,10 +219,29 @@ impl TarArchive {
         Ok(())
     }
 
+    /// ARC-017: gives each file of a compressed TAR its share of the
+    /// archive's compressed size, as its compressed size. A TAR is
+    /// compressed as one stream, so this is what a member costs to store,
+    /// and the ratio limits then refuse a TAR that unpacks to far more
+    /// than it takes, as they refuse such a ZIP member.
+    fn share_compressed_size(&mut self) -> Result<(), ArchiveError> {
+        if self.compression == TarCompression::None {
+            return Ok(());
+        }
+        let packed = self.source.length()?;
+        let unpacked = self.position.max(1);
+        for member in &mut self.members {
+            let share = (u128::from(member.size) * u128::from(packed)).div_ceil(u128::from(unpacked));
+            member.compressed_size = u64::try_from(share).unwrap_or(u64::MAX);
+        }
+        Ok(())
+    }
+
     /// Reads every header, recording the members and where their data is.
     fn read_headers(&mut self, max_members: usize) -> Result<(), ArchiveError> {
         let mut long_name: Option<String> = None;
         let mut pax_size: Option<u64> = None;
+        let mut name_bytes = 0usize;
         loop {
             self.cancel.check()?;
             let mut block = [0u8; BLOCK];
@@ -221,7 +254,7 @@ impl TarArchive {
                 break;
             }
             let header = parse(&block).map_err(|_| ArchiveError::DamagedArchive)?;
-            let metadata_blocks = padded(header.size);
+            let metadata_blocks = padded(header.size)?;
             match header.kind {
                 HeaderKind::LongName | HeaderKind::Pax => {
                     if header.size > MAX_METADATA_BYTES {
@@ -249,10 +282,14 @@ impl TarArchive {
                 if self.members.len() >= max_members {
                     return Err(ArchiveError::TooManyMembers);
                 }
+                name_bytes = name_bytes.saturating_add(member.name.len());
+                if name_bytes > MAX_NAME_BYTES {
+                    return Err(ArchiveError::TarNamesTooLarge);
+                }
                 self.members.push(member);
                 self.data_offsets.push(self.position);
             }
-            self.skip(padded(size))?;
+            self.skip(padded(size)?)?;
         }
         Ok(())
     }
@@ -379,9 +416,12 @@ fn member(name: &str, kind: HeaderKind, mode: u32, size: u64, modified: u64) -> 
     })
 }
 
-/// `size` rounded up to whole blocks.
-fn padded(size: u64) -> u64 {
-    size.div_ceil(BLOCK as u64) * BLOCK as u64
+/// `size` rounded up to whole blocks; a size no stream can hold is
+/// damaged.
+fn padded(size: u64) -> Result<u64, ArchiveError> {
+    size.div_ceil(BLOCK as u64)
+        .checked_mul(BLOCK as u64)
+        .ok_or(ArchiveError::DamagedArchive)
 }
 
 /// A decompression failure is damaged data.
@@ -407,7 +447,10 @@ pub(super) mod tests {
             let size = data.len() as u64;
             bytes.extend_from_slice(&ustar(name, *kind, 0o644, size));
             bytes.extend_from_slice(data);
-            bytes.resize(bytes.len() + usize::try_from(padded(size) - size).unwrap(), 0);
+            bytes.resize(
+                bytes.len() + usize::try_from(padded(size).unwrap() - size).unwrap(),
+                0,
+            );
         }
         bytes.extend_from_slice(&[0u8; 2 * BLOCK]);
         bytes
@@ -502,5 +545,92 @@ pub(super) mod tests {
             &Cancellation::new(),
         );
         assert!(matches!(opened, Err(ArchiveError::DamagedArchive)), "{opened:?}");
+    }
+
+    fn try_open(bytes: Vec<u8>) -> Result<TarArchive, ArchiveError> {
+        let compression = TarCompression::detect(&bytes).expect("a TAR");
+        TarArchive::open(
+            Box::new(Cursor::new(bytes)),
+            compression,
+            100,
+            &Cancellation::new(),
+        )
+    }
+
+    /// A size near the largest number a header holds, in GNU's base-256
+    /// form or in a pax record, is damaged rather than a crash.
+    #[test]
+    fn a_crafted_size_is_damaged_rather_than_a_crash() {
+        let mut block = ustar("huge", b'0', 0o644, 0);
+        block[124..136].copy_from_slice(&[0x80, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
+        block[148..156].copy_from_slice(b"        ");
+        let sum: u32 = block.iter().map(|&byte| u32::from(byte)).sum();
+        block[148..155].copy_from_slice(format!("{sum:06o}\0").as_bytes());
+        let mut base256 = block.to_vec();
+        base256.extend_from_slice(&[0u8; 2 * BLOCK]);
+        let pax = tar_of(&[
+            ("pax", b'x', b"29 size=18446744073709551615\n"),
+            ("huge", b'0', b""),
+        ]);
+
+        for bytes in [base256, pax] {
+            let opened = try_open(bytes);
+
+            assert!(matches!(opened, Err(ArchiveError::DamagedArchive)), "{opened:?}");
+        }
+    }
+
+    /// Long names are kept only up to the size of the largest ZIP
+    /// directory the viewer reads, so a small archive of long names does
+    /// not take gigabytes to list.
+    ///
+    /// parity: ARC-005
+    #[test]
+    fn long_names_stop_at_the_directory_limit() {
+        let long_name = vec![b'n'; usize::try_from(MAX_METADATA_BYTES).unwrap() - 8];
+        let mut entries = Vec::new();
+        let names: Vec<String> = (0..=MAX_NAME_BYTES / long_name.len())
+            .map(|index| format!("{index:06}"))
+            .collect();
+        let named: Vec<Vec<u8>> = names
+            .iter()
+            .map(|index| [index.as_bytes(), &long_name].concat())
+            .collect();
+        for name in &named {
+            entries.push(("././@LongLink", b'L', name.as_slice()));
+            entries.push(("short", b'0', b"".as_slice()));
+        }
+        let fits = tar_of(&entries[..entries.len() - 2]);
+        let over = tar_of(&entries);
+
+        assert_eq!(
+            try_open(fits).expect("within the limit").members().len(),
+            named.len() - 1
+        );
+        assert!(matches!(try_open(over), Err(ArchiveError::TarNamesTooLarge)));
+    }
+
+    /// A compressed TAR has one compressed size; each member counts its
+    /// share of it, so the ratio limits apply to a TAR as to a ZIP.
+    ///
+    /// parity: ARC-017
+    #[test]
+    fn a_member_counts_its_share_of_the_compressed_archive() {
+        let zeros = vec![0u8; 1024 * 1024];
+        let tar = tar_of(&[("zeros", b'0', &zeros), ("note", b'0', b"hi")]);
+
+        let plain = open(tar.clone());
+        let gzip = gzipped(&tar);
+        let packed = gzip.len() as u64;
+        let compressed = open(gzip);
+
+        assert_eq!(plain.members()[0].compressed_size, 1024 * 1024);
+        let share = compressed.members()[0].compressed_size;
+        assert!(share > packed * 9 / 10 && share <= packed, "{share} of {packed}");
+        assert_eq!(
+            compressed.members()[1].compressed_size,
+            1,
+            "a tiny member rounds up"
+        );
     }
 }

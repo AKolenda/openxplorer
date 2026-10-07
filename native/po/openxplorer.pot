@@ -253,6 +253,10 @@ msgstr ""
 msgid "Not updated live"
 msgstr ""
 
+#: crates/ox-app/resources/ui/status-bar.ui
+msgid "Read-only drive"
+msgstr ""
+
 #: crates/ox-app/resources/ui/tab-strip.ui
 msgid "Folder tabs"
 msgstr ""
@@ -3446,7 +3450,7 @@ msgstr ""
 msgid "Paste files (Ctrl+V)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/conflict_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/conflict_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Rename"
 msgstr ""
 
@@ -4408,6 +4412,10 @@ msgid "Link not supported"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
+msgid "Name Windows cannot use"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
 msgid "Name not supported"
 msgstr ""
 
@@ -4418,6 +4426,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
 msgid "“{name}” has characters the destination file system does not allow (\" * : < > ? \\ | and control characters)."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
+msgid "“{name}” is a name Windows cannot use on this drive: it is a device name such as CON, PRN, AUX, NUL, COM1 or LPT1 (with any extension), or it ends with a dot or a space. Rename it to “{storable}”, or skip it."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -4558,6 +4571,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/link_target.rs
 msgid "“{name}” is not a link."
+msgstr ""
+
+#: crates/ox-app/src/window/loading/disconnected.rs
+msgid "The drive or network share that holds this folder was disconnected."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5450,6 +5467,12 @@ msgid "{value1} minutes"
 msgstr ""
 
 #: crates/ox-app/src/window/zip_copies.rs
+msgid "1 link or special file inside was left out."
+msgid_plural "{count} links or special files inside were left out."
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/ox-app/src/window/zip_copies.rs
 msgid "Copy items from one ZIP at a time."
 msgstr ""
 
@@ -5584,6 +5607,10 @@ msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
 msgid "The archive has too many paths for the built-in extractor."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "The archive's file names are too long for the built-in viewer. Use an archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -5757,6 +5784,10 @@ msgstr ""
 
 #: crates/ox-core/src/archive/zip/error.rs
 msgid "zipfiles that span multiple disks are not supported"
+msgstr ""
+
+#: crates/ox-core/src/checksums.rs
+msgid "Checksums can only be calculated for ordinary files, not for pipes, devices or sockets."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6984,6 +7015,26 @@ msgstr ""
 msgid "The settings file is not valid UTF-8 text."
 msgstr ""
 
+#: crates/ox-core/src/read_only.rs
+msgid "The drive is read-only, so nothing on it can be changed. If it is a Windows drive, Windows is hibernated or used Fast startup: shut Windows down fully, then mount the drive again."
+msgstr ""
+
+#: crates/ox-core/src/read_only.rs
+msgid "This drive is mounted read-only, so files on it cannot be created, changed or deleted."
+msgstr ""
+
+#: crates/ox-core/src/read_only.rs
+msgid "This drive is read-only."
+msgstr ""
+
+#: crates/ox-core/src/read_only.rs
+msgid "Windows is hibernated or used Fast startup, so this drive is read-only."
+msgstr ""
+
+#: crates/ox-core/src/read_only.rs
+msgid "Windows was hibernated or shut down with Fast startup, so Linux mounted this drive read-only to keep its files safe. Start Windows and shut it down fully (hold Shift while choosing Shut down, or turn off Fast startup), then mount the drive again."
+msgstr ""
+
 #: crates/ox-core/src/search/error.rs
 msgid "Connected-device search caching is not supported. Copy files to local storage before indexing them."
 msgstr ""
@@ -7353,6 +7404,12 @@ msgstr[1] ""
 #: crates/ox-core/src/transfer/source_removal.rs
 msgid "1 item changed during the move and was"
 msgid_plural "{count} items changed during the move and were"
+msgstr[0] ""
+msgstr[1] ""
+
+#: crates/ox-core/src/transfer/source_removal.rs
+msgid "1 item could not be moved and was"
+msgid_plural "{count} items could not be moved and were"
 msgstr[0] ""
 msgstr[1] ""
 
