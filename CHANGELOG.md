@@ -1,5 +1,13 @@
 # Unreleased
 
+- Smaller fixes to Open and Save dialogs: browsing a network share in a
+  dialog no longer waits on GVfs on the main thread, since the share's
+  local path is looked up in the background; Save stays on where nothing
+  can be saved (This PC, Network, a share without a local path) and
+  pressing it says why, instead of being greyed out with no reason; a
+  split pane in a dialog lists only the chosen file type, as the first
+  pane does; and only the desktop portal that opened a dialog can close
+  it, not any program on the session bus.
 - An Open or Save dialog can no longer get stuck with Save, Cancel and
   Escape doing nothing:
   - "Replace it?" is asked inside the dialog, not in a window of its own
