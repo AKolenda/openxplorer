@@ -8,6 +8,10 @@
   split pane in a dialog lists only the chosen file type, as the first
   pane does; and only the desktop portal that opened a dialog can close
   it, not any program on the session bus.
+- A folder view split in two no longer reports a wrong height for an
+  instant as it opens, which could make GTK lay widgets over each other
+  in a narrow window or with wide fonts: the empty-folder page scrolls
+  instead of making its pane taller when narrow.
 
 # 2.0.3 — 2026-10-06
 

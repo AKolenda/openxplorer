@@ -45,6 +45,49 @@ fn each_pane_keeps_its_folder_and_the_window_follows_the_active_one() {
     assert_eq!(test.window.active_side(), PaneSide::Start);
 }
 
+/// A split measures the same height whatever width it is given, also
+/// just after it opens. Until its first layout with both panes, `GtkPaned`
+/// measures the start pane at the divider's own width, however wide the
+/// split is asked to be, so a pane taller when narrow (the empty page's
+/// message wrapping, counted even while files show) made the split taller
+/// for a great width than free of one. GTK's box layout then warned
+/// "Expect overlapping widgets", a critical that aborted the dialog tests
+/// where only the `DejaVu` fonts are installed.
+///
+/// parity: VIEW-059
+#[gtk::test]
+fn a_split_measures_the_same_height_whatever_width_it_is_given() {
+    let fixture = Fixture::standard();
+    // An empty folder, so the start pane's empty page holds its message.
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.wait_for_listing("Documents, which is empty");
+    settle();
+    let split = test.window.imp().pane_split.get();
+    let consistent = |when: &str| {
+        let (free, ..) = split.measure(gtk::Orientation::Vertical, -1);
+        let (wide, ..) = split.measure(gtk::Orientation::Vertical, 1 << 20);
+        assert!(
+            wide <= free,
+            "{when}, divider at {}: the split needs {wide} px at a great width but reports {free} px",
+            split.position()
+        );
+    };
+
+    test.activate("split-view", None);
+    // Before GTK lays the split out, with the divider as far left as the
+    // start pane allows.
+    split.set_position(1);
+    consistent("just opened");
+
+    test.wait_for_listing("the second pane");
+    settle();
+    for position in [1, split.width() / 2] {
+        split.set_position(position);
+        crate::test_support::harness::wait_for_frames(&test.window, 4);
+        consistent("laid out");
+    }
+}
+
 /// Scrolling the inactive pane with the wheel does not activate it, but
 /// leaving the split tab must still save where that pane was scrolled.
 ///
