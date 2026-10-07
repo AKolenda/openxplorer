@@ -339,6 +339,24 @@ impl BrowserWindow {
         self.size_strip().show_cancelling();
     }
 
+    /// Ends the window's folder-size run as its window closes: the folder
+    /// being measured stops at its next entry and the folders still
+    /// waiting are not measured, so a closed window leaves nothing walking
+    /// the disk or a share (PROP-029).
+    pub(super) fn end_size_scans(&self) {
+        if let Some(run) = self.size_scans().run.borrow_mut().as_mut() {
+            run.is_cancelled = true;
+            run.cancel.cancel();
+        }
+    }
+
+    /// The cancellation of the run in progress, for tests.
+    #[cfg(test)]
+    pub(super) fn size_run_cancellation(&self) -> Option<Cancellation> {
+        let run = self.size_scans().run.borrow();
+        run.as_ref().map(|run| run.cancel.clone())
+    }
+
     /// What this window measured for the folder at `uri`.
     pub(super) fn measured_folder_size(&self, uri: &str) -> Option<FolderSizeState> {
         self.size_scans().measured.borrow().get(uri).cloned()

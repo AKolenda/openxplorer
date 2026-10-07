@@ -120,6 +120,7 @@ mod place_menus;
 mod preferences;
 mod quick_access;
 mod quick_look;
+mod read_only_drive;
 mod recycle_bin_place;
 mod relocated_files;
 mod result_location;

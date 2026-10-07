@@ -259,27 +259,35 @@ fn cancellation_during_copy_removes_partial_stage_and_stops_the_batch() {
     assert_eq!(byte_updates, 1);
 }
 
-/// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_failure_inside_tree_leaves_source`: one special file deep
-/// inside a folder fails the whole folder. Nothing is published, the stage
-/// is removed and the source is untouched.
+/// One special file inside a folder no longer fails the whole folder, as
+/// it did in `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_failure_inside_tree_leaves_source`:
+/// as in Windows Explorer, only that entry is left out, the rest of the
+/// folder is copied and published, and the entry is reported by its path.
+/// Without a question installed it is left out without asking.
 ///
-/// parity: XFER-018
+/// parity: XFER-018, OPS-047
 #[test]
-fn a_special_file_inside_a_folder_fails_the_whole_folder() {
+fn a_special_file_inside_a_folder_is_left_out_and_the_rest_copied() {
     let fixture = Fixture::new();
     let tree = fixture.source_folder.join("tree");
-    fs::create_dir(&tree).unwrap();
+    fs::create_dir_all(tree.join("inner")).unwrap();
     write(&tree.join("a"), "hello");
-    make_fifo(&tree.join("pipe"));
+    write(&tree.join("inner").join("b"), "world");
+    make_fifo(&tree.join("inner").join("pipe"));
     let mut engine = fixture.engine(local::local());
 
     let result = fixture.run(&mut engine, &[&tree], Request::Copy(ConflictPolicy::Skip));
 
-    assert!(result.done.is_empty(), "{result:?}");
+    assert_eq!(result.done, [file_uri(&tree)], "{result:?}");
     assert_eq!(result.errors.len(), 1, "{result:?}");
+    assert!(result.errors[0].starts_with("tree/inner/pipe: "), "{result:?}");
     assert!(result.errors[0].contains("special files"), "{result:?}");
-    assert!(list(&fixture.destination_folder).is_empty());
+    let copy = fixture.destination_folder.join("tree");
+    assert_eq!(read(&copy.join("a")), "hello");
+    assert_eq!(read(&copy.join("inner").join("b")), "world");
+    assert_eq!(list(&copy.join("inner")), ["b"]);
     assert_eq!(read(&tree.join("a")), "hello");
+    fixture.assert_no_staging();
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_cancel_before_start`:
