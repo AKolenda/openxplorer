@@ -37,10 +37,11 @@ impl BrowserWindow {
                     true
                 },
             ),
-            toggle_action(WindowAction::Groups, false, |window, grouped| {
-                window.show_groups(grouped);
-                window.remember_style();
-            }),
+            choice_action(
+                WindowAction::GroupBy,
+                ox_core::grouping::GroupBy::None.as_str(),
+                BrowserWindow::group_by_key,
+            ),
             toggle_action(WindowAction::FoldersFirst, true, |window, first| {
                 window.show_folders_first(first);
                 window.remember_style();

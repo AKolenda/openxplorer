@@ -254,4 +254,52 @@ mod tests {
             assert!(errors.is_empty(), "{errors:#?}");
         }
     }
+
+    /// The rule in `code` that starts with `selector`, up to its closing
+    /// brace.
+    fn rule_starting<'a>(code: &'a str, selector: &str) -> &'a str {
+        let start = code
+            .find(selector)
+            .unwrap_or_else(|| panic!("a rule for {selector}"));
+        let end = code[start..].find('}').expect("the rule ends");
+        &code[start..start + end]
+    }
+
+    /// "Hide expand arrows" (SIDE-032) hides the navigation pane's arrows,
+    /// the chevrons of This PC and Network and the folder tree's, until
+    /// the pointer is over the pane or keyboard focus is in it, as Windows
+    /// does. The file list's arrows are the Expandable folders switch's.
+    ///
+    /// parity: SIDE-032
+    #[test]
+    fn the_skin_hides_the_navigation_panes_expand_arrows() {
+        let code = without_comments(RULES);
+        let hidden = rule_starting(&code, "window.hide-expand-arrows .sidebar .side-expander,");
+        assert!(hidden.contains("window.hide-expand-arrows .sidebar .folder-tree treeexpander expander {"));
+        assert!(hidden.contains("opacity: 0;"));
+        let revealed = rule_starting(&code, "window.hide-expand-arrows .sidebar:hover .side-expander,");
+        for selector in [
+            "window.hide-expand-arrows .sidebar:hover .folder-tree treeexpander expander,",
+            "window.hide-expand-arrows .sidebar:focus-within .side-expander,",
+            "window.hide-expand-arrows .sidebar:focus-within .folder-tree treeexpander expander {",
+        ] {
+            assert!(revealed.contains(selector), "{selector}");
+        }
+        assert!(revealed.contains("opacity: 1;"));
+        assert!(
+            !code.contains("window.hide-expand-arrows columnview"),
+            "the file list keeps its arrows"
+        );
+    }
+
+    /// The chevrons of This PC and Network have their own highlight, a
+    /// step past the row's (SIDE-033).
+    ///
+    /// parity: SIDE-033
+    #[test]
+    fn the_section_chevrons_have_their_own_highlight() {
+        let code = without_comments(RULES);
+        let hover = rule_starting(&code, "window.ox .sidebar button.side-expander:hover {");
+        assert!(hover.contains("background-color: @ox_pressed;"));
+    }
 }

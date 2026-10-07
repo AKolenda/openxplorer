@@ -10,9 +10,9 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 
-use crate::folder_view::groups::{self, GroupClock};
+use crate::folder_view::groups::{self, GroupClocks, Grouping};
 use crate::folder_view::item::FileItem;
-use crate::folder_view::sort_roles::{SortRole, SortState};
+use crate::folder_view::sort_roles::SortRole;
 use crate::folder_view::sorting::{self, SortColumn, SortDirection};
 
 /// The item a folder model hands to its filter or sorters.
@@ -60,7 +60,7 @@ pub(super) struct SortOptions {
     pub(super) folders_first: bool,
     pub(super) hidden_last: bool,
     pub(super) role: Option<(SortRole, SortDirection)>,
-    pub(super) grouping: Option<(SortState, GroupClock)>,
+    pub(super) grouping: Option<(Grouping, GroupClocks)>,
 }
 
 impl Default for SortOptions {
@@ -112,16 +112,16 @@ pub(super) fn role_sorter(options: &SharedOptions) -> gtk::CustomSorter {
     })
 }
 
-/// Sorts the items into their groups, in the order the key sorts.
+/// Sorts the items into their groups, in the groups' order.
 pub(super) fn group_sorter(options: &SharedOptions) -> gtk::CustomSorter {
     let options = Rc::clone(options);
     gtk::CustomSorter::new(move |a, b| {
-        let Some((state, clock)) = options.get().grouping else {
+        let Some((grouping, clocks)) = options.get().grouping else {
             return gtk::Ordering::Equal;
         };
-        let a = groups::group_of(state.by, as_item(a), &clock);
-        let b = groups::group_of(state.by, as_item(b), &clock);
-        directed(a.compare(&b), state.direction).into()
+        let a = groups::group_in(grouping, as_item(a), &clocks);
+        let b = groups::group_in(grouping, as_item(b), &clocks);
+        groups::compare_groups(grouping, &a, &b).into()
     })
 }
 

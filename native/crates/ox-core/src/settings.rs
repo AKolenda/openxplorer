@@ -49,7 +49,7 @@ mod view_properties;
 use std::path::{Path, PathBuf};
 
 pub use crate::private_storage::{StorageError, StorageRefusal};
-pub use choices::{Appearance, ContextMenu, Theme, View};
+pub use choices::{Appearance, ContextMenu, Theme, View, ZipOpening};
 pub use error::SettingsError;
 pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
@@ -61,7 +61,9 @@ pub use preferences::{
 pub use view_options::{ViewOptions, DEFAULT_DETAILS_COLUMNS, PREVIEW_SIZE_LIMIT};
 
 pub use tree_options::FolderTreeOptions;
-pub use view_properties::{may_remember, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS};
+pub use view_properties::{
+    may_remember, saved_style_for, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS,
+};
 
 use crate::location::same_location;
 use save::{replace_private_file, OldFile, SettingsLock};
@@ -353,6 +355,20 @@ impl Settings {
                 properties,
                 scope,
             );
+            Ok(preferences.clone())
+        })
+    }
+
+    /// Forgets every folder's display style and the shared one, so every
+    /// folder shows the default style (Windows' Reset Folders).
+    ///
+    /// # Errors
+    ///
+    /// The settings cannot be written.
+    pub fn reset_folder_views(&mut self) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let preferences = &mut data.preferences;
+            view_properties::reset(&mut preferences.folder_views, &mut preferences.view_defaults);
             Ok(preferences.clone())
         })
     }

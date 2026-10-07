@@ -53,6 +53,30 @@ fn rename(from: &gio::File, to: &gio::File) -> Result<(), glib::Error> {
     from.move_(to, RENAME, gio::Cancellable::NONE, None)
 }
 
+/// Like [`lift_single_folder`], but only when the lone folder has the
+/// output's own name: Extract all… into `Downloads/tidewater` of a ZIP
+/// holding `tidewater/` gives `Downloads/tidewater`, not
+/// `Downloads/tidewater/tidewater`, while a folder the user named
+/// differently keeps the name they typed. Blocking.
+pub fn lift_same_named_folder(extracted: ExtractedFolder) -> ExtractedFolder {
+    let outer = gio::File::for_uri(&extracted.uri);
+    if lone_folder(&outer).as_deref() == Some(extracted.name.as_str()) {
+        lift_single_folder(extracted)
+    } else {
+        extracted
+    }
+}
+
+/// A private, hidden name for a folder that an extraction into an
+/// existing folder unpacks into first, before its items are moved in.
+///
+/// # Errors
+///
+/// When the system's random source cannot be read.
+pub fn private_extraction_name() -> std::io::Result<String> {
+    Ok(format!(".openxplorer-extract-{}", random_hex(NAME_BYTES)?))
+}
+
 /// Makes the lone folder inside `extracted` the output, beside the
 /// archive under the first free name based on its own. Returns the
 /// output as it ends up: lifted, or `extracted` unchanged when there is
@@ -147,6 +171,28 @@ mod tests {
             .collect();
         names.sort();
         assert_eq!(names, ["Project", "Project (2)"], "nothing left behind");
+    }
+
+    /// Extracting into a new folder lifts only a lone folder of the same
+    /// name, so the folder keeps the name the user typed.
+    ///
+    /// parity: ARC-009
+    #[test]
+    fn only_a_same_named_lone_folder_is_lifted() {
+        let root = tempfile::tempdir().expect("a folder");
+        fs::create_dir_all(root.path().join("tidewater/tidewater/maps")).expect("output");
+        fs::create_dir_all(root.path().join("Stuff/tidewater")).expect("output");
+
+        let same = lift_same_named_folder(extracted(root.path(), "tidewater"));
+        let other = lift_same_named_folder(extracted(root.path(), "Stuff"));
+
+        assert_eq!(same.name, "tidewater");
+        assert!(root.path().join("tidewater/maps").is_dir());
+        assert!(!root.path().join("tidewater/tidewater").exists());
+        assert_eq!(other, extracted(root.path(), "Stuff"));
+        assert!(root.path().join("Stuff/tidewater").is_dir());
+        let name = private_extraction_name().expect("random");
+        assert!(name.starts_with(".openxplorer-extract-") && name.len() > 25);
     }
 
     /// parity: ARC-025

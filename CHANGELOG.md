@@ -1,3 +1,192 @@
+# Unreleased
+
+- Group by, as in Windows Explorer: Sort > Group by groups a folder apart
+  from its sort, so a folder grouped by date modified can be sorted by name
+  within each group. The choices are Name (A - H, I - P, Q - Z), Date
+  modified (Today, Yesterday, ... A long time ago), Type, Size, Date
+  created, Same as sort (the former Show in groups) and (None). Downloads
+  is grouped by date modified until another choice is made there. The Sort
+  menu now matches Explorer's: Name, Date modified and Type, with Size and
+  the further keys under More. The first group's heading is no longer
+  hidden when a grouped folder opens.
+- No more crash when Details columns change while groups are shown, such as
+  going Back from the Recycle Bin to Downloads grouped by date.
+- Group headings keep their counts right ("Today (3)") as files are added
+  or removed, and date groups move on at midnight: today's files become
+  Yesterday's without opening the folder again.
+- Turning groups off in a long Details list no longer crashes with GTK 4.22
+  ("gtk_list_item_manager_ensure_items"), so (None) is saved and the groups
+  go away. The headings now come off before the list changes and go back on
+  after, whenever the grouping changes.
+- Choosing an item in a side menu, such as Sort > Group by > Date
+  modified, closes every menu, and a click anywhere in the window closes
+  any menu still open. On KDE Plasma the Sort menu could stay on screen
+  until a window of another app was clicked.
+- An Open or Save dialog can no longer get stuck with Save, Cancel and
+  Escape doing nothing:
+  - "Replace it?" is asked inside the dialog, not in a window of its own
+    that could open out of sight and take every click and key.
+  - The dialog answers only once its window really closes. A window that
+    refused to close (an update installing, files being written in it)
+    used to keep a dead dialog after answering; now it says why and the
+    dialog stays usable.
+  - No tab can be moved into a dialog, which made closing it ask about
+    tabs.
+  - Escape cancels with Caps Lock or Num Lock on.
+  - Opening a window no longer waits for the Recycle Bin's watch, which
+    could hold the whole app, an open dialog included, while a network
+    share or drive stopped answering.
+- An Open or Save dialog opened by another application now belongs to that
+  application's window on Wayland, as Windows' dialog and KDE's own do: it
+  stays above the window, and the window cannot be used until the dialog
+  is answered or cancelled. The other OpenXplorer windows stay usable. This
+  needs a compositor with xdg-foreign and xdg-dialog (KDE Plasma 6.1 or
+  newer) and GTK 4.22 or newer; under X11 the dialog is a window of its
+  own, as before.
+- A drive Linux mounted read-only, such as the Windows drive of a
+  dual-boot computer while Windows is hibernated or used Fast startup,
+  is noticed: New, Paste, Cut, Rename, Duplicate and Delete are turned
+  off there and say why, Copy still works, and the status bar shows
+  "Read-only drive" with what to do (shut Windows down fully, then mount
+  the drive again). A write that still fails there says the drive is
+  read-only instead of the bare "Read-only file system".
+- Copying to a Windows drive (NTFS), or to a FAT or exFAT stick, no
+  longer creates names Windows cannot use. A device name such as CON,
+  PRN, AUX, NUL, COM1 or LPT1 (also with an extension, like `nul.txt`)
+  and a name ending in a dot or a space are asked about like names with
+  forbidden characters: Rename gives the item a name Windows opens
+  (`_nul.txt`, `notes_`), Skip leaves it out, and "Do this for all such
+  items" covers the rest of the copy.
+- A tab showing a USB drive that was unplugged, or a share or disk that
+  was unmounted by another program, no longer keeps showing the old
+  files. Every tab and split pane on it drops them and says "This
+  location is unavailable: the drive or network share that holds this
+  folder was disconnected", with Try again, which lists the folder once
+  the drive or share is back.
+- The Checksums tab no longer hangs on a named pipe (FIFO): a pipe, a
+  device or a socket is refused at once with a message, since it has no
+  contents to sum and reading a pipe waits forever for a writer, which
+  Cancel could not stop. Closing a window now also stops its folder-size
+  scan and the work of its Properties dialogs, which kept running.
+- Copying or moving a folder no longer fails as a whole when one file
+  inside it cannot be read (a locked or protected file, a socket, a pipe
+  or another special file). As in Windows Explorer, OpenXplorer asks about
+  that file by its path inside the folder: Retry copies only it again,
+  Skip or Skip all leave only it out, and the rest of the folder is
+  copied. The files left out are listed at the end, and a move keeps them,
+  with their folders, where they were.
+- Copying files out of a ZIP opened like a folder no longer fails because
+  of one bad item elsewhere in the ZIP, such as a symbolic link: only the
+  items you copy are checked. A link or special file inside a copied
+  folder, which the folder view hides, is left out, and the message says
+  so. Extract all still refuses a ZIP with such items.
+- TAR archives get the ZIP safety limits they were missing. A compressed
+  TAR that unpacks to over 1,000 times its size (a "TAR bomb") is refused
+  before anything is extracted, as such a ZIP is: each file counts its
+  share of the archive's compressed size. A crafted size near the largest
+  number a header can hold is a damaged archive instead of a crash in
+  debug builds. And a TAR's file names are kept only up to 32 MiB, as for
+  a ZIP's directory, so a 1.3 MB archive of long names no longer takes
+  2.4 GB of memory to list; it says its names are too long instead.
+- A file list at its top stays at its top when files come before the one
+  at the top edge, in every view: in an Open or Save dialog switching
+  from one file type to more (`*.svg`, then All files) no longer scrolls
+  the list down past its first files. GTK kept the row that was at the
+  top edge there. A position restored by Back or a tab switch, a file the
+  window scrolls to and a list scrolled down by hand are left alone.
+- Folder views, as in Windows' Folder Options: the view display style
+  dialog (View > Adjust view display style…) has "Apply to all folders",
+  which makes every folder show the current folder's view and forget its
+  own, and "Reset folders", which makes every folder forget its view and
+  show the default one. Both ask first, and every open window follows at
+  once.
+- Open and Save dialogs no longer freeze the app when their folder is on a
+  network share that stopped answering. The dialog checks the caller's
+  folder, typed names and files it would replace off the main thread and
+  waits at most three seconds: a folder that does not answer opens the
+  dialog in the home folder, and Save or Open says the share is not
+  answering. A file opened from such a share is sent as read-only.
+- The right-click menu of a This PC or Network card no longer crashes the
+  app when the page is drawn again while it is open (a drive or share
+  connecting, a server being found, or the menu's own Remove or Sign out).
+- Deleting permanently (Shift+Delete, or Delete where there is no Recycle
+  Bin) never goes into another drive. A folder where a drive, share or bind
+  mount is mounted is refused with "… is where a drive or share is mounted",
+  and a folder with one mounted inside it is refused before anything is
+  deleted, naming the mount. Before, the deletion went into the mounted
+  drive, deleted its files and only failed at the end with "Device busy".
+- Settings' small grey text is no longer cut off at the top or bottom
+  (#34). With GTK 4.22's Vulkan and NGL renderers, Segoe UI drawn at a
+  fractional size such as 12.5 pixels could lose the tops or bottoms of
+  its letters. Settings' descriptions and notes are now 12 pixels and its
+  titles 14, and every font size is rounded to a whole pixel at every text
+  size.
+
+# 2.0.2 — 2026-10-04
+
+More of Windows 11 File Explorer's behaviour: ZIPs, the Open and Save
+dialogs, Delete, Compact view and the navigation pane.
+
+- Extract all works like Windows Explorer's: it appears in the command bar
+  while a ZIP is selected, and its dialog is as short as Explorer's, with
+  one field, "Files will be extracted to this folder", filled in with the
+  ZIP's folder and name, and Browse…. A missing folder is created; an
+  existing one (such as Downloads) receives the files directly, asking
+  before any file is replaced; a ZIP holding one folder of the same name is
+  no longer nested (`tidewater/tidewater`). The counts, notes and Open in
+  archive manager are behind the (i) button; a password-protected ZIP says
+  so straight away and offers the archive manager, which no longer reopens
+  the archive in OpenXplorer when OpenXplorer is the default for ZIPs.
+- ZIPs can open like folders, as in Windows Explorer: Settings > Windows &
+  tabs > Open ZIP files > Like a folder (Windows). The ZIP opens in the tab,
+  with the address bar, crumbs, Back and Up working through it, Extract all
+  in the bar, and Copy, Paste and dragging items out (as real copies). It
+  stays read-only. The default, In a pop-up window, keeps today's window.
+- Copies made from inside a ZIP are cleaned up: a file opened from a ZIP no
+  longer leaves its copy in memory until logout (it is removed ten minutes
+  after it was opened), and items copied or dragged out are removed after a
+  day, when OpenXplorer starts or copies again.
+- Open and Save dialogs behave more like Windows':
+  - Escape closes the dialog while a file is selected in the list,
+    instead of only clearing the selection.
+  - The keyboard starts in File name with the name selected (without its
+    extension), so typing replaces it instead of jumping through the
+    file list.
+  - Open dialogs have a File name box too; File name takes a path from the
+    folder shown, `~/...` or a full path, and a folder typed there opens.
+  - Save adds the chosen type's extension to a name without one, Chrome's
+    types included; a name that ends in a dot is saved without one.
+  - A file typed in the address bar is chosen instead of being opened in
+    another application; in a Save dialog, that file or one double-clicked
+    is replaced after asking.
+  - Alt+Left, Alt+Right and Alt+Up work from the File name box.
+  - Ctrl+Q cancels the dialog instead of closing every window. Ctrl+N,
+    Open file location in new tab or new window, and Split view open
+    nothing from it.
+  - A dialog for one file keeps one item selected.
+  - Several files selected in an Open dialog for several are all chosen:
+    File name lists them in quotes (`"a.txt" "b.txt"`), and a quoted list
+    typed there opens every file in it.
+- Holding Shift while clicking Delete, in the command bar, the right-click
+  menu or the folder tree's menu, deletes permanently after asking, as in
+  Windows Explorer. Before, only the Shift+Delete key did.
+- The note at the bottom of the Details pane ("Select an item to see its
+  properties…") uses the pane's whole width instead of a narrow column.
+- Compact view, as in Windows 11: View > Compact view, and the same switch
+  in Settings > Appearance > Files and folders, draws the Details rows and
+  the navigation pane's rows closer together, so more items fit. Off by
+  default. (Not the List layout, which Dolphin calls "Compact".)
+- The arrows beside This PC and Network in the sidebar now collapse and
+  expand those sections, as in Windows, with their own highlight; Left
+  and Right on the section's row do the same from the keyboard. Clicking
+  the name still opens the place. While the open place is inside a
+  collapsed section, the section's row is highlighted.
+- Settings > Appearance > Layout > "Hide expand arrows", as in Windows:
+  the navigation pane's arrows (This PC, Network and the folder tree)
+  show only while the pointer is over the pane or keyboard focus is in
+  it. The arrows show by default. The file list's folder arrows stay
+  with Settings > Appearance > Files and folders > "Expandable folders".
+
 # 2.0.1 — 2026-10-02
 
 Most of the gaps left by 2.0.0 are closed: 635 of the tracked behaviours of

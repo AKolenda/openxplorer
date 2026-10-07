@@ -56,10 +56,12 @@ mod background_notice;
 mod breakpoints;
 mod button_style;
 mod cache_folder;
+mod caller_window;
 mod caption_buttons;
 mod card_grid;
 mod closing;
 mod command_bar;
+mod compact_density;
 mod compress_dialog;
 mod connections;
 mod context_menu;
@@ -73,8 +75,10 @@ mod disabled_reasons;
 mod disk_tools;
 mod empty_page;
 mod environment;
+mod expand_arrows;
 mod expanding;
 mod external_requests;
+mod extract_into;
 mod file_drag;
 mod file_drop;
 mod file_ops;
@@ -86,6 +90,7 @@ mod folder_tree;
 mod free_space;
 mod gestures;
 mod grid_keys;
+mod group_day;
 mod help;
 mod history_menu;
 mod imp;
@@ -116,6 +121,7 @@ mod place_menus;
 mod preferences;
 mod quick_access;
 mod quick_look;
+mod read_only_drive;
 mod recycle_bin_place;
 mod relocated_files;
 mod result_location;
@@ -162,6 +168,8 @@ pub(crate) mod widget_tree;
 mod window_action;
 mod window_keys;
 mod window_size;
+mod zip_copies;
+mod zip_folder;
 
 #[cfg(test)]
 mod tests;
@@ -225,6 +233,7 @@ impl BrowserWindow {
         window.watch_recycle_bin();
         window.apply_preferences();
         window.install_sidebar_resizer();
+        window.install_day_changes();
         window.focus_file_list_once_shown();
         window
     }

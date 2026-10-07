@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Walking, measuring and emptying a widget's children.
+//! Walking, measuring and emptying a widget's children, and switching a
+//! widget's style classes.
 //!
 //! GTK 4 links a widget's children as a chain (`first_child`, then
 //! `next_sibling`), and `GtkBox` has no call that removes them all. The
@@ -46,5 +47,14 @@ pub(super) fn remove_children(container: &impl IsA<gtk::Box>) {
     let container = container.upcast_ref::<gtk::Box>();
     while let Some(child) = container.first_child() {
         container.remove(&child);
+    }
+}
+
+/// Adds `class` to `widget` when `on`, and removes it otherwise.
+pub(crate) fn toggle_class(widget: &impl IsA<gtk::Widget>, class: &str, on: bool) {
+    if on {
+        widget.add_css_class(class);
+    } else {
+        widget.remove_css_class(class);
     }
 }

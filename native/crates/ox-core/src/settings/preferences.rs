@@ -11,12 +11,13 @@ use std::ops::RangeInclusive;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::choices::{ContextMenu, Theme, View};
+use super::choices::{ContextMenu, Theme, View, ZipOpening};
 use super::pane_options::DetailsPaneOptions;
 use super::tree_options::FolderTreeOptions;
 use super::view_options::ViewOptions;
 use super::view_properties::{read_folder_views, FolderView, ViewProperties};
 use super::SettingsError;
+use crate::grouping::GroupBy;
 use crate::location;
 
 /// Text sizes offered in Settings, in percent.
@@ -282,6 +283,11 @@ pub struct Preferences {
     /// below.
     #[serde(skip_serializing_if = "is_true")]
     pub browse_archives: bool,
+    /// How a ZIP opens when [`Self::browse_archives`] is on: in the tab
+    /// like a folder, or in its own window as before (ARC-026). Stored
+    /// only when the folder is chosen.
+    #[serde(skip_serializing_if = "ZipOpening::is_window")]
+    pub zip_opening: ZipOpening,
     /// The details pane's own options; saved only once changed, so the
     /// settings of a new installation stay as the Python app writes them.
     #[serde(skip_serializing_if = "DetailsPaneOptions::is_default")]
@@ -323,6 +329,12 @@ pub struct Preferences {
     /// Explorer's View > Show > Navigation pane off).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hide_sidebar: bool,
+    /// The navigation pane's expand arrows (beside This PC and Network,
+    /// and in the folder tree) show only while the pointer is over the
+    /// pane or keyboard focus is in it, as in Windows Explorer. Off by
+    /// default, so they always show; stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hide_expand_arrows: bool,
     /// The sidebar's icon size in pixels (16, 22, 32 or 48), or 0 for the
     /// automatic size (Dolphin's Places panel Icon Size). Stored only when
     /// chosen.
@@ -378,6 +390,11 @@ pub struct Preferences {
     /// `ExpandableFolders`). Stored only when off.
     #[serde(skip_serializing_if = "is_true")]
     pub expandable_folders: bool,
+    /// Windows 11's Compact view: the file list's and the navigation
+    /// pane's rows stand closer, so more items fit. Off by default, as in
+    /// Windows. Stored as `compactView`, only when on.
+    #[serde(rename = "compactView", skip_serializing_if = "std::ops::Not::not")]
+    pub compact_density: bool,
     /// The display style of every folder without its own, once the user
     /// changed it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -385,6 +402,11 @@ pub struct Preferences {
     /// The folders that keep their own display style, oldest first.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub folder_views: Vec<FolderView>,
+    /// The Group by the user chose in Downloads while folders share one
+    /// style. Downloads is grouped by date modified until then, as in
+    /// Windows Explorer. Stored only once chosen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub downloads_group_by: Option<GroupBy>,
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
@@ -426,6 +448,7 @@ impl Default for Preferences {
             editable_location: false,
             external_folders_in_new_window: false,
             browse_archives: true,
+            zip_opening: ZipOpening::Window,
             details_pane_options: DetailsPaneOptions::default(),
             view_options: ViewOptions::default(),
             full_path_in_title: false,
@@ -437,6 +460,7 @@ impl Default for Preferences {
             enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,
+            hide_expand_arrows: false,
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
@@ -450,8 +474,10 @@ impl Default for Preferences {
             per_folder_views: false,
             selection_marker: true,
             expandable_folders: true,
+            compact_density: false,
             view_defaults: None,
             folder_views: Vec::new(),
+            downloads_group_by: None,
         }
     }
 }
@@ -466,6 +492,16 @@ impl Preferences {
         }) {
             self.enabled_service_actions.clone_from(keys);
         }
+    }
+
+    /// The questions asked before trashing, deleting, emptying the Trash,
+    /// closing several tabs and running programs (SET-010).
+    fn apply_confirmations(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(&mut self.confirm_trash, update.confirm_trash);
+        replace_if_some(&mut self.confirm_delete, update.confirm_delete);
+        replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
+        replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
+        replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
     }
 
     /// Applies every valid value in `update` and silently ignores the rest,
@@ -496,14 +532,11 @@ impl Preferences {
             update.external_folders_in_new_window,
         );
         replace_if_some(&mut self.full_path_in_title, update.full_path_in_title);
-        replace_if_some(&mut self.confirm_trash, update.confirm_trash);
-        replace_if_some(&mut self.confirm_delete, update.confirm_delete);
-        replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
-        replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
-        replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
+        self.apply_confirmations(update);
         self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
+        replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
         let icon_size = update
             .sidebar_icon_size
             .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
@@ -538,6 +571,7 @@ impl Preferences {
             self.window_size = Some(size);
         }
         replace_if_some(&mut self.browse_archives, update.browse_archives);
+        replace_if_some(&mut self.zip_opening, update.zip_opening);
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
@@ -563,12 +597,14 @@ impl Preferences {
         replace_if_some(&mut self.per_folder_views, update.per_folder_views);
         replace_if_some(&mut self.selection_marker, update.selection_marker);
         replace_if_some(&mut self.expandable_folders, update.expandable_folders);
+        replace_if_some(&mut self.compact_density, update.compact_density);
         if let Some(defaults) = &update.view_defaults {
             self.view_defaults = Some(defaults.clone());
         }
         if let Some(folder_views) = &update.folder_views {
             self.folder_views.clone_from(folder_views);
         }
+        self.downloads_group_by = update.downloads_group_by.or(self.downloads_group_by);
         self.sync_style_defaults(update);
     }
 
@@ -584,6 +620,23 @@ impl Preferences {
             defaults.show_previews = Some(options.show_previews);
             defaults.details_columns = Some(options.details_columns.clone());
         }
+    }
+
+    /// The display style `uri` is shown in, where `downloads` is the
+    /// Downloads folder: as [`Self::view_for`], except that Downloads is
+    /// grouped by date modified, as in Windows Explorer, until the user
+    /// chooses another Group by there (VIEW-022). That choice is kept in
+    /// Downloads' own style when each folder keeps one, else apart from
+    /// the shared style.
+    pub fn view_in(&self, uri: &str, downloads: Option<&str>) -> ViewProperties {
+        let mut style = self.view_for(uri);
+        let in_downloads = downloads.is_some_and(|downloads| location::same_location(downloads, uri));
+        let own_style = self.per_folder_views
+            && super::view_properties::saved_style_for(&self.folder_views, uri).is_some();
+        if in_downloads && !own_style {
+            style.set_grouping(self.downloads_group_by.unwrap_or(GroupBy::Modified));
+        }
+        style
     }
 
     /// The display style `uri` is shown in: its own when each folder
@@ -649,6 +702,8 @@ pub struct PreferencesUpdate {
     pub external_folders_in_new_window: Option<bool>,
     /// Open archives as folders, or in their default application.
     pub browse_archives: Option<bool>,
+    /// Open ZIPs in the tab or in their own window.
+    pub zip_opening: Option<ZipOpening>,
     /// Replaces the details pane's options.
     pub details_pane_options: Option<DetailsPaneOptions>,
     /// Replaces the folder views' options.
@@ -671,6 +726,9 @@ pub struct PreferencesUpdate {
     pub desktop_font: Option<bool>,
     /// Hide or show the navigation pane.
     pub hide_sidebar: Option<bool>,
+    /// Hide the navigation pane's expand arrows until it is pointed at, or
+    /// always show them.
+    pub hide_expand_arrows: Option<bool>,
     /// New sidebar icon size; one of [`SIDEBAR_ICON_SIZES`] or ignored.
     pub sidebar_icon_size: Option<u32>,
     /// Replaces the hidden sidebar sections; up to 16 short ASCII keys,
@@ -700,12 +758,16 @@ pub struct PreferencesUpdate {
     pub selection_marker: Option<bool>,
     /// Let folders expand in place in the details view.
     pub expandable_folders: Option<bool>,
+    /// Turn Compact view on or off.
+    pub compact_density: Option<bool>,
     /// Replaces the shared display style.
     pub view_defaults: Option<ViewProperties>,
     /// Replaces the folders' own styles; read from the file only, as
     /// windows change one folder at a time with
     /// [`Settings::remember_view`](super::Settings::remember_view).
     pub folder_views: Option<Vec<FolderView>>,
+    /// The Group by chosen in Downloads while folders share one style.
+    pub downloads_group_by: Option<GroupBy>,
 }
 
 impl PreferencesUpdate {
@@ -741,6 +803,7 @@ impl PreferencesUpdate {
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
             browse_archives: flag("browseArchives"),
+            zip_opening: text("zipOpening").and_then(ZipOpening::from_key),
             details_pane_options: values
                 .get("detailsPaneOptions")
                 .and_then(DetailsPaneOptions::from_json),
@@ -754,6 +817,7 @@ impl PreferencesUpdate {
             enabled_service_actions: values.get("enabledServiceActions").and_then(read_keys),
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
+            hide_expand_arrows: flag("hideExpandArrows"),
             sidebar_icon_size: values
                 .get("sidebarIconSize")
                 .and_then(Value::as_u64)
@@ -770,8 +834,13 @@ impl PreferencesUpdate {
             per_folder_views: flag("perFolderViews"),
             selection_marker: flag("selectionMarker"),
             expandable_folders: flag("expandableFolders"),
+            compact_density: flag("compactView"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
             folder_views: values.get("folderViews").and_then(read_folder_views),
+            downloads_group_by: values
+                .get("downloadsGroupBy")
+                .and_then(Value::as_str)
+                .and_then(GroupBy::from_key),
         })
     }
 }
@@ -852,6 +921,66 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    /// Downloads is grouped by date modified until the user chooses
+    /// another Group by there, kept apart from the shared style, or in its
+    /// own style when each folder keeps one; other folders are unchanged.
+    ///
+    /// parity: VIEW-022
+    #[test]
+    fn downloads_is_grouped_by_date_until_chosen_otherwise() {
+        const DOWNLOADS: &str = "file:///home/ana/Downloads";
+        const DOCUMENTS: &str = "file:///home/ana/Documents";
+        let mut preferences = Preferences::default();
+        let downloads = Some(DOWNLOADS);
+        assert_eq!(
+            preferences.view_in(DOWNLOADS, downloads).grouping(),
+            GroupBy::Modified
+        );
+        assert_eq!(
+            preferences.view_in(DOCUMENTS, downloads).grouping(),
+            GroupBy::None
+        );
+        assert_eq!(
+            preferences.view_in(DOWNLOADS, None).grouping(),
+            GroupBy::None,
+            "no Downloads"
+        );
+        assert!(serde_json::to_value(&preferences)
+            .expect("preferences")
+            .get("downloadsGroupBy")
+            .is_none());
+
+        preferences.apply(&PreferencesUpdate {
+            downloads_group_by: Some(GroupBy::None),
+            ..PreferencesUpdate::default()
+        });
+        assert_eq!(
+            preferences.view_in(DOWNLOADS, downloads).grouping(),
+            GroupBy::None
+        );
+        let saved = serde_json::to_value(&preferences).expect("preferences");
+        assert_eq!(saved["downloadsGroupBy"], json!("none"));
+        let read = PreferencesUpdate::from_json(&saved).expect("read");
+        assert_eq!(read.downloads_group_by, Some(GroupBy::None));
+
+        let mut own = ViewProperties::default();
+        own.set_grouping(GroupBy::Type);
+        let mut per_folder = Preferences {
+            per_folder_views: true,
+            ..Preferences::default()
+        };
+        assert_eq!(
+            per_folder.view_in(DOWNLOADS, downloads).grouping(),
+            GroupBy::Modified
+        );
+        per_folder.folder_views.push(FolderView {
+            uri: DOWNLOADS.to_owned(),
+            properties: own,
+            subfolders: false,
+        });
+        assert_eq!(per_folder.view_in(DOWNLOADS, downloads).grouping(), GroupBy::Type);
+    }
 
     /// parity: SET-016
     #[test]
@@ -1048,5 +1177,54 @@ mod tests {
             (update.theme, update.view, update.context_menu),
             (None, None, None)
         );
+    }
+
+    /// Compact view is off by default and not stored then; once on it is
+    /// saved as `compactView` and read back, and turning it off again
+    /// takes the key away.
+    ///
+    /// parity: VIEW-067
+    #[test]
+    fn compact_view_is_off_by_default_and_stored_only_when_on() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.compact_density);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("compactView").is_none(), "not stored while off");
+
+        let on = PreferencesUpdate::from_json(&json!({ "compactView": true })).expect("a valid preference");
+        preferences.apply(&on);
+        assert!(preferences.compact_density);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["compactView"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.compact_density, Some(true));
+
+        preferences.apply(&PreferencesUpdate {
+            compact_density: Some(false),
+            ..PreferencesUpdate::default()
+        });
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("compactView").is_none(), "off again, not stored");
+    }
+
+    /// The expand arrows are shown by default and the choice is not
+    /// stored then; hiding them is saved as `hideExpandArrows` and read
+    /// back.
+    ///
+    /// parity: SIDE-032
+    #[test]
+    fn expand_arrows_are_shown_by_default_and_hiding_them_is_stored() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.hide_expand_arrows);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("hideExpandArrows").is_none(), "not stored while shown");
+
+        let hide =
+            PreferencesUpdate::from_json(&json!({ "hideExpandArrows": true })).expect("a valid preference");
+        preferences.apply(&hide);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["hideExpandArrows"], json!(true));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.hide_expand_arrows, Some(true));
     }
 }

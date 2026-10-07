@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.1
+Version:        2.0.2
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -116,6 +116,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Sun Oct 04 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.2-1
+- OpenXplorer 2.0.2: ZIPs open like folders, Extract all and the Open and
+  Save dialogs work as in Windows, Compact view and collapsible sidebar
+  sections.
+
 * Fri Oct 02 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.1-1
 - OpenXplorer 2.0.1: split panes, Compact view, folder tree, thumbnails,
   transfer jobs, more network protocols and optional file dialogs.

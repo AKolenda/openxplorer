@@ -179,6 +179,9 @@ pub(crate) struct BrowserWindow {
     pub(super) service_actions: RefCell<Vec<ox_core::service_actions::ServiceAction>>,
     /// The drives and devices the volume monitor reported last.
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
+    /// The folder shown last whose drive is mounted read-only, and why
+    /// (DEV-015); see [`super::read_only_drive`].
+    pub(super) read_only_drive: RefCell<Option<(String, ox_core::read_only::ReadOnlyDrive)>>,
     /// The type-to-select prefix of the folder views.
     pub(super) typeahead: RefCell<Typeahead>,
     /// The column Up and Down keep to in the icon grid, across rows of
@@ -192,6 +195,10 @@ pub(crate) struct BrowserWindow {
     /// drive the isolated session does not have.
     #[cfg(test)]
     pub(super) test_volume: RefCell<Option<(String, String)>>,
+    /// In tests, whether Shift is held when a command runs, standing in
+    /// for the keyboard the isolated session cannot press.
+    #[cfg(test)]
+    pub(super) test_shift_held: Cell<bool>,
     /// Set while the window swaps or reloads the model, so the
     /// selection it restores is not saved over the tab's selection.
     pub(super) changing_model: Cell<bool>,
@@ -305,6 +312,8 @@ impl ObjectImpl for BrowserWindow {
     }
 
     fn dispose(&self) {
+        self.obj().end_size_scans();
+        self.obj().end_properties_work();
         self.obj().end_band();
         self.obj().disconnect_external_handlers();
         self.obj().close_network();
@@ -326,11 +335,23 @@ impl WindowImpl for BrowserWindow {
         // window closes while an update installs (closing.rs).
         if let Some(refusal) = self.obj().close_refusal() {
             self.obj().show_message(&refusal);
+            self.obj().picking_close_refused();
             return glib::Propagation::Stop;
         }
-        // Nor while it writes files: it asks whether to cancel first
-        // (TAB-049).
-        if !self.obj().may_close_now() {
+        // A file dialog asks nothing before it closes: a question over it
+        // could end up out of sight and leave it unanswerable. While it
+        // writes files it says so and stays usable (INT-032).
+        if self.obj().is_picking() {
+            if self.obj().is_writing_files() {
+                self.obj().show_message(&ox_core::i18n::gettext(
+                    "Wait until the files are written, or cancel that, before closing this dialog.",
+                ));
+                self.obj().picking_close_refused();
+                return glib::Propagation::Stop;
+            }
+        } else if !self.obj().may_close_now() {
+            // Nor while it writes files: it asks whether to cancel first
+            // (TAB-049).
             return glib::Propagation::Stop;
         }
         // Let go of keyboard focus first. On Wayland, GTK's input method
@@ -346,6 +367,10 @@ impl WindowImpl for BrowserWindow {
         self.session
             .borrow_mut()
             .change_panes(super::session::Tab::stop_reading);
+        // So do its folder-size scans and the work of its Properties
+        // dialogs (PROP-029).
+        self.obj().end_size_scans();
+        self.obj().end_properties_work();
         // A file dialog closed without a choice answers Cancelled
         // (INT-032).
         self.obj().end_picking_on_close();

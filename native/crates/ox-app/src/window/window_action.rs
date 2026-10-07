@@ -79,6 +79,9 @@ pub(crate) enum WindowAction {
     EditableLocation,
     /// Shows the full path in the crumbs (NAV-024).
     ShowFullPath,
+    /// Windows 11's Compact view: closer rows in the file list and the
+    /// sidebar (VIEW-067).
+    CompactDensity,
     /// Opens the subfolder menu of a crumb; the target is the folder, the
     /// subfolder shown in bold and the first one listed (NAV-020).
     CrumbSubfolders,
@@ -148,6 +151,9 @@ pub(crate) enum WindowAction {
     SidebarShowAll,
     /// Hides the sidebar section whose key is the string target.
     HideSection,
+    /// Collapses or expands the sidebar section whose key is the string
+    /// target: the chevron of This PC or Network (SIDE-033).
+    ToggleSidebarSection,
     /// Shows the hidden sidebar section whose key is the string target.
     ShowSection,
     /// Hides the sidebar place at the string target (SIDE-010).
@@ -159,8 +165,9 @@ pub(crate) enum WindowAction {
     Sort,
     /// Whether the details view sorts ascending or descending.
     Direction,
-    /// Shows the items in groups by the sort key (VIEW-022).
-    Groups,
+    /// What the items are grouped by, in the string target: a key of
+    /// their own (Explorer's Group by), the sort key, or none (VIEW-022).
+    GroupBy,
     /// Lists folders before files.
     FoldersFirst,
     /// Opens the Adjust View Display Style dialog (VIEW-021).
@@ -453,6 +460,7 @@ impl WindowAction {
             WindowAction::PasteAddress => "paste-address",
             WindowAction::EditableLocation => "editable-location",
             WindowAction::ShowFullPath => "show-full-path",
+            WindowAction::CompactDensity => "compact-density",
             WindowAction::CrumbSubfolders => "crumb-subfolders",
             WindowAction::CrumbSibling => "crumb-sibling",
             WindowAction::Search => "search",
@@ -484,12 +492,13 @@ impl WindowAction {
             WindowAction::SidebarIconSize => "sidebar-icon-size",
             WindowAction::SidebarShowAll => "sidebar-show-all",
             WindowAction::HideSection => "hide-section",
+            WindowAction::ToggleSidebarSection => "toggle-sidebar-section",
             WindowAction::ShowSection => "show-section",
             WindowAction::HidePlace => "hide-place",
             WindowAction::ShowPlace => "show-place",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
-            WindowAction::Groups => "groups",
+            WindowAction::GroupBy => "group-by",
             WindowAction::FoldersFirst => "folders-first",
             WindowAction::ViewProperties => "view-properties",
             WindowAction::Theme => "theme",

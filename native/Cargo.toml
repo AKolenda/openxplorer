@@ -6,7 +6,7 @@ resolver = "2"
 members = ["crates/ox-core", "crates/ox-app"]
 
 [workspace.package]
-version = "2.0.1"
+version = "2.0.2"
 edition = "2021"
 license = "AGPL-3.0-only"
 # The oldest Rust the locked GTK and GIO crates build with. CI checks with
@@ -18,6 +18,9 @@ publish = false
 # GTK 4.14 is the version in Zorin OS 18 (Ubuntu 24.04), so newer GTK APIs stay
 # unavailable.
 gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
+# The Wayland side of GDK: a file dialog attaches to the window of the
+# application that opened it (xdg-foreign); its version follows gtk.
+gdk-wayland = { package = "gdk4-wayland", version = "0.11" }
 gio = "0.22"
 # GTK 4.14 needs GLib 2.76, so its APIs (GBookmarkFile among them) are safe.
 glib = { version = "0.22", features = ["v2_76"] }

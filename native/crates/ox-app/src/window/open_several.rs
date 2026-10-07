@@ -7,6 +7,7 @@
 
 use gtk::glib;
 use ox_core::entry::Entry;
+use ox_core::location::ArchiveLocation;
 
 use super::activation::{activation_for, desktop_link, Activation};
 use super::session::TabPlacement;
@@ -68,6 +69,16 @@ impl BrowserWindow {
     /// stack. An item that cannot be opened from here is left out.
     fn open_each(&self, entries: &[Entry]) {
         for entry in entries {
+            // Inside a ZIP opened like a folder: folders in background
+            // tabs, files as their private copies (ARC-026).
+            if let Some(inside) = ArchiveLocation::from_uri(&entry.uri) {
+                if inside.is_folder() {
+                    self.open_tab_or_report(&entry.uri, TabPlacement::Background);
+                } else {
+                    self.activate_zip_member(entry);
+                }
+                continue;
+            }
             match activation_for(entry) {
                 Activation::Folder(uri) => self.open_tab_or_report(&uri, TabPlacement::Background),
                 Activation::File => match desktop_link(entry) {

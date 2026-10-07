@@ -11,10 +11,18 @@
 //! glyph in place of its own, as app.js does. The compact style
 //! (CMD-008) puts a strip of icon buttons above the list: Cut, Copy,
 //! Paste, Rename and Delete in the context menus.
+//!
+//! An item with a submenu (a chevron at its right) opens it beside the
+//! menu, as Windows 11's menus do: hovering it opens the submenu after a
+//! moment, clicking it or Right opens it at once, and Left or Escape
+//! closes only the submenu. Choosing an item in a submenu closes every
+//! menu of the chain, then runs it.
 
 #[cfg(test)]
 mod inspection;
 mod items;
+
+use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -27,6 +35,10 @@ pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuI
 
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
+
+/// How long the pointer rests on a row before its submenu opens, or on
+/// another row before an open submenu closes; Windows waits about as long.
+const SUBMENU_DELAY: Duration = Duration::from_millis(250);
 
 /// A menu row's glyph: 16 pixels, as Windows 11 draws menu icons (ui-spec.md I05;
 /// the web app's classic menus drew 15).
@@ -86,6 +98,11 @@ mod imp {
         pub(super) strip_items: RefCell<Vec<MenuItem>>,
         /// The classic or compact look.
         pub(super) style: Cell<MenuStyle>,
+        /// The submenu open beside a row, and that row's index.
+        pub(super) submenu: RefCell<Option<(super::MenuPopover, i32)>>,
+        /// The row the pointer rests on, and the timer that opens or
+        /// closes a submenu once it has rested there.
+        pub(super) hover: RefCell<(Option<i32>, Option<glib::SourceId>)>,
     }
 
     #[glib::object_subclass]
@@ -129,6 +146,15 @@ mod imp {
             // before that it cannot take focus.
             popover.connect_show(super::MenuPopover::redraw);
             popover.connect_map(super::MenuPopover::focus_first_item);
+            popover.connect_closed(|popover| {
+                popover.cancel_hover();
+                popover.close_submenu();
+            });
+        }
+
+        fn dispose(&self) {
+            self.obj().cancel_hover();
+            self.obj().close_submenu();
         }
     }
 
@@ -180,6 +206,8 @@ fn item_list(popover: &MenuPopover) -> gtk::ListBox {
         popover,
         move |_, row| popover.choose_row(row.index())
     ));
+    follow_hover(popover, &list);
+    open_submenus_by_keyboard(popover, &list);
     // Up on the first item and Down on the last wrap around, as `openMenu`
     // moves between enabled items.
     list.connect_keynav_failed(|list, direction| {
@@ -197,6 +225,102 @@ fn item_list(popover: &MenuPopover) -> gtk::ListBox {
         }
     });
     list
+}
+
+/// Opens a row's submenu once the pointer rests on it, and closes an open
+/// submenu once it rests on another row.
+fn follow_hover(popover: &MenuPopover, list: &gtk::ListBox) {
+    let rest_at = glib::clone!(
+        #[weak]
+        popover,
+        move |y: f64| {
+            #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+            let index = popover.list().row_at_y(y as i32).map(|row| row.index());
+            popover.rest_on(index);
+        }
+    );
+    let motion = gtk::EventControllerMotion::new();
+    // Coming back from a submenu, GTK may send a motion with the other
+    // surface's position, a leave, then an enter where the pointer really
+    // is: the enter counts as resting there too.
+    let on_enter = rest_at.clone();
+    motion.connect_enter(move |_, _, y| on_enter(y));
+    motion.connect_motion(move |_, _, y| rest_at(y));
+    motion.connect_leave(glib::clone!(
+        #[weak]
+        popover,
+        move |_| popover.rest_on(None)
+    ));
+    list.add_controller(motion);
+    pass_hover_back_to_parent_menu(popover);
+}
+
+/// An open submenu grabs the pointer (`gtk_grab_add` in GTK's
+/// `gtk_popover_map`), so GTK hands it the pointer's motion over the menus
+/// it hangs from too: their lists hear the pointer come back, but not
+/// where it goes next. With Group by open, resting on More did not open
+/// it on KDE Plasma. The submenu passes that motion back to the menu the
+/// pointer is over.
+fn pass_hover_back_to_parent_menu(popover: &MenuPopover) {
+    let motion = gtk::EventControllerMotion::new();
+    motion.connect_motion(glib::clone!(
+        #[weak]
+        popover,
+        move |motion, _, _| {
+            let Some(event) = motion.current_event() else {
+                return;
+            };
+            let (Some(surface), Some((x, y))) = (event.surface(), event.position()) else {
+                return;
+            };
+            let mut menu = popover.parent_menu();
+            while let Some(parent) = menu {
+                if parent.surface().as_ref() == Some(&surface) {
+                    parent.rest_at_surface_point(x, y);
+                    return;
+                }
+                menu = parent.parent_menu();
+            }
+        }
+    ));
+    popover.add_controller(motion);
+}
+
+/// Right opens the focused row's submenu and moves into it; Left in a
+/// submenu closes it and goes back to its row.
+fn open_submenus_by_keyboard(popover: &MenuPopover, list: &gtk::ListBox) {
+    let keys = gtk::EventControllerKey::new();
+    keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        popover,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, _| match key {
+            gdk::Key::Right | gdk::Key::KP_Right => {
+                let focused = popover.list().focus_child().and_downcast::<gtk::ListBoxRow>();
+                let opens = focused.and_then(|row| {
+                    let item = popover.item(row.index())?;
+                    (!item.submenu.is_empty() && popover.can_choose(&item)).then_some(row.index())
+                });
+                match opens {
+                    Some(index) => {
+                        popover.open_submenu(index, true);
+                        glib::Propagation::Stop
+                    }
+                    None => glib::Propagation::Proceed,
+                }
+            }
+            gdk::Key::Left | gdk::Key::KP_Left => match popover.parent_menu() {
+                Some(parent) => {
+                    parent.close_submenu();
+                    glib::Propagation::Stop
+                }
+                None => glib::Propagation::Proceed,
+            },
+            _ => glib::Propagation::Proceed,
+        }
+    ));
+    list.add_controller(keys);
 }
 
 /// The rows of `list` a user can choose, in order.
@@ -335,6 +459,8 @@ impl MenuPopover {
     /// Rebuilds the strip and the rows, reading each action's state for
     /// its check mark and whether it is enabled.
     fn redraw(&self) {
+        // A submenu hangs from a row, which is about to go.
+        self.close_submenu();
         self.redraw_strip();
         let list = self.list();
         list.remove_all();
@@ -399,26 +525,217 @@ impl MenuPopover {
         item.availability != ItemAvailability::Disabled && item.action.is_enabled(self.upcast_ref())
     }
 
-    /// Runs the item of the row at `index`.
+    /// Runs the item of the row at `index`, or opens its submenu.
     fn choose_row(&self, index: i32) {
-        if let Some(item) = self.item(index) {
+        let Some(item) = self.item(index) else {
+            return;
+        };
+        if item.submenu.is_empty() {
             self.choose(&item);
+        } else {
+            self.open_submenu(index, true);
         }
     }
 
     /// Closes the menu, then runs `item`'s action, as `closeMenu()` before
-    /// `it.fn()` in app.js, so an item may open another menu here.
+    /// `it.fn()` in app.js, so an item may open another menu here. An item
+    /// with a submenu opens it instead. In a submenu, every menu of the
+    /// chain closes.
     fn choose(&self, item: &MenuItem) {
         if !item.submenu.is_empty() {
-            self.set_entries(item.submenu.clone());
-            self.focus_first_item();
+            if let Some(index) = self.items().iter().position(|shown| shown == item) {
+                self.open_submenu(i32::try_from(index).unwrap_or(i32::MAX), true);
+            }
             return;
         }
-        self.popdown();
+        // The first menu of the chain runs the action: closing it lets go
+        // of its submenus, which then have no window to find it in.
+        let mut first = self.clone();
+        while let Some(parent) = first.parent_menu() {
+            first = parent;
+        }
+        // Every menu of the chain closes, the deepest first, and each
+        // submenu is let go of, its surface gone, before the menu it hangs
+        // from closes, so no submenu outlives the menu it hangs from. On
+        // KDE Plasma the Sort menu once stayed on screen after Group by ›
+        // Date modified; [`close_menus_on_press`] is the other half.
+        first.close_submenu();
+        first.popdown();
         // GTK fails only when no ancestor has the action. Every browser
         // window and the application register them all, so that is a menu
         // outside a window, which has nothing to run.
-        let _ = self.activate_action(&item.action.detailed_name(), item.target.as_ref());
+        let _ = first.activate_action(&item.action.detailed_name(), item.target.as_ref());
+    }
+
+    /// The menu this one is a submenu of, if it is one.
+    fn parent_menu(&self) -> Option<MenuPopover> {
+        self.parent()?.ancestor(MenuPopover::static_type()).and_downcast()
+    }
+
+    /// The submenu open beside a row, for tests.
+    #[cfg(test)]
+    pub(crate) fn open_submenu_menu(&self) -> Option<MenuPopover> {
+        self.imp().submenu.borrow().as_ref().map(|(menu, _)| menu.clone())
+    }
+
+    /// Opens the submenu of the row at `index` beside it, closing another
+    /// one; with `focused`, the keyboard moves into it.
+    fn open_submenu(&self, index: i32, focused: bool) {
+        let open = self.imp().submenu.borrow().as_ref().map(|(_, row)| *row);
+        if open == Some(index) {
+            if focused {
+                if let Some((menu, _)) = self.imp().submenu.borrow().as_ref() {
+                    menu.focus_first_item();
+                }
+            }
+            return;
+        }
+        self.close_submenu();
+        let (Some(item), Some(row)) = (self.item(index), self.list().row_at_index(index)) else {
+            return;
+        };
+        if item.submenu.is_empty() || !self.can_choose(&item) {
+            return;
+        }
+        let menu = MenuPopover::new(item.submenu.clone());
+        // Beside the row, its first item level with the row, as Windows
+        // opens a submenu. It hangs from this menu, not from the row: the
+        // pointer moving over the submenu must not count as hovering this
+        // menu's rows, which events bubbling up through the row would.
+        menu.set_position(gtk::PositionType::Right);
+        menu.set_halign(gtk::Align::Fill);
+        menu.set_offset(2, -4);
+        menu.set_parent(self);
+        if let Some(bounds) = row.compute_bounds(self) {
+            #[expect(clippy::cast_possible_truncation, reason = "menu rows are small")]
+            let area = gdk::Rectangle::new(
+                bounds.x() as i32,
+                bounds.y() as i32,
+                bounds.width() as i32,
+                bounds.height() as i32,
+            );
+            menu.set_pointing_to(Some(&area));
+        }
+        // Escape, or a click elsewhere, closes the submenu by itself:
+        // it is let go of once GTK is done closing it.
+        menu.connect_closed(glib::clone!(
+            #[weak(rename_to = popover)]
+            self,
+            move |closed| {
+                let open = popover
+                    .imp()
+                    .submenu
+                    .borrow()
+                    .as_ref()
+                    .map(|(menu, _)| menu.clone());
+                if open.as_ref() == Some(closed) {
+                    let closed = closed.clone();
+                    glib::idle_add_local_once(glib::clone!(
+                        #[weak]
+                        popover,
+                        move || {
+                            let still_open = popover
+                                .imp()
+                                .submenu
+                                .borrow()
+                                .as_ref()
+                                .map(|(menu, _)| menu.clone());
+                            if still_open.as_ref() == Some(&closed) {
+                                popover.close_submenu();
+                            }
+                        }
+                    ));
+                }
+            }
+        ));
+        self.imp().submenu.replace(Some((menu.clone(), index)));
+        menu.popup();
+        if !focused {
+            // The pointer opened it: the keyboard stays on the row.
+            row.grab_focus();
+        }
+    }
+
+    /// Closes the submenu open beside a row, and any submenu of its own,
+    /// if one is.
+    fn close_submenu(&self) {
+        let Some((menu, index)) = self.imp().submenu.take() else {
+            return;
+        };
+        // A submenu of the submenu closes first.
+        menu.close_submenu();
+        menu.popdown();
+        menu.unparent();
+        if let Some(row) = self.list().row_at_index(index) {
+            if self.is_visible() {
+                row.grab_focus();
+            }
+        }
+    }
+
+    /// The pointer rests on the row at `index`, or on none: after
+    /// [`SUBMENU_DELAY`], that row's submenu opens, or the open one
+    /// closes when the pointer rests on another row.
+    fn rest_on(&self, index: Option<i32>) {
+        if self.imp().hover.borrow().0 == index {
+            return;
+        }
+        self.cancel_hover();
+        self.imp().hover.borrow_mut().0 = index;
+        let open = self.imp().submenu.borrow().as_ref().map(|(_, row)| *row);
+        let opens = index.filter(|index| {
+            self.item(*index)
+                .is_some_and(|item| !item.submenu.is_empty() && self.can_choose(&item))
+        });
+        let wanted = match (opens, index) {
+            (Some(row), _) if open != Some(row) => Some(true),
+            (None, Some(_)) if open.is_some() => Some(false),
+            _ => None,
+        };
+        let Some(opening) = wanted else {
+            return;
+        };
+        let timer = glib::timeout_add_local_once(
+            SUBMENU_DELAY,
+            glib::clone!(
+                #[weak(rename_to = popover)]
+                self,
+                move || {
+                    popover.imp().hover.borrow_mut().1 = None;
+                    match (opening, opens) {
+                        (true, Some(row)) => popover.open_submenu(row, false),
+                        _ => popover.close_submenu(),
+                    }
+                }
+            ),
+        );
+        self.imp().hover.borrow_mut().1 = Some(timer);
+    }
+
+    /// The pointer rests at `x`, `y` on this menu's surface, as a submenu
+    /// that grabbed the pointer reports it: on the row there, or on none.
+    fn rest_at_surface_point(&self, x: f64, y: f64) {
+        let (left, top) = self.surface_transform();
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let point = gtk::graphene::Point::new((x - left) as f32, (y - top) as f32);
+        let list = self.list();
+        let row = self
+            .compute_point(list, &point)
+            .filter(|point| list.contains(f64::from(point.x()), f64::from(point.y())))
+            .and_then(|point| {
+                #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+                list.row_at_y(point.y() as i32)
+            });
+        self.rest_on(row.map(|row| row.index()));
+    }
+
+    /// Stops a submenu from opening or closing on its timer.
+    fn cancel_hover(&self) {
+        let mut hover = self.imp().hover.borrow_mut();
+        hover.0 = None;
+        if let Some(timer) = hover.1.take() {
+            timer.remove();
+        }
     }
 
     /// The check mark `item` shows now.
@@ -432,6 +749,68 @@ impl MenuPopover {
                 CheckMark::checked_if(state.as_ref() == Some(&expected))
             }
         }
+    }
+}
+
+/// Closes every menu of `window` when a mouse button is pressed anywhere
+/// in it but on a menu. A menu normally closes itself on such a press, but
+/// on KDE Plasma a press in the app's own window is the app's to handle,
+/// and the Sort menu once stayed on screen until a window of another app
+/// was clicked. The press goes on to whatever it is on.
+pub(super) fn close_menus_on_press(window: &impl IsA<gtk::Widget>) {
+    let gesture = gtk::GestureClick::new();
+    gesture.set_button(0);
+    gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
+    gesture.connect_pressed(|gesture, _, _, _| {
+        // Only watching: the press is not taken from the widgets under it.
+        gesture.set_state(gtk::EventSequenceState::Denied);
+        let pressed = gesture.current_event().and_then(|event| event.surface());
+        if let Some(window) = gesture.widget() {
+            close_menus_in(&window, pressed.as_ref());
+        }
+    });
+    window.as_ref().add_controller(gesture);
+}
+
+/// Closes the menus of `root` for a press on `pressed`: all of them, the
+/// deepest first, unless the press is on one of them. A menu that is
+/// closed but whose surface is still on screen is taken off it.
+pub(super) fn close_menus_in(root: &gtk::Widget, pressed: Option<&gdk::Surface>) {
+    let mut menus = Vec::new();
+    collect_menus(root, &mut menus);
+    let on_a_menu = pressed.is_some_and(|pressed| {
+        menus
+            .iter()
+            .any(|menu| menu.is_visible() && gtk::prelude::NativeExt::surface(menu).as_ref() == Some(pressed))
+    });
+    if on_a_menu {
+        return;
+    }
+    for menu in &menus {
+        if menu.is_visible() && menu.parent_menu().is_none() {
+            menu.close_submenu();
+            menu.popdown();
+        }
+    }
+    for menu in &menus {
+        let left_on_screen =
+            gtk::prelude::NativeExt::surface(menu).is_some_and(|surface| surface.is_mapped());
+        if !menu.is_visible() && left_on_screen {
+            WidgetExt::unrealize(menu);
+        }
+    }
+}
+
+/// Adds the menus among `widget`'s descendants to `menus`, parents before
+/// the submenus that hang from them.
+fn collect_menus(widget: &gtk::Widget, menus: &mut Vec<MenuPopover>) {
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        if let Some(menu) = current.downcast_ref::<MenuPopover>() {
+            menus.push(menu.clone());
+        }
+        collect_menus(&current, menus);
+        child = current.next_sibling();
     }
 }
 

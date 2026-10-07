@@ -15,7 +15,7 @@ else
   pkgname=openxplorer-native
   pkgdesc='Preview of the native OpenXplorer file manager'
 fi
-pkgver=2.0.1
+pkgver=2.0.2
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url='https://openxplorer.app'

@@ -89,6 +89,7 @@ impl BrowserWindow {
             move || window.finish_address()
         ));
         self.install_focus_regions();
+        super::menu_popover::close_menus_on_press(self);
     }
 
     /// Focuses the file list once GTK has finished showing the window,
@@ -316,12 +317,12 @@ impl BrowserWindow {
     }
 
     /// Escape, Backspace and Space, which act on a typed prefix first:
-    /// Escape clears the prefix, and only without one the selection;
-    /// Backspace erases a typed character, and only without a prefix goes
-    /// back, as in Dolphin and Explorer (NAV-004), once the input method
-    /// did not take it for text it is composing; Space is prefix text, and
-    /// only without one selects the current item. `None` for every other
-    /// key.
+    /// Escape clears the prefix, and only without one closes Quick Look,
+    /// cancels a file dialog or clears the selection; Backspace erases a
+    /// typed character, and only without a prefix goes back, as in
+    /// Dolphin and Explorer (NAV-004), once the input method did not take
+    /// it for text it is composing; Space is prefix text, and only without
+    /// one selects the current item. `None` for every other key.
     fn prefix_editing_key(
         &self,
         controller: &gtk::EventControllerKey,
@@ -336,6 +337,9 @@ impl BrowserWindow {
                 self.reset_typeahead();
             }
             gdk::Key::Escape if self.close_quick_look() => {}
+            // In an Open or Save dialog Escape cancels, as in Windows,
+            // even with items selected.
+            gdk::Key::Escape if self.is_picking() => self.cancel_picking(),
             gdk::Key::Escape => self.clear_selection(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
             gdk::Key::BackSpace => {

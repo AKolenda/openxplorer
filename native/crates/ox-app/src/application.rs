@@ -184,6 +184,7 @@ mod imp {
             }
             if let Launch::Interactive = app.launch() {
                 app.report_unfinished_operations();
+                super::sweep_archive_copies_at_start();
             }
         }
 
@@ -218,6 +219,9 @@ mod imp {
             if let Some(state) = self.state.get() {
                 state.shut_down();
             }
+            if let Launch::Interactive = self.obj().launch() {
+                super::sweep_archive_copies();
+            }
             self.parent_shutdown();
         }
 
@@ -228,6 +232,33 @@ mod imp {
     }
 
     impl GtkApplicationImpl for Application {}
+}
+
+/// Removes the copies opened from archives that are older than
+/// [`ox_core::archive::PREVIEW_LIFETIME`]; newer ones may still be on
+/// their way into an application, and go at the next start (ARC-026).
+fn sweep_archive_copies() {
+    ox_core::archive::remove_old_previews(
+        &ox_core::archive::default_preview_root(),
+        ox_core::archive::PREVIEW_LIFETIME,
+    );
+}
+
+/// At start, on a worker thread: what an earlier run left of the copies
+/// opened from archives, in the runtime folder, which lives in memory, and
+/// of the copies taken out of ZIPs, in the cache, older than a day
+/// (ARC-026).
+fn sweep_archive_copies_at_start() {
+    // Without a thread the copies wait for the next copy or start.
+    let _ = std::thread::Builder::new()
+        .name("ox-archive-copies".into())
+        .spawn(|| {
+            sweep_archive_copies();
+            ox_core::archive::remove_old_copies(
+                &ox_core::archive::copies_root(),
+                ox_core::archive::COPY_LIFETIME,
+            );
+        });
 }
 
 glib::wrapper! {

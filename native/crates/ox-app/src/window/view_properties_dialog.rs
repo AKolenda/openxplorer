@@ -3,7 +3,7 @@
 //! (VIEW-021).
 //!
 //! Ports `ViewPropertiesDialog` (`src/settings/viewpropertiesdialog.cpp`):
-//! the view mode, the sort key and order, groups, folders first and hidden
+//! the view mode, the sort key and order, Group by, folders first and hidden
 //! files in one place. While each folder keeps its own style (VIEW-020) the
 //! choices apply to the folder shown, to it and its sub-folders, or to all
 //! folders, the last two after a confirmation, and can also become the
@@ -12,6 +12,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
+use ox_core::grouping::GroupBy;
 use ox_core::i18n::{gettext, gettext_static};
 use ox_core::settings::{may_remember, PreferencesUpdate, ViewProperties, ViewScope};
 
@@ -62,7 +63,7 @@ struct StyleForm {
     mode: gtk::DropDown,
     sort: gtk::DropDown,
     descending: gtk::DropDown,
-    groups: gtk::CheckButton,
+    group_by: gtk::DropDown,
     folders_first: gtk::CheckButton,
     hidden: gtk::CheckButton,
     hidden_last: gtk::CheckButton,
@@ -92,7 +93,10 @@ impl StyleForm {
             usize::from(style.descending),
         );
         dialog.add_labelled(&gettext("Order"), &descending);
-        let groups = dialog.add_check_button(&gettext("Show in groups"), style.groups);
+        let group_at = GroupBy::ALL.iter().position(|by| *by == style.grouping());
+        let group_labels: Vec<&str> = GroupBy::ALL.iter().map(|by| gettext_static(by.label())).collect();
+        let group_by = drop_down(&group_labels, group_at.unwrap_or(GroupBy::ALL.len() - 1));
+        dialog.add_labelled(&gettext("Group by"), &group_by);
         let folders_first = dialog.add_check_button(&gettext("Show folders first"), style.folders_first);
         let hidden = dialog.add_check_button(&gettext("Show hidden files"), style.show_hidden);
         let hidden_last = dialog.add_check_button(&gettext("Show hidden items last"), style.hidden_last);
@@ -129,7 +133,7 @@ impl StyleForm {
             mode,
             sort,
             descending,
-            groups,
+            group_by,
             folders_first,
             hidden,
             hidden_last,
@@ -160,19 +164,23 @@ impl StyleForm {
                 columns.push(column);
             }
         }
-        ViewProperties {
+        let mut style = ViewProperties {
             mode: mode.to_owned(),
             icon_size: shown.icon_size,
             sort: sort.to_owned(),
             descending: chosen(&self.descending) == 1,
-            groups: self.groups.is_active(),
+            groups: false,
+            group_by: None,
             folders_first: self.folders_first.is_active(),
             show_hidden: self.hidden.is_active(),
             hidden_last: self.hidden_last.is_active(),
             show_previews: Some(self.previews.is_active()),
             details_columns: Some(columns),
             column_widths: shown.column_widths.clone(),
-        }
+        };
+        let group_by = GroupBy::ALL.get(chosen(&self.group_by)).copied();
+        style.set_grouping(group_by.unwrap_or(GroupBy::None));
+        style
     }
 
     /// The scope chosen.
@@ -202,13 +210,19 @@ impl BrowserWindow {
             &gettext("Choose how the items of this folder are shown."),
         );
         let form = StyleForm::add_to(&dialog, &shown, per_folder);
+        // Windows' Folder Options > View > Folder views.
+        let apply_to_all = dialog.add_button(&gettext("Apply to all folders"), ButtonStyle::Bordered);
+        let reset_all = dialog.add_button(&gettext("Reset folders"), ButtonStyle::Bordered);
         dialog.add_cancel_button();
         dialog.add_button(&gettext("OK"), ButtonStyle::Accent);
         dialog.open_on_first_button();
         let answer = dialog.next_response().await;
         dialog.finish();
-        if answer.is_none() {
-            return;
+        match answer {
+            None => return,
+            Some(button) if button == apply_to_all => return self.apply_view_to_all_folders(shown).await,
+            Some(button) if button == reset_all => return self.reset_folder_views().await,
+            Some(_) => {}
         }
         let style = form.style(&shown);
         let scope = per_folder.then(|| form.scope());
@@ -218,6 +232,54 @@ impl BrowserWindow {
         self.apply_style(&style);
         self.folder_pane().restore_scroll_position(0.0);
         self.save_chosen_style(style, scope, form.as_default.is_active());
+    }
+
+    /// Folder views > Apply to all folders: after asking, every folder
+    /// shows `shown`, this folder's view, and keeps no style of its own.
+    async fn apply_view_to_all_folders(&self, shown: ViewProperties) {
+        let asked = self
+            .confirm(
+                message_id("Apply this view to all folders?"),
+                message_id(
+                    "Every folder will show this folder's layout, sorting, grouping and other view settings. \
+                     Folders that kept a view of their own will lose it.",
+                ),
+                message_id("Apply"),
+            )
+            .await;
+        if asked {
+            self.context()
+                .apply_view_to_all_folders(shown, self.preference_failure_reply());
+        }
+    }
+
+    /// Folder views > Reset folders: after asking, every folder forgets
+    /// its view and shows the default one.
+    async fn reset_folder_views(&self) {
+        let asked = self
+            .confirm(
+                message_id("Reset all folders to the default view?"),
+                message_id(
+                    "Every folder will forget its layout, sorting, grouping and other view settings, and show \
+                     the default view.",
+                ),
+                message_id("Reset"),
+            )
+            .await;
+        if asked {
+            self.context().reset_folder_views(self.preference_failure_reply());
+        }
+    }
+
+    /// Asks `title` with `message`; true when `action` was chosen.
+    async fn confirm(&self, title: &str, message: &str, action: &str) -> bool {
+        let dialog = Dialog::new(self, &gettext(title), &gettext(message));
+        dialog.add_cancel_button();
+        dialog.add_button(&gettext(action), ButtonStyle::Accent);
+        dialog.open_on_first_button();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        answer.is_some()
     }
 
     /// Asks before a style replaces those of other folders, as Dolphin's

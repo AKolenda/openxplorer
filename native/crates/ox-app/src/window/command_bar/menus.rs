@@ -7,6 +7,7 @@
 //! order. Each item runs a window or application action; the choices and
 //! toggles show a check mark while their action's state matches.
 
+use ox_core::grouping::GroupBy;
 use ox_core::i18n::gettext;
 use ox_core::settings::Theme;
 
@@ -95,24 +96,31 @@ fn role_item(role: SortRole) -> MenuEntry {
     MenuItem::choice(role.label(), Icon::ArrowSort, WindowAction::Sort, role.as_str()).into()
 }
 
-/// The Sort menu: the columns and Dolphin's further keys, then the
-/// direction, then grouping and folders first. The direction has an item
-/// each, where app.js had one item that flips it.
+/// The Sort menu, laid out as Windows Explorer's: Name, Date modified and
+/// Type, then More with Size and Dolphin's further keys; the direction,
+/// with an item each where app.js had one that flips it; then Group by,
+/// whose choices group apart from the sort (VIEW-022), and folders first.
 pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
-    let mut entries: Vec<MenuEntry> = SortColumn::IN_SORT_MENU.into_iter().map(column_item).collect();
-    entries.push(MenuEntry::Divider);
-    entries.extend(SortRole::ALL.into_iter().map(role_item));
+    let mut entries: Vec<MenuEntry> = [SortColumn::Name, SortColumn::Modified, SortColumn::Type]
+        .into_iter()
+        .map(column_item)
+        .collect();
+    let mut more = vec![column_item(SortColumn::Size)];
+    more.extend(SortRole::ALL.into_iter().map(role_item));
     entries.extend([
+        MenuItem::submenu(&gettext("More"), Icon::ArrowSort, WindowAction::Sort, more).into(),
         MenuEntry::Divider,
         direction_item(&gettext("Ascending"), Icon::ArrowUp, SortDirection::Ascending),
         direction_item(&gettext("Descending"), Icon::ArrowDown, SortDirection::Descending),
         MenuEntry::Divider,
-        MenuItem::toggle(
-            &ox_core::i18n::gettext("Show in groups"),
+        MenuItem::submenu(
+            &gettext("Group by"),
             Icon::TextBulletList,
-            WindowAction::Groups,
+            WindowAction::GroupBy,
+            GroupBy::ALL.into_iter().map(group_item).collect(),
         )
         .into(),
+        MenuEntry::Divider,
         MenuItem::toggle(
             &ox_core::i18n::gettext("Folders first"),
             Icon::Folder,
@@ -121,6 +129,17 @@ pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
         .into(),
     ]);
     entries
+}
+
+/// The Group by submenu's item for `group_by`.
+fn group_item(group_by: GroupBy) -> MenuEntry {
+    MenuItem::choice(
+        ox_core::i18n::gettext_static(group_by.label()),
+        Icon::TextBulletList,
+        WindowAction::GroupBy,
+        group_by.as_str(),
+    )
+    .into()
 }
 
 /// The View menu's item for `view`, showing its Explorer shortcut.
@@ -140,8 +159,8 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 }
 
 /// The View menu: the views (Details, List and Explorer's four icon
-/// sizes), the hidden-files, details-pane and navigation-pane toggles,
-/// Dolphin's display style dialog, then the text size.
+/// sizes), the hidden-files toggle, the pane toggles, Compact view and the
+/// terminal, Dolphin's display style dialog, then the text size.
 pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details);
     let compact = view_item(&gettext("List"), Icon::Table, FolderView::Compact);
@@ -179,6 +198,13 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
             WindowAction::FolderTree,
         )
         .with_shortcut("F7")
+        .into(),
+        // After the panes, as Windows 11 lists it under View > Show.
+        MenuItem::toggle(
+            &gettext("Compact view"),
+            Icon::TextBulletList,
+            WindowAction::CompactDensity,
+        )
         .into(),
         // Dolphin's Terminal panel embeds Konsole; VTE for GTK 4 is not
         // available everywhere the app ships, so this opens the desktop's

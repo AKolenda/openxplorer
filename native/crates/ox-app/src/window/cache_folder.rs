@@ -103,11 +103,13 @@ impl BrowserWindow {
     }
 
     /// Offers "Open file location" and its new tab and new window forms
-    /// for one selected search result.
+    /// for one selected search result; a file dialog offers only the
+    /// first, which opens the folder in its one tab (INT-032).
     pub(super) fn update_open_location_action(&self, selected: u32) {
         let offers = self.is_searching() && selected == 1;
         for action in LOCATION_ACTIONS {
-            self.set_action_enabled(action, offers);
+            let elsewhere = action != WindowAction::OpenFileLocation;
+            self.set_action_enabled(action, offers && !(elsewhere && self.is_picking()));
         }
     }
 
