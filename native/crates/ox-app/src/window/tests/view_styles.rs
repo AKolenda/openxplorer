@@ -5,6 +5,7 @@
 use std::fs;
 
 use gtk::prelude::*;
+use ox_core::grouping::GroupBy;
 use ox_core::settings::{ColumnWidths, PreferencesUpdate, Settings};
 
 use super::file_ops_support::{open_dialog, wait_for_no_dialog};
@@ -143,17 +144,14 @@ fn the_display_style_dialog_applies_its_choices() {
     test.activate("view-properties", None);
     let dialog = open_dialog(&test);
     let choices = descendants::<gtk::DropDown>(&dialog);
-    let [mode, sort, order] = choices.as_slice() else {
-        panic!("three choices: view mode, sort key and order");
+    let [mode, sort, order, group_by] = choices.as_slice() else {
+        panic!("four choices: view mode, sort key, order and Group by");
     };
     mode.set_selected(1);
     sort.set_selected(3);
     order.set_selected(1);
-    let groups = descendants::<gtk::CheckButton>(&dialog)
-        .into_iter()
-        .find(|check| check.label().as_deref() == Some("Show in groups"))
-        .expect("a groups choice");
-    groups.set_active(true);
+    // Grouped by date modified while sorted by size: the two are apart.
+    group_by.set_selected(1);
     let checks = descendants::<gtk::CheckButton>(&dialog);
     checks
         .iter()
@@ -179,7 +177,7 @@ fn the_display_style_dialog_applies_its_choices() {
     wait_until("the style to be saved", || {
         let saved = test.context.settings_data().preferences.view_defaults;
         saved.is_some_and(|style| {
-            style.groups
+            style.grouping() == GroupBy::Modified
                 && style.sort == "size"
                 && style.hidden_last
                 && style.show_previews == Some(false)
@@ -383,16 +381,17 @@ fn split_panes_keep_their_own_display_styles() {
     assert_eq!(right.details().sort_order().column, SortColumn::Modified);
 }
 
-/// "Show in groups" heads each group of the details view with its title.
+/// Group by "Same as sort" (Dolphin's "Show in groups") heads each group
+/// of the details view with the sort key's title.
 ///
 /// parity: VIEW-022
 #[gtk::test]
-fn show_in_groups_heads_each_group() {
+fn grouping_by_the_sort_key_heads_each_group() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.window.folder_pane().model().select_only(1);
     let selected = test.selected_names();
-    test.activate("groups", None);
+    test.activate("group-by", Some("sort"));
     let details = test.window.folder_pane().details().column_view().clone();
     assert!(details.header_factory().is_some());
     assert_eq!(
@@ -404,7 +403,7 @@ fn show_in_groups_heads_each_group() {
     let model = test.window.folder_pane().model();
     let first = model.item(0).expect("an item");
     assert_eq!((model.group_titles())(&first).as_deref(), Some("D"), "Documents");
-    test.activate("groups", None);
+    test.activate("group-by", Some("none"));
     assert!(details.header_factory().is_none());
     assert_eq!(test.selected_names(), selected);
 }

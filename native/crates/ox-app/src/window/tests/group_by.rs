@@ -1,0 +1,873 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! Explorer's Group by in a real window (VIEW-022): grouping apart from
+//! the sort, Explorer's name ranges and date periods, Downloads grouped by
+//! date out of the box, and the Sort menu's More and Group by submenus.
+//!
+//! With `OX_NATIVE_CAPTURE_DIR` set, this also saves
+//! `native-group-by-date.png`, `native-sort-menu.png` and
+//! `native-group-by-menu.png`.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
+
+use gtk::glib;
+use gtk::prelude::*;
+use ox_core::grouping::GroupBy;
+use ox_core::location::file_uri;
+use ox_core::places::FolderLocations;
+use ox_core::settings::PreferencesUpdate;
+
+use crate::folder_view::sorting::SortColumn;
+use crate::test_support::harness::{
+    capture, capture_popover, descendants, wait_for_frames, wait_until, Fixture, TestWindow,
+};
+use crate::window::command_bar::menus::sort_menu;
+use crate::window::menu_popover::MenuEntry;
+
+/// The headings the details view draws, top to bottom.
+fn headings(test: &TestWindow) -> Vec<String> {
+    wait_for_frames(&test.window, 3);
+    let column_view = test.window.folder_pane().details().column_view().clone();
+    let mut labels: Vec<(f64, String)> = descendants::<gtk::Label>(&column_view)
+        .into_iter()
+        .filter(|label| label.has_css_class("group-title") && label.is_mapped())
+        .filter_map(|label| {
+            let point = label.compute_point(&column_view, &gtk::graphene::Point::new(0.0, 0.0))?;
+            Some((f64::from(point.y()), label.text().to_string()))
+        })
+        .collect();
+    labels.sort_by(|a, b| a.0.total_cmp(&b.0));
+    labels.into_iter().map(|(_, text)| text).collect()
+}
+
+/// Sets the modification time of `path` to `age` ago.
+fn age(path: &Path, age: Duration) {
+    fs::File::options()
+        .write(true)
+        .open(path)
+        .and_then(|file| file.set_modified(SystemTime::now() - age))
+        .expect("the date is set");
+}
+
+/// Three years, a date that is "A long time ago" on any day.
+const LONG_AGO: Duration = Duration::from_secs(3 * 366 * 86_400);
+
+/// A home with a Downloads folder holding a folder and a file from today
+/// and a file from long ago.
+struct TestHome {
+    _root: tempfile::TempDir,
+    home: PathBuf,
+    config: PathBuf,
+}
+
+impl TestHome {
+    fn new() -> Self {
+        let root = tempfile::tempdir().expect("the test home has room");
+        let base = fs::canonicalize(root.path()).expect("the folder resolves");
+        let home = base.join("home");
+        let config = base.join("config");
+        let downloads = home.join("Downloads");
+        fs::create_dir_all(downloads.join("Installers")).expect("a folder");
+        fs::create_dir_all(&config).expect("a folder");
+        fs::write(downloads.join("today.txt"), "x").expect("a file");
+        let old = downloads.join("old manual.pdf");
+        fs::write(&old, "x").expect("a file");
+        age(&old, LONG_AGO);
+        Self {
+            _root: root,
+            home,
+            config,
+        }
+    }
+
+    fn locations(&self) -> FolderLocations {
+        FolderLocations::new(self.home.clone(), &self.config)
+    }
+
+    fn downloads(&self) -> String {
+        file_uri(&self.home.join("Downloads"))
+    }
+}
+
+/// Grouped by date modified, each period is sorted by name, as Explorer
+/// does: the groups no longer follow the sort.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn grouping_by_date_keeps_the_name_sort_within_each_group() {
+    let fixture = Fixture::empty();
+    for name in ["zeta.txt", "alpha.txt", "beta.txt"] {
+        fixture.write(name);
+    }
+    age(&fixture.path("beta.txt"), LONG_AGO);
+    let test = TestWindow::open(&fixture.uri());
+    assert_eq!(test.action_state("sort").as_deref(), Some("name"));
+
+    test.activate("group-by", Some("modified"));
+
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    assert_eq!(
+        test.action_state("sort").as_deref(),
+        Some("name"),
+        "the sort stays"
+    );
+    assert_eq!(
+        test.names(),
+        ["alpha.txt", "zeta.txt", "beta.txt"],
+        "today's by name, then long ago's"
+    );
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+
+    test.activate("direction", Some("descending"));
+    assert_eq!(
+        test.names(),
+        ["zeta.txt", "alpha.txt", "beta.txt"],
+        "the sort turns within the groups, which keep their order"
+    );
+}
+
+/// Grouped by name, the names fall in Explorer's letter ranges, and the
+/// selection survives regrouping; by size, folders come first.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn names_fall_in_explorers_letter_ranges() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    assert!(test.window.select_named("Notes 2.txt"));
+
+    test.activate("group-by", Some("name"));
+
+    assert_eq!(headings(&test), ["A – H (1)", "I – P (2)", "Q – Z (1)"]);
+    assert_eq!(
+        test.names(),
+        ["Documents", "Notes 2.txt", "Notes 10.txt", "Résumé.txt"]
+    );
+    assert_eq!(
+        test.selected_names(),
+        ["Notes 2.txt"],
+        "regrouping keeps the selection"
+    );
+    test.activate("group-by", Some("size"));
+    assert_eq!(headings(&test), ["Folders (1)", "Tiny (0 – 16 KB) (3)"]);
+    assert_eq!(test.selected_names(), ["Notes 2.txt"], "and regrouping again");
+}
+
+/// A group's count follows the files: one added or removed shows in its
+/// heading at the next listing (F5), without the folder being opened
+/// again. Before, "Today (2)" kept its first count.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn group_counts_follow_files_added_and_removed() {
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+    let new_file = home.home.join("Downloads").join("receipt.pdf");
+
+    fs::write(&new_file, "x").expect("a new file");
+    test.activate("refresh", None);
+    wait_until("the new file", || {
+        test.names().contains(&"receipt.pdf".to_owned())
+    });
+    assert_eq!(headings(&test), ["Today (3)", "A long time ago (1)"]);
+
+    fs::remove_file(&new_file).expect("the file goes");
+    test.activate("refresh", None);
+    wait_until("the file to go", || {
+        !test.names().contains(&"receipt.pdf".to_owned())
+    });
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+}
+
+/// Date groups follow the calendar past midnight: when the day changes,
+/// today's files move to Yesterday without the folder being opened again.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn date_groups_move_on_when_the_day_changes() {
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+
+    let tomorrow = glib::DateTime::now_local()
+        .and_then(|now| now.add_days(1))
+        .expect("tomorrow");
+    crate::folder_view::groups::set_clock_for_tests(Some(tomorrow));
+    test.window.follow_the_day();
+    let shown = headings(&test);
+    crate::folder_view::groups::set_clock_for_tests(None);
+    assert_eq!(shown, ["Yesterday (2)", "A long time ago (1)"]);
+}
+
+/// Columns shown, hidden or moved while the groups are headed: Downloads
+/// grouped, then the Recycle Bin (its own columns) and Back, then a column
+/// chosen and taken away again. GTK 4.22 crashed on Back after it had
+/// finalized group headers whose cells were still in them.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn columns_change_safely_while_the_groups_are_headed() {
+    super::file_ops_support::require_private_trash();
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+
+    test.window.navigate("trash:///").expect("the Recycle Bin");
+    test.wait_for_listing("the Recycle Bin");
+    wait_for_frames(&test.window, 4);
+    test.activate("back", None);
+    test.wait_for_listing("Downloads");
+    wait_for_frames(&test.window, 4);
+    assert_eq!(
+        headings(&test),
+        ["Today (2)", "A long time ago (1)"],
+        "the groups are headed again"
+    );
+
+    let details = test.window.folder_pane().details();
+    let before = details.chosen_columns();
+    let mut more = before.clone();
+    more.push(SortColumn::Created);
+    details.show_chosen_columns(more);
+    wait_for_frames(&test.window, 4);
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+    details.show_chosen_columns(before);
+    wait_for_frames(&test.window, 4);
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+}
+
+/// Downloads opens grouped by date, as in Explorer, while other folders
+/// share the style without groups; choosing (None) in Downloads is
+/// remembered for Downloads only.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn downloads_is_grouped_by_date_until_the_user_chooses_otherwise() {
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    assert_eq!(
+        test.names(),
+        ["Installers", "today.txt", "old manual.pdf"],
+        "newest group first, folders first within it"
+    );
+    assert_eq!(headings(&test), ["Today (2)", "A long time ago (1)"]);
+    capture(&test.window, "native-group-by-date.png");
+
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+    assert!(headings(&test).is_empty(), "an ungrouped list has no heading");
+
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+
+    test.activate("group-by", Some("none"));
+    assert!(headings(&test).is_empty());
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.downloads_group_by == Some(GroupBy::None)
+    });
+    let shared = test.context.settings_data().preferences.view_defaults;
+    assert!(
+        shared.is_none_or(|style| style.grouping() == GroupBy::None),
+        "the other folders' style is unchanged"
+    );
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+}
+
+/// With each folder keeping its own style, Downloads is grouped by date
+/// until it has a style of its own, which then keeps its Group by.
+///
+/// parity: VIEW-022, VIEW-020
+#[gtk::test]
+fn downloads_keeps_its_own_group_by_when_each_folder_keeps_a_style() {
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
+    let per_folder = PreferencesUpdate {
+        per_folder_views: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    test.context
+        .update_preferences(per_folder, |result| result.expect("saved"));
+    wait_until("the preference", || {
+        test.context.settings_data().preferences.per_folder_views
+    });
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+
+    test.activate("group-by", Some("type"));
+    wait_until("Downloads' own style", || {
+        let preferences = test.context.settings_data().preferences;
+        preferences.view_in(&downloads, Some(&downloads)).grouping() == GroupBy::Type
+    });
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
+}
+
+/// The first group's heading is in sight when a grouped folder opens: no
+/// row of the list hides it.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn the_first_heading_is_shown_when_a_grouped_folder_opens() {
+    let home = TestHome::new();
+    for number in 0..40 {
+        fs::write(
+            home.home.join("Downloads").join(format!("file {number}.txt")),
+            "x",
+        )
+        .expect("a file");
+    }
+    let test = TestWindow::open_with_standard_folders(&file_uri(&home.home), home.locations(), |_| {});
+    test.window.navigate(&home.downloads()).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    wait_for_frames(&test.window, 5);
+    let scrolled = test.window.folder_pane().details().vadjustment().value();
+    assert!(scrolled < 0.5, "Downloads opens at its first heading: {scrolled}");
+    assert_eq!(headings(&test).first().map(String::as_str), Some("Today (42)"));
+}
+
+/// Back to a grouped folder puts the view where it was: showing a list
+/// from its top must not override a restored position.
+///
+/// parity: VIEW-022, NAV-008
+#[gtk::test]
+fn back_to_a_grouped_folder_keeps_its_scroll_position() {
+    let home = TestHome::new();
+    for number in 0..80 {
+        fs::write(
+            home.home.join("Downloads").join(format!("file {number}.txt")),
+            "x",
+        )
+        .expect("a file");
+    }
+    let test = TestWindow::open_with_standard_folders(&home.downloads(), home.locations(), |_| {});
+    let adjustment = test.window.folder_pane().details().vadjustment();
+    wait_for_frames(&test.window, 5);
+    adjustment.set_value(400.0);
+    wait_for_frames(&test.window, 3);
+    let scrolled = adjustment.value();
+    assert!(scrolled > 300.0, "the list scrolls: {scrolled}");
+
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    test.activate("back", None);
+    test.wait_for_listing("Downloads");
+    wait_for_frames(&test.window, 8);
+
+    let restored = test.window.folder_pane().details().vadjustment().value();
+    assert!(
+        (restored - scrolled).abs() < 1.0,
+        "back to {scrolled}, not {restored}"
+    );
+}
+
+/// The Sort menu's submenus: More holds Size and the further keys, and
+/// Group by Explorer's choices, "Same as sort" and (None); choosing one
+/// from the open menu groups the folder.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn the_sort_menu_has_more_and_group_by_submenus() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    menu.row("Sort by").emit_activate();
+    wait_until("the Sort menu", || {
+        menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
+    });
+    capture_popover(&test.window, menu.upcast_ref(), "native-sort-menu.png");
+    // Clicking Group by opens it beside the Sort menu, which stays open.
+    menu.row("Group by").emit_activate();
+    let group_by = menu.open_submenu_menu().expect("Group by opens beside the menu");
+    wait_until("the Group by submenu", || group_by.is_visible());
+    assert!(menu.is_visible(), "the Sort menu stays open");
+    assert_eq!(
+        group_by.row_labels(),
+        [
+            "Name",
+            "Date modified",
+            "Type",
+            "Size",
+            "Date created",
+            "Same as sort",
+            "(None)"
+        ]
+    );
+    capture_popover(&test.window, group_by.upcast_ref(), "native-group-by-menu.png");
+
+    // Left closes only the submenu; Right on Group by opens it again.
+    assert!(group_by.press_in_list(gtk::gdk::Key::Left));
+    assert!(menu.open_submenu_menu().is_none());
+    assert!(menu.is_visible());
+    menu.row("Group by").grab_focus();
+    assert!(menu.press_in_list(gtk::gdk::Key::Right));
+    let group_by = menu.open_submenu_menu().expect("Right opens it");
+
+    // Choosing in the submenu closes both menus, then groups.
+    group_by.row("Date modified").emit_activate();
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    wait_until("both menus to close", || {
+        !menu.is_visible() && !group_by.is_visible()
+    });
+}
+
+/// With Group by open, the submenu grabs the pointer, so its motion over
+/// the Sort menu reaches the Sort menu through the submenu, as a position
+/// on the Sort menu's surface: resting there on More still opens More's
+/// submenu in Group by's place. Before, More stayed shut on KDE Plasma.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn the_pointer_back_from_group_by_still_opens_more() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    menu.row("Sort by").emit_activate();
+    wait_until("the Sort menu", || {
+        menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
+    });
+    menu.hover_row(Some("Group by"));
+    wait_until("the Group by submenu", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.is_visible())
+    });
+    // The pointer goes into the submenu, then back over the Sort menu.
+    menu.hover_row(None);
+    menu.hover_row_through_submenu("Descending");
+    menu.hover_row_through_submenu("More");
+    wait_until("More's submenu in Group by's place", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.row_labels().first().map(String::as_str) == Some("Size"))
+    });
+    menu.hover_row_through_submenu("Folders first");
+    wait_until("the submenu to close", || menu.open_submenu_menu().is_none());
+    assert!(menu.is_visible(), "the Sort menu stays open");
+}
+
+/// Resting the pointer on Group by opens its submenu after a moment, and
+/// resting it on another row closes it again, as Windows' menus do.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn hovering_group_by_opens_its_submenu_beside_the_menu() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    menu.row("Sort by").emit_activate();
+    wait_until("the Sort menu", || {
+        menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
+    });
+    menu.hover_row(Some("Group by"));
+    assert!(menu.open_submenu_menu().is_none(), "not at once");
+    wait_until("the submenu after a moment", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.is_visible())
+    });
+    let submenu = menu.open_submenu_menu().expect("open");
+    assert!(
+        !submenu.is_ancestor(&menu.row_list()),
+        "the pointer over the submenu does not hover the menu's rows"
+    );
+    menu.hover_row(Some("More"));
+    wait_until("More's submenu in its place", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.row_labels().first().map(String::as_str) == Some("Size"))
+    });
+    menu.hover_row(Some("Ascending"));
+    wait_until("the submenu to close", || menu.open_submenu_menu().is_none());
+    assert!(menu.is_visible(), "the Sort menu stays open");
+
+    let submenu = |label: &str| -> Vec<String> {
+        sort_menu()
+            .into_iter()
+            .find_map(|entry| match entry {
+                MenuEntry::Item(item) if item.label == label => Some(item.submenu),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("the Sort menu has {label}"))
+            .into_iter()
+            .map(|entry| match entry {
+                MenuEntry::Item(item) => item.label,
+                MenuEntry::Divider => "-".to_owned(),
+            })
+            .collect()
+    };
+    assert_eq!(
+        submenu("More"),
+        [
+            "Size",
+            "Date created",
+            "Date accessed",
+            "File extension",
+            "Permissions",
+            "Owner",
+            "User group",
+            "Link destination"
+        ]
+    );
+    assert_eq!(
+        submenu("Group by"),
+        [
+            "Name",
+            "Date modified",
+            "Type",
+            "Size",
+            "Date created",
+            "Same as sort",
+            "(None)"
+        ]
+    );
+}
+
+/// A folder of many more files than fit on screen, with one subfolder,
+/// shown in Details and scrolled to the middle.
+fn long_folder_scrolled_to_the_middle(fixture: &Fixture) -> TestWindow {
+    long_folder_of(fixture, 400)
+}
+
+/// A folder of `files` files spread over many groups and one subfolder,
+/// shown in Details and scrolled to the middle.
+fn long_folder_of(fixture: &Fixture, files: usize) -> TestWindow {
+    fs::create_dir(fixture.path("Archive")).expect("a subfolder");
+    for number in 0..40 {
+        fs::write(fixture.path(&format!("Archive/old {number:02}.txt")), b"x").expect("a file");
+    }
+    // Spread over many groups, so headings fall all through the list:
+    // names from A to Z, dates from today to long ago, several sizes.
+    let days = [0_u64, 1, 3, 9, 40, 200, 1200];
+    for number in 0..files {
+        let letter = char::from(b'a' + u8::try_from(number % 26).expect("a letter"));
+        let name = format!("{letter} file {number:04}.txt");
+        fs::write(fixture.path(&name), vec![b'x'; (number % 5) * 40_000]).expect("a file");
+        age(
+            &fixture.path(&name),
+            Duration::from_secs(days[number % days.len()] * 86_400 + 60),
+        );
+    }
+    // Shown and laid out: GTK makes rows and headings only for a list on
+    // screen.
+    let test = super::geometry::laid_out(&fixture.uri());
+    // The same size on every machine, so about as many rows show.
+    test.window.set_default_size(1100, 760);
+    wait_until("the test window's size", || {
+        (test.window.width() - 1100).abs() <= 8 && (test.window.height() - 760).abs() <= 8
+    });
+    test.activate("view", Some("details"));
+    test.wait_for_listing("the folder");
+    scroll_to_the_middle(&test);
+    test
+}
+
+/// Scrolls the details view halfway down and lets it draw.
+fn scroll_to_the_middle(test: &TestWindow) {
+    let adjustment = test.window.folder_pane().details().vadjustment();
+    wait_until("a list longer than the view", || {
+        adjustment.upper() > adjustment.page_size() * 4.0
+    });
+    adjustment.set_value((adjustment.upper() - adjustment.page_size()) / 2.0);
+    wait_for_frames(&test.window, 3);
+}
+
+/// Scrolls the grouped details view so that a group's heading near the
+/// middle of the list is in the middle of the screen, then waits until
+/// headings are drawn. Found from
+/// the list's own groups, so it does not depend on the window's size, the
+/// row height or how many rows a group has.
+fn scroll_to_a_heading_in_the_middle(test: &TestWindow, by: &str) {
+    let column_view = test.window.folder_pane().details().column_view().clone();
+    let model = column_view.model().expect("the details view lists the folder");
+    let sections = model
+        .dynamic_cast_ref::<gtk::SectionModel>()
+        .expect("a grouped list has sections");
+    let middle = model.n_items() / 2;
+    let (start, end) = sections.section(middle);
+    let group_start = if end < model.n_items() { end } else { start };
+    column_view.scroll_to(group_start, None, gtk::ListScrollFlags::NONE, None);
+    wait_for_frames(&test.window, 3);
+    // Then up by half a view, so the heading sits in the middle of the
+    // screen between rows of two groups.
+    let adjustment = test.window.folder_pane().details().vadjustment();
+    adjustment.set_value((adjustment.value() - adjustment.page_size() / 2.0).max(0.0));
+    wait_until(&format!("headings in the middle, by {by}"), || {
+        !headings(test).is_empty()
+    });
+}
+
+/// Groups by each of `choices` and turns the groups off again, three times
+/// over, scrolled to the middle of a long list each time: the headings
+/// come and go, the list is whole again and "none" is saved.
+fn turn_groups_on_and_off(test: &TestWindow, choices: &[&str]) {
+    // At least the folder's own items: 400 files and the subfolder.
+    let listed = 401;
+    for round in 0..3 {
+        for by in choices {
+            test.activate("group-by", Some(by));
+            // Headings on screen in the middle of the list: what GTK 4.22
+            // needs to abort when the groups are turned off.
+            scroll_to_a_heading_in_the_middle(test, by);
+            let details = test.window.folder_pane().details().column_view().clone();
+            assert!(
+                details.header_factory().is_some(),
+                "round {round}: grouped by {by}"
+            );
+            assert_eq!(test.action_state("group-by").as_deref(), Some(*by));
+
+            test.activate("group-by", Some("none"));
+            wait_for_frames(&test.window, 3);
+            assert!(headings(test).is_empty(), "round {round}: {by} turned off");
+            assert!(details.header_factory().is_none(), "round {round}: no headings");
+            let shown = test.names().len();
+            assert!(
+                shown >= listed,
+                "round {round}: the list is whole again ({shown} items)"
+            );
+            assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+            wait_until("groups off to be saved", || {
+                let saved = test.context.settings_data().preferences.view_defaults;
+                saved.is_some_and(|style| style.grouping() == GroupBy::None)
+            });
+            scroll_to_the_middle(test);
+        }
+    }
+}
+
+/// Turning groups off in a long Details list scrolled to its middle no
+/// longer aborts GTK (in `gtk_list_item_manager_ensure_items`), so the choice is saved and the groups go away. The
+/// list used to keep its group headings while it went back to the
+/// ungrouped tree.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn groups_turn_off_in_a_long_details_list() {
+    let fixture = Fixture::empty();
+    let test = long_folder_scrolled_to_the_middle(&fixture);
+
+    turn_groups_on_and_off(&test, &["sort", "modified", "name", "size"]);
+}
+
+/// The same with a subfolder expanded in the tree before grouping.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn groups_turn_off_in_a_long_details_list_with_a_folder_expanded() {
+    let fixture = Fixture::empty();
+    let test = long_folder_scrolled_to_the_middle(&fixture);
+    let model = test.window.folder_pane().model();
+    model.tree().set_expandable(true);
+    let archive = model.tree().row(0).expect("Archive comes first");
+    model.tree().set_expanded(&archive, true);
+    wait_until("the subfolder to list", || test.names().len() > 401);
+    scroll_to_the_middle(&test);
+
+    turn_groups_on_and_off(&test, &["sort", "modified"]);
+}
+
+/// A long folder that opens already grouped, as Downloads opens grouped
+/// by date, turns its groups off, and every other choice turns on and off
+/// again after it.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_long_folder_opened_grouped_turns_its_groups_off() {
+    let fixture = Fixture::empty();
+    let test = long_folder_of(&fixture, 1500);
+    test.activate("group-by", Some("modified"));
+    scroll_to_a_heading_in_the_middle(&test, "modified");
+    test.window.navigate(&fixture.uri_of("Archive")).expect("Archive");
+    test.wait_for_listing("Archive");
+    test.activate("back", None);
+    test.wait_for_listing("the long folder again");
+    assert_eq!(
+        test.action_state("group-by").as_deref(),
+        Some("modified"),
+        "it opens grouped"
+    );
+    scroll_to_a_heading_in_the_middle(&test, "modified");
+
+    test.activate("group-by", Some("none"));
+    wait_for_frames(&test.window, 3);
+
+    assert!(headings(&test).is_empty());
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+    turn_groups_on_and_off(&test, &["sort", "size", "type"]);
+}
+
+/// The command bar's Sort button.
+fn sort_button(test: &TestWindow) -> gtk::MenuButton {
+    descendants::<gtk::MenuButton>(&test.window)
+        .into_iter()
+        .find(|button| {
+            button
+                .popover()
+                .and_downcast::<crate::window::menu_popover::MenuPopover>()
+                .is_some_and(|menu| menu.items_labels().contains(&"Group by".to_owned()))
+        })
+        .expect("the command bar has Sort")
+}
+
+/// Waits a while after a menu closes, longer than a submenu takes to
+/// open or close on a timer, letting the window draw.
+fn wait_past_the_submenu_delay(test: &TestWindow) {
+    let waited = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = std::rc::Rc::clone(&waited);
+    glib::timeout_add_local_once(Duration::from_millis(700), move || done.set(true));
+    wait_until("the submenu delay to pass", || waited.get());
+    wait_for_frames(&test.window, 3);
+}
+
+/// The menus of the window that are on screen.
+fn open_menus(test: &TestWindow) -> Vec<String> {
+    descendants::<crate::window::menu_popover::MenuPopover>(&test.window)
+        .into_iter()
+        .filter(|menu| menu.is_visible() || menu.is_mapped())
+        .map(|menu| menu.items_labels().join(", "))
+        .collect()
+}
+
+/// Choosing Group by › Date modified in the command bar's Sort menu
+/// closes every menu, also when the pointer crossed other rows of the Sort
+/// menu on its way into Group by, and no menu opens again afterwards.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn choosing_in_the_group_by_submenu_of_the_sort_button_closes_every_menu() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sort = sort_button(&test);
+    let menu = sort
+        .popover()
+        .and_downcast::<crate::window::menu_popover::MenuPopover>()
+        .expect("an app menu");
+    sort.popup();
+    wait_until("the Sort menu", || menu.is_visible());
+    menu.hover_row(Some("Group by"));
+    wait_until("the Group by submenu", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.is_visible())
+    });
+    let group_by = menu.open_submenu_menu().expect("Group by is open");
+    // On its way into Group by, the pointer crosses the Sort menu's rows,
+    // and the submenu reports where it is over the Sort menu.
+    menu.hover_row(Some("Folders first"));
+    menu.hover_row(None);
+    menu.hover_row_through_submenu("Group by");
+    group_by.hover_row(Some("Date modified"));
+
+    group_by.row("Date modified").emit_activate();
+
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    wait_past_the_submenu_delay(&test);
+    assert!(!group_by.is_visible(), "Group by closed");
+    assert!(!sort.is_active(), "the Sort button is up");
+    assert_eq!(open_menus(&test), Vec::<String>::new(), "no menu is open");
+}
+
+/// A press anywhere in the window but on a menu closes the Sort menu and
+/// its Group by submenu, even if they did not close themselves, as on KDE
+/// Plasma, where a press in the app's own window is the app's to handle.
+/// A press on a menu closes nothing.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_press_in_the_window_closes_every_menu_and_a_press_on_a_menu_none() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sort = sort_button(&test);
+    let menu = sort
+        .popover()
+        .and_downcast::<crate::window::menu_popover::MenuPopover>()
+        .expect("an app menu");
+    sort.popup();
+    wait_until("the Sort menu", || menu.is_visible());
+    menu.hover_row(Some("Group by"));
+    wait_until("the Group by submenu", || {
+        menu.open_submenu_menu()
+            .is_some_and(|submenu| submenu.is_visible())
+    });
+    let group_by = menu.open_submenu_menu().expect("Group by is open");
+    let window: &gtk::Widget = test.window.upcast_ref();
+
+    for on in [&menu, &group_by] {
+        let surface = gtk::prelude::NativeExt::surface(on);
+        crate::window::menu_popover::close_menus_in(window, surface.as_ref());
+        assert!(menu.is_visible() && group_by.is_visible(), "a press on a menu");
+    }
+
+    let window_surface = gtk::prelude::NativeExt::surface(&test.window);
+    crate::window::menu_popover::close_menus_in(window, window_surface.as_ref());
+    assert!(!group_by.is_visible(), "Group by closed");
+    assert!(!menu.is_visible(), "the Sort menu closed");
+    assert!(!sort.is_active(), "the Sort button is up");
+    wait_past_the_submenu_delay(&test);
+    assert_eq!(open_menus(&test), Vec::<String>::new(), "no menu opens again");
+}
+
+/// Showing or hiding a column in a grouped list at its top keeps the
+/// list at its top: the headings come off and go back on around the
+/// change, with no change of the rows, and GTK kept the first row at the
+/// top edge with its heading above it, out of sight.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_column_shown_in_a_grouped_list_keeps_its_first_heading() {
+    let home = TestHome::new();
+    for number in 0..40 {
+        fs::write(
+            home.home.join("Downloads").join(format!("file {number}.txt")),
+            "x",
+        )
+        .expect("a file");
+    }
+    let test = TestWindow::open_with_standard_folders(&home.downloads(), home.locations(), |_| {});
+    let details = test.window.folder_pane().details();
+    let adjustment = details.vadjustment();
+    wait_until("a list longer than the view", || {
+        adjustment.upper() > adjustment.page_size() + 1.0
+    });
+    wait_for_frames(&test.window, 4);
+    assert!(adjustment.value() < 0.5, "Downloads opens at its top");
+    let before = details.chosen_columns();
+    let mut more = before.clone();
+    more.push(SortColumn::Created);
+    for columns in [more, before] {
+        details.show_chosen_columns(columns);
+        // Laid out again later, as a compositor or a row measured again
+        // makes GTK do.
+        wait_for_frames(&test.window, 4);
+        for list in descendants::<gtk::ListView>(details.column_view()) {
+            list.queue_allocate();
+        }
+        wait_for_frames(&test.window, 4);
+        assert!(adjustment.value() < 0.5, "at its top, not {}", adjustment.value());
+        assert_eq!(headings(&test).first().map(String::as_str), Some("Today (42)"));
+    }
+}

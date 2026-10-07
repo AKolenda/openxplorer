@@ -2654,4 +2654,143 @@ mod tests {
         assert_eq!(response, RESPONSE_CANCELLED);
         assert!(uris.is_empty());
     }
+
+    /// Sets the modification time of `path` to `seconds` ago.
+    fn modified_ago(path: &std::path::Path, seconds: u64) {
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .and_then(|file| {
+                file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(seconds))
+            })
+            .expect("the date is set");
+    }
+
+    /// The first group heading on screen and how far the list is
+    /// scrolled, once the window has drawn and laid the list out again.
+    fn top_of_the_list(window: &crate::window::BrowserWindow) -> (Option<String>, f64) {
+        crate::test_support::harness::wait_for_frames(window, 4);
+        let column_view = window.folder_pane().details().column_view().clone();
+        // GTK lays the list out again later for reasons of its own, such as
+        // KWin sizing the window: the list must stay where it was.
+        for list in crate::test_support::harness::descendants::<gtk::ListView>(&column_view) {
+            list.queue_allocate();
+        }
+        crate::test_support::harness::wait_for_frames(window, 4);
+        let mut headings: Vec<(f32, String)> =
+            crate::test_support::harness::descendants::<gtk::Label>(&column_view)
+                .into_iter()
+                .filter(|label| label.has_css_class("group-title") && label.is_mapped())
+                .filter_map(|label| {
+                    let point = label.compute_point(&column_view, &gtk::graphene::Point::new(0.0, 0.0))?;
+                    Some((point.y(), label.text().to_string()))
+                })
+                .collect();
+        headings.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let first = headings.into_iter().next().map(|(_, text)| text);
+        (first, window.folder_pane().details().vadjustment().value())
+    }
+
+    /// A Save dialog on a folder grouped and sorted by date modified
+    /// shows the list from its first heading, also after another file
+    /// type shows more files: the files the type hid come before the one
+    /// that was at the top, which GTK kept at the top edge, scrolling
+    /// "Today" out of sight (Chrome's Save dialog in Downloads, `*.svg`
+    /// then All files).
+    ///
+    /// parity: INT-032, VIEW-022
+    #[gtk::test]
+    fn a_grouped_dialog_list_stays_at_its_top_when_the_type_changes() {
+        let fixture = Fixture::empty();
+        // Newest first: today's files, the drawing among them, then
+        // older periods, a little more than the dialog shows.
+        let files = [
+            ("notes.txt", 60),
+            ("photo.png", 120),
+            ("drawing.svg", 180),
+            ("setup.deb", 240),
+            ("logo.svg", 2 * 86_400),
+            ("report.pdf", 3 * 86_400),
+            ("music.ogg", 40 * 86_400),
+            ("map.svg", 40 * 86_400 + 60),
+            ("letter.odt", 400 * 86_400),
+            ("old.zip", 1_200 * 86_400),
+        ];
+        for (name, age) in files {
+            fixture.write(name);
+            modified_ago(&fixture.path(name), age);
+        }
+        for number in 0..24 {
+            let name = format!("archive {number:02}.tar");
+            fixture.write(&name);
+            modified_ago(&fixture.path(&name), 1_300 * 86_400);
+        }
+        // Enough old drawings that the SVG files alone fill more than the
+        // view, as in a real Downloads folder.
+        for number in 0..14 {
+            let name = format!("sketch {number:02}.svg");
+            fixture.write(&name);
+            modified_ago(&fixture.path(&name), 1_300 * 86_400);
+        }
+        let portal = Portal::new();
+        let filters = [
+            ("SVG".to_owned(), vec![(0_u32, "*.svg".to_owned())]).to_variant(),
+            ("All files".to_owned(), vec![(0_u32, "*".to_owned())]).to_variant(),
+        ];
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "picture.svg".to_variant()),
+                (
+                    "filters",
+                    glib::Variant::array_from_iter_with_type(filters[0].type_(), filters.clone()),
+                ),
+            ],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        test.activate("view", Some("details"));
+        test.activate("sort", Some("modified"));
+        test.activate("direction", Some("descending"));
+        test.activate("group-by", Some("modified"));
+        assert_eq!(test.names().first().map(String::as_str), Some("drawing.svg"));
+
+        let (heading, scrolled) = top_of_the_list(window);
+        assert!(scrolled < 0.5, "the SVG files from their top: {scrolled}");
+        assert!(heading.is_some_and(|heading| heading.starts_with("Today")));
+
+        let types = window
+            .picker()
+            .expect("a picker")
+            .types
+            .clone()
+            .expect("a type list");
+        types.set_selected(1);
+        wait_until("every file", || test.names().len() == files.len() + 24 + 14);
+        let (heading, scrolled) = top_of_the_list(window);
+        assert!(scrolled < 0.5, "All files from their top, not {scrolled} down");
+        assert_eq!(heading.as_deref(), Some("Today (4)"), "the first heading shows");
+
+        // Down the list and back up to its top, by the scroll bar, then
+        // the SVG files and All files again.
+        let adjustment = window.folder_pane().details().vadjustment();
+        adjustment.set_value(adjustment.upper() - adjustment.page_size());
+        top_of_the_list(window);
+        adjustment.set_value(0.0);
+        let (heading, scrolled) = top_of_the_list(window);
+        assert!(scrolled < 0.5 && heading.as_deref() == Some("Today (4)"));
+        for (shown, files, first) in [(0, 3 + 14, "Today (1)"), (1, files.len() + 24 + 14, "Today (4)")] {
+            types.set_selected(shown);
+            wait_until("the type's files", || test.names().len() == files);
+            let (heading, scrolled) = top_of_the_list(window);
+            assert!(scrolled < 0.5, "type {shown} from its top, not {scrolled} down");
+            assert_eq!(
+                heading.as_deref(),
+                Some(first),
+                "type {shown} shows its first heading"
+            );
+        }
+    }
 }

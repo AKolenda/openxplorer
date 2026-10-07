@@ -12,6 +12,8 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format::DateStyle;
+use ox_core::grouping::GroupBy;
+use ox_core::places::KnownFolder;
 use ox_core::settings::{
     may_remember, ColumnWidths, Preferences, PreferencesUpdate, ViewProperties, ViewScope,
 };
@@ -20,6 +22,7 @@ use super::folder_pane::{FolderPane, FolderView};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 use crate::folder_view::details::GroupTitle;
+use crate::folder_view::groups::Grouping;
 use crate::folder_view::sort_roles::{SortBy, SortState};
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 
@@ -64,9 +67,10 @@ impl BrowserWindow {
         let state = self.sort_state();
         self.set_action_state(WindowAction::Sort, &state.by.as_str().to_variant());
         self.set_action_state(WindowAction::Direction, &state.direction.as_str().to_variant());
-        let model = self.folder_pane().model();
-        if model.grouping().is_some() {
-            model.set_grouping(Some(state));
+        let pane = self.folder_pane();
+        if let Some(grouping) = pane.model().grouping() {
+            // Grouped by the sort key, the groups follow the new sort.
+            group_pane(pane, Grouping::of(grouping.by, state));
         }
     }
 
@@ -88,15 +92,23 @@ impl BrowserWindow {
         self.remember_style();
     }
 
-    /// "Show in groups": groups the listing by its sort key, or stops.
-    pub(super) fn show_groups(&self, grouped: bool) {
+    /// Group by: groups the listing by `by`, a key of its own or the sort
+    /// key, or stops grouping it, without saving it.
+    pub(super) fn show_group_by(&self, by: GroupBy) {
         let pane = self.folder_pane();
-        let model = pane.model();
-        model.set_grouping(grouped.then(|| self.sort_state()));
-        let titles: Option<GroupTitle> = grouped.then(|| model.group_titles());
-        pane.details().show_group_headers(titles);
-        self.set_action_state(WindowAction::Groups, &grouped.to_variant());
+        group_pane(pane, Grouping::of(by, self.sort_state()));
+        self.set_action_state(WindowAction::GroupBy, &by.as_str().to_variant());
         self.update_expandability();
+    }
+
+    /// Group by, from the menu: groups by the choice `key` and saves it.
+    pub(super) fn group_by_key(&self, key: &str) -> bool {
+        let Some(by) = GroupBy::from_key(key) else {
+            return false;
+        };
+        self.show_group_by(by);
+        self.remember_style();
+        true
     }
 
     /// Lists folders before files, or among them.
@@ -114,7 +126,7 @@ impl BrowserWindow {
         let view = pane.view();
         let sort = pane_sort_state(pane);
         let model = pane.model();
-        ViewProperties {
+        let mut style = ViewProperties {
             mode: view.style_mode().to_owned(),
             icon_size: match view {
                 FolderView::Icons(size) => u32::try_from(size.pixels()).unwrap_or(56),
@@ -124,7 +136,8 @@ impl BrowserWindow {
             },
             sort: sort.by.as_str().to_owned(),
             descending: sort.direction == SortDirection::Descending,
-            groups: model.grouping().is_some(),
+            groups: false,
+            group_by: None,
             folders_first: model.folders_first(),
             show_hidden: model.shows_hidden(),
             hidden_last: model.hidden_last(),
@@ -137,7 +150,9 @@ impl BrowserWindow {
                     .collect(),
             ),
             column_widths: Some(ColumnWidths::from_values(&pane.details().widths_to_save())),
-        }
+        };
+        style.set_grouping(model.grouping().map_or(GroupBy::None, |grouping| grouping.by));
+        style
     }
 
     /// Shows the folder in `style`, without saving it.
@@ -167,9 +182,7 @@ impl BrowserWindow {
             },
         };
         show_pane_sort(pane, state);
-        model.set_grouping(style.groups.then_some(state));
-        pane.details()
-            .show_group_headers(style.groups.then(|| model.group_titles()));
+        group_pane(pane, Grouping::of(style.grouping(), state));
         model.set_show_hidden(style.show_hidden);
         pane.set_previews_enabled(style.show_previews.unwrap_or(true));
         if let Some(columns) = &style.details_columns {
@@ -183,12 +196,34 @@ impl BrowserWindow {
 
     /// Shows the folder at `uri` in its own style, when each folder keeps
     /// one (VIEW-020); with one style for all folders, the window keeps
-    /// the style it shows.
+    /// the style it shows, but for the groups of Downloads, which is
+    /// grouped by date modified until the user chooses otherwise there
+    /// (VIEW-022).
     pub(super) fn follow_folder_style(&self, uri: &str) {
         let preferences = self.context().settings_data().preferences;
+        let downloads = self.downloads_location();
+        let style = preferences.view_in(uri, downloads.as_deref());
         if preferences.per_folder_views {
-            self.apply_style(&preferences.view_for(uri));
+            self.apply_style(&style);
+            return;
         }
+        let shown = self
+            .folder_pane()
+            .model()
+            .grouping()
+            .map_or(GroupBy::None, |grouping| grouping.by);
+        if shown != style.grouping() {
+            self.show_group_by(style.grouping());
+        }
+    }
+
+    /// The Downloads folder's location, if the user has one.
+    pub(super) fn downloads_location(&self) -> Option<String> {
+        self.context()
+            .known_folders()
+            .into_iter()
+            .find(|place| place.known_folder == Some(KnownFolder::Downloads))
+            .map(|place| place.uri)
     }
 
     /// Saves the style shown now: for the folder shown when each folder
@@ -205,21 +240,36 @@ impl BrowserWindow {
         if self.imp().applying_style.get() {
             return;
         }
-        let style = Self::style_of_pane(pane);
+        let mut style = Self::style_of_pane(pane);
         let preferences = self.context().settings_data().preferences;
+        let shown_uri = self
+            .shown_panes()
+            .into_iter()
+            .find_map(|(side, uri)| (self.pane_on(side) == pane).then_some(uri));
         if preferences.per_folder_views {
-            let uri = self
-                .shown_panes()
-                .into_iter()
-                .find_map(|(side, uri)| (self.pane_on(side) == pane && may_remember(&uri)).then_some(uri));
-            if let Some(uri) = uri {
+            if let Some(uri) = shown_uri.filter(|uri| may_remember(uri)) {
                 self.save_style(&uri, style, ViewScope::Folder);
             }
         } else {
+            // Downloads keeps its own Group by apart from the shared style.
+            let downloads = self.downloads_location();
+            let in_downloads = shown_uri
+                .as_deref()
+                .zip(downloads.as_deref())
+                .is_some_and(|(uri, downloads)| ox_core::location::same_location(uri, downloads));
+            let mut downloads_group_by = None;
+            if let (true, Some(uri)) = (in_downloads, shown_uri.as_deref()) {
+                let chosen = style.grouping();
+                if chosen != preferences.view_in(uri, downloads.as_deref()).grouping() {
+                    downloads_group_by = Some(chosen);
+                }
+                style.set_grouping(preferences.view_for(uri).grouping());
+            }
             let mut options = preferences.view_options;
             options.show_previews = pane.previews_enabled();
             options.details_columns = style.details_columns.clone().unwrap_or_default();
             let mut update = shared_style_update(style, pane.view());
+            update.downloads_group_by = downloads_group_by;
             update.view_options = Some(options);
             update.column_widths = Some(pane.details().widths_to_save());
             self.context()
@@ -273,6 +323,32 @@ fn pane_sort_state(pane: &FolderPane) -> SortState {
 }
 
 /// Changes one pane's sorting without touching window action state.
+/// Groups `pane`'s items by `grouping`, or stops grouping them with
+/// `None`, with the details view's group headings to match.
+///
+/// The headings come off before the items change and go back on after.
+/// GTK's list keeps a heading for each group it has shown; when its model
+/// changes under the headings, between the grouped sort model and the
+/// ungrouped tree or from one set of groups to another, GTK 4.22 aborts
+/// in `gtk_list_item_manager_ensure_items` on a long list scrolled into
+/// its groups. Nothing changes when the grouping, its day and the
+/// headings already match.
+pub(super) fn group_pane(pane: &FolderPane, grouping: Option<Grouping>) {
+    let model = pane.model();
+    let details = pane.details();
+    let has_headings = details.column_view().header_factory().is_some();
+    let unchanged = model.grouping() == grouping && !model.day_changed();
+    if unchanged && has_headings == grouping.is_some() {
+        return;
+    }
+    details.show_group_headers(None);
+    model.set_grouping(grouping);
+    if grouping.is_some() {
+        let titles: GroupTitle = model.group_titles();
+        details.show_group_headers(Some(titles));
+    }
+}
+
 fn show_pane_sort(pane: &FolderPane, state: SortState) {
     let details = pane.details();
     match state.by {

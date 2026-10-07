@@ -1,5 +1,27 @@
 # Unreleased
 
+- Group by, as in Windows Explorer: Sort > Group by groups a folder apart
+  from its sort, so a folder grouped by date modified can be sorted by name
+  within each group. The choices are Name (A - H, I - P, Q - Z), Date
+  modified (Today, Yesterday, ... A long time ago), Type, Size, Date
+  created, Same as sort (the former Show in groups) and (None). Downloads
+  is grouped by date modified until another choice is made there. The Sort
+  menu now matches Explorer's: Name, Date modified and Type, with Size and
+  the further keys under More. The first group's heading is no longer
+  hidden when a grouped folder opens.
+- No more crash when Details columns change while groups are shown, such as
+  going Back from the Recycle Bin to Downloads grouped by date.
+- Group headings keep their counts right ("Today (3)") as files are added
+  or removed, and date groups move on at midnight: today's files become
+  Yesterday's without opening the folder again.
+- Turning groups off in a long Details list no longer crashes with GTK 4.22
+  ("gtk_list_item_manager_ensure_items"), so (None) is saved and the groups
+  go away. The headings now come off before the list changes and go back on
+  after, whenever the grouping changes.
+- Choosing an item in a side menu, such as Sort > Group by > Date
+  modified, closes every menu, and a click anywhere in the window closes
+  any menu still open. On KDE Plasma the Sort menu could stay on screen
+  until a window of another app was clicked.
 - An Open or Save dialog can no longer get stuck with Save, Cancel and
   Escape doing nothing:
   - "Replace it?" is asked inside the dialog, not in a window of its own
