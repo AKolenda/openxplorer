@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The question about an item the destination cannot store (XFER-028):
-//! a name with characters FAT, exFAT and NTFS forbid, or a symbolic link
-//! on FAT or exFAT.
+//! a name with characters FAT, exFAT and NTFS forbid, a name Windows
+//! cannot use there (a device name such as `CON` or `nul.txt`, or a dot or
+//! space at its end), or a symbolic link on FAT or exFAT.
 //!
 //! Beyond the Python app, which showed the raw GIO error. Dolphin asks
 //! "Replace invalid characters", "Replace all", "Skip", "Skip all" or
@@ -10,9 +11,11 @@
 //! item of the operation. The engine asks from its worker thread and waits
 //! (see `worker_question`).
 
+use std::ffi::OsStr;
+
 use gtk::prelude::*;
 use ox_core::ops::UnstorableAsker;
-use ox_core::transfer::{UnstorableAnswer, UnstorableItem, UnstorableReason};
+use ox_core::transfer::{storable_name, UnstorableAnswer, UnstorableItem, UnstorableReason};
 
 use super::worker_question::worker_question;
 use crate::dialog::Dialog;
@@ -26,6 +29,10 @@ fn question_text(item: &UnstorableItem) -> (&'static str, String) {
         UnstorableReason::InvalidCharacters => (
             ox_core::i18n::gettext_static("Name not supported"),
             ox_core::i18n::format_message("“{name}” has characters the destination file system does not allow (\" * : < > ? \\ | and control characters).", &[("name", name)]),
+        ),
+        UnstorableReason::WindowsName => (
+            ox_core::i18n::gettext_static("Name Windows cannot use"),
+            ox_core::i18n::format_message("“{name}” is a name Windows cannot use on this drive: it is a device name such as CON, PRN, AUX, NUL, COM1 or LPT1 (with any extension), or it ends with a dot or a space. Rename it to “{storable}”, or skip it.", &[("name", name), ("storable", &storable_name(OsStr::new(name)).to_string_lossy())]),
         ),
         UnstorableReason::SymbolicLink => (
             ox_core::i18n::gettext_static("Link not supported"),
@@ -65,12 +72,14 @@ impl BrowserWindow {
             dialog.add_check_button(ox_core::i18n::gettext_static("Do this for all such items"), false);
         dialog.add_cancel_button();
         let skip = dialog.add_button(ox_core::i18n::gettext_static("Skip"), ButtonStyle::Bordered);
-        let replace = (item.reason == UnstorableReason::InvalidCharacters).then(|| {
-            dialog.add_button(
-                ox_core::i18n::gettext_static("Replace invalid characters"),
-                ButtonStyle::Accent,
-            )
-        });
+        let replace = match item.reason {
+            UnstorableReason::InvalidCharacters => {
+                Some(ox_core::i18n::gettext_static("Replace invalid characters"))
+            }
+            UnstorableReason::WindowsName => Some(ox_core::i18n::gettext_static("Rename")),
+            UnstorableReason::SymbolicLink => None,
+        }
+        .map(|label| dialog.add_button(label, ButtonStyle::Accent));
         dialog.open();
         let pressed = dialog.next_response().await;
         let for_all = for_all.is_active();
@@ -101,5 +110,12 @@ mod tests {
         let (title, message) = question_text(&link);
         assert_eq!(title, "Link not supported");
         assert!(message.starts_with("“latest” is a symbolic link"), "{message}");
+        let device = UnstorableItem {
+            name: "nul.txt".into(),
+            reason: UnstorableReason::WindowsName,
+        };
+        let (title, message) = question_text(&device);
+        assert_eq!(title, "Name Windows cannot use");
+        assert!(message.contains("Rename it to “_nul.txt”"), "{message}");
     }
 }

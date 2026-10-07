@@ -1,5 +1,12 @@
 # Unreleased
 
+- Copying to a Windows drive (NTFS), or to a FAT or exFAT stick, no
+  longer creates names Windows cannot use. A device name such as CON,
+  PRN, AUX, NUL, COM1 or LPT1 (also with an extension, like `nul.txt`)
+  and a name ending in a dot or a space are asked about like names with
+  forbidden characters: Rename gives the item a name Windows opens
+  (`_nul.txt`, `notes_`), Skip leaves it out, and "Do this for all such
+  items" covers the rest of the copy.
 - A tab showing a USB drive that was unplugged, or a share or disk that
   was unmounted by another program, no longer keeps showing the old
   files. Every tab and split pane on it drops them and says "This
