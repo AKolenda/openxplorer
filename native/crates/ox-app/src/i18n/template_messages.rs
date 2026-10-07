@@ -82,6 +82,7 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("status-bar.ui", "count", "label", false, "Ready"),
     ("status-bar.ui", "details_view_button", "label", true, "Details view"),
     ("status-bar.ui", "details_view_button", "tooltip-text", false, "Details view"),
+    ("status-bar.ui", "drive_state", "label", false, "Read-only drive"),
     ("status-bar.ui", "icons_view_button", "label", true, "Large icons"),
     ("status-bar.ui", "icons_view_button", "tooltip-text", false, "Large icons"),
     ("status-bar.ui", "watch_state", "label", false, "Not updated live"),

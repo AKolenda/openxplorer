@@ -55,8 +55,12 @@ impl DetailsView {
             return;
         }
         self.imp().chosen.replace(chosen);
-        self.arrange_columns();
-        self.show_fitting_columns();
+        // Moving columns under the group headers is as unsafe as showing
+        // or hiding them.
+        self.change_columns_without_headers(|| {
+            self.arrange_columns();
+            self.show_fitting_columns();
+        });
     }
 
     /// Calls `on_chosen` with the shown columns' new order after the user
@@ -136,7 +140,7 @@ impl DetailsView {
     /// Keeps `chosen` and lays the columns out for it.
     fn arrange_columns_as(&self, chosen: Vec<SortColumn>) {
         self.imp().chosen.replace(chosen);
-        self.arrange_columns();
+        self.change_columns_without_headers(|| self.arrange_columns());
     }
 }
 

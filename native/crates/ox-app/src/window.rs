@@ -56,6 +56,7 @@ mod background_notice;
 mod breakpoints;
 mod button_style;
 mod cache_folder;
+mod caller_window;
 mod caption_buttons;
 mod card_grid;
 mod closing;
@@ -89,6 +90,7 @@ mod folder_tree;
 mod free_space;
 mod gestures;
 mod grid_keys;
+mod group_day;
 mod help;
 mod history_menu;
 mod imp;
@@ -119,6 +121,7 @@ mod place_menus;
 mod preferences;
 mod quick_access;
 mod quick_look;
+mod read_only_drive;
 mod recycle_bin_place;
 mod relocated_files;
 mod result_location;
@@ -230,6 +233,7 @@ impl BrowserWindow {
         window.watch_recycle_bin();
         window.apply_preferences();
         window.install_sidebar_resizer();
+        window.install_day_changes();
         window.focus_file_list_once_shown();
         window
     }

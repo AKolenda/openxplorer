@@ -243,3 +243,49 @@ fn a_file_saved_over_after_its_copy_is_kept_with_its_new_content() {
     assert_eq!(result.errors, [notice]);
     fixture.assert_no_staging();
 }
+
+/// A move that leaves out an entry it cannot copy moves the rest and keeps
+/// that entry, with the folders it is in, where it was, as Windows
+/// Explorer does; the user is told why, not that it "appeared".
+///
+/// parity: XFER-013, OPS-047
+#[test]
+fn a_move_keeps_the_entries_it_could_not_copy() {
+    let fixture = Fixture::new();
+    let source = album(&fixture);
+    fs::create_dir(source.join("extras")).unwrap();
+    write(&source.join("extras").join("three.jpg"), "three");
+    make_fifo(&source.join("extras").join("pipe"));
+    let mut engine = consenting(&fixture, Arc::new(OtherFilesystem::new(&fixture, Event::None)));
+
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
+
+    let copy = fixture.destination_folder.join("album");
+    assert_eq!(list(&copy), ["extras", "one.jpg", "two.jpg"]);
+    assert_eq!(list(&copy.join("extras")), ["three.jpg"]);
+    assert_eq!(
+        list(&source),
+        ["extras"],
+        "only the folder of what was left out stays"
+    );
+    assert_eq!(list(&source.join("extras")), ["pipe"]);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.starts_with("album/extras/pipe: ")),
+        "{result:?}"
+    );
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.contains("1 item could not be moved and was kept")),
+        "{result:?}"
+    );
+    assert!(
+        !result.errors.iter().any(|error| error.contains("appeared")),
+        "{result:?}"
+    );
+    fixture.assert_no_staging();
+}

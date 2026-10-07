@@ -15,7 +15,7 @@
 //! its right; the file commands come from [`EDIT_COMMANDS`] and the menus
 //! of [`menus`].
 
-mod menus;
+pub(in crate::window) mod menus;
 
 use gtk::glib;
 use gtk::prelude::*;

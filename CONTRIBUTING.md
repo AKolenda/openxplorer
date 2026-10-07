@@ -37,6 +37,8 @@ Commit dependency changes together with the updated `Cargo.lock` or `pnpm-lock.y
 
 Create a feature branch and open a pull request into `main`. Direct pushes, force pushes and deletion of `main` are blocked, including for administrators. A second reviewer is not required.
 
+Pull requests are squash-merged under their title, so the title must follow [Conventional Commits](https://www.conventionalcommits.org/) as `type(scope): description`, for example `fix(dialogs): Keep an Open dialog answerable until it closes`. The type is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore` or `revert`; the scope names the area changed, such as `dialogs`, `transfers`, `web` or `deps`, and `!` after it marks a breaking change. The required **PR title** check enforces this, and runs again when you edit the title.
+
 ## Checks before a pull request
 
 Run the checks that cover the change and include their actual outcomes:

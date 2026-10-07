@@ -10,6 +10,101 @@
   meanwhile. Every
   setting is still there, with the same options and defaults, and a
   search for its earlier name still finds it.
+
+# 2.0.3 — 2026-10-06
+
+Windows Explorer's Group by, safer copies and archives, drives that are
+read-only or gone, and Open and Save dialogs that no longer freeze or get
+stuck.
+
+- Group by, as in Windows Explorer: Sort > Group by groups a folder apart
+  from its sort, so a folder grouped by date modified can be sorted by name
+  within each group. The choices are Name (A - H, I - P, Q - Z), Date
+  modified (Today, Yesterday, ... A long time ago), Type, Size, Date
+  created, Same as sort (the former Show in groups) and (None). Downloads
+  is grouped by date modified until another choice is made there. The Sort
+  menu now matches Explorer's: Name, Date modified and Type, with Size and
+  the further keys under More. The first group's heading is no longer
+  hidden when a grouped folder opens.
+- No more crash when Details columns change while groups are shown, such as
+  going Back from the Recycle Bin to Downloads grouped by date.
+- Group headings keep their counts right ("Today (3)") as files are added
+  or removed, and date groups move on at midnight: today's files become
+  Yesterday's without opening the folder again.
+- Turning groups off in a long Details list no longer crashes with GTK 4.22
+  ("gtk_list_item_manager_ensure_items"), so (None) is saved and the groups
+  go away. The headings now come off before the list changes and go back on
+  after, whenever the grouping changes.
+- Choosing an item in a side menu, such as Sort > Group by > Date
+  modified, closes every menu, and a click anywhere in the window closes
+  any menu still open. On KDE Plasma the Sort menu could stay on screen
+  until a window of another app was clicked.
+- An Open or Save dialog can no longer get stuck with Save, Cancel and
+  Escape doing nothing:
+  - "Replace it?" is asked inside the dialog, not in a window of its own
+    that could open out of sight and take every click and key.
+  - The dialog answers only once its window really closes. A window that
+    refused to close (an update installing, files being written in it)
+    used to keep a dead dialog after answering; now it says why and the
+    dialog stays usable.
+  - No tab can be moved into a dialog, which made closing it ask about
+    tabs.
+  - Escape cancels with Caps Lock or Num Lock on.
+  - Opening a window no longer waits for the Recycle Bin's watch, which
+    could hold the whole app, an open dialog included, while a network
+    share or drive stopped answering.
+- An Open or Save dialog opened by another application now belongs to that
+  application's window on Wayland, as Windows' dialog and KDE's own do: it
+  stays above the window, and the window cannot be used until the dialog
+  is answered or cancelled. The other OpenXplorer windows stay usable. This
+  needs a compositor with xdg-foreign and xdg-dialog (KDE Plasma 6.1 or
+  newer) and GTK 4.22 or newer; under X11 the dialog is a window of its
+  own, as before.
+- A drive Linux mounted read-only, such as the Windows drive of a
+  dual-boot computer while Windows is hibernated or used Fast startup,
+  is noticed: New, Paste, Cut, Rename, Duplicate and Delete are turned
+  off there and say why, Copy still works, and the status bar shows
+  "Read-only drive" with what to do (shut Windows down fully, then mount
+  the drive again). A write that still fails there says the drive is
+  read-only instead of the bare "Read-only file system".
+- Copying to a Windows drive (NTFS), or to a FAT or exFAT stick, no
+  longer creates names Windows cannot use. A device name such as CON,
+  PRN, AUX, NUL, COM1 or LPT1 (also with an extension, like `nul.txt`)
+  and a name ending in a dot or a space are asked about like names with
+  forbidden characters: Rename gives the item a name Windows opens
+  (`_nul.txt`, `notes_`), Skip leaves it out, and "Do this for all such
+  items" covers the rest of the copy.
+- A tab showing a USB drive that was unplugged, or a share or disk that
+  was unmounted by another program, no longer keeps showing the old
+  files. Every tab and split pane on it drops them and says "This
+  location is unavailable: the drive or network share that holds this
+  folder was disconnected", with Try again, which lists the folder once
+  the drive or share is back.
+- The Checksums tab no longer hangs on a named pipe (FIFO): a pipe, a
+  device or a socket is refused at once with a message, since it has no
+  contents to sum and reading a pipe waits forever for a writer, which
+  Cancel could not stop. Closing a window now also stops its folder-size
+  scan and the work of its Properties dialogs, which kept running.
+- Copying or moving a folder no longer fails as a whole when one file
+  inside it cannot be read (a locked or protected file, a socket, a pipe
+  or another special file). As in Windows Explorer, OpenXplorer asks about
+  that file by its path inside the folder: Retry copies only it again,
+  Skip or Skip all leave only it out, and the rest of the folder is
+  copied. The files left out are listed at the end, and a move keeps them,
+  with their folders, where they were.
+- Copying files out of a ZIP opened like a folder no longer fails because
+  of one bad item elsewhere in the ZIP, such as a symbolic link: only the
+  items you copy are checked. A link or special file inside a copied
+  folder, which the folder view hides, is left out, and the message says
+  so. Extract all still refuses a ZIP with such items.
+- TAR archives get the ZIP safety limits they were missing. A compressed
+  TAR that unpacks to over 1,000 times its size (a "TAR bomb") is refused
+  before anything is extracted, as such a ZIP is: each file counts its
+  share of the archive's compressed size. A crafted size near the largest
+  number a header can hold is a damaged archive instead of a crash in
+  debug builds. And a TAR's file names are kept only up to 32 MiB, as for
+  a ZIP's directory, so a 1.3 MB archive of long names no longer takes
+  2.4 GB of memory to list; it says its names are too long instead.
 - A file list at its top stays at its top when files come before the one
   at the top edge, in every view: in an Open or Save dialog switching
   from one file type to more (`*.svg`, then All files) no longer scrolls

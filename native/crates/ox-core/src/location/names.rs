@@ -10,6 +10,28 @@ use super::LocationError;
 /// Longest file name most Linux filesystems accept (`NAME_MAX`), in bytes.
 const NAME_MAX_BYTES: usize = 255;
 
+/// Windows' device names, which Windows and SMB servers refuse or read as
+/// the device whatever the extension (`NUL.txt` is the device too).
+const RESERVED_DEVICE_NAMES: [&str; 22] = [
+    "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+    "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+];
+
+/// True when Windows reads `name` as a device: `CON`, `nul.txt`,
+/// `Com1.tar.gz` or `AUX .log`, in any case. The part before the first dot
+/// counts, without the spaces Windows drops at its end; `console`,
+/// `com10` and `nulled.txt` are ordinary names.
+pub fn is_reserved_device_name(name: &str) -> bool {
+    let base_name = name.split_once('.').map_or(name, |(base, _extensions)| base);
+    RESERVED_DEVICE_NAMES.contains(&glib::casefold(base_name.trim_end_matches(' ')).as_str())
+}
+
+/// True when Windows cannot keep `name` as it is: it drops a dot or a
+/// space at the end of a name.
+pub fn ends_like_windows_drops(name: &str) -> bool {
+    name.ends_with(['.', ' '])
+}
+
 /// Longest sidebar label, in characters.
 pub const MAX_LABEL_CHARS: usize = 120;
 
@@ -125,6 +147,19 @@ fn without_last_char(text: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// parity: ARC-014, XFER-028
+    #[test]
+    fn windows_device_names_are_reserved_with_any_extension_and_case() {
+        for name in ["CON", "nul.txt", "Com1.tar.gz", "lpt9", "AUX .log", "prn"] {
+            assert!(is_reserved_device_name(name), "{name}");
+        }
+        for name in ["console", "com10", "nulled.txt", "lpt", "my con.txt", ".con"] {
+            assert!(!is_reserved_device_name(name), "{name}");
+        }
+        assert!(ends_like_windows_drops("notes.") && ends_like_windows_drops("notes "));
+        assert!(!ends_like_windows_drops("notes.txt") && !ends_like_windows_drops(".hidden"));
+    }
 
     /// parity: OPS-006
     #[test]
