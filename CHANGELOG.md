@@ -1,5 +1,12 @@
 # Unreleased
 
+- Copying or moving a folder no longer fails as a whole when one file
+  inside it cannot be read (a locked or protected file, a socket, a pipe
+  or another special file). As in Windows Explorer, OpenXplorer asks about
+  that file by its path inside the folder: Retry copies only it again,
+  Skip or Skip all leave only it out, and the rest of the folder is
+  copied. The files left out are listed at the end, and a move keeps them,
+  with their folders, where they were.
 - Copying files out of a ZIP opened like a folder no longer fails because
   of one bad item elsewhere in the ZIP, such as a symbolic link: only the
   items you copy are checked. A link or special file inside a copied
