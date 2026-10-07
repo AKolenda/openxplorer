@@ -354,6 +354,7 @@ impl TransferEngine {
     /// the run after recording it.
     fn run_item(&mut self, batch: &Batch, index: usize, uri: &str, state: &mut RunState) {
         let mut staging = ItemStaging::default();
+        self.failures.start_item(batch.mode(), self.display_name(uri));
         let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
         while let Err(error) = &outcome {
             if batch.cancel.is_cancelled() || !self.failures.asks_about(error) {
@@ -368,6 +369,7 @@ impl TransferEngine {
             match self.failures.answer(&failed) {
                 Some(FailureAnswer::Retry) => {
                     self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
+                    self.failures.start_item(batch.mode(), self.display_name(uri));
                     outcome = self.process_item(batch, index, uri, state, &mut staging);
                 }
                 Some(FailureAnswer::Cancel) => {
@@ -377,6 +379,9 @@ impl TransferEngine {
                 Some(FailureAnswer::Skip | FailureAnswer::SkipAll) | None => break,
             }
         }
+        // OPS-047: the entries inside it that were left out, even when the
+        // item failed or was cancelled after them.
+        state.result.errors.extend(self.failures.take_left_out());
         match outcome {
             Ok(ItemOutcome::Skipped) => state.result.skipped.push(uri.to_owned()),
             Ok(ItemOutcome::Done) => {
@@ -577,7 +582,8 @@ impl TransferEngine {
             )));
         }
         let source = selected.node.as_ref();
-        let kept = remove_copied_source(source, &selected.info, &copied, self.guard()).map_err(|error| {
+        let left_out = self.failures.left_out_sources();
+        let kept = remove_copied_source(source, &selected.info, &copied, left_out, self.guard()).map_err(|error| {
             TransferError::RecoveryRequired(crate::i18n::format_message("The item was copied to {uri}, but the original could not be removed. Check the copy, then delete the original. {error}", &[("uri", &destination.uri()), ("error", &(error).to_string())]))
         })?;
         Ok(kept.notice(&source.uri()))
@@ -605,6 +611,7 @@ impl TransferEngine {
             cancel,
             guard: self.write_guard.as_deref(),
             unstorable: &mut self.unstorable,
+            failures: &mut self.failures,
             emit: &mut *self.emit,
             copied,
         };

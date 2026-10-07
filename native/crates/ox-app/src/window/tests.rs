@@ -21,6 +21,7 @@ mod compact_density;
 mod context_menus;
 mod details_preview;
 mod devices;
+mod disconnected;
 mod drag_and_drop;
 mod environment;
 mod expand_arrows;

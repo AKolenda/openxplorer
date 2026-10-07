@@ -47,6 +47,7 @@ pub mod network;
 pub mod ops;
 pub mod permissions;
 pub mod places;
+pub mod read_only;
 pub mod search;
 pub mod service_actions;
 pub mod session;

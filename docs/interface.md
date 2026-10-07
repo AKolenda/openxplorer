@@ -38,7 +38,7 @@ More options → Keyboard shortcuts (Ctrl+?) lists the available keys. F1 opens 
 
 Copy, move and delete jobs have their own progress panels. Pause, Resume and Cancel apply to the chosen job. Speed is shown while transferring bytes; estimated time remaining appears when the total is known.
 
-Up to four independent jobs can run while you browse. A job that overlaps an active source or destination must wait for that job to finish. Rename, archive operations, restore and Undo run on their own. If an item fails, Retry, Skip and Skip all let you choose how to continue.
+Up to four independent jobs can run while you browse. A job that overlaps an active source or destination must wait for that job to finish. Rename, archive operations, restore and Undo run on their own. If an item fails, Retry, Skip and Skip all let you choose how to continue. Inside a folder, only the file that fails is asked about, and the rest of the folder is still copied.
 
 ## Add installed service actions
 
