@@ -1,3 +1,5 @@
+<!-- Title: type(scope): description, for example "fix(dialogs): Keep an Open dialog answerable until it closes". See CONTRIBUTING.md. -->
+
 ## Problem and resulting behavior
 
 Describe the trigger, the previous behavior and what the change makes possible.
