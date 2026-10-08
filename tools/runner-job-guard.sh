@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-only
-# Install this file root-owned at /usr/local/libexec/openxplorer-runner-job-guard
+# Install this file root-owned at /usr/local/libexec/openxplorer-runner-job-guard.sh
 # and set ACTIONS_RUNNER_HOOK_JOB_STARTED to that path in the runner's .env.
 # Anyone with write access can push a branch whose workflow targets this
 # runner. Refuse every job except checks.yml as committed on main, started by

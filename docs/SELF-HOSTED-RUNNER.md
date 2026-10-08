@@ -46,11 +46,12 @@ Check the full nested mount, not only creation of a user namespace:
 Workflow files are ordinary repository files, so anyone with write access can
 push a branch whose workflow targets this runner, and GitHub cannot block such
 pushes on a public repository. Install `tools/runner-job-guard.sh` root-owned
-and mode 0755 at `/usr/local/libexec/openxplorer-runner-job-guard`, add this
-line to `/opt/openxplorer-runner/.env`, and restart the runner service:
+and mode 0755 at `/usr/local/libexec/openxplorer-runner-job-guard.sh` (the
+runner only runs hooks ending in `.sh`), add this line to
+`/opt/openxplorer-runner/.env`, and restart the runner service:
 
 ```sh
-ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/libexec/openxplorer-runner-job-guard
+ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/libexec/openxplorer-runner-job-guard.sh
 ```
 
 The hook fails every job except `checks.yml` as committed on `main`, started by
