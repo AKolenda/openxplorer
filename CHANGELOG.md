@@ -1,5 +1,11 @@
 # Unreleased
 
+- Dragging files works like Windows Explorer: a plain drag of
+  OpenXplorer's own items moves them to a folder on the same drive and
+  copies them to another drive (another partition, a USB stick, the
+  Windows drive or a network place). Hold Ctrl to copy or Shift to move.
+  Items dragged in from other apps are still copied, and a drag out to
+  another app still offers it only a copy.
 - Smaller fixes to Open and Save dialogs: browsing a network share in a
   dialog no longer waits on GVfs on the main thread, since the share's
   local path is looked up in the background; Save stays on where nothing

@@ -19,15 +19,17 @@
 //!   the source allows one, so a source is never told to delete what it
 //!   offered. A move is done by the window's own transfer engine, with
 //!   all its rules.
-//! - "A plain drop copies": without a modifier a drop copies, as the
-//!   Python app always did; Shift moves and Ctrl+Shift links only when the
-//!   user holds them ([`action`]).
+//! - "A plain drop of another app's items copies": only this app's own
+//!   items are moved by a plain drag, within their drive, as Windows
+//!   Explorer does; Shift moves and Ctrl+Shift links only when the user
+//!   holds them ([`action`], [`drive`]).
 //! - The drag has finished before any dialog or menu opens, and a drop
 //!   never touches the clipboard.
 //! - Items dragged out of a ZIP arrive as copies that are removed after a
 //!   day, so they are never linked to (ARC-026).
 
 mod action;
+mod drive;
 mod launcher;
 mod program;
 mod targets;

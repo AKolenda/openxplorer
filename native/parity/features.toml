@@ -8993,13 +8993,13 @@ python_tests = [
 ]
 bridge = ["beginFileDrag"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drag/payload.rs (local_files_never_consult_the_mount_resolver). A plain drag offers Copy and Ask only; Shift or Ctrl+Shift held as it starts adds Move or Link. The window never deletes what it offered, whatever the receiver answers."
+native_note = "native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drag/payload.rs (local_files_never_consult_the_mount_resolver). A plain drag offers Copy and Ask only; Shift or Ctrl+Shift held as it starts adds Move or Link. The window never deletes what it offered, whatever the receiver answers; a plain drag dropped in one of its own windows on the same drive is moved by the window's own transfer engine (DND-017)."
 
 [[feature]]
 id = "DND-009"
 area = "DND"
 title = "Drop files onto a folder to copy them"
-behaviour = "Files dropped from other apps or OpenXplorer windows onto a writable folder row/tile, a mounted sidebar folder, or blank space of the current folder are copied into that folder. A drop is always a copy: it never moves or deletes the source, and a source offering only MOVE is refused. The native grab finishes before any dialog opens; the drop never touches the clipboard."
+behaviour = "Files dropped from other apps or OpenXplorer windows onto a writable folder row/tile, a mounted sidebar folder, or blank space of the current folder are copied into that folder. A drop from another app is always a copy: it never moves or deletes the source, and a source offering only MOVE is refused. A plain drag of OpenXplorer's own items onto a folder of their drive is a move (DND-017). The native grab finishes before any dialog opens; the drop never touches the clipboard."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -9280,7 +9280,7 @@ native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_cru
 id = "DND-017"
 area = "DND"
 title = "Drag to move and Ctrl/Shift/Alt drop actions"
-behaviour = "Required: a drop moves or copies depending on the source/destination and the modifiers (Shift move, Ctrl copy, Alt/menu ask). Moving by drag handles a failing destination and cancellation safely. Today drag sources and receivers only copy."
+behaviour = "Required: a drop moves or copies depending on the source/destination and the modifiers (Shift move, Ctrl copy, Alt/menu ask). As in Windows Explorer, a plain drag moves items onto a folder of the same drive and copies them to another drive. Moving by drag handles a failing destination and cancellation safely."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "missing"
@@ -9298,7 +9298,7 @@ python_tests = [
 bridge = ["operate", "transferConflicts"]
 dolphin = "Drop menu Move/Copy/Link, Shift/Ctrl modifiers; DropJob MoveAction"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_shift_drop_moves_the_items_into_the_folder, moving_items_into_the_folder_they_are_in_changes_nothing); native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, another_apps_drag_that_offered_no_copy_is_refused). The move runs through the transfer engine and its conflict check. Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a Shift-drag moved a file into a folder."
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_shift_drop_moves_the_items_into_the_folder, moving_items_into_the_folder_they_are_in_changes_nothing); native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, another_apps_drag_that_offered_no_copy_is_refused, a_plain_drag_of_own_items_moves_within_a_drive_and_copies_across, the_drive_is_only_read_for_a_plain_drop_of_own_items); native/crates/ox-app/src/window/file_drop/drive.rs (items_in_one_folder_are_on_its_drive_and_an_empty_drop_is_not, network_missing_and_runtime_items_are_never_on_the_drive, a_dragged_link_is_on_the_drive_of_the_folder_holding_it). A plain drag of the window's own local items onto a folder on their drive (one device number) moves them, as Windows Explorer does; across drives, from or to a network place, out of a ZIP, or from another app it copies; Ctrl held at the drop copies and Shift moves. Limit: the drag still offers only Copy to the desktop so other apps never move the items, so the pointer shows a copy while the drop moves. The move runs through the transfer engine and its conflict check. Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a Shift-drag moved a file into a folder."
 
 [[feature]]
 id = "DND-018"
@@ -9325,7 +9325,7 @@ bridge = ["operate", "transferConflicts"]
 dolphin = "KIO::DropJob / DropMenu; Dolphin drop popup (Move Here / Copy Here / Link Here) and modifier keys"
 gnome = "GdkDragAction negotiation (COPY|MOVE|LINK|ASK) in GtkDropTarget; Nautilus moves within a filesystem and copies across"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, the_drop_menu_offers_copy_move_link_and_cancel); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer); native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder). Shift moves, Ctrl copies, Ctrl+Shift links and Alt opens Copy here, Move here, Create links here and Cancel; drops from the Recycle Bin are always moves and drops on it go to the Trash. Differs: a plain drop copies, the current app's default, instead of asking; GNOME has no stash, and the Recycle Bin has no sidebar place to drag as a link."
+native_note = "native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, the_drop_menu_offers_copy_move_link_and_cancel); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer); native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder). Shift moves, Ctrl copies, Ctrl+Shift links and Alt opens Copy here, Move here, Create links here and Cancel; drops from the Recycle Bin are always moves and drops on it go to the Trash. Differs: a plain drop does what Windows Explorer does instead of asking: this app's own items move within a drive and copy across drives, and items from other apps copy; GNOME has no stash, and the Recycle Bin has no sidebar place to drag as a link."
 
 [[feature]]
 id = "DND-019"

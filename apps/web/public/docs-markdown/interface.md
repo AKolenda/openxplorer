@@ -118,9 +118,9 @@ Drag a tab onto another OpenXplorer tab strip to merge it. To open a separate wi
 
 Select one or more files or folders and drag them into an application that accepts native file drops. The desktop app supplies file URIs and readable paths through GTK, including already-mounted network paths when available. Ctrl-click or Shift-click to select multiple items. Press Escape to cancel.
 
-Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. Choose Replace existing or Skip duplicates. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Quick access drops pin or reorder folders. File drops never request deletion of the source.
+Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. As in Windows Explorer, a plain drag of OpenXplorer's own items moves them to a folder on the same drive and copies them to another drive; hold Ctrl to copy or Shift to move. Items dragged in from other apps are always copied. Choose Replace existing or Skip duplicates. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Quick access drops pin or reorder folders. File drops never request deletion of the source.
 
-ZIP members must be extracted first. Some editors only accept local files: network items need an existing GVfs/FUSE or CIFS path for those applications. Dragging does not mount a share or download a temporary copy. Drag-to-move, automatic extraction, and undo remain unavailable; use Cut and Paste for supported same-filesystem moves.
+ZIP members must be extracted first. Some editors only accept local files: network items need an existing GVfs/FUSE or CIFS path for those applications. Dragging does not mount a share or download a temporary copy. Automatic extraction and undo remain unavailable.
 
 The website tour shows pictures and cannot drag files. Compatibility with a particular editor or a Wayland desktop must be checked on that system.
 

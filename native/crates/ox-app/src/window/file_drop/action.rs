@@ -7,24 +7,33 @@
 //! Wayland GNOME Shell picks one action (Shift moves, Ctrl copies, Alt
 //! asks), and on X11 GTK narrows the offer the same way (Ctrl+Shift
 //! links; the middle button asks). When several actions remain, a drop
-//! copies: the current app's default, which keeps the promise that a
-//! plain drop never removes its source. Ask opens the menu of Windows
-//! Explorer's right-button drag: Copy here, Move here, Create links here
-//! and Cancel.
+//! copies. A plain drag of this app's own items then does what Windows
+//! Explorer does: it moves them onto a folder of their drive and copies
+//! them to another drive ([`drive`](super::drive)); Ctrl held at the drop
+//! copies and Shift moves. Ask opens the menu of Windows Explorer's
+//! right-button drag: Copy here, Move here, Create links here and Cancel.
 //!
 //! Safety rule "a plain drop never removes its source" (DND-009): a drag
 //! from another app that did not offer a copy when it reached the window
 //! is refused, as `NativeFileDrop` refused a source offering only Move.
 //! Once the desktop applies a modifier, the offer narrows to the chosen
-//! action, so the first offer is what tells the two apart.
+//! action, so the first offer is what tells the two apart. A drag from
+//! another app is never turned into a move; a move of this app's own items
+//! is run by its own transfer engine, and the drag is still finished as a
+//! copy, so its source never deletes anything.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
+use ox_core::ops::is_recycle_bin_item;
+
+use super::drive::on_same_drive;
+use super::{own_dragged_items, DropDestination};
 use crate::icons::Icon;
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use crate::window::window_action::WindowAction;
+use crate::window::zip_copies::is_zip_copy;
 use crate::window::BrowserWindow;
 
 /// Where a drag comes from.
@@ -56,7 +65,15 @@ pub(crate) struct FirstOffer {
     drop: glib::WeakRef<gdk::Drop>,
     /// What it offered first.
     offered: gdk::DragAction,
+    /// The last folder the drag was over and whether its items are on that
+    /// folder's drive, so a hover does not read them again at each motion.
+    drive: Option<(String, bool)>,
 }
+
+/// The keys that change what a drop does.
+const ACTION_KEYS: gdk::ModifierType = gdk::ModifierType::CONTROL_MASK
+    .union(gdk::ModifierType::SHIFT_MASK)
+    .union(gdk::ModifierType::ALT_MASK);
 
 /// What a drop does with its items in a folder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,6 +115,29 @@ impl DropAction {
             return None;
         }
         Self::from_offered(offered)
+    }
+
+    /// The action a drop that settled on `self` runs once the keys `held`
+    /// at the drop and the drive are known, as in Windows Explorer: a copy
+    /// of this app's own items becomes a move when Shift is held, or when
+    /// no key is held and `same_drive` says the items are on the drive of
+    /// the folder they are dropped on. Ctrl keeps the copy, and a drop
+    /// from another app keeps whatever it settled on.
+    pub(crate) fn on_drive(
+        self,
+        origin: DragOrigin,
+        held: gdk::ModifierType,
+        same_drive: impl FnOnce() -> bool,
+    ) -> Self {
+        if origin != DragOrigin::ThisApp || self != Self::Copy {
+            return self;
+        }
+        let held = held & ACTION_KEYS;
+        if held == gdk::ModifierType::SHIFT_MASK || (held.is_empty() && same_drive()) {
+            Self::Move
+        } else {
+            self
+        }
     }
 
     /// The action as GTK names it.
@@ -174,10 +214,62 @@ fn drop_menu_entries() -> Vec<MenuEntry> {
 }
 
 impl BrowserWindow {
-    /// The action `drop` would run now, or `None` when it is refused.
-    pub(super) fn drop_action(&self, drop: &gdk::Drop) -> Option<DropAction> {
+    /// The action `drop` would run now onto `destination`, or `None` when
+    /// it is refused.
+    pub(super) fn drop_action(
+        &self,
+        drop: &gdk::Drop,
+        destination: Option<&DropDestination>,
+    ) -> Option<DropAction> {
         let first_offered = self.first_offer(drop);
-        DropAction::for_drop(DragOrigin::of(drop), first_offered, drop.actions())
+        let origin = DragOrigin::of(drop);
+        let action = DropAction::for_drop(origin, first_offered, drop.actions())?;
+        Some(action.on_drive(origin, self.held_drop_keys(), || {
+            self.drop_on_same_drive(drop, destination)
+        }))
+    }
+
+    /// The keys held now that change what a drop does.
+    fn held_drop_keys(&self) -> gdk::ModifierType {
+        let keyboard = WidgetExt::display(self)
+            .default_seat()
+            .and_then(|seat| seat.keyboard());
+        keyboard.map_or_else(gdk::ModifierType::empty, |keyboard| {
+            keyboard.modifier_state() & ACTION_KEYS
+        })
+    }
+
+    /// True when this app's own `drop` carries items that are all on the
+    /// drive of `destination`, a folder; remembered for the drop's last
+    /// folder.
+    fn drop_on_same_drive(&self, drop: &gdk::Drop, destination: Option<&DropDestination>) -> bool {
+        let Some(DropDestination::Folder(folder)) = destination else {
+            return false;
+        };
+        if let Some((known, same)) = self.known_drive(drop) {
+            if known == *folder {
+                return same;
+            }
+        }
+        let same = own_dragged_items(drop).is_some_and(|uris| {
+            !uris
+                .iter()
+                .any(|uri| is_zip_copy(uri) || is_recycle_bin_item(uri))
+                && on_same_drive(&uris, folder)
+        });
+        if let Some(offer) = self.imp().first_offer.borrow_mut().as_mut() {
+            offer.drive = Some((folder.clone(), same));
+        }
+        same
+    }
+
+    /// The folder and drive answer remembered for `drop`.
+    fn known_drive(&self, drop: &gdk::Drop) -> Option<(String, bool)> {
+        let first = self.imp().first_offer.borrow();
+        let offer = first.as_ref()?;
+        (offer.drop.upgrade().as_ref() == Some(drop))
+            .then(|| offer.drive.clone())
+            .flatten()
     }
 
     /// What `drop` offered when it first reached the window, remembered
@@ -191,6 +283,7 @@ impl BrowserWindow {
             *first = Some(FirstOffer {
                 drop: drop.downgrade(),
                 offered: drop.actions(),
+                drive: None,
             });
         }
         first
@@ -317,6 +410,64 @@ mod tests {
             Some(DropAction::Move),
             "this app never deletes what it offered"
         );
+    }
+
+    /// parity: DND-017
+    #[test]
+    fn a_plain_drag_of_own_items_moves_within_a_drive_and_copies_across() {
+        let none = gdk::ModifierType::empty();
+        let control = gdk::ModifierType::CONTROL_MASK;
+        let shift = gdk::ModifierType::SHIFT_MASK;
+        let alt = gdk::ModifierType::ALT_MASK;
+        let own = DragOrigin::ThisApp;
+        let copy = DropAction::Copy;
+
+        assert_eq!(copy.on_drive(own, none, || true), DropAction::Move);
+        assert_eq!(copy.on_drive(own, none, || false), DropAction::Copy);
+        assert_eq!(
+            copy.on_drive(own, control, || true),
+            DropAction::Copy,
+            "Ctrl copies"
+        );
+        assert_eq!(
+            copy.on_drive(own, shift, || false),
+            DropAction::Move,
+            "Shift moves"
+        );
+        assert_eq!(copy.on_drive(own, alt, || true), DropAction::Copy);
+        assert_eq!(
+            copy.on_drive(own, gdk::ModifierType::BUTTON1_MASK, || true),
+            DropAction::Move,
+            "a held button is no key"
+        );
+        assert_eq!(
+            copy.on_drive(DragOrigin::OtherApp, none, || true),
+            DropAction::Copy,
+            "another app's items are never moved unasked"
+        );
+        assert_eq!(
+            copy.on_drive(DragOrigin::OtherApp, shift, || true),
+            DropAction::Copy
+        );
+        for settled in [DropAction::Move, DropAction::Link, DropAction::Ask] {
+            assert_eq!(settled.on_drive(own, control, || true), settled);
+        }
+    }
+
+    /// parity: DND-017
+    #[test]
+    fn the_drive_is_only_read_for_a_plain_drop_of_own_items() {
+        let read = std::cell::Cell::new(false);
+        let mark = || {
+            read.set(true);
+            true
+        };
+
+        DropAction::Copy.on_drive(DragOrigin::ThisApp, gdk::ModifierType::CONTROL_MASK, mark);
+        DropAction::Copy.on_drive(DragOrigin::OtherApp, gdk::ModifierType::empty(), mark);
+        DropAction::Link.on_drive(DragOrigin::ThisApp, gdk::ModifierType::empty(), mark);
+
+        assert!(!read.get());
     }
 
     /// parity: DND-018
