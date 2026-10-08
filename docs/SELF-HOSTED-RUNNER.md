@@ -43,9 +43,26 @@ It does not change the container's shared mounts or disable WebKit's sandbox.
 Check the full nested mount, not only creation of a user namespace:
 `bwrap --ro-bind / / --unshare-user --unshare-pid --proc /proc -- true`.
 
+Workflow files are ordinary repository files, so anyone with write access can
+push a branch whose workflow targets this runner, and GitHub cannot block such
+pushes on a public repository. Install `tools/runner-job-guard.sh` root-owned
+and mode 0755 at `/usr/local/libexec/openxplorer-runner-job-guard`, add this
+line to `/opt/openxplorer-runner/.env`, and restart the runner service:
+
+```sh
+ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/libexec/openxplorer-runner-job-guard
+```
+
+The hook fails every job except `checks.yml` as committed on `main`, started by
+a push or a manual dispatch, before any of its steps run. `.github/CODEOWNERS`
+names the workflows, tools, package manifests, lockfile and deployment
+configuration; the `Owner review for CI and deploy files` ruleset on `main`
+requires the owner's approval for pull requests that change them.
+
 Repository configuration:
 
-- Secret `CLOUDFLARE_API_TOKEN`: a dedicated deployment token with Workers
+- Secret `CLOUDFLARE_API_TOKEN` in the `production` environment, which only
+  `main` may deploy from (never a repository-level secret): a dedicated deployment token with Workers
   Scripts Edit and Account Settings Read for the intended account, plus
   Workers Routes Edit and Zone Read for `openxplorer.app` only.
 - Variable `CLOUDFLARE_ACCOUNT_ID`: the intended Cloudflare account ID.
@@ -63,5 +80,5 @@ release publication; rerun the workflow after fixing a deployment failure.
 For recovery, check the repository's Actions runner status and inspect the
 runner's systemd service and `_diag` logs on the build host. Restart that
 service if necessary; do not restart another project's runner. Rotate the
-Cloudflare token by replacing the repository secret, then revoke the old token
-once a deployment with the replacement succeeds.
+Cloudflare token by replacing the `production` environment secret, then revoke
+the old token once a deployment with the replacement succeeds.
