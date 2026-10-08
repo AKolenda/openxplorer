@@ -76,7 +76,9 @@ change into `main`. All checks must pass before publication. A release includes
 the native Debian installer, the RPMs, Arch package and Flatpak bundle,
 matching corresponding source and `SHA256SUMS`.
 Existing release assets are left unchanged. Cloudflare deployment follows
-release publication; rerun the workflow after fixing a deployment failure.
+release publication. `Retry release and deploy` reruns the failed jobs of a
+`main` run up to twice, which covers a runner killed by its host running out of
+memory; rerun the workflow by hand after fixing any other deployment failure.
 
 For recovery, check the repository's Actions runner status and inspect the
 runner's systemd service and `_diag` logs on the build host. Restart that

@@ -1,0 +1,30 @@
+name: Retry release and deploy
+# The self-hosted runner shares its host's memory, and an out-of-memory kill
+# there fails the job without any fault in the change. Rerun the failed jobs
+# of a main release run, at most twice. Publishing is safe to repeat: an
+# existing release is left unchanged and the website deploy replaces itself.
+on:
+  workflow_run:
+    workflows: ['Build, release and deploy']
+    types: [completed]
+    branches: [main]
+permissions: {}
+jobs:
+  retry:
+    name: Retry failed jobs
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt < 3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Rerun the failed jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          # Give the runner time to restart after a kill.
+          sleep 60
+          echo "Rerunning failed jobs of run $RUN_ID after attempt $ATTEMPT."
+          gh run rerun "$RUN_ID" --failed --repo "$GITHUB_REPOSITORY"
