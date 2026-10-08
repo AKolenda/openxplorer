@@ -2817,15 +2817,37 @@ mod tests {
         assert_eq!(path, None, "a share that does not answer has no path");
     }
 
-    /// Sets the modification time of `path` to `seconds` ago.
-    fn modified_ago(path: &std::path::Path, seconds: u64) {
-        fs::File::options()
-            .write(true)
-            .open(path)
-            .and_then(|file| {
-                file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(seconds))
-            })
-            .expect("the date is set");
+    /// The groups' clock pinned to noon today, so that files dated a few
+    /// minutes before it are today's whatever the real time: just after
+    /// midnight, files dated minutes before the real time fell in
+    /// Yesterday. The real clock is back once this is dropped.
+    struct NoonClock(glib::DateTime);
+
+    impl NoonClock {
+        fn pin() -> Self {
+            let now = glib::DateTime::now_local().expect("the clock is readable");
+            let noon = glib::DateTime::from_local(now.year(), now.month(), now.day_of_month(), 12, 0, 0.0)
+                .expect("noon today");
+            crate::folder_view::groups::set_clock_for_tests(Some(noon.clone()));
+            Self(noon)
+        }
+
+        /// Sets the modification time of `path` to `seconds` before noon.
+        fn date(&self, path: &std::path::Path, seconds: u64) {
+            let noon = u64::try_from(self.0.to_unix()).expect("noon is after 1970");
+            let time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(noon - seconds);
+            fs::File::options()
+                .write(true)
+                .open(path)
+                .and_then(|file| file.set_modified(time))
+                .expect("the date is set");
+        }
+    }
+
+    impl Drop for NoonClock {
+        fn drop(&mut self) {
+            crate::folder_view::groups::set_clock_for_tests(None);
+        }
     }
 
     /// The first group heading on screen and how far the list is
@@ -2864,6 +2886,7 @@ mod tests {
     #[gtk::test]
     fn a_grouped_dialog_list_stays_at_its_top_when_the_type_changes() {
         let fixture = Fixture::empty();
+        let clock = NoonClock::pin();
         // Newest first: today's files, the drawing among them, then
         // older periods, a little more than the dialog shows.
         let files = [
@@ -2880,19 +2903,19 @@ mod tests {
         ];
         for (name, age) in files {
             fixture.write(name);
-            modified_ago(&fixture.path(name), age);
+            clock.date(&fixture.path(name), age);
         }
         for number in 0..24 {
             let name = format!("archive {number:02}.tar");
             fixture.write(&name);
-            modified_ago(&fixture.path(&name), 1_300 * 86_400);
+            clock.date(&fixture.path(&name), 1_300 * 86_400);
         }
         // Enough old drawings that the SVG files alone fill more than the
         // view, as in a real Downloads folder.
         for number in 0..14 {
             let name = format!("sketch {number:02}.svg");
             fixture.write(&name);
-            modified_ago(&fixture.path(&name), 1_300 * 86_400);
+            clock.date(&fixture.path(&name), 1_300 * 86_400);
         }
         let portal = Portal::new();
         let filters = [
