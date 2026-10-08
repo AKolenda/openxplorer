@@ -2,7 +2,8 @@ name: Pull request title
 # A pull request is squash-merged under its title, so the title must follow
 # Conventional Commits: type(scope): description, for example
 # "fix(dialogs): Keep an Open dialog answerable until it closes". Branch
-# protection on main requires this check.
+# protection on main requires this check. The description must also name the
+# model that generated the pull request in a "Model:" line (PR model check).
 on:
   pull_request:
     # edited: a corrected title is checked again. synchronize: a new push
@@ -27,5 +28,27 @@ jobs:
             echo "OK: $TITLE"
           else
             echo "::error title=Pull request title::\"$TITLE\" is not type(scope): description. Use one of the types ${types//|/, } and a scope, for example: fix(dialogs): Keep an Open dialog answerable until it closes"
+            exit 1
+          fi
+  model:
+    name: PR model
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check the description names the model that generated it
+        env:
+          # Through the environment, never pasted into the script.
+          BODY: ${{ github.event.pull_request.body }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          if [[ "$AUTHOR" == 'dependabot[bot]' ]]; then
+            echo "OK: Dependabot pull request"
+            exit 0
+          fi
+          model=$(printf '%s\n' "$BODY" | tr -d '\r' | sed -nE 's/^[[:space:]]*Model:[[:space:]]*([^[:space:]].*[^[:space:]]|[^[:space:]])[[:space:]]*$/\1/p' | head -n 1)
+          if [[ -n "$model" && "$model" != '<'* ]]; then
+            echo "OK: Model: $model"
+          else
+            echo "::error title=Pull request model::The description needs a line \"Model: <name>\" naming the model that generated the pull request, for example \"Model: claude-opus-5-5\". Write \"Model: none\" for a pull request written without one."
             exit 1
           fi

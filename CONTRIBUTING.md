@@ -39,6 +39,8 @@ Create a feature branch and open a pull request into `main`. Direct pushes, forc
 
 Pull requests are squash-merged under their title, so the title must follow [Conventional Commits](https://www.conventionalcommits.org/) as `type(scope): description`, for example `fix(dialogs): Keep an Open dialog answerable until it closes`. The type is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore` or `revert`; the scope names the area changed, such as `dialogs`, `transfers`, `web` or `deps`, and `!` after it marks a breaking change. The required **PR title** check enforces this, and runs again when you edit the title.
 
+The description must name the model that generated the pull request on a line of its own, such as `Model: claude-opus-5-5`, or `Model: none` for a pull request written without one. The required **PR model** check enforces this. Dependabot pull requests are exempt.
+
 ## Checks before a pull request
 
 Run the checks that cover the change and include their actual outcomes:

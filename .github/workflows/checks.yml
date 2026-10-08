@@ -131,6 +131,9 @@ jobs:
     # pull requests and non-main dispatches must not run on the LAN host.
     if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, Linux, X64, openxplorer]
+    # The Cloudflare token is a secret of this environment, which only main
+    # may use, so a workflow pushed on another branch cannot read it.
+    environment: production
     timeout-minutes: 45
     permissions:
       contents: read
