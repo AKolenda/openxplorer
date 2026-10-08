@@ -4486,8 +4486,8 @@ native_note = "Porting notes: Not done. Windows 11 has this as View > Show > Ite
 [[feature]]
 id = "SEL-014"
 area = "SEL"
-title = "Hover selection marker"
-behaviour = "Hovering an item shows a small +/− marker in its corner. Clicking the marker toggles the item without affecting other selected items."
+title = "Item check boxes"
+behaviour = "Each item has a check box that shows while it is hovered and stays checked while it is selected; clicking it toggles the item without affecting other selected items. The Details header has a box that selects all or none. View > Item check boxes turns them off."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -4501,7 +4501,7 @@ python_tests = []
 bridge = []
 dolphin = "ShowSelectionToggle (default true)"
 native = "done"
-native_note = "Hovering an item shows a small marker on its icon's corner: a plus, or a minus once the item is selected; clicking it toggles that item alone through the list's own Ctrl+click action and keeps the rest of the selection, as Dolphin's selection toggle and Explorer's item check boxes do. Settings > Appearance > Files and folders > Selection marker turns it off. native/crates/ox-app/src/folder_view/cells/selection_marker.rs; test the_selection_marker_toggles_its_item_alone."
+native_note = "Windows 11's item check boxes in place of Dolphin's plus and minus toggle: each item has a check box that shows while its row or tile is hovered (anywhere on a Details row) and stays checked while the item is selected, checked exactly when it is; clicking it toggles that item alone through the list's own Ctrl+click action. Before the icon in Details and List, keeping its room; on the icon's corner on tiles. A box before the Name title selects all or none and shows mixed for some. View > Item check boxes and Settings > Item check boxes turn them off for every window; on by default as in Windows 11; the saved key stays selectionMarker. native/crates/ox-app/src/folder_view/cells/item_check.rs, folder_view/details/select_all.rs, window/item_check_boxes.rs; tests in window/tests/item_check_boxes.rs (an_item_check_box_selects_its_item_alone, an_item_check_box_shows_on_hover_and_while_selected, the_header_check_box_selects_all_or_none, view_item_check_boxes_turns_them_off_and_is_saved, item_check_boxes_turned_off_elsewhere_go_at_once)."
 
 [[feature]]
 id = "SEL-015"

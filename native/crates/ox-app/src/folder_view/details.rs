@@ -16,6 +16,7 @@ mod column_choice;
 mod column_fit;
 pub(crate) mod column_text;
 mod group_headers;
+mod select_all;
 
 pub(crate) use group_headers::GroupTitle;
 
@@ -232,6 +233,9 @@ mod imp {
         /// The column titles' sort arrows, in column order; set by
         /// [`super::DetailsView::new`].
         pub(super) carets: OnceCell<Vec<gtk::Image>>,
+        /// The check box before the Name title that selects every item
+        /// or none (SEL-014).
+        pub(super) select_all: OnceCell<gtk::CheckButton>,
         /// The columns the window has room for.
         pub(super) columns: Cell<DetailsColumns>,
         /// Whether the view lists a folder or search results.
@@ -341,6 +345,7 @@ impl DetailsView {
             model.attach_column_sorter(&sorter);
         }
         view.add_sort_carets();
+        view.add_select_all(model.selection());
         view.install_column_fit();
         view.follow_column_drags();
         column_keys::make_titles_keyboard_operable(&view);

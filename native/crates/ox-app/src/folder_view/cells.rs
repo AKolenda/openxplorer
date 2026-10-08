@@ -13,8 +13,9 @@
 mod cell_owners;
 mod custom_icon;
 mod expander;
+mod item_check;
+pub(crate) use item_check::own_clicks;
 mod row_tooltip;
-mod selection_marker;
 
 use std::rc::Rc;
 
@@ -113,10 +114,11 @@ mod imp {
         pub(super) custom_icon: gtk::Picture,
         /// The running lookup of the custom icon or preview.
         pub(super) picture_lookup: RefCell<Option<glib::JoinHandle<()>>>,
-        /// Holds the icon, with the selection marker over its corner.
+        /// Holds the icon, and on a tile the check box over its corner.
         pub(super) icon_frame: gtk::Overlay,
-        /// Adds the item to the selection or takes it out (SEL-014).
-        pub(super) marker: gtk::Button,
+        /// Checked while the item is selected; a click selects or
+        /// deselects it alone (SEL-014).
+        pub(super) check: gtk::CheckButton,
         /// Expands a folder of a details row in place (VIEW-035).
         pub(super) expander: gtk::Button,
         /// The tree row the cell follows, and its handler.
@@ -138,7 +140,6 @@ mod imp {
             self.custom_icon.set_content_fit(gtk::ContentFit::Contain);
             self.custom_icon.set_visible(false);
             self.icon_frame.add_overlay(&self.custom_icon);
-            self.icon_frame.add_overlay(&self.marker);
             cell.append(&self.icon_frame);
             cell.append(&self.label);
         }
@@ -174,10 +175,12 @@ impl FileCell {
         cell
     }
 
-    /// The icon left of a one-line name that is cut off with an ellipsis.
+    /// The check box and the icon left of a one-line name that is cut off
+    /// with an ellipsis.
     fn lay_out_as_row(&self) {
         self.set_orientation(gtk::Orientation::Horizontal);
         self.set_spacing(ROW_ICON_GAP);
+        self.put_check_before_icon();
         self.imp().image.add_css_class("row-icon");
         let label = &self.imp().label;
         label.set_xalign(0.0);
@@ -186,10 +189,12 @@ impl FileCell {
         label.set_single_line_mode(true);
     }
 
-    /// The icon left of a one-line name [`COMPACT_NAME_CHARS`] wide.
+    /// The check box and the icon left of a one-line name
+    /// [`COMPACT_NAME_CHARS`] wide.
     fn lay_out_as_compact_item(&self) {
         self.set_orientation(gtk::Orientation::Horizontal);
         self.set_spacing(COMPACT_ICON_GAP);
+        self.put_check_before_icon();
         let label = &self.imp().label;
         label.set_xalign(0.0);
         label.set_ellipsize(pango::EllipsizeMode::End);
@@ -203,14 +208,26 @@ impl FileCell {
         self.set_orientation(gtk::Orientation::Vertical);
         self.set_spacing(TILE_ICON_GAP);
         self.set_valign(gtk::Align::Start);
-        // The marker sits on the icon's corner, not the tile's.
-        self.imp().icon_frame.set_halign(gtk::Align::Center);
+        // The check box sits on the icon's corner, not the tile's.
+        let imp = self.imp();
+        imp.icon_frame.set_halign(gtk::Align::Center);
+        imp.check.set_halign(gtk::Align::Start);
+        imp.check.set_valign(gtk::Align::Start);
+        imp.check.add_css_class("on-icon");
+        imp.icon_frame.add_overlay(&imp.check);
         let label = &self.imp().label;
         label.set_wrap(true);
         label.set_wrap_mode(pango::WrapMode::WordChar);
         label.set_lines(TILE_NAME_LINES);
         label.set_ellipsize(pango::EllipsizeMode::End);
         label.set_justify(gtk::Justification::Center);
+    }
+
+    /// Puts the check box first in a row, centred on the line.
+    fn put_check_before_icon(&self) {
+        let check = &self.imp().check;
+        check.set_valign(gtk::Align::Center);
+        self.prepend(check);
     }
 
     /// Shows `item`: its art and its name. A rename in place ends: the
@@ -304,7 +321,7 @@ pub(crate) fn connect_file_cells(
         list_item.set_child(Some(&cell));
         setup_owners.register(&cell, list_item);
         show_row_tooltip(&cell, &setup_owners, |_| None);
-        cell.follow_selection_marker(list_item, &setup_owners);
+        cell.follow_item_check(list_item, &setup_owners);
     });
     let bind_owners = Rc::clone(owners);
     factory.connect_bind(move |_, object| {
@@ -314,6 +331,7 @@ pub(crate) fn connect_file_cells(
             // A tile is named after its item (`aria-label` in app.js).
             list_item.set_accessible_label(&item.entry().name);
             cell.bind(&item);
+            cell.show_item_check(bind_owners.shows_item_checks());
             cell.look_up_picture(&item, bind_owners.previews());
             bind_owners.style_cell(&cell, &item);
         }
