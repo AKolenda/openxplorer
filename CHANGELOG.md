@@ -3,8 +3,8 @@
 - Item check boxes as in Windows 11, in place of the plus and minus that
   showed on an icon's corner (#80): each item has a check box that shows
   while its row or tile is pointed at, anywhere on it, and stays checked
-  while the item is selected; clicking it selects or deselects that item
-  alone. In Details and the List view it comes before the icon and keeps
+  while the item is selected; clicking it, or just beside it, selects or
+  deselects that item alone. In Details and the List view it comes before the icon and keeps
   its room, so names do not move; on icons it sits on the corner. Details
   has a box before Name that selects all items or none, and shows mixed
   while some are selected. View → Item check boxes, the renamed Settings

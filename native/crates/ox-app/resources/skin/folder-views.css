@@ -135,10 +135,13 @@ columnview.files .folder-expander:hover { background-color: @ox_hover; color: @o
    its room but shows only while its row or tile is hovered, anywhere in
    it, or selected; checked means selected. Transparent rather than
    hidden, so names never move. Off in View > Item check boxes, there are
-   none (src/folder_view/cells/item_check.rs). */
+   none (src/folder_view/cells/item_check.rs).
+   A click a little outside the drawn box still hits it: 4px of padding
+   all round, given back by a -4px margin, so the box looks and sits as
+   before and nothing beside it moves. */
 .files checkbutton.item-check {
-  padding: 0;
-  margin: 0;
+  padding: 4px;
+  margin: -4px;
   min-height: 0;
   opacity: 0;
 }
@@ -162,7 +165,7 @@ columnview.files .folder-expander:hover { background-color: @ox_hover; color: @o
 .files checkbutton.item-check:checked { opacity: 1; }
 /* Select all, before the Name title: shown while the pointer is on the
    titles or some item is selected (src/folder_view/details/select_all.rs). */
-columnview.files checkbutton.select-all { margin-right: 6px; }
+columnview.files checkbutton.select-all { margin-right: 2px; }
 columnview.files header:hover checkbutton.select-all,
 columnview.files checkbutton.select-all:indeterminate { opacity: 1; }
 .files checkbutton.item-check > check:indeterminate {
@@ -173,9 +176,9 @@ columnview.files checkbutton.select-all:indeterminate { opacity: 1; }
 /* A row with folder arrows starts 20px further left (.has-folder-expander
    above); its check box does not, so it lines up with the select-all box
    over it. */
-columnview.files .has-folder-expander checkbutton.item-check { margin-left: 20px; }
+columnview.files .has-folder-expander checkbutton.item-check { margin-left: 16px; }
 /* On a tile, over the icon's top left corner. */
-.files checkbutton.item-check.on-icon { margin: -3px 0 0 -3px; }
+.files checkbutton.item-check.on-icon { margin: -7px -4px -4px -7px; }
 
 /* ---- Icon view ---- */
 /* Tiles as renderRows places them: the first 10px in and 5px down, 4px

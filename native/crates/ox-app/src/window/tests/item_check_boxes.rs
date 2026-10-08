@@ -264,3 +264,49 @@ fn item_check_boxes_turned_off_elsewhere_go_at_once() {
     wait_until("the window to follow", || toggle_is_on(&test) == Some(false));
     assert!(!cell.item_check().is_visible());
 }
+
+/// A click a little outside the drawn box still hits it: the box reaches
+/// 4px beyond what it draws on every side, without taking room from the
+/// row, so what follows it sits as before.
+///
+/// parity: SEL-014
+#[gtk::test]
+fn a_click_just_outside_the_box_still_hits_it() {
+    /// How far the box reaches past what it draws (folder-views.css).
+    const REACH: f32 = 4.0;
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let cell = cell_at(&test, 2);
+    let check = cell.item_check();
+    let bounds = check.compute_bounds(&cell).expect("laid out");
+    let drawn_right = bounds.x() + bounds.width() - REACH;
+    assert!(bounds.width() >= 14.0 + 2.0 * REACH, "{}", bounds.width());
+
+    // What follows the box starts the row's usual gap after what it draws:
+    // the reach takes no room.
+    let next = check.next_sibling().expect("the box comes first");
+    let next_left = next.compute_bounds(&cell).expect("laid out").x();
+    #[expect(clippy::cast_precision_loss, reason = "a small spacing")]
+    let gap = cell.spacing() as f32;
+    assert!(
+        (next_left - drawn_right - gap).abs() < 0.5,
+        "next at {next_left}, box drawn to {drawn_right}, gap {gap}"
+    );
+
+    // Just right of, and just above, the drawn box.
+    let middle = bounds.y() + bounds.height() / 2.0;
+    let points = [
+        (bounds.x() + bounds.width() - 2.0, middle),
+        (bounds.x() + bounds.width() / 2.0, bounds.y() + 2.0),
+    ];
+    for (x, y) in points {
+        let picked = cell
+            .pick(f64::from(x), f64::from(y), gtk::PickFlags::DEFAULT)
+            .expect("something is there");
+        assert!(
+            picked == check.clone().upcast::<gtk::Widget>() || picked.is_ancestor(&check),
+            "({x}, {y}) hits the box, not {}",
+            picked.type_().name()
+        );
+    }
+}
