@@ -1,5 +1,7 @@
 <!-- Title: type(scope): description, for example "fix(dialogs): Keep an Open dialog answerable until it closes". See CONTRIBUTING.md. -->
 
+Model: <name of the model that generated this pull request, or none>
+
 ## Problem and resulting behavior
 
 Describe the trigger, the previous behavior and what the change makes possible.
