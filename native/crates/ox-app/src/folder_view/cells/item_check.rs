@@ -83,9 +83,10 @@ impl FileCell {
 }
 
 /// Makes a press on `check` its own, before the row or tile around it sees
-/// it, and toggles `check` on the release. The row would otherwise open
-/// its item on a quick second click, and a column title sort its view; a
-/// GTK check box claims a click only on its release.
+/// it: the row would otherwise open its item on a quick second click, and
+/// a column title sort its view. The check box's own click, which GTK
+/// keeps, toggles it on the release; this one must not toggle too, or a
+/// click would select the item and deselect it again.
 pub(crate) fn own_clicks(check: &gtk::CheckButton) {
     let click = gtk::GestureClick::new();
     click.set_button(gtk::gdk::BUTTON_PRIMARY);
@@ -93,11 +94,6 @@ pub(crate) fn own_clicks(check: &gtk::CheckButton) {
     click.connect_pressed(|gesture, _, _, _| {
         gesture.set_state(gtk::EventSequenceState::Claimed);
     });
-    click.connect_released(glib::clone!(
-        #[weak]
-        check,
-        move |_, _, _, _| check.set_active(!check.is_active())
-    ));
     check.add_controller(click);
 }
 

@@ -73,6 +73,25 @@ fn ink_of(check: &gtk::CheckButton) -> usize {
         .count()
 }
 
+/// Delivers a primary click on `check` to every click handler it has,
+/// GTK's and the app's, presses then releases, as a click reaches them.
+/// (Only the pointer itself, which tests cannot move, is left out.)
+fn click(check: &gtk::CheckButton) {
+    let clicks: Vec<gtk::GestureClick> = check
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+        .collect();
+    assert!(clicks.len() >= 2, "GTK's click and the box's own");
+    for gesture in &clicks {
+        gesture.emit_by_name::<()>("pressed", &[&1_i32, &4.0_f64, &4.0_f64]);
+    }
+    for gesture in &clicks {
+        gesture.emit_by_name::<()>("released", &[&1_i32, &4.0_f64, &4.0_f64]);
+    }
+}
+
 /// Clicking an item's check box selects it and keeps the rest of the
 /// selection, as a Ctrl+click does; clicking again deselects it alone.
 /// The box is checked exactly while its item is selected, however it was
@@ -100,20 +119,13 @@ fn an_item_check_box_selects_its_item_alone() {
     assert_eq!(selected(&test), [1]);
     assert!(!check.is_active());
 
-    // A press on the box is the box's own, before the row sees it, which
-    // would open the item on a quick second click; the release toggles.
-    let clicks: Vec<gtk::GestureClick> = check
-        .observe_controllers()
-        .iter::<glib::Object>()
-        .filter_map(Result::ok)
-        .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
-        .filter(|click| click.propagation_phase() == gtk::PropagationPhase::Capture)
-        .collect();
-    let own = clicks.last().expect("the box takes its own clicks");
-    own.emit_by_name::<()>("released", &[&1_i32, &4.0_f64, &4.0_f64]);
+    // A real click: every click handler on the box hears the press and
+    // the release, GTK's own as well as the app's. The box must toggle
+    // once, not twice (which selected the item and deselected it again).
+    click(&check);
     assert_eq!(selected(&test), [1, 2], "a click keeps the rest of the selection");
-    own.emit_by_name::<()>("released", &[&1_i32, &4.0_f64, &4.0_f64]);
-    assert_eq!(selected(&test), [1]);
+    click(&check);
+    assert_eq!(selected(&test), [1], "a second click deselects it alone");
 
     pane.model().select_all();
     assert!(check.is_active(), "Select all checks every box");
@@ -192,11 +204,11 @@ fn the_header_check_box_selects_all_or_none() {
     assert!(check.is_inconsistent() && !check.is_active(), "mixed with some");
     assert!(ink_of(&check) > 0, "shown, mixed, while some are selected");
     // A click on a mixed box selects every item.
-    check.set_active(!check.is_active());
+    click(&check);
     assert_eq!(selected(&test).len(), usize::try_from(total).expect("few items"));
     assert!(check.is_active() && !check.is_inconsistent(), "checked with all");
     // A click on a checked box selects none.
-    check.set_active(!check.is_active());
+    click(&check);
     assert!(selected(&test).is_empty());
     assert!(!check.is_active() && !check.is_inconsistent());
 }
