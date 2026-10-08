@@ -46,9 +46,10 @@ use super::actions::QUIT_ACCELERATORS;
 use super::{BrowserWindow, ButtonStyle, WindowAction};
 use crate::dialog::{DialogFrame, DialogWidth};
 use crate::folder_view::filter::ChooserListing;
-use crate::locations::Page;
+use local_paths::{ask_for_path, Known, LocalPaths};
 use probe::{all_writable, probe, Probe};
 
+mod local_paths;
 mod probe;
 
 /// The size a picker window opens at; it never saves its size over the
@@ -114,6 +115,8 @@ pub(crate) struct Picker {
     name: Option<gtk::Entry>,
     /// The type list, when the caller gave filters.
     types: Option<gtk::DropDown>,
+    /// The local paths found so far, asked off the main thread.
+    local_paths: LocalPaths,
     choices: Vec<ChoiceControl>,
     accept: gtk::Button,
     /// Set while the replace question is open, so the answer is not given
@@ -179,15 +182,6 @@ impl Picker {
     fn choice_values(&self) -> Vec<(String, String)> {
         self.choices.iter().map(ChoiceControl::value).collect()
     }
-}
-
-/// The local path of `uri`, if GIO has one: a local folder, or a share or
-/// device mounted by `GVfs`.
-fn local_path(uri: &str) -> Option<PathBuf> {
-    if Page::from_uri(uri).is_some() {
-        return None;
-    }
-    gio::File::for_uri(uri).path()
 }
 
 /// The message for a folder or file on a share that stopped answering.
@@ -281,7 +275,7 @@ impl BrowserWindow {
             self.set_action_enabled(action, false);
         }
         self.set_default_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1);
-        self.folder_pane().model().set_chooser_listing(picker.listing());
+        self.apply_chooser_listing();
         self.open_start_folder(wanted_folder);
         self.listen_for_escape();
         self.cancel_on_quit_key();
@@ -397,7 +391,7 @@ impl BrowserWindow {
         match &picker.request.mode {
             ChooserMode::Open { directory: false, .. } => {
                 // The activated file is the choice, selected or not.
-                match local_path(&entry.uri) {
+                match self.local_path(&entry.uri) {
                     Some(path) if !picker.is_busy() && !picker.reply.is_answered() => {
                         self.finish_picking(&picker, vec![path]);
                     }
@@ -406,7 +400,7 @@ impl BrowserWindow {
                 }
             }
             ChooserMode::Save { .. } => {
-                let Some(path) = local_path(&entry.uri) else {
+                let Some(path) = self.local_path(&entry.uri) else {
                     return self.show_message(&not_local());
                 };
                 if let Some(name) = &picker.name {
@@ -467,9 +461,62 @@ impl BrowserWindow {
             .collect()
     }
 
-    /// The current folder's local path, if it has one.
+    /// Narrows both folder panes to what the dialog may choose and the type
+    /// chosen, so a pane split off in the dialog lists what the other does.
+    pub(super) fn apply_chooser_listing(&self) {
+        let Some(picker) = self.picker() else {
+            return;
+        };
+        for pane in self.folder_panes() {
+            pane.model().set_chooser_listing(picker.listing());
+        }
+    }
+
+    /// The current folder's local path, if it is known to have one.
     fn picking_folder(&self) -> Option<PathBuf> {
-        local_path(&self.current_uri()?)
+        self.local_path(&self.current_uri()?)
+    }
+
+    /// The current folder's local path, waiting for `GVfs` if needed.
+    async fn picking_folder_now(&self) -> Option<PathBuf> {
+        self.local_path_now(&self.current_uri()?).await
+    }
+
+    /// The local path of `uri`, if it is known to have one: a local file,
+    /// or a share or device mounted by `GVfs` that already answered. A
+    /// location not asked about yet is asked off the main thread, and the
+    /// dialog updates itself with the answer.
+    fn local_path(&self, uri: &str) -> Option<PathBuf> {
+        let picker = self.picker()?;
+        let known = picker.local_paths.known(uri);
+        if known != Known::Unknown {
+            return known.path();
+        }
+        if picker.local_paths.start_asking(uri) {
+            let uri = uri.to_owned();
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                async move {
+                    picker.local_paths.remember(&uri, ask_for_path(&uri).await);
+                    window.update_picker();
+                }
+            ));
+        }
+        None
+    }
+
+    /// The local path of `uri`, asking `GVfs` off the main thread and
+    /// waiting for its answer when it is not known yet.
+    async fn local_path_now(&self, uri: &str) -> Option<PathBuf> {
+        let picker = self.picker()?;
+        let known = picker.local_paths.known(uri);
+        if known != Known::Unknown {
+            return known.path();
+        }
+        let answer = ask_for_path(uri).await;
+        picker.local_paths.remember(uri, answer.clone());
+        answer.path()
     }
 
     /// Enables the accept button when there is something to accept.
@@ -491,19 +538,22 @@ impl BrowserWindow {
             }
             ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => {
                 folder.is_some()
-                    || matches!(selected.as_slice(), [entry] if entry.is_dir && local_path(entry.navigation_uri()).is_some())
+                    || matches!(selected.as_slice(), [entry] if entry.is_dir && self.local_path(entry.navigation_uri()).is_some())
             }
-            ChooserMode::Save { .. } => {
-                folder.is_some()
-                    && picker
-                        .name
-                        .as_ref()
-                        .is_some_and(|name| !name.text().trim().is_empty())
-            }
+            // Save stays on with a name, also where nothing can be saved:
+            // pressing it says why, rather than doing nothing.
+            ChooserMode::Save { .. } => typed,
         };
         picker
             .accept
             .set_sensitive(ready && !picker.is_busy() && !picker.reply.is_answered());
+        // Where the folder shown has no local path, the button says why.
+        let has_no_path = self
+            .current_uri()
+            .is_some_and(|uri| picker.local_paths.known(&uri) == Known::NoPath);
+        picker
+            .accept
+            .set_tooltip_text(has_no_path.then(not_local).as_deref());
     }
 
     /// The accept button: works out the choice and answers, asking first
@@ -548,14 +598,14 @@ impl BrowserWindow {
                 multiple,
             } => match self.typed_choice(picker, &selected).await {
                 Some(typed) => typed,
-                None => self.chosen_files(&selected, *multiple),
+                None => self.chosen_files(&selected, *multiple).await,
             },
             ChooserMode::Open { directory: true, .. } => {
-                self.chosen_folder(&selected).map(|folder| vec![folder])
+                self.chosen_folder(&selected).await.map(|folder| vec![folder])
             }
             ChooserMode::Save { .. } => self.chosen_save(picker).await,
             ChooserMode::SaveFiles { names } => {
-                let folder = self.chosen_folder(&selected)?;
+                let folder = self.chosen_folder(&selected).await?;
                 let mut existing = Vec::new();
                 for name in names {
                     match probe(&folder.join(name)).await {
@@ -574,7 +624,7 @@ impl BrowserWindow {
     }
 
     /// The files of an Open dialog. A single selected folder opens instead.
-    fn chosen_files(&self, selected: &[Entry], multiple: bool) -> Result<Vec<PathBuf>, String> {
+    async fn chosen_files(&self, selected: &[Entry], multiple: bool) -> Result<Vec<PathBuf>, String> {
         if let [entry] = selected {
             if entry.is_dir {
                 self.navigate_or_report(entry.navigation_uri());
@@ -588,21 +638,25 @@ impl BrowserWindow {
         if files.len() > 1 && !multiple {
             return Err(ox_core::i18n::gettext(CHOOSE_ONE));
         }
-        files
-            .iter()
-            .map(|entry| local_path(&entry.uri).ok_or_else(not_local))
-            .collect()
+        let mut paths = Vec::with_capacity(files.len());
+        for entry in files {
+            paths.push(self.local_path_now(&entry.uri).await.ok_or_else(not_local)?);
+        }
+        Ok(paths)
     }
 
     /// The folder of a folder dialog or `SaveFiles`: the one selected
     /// folder, else the current folder.
-    fn chosen_folder(&self, selected: &[Entry]) -> Result<PathBuf, String> {
+    async fn chosen_folder(&self, selected: &[Entry]) -> Result<PathBuf, String> {
         if let [entry] = selected {
             if entry.is_dir {
-                return local_path(entry.navigation_uri()).ok_or_else(not_local);
+                return self
+                    .local_path_now(entry.navigation_uri())
+                    .await
+                    .ok_or_else(not_local);
             }
         }
-        self.picking_folder().ok_or_else(not_local)
+        self.picking_folder_now().await.ok_or_else(not_local)
     }
 
     /// The file of a Save dialog: the name in the current folder. A name
@@ -617,7 +671,7 @@ impl BrowserWindow {
         if typed.trim().is_empty() {
             return Ok(Vec::new());
         }
-        let shown = self.picking_folder().ok_or_else(not_local)?;
+        let shown = self.picking_folder_now().await.ok_or_else(not_local)?;
         let path = typed_path(&typed, &shown).ok_or_else(not_local)?;
         let found = probe(&path).await;
         if found == Probe::NoAnswer {
@@ -748,7 +802,7 @@ impl BrowserWindow {
         if files.len() > 1 && quoted_names(&files) == typed.as_str() {
             return None;
         }
-        let Some(shown) = self.picking_folder() else {
+        let Some(shown) = self.picking_folder_now().await else {
             return Some(Err(not_local()));
         };
         if let Some(names) = parse_quoted_names(&typed) {
@@ -960,6 +1014,7 @@ impl BrowserWindow {
             reply,
             name,
             types,
+            local_paths: LocalPaths::default(),
             choices,
             accept,
             asking: Cell::new(false),
@@ -1005,8 +1060,8 @@ impl BrowserWindow {
                 #[weak(rename_to = window)]
                 self,
                 move |_| {
-                    if let Some(picker) = window.picker() {
-                        window.folder_pane().model().set_chooser_listing(picker.listing());
+                    if window.is_picking() {
+                        window.apply_chooser_listing();
                         window.update_status();
                     }
                 }
@@ -2655,15 +2710,144 @@ mod tests {
         assert!(uris.is_empty());
     }
 
-    /// Sets the modification time of `path` to `seconds` ago.
-    fn modified_ago(path: &std::path::Path, seconds: u64) {
-        fs::File::options()
-            .write(true)
-            .open(path)
-            .and_then(|file| {
-                file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(seconds))
-            })
-            .expect("the date is set");
+    /// F3 opens no second pane in a dialog, and a pane split off anyway
+    /// lists only the type chosen, as the first one does.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn every_pane_of_a_dialog_lists_only_the_type_chosen() {
+        use crate::window::session::PaneSide;
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        fixture.write("photo.png");
+        let portal = Portal::new();
+        let filters = [("Text".to_owned(), vec![(0_u32, "*.txt".to_owned())]).to_variant()];
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "OpenFile",
+            vec![(
+                "filters",
+                glib::Variant::array_from_iter_with_type(filters[0].type_(), filters.clone()),
+            )],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the text file", || test.names() == ["notes.txt"]);
+
+        press(test, gdk::Key::F3, gdk::ModifierType::empty());
+        assert!(
+            !gtk::subclass::prelude::ObjectSubclassIsExt::imp(window)
+                .end_pane_column
+                .is_visible(),
+            "F3 splits nothing"
+        );
+
+        window.split_tab(None).expect("the folder splits");
+        let split = window.pane_on(PaneSide::End);
+        wait_until("the split pane's listing", || {
+            !window.is_loading() && split.model().n_items() == 1
+        });
+        settle();
+        assert_eq!(split.model().n_items(), 1, "only notes.txt");
+    }
+
+    /// Save stays on with a name where nothing can be saved, such as This
+    /// PC, and pressing it says why instead of doing nothing; the button's
+    /// tooltip says so too.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn saving_where_there_is_no_folder_says_why() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "notes.txt".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        test.wait_for_listing("the starting folder");
+        window
+            .navigate(crate::locations::Page::ThisPc.uri())
+            .expect("This PC opens");
+        test.wait_for_listing("This PC");
+        let accept = window.picker().expect("a picker").accept.clone();
+
+        assert!(accept.is_sensitive(), "Save is not greyed out silently");
+        assert_eq!(
+            accept.tooltip_text().as_deref(),
+            Some(super::not_local().as_str())
+        );
+        accept.emit_clicked();
+        wait_until("the reason", || window.shown_message() == super::not_local());
+        assert!(window.picker().is_some_and(|picker| !picker.reply.is_answered()));
+    }
+
+    /// The local path of a share is asked off the main thread: the dialog
+    /// does not wait for a share that stopped answering, and choosing
+    /// there gives up after the probe's time limit.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn a_share_s_local_path_is_never_waited_for_on_the_main_thread() {
+        use super::local_paths::NEVER_ANSWERS;
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let window = portal.test.window.clone();
+        let share = format!("{NEVER_ANSWERS}Reports");
+
+        let started = std::time::Instant::now();
+        assert_eq!(window.local_path(&share), None, "not known yet");
+        assert!(started.elapsed() < super::probe::PROBE_TIMEOUT, "nothing waited");
+        let picker = window.picker().expect("a picker");
+        assert!(
+            !picker.local_paths.start_asking(&share),
+            "being asked off the main thread"
+        );
+        wait_until("the question to give up", || {
+            picker.local_paths.start_asking(&share)
+        });
+        picker.local_paths.stop_asking(&share);
+
+        let path = wait_for("the path", async move { window.local_path_now(&share).await });
+        assert_eq!(path, None, "a share that does not answer has no path");
+    }
+
+    /// The groups' clock pinned to noon today, so that files dated a few
+    /// minutes before it are today's whatever the real time: just after
+    /// midnight, files dated minutes before the real time fell in
+    /// Yesterday. The real clock is back once this is dropped.
+    struct NoonClock(glib::DateTime);
+
+    impl NoonClock {
+        fn pin() -> Self {
+            let now = glib::DateTime::now_local().expect("the clock is readable");
+            let noon = glib::DateTime::from_local(now.year(), now.month(), now.day_of_month(), 12, 0, 0.0)
+                .expect("noon today");
+            crate::folder_view::groups::set_clock_for_tests(Some(noon.clone()));
+            Self(noon)
+        }
+
+        /// Sets the modification time of `path` to `seconds` before noon.
+        fn date(&self, path: &std::path::Path, seconds: u64) {
+            let noon = u64::try_from(self.0.to_unix()).expect("noon is after 1970");
+            let time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(noon - seconds);
+            fs::File::options()
+                .write(true)
+                .open(path)
+                .and_then(|file| file.set_modified(time))
+                .expect("the date is set");
+        }
+    }
+
+    impl Drop for NoonClock {
+        fn drop(&mut self) {
+            crate::folder_view::groups::set_clock_for_tests(None);
+        }
     }
 
     /// The first group heading on screen and how far the list is
@@ -2702,6 +2886,7 @@ mod tests {
     #[gtk::test]
     fn a_grouped_dialog_list_stays_at_its_top_when_the_type_changes() {
         let fixture = Fixture::empty();
+        let clock = NoonClock::pin();
         // Newest first: today's files, the drawing among them, then
         // older periods, a little more than the dialog shows.
         let files = [
@@ -2718,19 +2903,19 @@ mod tests {
         ];
         for (name, age) in files {
             fixture.write(name);
-            modified_ago(&fixture.path(name), age);
+            clock.date(&fixture.path(name), age);
         }
         for number in 0..24 {
             let name = format!("archive {number:02}.tar");
             fixture.write(&name);
-            modified_ago(&fixture.path(&name), 1_300 * 86_400);
+            clock.date(&fixture.path(&name), 1_300 * 86_400);
         }
         // Enough old drawings that the SVG files alone fill more than the
         // view, as in a real Downloads folder.
         for number in 0..14 {
             let name = format!("sketch {number:02}.svg");
             fixture.write(&name);
-            modified_ago(&fixture.path(&name), 1_300 * 86_400);
+            clock.date(&fixture.path(&name), 1_300 * 86_400);
         }
         let portal = Portal::new();
         let filters = [

@@ -884,6 +884,63 @@ fn another_program_is_refused() {
     assert!(fixture.received.borrow().is_empty());
 }
 
+/// Only the portal connection that made the request may close its
+/// dialog: another program's `Close` on the handle is refused and the
+/// dialog stays open until the portal closes it.
+///
+/// parity: INT-032
+#[test]
+fn another_program_cannot_close_the_dialog() {
+    let fixture = ServiceFixture::new();
+    let handle = "/org/freedesktop/portal/desktop/request/1_1/t5";
+    let pending = fixture.start_call(&fixture.frontend, "OpenFile", handle, &options_from_entries(&[]));
+    let reply = fixture.context.spawn_local(pending);
+    fixture.run_until("the call", || !fixture.received.borrow().is_empty());
+    let call = fixture.received.borrow_mut().remove(0);
+    let closed = Rc::new(std::cell::Cell::new(false));
+    let noticed = Rc::clone(&closed);
+    call.reply.connect_closed(move || noticed.set(true));
+
+    let stranger = fixture.bus.connect();
+    let close = stranger.call_future(
+        Some(&fixture.service_name),
+        handle,
+        "org.freedesktop.impl.portal.Request",
+        "Close",
+        None,
+        None,
+        gio::DBusCallFlags::NO_AUTO_START,
+        5000,
+    );
+    let error = fixture.finish(close).expect_err("refused");
+    assert_eq!(
+        gio::DBusError::remote_error(&error).as_deref(),
+        Some("org.freedesktop.DBus.Error.AccessDenied"),
+        "{error}"
+    );
+    assert!(!closed.get());
+    assert!(!call.reply.is_answered());
+
+    let close = fixture.frontend.call_future(
+        Some(&fixture.service_name),
+        handle,
+        "org.freedesktop.impl.portal.Request",
+        "Close",
+        None,
+        None,
+        gio::DBusCallFlags::NO_AUTO_START,
+        5000,
+    );
+    fixture.finish(close).expect("Close is answered");
+    assert!(closed.get());
+    assert!(call.reply.is_answered());
+    let reply = fixture.finish(reply).expect("joined").expect("answered");
+    assert_eq!(
+        reply.get::<(u32, glib::VariantDict)>().expect("(ua{sv})").0,
+        RESPONSE_OTHER
+    );
+}
+
 /// The portal's `Close` ends the call with "other" and lets the window go;
 /// a reply dropped unanswered ends it the same way.
 ///
