@@ -8,7 +8,7 @@
 //! deselects that item alone and keeps the rest of the selection, as a
 //! Ctrl+click does. In Details and the compact list it sits before the
 //! icon, keeping its room so names do not move as it shows; on an icon
-//! tile it sits on the icon's corner. When item check boxes are off there
+//! tile it sits in the tile's top left corner. When item check boxes are off there
 //! are none and they take no room.
 //!
 //! Whether a check box shows is the stylesheet's (`.item-check` in

@@ -3,9 +3,11 @@
 //! (SEL-014), as the one at the start of Explorer's Details header when
 //! item check boxes are on.
 //!
-//! It is checked while every item is selected, mixed while some are, and
-//! clear while none is. Clicking it selects every item, or none when
-//! every item already is. It shows while the pointer is on the column
+//! It is checked while every item is selected, mixed (a minus) while
+//! some are, and clear while none is. Clicking it selects every item when
+//! none is, and otherwise selects none: the minus takes the selection
+//! away rather than growing it to every item, which a Delete pressed next
+//! would then reach. It shows while the pointer is on the column
 //! titles or some item is selected, as the items' own check boxes show
 //! while hovered or selected (folder-views.css).
 //!
@@ -51,8 +53,7 @@ impl DetailsView {
             #[weak]
             selection,
             move |_| {
-                let (all, _) = look_for(selection.selection().size(), selection.n_items());
-                if all {
+                if selection.selection().size() > 0 {
                     selection.unselect_all();
                 } else {
                     selection.select_all();

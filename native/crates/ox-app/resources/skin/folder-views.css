@@ -145,6 +145,8 @@ columnview.files .folder-expander:hover { background-color: @ox_hover; color: @o
   min-height: 0;
   opacity: 0;
 }
+/* Solid, as Explorer's: GTK's theme lays a lighter gradient over the
+   fill, which made a checked box look washed out. */
 .files checkbutton.item-check > check {
   min-width: 14px;
   min-height: 14px;
@@ -152,6 +154,7 @@ columnview.files .folder-expander:hover { background-color: @ox_hover; color: @o
   border-radius: 3px;
   border: 1px solid @ox_muted;
   background-color: @ox_bg;
+  background-image: none;
   box-shadow: none;
 }
 .files checkbutton.item-check:hover > check { border-color: @ox_accent; }
@@ -177,8 +180,10 @@ columnview.files checkbutton.select-all:indeterminate { opacity: 1; }
    above); its check box does not, so it lines up with the select-all box
    over it. */
 columnview.files .has-folder-expander checkbutton.item-check { margin-left: 16px; }
-/* On a tile, over the icon's top left corner. */
-.files checkbutton.item-check.on-icon { margin: -7px -4px -4px -7px; }
+/* On a tile, in its top left corner, 5px in from its edges as in
+   Explorer: the tile's padding is 12px above and 10px beside, less the
+   4px reach. */
+.files checkbutton.item-check.on-icon { margin: -11px -4px -4px -9px; }
 
 /* ---- Icon view ---- */
 /* Tiles as renderRows places them: the first 10px in and 5px down, 4px

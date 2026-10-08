@@ -174,8 +174,9 @@ fn an_item_check_box_shows_on_hover_and_while_selected() {
 }
 
 /// The box before the Name title is clear with nothing selected, mixed
-/// with some items selected and checked with all; clicking it selects
-/// every item, or none when every item is selected.
+/// (a minus) with some items selected and checked with all. Clicking it
+/// with nothing selected selects every item; clicking it with some or all
+/// selected selects none.
 ///
 /// parity: SEL-014
 #[gtk::test]
@@ -203,14 +204,17 @@ fn the_header_check_box_selects_all_or_none() {
     model.select_only(1);
     assert!(check.is_inconsistent() && !check.is_active(), "mixed with some");
     assert!(ink_of(&check) > 0, "shown, mixed, while some are selected");
-    // A click on a mixed box selects every item.
+    // A click on the minus takes the selection away.
+    click(&check);
+    assert!(selected(&test).is_empty(), "the minus selects none");
+    assert!(!check.is_active() && !check.is_inconsistent());
+    // A click on the clear box selects every item.
     click(&check);
     assert_eq!(selected(&test).len(), usize::try_from(total).expect("few items"));
     assert!(check.is_active() && !check.is_inconsistent(), "checked with all");
-    // A click on a checked box selects none.
+    // A click on the checked box selects none.
     click(&check);
     assert!(selected(&test).is_empty());
-    assert!(!check.is_active() && !check.is_inconsistent());
 }
 
 /// View > Item check boxes turns every box off, the header's too, so they
@@ -309,4 +313,42 @@ fn a_click_just_outside_the_box_still_hits_it() {
             picked.type_().name()
         );
     }
+}
+
+/// A checked box is filled solid with the accent, as Explorer's is, not
+/// with the lighter gradient GTK's theme lays over it, which made it look
+/// washed out: its most painted colour is the light theme's accent.
+///
+/// parity: SEL-014
+#[gtk::test]
+fn a_checked_box_is_filled_solid_with_the_accent() {
+    /// `ox_accent` in resources/light.css (C14).
+    const ACCENT: [u8; 3] = [0x00, 0x67, 0xc0];
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.window.folder_pane().model().select_only(2);
+    let check = cell_at(&test, 2).item_check();
+    wait_for_frames(&test.window, 3);
+    let paintable = gtk::WidgetPaintable::new(Some(&check));
+    let snapshot = gtk::Snapshot::new();
+    paintable.snapshot(&snapshot, f64::from(check.width()), f64::from(check.height()));
+    let node = snapshot.to_node().expect("a checked box paints");
+    let renderer = check
+        .native()
+        .and_then(|native| native.renderer())
+        .expect("a drawn window");
+    let texture = renderer.render_texture(&node, None::<&gtk::graphene::Rect>);
+    let mut counts = std::collections::HashMap::<[u8; 3], usize>::new();
+    for pixel in pixel_rows(&texture).concat() {
+        if pixel[3] == 255 {
+            let [blue, green, red, _] = pixel;
+            *counts.entry([red, green, blue]).or_default() += 1;
+        }
+    }
+    let (most, _) = counts
+        .into_iter()
+        .max_by_key(|(_, count)| *count)
+        .expect("opaque pixels");
+    let close = most.iter().zip(ACCENT).all(|(a, b)| a.abs_diff(b) <= 3);
+    assert!(close, "the fill is {most:02x?}, not the accent {ACCENT:02x?}");
 }

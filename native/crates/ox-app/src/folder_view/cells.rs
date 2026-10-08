@@ -114,7 +114,8 @@ mod imp {
         pub(super) custom_icon: gtk::Picture,
         /// The running lookup of the custom icon or preview.
         pub(super) picture_lookup: RefCell<Option<glib::JoinHandle<()>>>,
-        /// Holds the icon, and on a tile the check box over its corner.
+        /// Holds the icon, and on a tile spans it, with the check box in
+        /// its top left corner.
         pub(super) icon_frame: gtk::Overlay,
         /// Checked while the item is selected; a click selects or
         /// deselects it alone (SEL-014).
@@ -208,9 +209,13 @@ impl FileCell {
         self.set_orientation(gtk::Orientation::Vertical);
         self.set_spacing(TILE_ICON_GAP);
         self.set_valign(gtk::Align::Start);
-        // The check box sits on the icon's corner, not the tile's.
+        // The check box sits in the tile's top left corner, as Explorer's:
+        // the frame spans the tile, and the icon stays centred in it at its
+        // own size, so nothing moves.
         let imp = self.imp();
-        imp.icon_frame.set_halign(gtk::Align::Center);
+        imp.icon_frame.set_halign(gtk::Align::Fill);
+        imp.image.set_halign(gtk::Align::Center);
+        imp.custom_icon.set_halign(gtk::Align::Center);
         imp.check.set_halign(gtk::Align::Start);
         imp.check.set_valign(gtk::Align::Start);
         imp.check.add_css_class("on-icon");

@@ -1,14 +1,16 @@
 # Unreleased
 
 - Item check boxes as in Windows 11, in place of the plus and minus that
-  showed on an icon's corner (#80): each item has a check box that shows
-  while its row or tile is pointed at, anywhere on it, and stays checked
-  while the item is selected; clicking it, or just beside it, selects or
-  deselects that item alone. In Details and the List view it comes before the icon and keeps
-  its room, so names do not move; on icons it sits on the corner. Details
-  has a box before Name that selects all items or none, and shows mixed
-  while some are selected. View → Item check boxes, the renamed Settings
-  row, turns them off; on by default, as in Windows 11.
+  showed on an icon's corner (#80): each item has a check box, filled
+  solid with the accent when checked, that shows while its row or tile is
+  pointed at, anywhere on it, and stays checked while the item is
+  selected; clicking it, or just beside it, selects or deselects that
+  item alone. In Details and the List view it comes before the icon and
+  keeps its room, so names do not move; on icons it sits in the tile's
+  top left corner. Details has a box before Name: clear, it selects every
+  item; with some or all selected (a minus or a tick), it selects none.
+  View → Item check boxes, the renamed Settings row, turns them off; on
+  by default, as in Windows 11.
 
 # 2.0.3 — 2026-10-06
 
