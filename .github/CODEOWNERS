@@ -1,0 +1,12 @@
+# Files that decide what runs on the self-hosted release runner, or with the
+# Cloudflare token. A ruleset on main requires the owner's approval for pull
+# requests that change them; everything else merges without it.
+/.github/ @AKolenda
+/tools/ @AKolenda
+/package.json @AKolenda
+/pnpm-lock.yaml @AKolenda
+/pnpm-workspace.yaml @AKolenda
+/.npmrc @AKolenda
+/apps/web/package.json @AKolenda
+/apps/web/next.config.ts @AKolenda
+/wrangler.jsonc @AKolenda
