@@ -21,6 +21,18 @@
   a word; everything the literal words found is still found. Every
   setting is still there, with the same options and defaults, and a
   search for its earlier name still finds it.
+- Smaller fixes to Open and Save dialogs: browsing a network share in a
+  dialog no longer waits on GVfs on the main thread, since the share's
+  local path is looked up in the background; Save stays on where nothing
+  can be saved (This PC, Network, a share without a local path) and
+  pressing it says why, instead of being greyed out with no reason; a
+  split pane in a dialog lists only the chosen file type, as the first
+  pane does; and only the desktop portal that opened a dialog can close
+  it, not any program on the session bus.
+- A folder view split in two no longer reports a wrong height for an
+  instant as it opens, which could make GTK lay widgets over each other
+  in a narrow window or with wide fonts: the empty-folder page scrolls
+  instead of making its pane taller when narrow.
 
 # 2.0.3 — 2026-10-06
 

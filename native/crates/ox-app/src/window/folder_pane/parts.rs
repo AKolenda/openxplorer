@@ -156,7 +156,19 @@ fn page_stack(views: &gtk::Stack, empty: &EmptyPage, landing_scroll: &gtk::Scrol
     let stack = gtk::Stack::builder().hexpand(true).vexpand(true).build();
     stack.add_css_class("folder-pane");
     stack.add_named(views, Some(PanePage::Listing.name()));
-    stack.add_named(&empty.root, Some(PanePage::Empty.name()));
+    // The empty page scrolls down, never across, as the other pages do. Its
+    // wrapping message then never sets the pane's minimum height: a split's
+    // GtkPaned measures each pane at the divider's width, and a message
+    // wrapping onto one more line there made the pane taller than the
+    // height it reports free of width, which GTK's box layout rejects
+    // ("Expect overlapping widgets"). The stack counts the page even while
+    // another one shows.
+    let empty_scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .vscrollbar_policy(gtk::PolicyType::Automatic)
+        .child(&empty.root)
+        .build();
+    stack.add_named(&empty_scroll, Some(PanePage::Empty.name()));
     stack.add_named(landing_scroll, Some(PanePage::Landing.name()));
     stack
 }
