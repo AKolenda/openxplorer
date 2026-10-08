@@ -12,6 +12,10 @@
   instant as it opens, which could make GTK lay widgets over each other
   in a narrow window or with wide fonts: the empty-folder page scrolls
   instead of making its pane taller when narrow.
+- A folder's expand arrow in the details view no longer pokes out of a
+  selected row's highlight: while folders can expand, rows start a little
+  further left so the arrow sits inside the highlight, and names and
+  columns stay where they were.
 
 # 2.0.3 — 2026-10-06
 
