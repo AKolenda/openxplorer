@@ -202,9 +202,10 @@ impl SettingRow {
     /// of its controls or `heading`, what its group's heading shows; marks
     /// it as a match while a search is typed, and says whether it shows.
     pub(crate) fn apply_query(&self, query: &SearchQuery, heading: &str) -> bool {
-        let words = format!("{} {}", self.text().words(), self.imp().more_words.borrow());
+        let text = self.text();
+        let details = format!("{} {}", text.detail_words(), self.imp().more_words.borrow());
         let controls = shown_text(&*self.imp().control_slot);
-        let finding = query.find_in(&[&words, &controls, heading]);
+        let finding = query.find_in_parts(&[&text.name_words(), &controls, heading], &[&details]);
         finding.show_on(self);
         finding.is_shown()
     }

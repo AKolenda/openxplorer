@@ -522,3 +522,51 @@ fn choosing_a_page_with_a_click_opens_no_bubble() {
         );
     }
 }
+
+/// The search finds settings by the words people use for them, not only
+/// by the words the settings use, and those words find only what they
+/// mean: "dark mode" finds Theme alone, the arrow words only the two
+/// settings with arrows.
+///
+/// parity: SET-004
+#[gtk::test]
+fn the_search_finds_settings_by_the_words_people_use() {
+    let settings = SettingsTest::open();
+    let arrows = [
+        "Hide expand arrows in the sidebar",
+        "Expandable folders in Details",
+    ];
+    let cases: [(&str, &[&str]); 14] = [
+        ("arrows", &arrows),
+        ("chevron", &arrows),
+        ("chevrons", &arrows),
+        ("triangle", &arrows),
+        ("sidebar chevron", &["Hide expand arrows in the sidebar"]),
+        ("hiding arrows", &["Hide expand arrows in the sidebar"]),
+        ("dark mode", &["Theme"]),
+        ("night mode", &["Theme"]),
+        ("light mode", &["Theme"]),
+        ("magnify", &["Text size"]),
+        (
+            "wastebasket",
+            &["Moving items to the Recycle Bin", "Emptying the Recycle Bin"],
+        ),
+        ("monitor", &["Watch folders for changes"]),
+        (
+            "dual pane",
+            &[
+                "Open new windows in split view",
+                "Tab key switches between split panes",
+            ],
+        ),
+        ("reopen", &["Reopen my tabs when OpenXplorer starts"]),
+    ];
+    for (typed, expected) in cases {
+        settings.page.search(typed);
+        assert_eq!(settings.shown_rows(), expected, "{typed:?}");
+    }
+    // "tree" finds the arrow settings among others that say it.
+    settings.page.search("tree");
+    let found = settings.shown_rows();
+    assert!(arrows.iter().all(|row| found.contains(row)), "tree: {found:?}");
+}

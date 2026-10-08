@@ -13,8 +13,14 @@
   search. An ⓘ bubble opens only for the pointer or the keyboard: a page
   chosen with a click no longer opens one that stayed until the window
   lost focus, and one open when its page is left no longer comes back
-  with the page. Every setting is still there, with the same options and
-  defaults, and a search for its earlier name still finds it.
+  with the page. The search also finds a setting by other words people
+  use for it ("chevron" or "tree" for the expand arrows, "dark mode" for
+  Theme, "wastebasket" for the Recycle Bin) and by other endings of a
+  word ("arrow", "chevrons"), looking for those only in what names a
+  setting so that a search does not fill with settings that only mention
+  a word; everything the literal words found is still found. Every
+  setting is still there, with the same options and defaults, and a
+  search for its earlier name still finds it.
 
 # 2.0.3 — 2026-10-06
 
