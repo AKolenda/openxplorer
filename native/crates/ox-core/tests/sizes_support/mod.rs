@@ -85,6 +85,7 @@ pub fn simulated_entry(uri: &str, kind: SizeEntryKind) -> SizeEntry {
         name: name.into(),
         kind,
         size: None,
+        allocated: None,
         filesystem: None,
         identity: None,
         is_mount_point: false,

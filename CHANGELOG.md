@@ -1,5 +1,8 @@
 # Unreleased
 
+- Properties shows "Size on disk" under Size, as Windows Explorer does:
+  the space a file takes on its drive. A folder's is measured with
+  Calculate folder size, and several items show their combined space.
 - Smaller fixes to Open and Save dialogs: browsing a network share in a
   dialog no longer waits on GVfs on the main thread, since the share's
   local path is looked up in the background; Save stays on where nothing

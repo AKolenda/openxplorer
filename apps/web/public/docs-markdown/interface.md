@@ -74,7 +74,7 @@ Snapshot tabs carry a “Previous version” badge and an amber top edge. A bann
 
 ## Measure folder sizes on demand
 
-Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
+Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and Properties shows the space they take as Size on disk, as Windows Explorer does. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
 
 These are not ZFS dataset used/referenced values, compressed allocation measurements or snapshot-exclusive block counts.
 

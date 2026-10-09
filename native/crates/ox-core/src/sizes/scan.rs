@@ -331,6 +331,11 @@ impl<'w> Walk<'w> {
             }
         }
         self.size.bytes = self.size.bytes.saturating_add(bytes);
+        self.size.allocated = self
+            .size
+            .allocated
+            .zip(entry.allocated)
+            .map(|(total, allocated)| total.saturating_add(allocated));
         self.size.files += 1;
     }
 

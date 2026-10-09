@@ -260,3 +260,44 @@ fn a_folder_with_spaces_and_a_hash_in_its_name_is_scanned() {
 
     assert_eq!(size.bytes, 3);
 }
+
+/// Size on disk, as Windows Explorer shows it: the blocks each counted file
+/// takes, a hard-linked file once.
+///
+/// parity: PROP-033
+#[test]
+fn the_space_files_take_on_disk_is_totalled_with_hard_links_once() {
+    let folder = Folder::new();
+    let first = folder.write("a", b"abc");
+    let second = folder.write("sub/b", &[7; 10_000]);
+    fs::hard_link(&first, folder.path().join("c")).unwrap();
+    let on_disk = |path: &std::path::Path| fs::metadata(path).unwrap().blocks() * 512;
+
+    let size = folder.scan();
+
+    assert_eq!(size.allocated, Some(on_disk(&first) + on_disk(&second)));
+}
+
+/// Size on disk is unknown, never a smaller total, when a file's backend
+/// does not report it.
+///
+/// parity: PROP-033
+#[test]
+fn the_space_on_disk_is_unknown_when_a_file_does_not_report_it() {
+    let folder = Folder::new();
+    let reported = SizeEntry {
+        size: Some(3),
+        allocated: Some(4096),
+        ..simulated_entry("file:///reported", SizeEntryKind::File)
+    };
+    let unreported = SizeEntry {
+        size: Some(5),
+        ..simulated_entry("file:///unreported", SizeEntryKind::File)
+    };
+    let provider = TestProvider::listing(Listing::Only(vec![reported.clone()]));
+    let both = TestProvider::listing(Listing::Only(vec![reported, unreported]));
+
+    assert_eq!(folder.scan_through(&provider).unwrap().allocated, Some(4096));
+    let size = folder.scan_through(&both).unwrap();
+    assert_eq!((size.bytes, size.allocated), (8, None));
+}

@@ -18,7 +18,7 @@ use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::{ItemProperties, MountFacts};
-use crate::dialog::{note, quiet_text, DialogFrame, PropertyGrid};
+use crate::dialog::{note, quiet_text, value_or_not_provided, DialogFrame, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::integration;
 use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};
@@ -32,9 +32,9 @@ const BUTTON_GLYPH: i32 = 16;
 
 /// Under Calculate folder size: what the measured size is, and is not.
 const SIZE_EXPLANATION: &str = crate::i18n::message_id(
-    "Logical file bytes, measured on demand. Skips links, nested mounts and \
-                                snapshot collections. The result may be partial; it is not ZFS compressed \
-                                or snapshot usage.",
+    "Size counts logical file bytes and Size on disk the space they take, measured \
+                                on demand. Skips links, nested mounts and snapshot collections. The result \
+                                may be partial; it is not snapshot usage.",
 );
 
 /// Under the permissions: what the tab does not do.
@@ -73,6 +73,8 @@ pub(super) struct GeneralFacts<'a> {
 pub(super) struct FolderRows {
     /// The Size value.
     pub size: gtk::Label,
+    /// The Size on disk value.
+    pub size_on_disk: gtk::Label,
     /// The Contains value: how many files and folders it holds.
     pub contains: gtk::Label,
 }
@@ -82,6 +84,8 @@ impl FolderRows {
     pub(super) fn show(&self, state: &FolderSizeState) {
         self.size.set_text(&state.size_text());
         self.size.set_tooltip_text(Some(&state.summary_tooltip()));
+        self.size_on_disk
+            .set_text(value_or_not_provided(&state.size_on_disk_text()));
         self.contains.set_text(&state.contains_text());
     }
 }
@@ -108,6 +112,7 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     if let Some(state) = facts.folder_size.filter(|_| entry.is_dir) {
         size_value.set_tooltip_text(Some(&state.summary_tooltip()));
     }
+    let size_on_disk = grid.add_row(&ox_core::i18n::gettext("Size on disk"), &size_on_disk_text(facts));
     let contains = entry.is_dir.then(|| {
         let text = facts
             .folder_size
@@ -155,6 +160,7 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     }
     contains.map(|contains| FolderRows {
         size: size_value,
+        size_on_disk,
         contains,
     })
 }
@@ -259,6 +265,21 @@ fn size_text(facts: &GeneralFacts<'_>) -> String {
     facts
         .folder_size
         .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::size_text)
+}
+
+/// The Size on disk value: the space a file takes, or a folder's measured
+/// space or "Not scanned"; empty when the backend does not report it.
+fn size_on_disk_text(facts: &GeneralFacts<'_>) -> String {
+    let properties = facts.properties;
+    if !properties.entry.is_dir {
+        return properties
+            .size_on_disk
+            .map(format::pretty_bytes)
+            .unwrap_or_default();
+    }
+    facts
+        .folder_size
+        .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::size_on_disk_text)
 }
 
 /// Change app…, Copy full path and, for a folder, Calculate folder size.
