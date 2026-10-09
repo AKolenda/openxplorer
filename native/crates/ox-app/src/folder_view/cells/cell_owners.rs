@@ -122,8 +122,8 @@ pub(crate) struct CellOwners {
     previews: Cell<PreviewPolicy>,
     /// Folders in the Size column say how many items they hold.
     counts_items: Cell<bool>,
-    /// Hovering an item shows no selection marker (SEL-014).
-    hides_selection_markers: Cell<bool>,
+    /// Item check boxes are off (SEL-014); on by default, as in Windows 11.
+    hides_item_checks: Cell<bool>,
 }
 
 impl CellOwners {
@@ -382,19 +382,18 @@ impl CellOwners {
         shown
     }
 
-    /// Whether hovering an item shows its selection marker.
-    pub(crate) fn shows_selection_markers(&self) -> bool {
-        !self.hides_selection_markers.get()
+    /// Whether items have check boxes.
+    pub(crate) fn shows_item_checks(&self) -> bool {
+        !self.hides_item_checks.get()
     }
 
-    /// Shows selection markers on hovered items, or never.
-    pub(crate) fn set_selection_markers(&self, shown: bool) {
-        self.hides_selection_markers.set(!shown);
-        if !shown {
-            for (cell, _) in self.owners.borrow().iter().filter_map(CellOwner::bound_cell) {
-                if let Some(cell) = cell.downcast_ref::<FileCell>() {
-                    cell.hide_selection_marker();
-                }
+    /// Gives every item a check box, or none; a cell bound later follows
+    /// when it is bound.
+    pub(crate) fn set_item_checks(&self, shown: bool) {
+        self.hides_item_checks.set(!shown);
+        for (cell, _) in self.owners.borrow().iter().filter_map(CellOwner::bound_cell) {
+            if let Some(cell) = cell.downcast_ref::<FileCell>() {
+                cell.show_item_check(shown);
             }
         }
     }

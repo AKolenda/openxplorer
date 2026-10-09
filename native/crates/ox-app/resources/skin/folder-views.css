@@ -84,6 +84,13 @@ columnview.files > listview > row > cell {
   font-feature-settings: "tnum" 1;
 }
 columnview.files > listview > row > cell:first-child { padding-left: 26px; }
+/* While folders show arrows (VIEW-035), the arrow takes the name cell's
+   left padding and would start 6px before the row's edge, outside a
+   selected row's highlight. Rows then reach 10px further left, 2px from
+   the list's edge, and their cells move back by as much, so the arrow
+   sits 4px inside the highlight and nothing else moves. */
+columnview.files.has-folder-arrows > listview > row { margin-left: 2px; }
+columnview.files.has-folder-arrows > listview > row > cell { margin-left: -2px; margin-right: 2px; }
 columnview.files > listview > row > cell:last-child { padding-right: 26px; }
 /* The 21px icon is centred on a half pixel, which Chromium draws one
    pixel down. */
@@ -131,20 +138,59 @@ columnview.files .folder-expander {
 columnview.files .has-folder-expander { margin-left: -20px; }
 columnview.files .folder-expander:hover { background-color: @ox_hover; color: @ox_text; }
 
-/* The hover selection marker (SEL-014): a small check-box-like button on
-   the icon's corner, as Explorer's item check boxes. */
-.files .selection-marker {
-  min-width: 16px;
-  min-height: 16px;
-  padding: 0;
-  margin: -3px 0 0 -3px;
-  border-radius: 4px;
+/* Item check boxes (SEL-014), as Explorer's: each item's check box keeps
+   its room but shows only while its row or tile is hovered, anywhere in
+   it, or selected; checked means selected. Transparent rather than
+   hidden, so names never move. Off in View > Item check boxes, there are
+   none (src/folder_view/cells/item_check.rs).
+   A click a little outside the drawn box still hits it: 4px of padding
+   all round, given back by a -4px margin, so the box looks and sits as
+   before and nothing beside it moves. */
+.files checkbutton.item-check {
+  padding: 4px;
+  margin: -4px;
+  min-height: 0;
+  opacity: 0;
+}
+/* Solid, as Explorer's: GTK's theme lays a lighter gradient over the
+   fill, which made a checked box look washed out. */
+.files checkbutton.item-check > check {
+  min-width: 14px;
+  min-height: 14px;
+  margin: 0;
+  border-radius: 3px;
   border: 1px solid @ox_muted;
   background-color: @ox_bg;
-  color: @ox_text;
+  background-image: none;
   box-shadow: none;
 }
-.files .selection-marker:hover { border-color: @ox_accent; color: @ox_accent; }
+.files checkbutton.item-check:hover > check { border-color: @ox_accent; }
+.files checkbutton.item-check > check:checked {
+  background-color: @ox_accent;
+  border-color: @ox_accent;
+  color: @ox_on_accent;
+}
+.files row:hover checkbutton.item-check,
+.files > child:hover checkbutton.item-check,
+.files checkbutton.item-check:checked { opacity: 1; }
+/* Select all, before the Name title: shown while the pointer is on the
+   titles or some item is selected (src/folder_view/details/select_all.rs). */
+columnview.files checkbutton.select-all { margin-right: 2px; }
+columnview.files header:hover checkbutton.select-all,
+columnview.files checkbutton.select-all:indeterminate { opacity: 1; }
+.files checkbutton.item-check > check:indeterminate {
+  background-color: @ox_accent;
+  border-color: @ox_accent;
+  color: @ox_on_accent;
+}
+/* A row with folder arrows starts 20px further left (.has-folder-expander
+   above); its check box does not, so it lines up with the select-all box
+   over it. */
+columnview.files .has-folder-expander checkbutton.item-check { margin-left: 16px; }
+/* On a tile, in its top left corner, 5px in from its edges as in
+   Explorer: the tile's padding is 12px above and 10px beside, less the
+   4px reach. */
+.files checkbutton.item-check.on-icon { margin: -11px -4px -4px -9px; }
 
 /* ---- Icon view ---- */
 /* Tiles as renderRows places them: the first 10px in and 5px down, 4px

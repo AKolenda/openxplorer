@@ -475,7 +475,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Compact view",
             "Relative dates",
             "Remember each folder's view",
-            "Selection marker",
+            "Item check boxes",
             "Expandable folders",
             "Sidebar and column widths",
             "Hide expand arrows"

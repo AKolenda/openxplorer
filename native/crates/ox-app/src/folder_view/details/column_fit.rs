@@ -170,7 +170,10 @@ impl DetailsView {
         let Some(view_column) = self.column(column) else {
             return;
         };
-        let widest = self.widest_text(column);
+        let mut widest = self.widest_text(column);
+        if column == SortColumn::Name {
+            widest += self.name_check_room();
+        }
         let width = column_widths::fitted_width(column, widest);
         view_column.set_expand(false);
         view_column.set_fixed_width(column_widths::fixed_width(column, Some(width)));
@@ -278,7 +281,8 @@ mod tests {
         );
         let widest = view.widest_text(SortColumn::Name);
         assert!(widest > 100.0, "the long name was measured");
-        let fitted = column_widths::fitted_width(SortColumn::Name, widest);
+        let room = view.name_check_room();
+        let fitted = column_widths::fitted_width(SortColumn::Name, widest + room);
         assert_eq!(
             name.fixed_width(),
             column_widths::fixed_width(SortColumn::Name, Some(fitted))
@@ -329,7 +333,8 @@ mod tests {
         assert!(view.fit_column_at_edge(&header, edge));
 
         let name = view.column(SortColumn::Name).expect("a Name column");
-        let fitted = column_widths::fitted_width(SortColumn::Name, view.widest_text(SortColumn::Name));
+        let widest = view.widest_text(SortColumn::Name) + view.name_check_room();
+        let fitted = column_widths::fitted_width(SortColumn::Name, widest);
         assert_eq!(
             name.fixed_width(),
             column_widths::fixed_width(SortColumn::Name, Some(fitted))

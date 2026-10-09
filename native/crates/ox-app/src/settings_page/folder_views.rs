@@ -27,10 +27,12 @@ const FOLDER_STYLES: RowText = RowText {
     keywords: "view properties per folder display style layout sort group remember global",
 };
 
-const SELECTION_MARKER: RowText = RowText {
-    title: "Selection marker",
-    description: "Hovering an item shows a button that adds it to the selection or takes it out.",
-    keywords: "check box checkbox select toggle hover marker plus minus item",
+const ITEM_CHECK_BOXES: RowText = RowText {
+    title: "Item check boxes",
+    description:
+        "Each item has a check box that selects it while keeping the others, as in Windows. Also under View.",
+    keywords:
+        "check box checkbox select multiple toggle hover selection marker plus minus item windows explorer",
 };
 
 const EXPANDABLE_FOLDERS: RowText = RowText {
@@ -131,7 +133,7 @@ pub(super) fn group(page: &SettingsPage) -> SettingsGroup {
             },
         ),
         (
-            SELECTION_MARKER,
+            ITEM_CHECK_BOXES,
             PreferenceBinding {
                 read: |preferences| preferences.selection_marker,
                 write: |on| PreferencesUpdate {

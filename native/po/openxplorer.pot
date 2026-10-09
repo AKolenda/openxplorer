@@ -681,11 +681,7 @@ msgstr ""
 msgid "Expand"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/cells/selection_marker.rs
-msgid "Deselect"
-msgstr ""
-
-#: crates/ox-app/src/folder_view/cells/selection_marker.rs crates/ox-app/src/window/select_matching.rs
+#: crates/ox-app/src/folder_view/cells/item_check.rs crates/ox-app/src/window/select_matching.rs
 msgid "Select"
 msgstr ""
 
@@ -715,6 +711,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/folder_view/details/group_headers.rs
 msgid "{title} ({count})"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/details/select_all.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Select all"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
@@ -2233,6 +2233,10 @@ msgid "Each folder keeps its own layout, sorting and grouping; off, every folder
 msgstr ""
 
 #: crates/ox-app/src/settings_page/folder_views.rs
+msgid "Each item has a check box that selects it while keeping the others, as in Windows. Also under View."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/folder_views.rs
 msgid "Expandable folders"
 msgstr ""
 
@@ -2245,11 +2249,11 @@ msgid "Files larger than 50 MB keep their icon."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/folder_views.rs
-msgid "Hovering an item shows a button that adds it to the selection or takes it out."
+msgid "In the details view, a folder's arrow lists its contents beneath it."
 msgstr ""
 
-#: crates/ox-app/src/settings_page/folder_views.rs
-msgid "In the details view, a folder's arrow lists its contents beneath it."
+#: crates/ox-app/src/settings_page/folder_views.rs crates/ox-app/src/window/command_bar/menus.rs
+msgid "Item check boxes"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/folder_views.rs
@@ -2292,10 +2296,6 @@ msgstr ""
 msgid "Rows in the file list and the navigation pane stand closer, so more items fit."
 msgstr ""
 
-#: crates/ox-app/src/settings_page/folder_views.rs
-msgid "Selection marker"
-msgstr ""
-
 #: crates/ox-app/src/settings_page/folder_views.rs crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Show previews"
 msgstr ""
@@ -2321,7 +2321,7 @@ msgid "The Size column says how many items a folder on this computer holds."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/folder_views.rs
-msgid "check box checkbox select toggle hover marker plus minus item"
+msgid "check box checkbox select multiple toggle hover selection marker plus minus item windows explorer"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/folder_views.rs
@@ -3589,10 +3589,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Reset text size"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Select all"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
