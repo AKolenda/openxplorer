@@ -1,5 +1,11 @@
 # Unreleased
 
+- Dropping files onto a file runs it only when it is really a program:
+  JSON, JavaScript and Windows `.exe` files no longer count as programs,
+  and a program on a drive where every file can run (NTFS, FAT, exFAT or
+  an SMB mount) asks "Run this program?" first. A `.desktop` launcher
+  there is no longer trusted just because it is executable.
+  (GHSA-9x68-px3w-xgg8, reported and fixed by @addition-official.)
 - Smaller fixes to Open and Save dialogs: browsing a network share in a
   dialog no longer waits on GVfs on the main thread, since the share's
   local path is looked up in the background; Save stays on where nothing
