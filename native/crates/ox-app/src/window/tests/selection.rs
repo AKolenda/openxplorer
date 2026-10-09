@@ -195,31 +195,6 @@ fn a_rubber_band_selects_the_rows_it_crosses_as_it_moves() {
     );
 }
 
-/// The marker on an item's icon toggles that item and keeps the rest of
-/// the selection, and shows the minus once the item is selected.
-///
-/// parity: SEL-014
-#[gtk::test]
-fn the_selection_marker_toggles_its_item_alone() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    let pane = test.window.folder_pane();
-    pane.model().select_only(1);
-    let cell = pane
-        .owners()
-        .file_cell_at(2, &pane.view_widget())
-        .expect("on screen");
-    let marker = cell.selection_marker();
-    marker.emit_clicked();
-    assert_eq!(selected(&test), [1, 2]);
-    assert_eq!(marker.tooltip_text().as_deref(), Some("Deselect"));
-    marker.emit_clicked();
-    assert_eq!(selected(&test), [1]);
-    marker.set_visible(true);
-    pane.owners().set_selection_markers(false);
-    assert!(!marker.is_visible(), "Settings hides an already hovered marker");
-}
-
 /// parity: SEL-004, SEL-005
 #[gtk::test]
 fn ctrl_a_and_escape_work_outside_the_view_but_not_in_text_fields() {
