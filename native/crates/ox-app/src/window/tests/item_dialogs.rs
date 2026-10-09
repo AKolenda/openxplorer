@@ -22,6 +22,16 @@ use crate::window::tests::file_ops_support::open_dialog;
 use crate::window::widget_tree::children;
 use crate::window::WindowAction;
 
+/// The Size on disk text of `files`: the blocks they take, as Properties
+/// shows it.
+fn on_disk_text(files: &[std::path::PathBuf]) -> String {
+    use std::os::unix::fs::MetadataExt;
+    let bytes: u64 = files
+        .iter()
+        .map(|file| fs::metadata(file).expect("a fixture file").blocks() * 512)
+        .sum();
+    ox_core::format::pretty_bytes(bytes)
+}
 /// The name of the snapshot the fixtures create.
 pub(super) const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
 
@@ -131,7 +141,7 @@ fn show_item_properties_opens_the_folder_and_the_properties() {
     wait_until("the selection", || test.selected_names() == ["report.txt"]);
 }
 
-/// parity: PROP-001, PROP-003, PROP-006
+/// parity: PROP-001, PROP-003, PROP-006, PROP-033
 #[gtk::test]
 fn alt_enter_opens_the_properties_of_the_selected_file() {
     let fixture = Fixture::standard();
@@ -153,6 +163,11 @@ fn alt_enter_opens_the_properties_of_the_selected_file() {
     });
     assert_eq!(value_after(&general, "Type").as_deref(), Some("Text document"));
     assert_eq!(value_after(&general, "Size").as_deref(), Some("20 bytes"));
+    assert_eq!(
+        value_after(&general, "Size on disk"),
+        Some(on_disk_text(&[fixture.path("Notes 2.txt")])),
+        "the blocks the file takes, as Windows Explorer's Size on disk"
+    );
     assert_eq!(
         value_after(&general, "Full path"),
         Some(fixture.path("Notes 2.txt").display().to_string())
@@ -337,6 +352,8 @@ fn properties_of_several_items_total_them_and_change_them_together() {
         value_after(&frame, "Contains").as_deref() == Some("3 files, 1 folder")
     });
     assert_eq!(value_after(&frame, "Size").as_deref(), Some("60 bytes"));
+    let files = ["Documents/inside.txt", "Notes 2.txt", "Notes 10.txt"].map(|name| fixture.path(name));
+    assert_eq!(value_after(&frame, "Size on disk"), Some(on_disk_text(&files)));
     assert_eq!(
         value_after(&frame, "Location").as_deref(),
         Some(format!("All in {}", fixture.path("").display()).trim_end_matches('/'))
@@ -568,9 +585,18 @@ fn calculate_folder_size_shows_the_size_everywhere_the_folder_is() {
 
     test.activate("calculate-folder-size-of", Some(&fixture.uri_of("Documents")));
 
+    let general = view.general_panel();
+    assert_eq!(
+        value_after(&general, "Size on disk").as_deref(),
+        Some("Not scanned")
+    );
     wait_until("the scan to finish", || {
         view.size_text().as_deref() == Some("10 bytes")
     });
+    assert_eq!(
+        value_after(&general, "Size on disk"),
+        Some(on_disk_text(&[fixture.path("Documents").join("a.txt")]))
+    );
     let strip = test.window.size_strip();
     wait_until("the bar to show the end", || strip.button_label() == "Dismiss");
     assert_eq!(

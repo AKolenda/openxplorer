@@ -123,7 +123,7 @@ impl PropertyGrid {
 
 /// `value`, or [`NOT_PROVIDED`] when it is empty, as `propertyRow` shows
 /// a missing value.
-fn value_or_not_provided(value: &str) -> &str {
+pub(crate) fn value_or_not_provided(value: &str) -> &str {
     if value.is_empty() {
         ox_core::i18n::gettext_static(NOT_PROVIDED)
     } else {

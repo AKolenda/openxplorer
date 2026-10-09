@@ -63,6 +63,7 @@ impl LocalSizeProvider {
             name: name.into_owned(),
             kind: kind_of(metadata.file_type()),
             size: Some(metadata.len()),
+            allocated: Some(metadata.blocks().saturating_mul(512)),
             filesystem: Some(metadata.dev().to_string()),
             identity: Some(FileIdentity {
                 device: metadata.dev(),

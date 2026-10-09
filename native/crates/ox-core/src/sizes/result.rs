@@ -76,14 +76,19 @@ impl fmt::Display for PartialReason {
 }
 
 /// The totals of a folder-size scan. The size is the sum of the logical
-/// sizes of regular files, not the space they take on disk, and never a
-/// fabricated total: see [`status`](Self::status).
+/// sizes of regular files, and [`allocated`](Self::allocated) the space
+/// they take on disk; neither is ever a fabricated total: see
+/// [`status`](Self::status).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FolderSize {
     /// The canonical URI of the scanned folder.
     pub uri: String,
     /// The logical bytes of the files counted.
     pub bytes: u64,
+    /// The bytes the counted files take on disk, as Windows Explorer's
+    /// "Size on disk"; `None` when any counted file's backend did not
+    /// report it.
+    pub allocated: Option<u64>,
     /// Regular files counted; a hard-linked file counts once.
     pub files: u64,
     /// Subfolders counted.
@@ -110,6 +115,7 @@ impl FolderSize {
         Self {
             uri,
             bytes: 0,
+            allocated: Some(0),
             files: 0,
             folders: 0,
             entries: 0,

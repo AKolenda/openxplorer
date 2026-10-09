@@ -1291,10 +1291,6 @@ msgid "Location"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
-msgid "Logical file bytes, measured on demand. Skips links, nested mounts and snapshot collections. The result may be partial; it is not ZFS compressed or snapshot usage."
-msgstr ""
-
-#: crates/ox-app/src/properties/general_panel.rs
 msgid "Metadata could not be read."
 msgstr ""
 
@@ -1336,6 +1332,14 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
 msgid "Readable"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs
+msgid "Size counts logical file bytes and Size on disk the space they take, measured on demand. Skips links, nested mounts and snapshot collections. The result may be partial; it is not snapshot usage."
+msgstr ""
+
+#: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/selection_view.rs
+msgid "Size on disk"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs

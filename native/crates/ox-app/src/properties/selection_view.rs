@@ -3,12 +3,13 @@
 //! `KPropertiesDialog(KFileItemList)` and Explorer's Properties of a
 //! multiple selection show them: a General tab with how many files and
 //! folders are selected, their common type and folder, and their combined
-//! size and content, which the folders' sizes are measured for; and a
+//! size, size on disk and content, which the folders' sizes are measured
+//! for; and a
 //! Permissions tab whose change applies to all of them, when the user owns
 //! every one, and keeps every bit the user did not change.
 
-use gtk::glib;
 use gtk::prelude::*;
+use gtk::{gio, glib};
 use ox_core::entry::Entry;
 use ox_core::format;
 use ox_core::location::parent_location;
@@ -22,7 +23,7 @@ use super::permissions_editor::{permissions_editor, EditedItems};
 use super::tabs::PropertiesTabs;
 use super::view::{can_edit_permissions, PropertiesContext};
 use super::{PropertiesTab, CALCULATING, READING};
-use crate::dialog::{note, quiet_text, PropertyGrid};
+use crate::dialog::{note, quiet_text, value_or_not_provided, PropertyGrid};
 use crate::icons::{Art, ArtImage};
 
 /// The Permissions tab when some item cannot be changed here.
@@ -77,10 +78,11 @@ impl SelectionProperties {
     }
 }
 
-/// The Size and Contains values, which measuring the folders updates.
+/// The Size, Size on disk and Contains values, which measuring updates.
 #[derive(Debug, Clone)]
 struct SizeRows {
     size: gtk::Label,
+    size_on_disk: gtk::Label,
     contains: gtk::Label,
 }
 
@@ -122,6 +124,7 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
             format::pretty_bytes(bytes)
         },
     );
+    let size_on_disk = grid.add_row(&ox_core::i18n::gettext("Size on disk"), CALCULATING);
     let contains = grid.add_row(
         &ox_core::i18n::gettext("Contains"),
         &if has_folders {
@@ -131,7 +134,11 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
         },
     );
     panel.append(grid.widget());
-    SizeRows { size, contains }
+    SizeRows {
+        size,
+        size_on_disk,
+        contains,
+    }
 }
 
 /// The items' type when they share one, else "Multiple types".
@@ -161,33 +168,45 @@ fn common_location(entries: &[Entry], context: &PropertiesContext) -> String {
     }
 }
 
-/// Measures the selected folders one after another and shows the
-/// combined size and content once every one is measured.
+/// Measures the selected folders one after another, and reads the space
+/// each selected file takes, then shows the combined size, size on disk and
+/// content once every one is measured.
 fn measure(entries: &[Entry], rows: &SizeRows, cancel: &Cancellation) {
     let folders: Vec<String> = entries
         .iter()
         .filter(|entry| entry.is_dir)
         .map(|entry| entry.uri.clone())
         .collect();
-    if folders.is_empty() {
-        return;
-    }
+    let files: Vec<String> = entries
+        .iter()
+        .filter(|entry| !entry.is_dir)
+        .map(|entry| entry.uri.clone())
+        .collect();
     let mut bytes: u64 = entries
         .iter()
         .filter_map(|entry| entry.size.filter(|_| !entry.is_dir))
         .sum();
-    let mut files = entries.iter().filter(|entry| !entry.is_dir).count() as u64;
+    let mut file_count = files.len() as u64;
     let mut subfolders = folders.len() as u64;
     let rows = rows.clone();
     let cancel = cancel.clone();
     glib::spawn_future_local(async move {
+        let mut allocated = Some(0_u64);
+        for uri in files {
+            allocated = add_allocated(allocated, size_on_disk(&uri).await);
+            if cancel.is_cancelled() {
+                return;
+            }
+        }
         let mut is_complete = true;
+        let has_folders = !folders.is_empty();
         for uri in folders {
             let noop = |_: &ox_core::sizes::FolderSize| {};
             match scan_folder_size_in_background(uri, cancel.clone(), noop).await {
                 Ok(size) => {
                     bytes += size.bytes;
-                    files += size.files;
+                    allocated = add_allocated(allocated, size.allocated);
+                    file_count += size.files;
                     subfolders += size.folders;
                     is_complete &= size.status == ScanStatus::Complete;
                 }
@@ -198,11 +217,39 @@ fn measure(entries: &[Entry], rows: &SizeRows, cancel: &Cancellation) {
             }
         }
         let at_least = if is_complete { "" } else { "≥ " };
-        rows.size
-            .set_text(&format!("{at_least}{}", format::pretty_bytes(bytes)));
-        rows.contains
-            .set_text(&format!("{at_least}{}", counts_text(files, subfolders)));
+        if has_folders {
+            rows.size
+                .set_text(&format!("{at_least}{}", format::pretty_bytes(bytes)));
+            rows.contains
+                .set_text(&format!("{at_least}{}", counts_text(file_count, subfolders)));
+        }
+        let on_disk = allocated.map_or_else(String::new, |allocated| {
+            format!("{at_least}{}", format::pretty_bytes(allocated))
+        });
+        rows.size_on_disk.set_text(value_or_not_provided(&on_disk));
     });
+}
+
+/// `total` plus `allocated`, or `None` once any item's space is unknown.
+fn add_allocated(total: Option<u64>, allocated: Option<u64>) -> Option<u64> {
+    total
+        .zip(allocated)
+        .map(|(total, allocated)| total.saturating_add(allocated))
+}
+
+/// The bytes the file at `uri` takes on disk, without following a link;
+/// `None` when it cannot be read or its backend does not say.
+async fn size_on_disk(uri: &str) -> Option<u64> {
+    let info = gio::File::for_uri(uri)
+        .query_info_future(
+            "standard::allocated-size",
+            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            glib::Priority::DEFAULT,
+        )
+        .await
+        .ok()?;
+    info.has_attribute("standard::allocated-size")
+        .then(|| info.attribute_uint64("standard::allocated-size"))
 }
 
 /// Reads every item's permissions, then fills the Permissions tab: the

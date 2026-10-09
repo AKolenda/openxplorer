@@ -225,6 +225,7 @@ mod tests {
         let size = FolderSize {
             uri: "file:///tmp/ox-test/Projects".to_owned(),
             bytes: 1_048_576,
+            allocated: Some(1_052_672),
             files: 1_024,
             folders: 3,
             entries: 1_027,

@@ -17,7 +17,8 @@ use crate::transfer::Cancellation;
 
 /// The metadata a scan reads; `id::filesystem` tells a subfolder on
 /// another filesystem apart.
-const ATTRIBUTES: &str = "standard::name,standard::type,standard::size,standard::is-symlink,id::filesystem";
+const ATTRIBUTES: &str =
+    "standard::name,standard::type,standard::size,standard::allocated-size,standard::is-symlink,id::filesystem";
 
 /// The [`SizeProvider`] for `smb://` and other GIO locations. It blocks, so
 /// call it on a worker thread.
@@ -83,6 +84,9 @@ fn size_entry(file: &gio::File, info: &gio::FileInfo) -> SizeEntry {
     } else {
         None
     };
+    let allocated = info
+        .has_attribute("standard::allocated-size")
+        .then(|| info.attribute_uint64("standard::allocated-size"));
     let filesystem = info
         .attribute_string("id::filesystem")
         .filter(|filesystem| !filesystem.is_empty());
@@ -91,6 +95,7 @@ fn size_entry(file: &gio::File, info: &gio::FileInfo) -> SizeEntry {
         name: info.name().to_string_lossy().into_owned(),
         kind: kind_of(info),
         size,
+        allocated,
         filesystem: filesystem.map(String::from),
         identity: None,
         is_mount_point: false,

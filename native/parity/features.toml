@@ -13759,6 +13759,21 @@ native = "done"
 native_note = "native/crates/ox-core/src/versions/lookup.rs and tests/versions_lookup.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (previous_versions_lists_the_snapshots_of_the_folder, a_file_without_snapshots_explains_that_none_were_found) run the lookup through GIO from the dialog. Earlier evidence: native/crates/ox-core/src/versions/lookup.rs (an_smb_item_is_looked_up_at_its_share_root, a_local_file_is_looked_up_next_to_it_and_a_folder_inside_it, the_most_specific_configured_source_is_the_only_candidate); native/crates/ox-core/tests/versions_lookup.rs (share_items_are_found_at_the_share_root_and_failures_become_warnings, a_configured_source_is_used_and_an_empty_result_explains_itself, a_folder_is_found_in_snapper_snapshots_next_to_it, at_most_one_hundred_versions_are_returned_and_marked_truncated, at_most_eight_warnings_are_kept, a_version_is_dated_by_its_snapshot_name_never_by_its_modification_time, a_cancelled_lookup_stops_instead_of_reporting_warnings, a_collection_read_by_a_lookup_becomes_read_only); native/crates/ox-core/tests/versions_lookup_gio.rs (gio_finds_versions_in_local_snapshot_folders_without_following_links, a_background_lookup_finds_the_same_versions). Porting notes: PROP-019 covers the dialog, and PROP-021 and PROP-024 cover detection and read-only marking. No backend test covers the lookup; ui_release's snapshot checks run against preview fixtures."
 
 [[feature]]
+id = "PROP-033"
+area = "PROP"
+title = "Size on disk"
+behaviour = "As in Windows Explorer, the General tab shows 'Size on disk' under 'Size': the space the item takes on its drive, from the blocks it uses. A folder's is measured with its size (Calculate folder size; 'Not scanned' until then, '≥' for a partial scan) and counts a hard-linked file once; several items show their combined space. Where the backend does not report the space of every file it shows 'not provided' rather than a smaller total."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows Explorer: Properties > General > Size on disk", "GIO standard::allocated-size; stat st_blocks"]
+python_tests = []
+bridge = []
+gnome = "GFileInfo standard::allocated-size"
+native = "done"
+native_note = "native/crates/ox-core/tests/sizes_scan.rs (the_space_files_take_on_disk_is_totalled_with_hard_links_once, the_space_on_disk_is_unknown_when_a_file_does_not_report_it); native/crates/ox-app/src/properties/folder_sizes.rs (size_on_disk_reads_like_the_size_or_is_not_provided); native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_of_several_items_total_them_and_change_them_together, calculate_folder_size_shows_the_size_everywhere_the_folder_is). Files read standard::allocated-size; the local scan adds st_blocks × 512 and the GIO scan standard::allocated-size."
+
+[[feature]]
 id = "SET-001"
 area = "SET"
 title = "Settings opens as its own tab"
