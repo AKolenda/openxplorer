@@ -7773,6 +7773,10 @@ msgid "Adds Windows Explorer's Group by, separate from the sort, and Folder Opti
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Adds item check boxes as in Windows 11 and a redesigned Settings page with eight pages, a search across all of them and details in ⓘ bubbles. Open and Save dialogs no longer wait on network shares and say why Save cannot save, and a folder's expand arrow stays inside its row's highlight. Dropping files onto a file on a Windows drive or share no longer runs it unless it really is a program, and asks first."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "File Manager"
 msgstr ""
 
