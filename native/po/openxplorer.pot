@@ -4048,7 +4048,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_drop/program.rs
-msgid "“{name}” is on a network share or a removable drive. Run it only if you trust where it came from."
+msgid "“{name}” is on a network share, a removable drive or a drive where every file can run, such as a Windows drive. Run it only if you trust where it came from."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
