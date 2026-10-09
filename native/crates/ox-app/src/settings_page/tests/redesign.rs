@@ -36,7 +36,7 @@ const MOVED_ROWS: [(&str, &str); 60] = [
     ("Compact view", "Compact view"),
     ("Relative dates", "Relative dates (Today, Yesterday)"),
     ("Remember each folder's view", "Remember each folder's view"),
-    ("Selection marker", "Selection marker on hover"),
+    ("Selection marker", "Item check boxes"),
     ("Expandable folders", "Expandable folders in Details"),
     ("Sidebar and column widths", "Sidebar and column widths"),
     ("Hide expand arrows", "Hide expand arrows in the sidebar"),

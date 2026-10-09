@@ -53,6 +53,8 @@ pub(super) enum Preference {
     ShowFullPath(bool),
     /// Compact view on or off (VIEW-067).
     CompactDensity(bool),
+    /// Item check boxes on or off (SEL-014).
+    ItemCheckBoxes(bool),
     /// The details pane's own options (PROP-010).
     DetailsPaneOptions(DetailsPaneOptions),
     /// Show the navigation pane (SIDE-024).
@@ -75,6 +77,7 @@ impl Preference {
             Preference::WindowSize(size) => update.window_size = Some(size),
             Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
             Preference::CompactDensity(compact) => update.compact_density = Some(compact),
+            Preference::ItemCheckBoxes(shown) => update.selection_marker = Some(shown),
             Preference::DetailsPaneOptions(options) => update.details_pane_options = Some(options),
             Preference::Sidebar(shown) => update.hide_sidebar = Some(!shown),
             Preference::SidebarIconSize(size) => update.sidebar_icon_size = Some(size),
