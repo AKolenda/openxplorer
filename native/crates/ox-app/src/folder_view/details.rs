@@ -412,6 +412,17 @@ impl DetailsView {
             .collect()
     }
 
+    /// The room a fitted Name keeps for the item check boxes before the
+    /// icons, besides the icon's own: none while items have no boxes.
+    pub(crate) fn name_check_room(&self) -> f64 {
+        let context = self.cells();
+        if context.owners.shows_item_checks() {
+            cells::row_check_room(context.tree.is_expandable())
+        } else {
+            0.0
+        }
+    }
+
     /// The cells' shared context, which `new` sets.
     fn cells(&self) -> &CellContext {
         self.imp()

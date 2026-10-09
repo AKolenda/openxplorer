@@ -34,6 +34,21 @@ use crate::icons::Art;
 /// Gap between a row's icon and its name (`.name-cell{gap:11px}`).
 const ROW_ICON_GAP: i32 = 11;
 
+/// Width of a row's check box: 14 pixels and its border
+/// (`.files checkbutton.item-check > check`).
+const ROW_CHECK_WIDTH: i32 = 16;
+
+/// How far a row's check box moves right after a folder arrow
+/// (`.has-folder-expander checkbutton.item-check`).
+const ROW_CHECK_ARROW_SHIFT: i32 = 16;
+
+/// The room a row's check box and its gap take before the icon, with
+/// folder arrows before it or not.
+pub(crate) fn row_check_room(after_arrows: bool) -> f64 {
+    let shift = if after_arrows { ROW_CHECK_ARROW_SHIFT } else { 0 };
+    f64::from(ROW_CHECK_WIDTH + ROW_ICON_GAP + shift)
+}
+
 /// Gap between a tile's icon and its name (`.file-tile{gap:8px}`).
 const TILE_ICON_GAP: i32 = 8;
 

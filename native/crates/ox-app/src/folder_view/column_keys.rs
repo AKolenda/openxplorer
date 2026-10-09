@@ -198,10 +198,16 @@ fn run_title_key(view: &DetailsView, title: &gtk::Widget, column: SortColumn, ac
         }
         TitleKey::FitToItems => {
             let list = view.column_view();
+            #[expect(clippy::cast_possible_truncation, reason = "the room is a few pixels")]
+            let room = if column == SortColumn::Name {
+                view.name_check_room() as i32
+            } else {
+                0
+            };
             let text_widths = view
                 .cell_texts(column, FIT_ITEMS)
                 .iter()
-                .map(|text| list.create_pango_layout(Some(text)).pixel_size().0)
+                .map(|text| list.create_pango_layout(Some(text)).pixel_size().0 + room)
                 .collect::<Vec<_>>();
             let width = fitted_width(column, text_widths);
             view_column.set_expand(false);
