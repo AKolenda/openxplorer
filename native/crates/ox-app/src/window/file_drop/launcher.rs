@@ -4,16 +4,18 @@
 //!
 //! A launcher is a program target ([`super::program`]) when it is a
 //! regular desktop entry of type Application with a command, and the user
-//! trusts it the way GNOME does: it is executable ("Allow Launching"), or
-//! it lies in an `applications` folder of the desktop's data folders,
-//! where installed applications are. The application's name comes from
+//! trusts it the way GNOME does: it is executable ("Allow Launching") on a
+//! filesystem whose execute bits are real, or it lies in an `applications`
+//! folder of the desktop's data folders, where installed applications
+//! are. On NTFS, FAT and SMB mounts every file is executable, so there the
+//! bit trusts nothing. The application's name comes from
 //! the entry, so the hint reads "Open with Text Editor".
 //!
 //! The application starts through `GLib`'s own `gio launch`, which reads the
 //! entry's command, field codes and terminal flag exactly as the desktop
 //! does; the dropped items are its file arguments, never a command line.
 //! Launchers get the same "Run this program?" question as programs on a
-//! network share or a removable drive.
+//! network share, a removable drive or a drive without Unix permissions.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -48,7 +50,8 @@ pub(super) fn is_desktop_entry(info: &gio::FileInfo) -> bool {
 /// cannot be read.
 pub(super) async fn query_launcher(entry: &Entry, info: &gio::FileInfo) -> Option<ProgramTarget> {
     let path = local_path(&entry.uri)?;
-    if !is_trusted(&path, info) {
+    let keeps_permissions = super::program::keeps_permissions(&entry.uri).await;
+    if !is_trusted(&path, info, keeps_permissions) {
         return None;
     }
     let (contents, _) = gio::File::for_uri(&entry.uri).load_contents_future().await.ok()?;
@@ -61,9 +64,11 @@ pub(super) async fn query_launcher(entry: &Entry, info: &gio::FileInfo) -> Optio
 }
 
 /// Whether the launcher at `path`, which GIO's `info` describes, may run:
-/// it is executable, or installed in an applications folder.
-pub(super) fn is_trusted(path: &Path, info: &gio::FileInfo) -> bool {
-    info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE) || is_in_applications_folder(path)
+/// it is executable on a filesystem that `keeps_permissions`, or installed
+/// in an applications folder.
+pub(super) fn is_trusted(path: &Path, info: &gio::FileInfo, keeps_permissions: bool) -> bool {
+    let allowed_to_launch = keeps_permissions && info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE);
+    allowed_to_launch || is_in_applications_folder(path)
 }
 
 /// True for a launcher in the `applications` folder of the user's or the
@@ -131,6 +136,20 @@ mod tests {
         assert_eq!(application_name(&link), None);
         assert_eq!(application_name(&hidden), None);
         assert_eq!(application_name(&no_command), None);
+    }
+
+    /// On NTFS, FAT and SMB mounts every launcher is executable, so the
+    /// bit trusts it only where permissions are real.
+    ///
+    /// parity: DND-020
+    #[test]
+    fn an_executable_launcher_is_trusted_only_where_permissions_are_real() {
+        let executable = gio::FileInfo::new();
+        executable.set_attribute_boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE, true);
+        let downloaded = Path::new("/media/ada/Windows/Users/ada/Downloads/tool.desktop");
+
+        assert!(is_trusted(downloaded, &executable, true));
+        assert!(!is_trusted(downloaded, &executable, false));
     }
 
     /// parity: DND-020

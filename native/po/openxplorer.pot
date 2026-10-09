@@ -4109,7 +4109,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_drop/program.rs
-msgid "“{name}” is on a network share or a removable drive. Run it only if you trust where it came from."
+msgid "“{name}” is on a network share, a removable drive or a drive where every file can run, such as a Windows drive. Run it only if you trust where it came from."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
@@ -7831,6 +7831,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Adds Windows Explorer's Group by, separate from the sort, and Folder Options' Apply to all folders and Reset folders. Copies ask about one unreadable file instead of failing the folder and about names Windows cannot use, TAR archives get the ZIP safety limits, read-only and disconnected drives say so, and the Open and Save dialogs no longer freeze or get stuck."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Adds item check boxes as in Windows 11 and a redesigned Settings page with eight pages, a search across all of them and details in ⓘ bubbles. Open and Save dialogs no longer wait on network shares and say why Save cannot save, and a folder's expand arrow stays inside its row's highlight. Dropping files onto a file on a Windows drive or share no longer runs it unless it really is a program, and asks first."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

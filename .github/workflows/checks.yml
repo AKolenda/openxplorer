@@ -242,7 +242,10 @@ jobs:
             python3 - <<'PY'
           import os
           from pathlib import Path
-          notes = Path('CHANGELOG.md').read_text().split('\n# ', 1)[0]
+          # The newest section, without its "# <version> — <date>" heading,
+          # which the release's title already gives.
+          section = Path('CHANGELOG.md').read_text().split('\n# ', 1)[0]
+          notes = section.split('\n', 1)[1].lstrip('\n')
           (Path(os.environ['RUNNER_TEMP'])/'release-notes.md').write_text(notes)
           PY
             # Every asset SHA256SUMS lists (the packages and the source

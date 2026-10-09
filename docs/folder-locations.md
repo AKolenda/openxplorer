@@ -30,4 +30,4 @@ The optional helper prepares persistent systemd mount/automount configuration. I
 
 ---
 
-OpenXplorer 2.0.3. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.4. Project-authored documentation: AGPL-3.0-only.
