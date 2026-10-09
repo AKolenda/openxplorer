@@ -9490,7 +9490,7 @@ python_tests = []
 bridge = []
 gnome = "GtkDropTarget on file rows; g_file_query_info access::can-execute; GAppInfo from the executable (g_app_info_create_from_commandline) or the terminal via xdg-terminal-exec / the configured terminal"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/program.rs (only_executable_regular_files_are_programs_and_scripts_are_text, a_binary_gets_each_path_as_one_argument_whatever_its_name, a_script_runs_in_the_terminal_through_the_fixed_hold_script, the_hold_script_passes_names_through_as_arguments, only_programs_on_this_computers_own_disks_run_without_asking); native/crates/ox-app/src/window/file_drop/targets/tests.rs (items_dropped_on_a_program_are_given_to_it_as_arguments, a_file_that_is_not_executable_is_no_program)."
+native_note = "native/crates/ox-app/src/window/file_drop/program.rs (only_executable_regular_files_are_programs_and_scripts_are_text, a_binary_gets_each_path_as_one_argument_whatever_its_name, a_script_runs_in_the_terminal_through_the_fixed_hold_script, the_hold_script_passes_names_through_as_arguments, only_programs_on_this_computers_own_disks_run_without_asking, only_binary_types_themselves_are_binaries, windows_drives_and_kernel_shares_have_no_real_execute_bits); native/crates/ox-app/src/window/file_drop/targets/tests.rs (items_dropped_on_a_program_are_given_to_it_as_arguments, a_file_that_is_not_executable_is_no_program, an_executable_json_or_javascript_file_is_no_program). Binary types are matched exactly (shared-mime-info derives JSON, JavaScript and .exe from application/x-executable), and a program on a filesystem without Unix permissions (NTFS, FAT, exFAT, fuseblk, CIFS) asks before it runs."
 
 [[feature]]
 id = "SRCH-001"

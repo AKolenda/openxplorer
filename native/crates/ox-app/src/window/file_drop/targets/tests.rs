@@ -375,6 +375,34 @@ fn a_file_that_is_not_executable_is_no_program() {
     assert_eq!(test.window.item_destination(notes), None);
 }
 
+/// shared-mime-info derives JSON and JavaScript from
+/// `application/x-executable`, and on NTFS every file is executable:
+/// such a file is still no program, so nothing runs when files are
+/// dropped on it.
+///
+/// parity: DND-026
+#[gtk::test]
+fn an_executable_json_or_javascript_file_is_no_program() {
+    let fixture = Fixture::standard();
+    for name in ["settings.json", "tool.js"] {
+        let path = fixture.path(name);
+        std::fs::write(&path, "touch ran\n").expect("the fixture is ours");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("the fixture is ours");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.window.refresh();
+    wait_until("the files to be listed", || {
+        test.names().contains(&"tool.js".to_owned())
+    });
+
+    for name in ["settings.json", "tool.js"] {
+        let position = test.position_of(name);
+        test.window.item_destination(position);
+        wait_for(Duration::from_millis(300));
+        assert_eq!(test.window.item_destination(position), None, "{name}");
+    }
+}
+
 /// With `OX_NATIVE_CAPTURE_DIR` set, saves the drop highlights (a
 /// folder row, the Quick access line and a crumb), the program hint
 /// and the drop menu in both themes; without it, proves they show.
