@@ -28,7 +28,7 @@ fn keep_both_through_gio_adds_a_copy_name() {
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(read(&fixture.destination_folder.join("payload.txt")), "old");
     assert_eq!(
-        read(&fixture.destination_folder.join("payload (copy 2).txt")),
+        read(&fixture.destination_folder.join("payload - Copy.txt")),
         "new"
     );
     fixture.assert_no_staging();

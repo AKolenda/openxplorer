@@ -279,7 +279,7 @@ fn a_configured_backup_folder_can_be_copied_from_but_not_into() {
     assert!(restored.errors.is_empty(), "{restored:?}");
     assert_eq!(read(&live), "current version");
     assert_eq!(
-        read(&fixture.destination_folder.join("photo (copy 2).jpg")),
+        read(&fixture.destination_folder.join("photo - Copy.jpg")),
         "saved version"
     );
 }
@@ -323,7 +323,7 @@ fn a_version_is_restored_as_a_copy_only_outside_snapshots() {
     assert_eq!(read(&live), "today");
     assert_eq!(read(&version), "monday");
     assert_eq!(
-        read(&fixture.destination_folder.join("report (copy 2).txt")),
+        read(&fixture.destination_folder.join("report - Copy.txt")),
         "monday"
     );
 }

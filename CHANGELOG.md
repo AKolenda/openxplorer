@@ -1,5 +1,8 @@
 # Unreleased
 
+- Copies are named as Windows Explorer names them: Duplicate, pasting
+  into the same folder and Keep both now give `Notes - Copy.txt`, then
+  `Notes - Copy (2).txt`, instead of `Notes (copy 2).txt`.
 - Smaller fixes to Open and Save dialogs: browsing a network share in a
   dialog no longer waits on GVfs on the main thread, since the share's
   local path is looked up in the background; Save stays on where nothing

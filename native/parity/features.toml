@@ -7333,7 +7333,7 @@ python_tests = [
 bridge = ["operate"]
 dolphin = "duplicate: Ctrl+D"
 native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy): Duplicate copies each selected item next to itself, selects the copies, and Undo reverses it; native/crates/ox-core/src/ops/duplicate.rs. Differs, for the owner to decide: copies are named \"(copy N)\", as the app's Keep both names them, not Dolphin's \"<name> copy.<ext>\"."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy): Duplicate copies each selected item next to itself, selects the copies, and Undo reverses it; native/crates/ox-core/src/ops/duplicate.rs. Differs, for the owner to decide: copies are named as Windows Explorer names them (\"<name> - Copy.<ext>\", then \"<name> - Copy (2).<ext>\"), as the app's Keep both names them, not Dolphin's \"<name> copy.<ext>\"."
 
 [[feature]]
 id = "OPS-035"
@@ -7759,8 +7759,8 @@ native_note = "Implemented in native/crates/ox-core/src/transfer/commit.rs and n
 [[feature]]
 id = "XFER-008"
 area = "XFER"
-title = "Keep both creates '(copy N)' names"
-behaviour = "With 'keep-both' a free name is chosen as '<stem> (copy N)<.ext>', starting at N=2. Folders and dot-files keep the whole name as the stem ('Folder.v1 (copy 3)', '.env (copy 2)'). Long stems are shortened on UTF-8 boundaries to stay within 255 bytes while keeping the extension. More than 10,000 attempts fails with 'Too many duplicate names. Rename the item before copying.'"
+title = "Keep both creates '- Copy' names"
+behaviour = "With 'keep-both' a free name is chosen as Windows Explorer names copies: '<stem> - Copy<.ext>', then '<stem> - Copy (N)<.ext>' from N=2 (the Python app used '<stem> (copy N)<.ext>' from N=2). Folders and dot-files keep the whole name as the stem ('Folder.v1 - Copy (3)', '.env - Copy (2)'). Long stems are shortened on UTF-8 boundaries to stay within 255 bytes while keeping the extension. More than 10,000 attempts fails with 'Too many duplicate names. Rename the item before copying.'"
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -7779,7 +7779,7 @@ python_tests = [
 bridge = ["operate"]
 dolphin = "KIO 'Rename' suggestion in conflict dialog"
 native = "done"
-native_note = "Implemented in native/crates/ox-core/src/transfer/conflicts.rs with native/crates/ox-core/src/location/names.rs (new_copy_name). Tests: names.rs unit tests (copy_names_follow_python, long_copy_names_are_shortened_by_whole_characters), native/crates/ox-core/tests/transfer_cases/conflicts.rs (keep_both_skips_every_taken_copy_name), native/crates/ox-core/tests/transfer_cases/gio_integration.rs, native/crates/ox-core/tests/transfer_cases/gio_engine.rs, native/crates/ox-core/tests/location_python.rs."
+native_note = "Implemented in native/crates/ox-core/src/transfer/conflicts.rs with native/crates/ox-core/src/location/names.rs (new_copy_name). Tests: names.rs unit tests (copy_names_follow_windows_explorer, long_copy_names_are_shortened_by_whole_characters), native/crates/ox-core/tests/transfer_cases/conflicts.rs (keep_both_skips_every_taken_copy_name), native/crates/ox-core/tests/transfer_cases/gio_integration.rs, native/crates/ox-core/tests/transfer_cases/gio_engine.rs, native/crates/ox-core/tests/location_python.rs (the marker's placement, shortening and refusals still match core.py, given the Python marker)."
 
 [[feature]]
 id = "XFER-009"

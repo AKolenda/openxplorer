@@ -4,7 +4,7 @@
 //! Ports the "Items already exist" dialog of `transferWithConflicts` in
 //! `v2.0.0:desktop/ui/app.js`, with its message and its Cancel, "Skip
 //! duplicates" and "Replace existing" buttons. The native dialog adds
-//! "Keep both" (the engine's `(copy N)` names) and, with several
+//! "Keep both" (the engine's `- Copy` names) and, with several
 //! conflicts, "Apply to all": cleared, the answer is for the first
 //! conflicting item only, and the dialog asks again about the next one,
 //! as Windows' "Let me decide for each file" does. As in Dolphin and
