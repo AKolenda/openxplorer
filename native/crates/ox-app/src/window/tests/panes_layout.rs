@@ -3,6 +3,7 @@
 //! the current app (see [`super::geometry`]).
 
 use gtk::prelude::*;
+use ox_core::settings::{PreferencesUpdate, Settings};
 
 use super::geometry::{bounds, laid_out, Bounds};
 use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
@@ -74,7 +75,35 @@ fn the_size_title_is_right_aligned_and_only_the_sorted_column_has_an_arrow() {
     );
 }
 
-/// parity: VIEW-001, LOOK-014
+/// Saves Expandable folders as `on`, as Settings would, and lets the
+/// window follow it.
+fn save_expandable_folders(test: &TestWindow, on: bool) {
+    let update = PreferencesUpdate {
+        expandable_folders: Some(on),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the change");
+    test.context.reload_settings();
+    wait_for_frames(&test.window, 3);
+}
+
+/// The x of each cell of `row` and of each column title.
+fn cell_and_title_x(test: &TestWindow, row: &gtk::Widget) -> (Vec<i32>, Vec<i32>) {
+    let cell_x = children(row).map(|cell| bounds(test, &cell).x).collect();
+    let title_x = column_titles(test)
+        .iter()
+        .map(|title| bounds(test, title).x)
+        .collect();
+    (cell_x, title_x)
+}
+
+/// Rows are inset 12 pixels on each side. While folders show arrows
+/// (VIEW-035) a row reaches 10 pixels further left, so the arrows sit
+/// inside its highlight; its cells stay under the titles either way.
+///
+/// parity: VIEW-001, VIEW-035, LOOK-014
 #[gtk::test]
 fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let fixture = Fixture::standard();
@@ -84,14 +113,49 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let row_place = bounds(&test, &row);
     assert_eq!(
         (row_place.x, row_place.width, row_place.height),
+        (list.x + 2, list.width - 14, 36),
+        "the fixture has folders, so rows make room for their arrows"
+    );
+    let (cell_x, title_x) = cell_and_title_x(&test, &row);
+    assert_eq!(cell_x, title_x);
+
+    save_expandable_folders(&test, false);
+    let row = first_row(&test);
+    let row_place = bounds(&test, &row);
+    assert_eq!(
+        (row_place.x, row_place.width, row_place.height),
         (list.x + 12, list.width - 24, 36)
     );
-    let title_x: Vec<i32> = column_titles(&test)
-        .iter()
-        .map(|title| bounds(&test, title).x)
-        .collect();
-    let cell_x: Vec<i32> = children(&row).map(|cell| bounds(&test, &cell).x).collect();
+    let (cell_x, title_x) = cell_and_title_x(&test, &row);
     assert_eq!(cell_x, title_x);
+}
+
+/// A folder's expand arrow sits inside its row, so a selected row's
+/// highlight goes around it rather than through it.
+///
+/// parity: VIEW-035
+#[gtk::test]
+fn a_folders_arrow_sits_inside_its_rows_highlight() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let view = test.window.folder_pane().details().column_view();
+    let arrows: Vec<gtk::Widget> = descendants::<gtk::Widget>(view)
+        .into_iter()
+        .filter(|widget| widget.has_css_class("folder-expander") && widget.is_mapped())
+        .collect();
+    assert!(!arrows.is_empty(), "the fixture's folders show arrows");
+    for arrow in arrows {
+        let row = std::iter::successors(arrow.parent(), gtk::Widget::parent)
+            .find(|widget| widget.css_name() == "row")
+            .expect("an arrow is in a row");
+        let (arrow_place, row_place) = (bounds(&test, &arrow), bounds(&test, &row));
+        assert!(
+            arrow_place.x >= row_place.x + 4,
+            "the arrow at {} starts 4 pixels inside its row at {}",
+            arrow_place.x,
+            row_place.x
+        );
+    }
 }
 
 #[gtk::test]

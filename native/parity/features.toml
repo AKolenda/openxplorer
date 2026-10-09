@@ -3511,7 +3511,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "ExpandableFolders (Details)"
 native = "done"
-native_note = "Details folders expand under their rows with indented Fluent chevrons; Left/Right collapse/expand, and Back/Forward restore expanded folders. Children use the same filtering and sorting. Collapsing cancels all descendant listings and reopening lists fresh contents; F5 and file-operation reloads refresh expanded children while preserving unchanged items. Settings can disable expansion. Nested folders are not independently watched. Tests a_folder_expands_in_place_and_back_keeps_it_open and collapsing_a_branch_discards_all_its_child_listings."
+native_note = "Details folders expand under their rows with indented Fluent chevrons; Left/Right collapse/expand, and Back/Forward restore expanded folders. Children use the same filtering and sorting. Collapsing cancels all descendant listings and reopening lists fresh contents; F5 and file-operation reloads refresh expanded children while preserving unchanged items. Settings can disable expansion. Nested folders are not independently watched. While folders show arrows, rows reach 10px further left so each arrow sits inside a selected row's highlight, and cells stay under the column titles. Tests a_folder_expands_in_place_and_back_keeps_it_open, collapsing_a_branch_discards_all_its_child_listings, a_folders_arrow_sits_inside_its_rows_highlight and rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles."
 
 [[feature]]
 id = "VIEW-036"

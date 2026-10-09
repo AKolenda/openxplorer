@@ -23,6 +23,10 @@
   item; with some or all selected (a minus or a tick), it selects none.
   View → Item check boxes, the renamed Settings row, turns them off; on
   by default, as in Windows 11.
+- A folder's expand arrow in the details view no longer pokes out of a
+  selected row's highlight: while folders can expand, rows start a little
+  further left so the arrow sits inside the highlight, and names and
+  columns stay where they were.
 
 # 2.0.3 — 2026-10-06
 

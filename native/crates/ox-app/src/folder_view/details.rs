@@ -344,6 +344,7 @@ impl DetailsView {
         if let Some(sorter) = column_view.sorter() {
             model.attach_column_sorter(&sorter);
         }
+        model.tree().mark_arrows_on(column_view);
         view.add_sort_carets();
         view.add_select_all(model.selection());
         view.install_column_fit();
