@@ -16,8 +16,14 @@
 //! - "Nothing runs from a file that is not executable": the execute
 //!   permission is checked again when the drop arrives.
 //! - "Ask before running a program from elsewhere": a program on a
-//!   network share or a removable drive runs only after the user
+//!   network share, a removable drive or a drive without Unix permissions
+//!   (NTFS, FAT, exFAT: every file there has the execute bit, so it says
+//!   nothing about whether the file is a program) runs only after the user
 //!   confirms.
+//! - "A program is what its type says": a binary's type must be one of
+//!   the binary types itself, not a type derived from them. In
+//!   shared-mime-info, JSON, JavaScript and Windows `.exe` files derive
+//!   from `application/x-executable`.
 //! - "Names are never code": the program gets the items' paths as
 //!   separate arguments, never through a command line a shell parses. The
 //!   terminal's shell runs one fixed script that calls the program with
@@ -47,20 +53,37 @@ const PROGRAM_ATTRIBUTES: &str = "standard::type,standard::content-type,access::
 /// The content type every script is a kind of.
 const TEXT_CONTENT_TYPE: &str = "text/plain";
 
-/// The content types of programs: binaries, and the scripts that
-/// shared-mime-info declares or older versions only name. A file of any
-/// other type is never run, whatever its execute bit says, since on FAT,
-/// NTFS and SMB mounts every file has it. This is the list Dolphin offers
-/// "Execute" for, less `.desktop` launchers, which [`launcher`] handles.
-const PROGRAM_CONTENT_TYPES: [&str; 8] = [
+/// The content types of binaries, matched exactly: shared-mime-info
+/// derives types such as `application/json`, `text/javascript` and
+/// `application/x-msdownload` (`.exe`) from `application/x-executable`,
+/// and none of them is a program here. A file of any other type is never
+/// run, whatever its execute bit says, since on FAT, NTFS and SMB mounts
+/// every file has it.
+const BINARY_CONTENT_TYPES: [&str; 5] = [
     "application/x-executable",
     "application/x-sharedlib",
     "application/x-pie-executable",
+    "application/vnd.appimage",
+    "application/x-iso9660-appimage",
+];
+
+/// The content types of scripts, with the types derived from them: the
+/// scripts that shared-mime-info declares or older versions only name.
+/// With [`BINARY_CONTENT_TYPES`], the list Dolphin offers "Execute" for,
+/// less `.desktop` launchers, which [`launcher`] handles.
+const SCRIPT_CONTENT_TYPES: [&str; 5] = [
     "application/x-shellscript",
     "application/x-perl",
     "application/x-ruby",
     "text/x-python",
     "text/x-python3",
+];
+
+/// Filesystems whose execute bit is set on every file, or that the mount
+/// sets for all of them: Windows and camera-card drives, and SMB shares
+/// mounted by the kernel. `fuseblk` is NTFS through ntfs-3g.
+const FILESYSTEMS_WITHOUT_PERMISSIONS: [&str; 9] = [
+    "vfat", "msdos", "fat", "exfat", "ntfs", "ntfs3", "fuseblk", "cifs", "smb3",
 ];
 
 /// The name the hold script runs under (`$0`).
@@ -114,23 +137,48 @@ fn program_from_info(entry: &Entry, info: &gio::FileInfo) -> Option<ProgramTarge
     let is_regular = info.file_type() == gio::FileType::Regular;
     let may_execute = info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE);
     let content_type = info.content_type()?;
-    let is_program_type = PROGRAM_CONTENT_TYPES
-        .iter()
-        .any(|program_type| gio::content_type_is_a(&content_type, program_type));
-    if !is_regular || !may_execute || !is_program_type {
+    let kind = program_kind(&content_type)?;
+    if !is_regular || !may_execute {
         return None;
     }
-    let is_script = gio::content_type_is_a(&content_type, TEXT_CONTENT_TYPE);
-    let kind = if is_script {
-        ProgramKind::Script
-    } else {
-        ProgramKind::Binary
-    };
     Some(ProgramTarget {
         uri: entry.uri.clone(),
         name: entry.name.clone(),
         kind,
     })
+}
+
+/// How a file of `content_type` runs, or `None` when it is not a program.
+fn program_kind(content_type: &str) -> Option<ProgramKind> {
+    let is_script = SCRIPT_CONTENT_TYPES
+        .iter()
+        .any(|script_type| gio::content_type_is_a(content_type, script_type));
+    let is_binary = BINARY_CONTENT_TYPES
+        .iter()
+        .any(|binary_type| gio::content_type_equals(content_type, binary_type));
+    // A script is text; anything else that is a script type runs directly.
+    match (is_script, is_binary) {
+        (true, _) if gio::content_type_is_a(content_type, TEXT_CONTENT_TYPE) => Some(ProgramKind::Script),
+        (true, _) | (false, true) => Some(ProgramKind::Binary),
+        (false, false) => None,
+    }
+}
+
+/// True when the filesystem named `filesystem_type` (GIO's
+/// `filesystem::type`) keeps real execute permissions.
+pub(super) fn has_unix_permissions(filesystem_type: &str) -> bool {
+    !FILESYSTEMS_WITHOUT_PERMISSIONS.contains(&filesystem_type)
+}
+
+/// Whether the file at `uri` is on a filesystem with real execute
+/// permissions; `false` when GIO cannot tell, so the user is asked.
+pub(super) async fn keeps_permissions(uri: &str) -> bool {
+    gio::File::for_uri(uri)
+        .query_filesystem_info_future(gio::FILE_ATTRIBUTE_FILESYSTEM_TYPE, glib::Priority::DEFAULT)
+        .await
+        .ok()
+        .and_then(|info| info.attribute_string(gio::FILE_ATTRIBUTE_FILESYSTEM_TYPE))
+        .is_some_and(|filesystem_type| has_unix_permissions(&filesystem_type))
 }
 
 /// The command that gives `items` to the program at `program`: the
@@ -158,11 +206,22 @@ fn item_argument(uri: &str) -> OsString {
     local_path(uri).map_or_else(|| OsString::from(uri), PathBuf::into_os_string)
 }
 
+/// Where a program is, as far as running it without asking goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ProgramPlace {
+    /// On a network share.
+    is_network: bool,
+    /// On a drive that can be removed.
+    is_removable: bool,
+    /// On a filesystem whose execute bits are real.
+    keeps_permissions: bool,
+}
+
 /// True when a program at `uri` asks before it runs: it is not on this
-/// computer's own disks, but on a network share (`is_network`) or a drive
-/// that can be removed (`is_removable`).
-fn needs_run_confirmation(uri: &str, is_network: bool, is_removable: bool) -> bool {
-    !uri.starts_with("file:") || is_network || is_removable
+/// computer's own disks with real permissions, but on a network share, a
+/// drive that can be removed or a drive where every file may be executed.
+fn needs_run_confirmation(uri: &str, place: ProgramPlace) -> bool {
+    !uri.starts_with("file:") || place.is_network || place.is_removable || !place.keeps_permissions
 }
 
 impl BrowserWindow {
@@ -242,7 +301,9 @@ impl BrowserWindow {
         let path = local_path(&program.uri)
             .ok_or_else(|| ox_core::i18n::gettext_static(NO_LOCAL_PATH).to_owned())?;
         let may_run = match program.kind {
-            ProgramKind::Launcher => launcher::is_trusted(&path, &info),
+            ProgramKind::Launcher => {
+                launcher::is_trusted(&path, &info, keeps_permissions(&program.uri).await)
+            }
             ProgramKind::Binary | ProgramKind::Script => info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE),
         };
         if !may_run {
@@ -258,7 +319,8 @@ impl BrowserWindow {
         self.start_program(program, &path, items)
     }
 
-    /// True for a program on a network share or a removable drive.
+    /// True for a program on a network share, a removable drive or a drive
+    /// without Unix permissions.
     async fn is_from_elsewhere(&self, program: &ProgramTarget) -> bool {
         let is_network = self.imp().locations.borrow().is_network_location(&program.uri);
         let uri = program.uri.clone();
@@ -267,12 +329,17 @@ impl BrowserWindow {
         let is_removable = gio::spawn_blocking(move || is_on_removable_drive(&uri))
             .await
             .unwrap_or(true);
-        needs_run_confirmation(&program.uri, is_network, is_removable)
+        let place = ProgramPlace {
+            is_network,
+            is_removable,
+            keeps_permissions: keeps_permissions(&program.uri).await,
+        };
+        needs_run_confirmation(&program.uri, place)
     }
 
     /// Asks before running `program`; true when the user agreed.
     async fn confirm_run(&self, program: &ProgramTarget) -> bool {
-        let message = ox_core::i18n::format_message("“{name}” is on a network share or a removable drive. Run it only if you trust where it came from.", &[("name", &program.name)]);
+        let message = ox_core::i18n::format_message("“{name}” is on a network share, a removable drive or a drive where every file can run, such as a Windows drive. Run it only if you trust where it came from.", &[("name", &program.name)]);
         let dialog = Dialog::new(self, &ox_core::i18n::gettext("Run this program?"), &message);
         dialog.add_cancel_button();
         dialog.add_button(&ox_core::i18n::gettext("Run"), ButtonStyle::Accent);
@@ -395,6 +462,57 @@ mod tests {
         assert_eq!(photo, None, "a photo is not a program");
     }
 
+    /// JSON, JavaScript and Windows programs derive from
+    /// `application/x-executable` in shared-mime-info, and on NTFS every
+    /// file is executable: none of them is a program here.
+    ///
+    /// parity: DND-026
+    #[test]
+    fn only_binary_types_themselves_are_binaries() {
+        let tool = file_entry("tool");
+        let kind_of = |content_type: &str| {
+            program_from_info(&tool, &info(gio::FileType::Regular, content_type, true))
+                .map(|program| program.kind)
+        };
+
+        for derived in [
+            "application/json",
+            "text/javascript",
+            "application/x-msdownload",
+            "application/x-desktop",
+            "text/x-lua",
+            "application/x-awk",
+        ] {
+            assert_eq!(kind_of(derived), None, "{derived} is not a program");
+        }
+        for binary in [
+            "application/x-executable",
+            "application/x-pie-executable",
+            "application/x-sharedlib",
+            "application/vnd.appimage",
+        ] {
+            assert_eq!(kind_of(binary), Some(ProgramKind::Binary), "{binary}");
+        }
+        for script in [
+            "application/x-shellscript",
+            "text/x-python3",
+            "application/x-perl",
+        ] {
+            assert_eq!(kind_of(script), Some(ProgramKind::Script), "{script}");
+        }
+    }
+
+    /// parity: DND-026
+    #[test]
+    fn windows_drives_and_kernel_shares_have_no_real_execute_bits() {
+        for without in ["ntfs", "ntfs3", "fuseblk", "vfat", "exfat", "cifs"] {
+            assert!(!has_unix_permissions(without), "{without}");
+        }
+        for with in ["ext4", "btrfs", "xfs", "tmpfs", "zfs"] {
+            assert!(has_unix_permissions(with), "{with}");
+        }
+    }
+
     /// parity: DND-026
     #[test]
     fn a_binary_gets_each_path_as_one_argument_whatever_its_name() {
@@ -450,8 +568,7 @@ mod tests {
     /// One program's place and whether it asks before running.
     struct ConfirmationCase {
         uri: &'static str,
-        is_network: bool,
-        is_removable: bool,
+        place: ProgramPlace,
         asks: bool,
     }
 
@@ -461,32 +578,53 @@ mod tests {
         let cases = [
             ConfirmationCase {
                 uri: "file:///home/ada/bin/convert",
-                is_network: false,
-                is_removable: false,
+                place: ProgramPlace {
+                    is_network: false,
+                    is_removable: false,
+                    keeps_permissions: true,
+                },
                 asks: false,
             },
             ConfirmationCase {
                 uri: "file:///media/ada/USB/convert",
-                is_network: false,
-                is_removable: true,
+                place: ProgramPlace {
+                    is_network: false,
+                    is_removable: true,
+                    keeps_permissions: true,
+                },
                 asks: true,
             },
             ConfirmationCase {
                 uri: "file:///mnt/nas/convert",
-                is_network: true,
-                is_removable: false,
+                place: ProgramPlace {
+                    is_network: true,
+                    is_removable: false,
+                    keeps_permissions: true,
+                },
                 asks: true,
             },
             ConfirmationCase {
                 uri: "smb://nas/tools/convert",
-                is_network: true,
-                is_removable: false,
+                place: ProgramPlace {
+                    is_network: true,
+                    is_removable: false,
+                    keeps_permissions: true,
+                },
+                asks: true,
+            },
+            ConfirmationCase {
+                uri: "file:///media/ada/Windows/Users/ada/Downloads/tool",
+                place: ProgramPlace {
+                    is_network: false,
+                    is_removable: false,
+                    keeps_permissions: false,
+                },
                 asks: true,
             },
         ];
 
         for case in cases {
-            let asks = needs_run_confirmation(case.uri, case.is_network, case.is_removable);
+            let asks = needs_run_confirmation(case.uri, case.place);
             assert_eq!(asks, case.asks, "{}", case.uri);
         }
     }
