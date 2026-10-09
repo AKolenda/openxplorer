@@ -285,8 +285,8 @@
         "id": "super-e",
         "title": "Super+E on KDE Plasma",
         "paragraphs": [
-          "On KDE Plasma, Settings → Default apps → Keyboard shortcut → Use Super+E makes Super+E open OpenXplorer, as Win+E opens File Explorer in Windows. Plasma gives Super+E to Dolphin; OpenXplorer asks KDE's shortcut service to move it, keeps Dolphin's other shortcuts, and records which app had it in its settings folder. The change lasts across logins and shows in System Settings → Shortcuts.",
-          "Undo and troubleshooting → Give Super+E back returns it to the app that had it. If you have given Super+E to another app since, it is left alone. Other desktops and the Flatpak do not offer this."
+          "On KDE Plasma, turn on Settings → Default apps → Keyboard shortcut → Super+E opens OpenXplorer to make Super+E open OpenXplorer, as Win+E opens File Explorer in Windows. Plasma gives Super+E to Dolphin; OpenXplorer asks KDE's shortcut service to move it, keeps Dolphin's other shortcuts, and records which app had it in its settings folder. The change shows in System Settings → Shortcuts and lasts across logins.",
+          "Log out and back in after turning it on or off: Plasma follows the new Super+E only from the next login. Turning it off gives Super+E back to the app that had it; if you have given Super+E to another app since, it is left alone. Other desktops and the Flatpak do not offer this."
         ]
       },
       {

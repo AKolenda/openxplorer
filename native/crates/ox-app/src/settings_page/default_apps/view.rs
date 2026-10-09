@@ -10,7 +10,9 @@
 //! INT-030). While a change runs, Make default and Restore previous are
 //! disabled; its outcome is toasted and the status read again.
 
+use std::cell::Cell;
 use std::future::Future;
+use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -52,8 +54,10 @@ pub(super) struct DefaultAppsView {
     apply_file_dialogs: glib::WeakRef<gtk::Button>,
     restore_file_dialogs: glib::WeakRef<gtk::Button>,
     super_e_row: glib::WeakRef<SettingRow>,
-    use_super_e: glib::WeakRef<gtk::Button>,
-    restore_super_e: glib::WeakRef<gtk::Button>,
+    super_e: glib::WeakRef<gtk::Switch>,
+    /// True while the page sets the switch to what KDE says, so that is
+    /// not taken for the user turning it on or off.
+    showing_super_e: Rc<Cell<bool>>,
 }
 
 impl DefaultAppsView {
@@ -78,8 +82,8 @@ impl DefaultAppsView {
             apply_file_dialogs: controls.apply_file_dialogs.downgrade(),
             restore_file_dialogs: controls.restore_file_dialogs.downgrade(),
             super_e_row: controls.super_e_row.downgrade(),
-            use_super_e: controls.use_super_e.downgrade(),
-            restore_super_e: controls.restore_super_e.downgrade(),
+            super_e: controls.super_e.downgrade(),
+            showing_super_e: Rc::new(Cell::new(false)),
         };
         view.connect_changes(controls);
         view.connect_show_in_folder(controls);
@@ -175,19 +179,24 @@ impl DefaultAppsView {
         });
     }
 
-    /// Use Super+E and Give Super+E back (INT-033).
+    /// The Super+E switch (INT-033): on takes Super+E for `OpenXplorer`,
+    /// off gives it back. The status read after the change sets the switch
+    /// to what KDE then says, so a refused change turns it back.
     fn connect_super_e(&self, controls: &Controls) {
         let view = self.clone();
-        controls.use_super_e.connect_clicked(move |_| {
-            view.run_change(
-                |integration| async move { integration.enable_launch_shortcut().await.map(Some) },
-            );
-        });
-        let view = self.clone();
-        controls.restore_super_e.connect_clicked(move |_| {
-            view.run_change(
-                |integration| async move { integration.restore_launch_shortcut().await.map(Some) },
-            );
+        controls.super_e.connect_active_notify(move |switch| {
+            if view.showing_super_e.get() {
+                return;
+            }
+            if switch.is_active() {
+                view.run_change(
+                    |integration| async move { integration.enable_launch_shortcut().await.map(Some) },
+                );
+            } else {
+                view.run_change(|integration| async move {
+                    integration.restore_launch_shortcut().await.map(Some)
+                });
+            }
         });
     }
 
@@ -259,12 +268,13 @@ impl DefaultAppsView {
             &self.enable_file_dialogs,
             &self.apply_file_dialogs,
             &self.restore_file_dialogs,
-            &self.use_super_e,
-            &self.restore_super_e,
         ] {
             if let Some(button) = button.upgrade() {
                 button.set_sensitive(enabled);
             }
+        }
+        if let Some(switch) = self.super_e.upgrade() {
+            switch.set_sensitive(enabled);
         }
     }
 
@@ -287,11 +297,12 @@ impl DefaultAppsView {
         if let Some(row) = self.super_e_row.upgrade() {
             row.set_description(&shortcut.text());
         }
-        set_sensitive(
-            &self.use_super_e,
-            shortcut.is_available() && !shortcut.is_enabled(),
-        );
-        set_sensitive(&self.restore_super_e, shortcut.is_enabled());
+        if let Some(switch) = self.super_e.upgrade() {
+            self.showing_super_e.set(true);
+            switch.set_active(shortcut.is_enabled());
+            self.showing_super_e.set(false);
+            switch.set_sensitive(shortcut.is_available());
+        }
         if let Some(button) = self.make_default.upgrade() {
             button.set_sensitive(true);
         }

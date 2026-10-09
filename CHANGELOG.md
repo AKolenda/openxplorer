@@ -1,10 +1,10 @@
 # Unreleased
 
-- On KDE Plasma, Settings > Default apps > Use Super+E makes Super+E open
-  OpenXplorer, as Win+E opens File Explorer. It takes the shortcut from
-  Dolphin (keeping Dolphin's other shortcuts) through KDE's own shortcut
-  service, and Give Super+E back returns it. Nothing changes until you
-  click.
+- On KDE Plasma, the switch Settings > Default apps > Super+E opens
+  OpenXplorer makes Super+E open OpenXplorer, as Win+E opens File
+  Explorer. On takes the shortcut from Dolphin (keeping Dolphin's other
+  shortcuts) through KDE's own shortcut service; off gives it back. Log
+  out and back in after changing it for Super+E to follow.
 
 # 2.0.4 — 2026-10-09
 

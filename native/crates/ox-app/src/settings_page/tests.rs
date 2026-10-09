@@ -576,11 +576,13 @@ fn every_setting_of_the_python_page_has_a_row() {
 }
 
 /// Rows that work but disable their button while there is nothing for it
-/// to do, as Restore previous with no handler recorded (INT-030).
-const ROWS_FOLLOWING_THEIR_STATE: [&str; 3] = [
+/// to do, as Restore previous with no handler recorded (INT-030), or the
+/// Super+E switch outside KDE Plasma (INT-033).
+const ROWS_FOLLOWING_THEIR_STATE: [&str; 4] = [
     "Restore the previous file handlers",
     "Give ZIP files back to the previous app",
     "Open ZIP files from other apps with OpenXplorer",
+    "Super+E opens OpenXplorer",
 ];
 
 /// Every row of every category works: its controls take input, except

@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Super+E opens `OpenXplorer` on KDE Plasma, as Win+E opens File Explorer
-//! (INT-033): the status line and the changes the Default apps page asks
-//! for, run off the main thread.
+//! (INT-033): the line under the Default apps switch and the changes the
+//! switch asks for, run off the main thread. KDE Plasma 6 follows a changed
+//! launch shortcut only after the user logs out and back in, so the line
+//! and the messages say so.
 
 use ox_core::integration::{LaunchShortcut, LaunchShortcutStatus, RestoredShortcut};
 
 use super::changes::IntegrationError;
+
+/// The line under the switch where it can be used: KDE Plasma follows the
+/// change only from the next login.
+const AFTER_LOGIN: &str =
+    crate::i18n::message_id("Log out and back in after changing this for Super+E to follow.");
 use super::shortcut_backend::ShortcutBackend;
 use super::DesktopIntegration;
 
@@ -34,17 +41,16 @@ impl ShortcutStatus {
         self.0 == LaunchShortcutStatus::Ours
     }
 
-    /// The row's status line.
+    /// The line under the switch: that the change needs a new login, or
+    /// why the switch cannot be used here.
     pub(crate) fn text(&self) -> String {
         match &self.0 {
             LaunchShortcutStatus::Unsupported => {
                 ox_core::i18n::gettext("Available on KDE Plasma with the installed package.")
             }
-            LaunchShortcutStatus::Ours => ox_core::i18n::gettext("Super+E opens OpenXplorer."),
-            LaunchShortcutStatus::Other(name) => {
-                ox_core::i18n::format_message("Super+E opens {name}.", &[("name", name)])
+            LaunchShortcutStatus::Ours | LaunchShortcutStatus::Other(_) | LaunchShortcutStatus::Free => {
+                ox_core::i18n::gettext_static(AFTER_LOGIN).to_owned()
             }
-            LaunchShortcutStatus::Free => ox_core::i18n::gettext("Super+E is not used."),
             LaunchShortcutStatus::Unreachable(reason) => reason.clone(),
         }
     }
@@ -62,7 +68,9 @@ impl DesktopIntegration {
             .run_in_background(LaunchShortcut::enable)
             .await?;
         self.notify_changed();
-        Ok(ox_core::i18n::gettext("Super+E now opens OpenXplorer."))
+        Ok(ox_core::i18n::gettext(
+            "Super+E will open OpenXplorer once you log out and back in.",
+        ))
     }
 
     /// Gives Super+E back to the app it opened before.
@@ -78,8 +86,12 @@ impl DesktopIntegration {
             .await?;
         self.notify_changed();
         Ok(match restored {
-            RestoredShortcut::GivenBack => ox_core::i18n::gettext("Super+E opens the app it opened before."),
-            RestoredShortcut::Freed => ox_core::i18n::gettext("Super+E no longer opens OpenXplorer."),
+            RestoredShortcut::GivenBack => ox_core::i18n::gettext(
+                "Super+E will open the app it opened before once you log out and back in.",
+            ),
+            RestoredShortcut::Freed => {
+                ox_core::i18n::gettext("Super+E will stop opening OpenXplorer once you log out and back in.")
+            }
             RestoredShortcut::NotOurs => ox_core::i18n::gettext("Super+E was not opening OpenXplorer."),
         })
     }
@@ -104,11 +116,13 @@ mod tests {
 
     /// parity: INT-033
     #[test]
-    fn the_status_says_what_super_e_opens() {
+    fn the_line_says_to_log_in_again_or_why_super_e_cannot_change() {
+        let after_login = "Log out and back in after changing this for Super+E to follow.";
         let other = ShortcutStatus(LaunchShortcutStatus::Other("Dolphin".to_owned()));
-        assert_eq!(other.text(), "Super+E opens Dolphin.");
+        assert_eq!(other.text(), after_login);
         assert!(other.is_available() && !other.is_enabled());
         let ours = ShortcutStatus(LaunchShortcutStatus::Ours);
+        assert_eq!(ours.text(), after_login);
         assert!(ours.is_enabled());
         let elsewhere = ShortcutStatus::default();
         assert!(!elsewhere.is_available());
@@ -118,5 +132,6 @@ mod tests {
         );
         let silent = ShortcutStatus(LaunchShortcutStatus::Unreachable("no answer".to_owned()));
         assert!(!silent.is_available());
+        assert_eq!(silent.text(), "no answer");
     }
 }

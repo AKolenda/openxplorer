@@ -1025,32 +1025,23 @@ msgid "Available on KDE Plasma with the installed package."
 msgstr ""
 
 #: crates/ox-app/src/integration/launch_shortcut_service.rs
-msgid "Super+E is not used."
-msgstr ""
-
-#: crates/ox-app/src/integration/launch_shortcut_service.rs
-msgid "Super+E no longer opens OpenXplorer."
-msgstr ""
-
-#: crates/ox-app/src/integration/launch_shortcut_service.rs
-msgid "Super+E now opens OpenXplorer."
-msgstr ""
-
-#: crates/ox-app/src/integration/launch_shortcut_service.rs
-msgid "Super+E opens OpenXplorer."
-msgstr ""
-
-#: crates/ox-app/src/integration/launch_shortcut_service.rs crates/ox-app/src/settings_page/default_apps.rs
-msgid "Super+E opens the app it opened before."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/integration/launch_shortcut_service.rs
-msgid "Super+E opens {name}."
+msgid "Log out and back in after changing this for Super+E to follow."
 msgstr ""
 
 #: crates/ox-app/src/integration/launch_shortcut_service.rs
 msgid "Super+E was not opening OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/integration/launch_shortcut_service.rs
+msgid "Super+E will open OpenXplorer once you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/launch_shortcut_service.rs
+msgid "Super+E will open the app it opened before once you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/launch_shortcut_service.rs
+msgid "Super+E will stop opening OpenXplorer once you log out and back in."
 msgstr ""
 
 #: crates/ox-app/src/integration/open_with_dialog.rs
@@ -2166,7 +2157,7 @@ msgid "Also open ZIP files"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
-msgid "As Win+E opens File Explorer. Changes KDE Plasma's keyboard shortcut."
+msgid "As Win+E opens File Explorer. On takes Super+E from the app that opens it now; off gives it back. Changes KDE Plasma's keyboard shortcut."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -2199,10 +2190,6 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
 msgid "From other apps"
-msgstr ""
-
-#: crates/ox-app/src/settings_page/default_apps.rs
-msgid "Give Super+E back"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -2306,10 +2293,6 @@ msgid "Use OpenXplorer for ZIPs"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
-msgid "Use Super+E"
-msgstr ""
-
-#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "What opens where"
 msgstr ""
 
@@ -2366,15 +2349,11 @@ msgid "smb:// links from browsers and chat apps."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
-msgid "super e meta e win e windows key keyboard shortcut global shortcut launch plasma kde system settings shortcuts"
+msgid "super e meta e win e windows key keyboard shortcut global shortcut launch plasma kde system settings shortcuts give back undo log out"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
 msgid "troubleshooting zorin + brave setup and troubleshooting help guide portal flatpak snap"
-msgstr ""
-
-#: crates/ox-app/src/settings_page/default_apps.rs
-msgid "undo super e meta e keyboard shortcut plasma kde"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -3144,7 +3123,7 @@ msgid "5. Flatpak/Snap Brave or a remembered portal choice may still use another
 msgstr ""
 
 #: crates/ox-app/src/settings_page/troubleshooting.rs
-msgid "6. Pin the installed OpenXplorer folder icon to your Zorin panel. Right-click it → Open windows… lists existing windows; New window creates another. Super+E is a separate system keyboard shortcut; on KDE Plasma, Default apps → Use Super+E gives it to OpenXplorer."
+msgid "6. Pin the installed OpenXplorer folder icon to your Zorin panel. Right-click it → Open windows… lists existing windows; New window creates another. Super+E is a separate system keyboard shortcut; on KDE Plasma, the Default apps switch Super+E opens OpenXplorer gives it to OpenXplorer after you log out and back in."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/troubleshooting.rs

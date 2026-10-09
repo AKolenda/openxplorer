@@ -281,16 +281,24 @@ fn show_in_folder_starts_disabled_and_its_test_needs_the_service() {
     });
 }
 
-/// Use Super+E takes Super+E from Dolphin for `OpenXplorer`, as Win+E
-/// opens File Explorer, and Give Super+E back returns it to Dolphin.
+/// The Super+E switch takes Super+E from Dolphin for `OpenXplorer`, as
+/// Win+E opens File Explorer, and turning it off gives it back; the line
+/// under it says to log out and back in, which KDE Plasma needs.
 ///
 /// parity: INT-033
 #[gtk::test]
-fn super_e_is_given_to_openxplorer_and_back_to_dolphin() {
+fn the_super_e_switch_takes_super_e_from_dolphin_and_gives_it_back() {
     let default_apps = DefaultAppsTest::open();
     let row = default_apps.row(super::SUPER_E.title);
-    let shows = |text: &str| row.shown_description() == text;
-    wait_until("the shortcut status", || shows("Super+E opens Dolphin."));
+    let switch = row
+        .controls()
+        .into_iter()
+        .find_map(|control| control.downcast::<gtk::Switch>().ok())
+        .expect("Super+E is an on/off switch");
+    let after_login = "Log out and back in after changing this for Super+E to follow.";
+    wait_until("the shortcut status", || switch.is_sensitive());
+    assert_eq!(row.shown_description(), after_login);
+    assert!(!switch.is_active(), "Dolphin has Super+E");
     let table = default_apps.page.context().desktop_integration().shortcut_table();
     let keys_of = |component: &str| {
         let table = table.lock().unwrap_or_else(PoisonError::into_inner);
@@ -301,23 +309,19 @@ fn super_e_is_given_to_openxplorer_and_back_to_dolphin() {
             .unwrap_or_default()
     };
     let ours = format!("{}.desktop", crate::config::APP_ID);
-    assert!(default_apps.button("Use Super+E").is_sensitive());
-    assert!(!default_apps.button(super::RESTORE_SUPER_E.title).is_sensitive());
 
-    default_apps.button("Use Super+E").emit_clicked();
+    switch.set_active(true);
 
-    wait_until("Super+E to open OpenXplorer", || {
-        shows("Super+E opens OpenXplorer.")
-    });
-    assert_eq!(keys_of(&ours), [SUPER_E]);
+    wait_until("Super+E to be OpenXplorer's", || keys_of(&ours) == [SUPER_E]);
     assert!(keys_of(DOLPHIN).is_empty());
-    assert!(!default_apps.button("Use Super+E").is_sensitive());
+    wait_until("the status after the change", || switch.is_sensitive());
+    assert!(switch.is_active(), "the switch stays on");
+    assert_eq!(row.shown_description(), after_login);
 
-    default_apps.button(super::RESTORE_SUPER_E.title).emit_clicked();
+    switch.set_active(false);
 
-    wait_until("Super+E to open Dolphin again", || {
-        shows("Super+E opens Dolphin.")
-    });
-    assert_eq!(keys_of(DOLPHIN), [SUPER_E]);
+    wait_until("Super+E to be Dolphin's again", || keys_of(DOLPHIN) == [SUPER_E]);
     assert!(keys_of(&ours).is_empty());
+    wait_until("the status after the change", || switch.is_sensitive());
+    assert!(!switch.is_active());
 }

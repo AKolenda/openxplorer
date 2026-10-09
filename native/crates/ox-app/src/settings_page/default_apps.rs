@@ -101,15 +101,10 @@ const FILE_DIALOGS: RowText = RowText {
 
 const SUPER_E: RowText = RowText {
     title: "Super+E opens OpenXplorer",
-    description: "As Win+E opens File Explorer. Changes KDE Plasma's keyboard shortcut.",
+    description: "As Win+E opens File Explorer. On takes Super+E from the app that opens it now; off \
+                  gives it back. Changes KDE Plasma's keyboard shortcut.",
     keywords: "super e meta e win e windows key keyboard shortcut global shortcut launch plasma kde \
-               system settings shortcuts",
-};
-
-const RESTORE_SUPER_E: RowText = RowText {
-    title: "Give Super+E back",
-    description: "Super+E opens the app it opened before.",
-    keywords: "undo super e meta e keyboard shortcut plasma kde",
+               system settings shortcuts give back undo log out",
 };
 
 const TROUBLESHOOTING: RowText = RowText {
@@ -168,8 +163,7 @@ struct Controls {
     apply_file_dialogs: gtk::Button,
     restore_file_dialogs: gtk::Button,
     super_e_row: SettingRow,
-    use_super_e: gtk::Button,
-    restore_super_e: gtk::Button,
+    super_e: gtk::Switch,
 }
 
 impl Controls {
@@ -226,10 +220,16 @@ impl Controls {
                 ButtonStyle::Bordered,
             ),
             super_e_row: SettingRow::new(SUPER_E),
-            use_super_e: parts::button(&ox_core::i18n::gettext("Use Super+E"), ButtonStyle::Accent),
-            restore_super_e: parts::button(RESTORE_SUPER_E.title, ButtonStyle::Bordered),
+            super_e: insensitive_switch(),
         }
     }
+}
+
+/// A settings switch that waits, off, until the status is read.
+fn insensitive_switch() -> gtk::Switch {
+    let switch = parts::switch();
+    switch.set_sensitive(false);
+    switch
 }
 
 /// A settings switch that starts `active`.
@@ -335,12 +335,12 @@ fn refresh_button(view: &DefaultAppsView) -> gtk::Button {
     refresh
 }
 
-/// "Super+E opens `OpenXplorer`", with Use Super+E (INT-033); its
-/// description becomes the status line.
+/// "Super+E opens `OpenXplorer`", an on/off switch (INT-033); the line
+/// under it says to log out and back in, or why it cannot be used here.
 fn super_e_group(controls: &Controls) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Keyboard shortcut"));
     let row = &controls.super_e_row;
-    row.add_control(&controls.use_super_e, ControlName::OwnLabel);
+    row.add_control(&controls.super_e, ControlName::RowTitle);
     group.add_row(row);
     group
 }
@@ -354,7 +354,6 @@ fn undo_group(page: &SettingsPage, controls: &Controls) -> SettingsGroup {
         (RESTORE_ZIP_HANDLER, &controls.restore_zip),
         (DISABLE_SHOW_IN_FOLDER, &controls.disable_show_in_folder),
         (RESTORE_FILE_DIALOGS, &controls.restore_file_dialogs),
-        (RESTORE_SUPER_E, &controls.restore_super_e),
     ] {
         let row = SettingRow::new(text);
         row.add_control(button, ControlName::OwnLabel);
