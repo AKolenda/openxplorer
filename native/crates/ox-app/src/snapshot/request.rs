@@ -228,8 +228,8 @@ mod tests {
         );
         assert_eq!(asked.settings_search.as_deref(), Some("zoom"));
         assert_eq!(asked.search, None);
-        let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SETTINGS_VARIABLE, "general")]);
-        assert!(refused.is_err(), "general is not a settings page");
+        let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SETTINGS_VARIABLE, "colours")]);
+        assert!(refused.is_err(), "colours is not a settings page");
     }
 
     #[test]

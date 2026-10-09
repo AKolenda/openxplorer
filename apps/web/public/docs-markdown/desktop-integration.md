@@ -4,7 +4,7 @@ Make explicit changes, with a way back.
 
 ## Set folder and SMB handlers
 
-Settings → Default file explorer → Make OpenXplorer default changes the per-user folder and SMB associations and records previous handlers. Installing the package does not do this for you.
+Settings → Default apps → Make OpenXplorer default changes the per-user folder and SMB associations and records previous handlers. Installing the package does not do this for you.
 
 ## Brave: Show in folder
 
@@ -16,7 +16,7 @@ Restart Brave after changing handlers. Test Show in folder checks FileManager1, 
 
 ## Open ZIP downloads in OpenXplorer
 
-In Settings → Default file explorer, click Use OpenXplorer for ZIPs. This is an explicit, per-user change to ZIP associations, with a Restore ZIP handler button. It does not change PDF, video, or document defaults. Installation never changes these associations.
+In Settings → ZIP & archives, click Use OpenXplorer for ZIPs. This is an explicit, per-user change to ZIP associations; Settings → Default apps → Undo and troubleshooting has the Restore ZIP handler button. It does not change PDF, video, or document defaults. Installation never changes these associations.
 
 A ZIP opens in the built-in ZIP browser; this setting does not automatically extract it. You can instead leave ZIPs assigned to an external archive manager.
 
@@ -28,7 +28,7 @@ openxplorer --diagnose
 
 ## Open and Save dialogs
 
-Settings → Default apps → Apps’ Open and Save dialogs → Enable makes other applications choose and save files in an OpenXplorer window: the same navigation pane, address bar and search, with File name, Save as type and the Save or Open button at the bottom. It works for applications that use the desktop portal for file dialogs, such as Chrome, Firefox and Flatpak apps; applications that draw their own dialog keep it. As in Windows, the File name box takes a name, a path from the folder shown, ~/… or a full path: a folder opens, a file is chosen, and Save adds the chosen type’s extension to a name without one. A file typed in the address bar is chosen too. Escape and Ctrl+Q cancel the dialog, Alt+Left, Alt+Right and Alt+Up work from the File name box, and Ctrl+N opens no other window.
+Settings → Default apps → Other apps' Open and Save dialogs → Enable makes other applications choose and save files in an OpenXplorer window: the same navigation pane, address bar and search, with File name, Save as type and the Save or Open button at the bottom. It works for applications that use the desktop portal for file dialogs, such as Chrome, Firefox and Flatpak apps; applications that draw their own dialog keep it. As in Windows, the File name box takes a name, a path from the folder shown, ~/… or a full path: a folder opens, a file is chosen, and Save adds the chosen type’s extension to a name without one. A file typed in the address bar is chosen too. Escape and Ctrl+Q cancel the dialog, Alt+Left, Alt+Right and Alt+Up work from the File name box, and Ctrl+N opens no other window.
 
 Enabling writes one preference into your own desktop-portal configuration (the file the portal reads now, or a new ~/.config/xdg-desktop-portal/<desktop>-portals.conf) and records what the file held; every other portal, such as screenshots or screen sharing, keeps its backend. Click Apply now to restart the desktop portal when it runs as a user service, or log out and back in. Saving over an existing file always asks first.
 

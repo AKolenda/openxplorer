@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Search & indexing: the folders to index, how the index keeps current,
-//! and folder sizes.
+//! Search: the folders to index and how the index keeps current.
 //!
-//! Ports the "Search cache" and "Folder sizes" sections of
+//! Ports the "Search cache" section of
 //! `renderSettingsPage` in `v2.0.0:desktop/ui/app.js` (SET-006, SET-008,
 //! SET-009), with the options of the settings mockup, including "Index
 //! pinned folders automatically" (the owner's decision of 2026-09-28 that
 //! anything pinned is indexed by default, SRCH-040). A status card says
 //! how many folders and names instant search covers, with "Refresh all".
 //! The folder list opens as a page of its own
-//! ([`super::indexed_folders`]), with the limits of indexing, and so do
-//! the details of folder sizes. The page itself keeps one note, on
-//! privacy, as the mockup does. Watching and the network interval are the
+//! ([`super::indexed_folders`]), with the limits of indexing. The note on
+//! privacy is in the indexed folders row's ⓘ. Watching and the network interval are the
 //! Python app's `autoIndex` and `networkInterval`, which the index service
 //! follows at once.
 
@@ -35,10 +33,11 @@ use super::{SettingsPage, SharedHandler, MESSAGE};
 use crate::icons::Icon;
 
 const FOLDERS_TO_INDEX: RowText = RowText {
-    title: "Folders to index",
+    title: "Indexed folders",
     description: "Check a folder to index the names and paths of its files and subfolders. SMB \
                   folders work too.",
-    keywords: "search cache add custom folder directory path local disk smb nas entire drive 2tb \
+    keywords:
+        "folders to index search cache add custom folder directory path local disk smb nas entire drive 2tb \
                indexing refresh clear",
 };
 
@@ -50,32 +49,17 @@ const PINNED_FOLDERS: RowText = RowText {
 };
 
 const WATCH_FOLDERS: RowText = RowText {
-    title: "Watch folders for live changes",
+    title: "Watch folders for changes",
     description: "Watch enabled local folders for changes while OpenXplorer is open.",
-    keywords: "inotify automatic file updates index",
+    keywords: "watch folders for live changes inotify automatic file updates index",
 };
 
 const NETWORK_CHECKS: RowText = RowText {
-    title: "Network / fallback checks",
+    title: "Check network and unwatched folders every",
     description: "SMB and unwatched folders are checked for changes this often.",
-    keywords: "network refresh interval smb polling nas seconds minute. SMB and unwatched folders \
+    keywords: "network / fallback checks network refresh interval smb polling nas seconds minute. SMB and unwatched folders \
                use incremental directory checks, not push notifications. Large trees take longer \
                than one interval.",
-};
-
-const FOLDER_SIZES: RowText = RowText {
-    title: "Calculate folder sizes",
-    description: "Right-click a folder → Calculate folder size. Results last for this session.",
-    keywords: "zfs logical bytes snapshots disk usage. Results are kept only for this window \
-               session.",
-};
-
-const HOW_SIZES_ARE_COUNTED: RowText = RowText {
-    title: "How sizes are counted",
-    description: "Logical file bytes, what a scan skips, and its limits.",
-    keywords: "folder sizes scans run on demand outside the browsing worker pool compressed zfs \
-               space snapshot usage hidden files links nested filesystem mounts snapshot \
-               collections 1 million entries 5 minutes partial total cancel recalculate",
 };
 
 /// How often network and unwatched folders are checked, as the Python
@@ -103,35 +87,18 @@ const PRIVACY_NOTE: &str = crate::i18n::message_id(
                             symbolic links are skipped.",
 );
 
-/// The two paragraphs of the Python "Folder sizes" section.
-const FOLDER_SIZES_HELP: [&str; 2] = [
-    "Right-click a folder → Calculate folder size. Scans run on demand, outside the browsing worker \
-     pool. Results are logical file bytes, not compressed ZFS space or snapshot usage. They are \
-     kept only for this window session. Recalculate to pick up later changes.",
-    "Scans include hidden files, but skip links, nested filesystem mounts and snapshot \
-     collections. Each folder is limited to 1 million entries or 5 minutes between I/O calls. \
-     Inaccessible or excluded entries produce a partial total. Cancel stops the active scan and \
-     any queued folders.",
-];
-
 /// The status card's line while nothing is indexed.
 const NOTHING_INDEXED: &str =
     crate::i18n::message_id("Search file names in the folders you choose, even while a share is offline.");
 
-/// The Search & indexing page.
+/// The Search page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
-    let category = Category::SearchAndIndexing;
+    let category = Category::Search;
     let indexing = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     let card = status_card(page);
     indexing.append_card(&card);
     follow_cache_status(page, &card);
-    indexing.append_group(&folders_group(page));
-    indexing.append_group(&options_group(page));
-    indexing.append_text(&parts::note(
-        Icon::Info,
-        ox_core::i18n::gettext_static(PRIVACY_NOTE),
-    ));
-    indexing.append_group(&folder_sizes_group(page));
+    indexing.append_group(&instant_search_group(page));
     indexing
 }
 
@@ -232,10 +199,12 @@ impl CacheSummary {
     }
 }
 
-/// "Folders to index", which opens the Indexed folders page.
-fn folders_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new(&ox_core::i18n::gettext("Indexed folders"));
+/// "Indexed folders", which opens the Indexed folders page, and how the
+/// index keeps current.
+fn instant_search_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Instant search"));
     let row = SettingRow::new(FOLDERS_TO_INDEX);
+    row.add_details(ox_core::i18n::gettext_static(PRIVACY_NOTE));
     let manage = parts::page_button(&ox_core::i18n::gettext("Manage…"));
     manage.connect_clicked(glib::clone!(
         #[weak]
@@ -244,11 +213,6 @@ fn folders_group(page: &SettingsPage) -> SettingsGroup {
     ));
     row.add_control(&manage, ControlName::OwnLabel);
     group.add_row(&row);
-    group
-}
-
-fn options_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new(&ox_core::i18n::gettext("Options"));
     group.add_row(&pinned_folders_row(page));
     let watch = SettingRow::new(WATCH_FOLDERS);
     let auto_index = PreferenceBinding {
@@ -337,36 +301,6 @@ impl SettingsPage {
             page.emit_by_name::<()>(MESSAGE, &[&error.to_string()]);
         });
     }
-}
-
-/// "Calculate folder sizes", a command of the folder's context menu, and
-/// the row that opens how sizes are counted.
-fn folder_sizes_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new(&ox_core::i18n::gettext("Folder sizes"));
-    group.add_row(&SettingRow::new(FOLDER_SIZES));
-    let details = SettingRow::new(HOW_SIZES_ARE_COUNTED);
-    let open = parts::chevron_button(HOW_SIZES_ARE_COUNTED.title);
-    open.connect_clicked(glib::clone!(
-        #[weak]
-        page,
-        move |_| page.show_view(SettingsView::Subpage(Subpage::FolderSizes))
-    ));
-    details.add_control(&open, ControlName::OwnLabel);
-    group.add_row(&details);
-    group
-}
-
-/// The page of how folder sizes are counted: the Python section's help.
-pub(super) fn build_folder_sizes() -> SettingsSection {
-    let sizes = SettingsSection::new(
-        &ox_core::i18n::gettext("Folder sizes"),
-        "How Calculate folder size counts a folder, and what it leaves out.",
-        PageKind::Subpage,
-    );
-    for paragraph in FOLDER_SIZES_HELP {
-        sizes.append_text(&parts::paragraph(paragraph));
-    }
-    sizes
 }
 
 #[cfg(test)]
