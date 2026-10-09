@@ -14,9 +14,9 @@ Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with ta
 
 ## Install
 
-Version **2.0.3** is a native GTK 4 application written in Rust (`native/`). It keeps the same look, settings, pins and saved passwords as 1.x; see the [changelog](CHANGELOG.md) for what 2.0.3 adds. Get it from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases):
+Version **2.0.4** is a native GTK 4 application written in Rust (`native/`). It keeps the same look, settings, pins and saved passwords as 1.x; see the [changelog](CHANGELOG.md) for what 2.0.4 adds. Get it from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases):
 
-- **Zorin OS 18, Ubuntu 24.04 and newer, Debian 13:** `openxplorer_2.0.3_all.deb` (x86-64). OpenXplorer 1.1.x offers it in **Check for updates**.
+- **Zorin OS 18, Ubuntu 24.04 and newer, Debian 13:** `openxplorer_2.0.4_all.deb` (x86-64). OpenXplorer 1.1.x offers it in **Check for updates**.
 - **Fedora, openSUSE Tumbleweed, Arch Linux:** the `.rpm` or `.pkg.tar.zst` of the release, when the release lists one.
 - **Any distribution with Flatpak**, including Debian 12 and others with GTK older than 4.14: `io.winspace.Development.flatpak`.
 

@@ -30,7 +30,7 @@ Since 2.0.0 the desktop app is a native GTK 4 application written in Rust. GIO/G
 
 ## Know what you are installing
 
-Version 2.0.0 replaces the Python app with the native GTK 4 app under the same name, settings and saved passwords, and adds Fluent icons, a categorised Settings page, undo, and Flatpak and distribution packages. Zorin is the primary target; Ubuntu 24.04+, Debian 13, Fedora, openSUSE and Arch are supported through their packages, and every other distribution through the Flatpak. Version 2.0.1 adds split panes, a Compact view, a folder tree, thumbnails, transfer jobs with undo, SFTP, FTP, WebDAV and NFS locations, content search and optional Open and Save dialogs for other apps. Version 2.0.2 opens ZIPs like folders, makes Extract all and the Open and Save dialogs work as in Windows, and adds Windows 11's Compact view and collapsible This PC and Network sections. Version 2.0.3 adds Windows Explorer's Group by, separate from the sort, makes copies ask about a single unreadable file and about names Windows cannot use, and says when a drive is read-only or a tab's drive or share goes away. The known gaps are listed in the changelog.
+Version 2.0.0 replaces the Python app with the native GTK 4 app under the same name, settings and saved passwords, and adds Fluent icons, a categorised Settings page, undo, and Flatpak and distribution packages. Zorin is the primary target; Ubuntu 24.04+, Debian 13, Fedora, openSUSE and Arch are supported through their packages, and every other distribution through the Flatpak. Version 2.0.1 adds split panes, a Compact view, a folder tree, thumbnails, transfer jobs with undo, SFTP, FTP, WebDAV and NFS locations, content search and optional Open and Save dialogs for other apps. Version 2.0.2 opens ZIPs like folders, makes Extract all and the Open and Save dialogs work as in Windows, and adds Windows 11's Compact view and collapsible This PC and Network sections. Version 2.0.3 adds Windows Explorer's Group by, separate from the sort, makes copies ask about a single unreadable file and about names Windows cannot use, and says when a drive is read-only or a tab's drive or share goes away. Version 2.0.4 adds item check boxes as in Windows 11 and a redesigned Settings page, with a search across every page. The known gaps are listed in the changelog.
 
 > Use a disposable folder and a non-critical share first. SMB servers other than the maintainer's, phones and USB drives have not yet been accepted on real hardware with the native app.
 
@@ -40,4 +40,4 @@ Read Installation, open your home directory, and test a network share. Enable in
 
 ---
 
-OpenXplorer 2.0.3. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.4. Project-authored documentation: AGPL-3.0-only.
