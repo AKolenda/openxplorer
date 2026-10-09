@@ -9,6 +9,7 @@
 * fix(views): keep a folder's expand arrow inside its row's highlight by @addition-official in https://github.com/AKolenda/openxplorer/pull/86
 * fix(views): show item check boxes as Windows 11 does by @addition-official in https://github.com/AKolenda/openxplorer/pull/85
 * feat(settings): lay out the Settings page anew by @addition-official in https://github.com/AKolenda/openxplorer/pull/82
+* fix(security): run a dropped-on file only when it really is a program by @addition-official in https://github.com/AKolenda/openxplorer/pull/89 (GHSA-9x68-px3w-xgg8)
 
 ## Packages
 Download them from the assets below.

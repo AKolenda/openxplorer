@@ -118,7 +118,8 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %changelog
 * Fri Oct 09 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.4-1
 - OpenXplorer 2.0.4: item check boxes as in Windows 11, a redesigned
-  Settings page, and Open and Save dialogs that no longer wait on shares.
+  Settings page, Open and Save dialogs that no longer wait on shares, and
+  a fix for programs run by a drop on Windows drives (GHSA-9x68-px3w-xgg8).
 
 * Tue Oct 06 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.3-1
 - OpenXplorer 2.0.3: Group by as in Windows Explorer, safer copies and
