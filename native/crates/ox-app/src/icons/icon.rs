@@ -236,7 +236,7 @@ pub(crate) enum Icon {
     WeatherSunny,
     /// `window_console_20_regular`: Open in Terminal.
     WindowConsole,
-    /// `window_multiple_20_regular`: the Windows & tabs settings.
+    /// `window_multiple_20_regular`: the General settings.
     WindowMultiple,
     /// `window_new_20_regular`: New window, in menus and in Settings.
     WindowNew,

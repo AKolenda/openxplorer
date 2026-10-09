@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Windows & tabs ▸ Startup: where new windows open (TAB-055) and whether
+//! General ▸ Start up: where new windows open (TAB-055) and whether
 //! a start reopens the last window's tabs (TAB-053).
 //!
 //! Ports Dolphin's Startup page ("Show on startup" with "Use Current
@@ -22,16 +22,18 @@ use crate::locations::{self, Page};
 use crate::window::ButtonStyle;
 
 const STARTUP_FOLDER: RowText = RowText {
-    title: "Open new windows at",
+    title: "New windows open at",
     description: "The folder a new window shows first. Leave it empty for Home.",
-    keywords: "startup start home folder location default show on startup open explorer to",
+    keywords: "open new windows at startup start home folder location default show on startup \
+               open explorer to",
 };
 
 const RESTORE_SESSION: RowText = RowText {
-    title: "Restore previous tabs at startup",
+    title: "Reopen my tabs when OpenXplorer starts",
     description: "Starting OpenXplorer without a folder reopens the tabs and split panes the last \
                   window had.",
-    keywords: "session remember reopen restore tabs last time startup logon",
+    keywords: "restore previous tabs at startup session remember reopen restore tabs last time \
+               startup logon",
 };
 
 /// The startup folder `typed` asks for, relative to `base`: its canonical
@@ -77,9 +79,9 @@ fn shown_folder(uri: Option<&str>) -> String {
     }
 }
 
-/// The Startup group.
+/// The Start up group.
 pub(super) fn startup_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new(&ox_core::i18n::gettext("Startup"));
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Start up"));
     group.add_row(&startup_folder_row(page));
     let restore = SettingRow::new(RESTORE_SESSION);
     let binding = PreferenceBinding {
@@ -94,7 +96,7 @@ pub(super) fn startup_group(page: &SettingsPage) -> SettingsGroup {
     group
 }
 
-/// "Open new windows at": the folder's field, "Use current location" and
+/// "New windows open at": the folder's field, "Use current location" and
 /// "Use Home".
 fn startup_folder_row(page: &SettingsPage) -> SettingRow {
     let row = SettingRow::new(STARTUP_FOLDER);

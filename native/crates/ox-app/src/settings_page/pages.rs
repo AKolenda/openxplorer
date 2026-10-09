@@ -5,16 +5,19 @@
 //! was one long page of sections. The native page shows one [`Category`]
 //! at a time, chosen in a list on the left, as the `ChatGPT` and T3 Code
 //! settings do (SET-019), and long lists open as a [`Subpage`] of their
-//! own. The categories follow the Python sections, grouped by what the
-//! user wants to change:
+//! own. The categories follow the 2026-10 settings mockup, grouped by what
+//! the user wants to change; every setting of the Python sections is on
+//! one of them:
 //!
 //! | Category | Python sections |
 //! |---|---|
+//! | General | Windows & tabs |
 //! | Appearance | Appearance & layout |
-//! | Search & indexing | Search cache, Folder sizes |
-//! | Default apps | Default file explorer |
-//! | Windows & tabs | Windows & tabs |
-//! | Brave & downloads | Brave & downloads |
+//! | Files & folders | Appearance & layout, Folder sizes |
+//! | ZIP & archives | Default file explorer (ZIP files) |
+//! | Confirmations | (Dolphin's Confirmations) |
+//! | Search | Search cache |
+//! | Default apps | Default file explorer, Brave & downloads |
 //! | About | OpenXplorer · License & source |
 
 use crate::icons::Icon;
@@ -22,28 +25,35 @@ use crate::icons::Icon;
 /// One category of settings, as the list on the left names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Category {
+    /// Start up, windows and tabs, the address bar and dragging.
+    General,
     /// Theme, text size, the right-click menu and the pane widths.
     Appearance,
-    /// The search index and folder sizes.
-    SearchAndIndexing,
-    /// Which app opens folders, SMB links and ZIP files, and Show in folder.
+    /// Folder views, the details view, previews and folder sizes.
+    FilesAndFolders,
+    /// How ZIP and TAR archives open.
+    Archives,
+    /// The questions asked before deleting, running and closing.
+    Confirmations,
+    /// The search index.
+    Search,
+    /// Which app opens folders, SMB links and ZIP files, Show in folder,
+    /// the file dialogs and Brave's downloads.
     DefaultApps,
-    /// Open windows and moving tabs between them.
-    WindowsAndTabs,
-    /// Brave's download folder.
-    BraveAndDownloads,
     /// The build, updates and the licence.
     About,
 }
 
 impl Category {
     /// Every category, in the order the list shows them.
-    pub(crate) const ALL: [Category; 6] = [
+    pub(crate) const ALL: [Category; 8] = [
+        Category::General,
         Category::Appearance,
-        Category::SearchAndIndexing,
+        Category::FilesAndFolders,
+        Category::Archives,
+        Category::Confirmations,
+        Category::Search,
         Category::DefaultApps,
-        Category::WindowsAndTabs,
-        Category::BraveAndDownloads,
         Category::About,
     ];
 
@@ -51,11 +61,13 @@ impl Category {
     /// `OPENXPLORER_SETTINGS`.
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
+            Category::General => "general",
             Category::Appearance => "appearance",
-            Category::SearchAndIndexing => "search",
+            Category::FilesAndFolders => "files",
+            Category::Archives => "archives",
+            Category::Confirmations => "confirmations",
+            Category::Search => "search",
             Category::DefaultApps => "default-apps",
-            Category::WindowsAndTabs => "windows",
-            Category::BraveAndDownloads => "brave",
             Category::About => "about",
         }
     }
@@ -63,11 +75,13 @@ impl Category {
     /// The name in the list and the page title.
     pub(crate) const fn title(self) -> &'static str {
         match self {
+            Category::General => crate::i18n::message_id("General"),
             Category::Appearance => crate::i18n::message_id("Appearance"),
-            Category::SearchAndIndexing => crate::i18n::message_id("Search & indexing"),
+            Category::FilesAndFolders => crate::i18n::message_id("Files & folders"),
+            Category::Archives => crate::i18n::message_id("ZIP & archives"),
+            Category::Confirmations => crate::i18n::message_id("Confirmations"),
+            Category::Search => crate::i18n::message_id("Search"),
             Category::DefaultApps => crate::i18n::message_id("Default apps"),
-            Category::WindowsAndTabs => crate::i18n::message_id("Windows & tabs"),
-            Category::BraveAndDownloads => crate::i18n::message_id("Brave & downloads"),
             Category::About => crate::i18n::message_id("About"),
         }
     }
@@ -75,19 +89,23 @@ impl Category {
     /// The line under the page title.
     pub(crate) const fn lead(self) -> &'static str {
         match self {
+            Category::General => {
+                crate::i18n::message_id("How windows and tabs open, and what the address bar shows.")
+            }
             Category::Appearance => crate::i18n::message_id("How OpenXplorer looks in every window."),
-            Category::SearchAndIndexing => crate::i18n::message_id(
+            Category::FilesAndFolders => {
+                crate::i18n::message_id("How folders, their items and previews are shown.")
+            }
+            Category::Archives => crate::i18n::message_id("How ZIP and TAR archives open."),
+            Category::Confirmations => {
+                crate::i18n::message_id("What OpenXplorer asks before it deletes, runs or closes.")
+            }
+            Category::Search => crate::i18n::message_id(
                 "Keep a private list of file names so searches in these folders are instant.",
             ),
             Category::DefaultApps => crate::i18n::message_id(
                 "Choose what opens when you open a folder, a network link or a ZIP file.",
             ),
-            Category::WindowsAndTabs => {
-                crate::i18n::message_id("Open more windows and move tabs and files between them.")
-            }
-            Category::BraveAndDownloads => {
-                crate::i18n::message_id("Save Brave's downloads in your Linux Downloads folder.")
-            }
             Category::About => {
                 crate::i18n::message_id("What this build is, how it is updated and its licence.")
             }
@@ -97,11 +115,13 @@ impl Category {
     /// The glyph before the name in the list.
     pub(crate) const fn icon(self) -> Icon {
         match self {
+            Category::General => Icon::WindowMultiple,
             Category::Appearance => Icon::PaintBrush,
-            Category::SearchAndIndexing => Icon::Search,
+            Category::FilesAndFolders => Icon::Folder,
+            Category::Archives => Icon::FolderZip,
+            Category::Confirmations => Icon::ShieldLock,
+            Category::Search => Icon::Search,
             Category::DefaultApps => Icon::Apps,
-            Category::WindowsAndTabs => Icon::WindowMultiple,
-            Category::BraveAndDownloads => Icon::ArrowDownload,
             Category::About => Icon::Info,
         }
     }
@@ -110,11 +130,13 @@ impl Category {
     /// (`resources/skin/settings.css`).
     pub(crate) const fn css_class(self) -> &'static str {
         match self {
+            Category::General => "category-general",
             Category::Appearance => "category-appearance",
-            Category::SearchAndIndexing => "category-search",
+            Category::FilesAndFolders => "category-files",
+            Category::Archives => "category-archives",
+            Category::Confirmations => "category-confirmations",
+            Category::Search => "category-search",
             Category::DefaultApps => "category-default-apps",
-            Category::WindowsAndTabs => "category-windows",
-            Category::BraveAndDownloads => "category-brave",
             Category::About => "category-about",
         }
     }
@@ -153,7 +175,8 @@ impl Subpage {
     /// The category whose row opens it, which the back arrow returns to.
     pub(crate) const fn category(self) -> Category {
         match self {
-            Subpage::IndexedFolders | Subpage::FolderSizes => Category::SearchAndIndexing,
+            Subpage::IndexedFolders => Category::Search,
+            Subpage::FolderSizes => Category::FilesAndFolders,
             Subpage::Troubleshooting => Category::DefaultApps,
         }
     }
@@ -169,9 +192,9 @@ pub(crate) enum SettingsView {
 }
 
 impl Default for SettingsView {
-    /// Settings opens on Appearance, the first category.
+    /// Settings opens on General, the first category.
     fn default() -> Self {
-        SettingsView::Category(Category::Appearance)
+        SettingsView::Category(Category::General)
     }
 }
 
@@ -185,7 +208,17 @@ impl SettingsView {
     }
 
     /// The view whose page is called `key`, or `None` for another name.
+    /// The names of the categories before the settings were rearranged
+    /// still lead to where their settings are now.
     pub(crate) fn from_key(key: &str) -> Option<Self> {
+        let moved = match key {
+            "windows" => Some(Category::General),
+            "brave" => Some(Category::DefaultApps),
+            _ => None,
+        };
+        if let Some(category) = moved {
+            return Some(SettingsView::Category(category));
+        }
         let categories = Category::ALL.into_iter().map(SettingsView::Category);
         let subpages = Subpage::ALL.into_iter().map(SettingsView::Subpage);
         categories.chain(subpages).find(|view| view.as_str() == key)
@@ -213,7 +246,12 @@ mod tests {
         for view in categories.into_iter().chain(subpages) {
             assert_eq!(SettingsView::from_key(view.as_str()), Some(view));
         }
-        assert_eq!(SettingsView::from_key("general"), None);
+        assert_eq!(SettingsView::from_key("windows-and-more"), None);
+        assert_eq!(
+            SettingsView::from_key("windows"),
+            Some(SettingsView::Category(Category::General)),
+            "an earlier name still leads to its settings"
+        );
     }
 
     #[test]
@@ -229,9 +267,9 @@ mod tests {
     #[test]
     fn a_subpage_highlights_the_category_that_opens_it() {
         let indexed = SettingsView::Subpage(Subpage::IndexedFolders);
-        assert_eq!(indexed.category(), Category::SearchAndIndexing);
+        assert_eq!(indexed.category(), Category::Search);
         let folder_sizes = SettingsView::Subpage(Subpage::FolderSizes);
-        assert_eq!(folder_sizes.category(), Category::SearchAndIndexing);
+        assert_eq!(folder_sizes.category(), Category::FilesAndFolders);
         let troubleshooting = SettingsView::Subpage(Subpage::Troubleshooting);
         assert_eq!(troubleshooting.category(), Category::DefaultApps);
     }

@@ -100,10 +100,15 @@ impl BrowserWindow {
     }
 
     /// Opens Settings, showing `view` when one is given and where it was
-    /// left otherwise, with keyboard focus on its chosen category.
+    /// left otherwise, with keyboard focus on its chosen category. Settings
+    /// opened anew, its tab closed since, starts with an empty search.
     pub(crate) fn open_settings(&self, view: Option<SettingsView>) {
         self.remember_settings_origin();
+        let reopened = self.settings_tab().is_none();
         self.show_settings_tab();
+        if reopened {
+            self.settings_page().search("");
+        }
         self.settings_page().open(view);
         self.show_index_candidates();
     }
@@ -181,12 +186,14 @@ impl BrowserWindow {
         self.imp().surfaces.visible_child_name().as_deref() == Some(Surface::Settings.name())
     }
 
-    /// "Back to files": closes the Settings tab, or on the window's only
-    /// tab opens the folder shown before Settings, else the home folder.
+    /// "Back to files": empties the settings search, then closes the
+    /// Settings tab, or on the window's only tab opens the folder shown
+    /// before Settings, else the home folder.
     fn leave_settings(&self) {
         let Some(id) = self.settings_tab() else {
             return;
         };
+        self.settings_page().search("");
         if self.tab_count() > 1 {
             self.close_tab(id);
             return;

@@ -4,10 +4,14 @@
 //!
 //! Ports `settingsSearch` and the section links of `renderSettingsPage` in
 //! `v2.0.0:desktop/ui/app.js`. The search filters the rows of every category at
-//! once; the list then shows only the categories with matches, each with
-//! its count, and "N matching settings" under the search box. Enter jumps
-//! to the first match, Escape leaves the search, and arrow keys move
-//! through the categories. Escape on a sub-page goes back to its category.
+//! once and shows the matches of all of them on one page of results, each
+//! category's under its name, as the settings mockup does, so nobody has
+//! to look for matches category by category; "N matching settings" heads
+//! the results. Of the left side only the search box changes: the category
+//! list stays as it is, with no category chosen, and choosing one ends the
+//! search and opens it. Enter jumps to the first match, Escape leaves the search, and arrow
+//! keys move through the categories. Escape on a sub-page goes back to its
+//! category.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -22,6 +26,9 @@ use crate::window::children;
 
 /// The name of the page shown when no setting matches the search.
 const NO_MATCHES_PAGE: &str = "no-matches";
+
+/// The name of the page of search results.
+const RESULTS_PAGE: &str = "search-results";
 
 /// Room kept above a row the search jumps to, in pixels.
 const JUMP_MARGIN: f64 = 24.0;
@@ -40,6 +47,32 @@ impl SettingsPage {
             .css_classes(["settings-no-matches"])
             .build();
         imp.pages.add_named(&no_matches, Some(NO_MATCHES_PAGE));
+        // The results page: "N matching settings", then the matches.
+        let match_count = gtk::Label::builder()
+            .xalign(0.0)
+            .accessible_role(gtk::AccessibleRole::Status)
+            .css_classes(["settings-match-count"])
+            .visible(false)
+            .build();
+        let results = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["settings-results"])
+            .build();
+        let content = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .css_classes(["settings-content"])
+            .build();
+        content.append(&match_count);
+        content.append(&results);
+        let scrolled = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .child(&content)
+            .build();
+        imp.pages.add_named(&scrolled, Some(RESULTS_PAGE));
+        imp.results.set(results).expect("the navigation is built once");
+        imp.match_count
+            .set(match_count)
+            .expect("the navigation is built once");
         self.connect_category_list();
         self.connect_search_entry();
         self.go_back_on_escape();
@@ -54,6 +87,13 @@ impl SettingsPage {
                 let Some(category) = row.and_then(category_of) else {
                     return;
                 };
+                // A category chosen during a search ends it and opens
+                // that category.
+                if page.is_searching() {
+                    page.imp().view.set(SettingsView::Category(category));
+                    page.imp().search_entry.set_text("");
+                    return;
+                }
                 // Selecting the row of the category shown already, as a
                 // sub-page does, keeps the page.
                 if page.view().category() != category {
@@ -61,18 +101,14 @@ impl SettingsPage {
                 }
             }
         ));
-        // Enter on a category moves into its page.
+        // Enter on a category moves into its page. A click only chooses
+        // it (activate-on-single-click is off in the template), so the
+        // keyboard stays in the list rather than landing on the page's
+        // first ⓘ, whose bubble no pointer would then close.
         list.connect_row_activated(glib::clone!(
             #[weak(rename_to = page)]
             self,
             move |_, _| page.focus_page()
-        ));
-        list.set_filter_func(glib::clone!(
-            #[weak(rename_to = page)]
-            self,
-            #[upgrade_or]
-            true,
-            move |row| page.lists_category(row)
         ));
     }
 
@@ -137,13 +173,72 @@ impl SettingsPage {
     }
 
     /// Shows `view` on the right and highlights its category on the left.
+    /// While a search is typed, a category is shown as its matches among
+    /// the results, and no category is highlighted.
     pub(super) fn show_view(&self, view: SettingsView) {
         let imp = self.imp();
         imp.view.set(view);
-        imp.pages.set_visible_child_name(view.as_str());
-        let row = self.category_list_row(view.category());
+        match view {
+            SettingsView::Category(category) if self.is_searching() => {
+                imp.pages.set_visible_child_name(RESULTS_PAGE);
+                self.scroll_to(self.category_section(category).upcast_ref());
+            }
+            _ => imp.pages.set_visible_child_name(view.as_str()),
+        }
+        self.mark_chosen_category();
+    }
+
+    /// Highlights the category shown in the list, or none while a search
+    /// is typed: the results are of every category, and choosing one ends
+    /// the search.
+    fn mark_chosen_category(&self) {
+        let list = &self.imp().category_list;
+        // Browse keeps a category chosen at all times; while searching,
+        // Single lets the list have none.
+        if self.is_searching() {
+            list.set_selection_mode(gtk::SelectionMode::Single);
+            list.unselect_all();
+            return;
+        }
+        let row = self.category_list_row(self.view().category());
         if let Some(row) = row.filter(|row| !row.is_selected()) {
-            imp.category_list.select_row(Some(&row));
+            list.select_row(Some(&row));
+        }
+        list.set_selection_mode(gtk::SelectionMode::Browse);
+    }
+
+    /// Whether a search is typed.
+    fn is_searching(&self) -> bool {
+        !self.imp().query.borrow().is_empty()
+    }
+
+    /// Puts every category's section on the page of results while
+    /// `searching`, each under its title, and back on its own page when
+    /// the search ends.
+    fn gather_results(&self, searching: bool) {
+        let imp = self.imp();
+        let Some(results) = imp.results.get() else {
+            return;
+        };
+        let gathered = results.first_child().is_some();
+        if searching == gathered {
+            return;
+        }
+        let hosts = imp.category_hosts.borrow();
+        for category in Category::ALL {
+            let section = self.category_section(category);
+            let Some(host) = hosts.get(&category) else {
+                continue;
+            };
+            let (from, to) = if searching {
+                (host, results)
+            } else {
+                (results, host)
+            };
+            from.remove(&section);
+            to.append(&section);
+            section.set_searching(searching);
+            section.set_visible(true);
         }
     }
 
@@ -178,39 +273,52 @@ impl SettingsPage {
     fn apply_search(&self, typed: &str) {
         let imp = self.imp();
         let query = SearchQuery::parse(typed);
+        self.gather_results(!query.is_empty());
         let mut total = 0;
         for category_row in self.category_rows() {
             let section = self.category_section(category_row.category());
             let matches = section.apply_query(&query);
-            category_row.show_matches(matches, &query);
+            category_row.set_matches(matches);
+            // Among the results, a category without matches leaves out
+            // its title too.
+            section.set_visible(query.is_empty() || matches > 0);
             total += matches;
         }
-        imp.match_count.set_text(&match_count_text(total));
-        imp.match_count.set_visible(!query.is_empty());
+        imp.match_count().set_text(&match_count_text(total));
+        imp.match_count().set_visible(!query.is_empty());
         imp.query.replace(query);
-        imp.category_list.invalidate_filter();
+        self.mark_chosen_category();
         self.show_search_results();
     }
 
-    /// Keeps the category shown when it has matches, else shows the first
-    /// that has, or says that none has.
+    /// Shows the results from the top, or says that nothing matches. The
+    /// page the user was on stays chosen, so ending the search returns to
+    /// it.
     fn show_search_results(&self) {
         let imp = self.imp();
-        if imp.query.borrow().is_empty() {
+        if !self.is_searching() {
             imp.pages.set_visible_child_name(self.view().as_str());
             return;
         }
-        let current = self.view().category();
-        let has_matches = |category: Category| self.matches_in(category) > 0;
-        let shown = if has_matches(current) {
-            Some(current)
-        } else {
-            Category::ALL.into_iter().find(|category| has_matches(*category))
-        };
-        match shown {
-            Some(category) => self.show_view(SettingsView::Category(category)),
-            None => imp.pages.set_visible_child_name(NO_MATCHES_PAGE),
+        let any_match = Category::ALL
+            .into_iter()
+            .any(|category| self.matches_in(category) > 0);
+        if !any_match {
+            imp.pages.set_visible_child_name(NO_MATCHES_PAGE);
+            return;
         }
+        imp.pages.set_visible_child_name(RESULTS_PAGE);
+        if let Some(scrolled) = self.shown_scroller() {
+            scrolled.vadjustment().set_value(0.0);
+        }
+    }
+
+    /// The scrolled page the right side shows now.
+    fn shown_scroller(&self) -> Option<gtk::ScrolledWindow> {
+        self.imp()
+            .pages
+            .visible_child()
+            .and_downcast::<gtk::ScrolledWindow>()
     }
 
     /// How many rows of `category` match the search typed now.
@@ -230,15 +338,6 @@ impl SettingsPage {
     pub(super) fn category_list_row(&self, category: Category) -> Option<CategoryRow> {
         let rows = self.category_rows();
         rows.into_iter().find(|row| row.category() == category)
-    }
-
-    /// Whether the list shows `row`: always, or while searching only when
-    /// its category has matches.
-    fn lists_category(&self, row: &gtk::ListBoxRow) -> bool {
-        if self.imp().query.borrow().is_empty() {
-            return true;
-        }
-        category_of(row).is_some_and(|category| self.matches_in(category) > 0)
     }
 
     /// Shows the first setting, a status card or a row, that matches the
@@ -264,12 +363,7 @@ impl SettingsPage {
     /// Scrolls the shown page so `setting` is near its top, once the page
     /// has been laid out.
     fn scroll_to(&self, setting: &gtk::Widget) {
-        let scrolled = self
-            .imp()
-            .pages
-            .visible_child()
-            .and_downcast::<gtk::ScrolledWindow>();
-        let Some(scrolled) = scrolled else {
+        let Some(scrolled) = self.shown_scroller() else {
             return;
         };
         let setting = setting.downgrade();
@@ -285,8 +379,8 @@ impl SettingsPage {
         });
     }
 
-    /// Empties the search, which shows every row again, and puts keyboard
-    /// focus back on the category list.
+    /// Empties the search, which shows every row again and highlights the
+    /// category shown, and puts keyboard focus back on the category list.
     fn leave_search(&self) {
         self.imp().search_entry.set_text("");
         self.focus_chosen_category();
@@ -299,7 +393,8 @@ impl SettingsPage {
         }
     }
 
-    /// Moves keyboard focus to the first control of the page shown.
+    /// Moves keyboard focus to the first control of the page shown, when
+    /// Enter is pressed on its category.
     fn focus_page(&self) {
         if let Some(page) = self.imp().pages.visible_child() {
             page.child_focus(gtk::DirectionType::TabForward);

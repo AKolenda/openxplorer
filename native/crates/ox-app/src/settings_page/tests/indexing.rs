@@ -114,7 +114,7 @@ fn an_indexed_folder_shows_its_state_and_leaves_the_suggestions() {
         !suggested.contains(&"Example projects".to_owned()),
         "{suggested:?}"
     );
-    let card = descendants::<StatusCard>(&settings.page.category_section(Category::SearchAndIndexing));
+    let card = descendants::<StatusCard>(&settings.page.category_section(Category::Search));
     assert_eq!(card[0].title(), "Instant search is on for 1 folder");
     settings
         .page
@@ -211,7 +211,7 @@ fn refresh_all_rescans_while_watching_is_off() {
     let settings = SettingsTest::with_search_cache();
     let folder = settings.fixture.uri();
     settings.test.index_folder(&folder);
-    switch_of(&settings.row("Watch folders for live changes")).set_active(false);
+    switch_of(&settings.row("Watch folders for changes")).set_active(false);
     wait_until("the service to pause", || {
         settings
             .test
@@ -223,7 +223,7 @@ fn refresh_all_rescans_while_watching_is_off() {
     wait_for(Duration::from_millis(1500));
     let before = settings.test.find_root(&folder).map(|root| root.entry_count);
     assert_eq!(before, Some(4), "a paused index does not watch");
-    let card = descendants::<StatusCard>(&settings.page.category_section(Category::SearchAndIndexing));
+    let card = descendants::<StatusCard>(&settings.page.category_section(Category::Search));
     let refresh_all = descendants::<gtk::Button>(&card[0])
         .into_iter()
         .next()

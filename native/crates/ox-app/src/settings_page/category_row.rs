@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! One category in the Settings list: the accent bar of the chosen row,
-//! the category's coloured glyph and name, and while a search is typed how
-//! many of its settings match.
+//! One category in the Settings list: the accent bar of the chosen row and
+//! the category's coloured glyph and name. A search changes nothing the
+//! row shows; it only keeps how many of the category's settings match.
 //!
 //! Ports the section links of `renderSettingsPage` in `v2.0.0:desktop/ui/app.js`
-//! (`.settings-nav-link`), with the per-category counts of the settings
-//! mockup. The static layout is the template
+//! (`.settings-nav-link`). The static layout is the template
 //! `resources/ui/category-row.ui`. Each row knows its [`Category`], so the
 //! list never maps rows to categories by their position.
 
@@ -16,7 +15,6 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::pages::Category;
-use super::search::SearchQuery;
 use crate::icons;
 
 /// A category's glyph in the list.
@@ -37,9 +35,6 @@ mod imp {
         /// The category's name.
         #[template_child]
         pub(super) title: TemplateChild<gtk::Label>,
-        /// How many settings match, shown while a search is typed.
-        #[template_child]
-        pub(super) count: TemplateChild<gtk::Label>,
         /// The category the row stands for, set once by `CategoryRow::new`.
         pub(super) category: OnceCell<Category>,
         /// How many of its settings match the search typed now.
@@ -108,11 +103,8 @@ impl CategoryRow {
     }
 
     /// Keeps `matches`, the number of the category's settings that match
-    /// `query`, and shows it beside the name while a search is typed.
-    pub(crate) fn show_matches(&self, matches: usize, query: &SearchQuery) {
-        let imp = self.imp();
-        imp.matches.set(matches);
-        imp.count.set_text(&matches.to_string());
-        imp.count.set_visible(!query.is_empty());
+    /// the search typed now.
+    pub(crate) fn set_matches(&self, matches: usize) {
+        self.imp().matches.set(matches);
     }
 }
