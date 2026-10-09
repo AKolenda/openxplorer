@@ -16,6 +16,7 @@ mod column_choice;
 mod column_fit;
 pub(crate) mod column_text;
 mod group_headers;
+mod select_all;
 
 pub(crate) use group_headers::GroupTitle;
 
@@ -232,6 +233,9 @@ mod imp {
         /// The column titles' sort arrows, in column order; set by
         /// [`super::DetailsView::new`].
         pub(super) carets: OnceCell<Vec<gtk::Image>>,
+        /// The check box before the Name title that selects every item
+        /// or none (SEL-014).
+        pub(super) select_all: OnceCell<gtk::CheckButton>,
         /// The columns the window has room for.
         pub(super) columns: Cell<DetailsColumns>,
         /// Whether the view lists a folder or search results.
@@ -342,6 +346,7 @@ impl DetailsView {
         }
         model.tree().mark_arrows_on(column_view);
         view.add_sort_carets();
+        view.add_select_all(model.selection());
         view.install_column_fit();
         view.follow_column_drags();
         column_keys::make_titles_keyboard_operable(&view);
@@ -405,6 +410,17 @@ impl DetailsView {
             .filter_map(|position| items.item(position).and_downcast::<FileItem>())
             .map(|item| cell_text(column, &item, self.date_style()))
             .collect()
+    }
+
+    /// The room a fitted Name keeps for the item check boxes before the
+    /// icons, besides the icon's own: none while items have no boxes.
+    pub(crate) fn name_check_room(&self) -> f64 {
+        let context = self.cells();
+        if context.owners.shows_item_checks() {
+            cells::row_check_room(context.tree.is_expandable())
+        } else {
+            0.0
+        }
     }
 
     /// The cells' shared context, which `new` sets.

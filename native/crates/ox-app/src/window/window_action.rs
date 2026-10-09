@@ -82,6 +82,9 @@ pub(crate) enum WindowAction {
     /// Windows 11's Compact view: closer rows in the file list and the
     /// sidebar (VIEW-067).
     CompactDensity,
+    /// Windows 11's Item check boxes: a check box on each item, and one
+    /// that selects all in the Details header (SEL-014).
+    ItemCheckBoxes,
     /// Opens the subfolder menu of a crumb; the target is the folder, the
     /// subfolder shown in bold and the first one listed (NAV-020).
     CrumbSubfolders,
@@ -461,6 +464,7 @@ impl WindowAction {
             WindowAction::EditableLocation => "editable-location",
             WindowAction::ShowFullPath => "show-full-path",
             WindowAction::CompactDensity => "compact-density",
+            WindowAction::ItemCheckBoxes => "item-check-boxes",
             WindowAction::CrumbSubfolders => "crumb-subfolders",
             WindowAction::CrumbSibling => "crumb-sibling",
             WindowAction::Search => "search",

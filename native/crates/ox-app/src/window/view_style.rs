@@ -285,13 +285,13 @@ impl BrowserWindow {
     }
 
     /// Follows the preferences of how items are shown: the date style
-    /// (VIEW-004), redrawn if it changed, the selection marker (SEL-014)
-    /// and expandable folders (VIEW-035).
+    /// (VIEW-004), redrawn if it changed, item check boxes (SEL-014) and
+    /// expandable folders (VIEW-035).
     pub(super) fn follow_item_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
+        self.show_item_check_boxes(preferences.selection_marker);
         for pane in self.folder_panes() {
             pane.details().set_date_style(date_style(&preferences));
-            pane.owners().set_selection_markers(preferences.selection_marker);
             self.update_expandability_for(pane);
         }
         for (side, uri) in self.shown_panes() {

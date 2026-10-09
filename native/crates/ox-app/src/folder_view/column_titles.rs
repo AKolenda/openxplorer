@@ -53,6 +53,13 @@ pub(crate) fn title_buttons(view: &gtk::ColumnView) -> Vec<gtk::Widget> {
     std::iter::successors(first_title, WidgetExt::next_sibling).collect()
 }
 
+/// The box inside the title of `column`, while the titles are still in
+/// the order the view was built with.
+pub(crate) fn title_box_of(view: &gtk::ColumnView, column: SortColumn) -> Option<gtk::Box> {
+    let index = SortColumn::ALL.iter().position(|shown| *shown == column)?;
+    title_boxes(view).into_iter().nth(index)
+}
+
 /// The box inside each column title, in column order.
 fn title_boxes(view: &gtk::ColumnView) -> Vec<gtk::Box> {
     title_buttons(view)

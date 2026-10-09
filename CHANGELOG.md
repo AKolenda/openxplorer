@@ -12,6 +12,17 @@
   instant as it opens, which could make GTK lay widgets over each other
   in a narrow window or with wide fonts: the empty-folder page scrolls
   instead of making its pane taller when narrow.
+- Item check boxes as in Windows 11, in place of the plus and minus that
+  showed on an icon's corner (#80): each item has a check box, filled
+  solid with the accent when checked, that shows while its row or tile is
+  pointed at, anywhere on it, and stays checked while the item is
+  selected; clicking it, or just beside it, selects or deselects that
+  item alone. In Details and the List view it comes before the icon and
+  keeps its room, so names do not move; on icons it sits in the tile's
+  top left corner. Details has a box before Name: clear, it selects every
+  item; with some or all selected (a minus or a tick), it selects none.
+  View → Item check boxes, the renamed Settings row, turns them off; on
+  by default, as in Windows 11.
 - A folder's expand arrow in the details view no longer pokes out of a
   selected row's highlight: while folders can expand, rows start a little
   further left so the arrow sits inside the highlight, and names and
