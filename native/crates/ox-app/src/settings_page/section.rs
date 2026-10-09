@@ -53,6 +53,8 @@ mod imp {
         pub(super) body: OnceCell<gtk::Box>,
         /// The arrow back to the category, on a sub-page.
         pub(super) back_button: OnceCell<gtk::Button>,
+        /// The line under the title.
+        pub(super) lead: OnceCell<gtk::Label>,
     }
 
     impl SettingsSection {
@@ -161,6 +163,23 @@ impl SettingsSection {
         let column = self.imp().column();
         column.append(&title_row);
         column.append(&lead_label);
+        self.imp()
+            .lead
+            .set(lead_label)
+            .expect("a new page has no lead yet");
+    }
+
+    /// Shows the page among the search results, where its title heads
+    /// its matches and the line under it is left out, or on its own again.
+    pub(crate) fn set_searching(&self, searching: bool) {
+        if let Some(lead) = self.imp().lead.get() {
+            lead.set_visible(!searching);
+        }
+        if searching {
+            self.add_css_class("in-results");
+        } else {
+            self.remove_css_class("in-results");
+        }
     }
 
     fn body(&self) -> &gtk::Box {
