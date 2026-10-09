@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.3
+Version:        2.0.4
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -116,6 +116,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Fri Oct 09 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.4-1
+- OpenXplorer 2.0.4: item check boxes as in Windows 11, a redesigned
+  Settings page, and Open and Save dialogs that no longer wait on shares.
+
 * Tue Oct 06 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.3-1
 - OpenXplorer 2.0.3: Group by as in Windows Explorer, safer copies and
   archives, read-only and disconnected drives, and steadier Open and Save

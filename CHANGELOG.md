@@ -1,53 +1,29 @@
-# Unreleased
+# 2.0.4 — 2026-10-09
 
-- Smaller fixes to Open and Save dialogs: browsing a network share in a
-  dialog no longer waits on GVfs on the main thread, since the share's
-  local path is looked up in the background; Save stays on where nothing
-  can be saved (This PC, Network, a share without a local path) and
-  pressing it says why, instead of being greyed out with no reason; a
-  split pane in a dialog lists only the chosen file type, as the first
-  pane does; and only the desktop portal that opened a dialog can close
-  it, not any program on the session bus.
-- A folder view split in two no longer reports a wrong height for an
-  instant as it opens, which could make GTK lay widgets over each other
-  in a narrow window or with wide fonts: the empty-folder page scrolls
-  instead of making its pane taller when narrow.
-- Settings is laid out anew, from a settings mockup: eight pages (General,
-  Appearance, Files & folders, ZIP & archives, Confirmations, Search,
-  Default apps, About), one short line per setting with its details in
-  an ⓘ bubble that shows while the pointer (or the keyboard) is on it,
-  rarely changed settings folded away (Previews and thumbnails, Dragging
-  tabs and files, Undo and troubleshooting), and a search that shows the
-  matching settings of every page on one page, headed by how many match.
-  The page list stays as it is during a search, with no page chosen, and
-  choosing a page ends the search and opens it. Settings opened again
-  after Back to files or after its tab was closed starts with an empty
-  search. An ⓘ bubble opens only for the pointer or the keyboard: a page
-  chosen with a click no longer opens one that stayed until the window
-  lost focus, and one open when its page is left no longer comes back
-  with the page. The search also finds a setting by other words people
-  use for it ("chevron" or "tree" for the expand arrows, "dark mode" for
-  Theme, "wastebasket" for the Recycle Bin) and by other endings of a
-  word ("arrow", "chevrons"), looking for those only in what names a
-  setting so that a search does not fill with settings that only mention
-  a word; everything the literal words found is still found. Every
-  setting is still there, with the same options and defaults, and a
-  search for its earlier name still finds it.
-- Item check boxes as in Windows 11, in place of the plus and minus that
-  showed on an icon's corner (#80): each item has a check box, filled
-  solid with the accent when checked, that shows while its row or tile is
-  pointed at, anywhere on it, and stays checked while the item is
-  selected; clicking it, or just beside it, selects or deselects that
-  item alone. In Details and the List view it comes before the icon and
-  keeps its room, so names do not move; on icons it sits in the tile's
-  top left corner. Details has a box before Name: clear, it selects every
-  item; with some or all selected (a minus or a tick), it selects none.
-  View → Item check boxes, the renamed Settings row, turns them off; on
-  by default, as in Windows 11.
-- A folder's expand arrow in the details view no longer pokes out of a
-  selected row's highlight: while folders can expand, rows start a little
-  further left so the arrow sits inside the highlight, and names and
-  columns stay where they were.
+## What's Changed
+* ci(repo): Require Conventional Commits pull request titles by @AKolenda in https://github.com/AKolenda/openxplorer/pull/78
+* fix(dialogs): keep shares from blocking, say why Save can't save, filter both panes, guard Close by @addition-official in https://github.com/AKolenda/openxplorer/pull/73
+* chore(deps-dev): bump wrangler from 4.145.0 to 4.147.0 by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/79
+* ci(repo): Require a Model line in PRs and protect the release runner and Cloudflare token by @AKolenda in https://github.com/AKolenda/openxplorer/pull/83
+* ci(release): Retry failed release and deploy jobs on main by @AKolenda in https://github.com/AKolenda/openxplorer/pull/84
+* fix(views): keep a folder's expand arrow inside its row's highlight by @addition-official in https://github.com/AKolenda/openxplorer/pull/86
+* fix(views): show item check boxes as Windows 11 does by @addition-official in https://github.com/AKolenda/openxplorer/pull/85
+* feat(settings): lay out the Settings page anew by @addition-official in https://github.com/AKolenda/openxplorer/pull/82
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.4_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.4-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.4-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.4-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.4-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.3...v2.0.4
 
 # 2.0.3 — 2026-10-06
 
