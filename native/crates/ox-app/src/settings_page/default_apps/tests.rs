@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use gtk::prelude::*;
-use ox_core::integration::{MimeType, Sandbox, APP_ID};
+use ox_core::integration::{MimeType, Sandbox, APP_ID, SUPER_E};
 
 use super::super::pages::{Category, SettingsView};
 use super::super::row::SettingRow;
@@ -262,4 +262,45 @@ fn show_in_folder_starts_disabled_and_its_test_needs_the_service() {
             == "OpenXplorer does not own Show in folder yet. Close other file managers, or log out and \
                 back in after enabling."
     });
+}
+
+/// Use Super+E takes Super+E from Dolphin for `OpenXplorer`, as Win+E
+/// opens File Explorer, and Give Super+E back returns it to Dolphin.
+///
+/// parity: INT-033
+#[gtk::test]
+fn super_e_is_given_to_openxplorer_and_back_to_dolphin() {
+    let default_apps = DefaultAppsTest::open();
+    let row = default_apps.row(super::SUPER_E.title);
+    let shows = |text: &str| row.shown_description() == text;
+    wait_until("the shortcut status", || shows("Super+E opens Dolphin."));
+    let table = default_apps.page.context().desktop_integration().shortcut_table();
+    let keys_of = |component: &str| {
+        let table = table.lock().unwrap_or_else(PoisonError::into_inner);
+        table
+            .iter()
+            .find(|(action, _)| action.component == component)
+            .map(|(_, keys)| keys.clone())
+            .unwrap_or_default()
+    };
+    let ours = format!("{}.desktop", crate::config::APP_ID);
+    assert!(default_apps.button("Use Super+E").is_sensitive());
+    assert!(!default_apps.button(super::RESTORE_SUPER_E.title).is_sensitive());
+
+    default_apps.button("Use Super+E").emit_clicked();
+
+    wait_until("Super+E to open OpenXplorer", || {
+        shows("Super+E opens OpenXplorer.")
+    });
+    assert_eq!(keys_of(&ours), [SUPER_E]);
+    assert!(keys_of(DOLPHIN).is_empty());
+    assert!(!default_apps.button("Use Super+E").is_sensitive());
+
+    default_apps.button(super::RESTORE_SUPER_E.title).emit_clicked();
+
+    wait_until("Super+E to open Dolphin again", || {
+        shows("Super+E opens Dolphin.")
+    });
+    assert_eq!(keys_of(DOLPHIN), [SUPER_E]);
+    assert!(keys_of(&ours).is_empty());
 }

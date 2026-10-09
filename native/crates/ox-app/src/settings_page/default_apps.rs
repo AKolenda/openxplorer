@@ -11,7 +11,8 @@
 //! whether `OpenXplorer` is the default file explorer, with "Make
 //! `OpenXplorer` default"; the two options that go with it; what opens each
 //! route; Show in folder with its status line; the guide as a page of its
-//! own ([`super::troubleshooting`]); and the undo actions in Advanced.
+//! own ([`super::troubleshooting`]); Super+E on KDE Plasma (INT-033);
+//! and the undo actions in Advanced.
 //!
 //! The status is read each time Settings opens, after every change, when
 //! "Refresh status" is clicked and when the `FileManager1` name changes
@@ -95,6 +96,19 @@ const FILE_DIALOGS: RowText = RowText {
                dialogs apply now restart portal",
 };
 
+const SUPER_E: RowText = RowText {
+    title: "Super+E opens OpenXplorer",
+    description: "As Win+E opens File Explorer. Changes KDE Plasma's keyboard shortcut.",
+    keywords: "super e meta e win e windows key keyboard shortcut global shortcut launch plasma kde \
+               system settings shortcuts",
+};
+
+const RESTORE_SUPER_E: RowText = RowText {
+    title: "Give Super+E back",
+    description: "Super+E opens the app it opened before.",
+    keywords: "undo super e meta e keyboard shortcut plasma kde",
+};
+
 const TROUBLESHOOTING: RowText = RowText {
     title: "Troubleshooting",
     description: "Zorin and Brave setup steps, and how to undo each change.",
@@ -149,6 +163,9 @@ struct Controls {
     enable_file_dialogs: gtk::Button,
     apply_file_dialogs: gtk::Button,
     restore_file_dialogs: gtk::Button,
+    super_e_row: SettingRow,
+    use_super_e: gtk::Button,
+    restore_super_e: gtk::Button,
 }
 
 impl Controls {
@@ -192,6 +209,9 @@ impl Controls {
             enable_file_dialogs: parts::button("Enable", ButtonStyle::Accent),
             apply_file_dialogs: parts::button("Apply now", ButtonStyle::Bordered),
             restore_file_dialogs: parts::button(RESTORE_FILE_DIALOGS.title, ButtonStyle::Bordered),
+            super_e_row: SettingRow::new(SUPER_E),
+            use_super_e: parts::button(&ox_core::i18n::gettext("Use Super+E"), ButtonStyle::Accent),
+            restore_super_e: parts::button(RESTORE_SUPER_E.title, ButtonStyle::Bordered),
         }
     }
 }
@@ -214,6 +234,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     section.append_group(&routes);
     section.append_group(&show_in_folder_group(&controls));
     section.append_group(&file_dialogs_group(&controls));
+    section.append_group(&super_e_group(&controls));
     section.append_group(&troubleshooting_group(page));
     section.append_group(&advanced_group(&controls));
     let view = DefaultAppsView::new(page, &controls);
@@ -296,6 +317,16 @@ fn file_dialogs_group(controls: &Controls) -> SettingsGroup {
     group
 }
 
+/// "Super+E opens `OpenXplorer`", with Use Super+E (INT-033); its
+/// description becomes the status line.
+fn super_e_group(controls: &Controls) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Keyboard shortcut"));
+    let row = &controls.super_e_row;
+    row.add_control(&controls.use_super_e, ControlName::OwnLabel);
+    group.add_row(row);
+    group
+}
+
 /// The row whose chevron opens the Zorin and Brave guide.
 fn troubleshooting_group(page: &SettingsPage) -> SettingsGroup {
     // The row names itself, as in the mockup.
@@ -320,6 +351,7 @@ fn advanced_group(controls: &Controls) -> SettingsGroup {
         (RESTORE_ZIP_HANDLER, &controls.restore_zip),
         (DISABLE_SHOW_IN_FOLDER, &controls.disable_show_in_folder),
         (RESTORE_FILE_DIALOGS, &controls.restore_file_dialogs),
+        (RESTORE_SUPER_E, &controls.restore_super_e),
     ] {
         let row = SettingRow::new(text);
         row.add_control(button, ControlName::OwnLabel);

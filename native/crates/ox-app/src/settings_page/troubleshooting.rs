@@ -43,7 +43,7 @@ const GUIDE: [&str; 7] = [
     crate::i18n::message_id(
         "6. Pin the installed OpenXplorer folder icon to your Zorin panel. Right-click it → Open \
      windows… lists existing windows; New window creates another. Super+E is a separate system \
-     keyboard shortcut.",
+     keyboard shortcut; on KDE Plasma, Default apps → Use Super+E gives it to OpenXplorer.",
     ),
     crate::i18n::message_id(
         "Restore previous removes OpenXplorer's unmodified per-user reveal/autostart files and restores \

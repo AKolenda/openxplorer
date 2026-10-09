@@ -49,6 +49,7 @@
 //! | `file_manager_request` | Checking FileManager1 requests | `window_state.py` |
 //! | `file_chooser_bus`, `file_chooser_request` | The `FileChooser` portal backend for Open and Save dialogs | (new) |
 //! | `file_dialogs` | The opt-in that prefers that backend | (new) |
+//! | `launch_shortcut` | The opt-in that makes Super+E open the app on KDE Plasma | (new) |
 //! | `brave` | Brave's download folder | `brave_integration.py` |
 //! | `activation`, `opening` | What activating does; opening a file | `activation.py`, `native_opening.py` |
 //! | `applications`, `app_catalog` | Installed applications, Open with, editors | `app_catalog.py` |
@@ -72,6 +73,7 @@ mod file_dialogs;
 mod file_manager_bus;
 mod file_manager_request;
 pub(crate) mod host_command;
+mod launch_shortcut;
 mod mime_type;
 mod opening;
 mod private_file;
@@ -116,6 +118,10 @@ pub use file_manager_bus::{
 };
 pub use file_manager_request::{
     FileManagerMethod, FileManagerRequest, FileManagerRequestError, MAX_REQUEST_LOCATIONS,
+};
+pub use launch_shortcut::{
+    GlobalShortcuts, KdeShortcuts, KeySequence, LaunchShortcut, LaunchShortcutStatus, RestoredShortcut,
+    ShortcutAction, ShortcutError, SHORTCUT_SERVICE, SUPER_E,
 };
 pub use mime_type::MimeType;
 pub use opening::{

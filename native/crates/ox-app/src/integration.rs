@@ -38,8 +38,10 @@ mod custom_command;
 mod editors;
 mod file_dialog_service;
 mod file_manager_service;
+mod launch_shortcut_service;
 mod mime_backend;
 mod open_with_dialog;
+mod shortcut_backend;
 mod status;
 mod terminal;
 #[cfg(test)]
@@ -53,8 +55,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{
-    BraveIntegration, BravePaths, DefaultApps, FileDialogPaths, FileDialogRegistration, RevealPaths,
-    RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
+    BraveIntegration, BravePaths, DefaultApps, FileDialogPaths, FileDialogRegistration, LaunchShortcut,
+    RevealPaths, RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
 };
 
 #[cfg(test)]
@@ -67,8 +69,10 @@ pub(crate) use brave_dialog::BraveDialog;
 pub(crate) use changes::{IntegrationError, MakeDefaultChoice};
 pub(crate) use editors::{editor_shortcuts_in_background, EditorShortcut};
 pub(crate) use file_dialog_service::FileDialogsStatus;
+pub(crate) use launch_shortcut_service::ShortcutStatus;
 pub(crate) use mime_backend::MimeBackend;
 pub(crate) use open_with_dialog::{Launcher, OpenWithDialog, OpenWithSubject};
+use shortcut_backend::ShortcutBackend;
 pub(crate) use status::{DefaultsReport, IntegrationStatus};
 pub(crate) use terminal::open_terminal;
 pub(crate) use tools::{installed_application, Tool};
@@ -141,6 +145,8 @@ struct Services {
     brave: BraveIntegration,
     /// The opt-in that sends Open and Save dialogs to the app.
     file_dialogs: FileDialogRegistration,
+    /// The opt-in that makes Super+E open the app on KDE Plasma.
+    launch_shortcut: LaunchShortcut<ShortcutBackend>,
     /// The settings folder, which keeps the records and backups.
     settings_directory: PathBuf,
     /// The bus name of the desktop portal that starts the Flatpak at login.
@@ -270,6 +276,13 @@ impl DesktopIntegration {
                 crate::config::APP_ID,
                 sandbox,
             ),
+            launch_shortcut: LaunchShortcut::new(
+                ShortcutBackend::session(),
+                &folders.settings,
+                &format!("{}.desktop", crate::config::APP_ID),
+                folders.desktops.clone(),
+                sandbox,
+            ),
             settings_directory: folders.settings.clone(),
             background_portal: background_portal.to_owned(),
         };
@@ -280,6 +293,16 @@ impl DesktopIntegration {
             .set(services)
             .expect("a new DesktopIntegration has no services yet");
         integration
+    }
+
+    /// The shortcuts the integration reads and changes, for tests.
+    #[cfg(test)]
+    pub(crate) fn shortcut_table(&self) -> shortcut_backend::ShortcutTable {
+        self.services()
+            .launch_shortcut
+            .shortcuts()
+            .table()
+            .expect("tests use shortcuts in memory")
     }
 
     fn services(&self) -> &Services {

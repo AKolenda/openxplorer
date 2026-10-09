@@ -51,6 +51,9 @@ pub(super) struct DefaultAppsView {
     enable_file_dialogs: glib::WeakRef<gtk::Button>,
     apply_file_dialogs: glib::WeakRef<gtk::Button>,
     restore_file_dialogs: glib::WeakRef<gtk::Button>,
+    super_e_row: glib::WeakRef<SettingRow>,
+    use_super_e: glib::WeakRef<gtk::Button>,
+    restore_super_e: glib::WeakRef<gtk::Button>,
 }
 
 impl DefaultAppsView {
@@ -74,10 +77,14 @@ impl DefaultAppsView {
             enable_file_dialogs: controls.enable_file_dialogs.downgrade(),
             apply_file_dialogs: controls.apply_file_dialogs.downgrade(),
             restore_file_dialogs: controls.restore_file_dialogs.downgrade(),
+            super_e_row: controls.super_e_row.downgrade(),
+            use_super_e: controls.use_super_e.downgrade(),
+            restore_super_e: controls.restore_super_e.downgrade(),
         };
         view.connect_changes(controls);
         view.connect_show_in_folder(controls);
         view.connect_file_dialogs(controls);
+        view.connect_super_e(controls);
         view
     }
 
@@ -168,6 +175,22 @@ impl DefaultAppsView {
         });
     }
 
+    /// Use Super+E and Give Super+E back (INT-033).
+    fn connect_super_e(&self, controls: &Controls) {
+        let view = self.clone();
+        controls.use_super_e.connect_clicked(move |_| {
+            view.run_change(
+                |integration| async move { integration.enable_launch_shortcut().await.map(Some) },
+            );
+        });
+        let view = self.clone();
+        controls.restore_super_e.connect_clicked(move |_| {
+            view.run_change(
+                |integration| async move { integration.restore_launch_shortcut().await.map(Some) },
+            );
+        });
+    }
+
     /// The options of Make `OpenXplorer` default, as the switches show them.
     fn make_default_choice(&self) -> MakeDefaultChoice {
         let includes_zip = self
@@ -236,6 +259,8 @@ impl DefaultAppsView {
             &self.enable_file_dialogs,
             &self.apply_file_dialogs,
             &self.restore_file_dialogs,
+            &self.use_super_e,
+            &self.restore_super_e,
         ] {
             if let Some(button) = button.upgrade() {
                 button.set_sensitive(enabled);
@@ -258,6 +283,15 @@ impl DefaultAppsView {
         );
         set_sensitive(&self.apply_file_dialogs, dialogs.is_available);
         set_sensitive(&self.restore_file_dialogs, dialogs.is_enabled);
+        let shortcut = &status.launch_shortcut;
+        if let Some(row) = self.super_e_row.upgrade() {
+            row.set_description(&shortcut.text());
+        }
+        set_sensitive(
+            &self.use_super_e,
+            shortcut.is_available() && !shortcut.is_enabled(),
+        );
+        set_sensitive(&self.restore_super_e, shortcut.is_enabled());
         if let Some(button) = self.make_default.upgrade() {
             button.set_sensitive(true);
         }
