@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  One setting (src/settings_page/row.rs): its title, a one-line
-  description and, for a setting the native preview does not have yet, the
-  milestone that brings it, on the left; its compact controls on the
-  right, or below the text in a narrow window.
+  One setting (src/settings_page/row.rs): its one-line title with an ⓘ
+  that opens its details, and under it a live status line where the
+  setting has one (such as the app that opens ZIP files), on the left;
+  its compact controls on the right, or below the text in a narrow window.
 -->
 <interface>
   <requires lib="gtk" version="4.14"/>
@@ -19,12 +19,29 @@
         <property name="hexpand">true</property>
         <property name="valign">center</property>
         <child>
-          <object class="GtkLabel" id="title_label">
-            <property name="xalign">0</property>
-            <property name="wrap">true</property>
-            <style>
-              <class name="setting-title"/>
-            </style>
+          <!-- A grid, not a box: a box lines the title and the ⓘ up by
+               their baselines for one width and not for another, and GTK
+               refuses a height that changes so. -->
+          <object class="GtkGrid" id="title_line">
+            <property name="column-spacing">4</property>
+            <child>
+              <!-- One line that ends in "…" when the row is too narrow: a
+                   label that wraps beside the ⓘ is asked, by some GTK
+                   versions, how tall it is at its narrowest, one word a
+                   line, and the row takes that much room. -->
+              <object class="GtkLabel" id="title_label">
+                <property name="xalign">0</property>
+                <property name="valign">center</property>
+                <property name="ellipsize">end</property>
+                <style>
+                  <class name="setting-title"/>
+                </style>
+                <layout>
+                  <property name="column">0</property>
+                  <property name="row">0</property>
+                </layout>
+              </object>
+            </child>
           </object>
         </child>
         <child>
