@@ -1,3 +1,9 @@
+# Unreleased
+
+- Copies are named as Windows Explorer names them: Duplicate, pasting
+  into the same folder and Keep both now give `Notes - Copy.txt`, then
+  `Notes - Copy (2).txt`, instead of `Notes (copy 2).txt`.
+
 # 2.0.4 — 2026-10-09
 
 ## What's Changed

@@ -4,7 +4,7 @@
 //!
 //! Dolphin's rename dialog has a field for the new name and "Suggest New
 //! Name". The native dialog fills the field with the suggestion at once:
-//! the first free `(copy N)` name, the name Keep both would give. A typed
+//! the first free `- Copy` name, the name Keep both would give. A typed
 //! name must be valid ([`validate_name`]), differ from the item's own and
 //! be free in the destination folder; the engine still refuses a name
 //! taken meanwhile rather than replacing anything.
@@ -14,7 +14,7 @@ use gtk::gio::prelude::*;
 use gtk::glib;
 use ox_core::location::{new_copy_name, validate_name, ItemKind};
 
-/// How many `(copy N)` names are tried for the suggestion.
+/// How many `- Copy` names are tried for the suggestion.
 const MAX_SUGGESTIONS: u32 = 100;
 
 /// True when `folder` has a child called `name`, a link included.
@@ -30,7 +30,7 @@ async fn is_taken(folder: &gio::File, name: &str) -> bool {
         .is_ok()
 }
 
-/// The first free `(copy N)` name for the item at `uri` in
+/// The first free `- Copy` name for the item at `uri` in
 /// `destination_folder`, or the item's own name when none is found.
 pub(super) async fn suggested_name(uri: &str, destination_folder: &str) -> String {
     let item = gio::File::for_uri(uri);
@@ -52,7 +52,7 @@ pub(super) async fn suggested_name(uri: &str, destination_folder: &str) -> Strin
         ItemKind::File
     };
     let folder = gio::File::for_uri(destination_folder);
-    for number in 2..MAX_SUGGESTIONS {
+    for number in 1..MAX_SUGGESTIONS {
         let Ok(candidate) = new_copy_name(&name, number, kind) else {
             break;
         };

@@ -8,7 +8,7 @@ use ox_core::transfer::{ConflictPolicy, TransferMode};
 use crate::transfer_support::{local, *};
 
 /// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_keep_both`:
-/// a taken `(copy 2)` name is skipped too, and
+/// a taken `- Copy` name is skipped too, and
 /// both existing files stay untouched.
 ///
 /// parity: XFER-008
@@ -18,15 +18,18 @@ fn keep_both_skips_every_taken_copy_name() {
     let source = fixture.source_folder.join("file.txt");
     write(&source, "new");
     write(&fixture.destination_folder.join("file.txt"), "old");
-    write(&fixture.destination_folder.join("file (copy 2).txt"), "also old");
+    write(&fixture.destination_folder.join("file - Copy.txt"), "also old");
 
     let result = fixture.copy(local::local(), &[&source], ConflictPolicy::KeepBoth);
 
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(result.done, [file_uri(&source)]);
-    assert_eq!(read(&fixture.destination_folder.join("file (copy 3).txt")), "new");
     assert_eq!(
-        read(&fixture.destination_folder.join("file (copy 2).txt")),
+        read(&fixture.destination_folder.join("file - Copy (2).txt")),
+        "new"
+    );
+    assert_eq!(
+        read(&fixture.destination_folder.join("file - Copy.txt")),
         "also old"
     );
     assert_eq!(read(&fixture.destination_folder.join("file.txt")), "old");
@@ -35,7 +38,7 @@ fn keep_both_skips_every_taken_copy_name() {
 
 /// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_move_same_directory_is_noop`, for every policy: moving an
 /// item into the folder it is already in is skipped (XFER-012). With Keep
-/// both it would otherwise be renamed to "(copy 2)"; with Replace it would
+/// both it would otherwise be renamed to "- Copy"; with Replace it would
 /// be replaced by itself.
 ///
 /// parity: XFER-012
@@ -146,7 +149,7 @@ struct PolicyCase {
     is_skipped: bool,
     /// The content of `notes.txt` afterwards.
     notes_txt: &'static str,
-    /// The content of `notes (copy 2).txt` afterwards; `None` when there
+    /// The content of `notes - Copy.txt` afterwards; `None` when there
     /// must be no such file.
     notes_copy_2_txt: Option<&'static str>,
 }
@@ -197,7 +200,7 @@ fn conflict_policies_never_overwrite_without_replace() {
         assert_eq!(listed, &[file_uri(&source)], "{:?}", case.policy);
         let notes = fixture.destination_folder.join("notes.txt");
         assert_eq!(read(&notes), case.notes_txt, "{:?}", case.policy);
-        let copy = fixture.destination_folder.join("notes (copy 2).txt");
+        let copy = fixture.destination_folder.join("notes - Copy.txt");
         match case.notes_copy_2_txt {
             Some(text) => assert_eq!(read(&copy), text),
             None => assert!(!exists_without_following_links(&copy), "{:?}", case.policy),

@@ -165,7 +165,7 @@ fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {
     wait_until("the second copy to be selected", || {
         test.selected_names()
             .first()
-            .is_some_and(|name| name.starts_with("Notes 2 (copy"))
+            .is_some_and(|name| name.starts_with("Notes 2 - Copy"))
     });
     assert!(fixture.path("Notes 2.txt").is_file());
 }
@@ -217,12 +217,12 @@ fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
     wait_until("the answered copy to be selected", || {
         test.selected_names()
             .first()
-            .is_some_and(|name| name.starts_with("Notes 10 (copy"))
+            .is_some_and(|name| name.starts_with("Notes 10 - Copy"))
     });
     let copies: Vec<String> = test
         .names()
         .into_iter()
-        .filter(|name| name.contains("(copy"))
+        .filter(|name| name.contains(" - Copy"))
         .collect();
     assert_eq!(copies.len(), 1, "Notes 2.txt was skipped: {copies:?}");
     let report = open_dialog(&test);
@@ -249,11 +249,7 @@ fn rename_in_the_conflict_dialog_copies_under_the_typed_name() {
         .into_iter()
         .next()
         .expect("the dialog has a New name field");
-    assert_eq!(
-        new_name.text(),
-        "Notes 2 (copy 2).txt",
-        "a free name is suggested"
-    );
+    assert_eq!(new_name.text(), "Notes 2 - Copy.txt", "a free name is suggested");
     new_name.set_text("Notes 10.txt");
     dialog.press("Rename");
     wait_until("the taken name to be refused", || dialog.error_text().is_some());
@@ -398,7 +394,7 @@ fn paste_during_a_search_asks_to_open_the_destination_folder() {
     wait_until("the refusal", || {
         test.window.shown_message() == "Open the destination folder before pasting."
     });
-    assert!(!fixture.path("Notes 2 (copy 2).txt").exists());
+    assert!(!fixture.path("Notes 2 - Copy.txt").exists());
 }
 
 /// parity: CLIP-002, CLIP-009, LOOK-014

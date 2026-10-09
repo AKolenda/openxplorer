@@ -568,7 +568,7 @@ fn duplicate_copies_next_to_the_item_and_selects_the_copy() {
     test.activate("duplicate", None);
     wait_until("the copy to be selected", || {
         let selected = test.selected_names();
-        selected.len() == 1 && selected[0].starts_with("Notes 2 (copy")
+        selected.len() == 1 && selected[0].starts_with("Notes 2 - Copy")
     });
     let copy = test.selected_names().remove(0);
     assert!(fixture.path(&copy).is_file());

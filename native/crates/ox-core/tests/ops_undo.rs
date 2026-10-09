@@ -261,9 +261,9 @@ fn undoing_new_folder_and_duplicate_moves_the_new_items_to_the_trash() {
 
     assert_eq!(labels, ["Undo: Duplicate", "Undo: New folder"]);
     assert!(!temp.path().join("New folder").exists());
-    assert!(!temp.path().join("a (copy 2).txt").exists());
+    assert!(!temp.path().join("a - Copy.txt").exists());
     assert_eq!(fs::read(temp.path().join("a.txt")).unwrap(), b"a");
-    assert!(is_in_recycle_bin(&temp.path().join("a (copy 2).txt")));
+    assert!(is_in_recycle_bin(&temp.path().join("a - Copy.txt")));
 }
 
 #[test]

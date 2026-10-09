@@ -22,7 +22,7 @@ use snapshots::{snapshot_protection, READ_ONLY};
 fn duplicate_names_each_copy_like_keep_both_and_reports_the_copies() {
     let temp = tempfile::tempdir().unwrap();
     fs::write(temp.path().join("report.pdf"), b"pdf").unwrap();
-    fs::write(temp.path().join("report (copy 2).pdf"), b"older duplicate").unwrap();
+    fs::write(temp.path().join("report - Copy.pdf"), b"older duplicate").unwrap();
     fs::create_dir(temp.path().join("Folder.v1")).unwrap();
     fs::write(temp.path().join("Folder.v1").join("inside.txt"), b"inside").unwrap();
     let items = [
@@ -33,18 +33,21 @@ fn duplicate_names_each_copy_like_keep_both_and_reports_the_copies() {
     let outcome = block_on(duplicate_items(&items, &OperationContext::default(), |_| {})).unwrap();
 
     let copies = vec![
-        file_uri(&temp.path().join("report (copy 3).pdf")),
-        file_uri(&temp.path().join("Folder.v1 (copy 2)")),
+        file_uri(&temp.path().join("report - Copy (2).pdf")),
+        file_uri(&temp.path().join("Folder.v1 - Copy")),
     ];
     assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
     assert_eq!(outcome.created, copies);
     assert_eq!(outcome.undo, Some(UndoRecord::Duplicate { copies }));
-    assert_eq!(fs::read(temp.path().join("report (copy 3).pdf")).unwrap(), b"pdf");
     assert_eq!(
-        fs::read(temp.path().join("report (copy 2).pdf")).unwrap(),
+        fs::read(temp.path().join("report - Copy (2).pdf")).unwrap(),
+        b"pdf"
+    );
+    assert_eq!(
+        fs::read(temp.path().join("report - Copy.pdf")).unwrap(),
         b"older duplicate"
     );
-    let inside = temp.path().join("Folder.v1 (copy 2)").join("inside.txt");
+    let inside = temp.path().join("Folder.v1 - Copy").join("inside.txt");
     assert_eq!(fs::read(inside).unwrap(), b"inside");
 }
 
@@ -60,9 +63,9 @@ fn duplicate_copies_items_of_several_folders_into_their_own_folders() {
 
     let outcome = block_on(duplicate_items(&items, &OperationContext::default(), |_| {})).unwrap();
 
-    assert_eq!(fs::read(folders.source().join("a (copy 2).txt")).unwrap(), b"a");
+    assert_eq!(fs::read(folders.source().join("a - Copy.txt")).unwrap(), b"a");
     assert_eq!(
-        fs::read(folders.destination().join("a (copy 2).txt")).unwrap(),
+        fs::read(folders.destination().join("a - Copy.txt")).unwrap(),
         b"b"
     );
     assert_eq!(outcome.created.len(), 2);

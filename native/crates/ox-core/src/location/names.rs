@@ -75,8 +75,9 @@ pub fn validate_name(name: &str) -> Result<&str, LocationError> {
     Ok(name)
 }
 
-/// The name for the `number`th duplicate when both copies are kept:
-/// `file (copy 2).pdf`, `.env (copy 2)`, `Folder.v1 (copy 3)`.
+/// The name for the `number`th duplicate when both copies are kept, as
+/// Windows Explorer names copies: `file - Copy.pdf` for the first, then
+/// `file - Copy (2).pdf`, `.env - Copy (2)`, `Folder.v1 - Copy (3)`.
 ///
 /// Folders and names whose only dot is leading keep the marker at the end;
 /// files put it before the last extension. The stem is shortened a whole
@@ -89,9 +90,28 @@ pub fn validate_name(name: &str) -> Result<&str, LocationError> {
 /// no room for the marker: the name is then rejected rather than renamed
 /// beyond recognition.
 pub fn new_copy_name(name: &str, number: u32, kind: ItemKind) -> Result<String, LocationError> {
+    name_with_copy_marker(name, &copy_marker(number), kind)
+}
+
+/// The marker of the `number`th copy: ` - Copy`, then ` - Copy (2)`.
+fn copy_marker(number: u32) -> String {
+    if number <= 1 {
+        " - Copy".to_owned()
+    } else {
+        format!(" - Copy ({number})")
+    }
+}
+
+/// `name` with `marker` added where [`new_copy_name`] puts it: before a
+/// file's last extension, or at the end of a folder's or a dot-file's
+/// name, with the stem shortened by whole characters to fit 255 bytes.
+///
+/// # Errors
+///
+/// As [`new_copy_name`].
+pub fn name_with_copy_marker(name: &str, marker: &str, kind: ItemKind) -> Result<String, LocationError> {
     validate_name(name)?;
     let (mut stem, suffix) = split_extension(name, kind);
-    let marker = format!(" (copy {number})");
     let fits = |stem: &str| stem.len() + marker.len() + suffix.len() <= NAME_MAX_BYTES;
     while !fits(stem) && !stem.is_empty() {
         stem = without_last_char(stem);
@@ -193,33 +213,42 @@ mod tests {
 
     /// parity: XFER-008
     #[test]
-    fn copy_names_follow_python() {
-        assert_eq!(copy_name("file.pdf", 2, ItemKind::File), "file (copy 2).pdf");
-        assert_eq!(copy_name(".env", 2, ItemKind::File), ".env (copy 2)");
-        assert_eq!(copy_name("Folder.v1", 3, ItemKind::Folder), "Folder.v1 (copy 3)");
+    fn copy_names_follow_windows_explorer() {
+        assert_eq!(copy_name("file.pdf", 1, ItemKind::File), "file - Copy.pdf");
+        assert_eq!(copy_name("file.pdf", 2, ItemKind::File), "file - Copy (2).pdf");
+        assert_eq!(copy_name("Folder", 1, ItemKind::Folder), "Folder - Copy");
+        assert_eq!(copy_name(".env", 2, ItemKind::File), ".env - Copy (2)");
+        assert_eq!(
+            copy_name("Folder.v1", 3, ItemKind::Folder),
+            "Folder.v1 - Copy (3)"
+        );
         assert_eq!(
             copy_name("archive.tar.gz", 2, ItemKind::File),
-            "archive.tar (copy 2).gz"
+            "archive.tar - Copy (2).gz"
         );
         assert_eq!(
             copy_name("..hidden.txt", 4, ItemKind::File),
-            "..hidden (copy 4).txt"
+            "..hidden - Copy (4).txt"
         );
-        assert_eq!(copy_name("trailing.", 2, ItemKind::File), "trailing (copy 2).");
-        assert_eq!(copy_name("README", 10, ItemKind::File), "README (copy 10)");
+        assert_eq!(copy_name("trailing.", 1, ItemKind::File), "trailing - Copy.");
+        assert_eq!(copy_name("README", 10, ItemKind::File), "README - Copy (10)");
+        assert_eq!(
+            copy_name("file - Copy.txt", 1, ItemKind::File),
+            "file - Copy - Copy.txt"
+        );
     }
 
     /// parity: XFER-008
     #[test]
     fn long_copy_names_are_shortened_by_whole_characters() {
-        // The Python suite's case: 244 bytes plus the marker still fits.
+        // 244 bytes plus the marker still fits.
         let name = format!("{}.txt", "é".repeat(120));
         let copy = new_copy_name(&name, 2, ItemKind::File).expect("the name fits");
         assert!(copy.len() <= 255, "{} bytes", copy.len());
-        // 254 bytes: four two-byte characters must go.
+        // 254 bytes: five two-byte characters must go for ` - Copy (2)`.
         let name = format!("{}.txt", "é".repeat(125));
         let copy = new_copy_name(&name, 2, ItemKind::File).expect("the stem can be shortened");
-        assert_eq!(copy, format!("{} (copy 2).txt", "é".repeat(121)));
+        assert_eq!(copy, format!("{} - Copy (2).txt", "é".repeat(120)));
         assert_eq!(copy.len(), 255);
     }
 
