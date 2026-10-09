@@ -206,6 +206,12 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
             WindowAction::CompactDensity,
         )
         .into(),
+        MenuItem::toggle(
+            &gettext("Item check boxes"),
+            Icon::SelectAllOn,
+            WindowAction::ItemCheckBoxes,
+        )
+        .into(),
         // Dolphin's Terminal panel embeds Konsole; VTE for GTK 4 is not
         // available everywhere the app ships, so this opens the desktop's
         // terminal in the folder shown instead (OPEN-022).

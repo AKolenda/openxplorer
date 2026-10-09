@@ -40,6 +40,24 @@ struct TreeState {
     /// The rows expanded so far; collapsed ones and those inside collapsed
     /// folders are skipped.
     expanded: RefCell<Vec<glib::WeakRef<gtk::TreeListRow>>>,
+    /// The lists that show the tree, which carry [`ARROWS_CLASS`] while
+    /// folders may expand.
+    views: RefCell<Vec<glib::WeakRef<gtk::Widget>>>,
+}
+
+/// The class of a list whose folders show arrows; its rows reach further
+/// left so the arrows sit inside a row's highlight
+/// (`resources/skin/folder-views.css`).
+pub(crate) const ARROWS_CLASS: &str = "has-folder-arrows";
+
+/// Gives `view` [`ARROWS_CLASS`] while folders `expandable`, else takes it
+/// away.
+fn toggle_arrows_class(view: &gtk::Widget, expandable: bool) {
+    if expandable {
+        view.add_css_class(ARROWS_CLASS);
+    } else {
+        view.remove_css_class(ARROWS_CLASS);
+    }
 }
 
 /// The URI of the item `row` shows.
@@ -73,7 +91,16 @@ impl FolderTree {
             listings: RefCell::default(),
             pending: RefCell::default(),
             expanded: RefCell::default(),
+            views: RefCell::default(),
         }))
+    }
+
+    /// Marks `view` with [`ARROWS_CLASS`] while folders may expand, from
+    /// now on.
+    pub(crate) fn mark_arrows_on(&self, view: &impl IsA<gtk::Widget>) {
+        let view = view.as_ref();
+        toggle_arrows_class(view, self.is_expandable());
+        self.0.views.borrow_mut().push(view.downgrade());
     }
 
     /// The model the selection shows.
@@ -87,6 +114,13 @@ impl FolderTree {
             self.collapse_all();
         }
         self.0.expandable.set(expandable);
+        self.0.views.borrow_mut().retain(|view| {
+            let Some(view) = view.upgrade() else {
+                return false;
+            };
+            toggle_arrows_class(&view, expandable);
+            true
+        });
     }
 
     /// Whether folders may expand now.

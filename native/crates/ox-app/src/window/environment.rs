@@ -202,6 +202,7 @@ impl BrowserWindow {
         self.render_landing_with(&places);
         self.follow_full_path_preference();
         self.follow_compact_density_preference();
+        self.follow_item_check_boxes_preference();
         self.follow_expand_arrows_preference();
         self.render_title();
         self.render_tabs();

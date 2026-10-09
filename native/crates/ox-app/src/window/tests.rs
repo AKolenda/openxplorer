@@ -35,6 +35,7 @@ mod group_by;
 mod history;
 mod icons;
 mod input;
+mod item_check_boxes;
 mod item_dialogs;
 mod landing_pages;
 mod late_replies;
