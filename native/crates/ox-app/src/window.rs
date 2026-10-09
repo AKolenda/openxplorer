@@ -96,6 +96,7 @@ mod history_menu;
 mod imp;
 mod input;
 mod integration_actions;
+mod item_check_boxes;
 mod item_dialogs;
 mod landing;
 mod link_target;

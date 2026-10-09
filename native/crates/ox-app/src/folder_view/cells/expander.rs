@@ -31,14 +31,20 @@ fn arrow_look(expanded: bool) -> (Icon, &'static str) {
 }
 
 impl FileCell {
-    /// Puts the arrow before the icon; clicking it expands or collapses the
+    /// Puts the arrow before the icon, after the check box, which stays at
+    /// the row's start at every depth; clicking it expands or collapses the
     /// row in `tree` that `list_item` shows.
     fn add_expander(&self, list_item: &gtk::ListItem, tree: &FolderTree) {
         let arrow = &self.imp().expander;
         arrow.add_css_class("folder-expander");
         arrow.set_focusable(false);
         arrow.set_valign(gtk::Align::Center);
-        self.prepend(arrow);
+        let check = &self.imp().check;
+        if check.parent().as_ref() == Some(self.upcast_ref::<gtk::Widget>()) {
+            self.insert_child_after(arrow, Some(check));
+        } else {
+            self.prepend(arrow);
+        }
         arrow.connect_clicked(glib::clone!(
             #[weak]
             list_item,
