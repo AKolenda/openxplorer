@@ -121,7 +121,7 @@ pub use file_manager_request::{
 };
 pub use launch_shortcut::{
     GlobalShortcuts, KdeShortcuts, KeySequence, LaunchShortcut, LaunchShortcutStatus, RestoredShortcut,
-    ShortcutAction, ShortcutError, SHORTCUT_SERVICE, SUPER_E,
+    ShortcutAction, ShortcutError, NEW_WINDOW_ACTION, SHORTCUT_SERVICE, SUPER_E,
 };
 pub use mime_type::MimeType;
 pub use opening::{

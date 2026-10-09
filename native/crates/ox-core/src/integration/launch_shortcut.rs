@@ -5,13 +5,17 @@
 //! On Plasma, Super+E (Meta+E in KDE's words) is a global shortcut that
 //! launches Dolphin. Global shortcuts belong to KDE's shortcut service,
 //! `kglobalacceld`, reached on the session bus as `org.kde.kglobalaccel`;
-//! System Settings > Shortcuts changes them the same way. A desktop file's
-//! launch shortcut is its `_launch` action, in the component named after
-//! the desktop file, which the service launches when the keys are pressed.
+//! System Settings > Shortcuts changes them the same way. A desktop file is
+//! a component named after it: its `_launch` action runs its command, and
+//! each `[Desktop Action]` is an action of that name, which the service runs
+//! when the keys are pressed.
 //!
-//! Turning it on takes Super+E from the action that has it (Dolphin's, as
-//! Plasma ships), keeping that action's other keys, and gives it to
-//! `OpenXplorer`'s launch action. What it took is recorded in the settings
+//! As Win+E always opens a new File Explorer window, Super+E runs the
+//! desktop file's `NewWindow` action (`openxplorer --new-window`), which
+//! opens a new window whether or not one is open; `_launch` would only show
+//! the open window. Turning it on takes Super+E from the action that has it
+//! (Dolphin's launch action, as Plasma ships), keeping that action's other
+//! keys, and gives it to that `NewWindow` action. What it took is recorded in the settings
 //! folder, so turning it off gives Super+E back to that action. The
 //! service saves the change itself, so it lasts across logins. Nothing
 //! changes until the user asks (INT-033), other desktops are left alone,
@@ -50,6 +54,10 @@ const KEY_E: i32 = 0x45;
 /// The action of a desktop file that launches it.
 const LAUNCH_ACTION: &str = "_launch";
 
+/// The desktop file's action that opens a new window (`[Desktop Action
+/// NewWindow]`, `openxplorer --new-window`), which Super+E runs.
+pub const NEW_WINDOW_ACTION: &str = "NewWindow";
+
 /// One key sequence as the service sends it: up to four key combinations,
 /// unused ones 0 (Qt's `QKeySequence` on the bus, `(ai)`).
 pub type KeySequence = [i32; 4];
@@ -80,6 +88,18 @@ impl ShortcutAction {
             action: LAUNCH_ACTION.to_owned(),
             component_name: name.to_owned(),
             action_name: name.to_owned(),
+        }
+    }
+
+    /// The `[Desktop Action]` called `action` of the desktop file
+    /// `desktop_id`, named `component_name` and `action_name` in System
+    /// Settings.
+    pub fn desktop_action(desktop_id: &str, action: &str, component_name: &str, action_name: &str) -> Self {
+        Self {
+            component: desktop_id.to_owned(),
+            action: action.to_owned(),
+            component_name: component_name.to_owned(),
+            action_name: action_name.to_owned(),
         }
     }
 
@@ -316,7 +336,7 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         Self {
             shortcuts,
             settings: settings.to_owned(),
-            ours: ShortcutAction::launch(desktop_id, "OpenXplorer"),
+            ours: ShortcutAction::desktop_action(desktop_id, NEW_WINDOW_ACTION, "OpenXplorer", "New window"),
             desktops,
             sandbox,
         }
@@ -345,9 +365,18 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         }
     }
 
+    /// True for any action of `OpenXplorer`'s desktop file, such as the
+    /// launch action an earlier version gave Super+E to.
+    fn is_ours_in_any_action(&self, action: &ShortcutAction) -> bool {
+        action.component == self.ours.component
+    }
+
     /// Takes Super+E from the action that has it, keeping its other keys,
-    /// and gives it to `OpenXplorer`. When the service does not give it,
-    /// the other action gets its keys back.
+    /// and gives it to `OpenXplorer`'s new-window action. When the service
+    /// does not give it, the other action gets its keys back. Super+E on
+    /// another action of `OpenXplorer`'s (the launch action of an earlier
+    /// version) moves to the new-window action, and the record of what was
+    /// first taken is kept.
     ///
     /// # Errors
     ///
@@ -363,6 +392,12 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             return Ok(());
         }
         let taken = match owner {
+            Some(earlier) if self.is_ours_in_any_action(&earlier) => {
+                let mut keys = self.shortcuts.keys(&earlier)?;
+                keys.retain(|keys| *keys != SUPER_E);
+                self.shortcuts.set_keys(&earlier, &keys)?;
+                None
+            }
             Some(previous) => {
                 let keys = self.shortcuts.keys(&previous)?;
                 let record = Record { previous, keys };
@@ -407,17 +442,17 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             return Err(ShortcutError::Unsupported);
         }
         let record = self.read_record();
-        let is_ours = self
+        let owner = self
             .shortcuts
             .owner(SUPER_E)?
-            .is_some_and(|owner| owner.is(&self.ours));
-        if !is_ours {
+            .filter(|owner| self.is_ours_in_any_action(owner));
+        let Some(owner) = owner else {
             self.remove_record();
             return Ok(RestoredShortcut::NotOurs);
-        }
-        let mut keys = self.shortcuts.keys(&self.ours)?;
+        };
+        let mut keys = self.shortcuts.keys(&owner)?;
         keys.retain(|keys| *keys != SUPER_E);
-        self.shortcuts.set_keys(&self.ours, &keys)?;
+        self.shortcuts.set_keys(&owner, &keys)?;
         let restored = match record {
             Some(record) => {
                 self.shortcuts.set_keys(&record.previous, &record.keys)?;

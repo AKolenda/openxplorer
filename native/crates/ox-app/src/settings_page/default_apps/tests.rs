@@ -281,8 +281,9 @@ fn show_in_folder_starts_disabled_and_its_test_needs_the_service() {
     });
 }
 
-/// The Super+E switch takes Super+E from Dolphin for `OpenXplorer`, as
-/// Win+E opens File Explorer, and turning it off gives it back; the line
+/// The Super+E switch takes Super+E from Dolphin for `OpenXplorer`'s New
+/// window action, as Win+E opens a new File Explorer window, and turning
+/// it off gives it back; the line
 /// under it says to log out and back in, which KDE Plasma needs.
 ///
 /// parity: INT-033
@@ -313,6 +314,13 @@ fn the_super_e_switch_takes_super_e_from_dolphin_and_gives_it_back() {
     switch.set_active(true);
 
     wait_until("Super+E to be OpenXplorer's", || keys_of(&ours) == [SUPER_E]);
+    let owner = table
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .find(|(_, keys)| keys.contains(&SUPER_E))
+        .map(|(action, _)| action.action.clone());
+    assert_eq!(owner.as_deref(), Some("NewWindow"), "Super+E opens a new window");
     assert!(keys_of(DOLPHIN).is_empty());
     wait_until("the status after the change", || switch.is_sensitive());
     assert!(switch.is_active(), "the switch stays on");

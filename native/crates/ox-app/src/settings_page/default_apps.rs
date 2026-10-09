@@ -101,8 +101,9 @@ const FILE_DIALOGS: RowText = RowText {
 
 const SUPER_E: RowText = RowText {
     title: "Super+E opens OpenXplorer",
-    description: "As Win+E opens File Explorer. On takes Super+E from the app that opens it now; off \
-                  gives it back. Changes KDE Plasma's keyboard shortcut.",
+    description: "Opens a new window each time, as Win+E opens a new File Explorer window. On takes \
+                  Super+E from the app that opens it now; off gives it back. Changes KDE Plasma's \
+                  keyboard shortcut.",
     keywords: "super e meta e win e windows key keyboard shortcut global shortcut launch plasma kde \
                system settings shortcuts give back undo log out",
 };

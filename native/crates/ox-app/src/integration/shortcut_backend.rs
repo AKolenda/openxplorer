@@ -71,7 +71,7 @@ impl GlobalShortcuts for ShortcutBackend {
                 let table = table.lock().unwrap_or_else(PoisonError::into_inner);
                 Ok(table
                     .iter()
-                    .find(|(known, _)| known.component == action.component)
+                    .find(|(known, _)| known.component == action.component && known.action == action.action)
                     .map(|(_, keys)| keys.clone())
                     .unwrap_or_default())
             }
@@ -84,7 +84,10 @@ impl GlobalShortcuts for ShortcutBackend {
             #[cfg(test)]
             Self::InMemory(table) => {
                 let mut table = table.lock().unwrap_or_else(PoisonError::into_inner);
-                if !table.iter().any(|(known, _)| known.component == action.component) {
+                if !table
+                    .iter()
+                    .any(|(known, _)| known.component == action.component && known.action == action.action)
+                {
                     table.push((action.clone(), Vec::new()));
                 }
                 Ok(())
@@ -102,14 +105,15 @@ impl GlobalShortcuts for ShortcutBackend {
                     .iter()
                     .copied()
                     .filter(|key| {
-                        !table
-                            .iter()
-                            .any(|(other, owned)| other.component != action.component && owned.contains(key))
+                        !table.iter().any(|(other, owned)| {
+                            (other.component != action.component || other.action != action.action)
+                                && owned.contains(key)
+                        })
                     })
                     .collect();
                 if let Some((_, owned)) = table
                     .iter_mut()
-                    .find(|(known, _)| known.component == action.component)
+                    .find(|(known, _)| known.component == action.component && known.action == action.action)
                 {
                     *owned = free;
                 }

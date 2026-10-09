@@ -7,7 +7,7 @@ use std::cell::RefCell;
 
 use ox_core::integration::{
     GlobalShortcuts, KeySequence, LaunchShortcut, LaunchShortcutStatus, RestoredShortcut, Sandbox,
-    ShortcutAction, ShortcutError, SUPER_E,
+    ShortcutAction, ShortcutError, NEW_WINDOW_ACTION, SUPER_E,
 };
 
 /// `OpenXplorer`'s desktop file.
@@ -36,15 +36,31 @@ impl Shortcuts {
         }
     }
 
-    /// The keys of the action of `component` now.
+    /// The keys of `component`'s launch action, or of `OpenXplorer`'s
+    /// new-window action for [`OURS`], now.
     fn keys_of(&self, component: &str) -> Vec<KeySequence> {
+        let action = if component == OURS {
+            NEW_WINDOW_ACTION
+        } else {
+            "_launch"
+        };
+        self.keys_of_action(component, action)
+    }
+
+    /// The keys of `component`'s `action` now.
+    fn keys_of_action(&self, component: &str, action: &str) -> Vec<KeySequence> {
         self.actions
             .borrow()
             .iter()
-            .find(|(action, _)| action.component == component)
+            .find(|(known, _)| known.component == component && known.action == action)
             .map(|(_, keys)| keys.clone())
             .unwrap_or_default()
     }
+}
+
+/// True for the same action of the same component.
+fn same(one: &ShortcutAction, other: &ShortcutAction) -> bool {
+    one.component == other.component && one.action == other.action
 }
 
 impl GlobalShortcuts for Shortcuts {
@@ -58,14 +74,12 @@ impl GlobalShortcuts for Shortcuts {
     }
 
     fn keys(&self, action: &ShortcutAction) -> Result<Vec<KeySequence>, ShortcutError> {
-        Ok(self.keys_of(&action.component))
+        Ok(self.keys_of_action(&action.component, &action.action))
     }
 
     fn register(&self, action: &ShortcutAction) -> Result<(), ShortcutError> {
         let mut actions = self.actions.borrow_mut();
-        let known = actions
-            .iter()
-            .any(|(known, _)| known.component == action.component);
+        let known = actions.iter().any(|(known, _)| same(known, action));
         if !known && self.launchable.contains(&action.component) {
             actions.push((action.clone(), Vec::new()));
         }
@@ -80,13 +94,10 @@ impl GlobalShortcuts for Shortcuts {
             .filter(|key| {
                 !actions
                     .iter()
-                    .any(|(other, owned)| other.component != action.component && owned.contains(key))
+                    .any(|(other, owned)| !same(other, action) && owned.contains(key))
             })
             .collect();
-        if let Some((_, owned)) = actions
-            .iter_mut()
-            .find(|(known, _)| known.component == action.component)
-        {
+        if let Some((_, owned)) = actions.iter_mut().find(|(known, _)| same(known, action)) {
             *owned = free;
         }
         Ok(())
@@ -247,4 +258,115 @@ fn other_desktops_and_the_flatpak_are_left_alone() {
         shortcuts.keys_of("org.kde.dolphin.desktop"),
         [SUPER_E, CTRL_ALT_D]
     );
+}
+
+/// As Win+E always opens a new File Explorer window, Super+E goes to the
+/// desktop file's New window action (`openxplorer --new-window`), not to
+/// its launch action, which only shows the open window.
+///
+/// parity: INT-033
+#[test]
+fn super_e_runs_the_new_window_action() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+
+    opt_in.enable().unwrap();
+
+    let owner = shortcuts.owner(SUPER_E).unwrap().expect("Super+E has an owner");
+    assert_eq!(
+        (owner.component.as_str(), owner.action.as_str()),
+        (OURS, "NewWindow")
+    );
+    assert_eq!(
+        shortcuts.keys_of_action(OURS, "_launch"),
+        Vec::<KeySequence>::new()
+    );
+}
+
+/// Super+E that an earlier version gave to `OpenXplorer`'s launch action
+/// moves to the New window action when the switch is turned on again, and
+/// turning it off still gives it back to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn super_e_on_the_earlier_launch_action_moves_to_new_window_and_back() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+    opt_in.enable().unwrap();
+    let earlier = ShortcutAction::launch(OURS, "OpenXplorer");
+    shortcuts
+        .set_keys(
+            &ShortcutAction::desktop_action(OURS, NEW_WINDOW_ACTION, "", ""),
+            &[],
+        )
+        .unwrap();
+    shortcuts.actions.borrow_mut().push((earlier, vec![SUPER_E]));
+    assert_ne!(
+        opt_in.status(),
+        LaunchShortcutStatus::Ours,
+        "the switch shows off"
+    );
+
+    opt_in.enable().unwrap();
+
+    assert_eq!(opt_in.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(shortcuts.keys_of(OURS), [SUPER_E]);
+    assert_eq!(
+        shortcuts.keys_of_action(OURS, "_launch"),
+        Vec::<KeySequence>::new()
+    );
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(
+        shortcuts.keys_of("org.kde.dolphin.desktop"),
+        [SUPER_E, CTRL_ALT_D]
+    );
+
+    // Turning it off while the earlier launch action has Super+E gives it
+    // back to Dolphin too.
+    opt_in.enable().unwrap();
+    shortcuts
+        .set_keys(
+            &ShortcutAction::desktop_action(OURS, NEW_WINDOW_ACTION, "", ""),
+            &[],
+        )
+        .unwrap();
+    shortcuts
+        .set_keys(&ShortcutAction::launch(OURS, "OpenXplorer"), &[SUPER_E])
+        .unwrap();
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(
+        shortcuts.keys_of("org.kde.dolphin.desktop"),
+        [SUPER_E, CTRL_ALT_D]
+    );
+    assert_eq!(
+        shortcuts.keys_of_action(OURS, "_launch"),
+        Vec::<KeySequence>::new()
+    );
+}
+
+/// The New window action Super+E runs is in the desktop file the packages
+/// install, and opens a new window.
+///
+/// parity: INT-033
+#[test]
+fn the_desktop_file_has_the_new_window_action() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packaging/data/io.winspace.Development.desktop");
+    let entry = std::fs::read_to_string(path).expect("the desktop file is in the tree");
+    let actions = entry
+        .lines()
+        .find_map(|line| line.strip_prefix("Actions="))
+        .expect("the desktop file lists its actions");
+    assert!(actions.split(';').any(|action| action == NEW_WINDOW_ACTION));
+    let section = entry
+        .split("[Desktop Action NewWindow]")
+        .nth(1)
+        .expect("the New window action has a section");
+    let exec = section
+        .lines()
+        .find_map(|line| line.strip_prefix("Exec="))
+        .expect("the action has a command");
+    assert_eq!(exec, "openxplorer --new-window");
 }
