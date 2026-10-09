@@ -84,6 +84,13 @@ columnview.files > listview > row > cell {
   font-feature-settings: "tnum" 1;
 }
 columnview.files > listview > row > cell:first-child { padding-left: 26px; }
+/* While folders show arrows (VIEW-035), the arrow takes the name cell's
+   left padding and would start 6px before the row's edge, outside a
+   selected row's highlight. Rows then reach 10px further left, 2px from
+   the list's edge, and their cells move back by as much, so the arrow
+   sits 4px inside the highlight and nothing else moves. */
+columnview.files.has-folder-arrows > listview > row { margin-left: 2px; }
+columnview.files.has-folder-arrows > listview > row > cell { margin-left: -2px; margin-right: 2px; }
 columnview.files > listview > row > cell:last-child { padding-right: 26px; }
 /* The 21px icon is centred on a half pixel, which Chromium draws one
    pixel down. */
