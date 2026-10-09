@@ -5,8 +5,9 @@
 //! The Python app rendered its settings page each time Settings opened
 //! (`renderSettingsPage` in `v2.0.0:desktop/ui/app.js`). Every native window
 //! holds a Settings page, and most never show it, so a window builds its
-//! six categories, their sub-pages and some forty rows only when Settings
-//! is first shown or opened, rather than when the window is created.
+//! eight categories, their sub-pages and some sixty rows only when
+//! Settings is first shown or opened, rather than when the window is
+//! created.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -16,7 +17,8 @@ use super::pages::{Category, SettingsView, Subpage};
 use super::section::SettingsSection;
 use super::SettingsPage;
 use super::{
-    about, appearance, brave, default_apps, indexed_folders, indexing, troubleshooting, windows_tabs,
+    about, appearance, archives, confirmations, default_apps, files_folders, general, indexed_folders,
+    indexing, troubleshooting,
 };
 
 impl SettingsPage {
@@ -35,25 +37,25 @@ impl SettingsPage {
     }
 
     fn add_category_sections(&self) {
+        // The Default apps page builds the ZIP route's group, which the
+        // ZIP & archives page shows.
+        let (default_apps, zip_files) = default_apps::build(self);
         for category in Category::ALL {
-            let section = self.build_category(category);
-            self.add_page(category.as_str(), &section);
+            let section = match category {
+                Category::General => general::build(self),
+                Category::Appearance => appearance::build(self),
+                Category::FilesAndFolders => files_folders::build(self),
+                Category::Archives => archives::build(self, &zip_files),
+                Category::Confirmations => confirmations::build(self),
+                Category::Search => indexing::build(self),
+                Category::DefaultApps => default_apps.clone(),
+                Category::About => about::build(self),
+            };
+            self.add_page(category, &section);
             self.imp()
                 .category_sections
                 .borrow_mut()
                 .insert(category, section);
-        }
-    }
-
-    /// The page of `category`, from the category's own module.
-    fn build_category(&self, category: Category) -> SettingsSection {
-        match category {
-            Category::Appearance => appearance::build(self),
-            Category::SearchAndIndexing => indexing::build(self),
-            Category::DefaultApps => default_apps::build(self),
-            Category::WindowsAndTabs => windows_tabs::build(self),
-            Category::BraveAndDownloads => brave::build(self),
-            Category::About => about::build(self),
         }
     }
 
@@ -65,7 +67,7 @@ impl SettingsPage {
             .expect("the sub-pages are built once");
         let subpages = [
             (Subpage::IndexedFolders, indexed_page),
-            (Subpage::FolderSizes, indexing::build_folder_sizes()),
+            (Subpage::FolderSizes, files_folders::build_folder_sizes()),
             (Subpage::Troubleshooting, troubleshooting::build()),
         ];
         for (subpage, section) in subpages {
@@ -76,13 +78,22 @@ impl SettingsPage {
                     move |_| settings.show_view(SettingsView::Category(subpage.category()))
                 ));
             }
-            self.add_page(subpage.as_str(), &section);
+            self.add_named_page(subpage.as_str(), &section);
             self.imp().subpages.borrow_mut().insert(subpage, section);
         }
     }
 
-    /// Adds `section` to the stack as `name`, scrolling on its own.
-    fn add_page(&self, name: &str, section: &SettingsSection) {
+    /// Adds `section`, the page of `category`, to the stack, and keeps
+    /// the box that holds it: a search shows every category's section on
+    /// one page of results, and puts each back here when it ends.
+    fn add_page(&self, category: Category, section: &SettingsSection) {
+        let content = self.add_named_page(category.as_str(), section);
+        self.imp().category_hosts.borrow_mut().insert(category, content);
+    }
+
+    /// Adds `section` to the stack as `name`, scrolling on its own, and
+    /// returns the box that holds it.
+    fn add_named_page(&self, name: &str, section: &SettingsSection) -> gtk::Box {
         let content = gtk::Box::builder().css_classes(["settings-content"]).build();
         content.append(section);
         let scrolled = gtk::ScrolledWindow::builder()
@@ -90,6 +101,7 @@ impl SettingsPage {
             .child(&content)
             .build();
         self.imp().pages.add_named(&scrolled, Some(name));
+        content
     }
 
     /// Lays every section out for the width the page last took.

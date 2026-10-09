@@ -17,6 +17,7 @@ use super::category_row::CategoryRow;
 use super::choice_list::ChoiceList;
 use super::pages::{Category, SettingsView, Subpage};
 use super::row::SettingRow;
+use super::section::SettingsSection;
 use super::status_card::StatusCard;
 use super::SettingsPage;
 use crate::test_support::harness::{descendants, skin, wait_until, Fixture, TestWindow, ThemeGuard};
@@ -25,6 +26,7 @@ use crate::text_size::TextSize;
 use crate::window::WindowAction;
 
 mod indexing;
+mod redesign;
 
 /// A window on the standard fixture with Settings open in front.
 struct SettingsTest {
@@ -71,12 +73,26 @@ impl SettingsTest {
             .clone()
     }
 
-    /// The titles of the rows the category page shown now shows.
+    /// The titles of the rows the category page shown now shows, or
+    /// would show with its folded groups open: the rows the search keeps.
     fn shown_rows(&self) -> Vec<&'static str> {
-        let category = self.page.view().category();
-        let rows = self.page.category_section(category).rows();
-        let shown = rows.into_iter().filter(WidgetExt::is_visible);
+        let sections = self.shown_sections().into_iter();
+        let rows = sections.flat_map(|section| section.rows());
+        let shown = rows.filter(WidgetExt::get_visible);
         shown.map(|row| row.text().title).collect()
+    }
+
+    /// The category pages shown now: every one with matches among the
+    /// search results, else the chosen one.
+    fn shown_sections(&self) -> Vec<SettingsSection> {
+        if self.page.imp().search_entry.text().is_empty() {
+            let category = self.page.view().category();
+            return vec![self.page.category_section(category)];
+        }
+        let results = self.result_categories().into_iter();
+        results
+            .map(|category| self.page.category_section(category))
+            .collect()
     }
 
     /// The radio button of the theme card `name`, such as "Dark".
@@ -90,17 +106,27 @@ impl SettingsTest {
 
     /// Whether the category page shown now shows its status card.
     fn shows_status_card(&self) -> bool {
-        let category = self.page.view().category();
-        let section = self.page.category_section(category);
-        let cards = descendants::<StatusCard>(&section);
-        cards.iter().any(WidgetExt::is_visible)
+        let sections = self.shown_sections().into_iter();
+        let cards = sections.flat_map(|section| descendants::<StatusCard>(&section));
+        cards.into_iter().any(|card| card.is_visible())
     }
 
-    /// The categories the list shows now.
+    /// The categories the list shows now: none while it is hidden.
     fn listed_categories(&self) -> Vec<Category> {
+        if !self.page.imp().category_list.is_visible() {
+            return Vec::new();
+        }
         let rows = self.page.category_rows().into_iter();
         let listed = rows.filter(WidgetExt::is_child_visible);
         listed.map(|row| row.category()).collect()
+    }
+
+    /// The categories whose matches the search results show, in order.
+    fn result_categories(&self) -> Vec<Category> {
+        let shown = Category::ALL.into_iter();
+        shown
+            .filter(|category| self.page.category_section(*category).get_visible())
+            .collect()
     }
 
     /// The category the list shows as chosen.
@@ -162,7 +188,7 @@ fn a_window_builds_its_settings_rows_when_settings_is_first_shown() {
     test.activate("settings", None);
 
     assert!(!descendants::<SettingRow>(&page).is_empty());
-    assert_eq!(page.view(), SettingsView::Category(Category::Appearance));
+    assert_eq!(page.view(), SettingsView::Category(Category::General));
 }
 
 /// A window whose first tab is Settings, as `OPENXPLORER_START=ox:settings`
@@ -201,11 +227,13 @@ fn the_navigation_column_names_the_page_its_search_and_categories() {
     assert_eq!(
         titles,
         [
+            "General",
             "Appearance",
-            "Search & indexing",
+            "Files & folders",
+            "ZIP & archives",
+            "Confirmations",
+            "Search",
             "Default apps",
-            "Windows & tabs",
-            "Brave & downloads",
             "About"
         ]
     );
@@ -218,7 +246,7 @@ fn the_navigation_column_names_the_page_its_search_and_categories() {
 fn choosing_a_category_shows_only_that_category() {
     let settings = SettingsTest::open();
     let pages = &settings.page.imp().pages;
-    assert_eq!(pages.visible_child_name().as_deref(), Some("appearance"));
+    assert_eq!(pages.visible_child_name().as_deref(), Some("general"));
 
     let default_apps = settings
         .page
@@ -246,14 +274,11 @@ fn arrow_keys_move_through_the_categories() {
     let chosen = list.selected_row().expect("a category is chosen");
     assert!(chosen.grab_focus());
     list.emit_move_cursor(gtk::MovementStep::DisplayLines, 1, false, false);
-    assert_eq!(
-        settings.page.view(),
-        SettingsView::Category(Category::SearchAndIndexing)
-    );
+    assert_eq!(settings.page.view(), SettingsView::Category(Category::Appearance));
     list.emit_move_cursor(gtk::MovementStep::DisplayLines, 1, false, false);
     assert_eq!(
         settings.page.view(),
-        SettingsView::Category(Category::DefaultApps)
+        SettingsView::Category(Category::FilesAndFolders)
     );
 }
 
@@ -279,8 +304,8 @@ fn the_search_filters_rows_across_every_category() {
         },
         SearchCase {
             typed: "watch live",
-            categories: &[Category::SearchAndIndexing],
-            shown: &["Watch folders for live changes"],
+            categories: &[Category::Search],
+            shown: &["Watch folders for changes"],
         },
         SearchCase {
             typed: "dolphin",
@@ -289,21 +314,24 @@ fn the_search_filters_rows_across_every_category() {
         },
         SearchCase {
             typed: "brave",
-            categories: &[Category::DefaultApps, Category::BraveAndDownloads],
+            categories: &[Category::DefaultApps],
             shown: &[
-                "Include Show in folder",
-                "Brave and other apps",
-                "Troubleshooting",
-                "Disable Show in folder",
+                "Also handle “Show in folder”",
+                "“Show in folder” from browsers and apps",
+                "Brave saves to my Linux Downloads folder",
+                "Turn off Show in folder",
+                "Setup help for Zorin and Brave",
             ],
         },
     ];
     for case in cases {
         settings.page.search(case.typed);
-        assert_eq!(settings.listed_categories(), case.categories, "{}", case.typed);
+        assert_eq!(settings.listed_categories(), Category::ALL, "{}", case.typed);
+        assert_eq!(settings.chosen_category(), None, "{}", case.typed);
+        assert_eq!(settings.result_categories(), case.categories, "{}", case.typed);
         assert_eq!(settings.shown_rows(), case.shown, "{}", case.typed);
     }
-    let count = &settings.page.imp().match_count;
+    let count = settings.page.imp().match_count();
     assert!(count.is_visible());
     assert_eq!(count.text(), "5 matching settings");
 }
@@ -328,21 +356,27 @@ fn the_search_finds_what_buttons_options_and_headings_show() {
     let cases = [
         ShownTextCase {
             typed: "refresh all",
-            category: Category::SearchAndIndexing,
+            category: Category::Search,
             shows_status_card: true,
-            shown: &["Network / fallback checks"],
+            // "all" is in the privacy note ("locally"), in the row's ⓘ.
+            shown: &["Indexed folders", "Check network and unwatched folders every"],
         },
         ShownTextCase {
             typed: "make openxplorer default",
             category: Category::DefaultApps,
             shows_status_card: true,
-            shown: &["Include Show in folder", "Also open ZIP files"],
+            shown: &["Also handle “Show in folder”", "Also open ZIP files"],
         },
         ShownTextCase {
             typed: "refresh status",
             category: Category::DefaultApps,
             shows_status_card: false,
-            shown: &["Folders", "SMB links", "ZIP files"],
+            shown: &[
+                "Folders",
+                "Network (SMB) links",
+                "“Show in folder” from browsers and apps",
+                "Other apps' Open and Save dialogs",
+            ],
         },
         ShownTextCase {
             typed: "compact actions",
@@ -353,8 +387,8 @@ fn the_search_finds_what_buttons_options_and_headings_show() {
     ];
     for case in cases {
         settings.page.search(case.typed);
-        let view = settings.page.view();
-        assert_eq!(view, SettingsView::Category(case.category), "{}", case.typed);
+        let results = settings.result_categories();
+        assert_eq!(results, [case.category], "{}", case.typed);
         assert_eq!(
             settings.shows_status_card(),
             case.shows_status_card,
@@ -375,13 +409,13 @@ fn enter_on_a_status_card_match_jumps_to_the_card() {
 
     settings.page.imp().search_entry.emit_activate();
 
-    let section = settings.page.category_section(Category::SearchAndIndexing);
+    let section = settings.page.category_section(Category::Search);
     let card = descendants::<StatusCard>(&section)
         .into_iter()
         .next()
-        .expect("Search & indexing has a status card");
+        .expect("Search has a status card");
     assert!(card.has_css_class("jump-target"));
-    assert_eq!(settings.page.imp().match_count.text(), "2 matching settings");
+    assert_eq!(settings.page.imp().match_count().text(), "3 matching settings");
 }
 
 /// parity: SET-019
@@ -390,9 +424,10 @@ fn a_search_that_matches_nothing_says_so() {
     let settings = SettingsTest::open();
     settings.page.search("no such setting");
     let imp = settings.page.imp();
-    assert_eq!(imp.match_count.text(), "No matching settings");
+    assert_eq!(imp.match_count().text(), "No matching settings");
     assert_eq!(imp.pages.visible_child_name().as_deref(), Some("no-matches"));
-    assert!(settings.listed_categories().is_empty());
+    assert_eq!(settings.listed_categories(), Category::ALL);
+    assert_eq!(settings.chosen_category(), None);
 }
 
 /// More > Default file explorer… names its category, so it shows all of
@@ -437,11 +472,9 @@ fn enter_in_the_search_jumps_to_the_first_match() {
 
     settings.page.imp().search_entry.emit_activate();
 
-    assert_eq!(
-        settings.page.view(),
-        SettingsView::Category(Category::SearchAndIndexing)
-    );
-    let row = settings.row("Network / fallback checks");
+    assert_eq!(settings.page.view(), SettingsView::Category(Category::Search));
+    assert_eq!(settings.chosen_category(), None, "the search goes on");
+    let row = settings.row("Check network and unwatched folders every");
     assert!(row.has_css_class("jump-target"));
     let focus = GtkWindowExt::focus(&settings.test.window).expect("a control has focus");
     assert!(focus.is_ancestor(&row), "the row's drop-down has keyboard focus");
@@ -451,12 +484,15 @@ fn enter_in_the_search_jumps_to_the_first_match() {
 #[gtk::test]
 fn escape_leaves_the_search_and_shows_every_row_again() {
     let settings = SettingsTest::open();
+    settings
+        .page
+        .show_view(SettingsView::Category(Category::Appearance));
     settings.page.search("zoom");
 
     settings.page.imp().search_entry.emit_stop_search();
 
     assert_eq!(settings.page.imp().search_entry.text(), "");
-    assert!(!settings.page.imp().match_count.is_visible());
+    assert!(!settings.page.imp().match_count().is_visible());
     assert_eq!(settings.listed_categories(), Category::ALL);
     assert_eq!(
         settings.shown_rows(),
@@ -464,21 +500,10 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Theme",
             "Text size",
             "Use the desktop font",
-            "Right-click menu",
-            "Show previews",
-            "Show previews in network folders",
-            "Skip previews of large files",
-            "Preview pictures",
-            "Preview videos",
-            "Preview documents and other files",
-            "Show the number of items in folders",
             "Compact view",
-            "Relative dates",
-            "Remember each folder's view",
-            "Item check boxes",
-            "Expandable folders",
-            "Sidebar and column widths",
-            "Hide expand arrows"
+            "Hide expand arrows in the sidebar",
+            "Right-click menu",
+            "Sidebar and column widths"
         ]
     );
 }
@@ -509,26 +534,38 @@ fn every_setting_of_the_python_page_has_a_row() {
         offered_by("Text size", "Text size"),
         offered_by("Right-click menu", "Right-click menu"),
         offered_by("Reset sidebar and column widths", "Sidebar and column widths"),
-        offered_by("Folders to index", "Folders to index"),
-        offered_by("Watch folders for live changes", "Watch folders for live changes"),
-        offered_by("Network / fallback checks", "Network / fallback checks"),
+        offered_by("Folders to index", "Indexed folders"),
+        offered_by("Watch folders for live changes", "Watch folders for changes"),
+        offered_by(
+            "Network / fallback checks",
+            "Check network and unwatched folders every",
+        ),
         offered_by("Calculate folder sizes", "Calculate folder sizes"),
         offered_by("Folders", "Folders"),
-        offered_by("SMB links", "SMB links"),
-        offered_by("ZIP files", "ZIP files"),
-        offered_by("Include Show in folder", "Include Show in folder"),
+        offered_by("SMB links", "Network (SMB) links"),
+        offered_by("ZIP files", "Open ZIP files from other apps with OpenXplorer"),
+        offered_by("Include Show in folder", "Also handle “Show in folder”"),
         offered_by("Also open ZIP files in OpenXplorer", "Also open ZIP files"),
-        offered_by("Use OpenXplorer for ZIPs", "ZIP files"),
-        offered_by("Test Show in folder", "Brave and other apps"),
-        offered_by("Enable Show in folder", "Brave and other apps"),
-        offered_by("Zorin + Brave setup and troubleshooting", "Troubleshooting"),
-        offered_by("Restore previous", "Restore previous"),
-        offered_by("Restore ZIP handler", "Restore ZIP handler"),
-        offered_by("Disable Show in folder", "Disable Show in folder"),
+        offered_by(
+            "Use OpenXplorer for ZIPs",
+            "Open ZIP files from other apps with OpenXplorer",
+        ),
+        offered_by("Test Show in folder", "“Show in folder” from browsers and apps"),
+        offered_by("Enable Show in folder", "“Show in folder” from browsers and apps"),
+        offered_by(
+            "Zorin + Brave setup and troubleshooting",
+            "Setup help for Zorin and Brave",
+        ),
+        offered_by("Restore previous", "Restore the previous file handlers"),
+        offered_by("Restore ZIP handler", "Give ZIP files back to the previous app"),
+        offered_by("Disable Show in folder", "Turn off Show in folder"),
         offered_by("Open windows", "Open windows"),
         offered_by("New window", "New window"),
         offered_by("Move tabs between windows", "Move tabs between windows"),
-        offered_by("Use Linux Downloads in Brave", "Use Linux Downloads in Brave"),
+        offered_by(
+            "Use Linux Downloads in Brave",
+            "Brave saves to my Linux Downloads folder",
+        ),
         offered_by("OpenXplorer · License & source", "OpenXplorer · License & source"),
     ];
     for setting in python_settings {
@@ -540,7 +577,11 @@ fn every_setting_of_the_python_page_has_a_row() {
 
 /// Rows that work but disable their button while there is nothing for it
 /// to do, as Restore previous with no handler recorded (INT-030).
-const ROWS_FOLLOWING_THEIR_STATE: [&str; 3] = ["Restore previous", "Restore ZIP handler", "ZIP files"];
+const ROWS_FOLLOWING_THEIR_STATE: [&str; 3] = [
+    "Restore the previous file handlers",
+    "Give ZIP files back to the previous app",
+    "Open ZIP files from other apps with OpenXplorer",
+];
 
 /// Every row of every category works: its controls take input, except
 /// those that wait for something to do.
@@ -597,6 +638,9 @@ fn a_theme_card_applies_the_theme_and_saves_it_for_both_apps() {
 fn the_arrow_keys_move_between_the_theme_cards_and_choose_them() {
     let _theme = ThemeGuard::keep();
     let settings = SettingsTest::open();
+    settings
+        .page
+        .show_view(SettingsView::Category(Category::Appearance));
     let light = settings.theme_radio("Light");
     let dark = settings.theme_radio("Dark");
     for radio in [&settings.theme_radio("System"), &light, &dark] {
@@ -680,7 +724,7 @@ fn the_text_size_row_draws_and_saves_the_chosen_size() {
 #[gtk::test]
 fn the_expand_arrows_switch_saves_the_choice() {
     let settings = SettingsTest::open();
-    let switch = switch_of(&settings.row("Hide expand arrows"));
+    let switch = switch_of(&settings.row("Hide expand arrows in the sidebar"));
     assert!(!switch.is_active(), "the arrows are shown by default");
 
     switch.set_active(true);
@@ -719,8 +763,8 @@ fn the_compact_view_switch_saves_the_choice() {
 fn the_menu_watch_and_interval_rows_save_the_python_keys() {
     let settings = SettingsTest::open();
     choices_of(&settings.row("Right-click menu")).choose_labelled("Windows 11 · Compact actions");
-    switch_of(&settings.row("Watch folders for live changes")).set_active(false);
-    choices_of(&settings.row("Network / fallback checks")).choose_labelled("5 minutes");
+    switch_of(&settings.row("Watch folders for changes")).set_active(false);
+    choices_of(&settings.row("Check network and unwatched folders every")).choose_labelled("5 minutes");
 
     wait_until("the three preferences to be saved", || {
         let saved = settings.saved_preferences();
@@ -739,7 +783,7 @@ fn the_menu_watch_and_interval_rows_save_the_python_keys() {
 #[gtk::test]
 fn open_zip_files_waits_for_open_archives_as_folders() {
     let settings = SettingsTest::open();
-    let opening = settings.row("Open ZIP files");
+    let opening = settings.row("Double-clicking a ZIP");
     let is_usable = || opening.controls().iter().all(WidgetExt::is_sensitive);
     assert!(is_usable());
 
@@ -763,14 +807,14 @@ fn the_rows_show_what_the_python_app_saved() {
     // changes.
     settings.test.activate("refresh", None);
 
-    let watch = switch_of(&settings.row("Watch folders for live changes"));
+    let watch = switch_of(&settings.row("Watch folders for changes"));
     wait_until("the rows to show the Python app's values", || !watch.is_active());
     assert_eq!(
         choices_of(&settings.row("Right-click menu")).chosen_label(),
         "Windows 11 · Compact actions"
     );
     assert_eq!(
-        choices_of(&settings.row("Network / fallback checks")).chosen_label(),
+        choices_of(&settings.row("Check network and unwatched folders every")).chosen_label(),
         "30 seconds"
     );
     assert!(
@@ -783,7 +827,7 @@ fn the_rows_show_what_the_python_app_saved() {
 #[gtk::test]
 fn manage_opens_the_indexed_folders_page_and_back_returns() {
     let settings = SettingsTest::open();
-    let manage = settings.row("Folders to index").controls()[0]
+    let manage = settings.row("Indexed folders").controls()[0]
         .clone()
         .downcast::<gtk::Button>()
         .expect("Manage… is a button");
@@ -819,13 +863,10 @@ fn manage_opens_the_indexed_folders_page_and_back_returns() {
         .back_button()
         .expect("a sub-page has a back arrow")
         .emit_clicked();
-    assert_eq!(
-        settings.page.view(),
-        SettingsView::Category(Category::SearchAndIndexing)
-    );
+    assert_eq!(settings.page.view(), SettingsView::Category(Category::Search));
 }
 
-/// The Python "Folder sizes" help moves off the Search & indexing page to
+/// The Python "Folder sizes" help moves off the Files & folders page to
 /// a page of its own, whole.
 ///
 /// parity: SET-019
@@ -875,7 +916,7 @@ fn default_apps_reads_which_app_opens_each_route() {
         return;
     }
     let settings = SettingsTest::open();
-    let values: Vec<gtk::Label> = ["Folders", "SMB links"]
+    let values: Vec<gtk::Label> = ["Folders", "Network (SMB) links"]
         .into_iter()
         .map(|title| {
             let control = settings.row(title).controls().into_iter().next();
@@ -884,7 +925,7 @@ fn default_apps_reads_which_app_opens_each_route() {
                 .expect("the route shows its app")
         })
         .collect();
-    let zip_files = settings.row("ZIP files");
+    let zip_files = settings.row("Open ZIP files from other apps with OpenXplorer");
     let section = settings.page.category_section(Category::DefaultApps);
     let card = descendants::<StatusCard>(&section)
         .into_iter()

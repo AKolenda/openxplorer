@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Appearance: the theme, the text size, the right-click menu, how files
-//! and folders are shown, and the pane widths.
+//! Appearance: the theme, the text size and font, the compact view, the
+//! navigation pane's arrows, the right-click menu and the pane widths.
 //!
 //! Ports the "Appearance & layout" section of `renderSettingsPage`,
 //! `textSizeControls` and `menuPreferenceControls` in
@@ -55,10 +55,11 @@ const RIGHT_CLICK_MENU: RowText = RowText {
 };
 
 const HIDE_EXPAND_ARROWS: RowText = RowText {
-    title: "Hide expand arrows",
+    title: "Hide expand arrows in the sidebar",
     description: "As in Windows, the navigation pane's arrows (This PC, Network and the folder tree) \
                   show only while you point at the pane or move through it with the keyboard.",
-    keywords: "chevron expander triangle sidebar navigation pane tree folders windows",
+    keywords: "hide expand arrows chevron expander triangle sidebar navigation pane tree folders \
+               windows",
 };
 
 const PANE_WIDTHS: RowText = RowText {
@@ -112,20 +113,22 @@ const THEME_CARDS: [ThemeCard; 3] = [
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::Appearance;
     let appearance = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
-    appearance.append_group(&theme_group());
-    appearance.append_group(&text_and_menus_group(page));
-    appearance.append_group(&super::folder_views::group(page));
+    appearance.append_group(&theme_group(page));
     appearance.append_group(&layout_group(page));
     appearance
 }
 
-fn theme_group() -> SettingsGroup {
-    // The row is called Theme already.
-    let group = SettingsGroup::new("");
+/// The theme, the text size and the font.
+fn theme_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Theme"));
     let row = SettingRow::new(THEME);
     row.add_control(&theme_cards(), ControlName::OwnLabel);
     row.set_roomy_layout(RowLayout::ControlsBelow);
     group.add_row(&row);
+    let text_size = SettingRow::new(TEXT_SIZE);
+    text_size.add_control(&text_size_choice(page), ControlName::RowTitle);
+    group.add_row(&text_size);
+    group.add_row(&desktop_font_row(page));
     group
 }
 
@@ -230,12 +233,8 @@ fn theme_preview() -> gtk::Box {
     preview
 }
 
-fn text_and_menus_group(page: &SettingsPage) -> SettingsGroup {
-    let group = SettingsGroup::new(&ox_core::i18n::gettext("Text and menus"));
-    let text_size = SettingRow::new(TEXT_SIZE);
-    text_size.add_control(&text_size_choice(page), ControlName::RowTitle);
-    group.add_row(&text_size);
-    group.add_row(&desktop_font_row(page));
+/// "Right-click menu": the menu's style.
+fn right_click_menu_row(page: &SettingsPage) -> SettingRow {
     let menu = SettingRow::new(RIGHT_CLICK_MENU);
     let binding = PreferenceBinding {
         read: |preferences| preferences.context_menu,
@@ -250,8 +249,7 @@ fn text_and_menus_group(page: &SettingsPage) -> SettingsGroup {
     );
     // The folder views' context menus follow the choice when they open
     // (CMD-008, src/window/context_menu.rs).
-    group.add_row(&menu);
-    group
+    menu
 }
 
 /// "Use the desktop font": the switch saves the choice and the skin draws
@@ -326,13 +324,11 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
     });
 }
 
+/// The compact view, the navigation pane's arrows, the right-click menu
+/// and the pane widths.
 fn layout_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Layout"));
-    let row = SettingRow::new(PANE_WIDTHS);
-    let reset = parts::button_with_glyph(&ox_core::i18n::gettext("Reset"), Icon::ArrowClockwise);
-    WindowAction::ResetLayout.assign_to(&reset);
-    row.add_control(&reset, ControlName::OwnLabel);
-    group.add_row(&row);
+    group.add_row(&super::files_folders::compact_view_row(page));
     let arrows = SettingRow::new(HIDE_EXPAND_ARROWS);
     let binding = PreferenceBinding {
         read: |preferences| preferences.hide_expand_arrows,
@@ -343,6 +339,12 @@ fn layout_group(page: &SettingsPage) -> SettingsGroup {
     };
     arrows.add_control(&page.preference_switch(binding), ControlName::RowTitle);
     group.add_row(&arrows);
+    group.add_row(&right_click_menu_row(page));
+    let row = SettingRow::new(PANE_WIDTHS);
+    let reset = parts::button_with_glyph(&ox_core::i18n::gettext("Reset"), Icon::ArrowClockwise);
+    WindowAction::ResetLayout.assign_to(&reset);
+    row.add_control(&reset, ControlName::OwnLabel);
+    group.add_row(&row);
     group
 }
 

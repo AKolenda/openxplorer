@@ -176,6 +176,42 @@ fn back_to_files_on_the_only_tab_opens_the_folder_shown_before() {
     assert!(test.window.is_visible(), "the window stays open");
 }
 
+/// Settings left with "Back to files" opens again with an empty search.
+///
+/// parity: SET-019
+#[gtk::test]
+fn back_to_files_empties_the_settings_search() {
+    let (_fixture, test) = window_with_settings_open();
+    let page = test.window.imp().settings_page.get();
+    test.window.search_settings("zoom");
+
+    page.back_to_files_button().emit_clicked();
+    test.activate("settings", None);
+
+    assert_eq!(page.search_text(), "");
+}
+
+/// Settings opened again after its tab was closed starts with an empty
+/// search; switching to another tab and back keeps the search.
+///
+/// parity: SET-019
+#[gtk::test]
+fn a_closed_settings_tab_opens_again_with_an_empty_search() {
+    let (_fixture, test) = window_with_settings_open();
+    let page = test.window.imp().settings_page.get();
+    test.window.search_settings("zoom");
+
+    test.activate("previous-tab", None);
+    test.activate("settings", None);
+    assert_eq!(page.search_text(), "zoom", "a tab switch keeps the search");
+
+    test.activate("close-tab", None);
+    assert!(!test.window.shows_settings());
+    test.activate("settings", None);
+
+    assert_eq!(page.search_text(), "");
+}
+
 #[gtk::test]
 fn ctrl_f_on_the_settings_tab_focuses_the_settings_search() {
     let (_fixture, test) = window_with_settings_open();

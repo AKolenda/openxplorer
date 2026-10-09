@@ -1,31 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Brave & downloads: Brave's download folder.
+//! Default apps ▸ Browsers: Brave's download folder.
 //!
 //! Ports the "Brave & downloads" section of `appendV07Settings` in
 //! `v2.0.0:desktop/ui/app.js` (INT-020, SET-009). "Use Linux Downloads in
 //! Brave…" opens the Brave dialog (`braveDialog`) on the user's Downloads
-//! folder, as `user-dirs.dirs` names it; the Python section's advice
-//! stays as notes.
+//! folder, as `user-dirs.dirs` names it; the Python section's advice is
+//! in the row's ⓘ.
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::places::{FolderLocations, KnownFolder};
 
-use super::group::SettingsGroup;
-use super::pages::Category;
 use super::parts;
 use super::row::{ControlName, SettingRow};
 use super::search::RowText;
-use super::section::{PageKind, SettingsSection};
 use super::SettingsPage;
-use crate::icons::Icon;
 use crate::integration::BraveDialog;
 use crate::window::ButtonStyle;
 
 const USE_LINUX_DOWNLOADS: RowText = RowText {
-    title: "Use Linux Downloads in Brave",
+    title: "Brave saves to my Linux Downloads folder",
     description: "Selected native Brave profiles save to your Linux Downloads folder.",
-    keywords: "brave download location downloads sync save as browser profile. Use the Linux \
+    keywords: "use linux downloads in brave brave download location downloads sync save as browser profile. Use the Linux \
                Downloads location in selected native Brave profiles.",
 };
 
@@ -43,12 +39,12 @@ const MANUAL_NOTE: &str = crate::i18n::message_id(
                            manually. SMB bookmarks are not persistent download paths.",
 );
 
-/// The Brave & downloads page.
-pub(super) fn build(page: &SettingsPage) -> SettingsSection {
-    let category = Category::BraveAndDownloads;
-    let brave = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
-    let group = SettingsGroup::new(&ox_core::i18n::gettext("Download folder"));
+/// The row whose button opens the Brave dialog, with the Python
+/// section's advice in its ⓘ.
+pub(super) fn downloads_row(page: &SettingsPage) -> SettingRow {
     let row = SettingRow::new(USE_LINUX_DOWNLOADS);
+    row.add_details(ox_core::i18n::gettext_static(SYNC_NOTE));
+    row.add_details(ox_core::i18n::gettext_static(MANUAL_NOTE));
     let sync = parts::button(
         &ox_core::i18n::gettext("Use Linux Downloads in Brave…"),
         ButtonStyle::Accent,
@@ -59,14 +55,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
         move |button| open_brave_dialog(&page, button)
     ));
     row.add_control(&sync, ControlName::OwnLabel);
-    group.add_row(&row);
-    brave.append_group(&group);
-    brave.append_text(&parts::note(Icon::Info, ox_core::i18n::gettext_static(SYNC_NOTE)));
-    brave.append_text(&parts::note(
-        Icon::Info,
-        ox_core::i18n::gettext_static(MANUAL_NOTE),
-    ));
-    brave
+    row
 }
 
 /// Opens the Brave dialog over the page's window, on the Downloads folder

@@ -65,17 +65,26 @@ impl DefaultAppsTest {
         handlers.get(&mime_type).cloned().unwrap_or_default()
     }
 
+    /// The pages this page's controls are on: Default apps, and ZIP &
+    /// archives, which shows the ZIP route.
+    fn sections(&self) -> [super::super::section::SettingsSection; 2] {
+        [Category::DefaultApps, Category::Archives].map(|category| self.page.category_section(category))
+    }
+
     fn row(&self, title: &str) -> SettingRow {
-        let rows = self.page.category_section(Category::DefaultApps).rows();
+        let rows = self.sections().into_iter().flat_map(|section| section.rows());
         rows.into_iter()
             .find(|row| row.text().title == title)
             .unwrap_or_else(|| panic!("Default apps has a row titled {title:?}"))
     }
 
-    /// The button labelled `label` on Default apps.
+    /// The button labelled `label` on Default apps or ZIP & archives.
     fn button(&self, label: &str) -> gtk::Button {
-        let section = self.page.category_section(Category::DefaultApps);
-        descendants::<gtk::Button>(&section)
+        let buttons = self
+            .sections()
+            .into_iter()
+            .flat_map(|section| descendants::<gtk::Button>(&section));
+        buttons
             .into_iter()
             .find(|button| button.label().as_deref() == Some(label))
             .unwrap_or_else(|| panic!("Default apps has a {label:?} button"))
@@ -127,7 +136,9 @@ fn making_openxplorer_the_default_can_be_undone() {
         "nothing is recorded yet"
     );
     assert!(
-        default_apps.switch_of("Include Show in folder").is_active(),
+        default_apps
+            .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+            .is_active(),
         "on by default"
     );
     assert!(
@@ -135,7 +146,9 @@ fn making_openxplorer_the_default_can_be_undone() {
         "off by default"
     );
     // Show in folder writes session files; this test leaves it alone.
-    default_apps.switch_of("Include Show in folder").set_active(false);
+    default_apps
+        .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+        .set_active(false);
 
     default_apps.button("Make OpenXplorer default").emit_clicked();
     wait_until("the page to say so", || {
@@ -186,9 +199,11 @@ fn the_dialog_buttons_wait_while_a_change_runs() {
         .filter_map(|control| control.downcast::<gtk::Button>().ok())
         .collect();
     assert_eq!(buttons.len(), 2, "Apply now and Enable");
-    buttons.push(default_apps.button(super::RESTORE_FILE_DIALOGS.title));
+    buttons.push(default_apps.button("Restore Open and Save dialogs"));
     let before: Vec<bool> = buttons.iter().map(gtk::Button::is_sensitive).collect();
-    default_apps.switch_of("Include Show in folder").set_active(false);
+    default_apps
+        .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+        .set_active(false);
 
     default_apps.button("Make OpenXplorer default").emit_clicked();
 
@@ -223,7 +238,7 @@ fn zip_files_are_taken_over_and_given_back_on_their_own() {
     }
     assert_eq!(default_apps.handler(MimeType::Directory), DOLPHIN);
     assert_eq!(
-        default_apps.row("ZIP files").shown_description(),
+        default_apps.row(super::ZIP_FILES.title).shown_description(),
         "ZIP opening: OpenXplorer. This is separate from folder defaults."
     );
     assert_eq!(
@@ -251,7 +266,9 @@ fn zip_files_are_taken_over_and_given_back_on_their_own() {
 fn show_in_folder_starts_disabled_and_its_test_needs_the_service() {
     let default_apps = DefaultAppsTest::open();
     assert_eq!(
-        default_apps.row("Brave and other apps").shown_description(),
+        default_apps
+            .row(super::BRAVE_AND_OTHER_APPS.title)
+            .shown_description(),
         "Show in folder: not enabled. Folder associations alone do not control every browser route."
     );
 

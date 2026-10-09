@@ -194,7 +194,7 @@
         "id": "enable",
         "title": "Choose what gets indexed",
         "paragraphs": [
-          "Settings → Search & indexing lists folders, SMB shares and mounted volumes. Check a root or add a custom path to index its filenames and metadata. The initial scan does not download file contents.",
+          "Settings → Search → Indexed folders → Manage lists folders, SMB shares and mounted volumes. Check a root or add a custom path to index its filenames and metadata. The initial scan does not download file contents.",
           "Each mounted filesystem is selected separately. Selecting Local Disk does not automatically traverse every other mounted volume."
         ]
       },
@@ -247,7 +247,7 @@
         "id": "handlers",
         "title": "Set folder and SMB handlers",
         "paragraphs": [
-          "Settings → Default file explorer → Make OpenXplorer default changes the per-user folder and SMB associations and records previous handlers. Installing the package does not do this for you."
+          "Settings → Default apps → Make OpenXplorer default changes the per-user folder and SMB associations and records previous handlers. Installing the package does not do this for you."
         ]
       },
       {
@@ -263,7 +263,7 @@
         "id": "zip-files",
         "title": "Open ZIP downloads in OpenXplorer",
         "paragraphs": [
-          "In Settings → Default file explorer, click Use OpenXplorer for ZIPs. This is an explicit, per-user change to ZIP associations, with a Restore ZIP handler button. It does not change PDF, video, or document defaults. Installation never changes these associations.",
+          "In Settings → ZIP & archives, click Use OpenXplorer for ZIPs. This is an explicit, per-user change to ZIP associations; Settings → Default apps → Undo and troubleshooting has the Restore ZIP handler button. It does not change PDF, video, or document defaults. Installation never changes these associations.",
           "A ZIP opens in the built-in ZIP browser; this setting does not automatically extract it. You can instead leave ZIPs assigned to an external archive manager."
         ],
         "code": "xdg-mime query default inode/directory\nxdg-mime query default application/zip\nopenxplorer --diagnose",
@@ -273,7 +273,7 @@
         "id": "file-dialogs",
         "title": "Open and Save dialogs",
         "paragraphs": [
-          "Settings → Default apps → Apps’ Open and Save dialogs → Enable makes other applications choose and save files in an OpenXplorer window: the same navigation pane, address bar and search, with File name, Save as type and the Save or Open button at the bottom. It works for applications that use the desktop portal for file dialogs, such as Chrome, Firefox and Flatpak apps; applications that draw their own dialog keep it. As in Windows, the File name box takes a name, a path from the folder shown, ~/… or a full path: a folder opens, a file is chosen, and Save adds the chosen type’s extension to a name without one. A file typed in the address bar is chosen too. Escape and Ctrl+Q cancel the dialog, Alt+Left, Alt+Right and Alt+Up work from the File name box, and Ctrl+N opens no other window.",
+          "Settings → Default apps → Other apps' Open and Save dialogs → Enable makes other applications choose and save files in an OpenXplorer window: the same navigation pane, address bar and search, with File name, Save as type and the Save or Open button at the bottom. It works for applications that use the desktop portal for file dialogs, such as Chrome, Firefox and Flatpak apps; applications that draw their own dialog keep it. As in Windows, the File name box takes a name, a path from the folder shown, ~/… or a full path: a folder opens, a file is chosen, and Save adds the chosen type’s extension to a name without one. A file typed in the address bar is chosen too. Escape and Ctrl+Q cancel the dialog, Alt+Left, Alt+Right and Alt+Up work from the File name box, and Ctrl+N opens no other window.",
           "Enabling writes one preference into your own desktop-portal configuration (the file the portal reads now, or a new ~/.config/xdg-desktop-portal/<desktop>-portals.conf) and records what the file held; every other portal, such as screenshots or screen sharing, keeps its backend. Click Apply now to restart the desktop portal when it runs as a user service, or log out and back in. Saving over an existing file always asks first.",
           "On KDE Plasma, KDE’s own apps (Plasma and its widgets, Kate, System Settings and the rest) show their own dialog unless told to use the portal, so Enable also adds ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh, which sets PLASMA_INTEGRATION_USE_PORTAL=1 when you log in. KDE apps follow after you log out and back in; Restore removes the file again. If a file of yours already has that name, OpenXplorer leaves it alone and the status line says KDE apps keep KDE’s dialog.",
           "Restore Open and Save dialogs puts the file back as it was, or, if you edited it since, removes only OpenXplorer’s line. The Flatpak cannot change the host’s portal, so this is available in the installed package only."
@@ -286,7 +286,7 @@
         "title": "Super+E on KDE Plasma",
         "paragraphs": [
           "On KDE Plasma, Settings → Default apps → Keyboard shortcut → Use Super+E makes Super+E open OpenXplorer, as Win+E opens File Explorer in Windows. Plasma gives Super+E to Dolphin; OpenXplorer asks KDE's shortcut service to move it, keeps Dolphin's other shortcuts, and records which app had it in its settings folder. The change lasts across logins and shows in System Settings → Shortcuts.",
-          "Advanced → Give Super+E back returns it to the app that had it. If you have given Super+E to another app since, it is left alone. Other desktops and the Flatpak do not offer this."
+          "Undo and troubleshooting → Give Super+E back returns it to the app that had it. If you have given Super+E to another app since, it is left alone. Other desktops and the Flatpak do not offer this."
         ]
       },
       {
@@ -386,14 +386,14 @@
         "title": "Two folders in one tab",
         "paragraphs": [
           "Press F3 or choose View → Split view to open two panes. Click either pane to make its path, selection and commands active. Each pane keeps its own folder and history. F3 again closes the active pane and keeps the other.",
-          "Settings → Windows & tabs → Startup lets you choose where new windows open and enable Restore previous tabs at startup. Session restoration is off by default. New tabs normally open beside the current tab."
+          "Settings → General → Start up lets you choose where new windows open and turn on Reopen my tabs when OpenXplorer starts. Session restoration is off by default. New tabs normally open beside the current tab."
         ]
       },
       {
         "id": "previews-and-tree",
         "title": "Previews and the folder tree",
         "paragraphs": [
-          "Settings → Appearance → Files and folders controls thumbnail previews, file types and the large-file limit. Previews in network folders are off by default. Missing previews use the desktop thumbnail service when available; supported local images can be generated by OpenXplorer. Files that cannot be previewed keep their icons.",
+          "Settings → Files & folders → Previews and thumbnails controls thumbnail previews, file types and the large-file limit. Previews in network folders are off by default. Missing previews use the desktop thumbnail service when available; supported local images can be generated by OpenXplorer. Files that cannot be previewed keep their icons.",
           "View → Folder tree (F7) shows a tree of folders below the navigation places. Expand a folder to read its subfolders. Its menu controls hidden folders, limiting the tree to Home and following the active folder. The arrows beside This PC and Network collapse and expand those sections; with the keyboard, press Left or Right on the section’s name. Settings → Appearance → Layout → Hide expand arrows shows the navigation pane’s arrows only while you point at the pane or move through it with the keyboard, as in Windows. Recent locations lists folders from desktop history and offers Clear recent locations."
         ]
       },
@@ -469,7 +469,7 @@
         "title": "Extract ZIP files",
         "paragraphs": [
           "Select a ZIP and click Extract all in the command bar, or right-click it and choose Extract all… in either context-menu style. As in Windows Explorer, one field says where the files go, filled in with the ZIP's folder and name (for example Downloads/tidewater); Browse… picks another folder. A folder that does not exist yet is created. Delete the last part to extract straight into an existing folder such as Downloads: if a file with the same name is already there, you are asked whether to replace or skip it. A ZIP holding one folder of the same name is not nested (no tidewater/tidewater). The ZIP stays unchanged, and Cancel is available in the transfer panel. The ⓘ button at the bottom left shows how many files the ZIP holds, a few notes, and Open in archive manager, which opens your archive manager (such as Ark) even when OpenXplorer opens ZIPs by default. A password-protected ZIP cannot be extracted here: the dialog says so and offers the archive manager.",
-          "To browse ZIPs like Windows Explorer does, set Settings → Windows & tabs → Open ZIP files to Like a folder. Opening a ZIP then shows it in the tab: the address bar shows the path through it, folders inside open in the tab, Back and Up work, and Extract all appears in the bar. The ZIP stays read-only; Copy (then Paste anywhere) and dragging items out hand over real copies, which OpenXplorer unpacks into ~/.cache/winspace/zip-copies and removes after a day. The default, In a pop-up window, keeps the Compressed folder window.",
+          "To browse ZIPs like Windows Explorer does, set Settings → ZIP & archives → Double-clicking a ZIP to Like a folder. Opening a ZIP then shows it in the tab: the address bar shows the path through it, folders inside open in the tab, Back and Up work, and Extract all appears in the bar. The ZIP stays read-only; Copy (then Paste anywhere) and dragging items out hand over real copies, which OpenXplorer unpacks into ~/.cache/winspace/zip-copies and removes after a day. The default, In a pop-up window, keeps the Compressed folder window.",
           "Local and already connected SMB locations are supported by the implementation; live SMB extraction still needs target-machine validation. Sign into the relevant shares first. Password-protected ZIPs, unsupported methods, and files exceeding the built-in safety limits need an external archive manager. Double-click continues to browse without extracting the entire ZIP."
         ]
       },
@@ -477,7 +477,7 @@
         "id": "text-size",
         "title": "Make text easier to read",
         "paragraphs": [
-          "Ctrl + (or Ctrl =) increases text, Ctrl − decreases it, and Ctrl 0 resets to 100%. Settings → Appearance & layout → Text size offers 80% through 200%. The preference is saved across restarts and applied to open windows.",
+          "Ctrl + (or Ctrl =) increases text, Ctrl − decreases it, and Ctrl 0 resets to 100%. Settings → Appearance → Text size offers 80% through 200%. The preference is saved across restarts and applied to open windows.",
           "Only the application text and needed row spacing change; desktop scaling and file data remain unchanged. Sidebar and column widths remain resizable."
         ]
       },

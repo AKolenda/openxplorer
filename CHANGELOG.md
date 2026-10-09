@@ -17,6 +17,27 @@
   instant as it opens, which could make GTK lay widgets over each other
   in a narrow window or with wide fonts: the empty-folder page scrolls
   instead of making its pane taller when narrow.
+- Settings is laid out anew, from a settings mockup: eight pages (General,
+  Appearance, Files & folders, ZIP & archives, Confirmations, Search,
+  Default apps, About), one short line per setting with its details in
+  an ⓘ bubble that shows while the pointer (or the keyboard) is on it,
+  rarely changed settings folded away (Previews and thumbnails, Dragging
+  tabs and files, Undo and troubleshooting), and a search that shows the
+  matching settings of every page on one page, headed by how many match.
+  The page list stays as it is during a search, with no page chosen, and
+  choosing a page ends the search and opens it. Settings opened again
+  after Back to files or after its tab was closed starts with an empty
+  search. An ⓘ bubble opens only for the pointer or the keyboard: a page
+  chosen with a click no longer opens one that stayed until the window
+  lost focus, and one open when its page is left no longer comes back
+  with the page. The search also finds a setting by other words people
+  use for it ("chevron" or "tree" for the expand arrows, "dark mode" for
+  Theme, "wastebasket" for the Recycle Bin) and by other endings of a
+  word ("arrow", "chevrons"), looking for those only in what names a
+  setting so that a search does not fill with settings that only mention
+  a word; everything the literal words found is still found. Every
+  setting is still there, with the same options and defaults, and a
+  search for its earlier name still finds it.
 - Item check boxes as in Windows 11, in place of the plus and minus that
   showed on an icon's corner (#80): each item has a check box, filled
   solid with the accent when checked, that shows while its row or tile is

@@ -3,8 +3,7 @@
 <!--
   One category in the Settings list (src/settings_page/category_row.rs):
   the accent bar of the chosen row, the category's coloured glyph and
-  name, and while a search is typed the number of its matching settings.
-  resources/skin/settings.css draws the bar and the count.
+  name. resources/skin/settings.css draws the bar.
 -->
 <interface>
   <requires lib="gtk" version="4.14"/>
@@ -35,15 +34,6 @@
             <property name="xalign">0</property>
             <property name="hexpand">true</property>
             <property name="ellipsize">end</property>
-          </object>
-        </child>
-        <child>
-          <object class="GtkLabel" id="count">
-            <property name="visible">false</property>
-            <property name="valign">center</property>
-            <style>
-              <class name="category-count"/>
-            </style>
           </object>
         </child>
       </object>

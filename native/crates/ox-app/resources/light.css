@@ -95,8 +95,10 @@
 @define-color ox_category_appearance #9a79cb;
 @define-color ox_category_search @ox_accent;
 @define-color ox_category_default_apps #138266;
-@define-color ox_category_windows #3b8ec7;
-@define-color ox_category_brave #b48540;
+@define-color ox_category_general #3b8ec7;
+@define-color ox_category_files #c19c00;
+@define-color ox_category_archives #b48540;
+@define-color ox_category_confirmations #c4314b;
 @define-color ox_category_about @ox_muted;
 /* The theme cards show each palette's own surfaces in both themes */
 @define-color ox_preview_light_title #eff1f4;

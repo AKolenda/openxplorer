@@ -149,7 +149,7 @@ impl StatusCard {
         let title = imp.title_label.text();
         let text = imp.text_label.text();
         let actions = shown_text(&*imp.actions);
-        let finding = query.find_in(&[&title, &text, &actions]);
+        let finding = query.find_in_parts(&[&title, &actions], &[&text]);
         finding.show_on(self);
         !query.is_empty() && finding.is_shown()
     }

@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! One setting: a title and a one-line description on the left, a compact
-//! control on the right.
+//! One setting: a one-line title on the left, with an ⓘ whose bubble has
+//! the details, and a compact control on the right.
 //!
 //! Replaces the `.settings-line` rows of `v2.0.0:desktop/ui/app.js`
-//! (`renderSettingsPage`), whose controls sat under long paragraphs. The
-//! static layout is the template `resources/ui/settings-row.ui`.
+//! (`renderSettingsPage`), whose controls sat under long paragraphs. As in
+//! the settings mockup, each row is one short line; what it used to say
+//! under its name is in the ⓘ's bubble ([`InfoBubble`]). A row whose line
+//! states something read later, such as the app that opens ZIP files,
+//! still shows that status under its name. The static layout is the
+//! template `resources/ui/settings-row.ui`.
 
-use std::cell::{Cell, OnceCell};
+use std::cell::{Cell, OnceCell, RefCell};
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::i18n::gettext;
 
+use super::info_bubble::InfoBubble;
 use super::search::{jump_to, shown_text, RowText, SearchQuery};
 use crate::window::children;
 
@@ -46,7 +51,7 @@ pub(crate) enum RowLayout {
 }
 
 mod imp {
-    use super::{Cell, OnceCell, RowLayout, RowText};
+    use super::{Cell, InfoBubble, OnceCell, RefCell, RowLayout, RowText};
     use gtk::glib;
     use gtk::subclass::prelude::*;
 
@@ -54,12 +59,19 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/settings-row.ui")]
     pub(crate) struct SettingRow {
+        /// The name and the ⓘ after it.
+        #[template_child]
+        pub(super) title_line: TemplateChild<gtk::Grid>,
         /// The row's name.
         #[template_child]
         pub(super) title_label: TemplateChild<gtk::Label>,
-        /// The line under the name.
+        /// A live status under the name, for the rows that have one.
         #[template_child]
         pub(super) description_label: TemplateChild<gtk::Label>,
+        /// The ⓘ with the row's details, when it has any.
+        pub(super) info: OnceCell<InfoBubble>,
+        /// Details added after the row's own, which the search finds too.
+        pub(super) more_words: RefCell<String>,
         /// The switch, drop-down or buttons.
         #[template_child]
         pub(super) control_slot: TemplateChild<gtk::Box>,
@@ -102,15 +114,42 @@ glib::wrapper! {
 }
 
 impl SettingRow {
-    /// A row saying `text`, without controls yet.
+    /// A row saying `text`, without controls yet: its title on one line,
+    /// and its description in the ⓘ's bubble.
     pub(crate) fn new(text: RowText) -> Self {
         let row: Self = glib::Object::new();
         let imp = row.imp();
         imp.title_label.set_text(&gettext(text.title));
-        imp.description_label.set_text(&gettext(text.description));
-        imp.description_label.set_visible(!text.description.is_empty());
+        imp.description_label.set_visible(false);
         imp.text.set(text).expect("a new row has no text yet");
+        if !text.description.is_empty() {
+            row.add_details(&gettext(text.description));
+        }
         row
+    }
+
+    /// Adds `details` to the ⓘ's bubble, opening one if the row has none
+    /// yet, such as a note that used to follow the row's group. The
+    /// settings search finds the row by them too.
+    pub(crate) fn add_details(&self, details: &str) {
+        let imp = self.imp();
+        if let Some(info) = imp.info.get() {
+            info.add_paragraph(details);
+            let mut more = imp.more_words.borrow_mut();
+            more.push(' ');
+            more.push_str(details);
+            return;
+        }
+        let title = imp.title_label.text();
+        let info = InfoBubble::new(&title, details);
+        imp.title_line.attach(info.widget(), 1, 0, 1, 1);
+        let _ = imp.info.set(info);
+    }
+
+    /// The ⓘ with the row's details, when it has any.
+    #[cfg(test)]
+    pub(crate) fn info(&self) -> Option<&InfoBubble> {
+        self.imp().info.get()
     }
 
     /// What the row says.
@@ -118,9 +157,10 @@ impl SettingRow {
         *self.imp().text.get().expect("SettingRow::new sets the text")
     }
 
-    /// Shows `description` under the title in place of the row's own, for
-    /// a line that states something read later, such as the app that opens
-    /// ZIP files. The search still finds the row by its own words.
+    /// Shows `description` under the title, for a line that states
+    /// something read later, such as the app that opens ZIP files. The
+    /// row's own details stay in its ⓘ, and the search still finds the
+    /// row by its own words.
     pub(crate) fn set_description(&self, description: &str) {
         let label = &self.imp().description_label;
         label.set_text(description);
@@ -145,6 +185,11 @@ impl SettingRow {
         };
         let control = control.upcast_ref::<gtk::Widget>();
         control.update_relation(&[relation]);
+        // The details the ⓘ shows are read with the control, so a screen
+        // reader user needs no bubble.
+        if let (ControlName::RowTitle, Some(info)) = (name, imp.info.get()) {
+            control.update_property(&[gtk::accessible::Property::Description(&info.details())]);
+        }
         imp.control_slot.append(control);
     }
 
@@ -157,9 +202,10 @@ impl SettingRow {
     /// of its controls or `heading`, what its group's heading shows; marks
     /// it as a match while a search is typed, and says whether it shows.
     pub(crate) fn apply_query(&self, query: &SearchQuery, heading: &str) -> bool {
-        let words = self.text().words();
+        let text = self.text();
+        let details = format!("{} {}", text.detail_words(), self.imp().more_words.borrow());
         let controls = shown_text(&*self.imp().control_slot);
-        let finding = query.find_in(&[&words, &controls, heading]);
+        let finding = query.find_in_parts(&[&text.name_words(), &controls, heading], &[&details]);
         finding.show_on(self);
         finding.is_shown()
     }

@@ -121,7 +121,6 @@ const FONT_SIZES: &[FontSize] = &[
     font("entry.settings-search", 13.0),
     font(".settings-match-count", 12.0),
     font("list.settings-categories > row", 13.0),
-    font(".settings-categories .category-count", 11.0),
     font(".settings .page-title", 24.0),
     font(".settings .page-lead", 14.0),
     font(".settings .group-title", 13.0),
