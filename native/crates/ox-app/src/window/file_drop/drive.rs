@@ -3,23 +3,25 @@
 //! on, which decides what a plain drag does (DND-017): Windows Explorer
 //! moves items dragged within a drive and copies them to another drive.
 //!
-//! A drive is a local filesystem, told apart by its device number, which
-//! is also what decides whether a rename can move an item. Only local
-//! `file:` items count: a network folder, a mount of the session's GIO
-//! daemons and a document portal path share one device number for many
-//! shares or files, so a drop there, or from there, stays a copy.
+//! A drive is one mount of a local filesystem
+//! ([`ox_core::drive::Drive`]), which is also what decides whether a
+//! rename can move an item. Only local `file:` items count: a network
+//! folder, a mount of the session's GIO daemons and a document portal path
+//! share one device number for many shares or files, and a kernel mount of
+//! a share is a network place too, so a drop there, or from there, stays a
+//! copy.
 //!
 //! Reading a file's device number can block for long on a kernel mount of
 //! a share that stopped answering, so it is never read on the GTK thread:
 //! the drop reads it once its items are known, on a worker thread and for
 //! a limited time ([`answer_within`]).
 
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use ox_core::drive::Drive;
 
 /// What `check` answers on a worker thread, or false when it does not
 /// answer within `timeout`; the GTK thread goes on meanwhile.
@@ -44,21 +46,16 @@ pub(super) fn on_same_drive(uris: &[String], folder: &str) -> bool {
     !uris.is_empty()
         && uris
             .iter()
-            .all(|uri| drive_of(uri, &runtime, false) == Some(drive))
+            .all(|uri| drive_of(uri, &runtime, false).is_some_and(|item| item.is_same_local_drive(&drive)))
 }
 
-/// The device number of the local file `uri`, or `None` when it is not a
-/// plain local file. A dragged symbolic link is on the drive of the folder
+/// The drive of the local file `uri`, or `None` when it is not a plain
+/// local file. A dragged symbolic link is on the drive of the folder
 /// holding it (`follow` false); a destination folder is where its link
 /// points (`follow` true).
-fn drive_of(uri: &str, runtime: &Path, follow: bool) -> Option<u64> {
+fn drive_of(uri: &str, runtime: &Path, follow: bool) -> Option<Drive> {
     let path = local_file_path(uri, runtime)?;
-    let metadata = if follow {
-        std::fs::metadata(&path)
-    } else {
-        std::fs::symlink_metadata(&path)
-    };
-    metadata.ok().map(|metadata| metadata.dev())
+    ox_core::drive::drive_of(&path, follow)
 }
 
 /// The path of `uri` when it is a `file:` address outside the session's
