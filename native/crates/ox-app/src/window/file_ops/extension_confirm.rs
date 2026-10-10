@@ -21,14 +21,16 @@ const MESSAGE: &str = crate::i18n::message_id(
                                  want to change it?",
 );
 
-/// The extension of the file name `name`, lowercased: what follows its
+/// The extension of the file name `name`, case-folded: what follows its
 /// last dot, unless that dot is a leading one (`.bashrc` has none) or
-/// nothing follows it.
+/// nothing follows it. Folding upper case then lower case matches letters
+/// that differ only in case as Unicode case folding does, such as `ſ` and
+/// `S` or the Kelvin sign and `k`, which lower case alone keeps apart.
 fn extension(name: &str) -> Option<String> {
     let dot = name.rfind('.')?;
     let is_leading = name[..dot].chars().all(|character| character == '.');
     let extension = &name[dot + 1..];
-    (!is_leading && !extension.is_empty()).then(|| extension.to_lowercase())
+    (!is_leading && !extension.is_empty()).then(|| extension.to_uppercase().to_lowercase())
 }
 
 /// True when renaming the file `old_name` to `new_name` adds, removes or
@@ -101,5 +103,19 @@ mod tests {
             !changes_extension("Photos", "Photos.2024", true),
             "folders have no extension"
         );
+    }
+
+    /// parity: OPS-049
+    #[test]
+    fn a_case_change_that_only_case_folding_sees_does_not_ask() {
+        assert!(
+            !changes_extension("report.\u{17f}", "report.S", false),
+            "long s and S"
+        );
+        assert!(
+            !changes_extension("photo.\u{212a}", "photo.k", false),
+            "Kelvin sign and k"
+        );
+        assert!(changes_extension("report.s", "report.t", false));
     }
 }

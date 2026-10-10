@@ -179,6 +179,9 @@ impl BrowserWindow {
         name: &str,
         is_folder: bool,
     ) -> Result<(), String> {
+        // An invalid name is refused before anything is asked, as renaming
+        // in place and the Rename dialog refuse it.
+        ox_core::location::validate_name(name).map_err(|error| error.to_string())?;
         if !self.confirm_extension_change(old_name, name, is_folder).await {
             return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
         }
