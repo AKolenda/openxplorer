@@ -35,6 +35,8 @@ struct RenameTarget {
     uri: String,
     /// Its name before the rename.
     name: String,
+    /// True for a folder, whose name has no extension.
+    is_folder: bool,
 }
 
 /// How many places Tab, Shift+Tab, Down or Up move the rename on from
@@ -69,6 +71,7 @@ impl BrowserWindow {
         let target = RenameTarget {
             uri: entry.uri.clone(),
             name: entry.name.clone(),
+            is_folder: entry.is_dir,
         };
         self.connect_name_editor(cell, &editor, &target);
         cell.show_name_editor(&editor);
@@ -246,7 +249,20 @@ impl BrowserWindow {
             self.close_name_editor(cell);
             return;
         }
-        if !self.confirm_hiding_rename(&target.name, name).await {
+        // A name the backend refuses anyway is refused before anything is
+        // asked, with the message that says why (more than 255 bytes).
+        if let Err(error) = ox_core::location::validate_name(name) {
+            self.take_rename_next();
+            editor.set_sensitive(true);
+            editor.grab_focus();
+            self.show_message(&error.to_string());
+            return;
+        }
+        let confirmed = self
+            .confirm_extension_change(&target.name, name, target.is_folder)
+            .await
+            && self.confirm_hiding_rename(&target.name, name).await;
+        if !confirmed {
             self.take_rename_next();
             editor.set_sensitive(true);
             editor.grab_focus();

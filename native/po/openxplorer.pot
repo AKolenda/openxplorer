@@ -4240,6 +4240,18 @@ msgstr ""
 msgid "“{name}” already exists here too. Enter another name."
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/extension_confirm.rs
+msgid "Change extension"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/extension_confirm.rs
+msgid "Change the extension?"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/extension_confirm.rs
+msgid "If you change a file name extension, the file might become unusable. Are you sure you want to change it?"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Error while {doing} “{name}”"

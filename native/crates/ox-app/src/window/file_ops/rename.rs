@@ -145,6 +145,7 @@ impl BrowserWindow {
         ask_for_name(self, request, |name, cancel| {
             let uri = entry.uri.clone();
             let old_name = entry.name.clone();
+            let is_folder = entry.is_dir;
             let context = OperationContext {
                 cancel,
                 ..OperationContext::new(protection.clone())
@@ -154,7 +155,12 @@ impl BrowserWindow {
                 let window = window
                     .upgrade()
                     .ok_or_else(|| ox_core::i18n::gettext_static(NOT_RENAMED).to_owned())?;
-                if !window.confirm_hiding_rename(&old_name, &name).await {
+                // A name the backend refuses anyway is refused before
+                // anything is asked, with the message that says why.
+                ox_core::location::validate_name(&name).map_err(|error| error.to_string())?;
+                let confirmed = window.confirm_extension_change(&old_name, &name, is_folder).await
+                    && window.confirm_hiding_rename(&old_name, &name).await;
+                if !confirmed {
                     return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
                 }
                 rename_item(&uri, &name, &context)
@@ -165,10 +171,23 @@ impl BrowserWindow {
         .await
     }
 
-    /// Renames the item at `uri` to `name`, as the name field of
-    /// Properties asks (PROP-005): the same checks, write protection and
-    /// Undo as Rename. The error is the message to show.
-    pub(crate) async fn rename_item_at(&self, uri: &str, name: &str) -> Result<(), String> {
+    /// Renames the item at `uri`, called `old_name`, to `name`, as the
+    /// name field of Properties asks (PROP-005): the same checks, question
+    /// about a changed extension, write protection and Undo as Rename. The
+    /// error is the message to show.
+    pub(crate) async fn rename_item_at(
+        &self,
+        uri: &str,
+        old_name: &str,
+        name: &str,
+        is_folder: bool,
+    ) -> Result<(), String> {
+        // An invalid name is refused before anything is asked, as renaming
+        // in place and the Rename dialog refuse it.
+        ox_core::location::validate_name(name).map_err(|error| error.to_string())?;
+        if !self.confirm_extension_change(old_name, name, is_folder).await {
+            return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
+        }
         let context = OperationContext::new(self.context().write_protection());
         let renamed = rename_item(uri, name, &context)
             .await

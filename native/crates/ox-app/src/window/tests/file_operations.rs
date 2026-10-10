@@ -293,6 +293,40 @@ fn an_item_that_is_not_on_screen_is_renamed_with_the_dialog() {
     wait_for_no_dialog(&test);
 }
 
+/// The Rename dialog refuses a name longer than 255 bytes before the
+/// extension question, and says why.
+///
+/// parity: OPS-049
+#[gtk::test]
+fn the_rename_dialog_refuses_a_name_too_long_before_the_extension_question() {
+    let fixture = Fixture::with_files(400);
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["file 0399.txt"]);
+    test.activate("rename", None);
+    let dialog = open_dialog(&test);
+    let asks_about_the_extension = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .any(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+    };
+
+    text_field(&dialog).set_text(&format!("{}.md", "f".repeat(260)));
+    dialog.press("Save");
+
+    wait_until("the refusal", || {
+        dialog.error_text().is_some() || asks_about_the_extension()
+    });
+    assert!(!asks_about_the_extension(), "no extension question");
+    assert_eq!(
+        dialog.error_text().as_deref(),
+        Some("This name is longer than 255 bytes.")
+    );
+    assert!(fixture.path("file 0399.txt").is_file());
+    dialog.press("Cancel");
+    wait_for_no_dialog(&test);
+}
+
 /// parity: OPS-014, OPS-029, OPS-032
 #[gtk::test]
 fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together() {

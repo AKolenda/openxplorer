@@ -7596,6 +7596,20 @@ gnome = "G_USER_DIRECTORY_TEMPLATES; g_file_create with G_FILE_CREATE_PRIVATE an
 native = "done"
 native_note = "native/crates/ox-core/src/ops/templates.rs lists at most 100 user templates without following links; native/crates/ox-core/src/ops/new_from_template.rs opens with O_NOFOLLOW|O_NONBLOCK, checks fstat, reads in 64 KiB blocks up to 16 MiB with cancellation, stages to .winspace-new-<hex> and publishes without overwriting. Tests: native/crates/ox-core/tests/ops_create.rs (the_six_starters_come_first_with_their_fixed_names, only_visible_regular_files_up_to_sixteen_mebibytes_are_user_templates, at_most_one_hundred_user_templates_are_listed, a_user_template_is_copied_without_its_permissions, a_template_the_list_does_not_offer_is_refused, a_template_never_overwrites_and_never_goes_to_a_server_listing); new_from_template.rs (a_template_swapped_for_a_link_or_a_fifo_is_refused_without_blocking, a_template_that_grew_past_the_limit_is_refused_and_cancellation_stops_reading, a_name_taken_while_publishing_is_kept_and_the_stage_file_is_deleted)."
 
+
+[[feature]]
+id = "OPS-049"
+area = "OPS"
+title = "Confirm changing a file's extension on rename"
+behaviour = "As in Windows Explorer, a rename that adds, removes or changes the part after a file's last dot asks 'If you change a file name extension, the file might become unusable. Are you sure you want to change it?' with Cancel and 'Change extension'. Cancel keeps the item's name (in place, the field stays open with the typed name). Folders, names whose only dot is leading ('.bashrc'), and a change of the extension's case only ('.JPG' to '.jpg', compared with Unicode case folding) never ask; an invalid name, including one longer than 255 bytes, is refused before anything is asked, with the message that says why. It applies to F2 in place, the Rename dialog and the name in Properties; batch rename keeps every extension."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows Explorer: Rename (extension change warning)"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_ops/extension_confirm.rs (adding_removing_or_changing_a_files_extension_asks, keeping_the_extension_or_renaming_a_folder_does_not_ask, a_case_change_that_only_case_folding_sees_does_not_ask); native/crates/ox-app/src/window/tests/renaming.rs (changing_the_extension_in_place_asks_first_as_windows_explorer_does, renaming_a_folder_with_a_dot_or_keeping_the_extension_never_asks, a_name_too_long_is_refused_in_place_before_the_extension_question); native/crates/ox-app/src/window/tests/file_operations.rs (the_rename_dialog_refuses_a_name_too_long_before_the_extension_question); native/crates/ox-app/src/window/tests/item_dialogs.rs (the_name_in_properties_asks_before_changing_the_extension, an_invalid_name_in_properties_is_refused_before_the_extension_question). The question comes before OPS-013's hide question."
 [[feature]]
 id = "XFER-001"
 area = "XFER"

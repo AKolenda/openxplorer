@@ -11,7 +11,7 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{
-    is_renaming_in_place, name_editor, open_dialog, select_names, text_field, wait_for_no_dialog,
+    dialog_over, is_renaming_in_place, name_editor, open_dialog, select_names, text_field, wait_for_no_dialog,
 };
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
 use crate::window::slow_click_rename::NamePress;
@@ -129,6 +129,81 @@ fn cancelling_the_hide_question_keeps_the_name_and_the_field() {
     assert_eq!(field.text(), ".Notes 2.txt", "the typed name is kept");
     assert!(fixture.path("Notes 2.txt").is_file());
     assert!(!fixture.path(".Notes 2.txt").exists());
+}
+
+/// parity: OPS-049
+#[gtk::test]
+fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+
+    field.set_text("Notes 2.md");
+    field.emit_activate();
+    let question = open_dialog(&test);
+    assert_eq!(question.title_text(), "Change the extension?");
+    assert_eq!(
+        question.message_text(),
+        "If you change a file name extension, the file might become unusable. Are you sure you \
+         want to change it?"
+    );
+    assert_eq!(question.button_labels(), ["Cancel", "Change extension"]);
+    question.press("Cancel");
+    wait_for_no_dialog(&test);
+    wait_until("the field to come back", || field.is_sensitive());
+    assert!(is_renaming_in_place(&test), "editing goes on");
+    assert_eq!(field.text(), "Notes 2.md", "the typed name is kept");
+    assert!(fixture.path("Notes 2.txt").is_file());
+
+    field.emit_activate();
+    open_dialog(&test).press("Change extension");
+
+    wait_until("the rename", || fixture.path("Notes 2.md").is_file());
+    assert!(!fixture.path("Notes 2.txt").exists());
+}
+
+/// A name longer than 255 bytes is refused before the extension question,
+/// with the message that says why, and the field stays open to fix it.
+///
+/// parity: OPS-049
+#[gtk::test]
+fn a_name_too_long_is_refused_in_place_before_the_extension_question() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    let too_long = format!("{}.md", "N".repeat(260));
+
+    field.set_text(&too_long);
+    field.emit_activate();
+
+    wait_until("the refusal", || {
+        test.window.shown_message_text() == "This name is longer than 255 bytes."
+    });
+    assert!(dialog_over(&test).is_none(), "no extension question");
+    wait_until("the field to come back", || field.is_sensitive());
+    assert!(is_renaming_in_place(&test), "editing goes on");
+    assert_eq!(field.text(), too_long, "the typed name is kept");
+    assert!(fixture.path("Notes 2.txt").is_file());
+}
+
+/// parity: OPS-049
+#[gtk::test]
+fn renaming_a_folder_with_a_dot_or_keeping_the_extension_never_asks() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Documents"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+
+    field.set_text("Documents.old");
+    field.emit_activate();
+
+    wait_until("the rename", || fixture.path("Documents.old").is_dir());
+    assert!(dialog_over(&test).is_none(), "nothing is asked");
 }
 
 /// parity: OPS-007
