@@ -4,8 +4,8 @@
   OpenXplorer's own items moves them to a folder on the same drive and
   copies them to another drive (another partition, a USB stick, the
   Windows drive or a network place). Hold Ctrl to copy or Shift to move.
-  Items dragged in from other apps are still copied, and a drag out to
-  another app still offers it only a copy.
+  A plain drag from another app still copies (hold Shift to move), and a
+  drag out to another app still offers it only a copy.
 
 # 2.0.4 — 2026-10-09
 
