@@ -19,7 +19,9 @@
 //! recorded in the settings folder, so turning it off gives Super+E back to
 //! that action. The stable and the preview package each keep a record
 //! there; when one took Super+E from the other, the records are joined up
-//! so Super+E still goes back to the action it was first taken from. The
+//! so Super+E still goes back to the action it was first taken from. Both
+//! packages run in their own processes, so they read and change Super+E
+//! under one lock in that folder. The
 //! service saves the change itself, so it lasts across logins. Nothing
 //! changes until the user asks (INT-033), other desktops are left alone,
 //! and the Flatpak, which cannot reach the service, does not offer it.
@@ -29,7 +31,6 @@ use std::path::{Path, PathBuf};
 use gio::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::default_apps::APP_ID;
 use super::private_file::write_private_file;
 use super::sandbox::Sandbox;
 use super::worker::on_worker;
@@ -51,8 +52,13 @@ const CALL_TIMEOUT_MS: i32 = 5_000;
 /// `launch-shortcut-<desktop file>.json`.
 const RECORD_PREFIX: &str = "launch-shortcut-";
 
-/// The one record the stable package's earlier test builds kept.
+/// The one record every package's earlier test builds kept. It belongs
+/// to whichever package has Super+E now, and to none while it is free.
 const EARLIER_RECORD: &str = "launch-shortcut.json";
+
+/// The lock both packages hold while they read and change Super+E, as
+/// they run in two processes and may be switched at the same moment.
+const LOCK_FILE: &str = "launch-shortcut.lock";
 
 /// Qt's Meta modifier, which is Super.
 const META: i32 = 0x1000_0000;
@@ -402,6 +408,7 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         if !self.is_available() {
             return Err(ShortcutError::Unsupported);
         }
+        let _lock = self.lock()?;
         let owner = self.shortcuts.owner(SUPER_E)?;
         if owner.as_ref().is_some_and(|owner| owner.is(&self.ours)) {
             return Ok(());
@@ -425,15 +432,16 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
                     previous: previous.clone(),
                 })?;
                 if let Err(error) = self.take_super_e_from(&previous) {
-                    self.remove_record();
+                    self.remove_record(false);
                     return Err(error);
                 }
                 Some(previous)
             }
             // A free Super+E has nothing to go back to. A record left from
-            // before the user cleared Super+E would give it to that action.
+            // before the user cleared Super+E would give it to that action,
+            // and the record earlier builds shared is nobody's now.
             None => {
-                self.remove_record();
+                self.remove_record(true);
                 None
             }
         };
@@ -471,17 +479,20 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         if !self.is_available() {
             return Err(ShortcutError::Unsupported);
         }
-        let record = self.read_record();
+        let _lock = self.lock()?;
         let owner = self
             .shortcuts
             .owner(SUPER_E)?
             .filter(|owner| self.is_ours_or_earlier(owner));
+        // The record earlier builds shared is this package's only while it
+        // has Super+E.
+        let record = self.read_record(owner.is_some());
         let Some(owner) = owner else {
             // Another package of `OpenXplorer` may have taken Super+E from
             // this one; it now gives it back to where this one took it.
             // This record stays until that is written.
             self.hand_record_on(record.as_ref())?;
-            self.remove_record();
+            self.remove_record(false);
             return Ok(RestoredShortcut::NotOurs);
         };
         let ours = self.shortcuts.keys(&owner)?;
@@ -492,11 +503,23 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
                     let _ = self.shortcuts.set_keys(&owner, &ours);
                     return Err(error);
                 }
-                RestoredShortcut::GivenBack
+                // The action may be gone, as when its app was uninstalled:
+                // KDE then sets nothing and Super+E is free.
+                let given = self
+                    .shortcuts
+                    .owner(SUPER_E)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|now| now.is(&record.previous));
+                if given {
+                    RestoredShortcut::GivenBack
+                } else {
+                    RestoredShortcut::Freed
+                }
             }
             None => RestoredShortcut::Freed,
         };
-        self.remove_record();
+        self.remove_record(true);
         Ok(restored)
     }
 
@@ -546,7 +569,7 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         let _ = self.take_super_e_from(&self.ours);
         if let Some(previous) = taken {
             if self.give_super_e_back(previous).is_ok() {
-                self.remove_record();
+                self.remove_record(false);
             }
         }
     }
@@ -564,22 +587,48 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
 
     /// The record's path.
     fn record_path(&self) -> PathBuf {
-        record_paths(&self.settings, &self.ours.component).remove(0)
+        record_path_of(&self.settings, &self.ours.component)
     }
 
-    /// The record an earlier test build of the stable package kept, which
-    /// only that package reads.
-    fn earlier_record_path(&self) -> Option<PathBuf> {
-        record_paths(&self.settings, &self.ours.component).get(1).cloned()
+    /// The record earlier test builds of every package shared, when it is
+    /// this package's (`claims_earlier`: it has Super+E).
+    fn earlier_record_path(&self, claims_earlier: bool) -> Option<PathBuf> {
+        claims_earlier.then(|| self.settings.join(EARLIER_RECORD))
     }
 
-    /// The record, or `None` when there is none or it cannot be read.
-    fn read_record(&self) -> Option<Record> {
+    /// Takes the lock both packages hold while they read and change
+    /// Super+E; it is let go when the returned file is dropped. Each step
+    /// under it is a call to KDE's service with a time limit, so the other
+    /// package never waits long.
+    fn lock(&self) -> Result<std::fs::File, ShortcutError> {
+        use std::os::unix::fs::OpenOptionsExt;
+        let path = self.settings.join(LOCK_FILE);
+        let record_error = |error| ShortcutError::Record {
+            path: path.clone(),
+            error,
+        };
+        std::fs::create_dir_all(&self.settings).map_err(record_error)?;
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(&path)
+            .map_err(record_error)?;
+        rustix::fs::flock(&file, rustix::fs::FlockOperation::LockExclusive)
+            .map_err(|errno| record_error(errno.into()))?;
+        Ok(file)
+    }
+
+    /// The record, or `None` when there is none or it cannot be read; with
+    /// `claims_earlier`, the record earlier builds shared too.
+    fn read_record(&self, claims_earlier: bool) -> Option<Record> {
         let read = |path: PathBuf| {
             let text = std::fs::read_to_string(path).ok()?;
             serde_json::from_str::<Record>(&text).ok()
         };
-        read(self.record_path()).or_else(|| self.earlier_record_path().and_then(read))
+        read(self.record_path()).or_else(|| self.earlier_record_path(claims_earlier).and_then(read))
     }
 
     /// Writes the record, privately.
@@ -592,10 +641,11 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
     }
 
     /// The records of the other packages of `OpenXplorer` that share the
-    /// settings folder, with their paths.
+    /// settings folder, with their paths, while this package does not
+    /// have Super+E (the record earlier builds shared is then not its).
     fn sibling_records(&self) -> Vec<(PathBuf, Record)> {
         let own = self.record_path();
-        let own_earlier = self.earlier_record_path();
+        let own_earlier = self.earlier_record_path(false);
         let Ok(entries) = std::fs::read_dir(&self.settings) else {
             return Vec::new();
         };
@@ -622,7 +672,11 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         if owner.component == self.ours.component || !is_super_e_action_of(owner, &owner.component) {
             return None;
         }
-        let paths = record_paths(&self.settings, &owner.component);
+        // `owner` has Super+E, so the record earlier builds shared is its.
+        let paths = [
+            record_path_of(&self.settings, &owner.component),
+            self.settings.join(EARLIER_RECORD),
+        ];
         self.sibling_records()
             .into_iter()
             .find(|(path, record)| paths.contains(path) && self.is_ours_or_earlier(&record.previous))
@@ -653,24 +707,20 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         Ok(())
     }
 
-    /// Removes the record, and an earlier one; a missing one is fine.
-    fn remove_record(&self) {
+    /// Removes the record, and with `claims_earlier` the one earlier
+    /// builds shared; a missing one is fine.
+    fn remove_record(&self, claims_earlier: bool) {
         let _ = std::fs::remove_file(self.record_path());
-        if let Some(earlier) = self.earlier_record_path() {
+        if let Some(earlier) = self.earlier_record_path(claims_earlier) {
             let _ = std::fs::remove_file(earlier);
         }
     }
 }
 
-/// Where the package whose desktop file is `component` keeps its record
-/// in `settings`: its own file, then for the stable package the one an
-/// earlier test build kept.
-fn record_paths(settings: &Path, component: &str) -> Vec<PathBuf> {
-    let mut paths = vec![settings.join(format!("{RECORD_PREFIX}{component}.json"))];
-    if component == APP_ID {
-        paths.push(settings.join(EARLIER_RECORD));
-    }
-    paths
+/// Where the package whose desktop file is `component` keeps its own
+/// record in `settings`.
+fn record_path_of(settings: &Path, component: &str) -> PathBuf {
+    settings.join(format!("{RECORD_PREFIX}{component}.json"))
 }
 
 /// True for the action of the desktop file `component` that the switch
@@ -751,7 +801,7 @@ mod tests {
         let mut stable = LaunchShortcut::new(
             OwnedBy(preview_owner),
             settings.path(),
-            APP_ID,
+            super::super::default_apps::APP_ID,
             vec!["kde".to_owned()],
             Sandbox::Host,
         );
@@ -762,14 +812,14 @@ mod tests {
         let pointing_here = Record {
             previous: stable.ours.clone(),
         };
-        let preview_record = record_paths(settings.path(), preview_id).remove(0);
+        let preview_record = record_path_of(settings.path(), preview_id);
         let text = serde_json::to_string(&pointing_here).unwrap();
         std::fs::write(&preview_record, &text).unwrap();
         stable.write_file = |_, _, _| Err(std::io::Error::other("No space left on device"));
 
         assert!(matches!(stable.restore(), Err(ShortcutError::Record { .. })));
 
-        assert_eq!(stable.read_record(), Some(dolphin), "the record stays");
+        assert_eq!(stable.read_record(false), Some(dolphin), "the record stays");
         assert_eq!(std::fs::read_to_string(&preview_record).unwrap(), text);
     }
 }

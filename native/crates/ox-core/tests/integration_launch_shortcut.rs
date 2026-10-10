@@ -37,6 +37,18 @@ struct Shortcuts {
     /// A call that fails, as when the service restarts: `register`, or
     /// `set_keys` of `OpenXplorer`'s actions.
     failing: RefCell<Option<&'static str>>,
+    /// Runs before each `set_keys`, with its action, as another process
+    /// could act at that moment.
+    before_set_keys: RefCell<Option<Hook>>,
+}
+
+/// What runs before a `set_keys`.
+struct Hook(Box<dyn Fn(&ShortcutAction)>);
+
+impl std::fmt::Debug for Hook {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Hook")
+    }
 }
 
 impl Shortcuts {
@@ -51,6 +63,7 @@ impl Shortcuts {
                 PREVIEW.to_owned(),
             ],
             failing: RefCell::new(None),
+            before_set_keys: RefCell::new(None),
         }
     }
 
@@ -119,6 +132,9 @@ impl GlobalShortcuts for Shortcuts {
     }
 
     fn set_keys(&self, action: &ShortcutAction, keys: &[KeySequence]) -> Result<(), ShortcutError> {
+        if let Some(Hook(hook)) = self.before_set_keys.borrow().as_ref() {
+            hook(action);
+        }
         if action.component == OURS {
             self.check("set_keys")?;
         }
@@ -713,5 +729,154 @@ fn turning_it_on_from_a_free_key_forgets_an_old_record() {
 
     assert_eq!(opt_in.status(), LaunchShortcutStatus::Free);
     assert_eq!(shortcuts.keys_of("org.kde.dolphin.desktop"), [CTRL_ALT_D]);
+    assert!(!settings.path().join(RECORD).exists());
+}
+
+/// The record both packages kept, under one name, before each kept its
+/// own.
+const EARLIER: &str = "launch-shortcut.json";
+
+/// Moves `package`'s record to the one name every package shared before.
+fn make_it_an_earlier_record(settings: &std::path::Path, package: &str) {
+    let record = settings.join(format!("launch-shortcut-{package}"));
+    std::fs::rename(&record, settings.join(EARLIER)).expect("the record moves");
+}
+
+/// A preview build from before the records were split kept its record
+/// under the shared name. While the preview has Super+E, that record is
+/// its own: turning the preview off gives Super+E back to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn the_preview_reads_the_earlier_record_while_it_has_super_e() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    preview.enable().unwrap();
+    make_it_an_earlier_record(settings.path(), &format!("{PREVIEW}.json"));
+
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+    assert!(!settings.path().join(EARLIER).exists(), "the record is used up");
+}
+
+/// The shared record belongs to whichever package has Super+E: turning
+/// the other one off leaves it alone.
+///
+/// parity: INT-033
+#[test]
+fn the_earlier_record_stays_with_the_package_that_has_super_e() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    make_it_an_earlier_record(settings.path(), &format!("{OURS}.json"));
+
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::NotOurs);
+    assert!(
+        settings.path().join(EARLIER).exists(),
+        "the stable package's record stays"
+    );
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+}
+
+/// While Super+E is free, the shared record is nobody's: turning either
+/// package on forgets it, so turning it off later leaves Super+E free.
+///
+/// parity: INT-033
+#[test]
+fn a_free_super_e_forgets_the_earlier_record_too() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    make_it_an_earlier_record(settings.path(), &format!("{OURS}.json"));
+    shortcuts
+        .set_keys(
+            &ShortcutAction::desktop_action(OURS, NEW_WINDOW_ACTION, "", ""),
+            &[],
+        )
+        .unwrap();
+
+    preview.enable().unwrap();
+
+    assert!(
+        !settings.path().join(EARLIER).exists(),
+        "the old record is forgotten"
+    );
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::Freed);
+    stable.enable().unwrap();
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::Freed);
+    assert_eq!(shortcuts.keys_of("org.kde.dolphin.desktop"), [CTRL_ALT_D]);
+}
+
+/// True when another process could take the lock both packages use for
+/// the shortcut in `settings` now.
+fn shortcut_lock_is_free(settings: &std::path::Path) -> bool {
+    let Ok(file) = std::fs::OpenOptions::new()
+        .read(true)
+        .open(settings.join("launch-shortcut.lock"))
+    else {
+        return true;
+    };
+    let taken = rustix::fs::flock(&file, rustix::fs::FlockOperation::NonBlockingLockExclusive);
+    taken.is_ok()
+}
+
+/// The stable and the preview package run in two processes and may be
+/// turned on or off at the same moment. Reading the owner, taking
+/// Super+E and giving it on happen under one lock in the settings
+/// folder, so the other package never sees Super+E free in between.
+///
+/// parity: INT-033
+#[test]
+fn turning_it_on_or_off_holds_a_lock_the_other_package_waits_for() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let seen = std::rc::Rc::new(RefCell::new(Vec::new()));
+    let (folder, record) = (settings.path().to_owned(), seen.clone());
+    *shortcuts.before_set_keys.borrow_mut() = Some(Hook(Box::new(move |_| {
+        record.borrow_mut().push(shortcut_lock_is_free(&folder));
+    })));
+
+    stable.enable().unwrap();
+    stable.restore().unwrap();
+
+    let seen = seen.borrow().clone();
+    assert!(!seen.is_empty());
+    assert!(
+        seen.iter().all(|free| !free),
+        "every change is made under the lock: {seen:?}"
+    );
+    assert!(
+        shortcut_lock_is_free(settings.path()),
+        "and the lock is let go after"
+    );
+}
+
+/// Turning it off when the action Super+E was taken from is gone, as when
+/// Dolphin was uninstalled since, leaves Super+E free and says so,
+/// instead of saying it was given back.
+///
+/// parity: INT-033
+#[test]
+fn turning_it_off_says_super_e_is_free_when_its_old_action_is_gone() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+    opt_in.enable().unwrap();
+    shortcuts
+        .actions
+        .borrow_mut()
+        .retain(|(action, _)| action.component != "org.kde.dolphin.desktop");
+
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::Freed);
+
+    assert_eq!(opt_in.status(), LaunchShortcutStatus::Free);
     assert!(!settings.path().join(RECORD).exists());
 }
