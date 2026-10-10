@@ -15,8 +15,11 @@
 //! opens a new window whether or not one is open; `_launch` would only show
 //! the open window. Turning it on takes Super+E from the action that has it
 //! (Dolphin's launch action, as Plasma ships), keeping that action's other
-//! keys, and gives it to that `NewWindow` action. What it took is recorded in the settings
-//! folder, so turning it off gives Super+E back to that action. The
+//! keys, and adds it to that `NewWindow` action's keys. What it took is
+//! recorded in the settings folder, so turning it off gives Super+E back to
+//! that action. The stable and the preview package each keep a record
+//! there; when one took Super+E from the other, the records are joined up
+//! so Super+E still goes back to the action it was first taken from. The
 //! service saves the change itself, so it lasts across logins. Nothing
 //! changes until the user asks (INT-033), other desktops are left alone,
 //! and the Flatpak, which cannot reach the service, does not offer it.
@@ -370,10 +373,12 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         }
     }
 
-    /// True for any action of `OpenXplorer`'s desktop file, such as the
-    /// launch action an earlier version gave Super+E to.
-    fn is_ours_in_any_action(&self, action: &ShortcutAction) -> bool {
-        action.component == self.ours.component
+    /// True for `OpenXplorer`'s new-window action, or for the launch action
+    /// an earlier version gave Super+E to. Other actions of its desktop
+    /// file, such as one the user gave Super+E to, are treated like any
+    /// other app's.
+    fn is_ours_or_earlier(&self, action: &ShortcutAction) -> bool {
+        is_super_e_action_of(action, &self.ours.component)
     }
 
     /// Takes Super+E from the action that has it, keeping its other keys,
@@ -397,9 +402,18 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         if owner.as_ref().is_some_and(|owner| owner.is(&self.ours)) {
             return Ok(());
         }
+        let mut sibling = None;
         let taken = match owner {
-            Some(earlier) if self.is_ours_in_any_action(&earlier) => {
+            Some(earlier) if self.is_ours_or_earlier(&earlier) => {
                 self.take_super_e_from(&earlier)?;
+                None
+            }
+            // The other package took Super+E from this one: taking it back
+            // keeps this package's record and ends the other's, which only
+            // pointed back here, once Super+E is this package's.
+            Some(other) if self.sibling_record_pointing_here(&other).is_some() => {
+                self.take_super_e_from(&other)?;
+                sibling = Some(other);
                 None
             }
             Some(previous) => {
@@ -414,8 +428,22 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             }
             None => None,
         };
-        self.give_super_e_to_ours()
-            .inspect_err(|_| self.roll_back(taken.as_ref()))
+        match self.give_super_e_to_ours() {
+            Ok(()) => {
+                let record = sibling.and_then(|other| self.sibling_record_pointing_here(&other));
+                if let Some((path, _)) = record {
+                    let _ = std::fs::remove_file(path);
+                }
+                Ok(())
+            }
+            Err(error) => {
+                self.roll_back(taken.as_ref());
+                if let Some(other) = sibling {
+                    let _ = self.give_super_e_back(&other);
+                }
+                Err(error)
+            }
+        }
     }
 
     /// Takes Super+E from `OpenXplorer` and gives it back to the action it
@@ -436,8 +464,11 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         let owner = self
             .shortcuts
             .owner(SUPER_E)?
-            .filter(|owner| self.is_ours_in_any_action(owner));
+            .filter(|owner| self.is_ours_or_earlier(owner));
         let Some(owner) = owner else {
+            // Another package of `OpenXplorer` may have taken Super+E from
+            // this one; it now gives it back to where this one took it.
+            self.hand_record_on(record.as_ref());
             self.remove_record();
             return Ok(RestoredShortcut::NotOurs);
         };
@@ -474,7 +505,7 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         self.shortcuts.set_keys(action, &keys)
     }
 
-    /// Gives Super+E to `OpenXplorer`'s new-window action.
+    /// Adds Super+E to `OpenXplorer`'s new-window action.
     ///
     /// # Errors
     ///
@@ -482,7 +513,8 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
     /// action, and the service's failure.
     fn give_super_e_to_ours(&self) -> Result<(), ShortcutError> {
         self.shortcuts.register(&self.ours)?;
-        self.shortcuts.set_keys(&self.ours, &[SUPER_E])?;
+        // Its other keys stay, as Super+E is all the switch changes.
+        self.give_super_e_back(&self.ours)?;
         let given = self
             .shortcuts
             .owner(SUPER_E)?
@@ -520,14 +552,13 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
 
     /// The record's path.
     fn record_path(&self) -> PathBuf {
-        self.settings
-            .join(format!("{RECORD_PREFIX}{}.json", self.ours.component))
+        record_paths(&self.settings, &self.ours.component).remove(0)
     }
 
     /// The record an earlier test build of the stable package kept, which
     /// only that package reads.
     fn earlier_record_path(&self) -> Option<PathBuf> {
-        (self.ours.component == APP_ID).then(|| self.settings.join(EARLIER_RECORD))
+        record_paths(&self.settings, &self.ours.component).get(1).cloned()
     }
 
     /// The record, or `None` when there is none or it cannot be read.
@@ -548,6 +579,63 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             .map_err(|error| ShortcutError::Record { path, error })
     }
 
+    /// The records of the other packages of `OpenXplorer` that share the
+    /// settings folder, with their paths.
+    fn sibling_records(&self) -> Vec<(PathBuf, Record)> {
+        let own = self.record_path();
+        let own_earlier = self.earlier_record_path();
+        let Ok(entries) = std::fs::read_dir(&self.settings) else {
+            return Vec::new();
+        };
+        entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| *path != own && Some(path) != own_earlier.as_ref())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(RECORD_PREFIX) || name == EARLIER_RECORD)
+            })
+            .filter_map(|path| {
+                let text = std::fs::read_to_string(&path).ok()?;
+                let record = serde_json::from_str::<Record>(&text).ok()?;
+                Some((path, record))
+            })
+            .collect()
+    }
+
+    /// The record of the other package of `OpenXplorer` whose action
+    /// `owner` is, when that package took Super+E from this one.
+    fn sibling_record_pointing_here(&self, owner: &ShortcutAction) -> Option<(PathBuf, Record)> {
+        if owner.component == self.ours.component || !is_super_e_action_of(owner, &owner.component) {
+            return None;
+        }
+        let paths = record_paths(&self.settings, &owner.component);
+        self.sibling_records()
+            .into_iter()
+            .find(|(path, record)| paths.contains(path) && self.is_ours_or_earlier(&record.previous))
+    }
+
+    /// Hands this package's `record` on to every other package that took
+    /// Super+E from this one, so turning that one off gives Super+E to
+    /// where this one took it, or frees it, instead of back here.
+    fn hand_record_on(&self, record: Option<&Record>) {
+        for (path, sibling) in self.sibling_records() {
+            if !self.is_ours_or_earlier(&sibling.previous) {
+                continue;
+            }
+            match record {
+                Some(record) => {
+                    let text = serde_json::to_string_pretty(record).expect("a record serialises");
+                    let _ = write_private_file(&path, ".winspace-", text.as_bytes());
+                }
+                None => {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
+    }
+
     /// Removes the record, and an earlier one; a missing one is fine.
     fn remove_record(&self) {
         let _ = std::fs::remove_file(self.record_path());
@@ -555,6 +643,23 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             let _ = std::fs::remove_file(earlier);
         }
     }
+}
+
+/// Where the package whose desktop file is `component` keeps its record
+/// in `settings`: its own file, then for the stable package the one an
+/// earlier test build kept.
+fn record_paths(settings: &Path, component: &str) -> Vec<PathBuf> {
+    let mut paths = vec![settings.join(format!("{RECORD_PREFIX}{component}.json"))];
+    if component == APP_ID {
+        paths.push(settings.join(EARLIER_RECORD));
+    }
+    paths
+}
+
+/// True for the action of the desktop file `component` that the switch
+/// gives Super+E to, or the launch action an earlier version gave it to.
+fn is_super_e_action_of(action: &ShortcutAction, component: &str) -> bool {
+    action.component == component && (action.action == NEW_WINDOW_ACTION || action.action == LAUNCH_ACTION)
 }
 
 /// The name System Settings gives `action`'s component, else its desktop

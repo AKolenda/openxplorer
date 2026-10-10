@@ -508,3 +508,183 @@ fn an_earlier_record_still_gives_super_e_back() {
     assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
     assert!(!earlier.exists(), "the earlier record is gone");
 }
+
+/// Ctrl+Alt+N, a key the user gave `OpenXplorer`'s New window action.
+const CTRL_ALT_N: KeySequence = [0x0400_0000 | 0x0800_0000 | 0x4e, 0, 0, 0];
+
+/// The preview package's opt-in over `shortcuts`, with its record in
+/// `settings`.
+fn preview_shortcut<'a>(
+    shortcuts: &'a Shortcuts,
+    settings: &std::path::Path,
+) -> LaunchShortcut<&'a Shortcuts> {
+    LaunchShortcut::new(
+        shortcuts,
+        settings,
+        PREVIEW,
+        vec!["kde".to_owned()],
+        Sandbox::Host,
+    )
+}
+
+/// Turning it on adds Super+E to the keys the New window action already
+/// has, and turning it off takes only Super+E away.
+///
+/// parity: INT-033
+#[test]
+fn turning_it_on_keeps_the_new_window_actions_other_keys() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let new_window = ShortcutAction::desktop_action(OURS, NEW_WINDOW_ACTION, "OpenXplorer", "New window");
+    shortcuts
+        .actions
+        .borrow_mut()
+        .push((new_window, vec![CTRL_ALT_N]));
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+
+    opt_in.enable().unwrap();
+
+    assert_eq!(opt_in.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(shortcuts.keys_of(OURS), [CTRL_ALT_N, SUPER_E]);
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(shortcuts.keys_of(OURS), [CTRL_ALT_N]);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+}
+
+/// Super+E the user gave another action of `OpenXplorer`'s own, such as
+/// its Settings action, goes back to that action when the switch is
+/// turned off; only the launch action of an earlier version is moved
+/// without a record. With the switch off, that Super+E is left alone.
+///
+/// parity: INT-033
+#[test]
+fn super_e_on_another_openxplorer_action_goes_back_to_it() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let dolphin = ShortcutAction::launch("org.kde.dolphin.desktop", "Dolphin");
+    shortcuts.set_keys(&dolphin, &[CTRL_ALT_D]).unwrap();
+    let settings_action = ShortcutAction::desktop_action(OURS, "Settings", "OpenXplorer", "Settings");
+    shortcuts
+        .actions
+        .borrow_mut()
+        .push((settings_action, vec![SUPER_E]));
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+    assert_ne!(opt_in.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(
+        opt_in.restore().unwrap(),
+        RestoredShortcut::NotOurs,
+        "with the switch off, the user's own Super+E stays"
+    );
+    assert_eq!(shortcuts.keys_of_action(OURS, "Settings"), [SUPER_E]);
+
+    opt_in.enable().unwrap();
+
+    assert_eq!(opt_in.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(
+        shortcuts.keys_of_action(OURS, "Settings"),
+        Vec::<KeySequence>::new()
+    );
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(shortcuts.keys_of_action(OURS, "Settings"), [SUPER_E]);
+    assert_eq!(shortcuts.keys_of(OURS), Vec::<KeySequence>::new());
+}
+
+/// With both packages' Settings open, the stable package's switch can be
+/// turned off after the preview took Super+E from it. That opt-out hands
+/// its record on, so turning the preview off gives Super+E to Dolphin,
+/// not back to the stable package.
+///
+/// parity: INT-033
+#[test]
+fn a_stale_opt_out_hands_its_record_to_the_package_that_took_super_e() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    preview.enable().unwrap();
+
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::NotOurs);
+    assert_eq!(
+        preview.status(),
+        LaunchShortcutStatus::Ours,
+        "the preview keeps it"
+    );
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+
+    assert_ne!(stable.status(), LaunchShortcutStatus::Ours, "the opt-out holds");
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::NotOurs);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+}
+
+/// A stale opt-out of a package that took a free Super+E leaves the key
+/// free when the other package lets it go.
+///
+/// parity: INT-033
+#[test]
+fn a_stale_opt_out_of_a_free_super_e_leaves_it_free_later() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let dolphin = ShortcutAction::launch("org.kde.dolphin.desktop", "Dolphin");
+    shortcuts.set_keys(&dolphin, &[CTRL_ALT_D]).unwrap();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    preview.enable().unwrap();
+
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::NotOurs);
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::Freed);
+
+    assert_eq!(stable.status(), LaunchShortcutStatus::Free);
+}
+
+/// Taking Super+E back from the package that took it keeps the record of
+/// Dolphin, so turning it off gives Super+E to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn taking_super_e_back_from_the_other_package_keeps_the_record_of_dolphin() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    preview.enable().unwrap();
+
+    stable.enable().unwrap();
+
+    assert_eq!(stable.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::NotOurs);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+}
+
+/// When taking Super+E back from the other package fails, the other
+/// package keeps Super+E and its record.
+///
+/// parity: INT-033
+#[test]
+fn a_failure_while_taking_super_e_back_leaves_the_other_package_as_it_was() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    preview.enable().unwrap();
+    shortcuts.fail("register");
+
+    assert!(stable.enable().is_err());
+
+    *shortcuts.failing.borrow_mut() = None;
+    assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(
+        stable.status(),
+        LaunchShortcutStatus::Ours,
+        "back to the stable package"
+    );
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+}
