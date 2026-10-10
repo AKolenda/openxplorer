@@ -58,6 +58,12 @@ pub(super) struct DefaultAppsView {
     /// True while the page sets the switch to what KDE says, so that is
     /// not taken for the user turning it on or off.
     showing_super_e: Rc<Cell<bool>>,
+    /// Counts status reads and changes: a read shows its status only when
+    /// nothing was read or changed since it started, so a late read never
+    /// turns a control back while a change runs or after a newer read.
+    status_turn: Rc<Cell<u64>>,
+    /// True while a change runs; reads that end meanwhile are not shown.
+    is_changing: Rc<Cell<bool>>,
 }
 
 impl DefaultAppsView {
@@ -84,6 +90,8 @@ impl DefaultAppsView {
             super_e_row: controls.super_e_row.downgrade(),
             super_e: controls.super_e.downgrade(),
             showing_super_e: Rc::new(Cell::new(false)),
+            status_turn: Rc::new(Cell::new(0)),
+            is_changing: Rc::new(Cell::new(false)),
         };
         view.connect_changes(controls);
         view.connect_show_in_folder(controls);
@@ -230,11 +238,21 @@ impl DefaultAppsView {
         let Some(integration) = self.integration() else {
             return;
         };
+        let turn = self.next_status_turn();
         let view = self.clone();
         glib::spawn_future_local(async move {
             let status = integration.status().await;
-            view.show(&status);
+            if view.status_turn.get() == turn && !view.is_changing.get() {
+                view.show(&status);
+            }
         });
+    }
+
+    /// Starts a new status turn, which outdates every read still running.
+    fn next_status_turn(&self) -> u64 {
+        let turn = self.status_turn.get().wrapping_add(1);
+        self.status_turn.set(turn);
+        turn
     }
 
     /// Runs `change` with Make default, Restore previous and the Open and
@@ -250,6 +268,8 @@ impl DefaultAppsView {
             return;
         };
         self.set_requests_enabled(false);
+        self.next_status_turn();
+        self.is_changing.set(true);
         let view = self.clone();
         glib::spawn_future_local(async move {
             let outcome = change(integration).await;
@@ -257,6 +277,7 @@ impl DefaultAppsView {
             if let (Some(message), Some(page)) = (message, view.page.upgrade()) {
                 page.report(&message);
             }
+            view.is_changing.set(false);
             view.read_status();
         });
     }
