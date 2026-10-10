@@ -10,7 +10,9 @@
 //! INT-030). While a change runs, Make default and Restore previous are
 //! disabled; its outcome is toasted and the status read again.
 
+use std::cell::Cell;
 use std::future::Future;
+use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -51,6 +53,17 @@ pub(super) struct DefaultAppsView {
     enable_file_dialogs: glib::WeakRef<gtk::Button>,
     apply_file_dialogs: glib::WeakRef<gtk::Button>,
     restore_file_dialogs: glib::WeakRef<gtk::Button>,
+    super_e_row: glib::WeakRef<SettingRow>,
+    super_e: glib::WeakRef<gtk::Switch>,
+    /// True while the page sets the switch to what KDE says, so that is
+    /// not taken for the user turning it on or off.
+    showing_super_e: Rc<Cell<bool>>,
+    /// Counts status reads and changes: a read shows its status only when
+    /// nothing was read or changed since it started, so a late read never
+    /// turns a control back while a change runs or after a newer read.
+    status_turn: Rc<Cell<u64>>,
+    /// True while a change runs; reads that end meanwhile are not shown.
+    is_changing: Rc<Cell<bool>>,
 }
 
 impl DefaultAppsView {
@@ -74,10 +87,16 @@ impl DefaultAppsView {
             enable_file_dialogs: controls.enable_file_dialogs.downgrade(),
             apply_file_dialogs: controls.apply_file_dialogs.downgrade(),
             restore_file_dialogs: controls.restore_file_dialogs.downgrade(),
+            super_e_row: controls.super_e_row.downgrade(),
+            super_e: controls.super_e.downgrade(),
+            showing_super_e: Rc::new(Cell::new(false)),
+            status_turn: Rc::new(Cell::new(0)),
+            is_changing: Rc::new(Cell::new(false)),
         };
         view.connect_changes(controls);
         view.connect_show_in_folder(controls);
         view.connect_file_dialogs(controls);
+        view.connect_super_e(controls);
         view
     }
 
@@ -168,6 +187,27 @@ impl DefaultAppsView {
         });
     }
 
+    /// The Super+E switch (INT-033): on takes Super+E for `OpenXplorer`,
+    /// off gives it back. The status read after the change sets the switch
+    /// to what KDE then says, so a refused change turns it back.
+    fn connect_super_e(&self, controls: &Controls) {
+        let view = self.clone();
+        controls.super_e.connect_active_notify(move |switch| {
+            if view.showing_super_e.get() {
+                return;
+            }
+            if switch.is_active() {
+                view.run_change(
+                    |integration| async move { integration.enable_launch_shortcut().await.map(Some) },
+                );
+            } else {
+                view.run_change(|integration| async move {
+                    integration.restore_launch_shortcut().await.map(Some)
+                });
+            }
+        });
+    }
+
     /// The options of Make `OpenXplorer` default, as the switches show them.
     fn make_default_choice(&self) -> MakeDefaultChoice {
         let includes_zip = self
@@ -198,11 +238,21 @@ impl DefaultAppsView {
         let Some(integration) = self.integration() else {
             return;
         };
+        let turn = self.next_status_turn();
         let view = self.clone();
         glib::spawn_future_local(async move {
             let status = integration.status().await;
-            view.show(&status);
+            if view.status_turn.get() == turn && !view.is_changing.get() {
+                view.show(&status);
+            }
         });
+    }
+
+    /// Starts a new status turn, which outdates every read still running.
+    fn next_status_turn(&self) -> u64 {
+        let turn = self.status_turn.get().wrapping_add(1);
+        self.status_turn.set(turn);
+        turn
     }
 
     /// Runs `change` with Make default, Restore previous and the Open and
@@ -218,6 +268,8 @@ impl DefaultAppsView {
             return;
         };
         self.set_requests_enabled(false);
+        self.next_status_turn();
+        self.is_changing.set(true);
         let view = self.clone();
         glib::spawn_future_local(async move {
             let outcome = change(integration).await;
@@ -225,6 +277,7 @@ impl DefaultAppsView {
             if let (Some(message), Some(page)) = (message, view.page.upgrade()) {
                 page.report(&message);
             }
+            view.is_changing.set(false);
             view.read_status();
         });
     }
@@ -240,6 +293,9 @@ impl DefaultAppsView {
             if let Some(button) = button.upgrade() {
                 button.set_sensitive(enabled);
             }
+        }
+        if let Some(switch) = self.super_e.upgrade() {
+            switch.set_sensitive(enabled);
         }
     }
 
@@ -258,6 +314,16 @@ impl DefaultAppsView {
         );
         set_sensitive(&self.apply_file_dialogs, dialogs.is_available);
         set_sensitive(&self.restore_file_dialogs, dialogs.is_enabled);
+        let shortcut = &status.launch_shortcut;
+        if let Some(row) = self.super_e_row.upgrade() {
+            row.set_description(&shortcut.text());
+        }
+        if let Some(switch) = self.super_e.upgrade() {
+            self.showing_super_e.set(true);
+            switch.set_active(shortcut.is_enabled());
+            self.showing_super_e.set(false);
+            switch.set_sensitive(shortcut.is_available());
+        }
         if let Some(button) = self.make_default.upgrade() {
             button.set_sensitive(true);
         }

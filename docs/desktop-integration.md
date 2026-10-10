@@ -41,9 +41,15 @@ cat ~/.config/xdg-desktop-portal/*-portals.conf
 systemctl --user try-restart xdg-desktop-portal.service
 ```
 
+## Super+E on KDE Plasma
+
+On KDE Plasma, turn on Settings → Default apps → Keyboard shortcut → Super+E opens OpenXplorer to make Super+E open a new OpenXplorer window, as Win+E opens a new File Explorer window in Windows, whether or not one is already open. Plasma gives Super+E to Dolphin; OpenXplorer asks KDE's shortcut service to move it, keeps Dolphin's other shortcuts, and records which app had it in its settings folder. The change shows in System Settings → Shortcuts and lasts across logins.
+
+Log out and back in after turning it on or off: Plasma follows the new Super+E only from the next login. Turning it off gives Super+E back to the app that had it; if you have given Super+E to another app since, it is left alone. Other desktops and the Flatpak do not offer this.
+
 ## What this does not replace
 
-Browsers can route reveal actions through desktop portals or keep a previous application choice. Choose OpenXplorer in a chooser when available. Upload/save file-picker dialogs stay with the system unless you turn on Open and Save dialogs. Super+E is a separate desktop keyboard shortcut; the app does not override it.
+Browsers can route reveal actions through desktop portals or keep a previous application choice. Choose OpenXplorer in a chooser when available. Upload/save file-picker dialogs stay with the system unless you turn on Open and Save dialogs. On other desktops Super+E stays a separate desktop keyboard shortcut; the app changes it only on KDE Plasma, when you turn on Super+E (above).
 
 ## Tabs, windows and the taskbar
 

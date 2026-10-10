@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use gtk::prelude::*;
-use ox_core::integration::{MimeType, Sandbox, APP_ID};
+use ox_core::integration::{MimeType, Sandbox, APP_ID, SUPER_E};
 
 use super::super::pages::{Category, SettingsView};
 use super::super::row::SettingRow;
@@ -279,4 +279,57 @@ fn show_in_folder_starts_disabled_and_its_test_needs_the_service() {
             == "OpenXplorer does not own Show in folder yet. Close other file managers, or log out and \
                 back in after enabling."
     });
+}
+
+/// The Super+E switch takes Super+E from Dolphin for `OpenXplorer`'s New
+/// window action, as Win+E opens a new File Explorer window, and turning
+/// it off gives it back; the line
+/// under it says to log out and back in, which KDE Plasma needs.
+///
+/// parity: INT-033
+#[gtk::test]
+fn the_super_e_switch_takes_super_e_from_dolphin_and_gives_it_back() {
+    let default_apps = DefaultAppsTest::open();
+    let row = default_apps.row(super::SUPER_E.title);
+    let switch = row
+        .controls()
+        .into_iter()
+        .find_map(|control| control.downcast::<gtk::Switch>().ok())
+        .expect("Super+E is an on/off switch");
+    let after_login = "Log out and back in after changing this for Super+E to follow.";
+    wait_until("the shortcut status", || switch.is_sensitive());
+    assert_eq!(row.shown_description(), after_login);
+    assert!(!switch.is_active(), "Dolphin has Super+E");
+    let table = default_apps.page.context().desktop_integration().shortcut_table();
+    let keys_of = |component: &str| {
+        let table = table.lock().unwrap_or_else(PoisonError::into_inner);
+        table
+            .iter()
+            .find(|(action, _)| action.component == component)
+            .map(|(_, keys)| keys.clone())
+            .unwrap_or_default()
+    };
+    let ours = format!("{}.desktop", crate::config::APP_ID);
+
+    switch.set_active(true);
+
+    wait_until("Super+E to be OpenXplorer's", || keys_of(&ours) == [SUPER_E]);
+    let owner = table
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .find(|(_, keys)| keys.contains(&SUPER_E))
+        .map(|(action, _)| action.action.clone());
+    assert_eq!(owner.as_deref(), Some("NewWindow"), "Super+E opens a new window");
+    assert!(keys_of(DOLPHIN).is_empty());
+    wait_until("the status after the change", || switch.is_sensitive());
+    assert!(switch.is_active(), "the switch stays on");
+    assert_eq!(row.shown_description(), after_login);
+
+    switch.set_active(false);
+
+    wait_until("Super+E to be Dolphin's again", || keys_of(DOLPHIN) == [SUPER_E]);
+    assert!(keys_of(&ours).is_empty());
+    wait_until("the status after the change", || switch.is_sensitive());
+    assert!(!switch.is_active());
 }

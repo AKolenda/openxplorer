@@ -11,7 +11,8 @@
 //! whether `OpenXplorer` is the default file explorer, with "Make
 //! `OpenXplorer` default"; the two options that go with it; what opens each
 //! route, Show in folder and the file dialogs with their status lines;
-//! Brave's downloads ([`super::brave`]); and, folded away, the undo
+//! Brave's downloads ([`super::brave`]); Super+E on KDE Plasma
+//! (INT-033); and, folded away, the undo
 //! actions and the guide, a page of its own ([`super::troubleshooting`]).
 //! The ZIP route is shown on the ZIP & archives page.
 //!
@@ -98,6 +99,15 @@ const FILE_DIALOGS: RowText = RowText {
                dialogs apply now restart portal",
 };
 
+const SUPER_E: RowText = RowText {
+    title: "Super+E opens OpenXplorer",
+    description: "Opens a new window each time, as Win+E opens a new File Explorer window. On takes \
+                  Super+E from the app that opens it now; off gives it back. Changes KDE Plasma's \
+                  keyboard shortcut.",
+    keywords: "super e meta e win e windows key keyboard shortcut global shortcut launch plasma kde \
+               system settings shortcuts give back undo log out",
+};
+
 const TROUBLESHOOTING: RowText = RowText {
     title: "Setup help for Zorin and Brave",
     description: "Zorin and Brave setup steps, and how to undo each change.",
@@ -153,6 +163,8 @@ struct Controls {
     enable_file_dialogs: gtk::Button,
     apply_file_dialogs: gtk::Button,
     restore_file_dialogs: gtk::Button,
+    super_e_row: SettingRow,
+    super_e: gtk::Switch,
 }
 
 impl Controls {
@@ -208,8 +220,17 @@ impl Controls {
                 &ox_core::i18n::gettext("Restore Open and Save dialogs"),
                 ButtonStyle::Bordered,
             ),
+            super_e_row: SettingRow::new(SUPER_E),
+            super_e: insensitive_switch(),
         }
     }
+}
+
+/// A settings switch that waits, off, until the status is read.
+fn insensitive_switch() -> gtk::Switch {
+    let switch = parts::switch();
+    switch.set_sensitive(false);
+    switch
 }
 
 /// A settings switch that starts `active`.
@@ -229,6 +250,7 @@ pub(super) fn build(page: &SettingsPage) -> (SettingsSection, SettingsGroup) {
     section.append_group(&options_group(&controls));
     let routes = routes_group(&controls);
     section.append_group(&routes);
+    section.append_group(&super_e_group(&controls));
     section.append_group(&browsers_group(page));
     section.append_group(&undo_group(page, &controls));
     let zip_files = zip_files_group(&controls);
@@ -312,6 +334,16 @@ fn refresh_button(view: &DefaultAppsView) -> gtk::Button {
     let view = view.clone();
     refresh.connect_clicked(move |_| view.read_status());
     refresh
+}
+
+/// "Super+E opens `OpenXplorer`", an on/off switch (INT-033); the line
+/// under it says to log out and back in, or why it cannot be used here.
+fn super_e_group(controls: &Controls) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Keyboard shortcut"));
+    let row = &controls.super_e_row;
+    row.add_control(&controls.super_e, ControlName::RowTitle);
+    group.add_row(row);
+    group
 }
 
 /// The undo actions and the Zorin and Brave guide, rarely needed, folded
