@@ -138,3 +138,163 @@ fn ctrl_v_pastes_into_an_empty_folder() {
 
     wait_until("the pasted copy", || fixture.path("Empty/Notes 2.txt").is_file());
 }
+
+/// Whether keyboard focus is on `widget` or inside it.
+fn focus_is_in(test: &TestWindow, widget: &gtk::Widget) -> bool {
+    gtk::prelude::GtkWindowExt::focus(&test.window)
+        .is_some_and(|focus| &focus == widget || focus.is_ancestor(widget))
+}
+
+/// Closing the folder menu on an empty folder gives the keyboard back to
+/// its page, as closing it on the list gives it back to the list.
+///
+/// parity: CMD-011
+#[gtk::test]
+fn closing_the_menu_gives_the_keyboard_back_to_the_empty_page() {
+    let fixture = Fixture::standard();
+    let empty = make_empty_folder(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let page = go_to_empty_folder(&test, &empty);
+    test.window.folder_pane().focus_view();
+    test.window.open_context_menu_from_keyboard();
+    let menu = menu_of(&page).expect("the empty page has the folder menu");
+    wait_until("the menu", || menu.is_visible());
+
+    menu.popdown();
+
+    wait_until("the menu to close", || !menu.is_visible());
+    assert!(focus_is_in(&test, &page), "focus is back on the empty page");
+}
+
+/// Pasting the first item into an empty folder shows the list, and the
+/// keyboard moves there with it.
+///
+/// parity: CMD-011
+#[gtk::test]
+fn the_keyboard_follows_an_empty_folder_to_its_first_item() {
+    let fixture = Fixture::standard();
+    let empty = make_empty_folder(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    go_to_empty_folder(&test, &empty);
+
+    press_shortcut(&test, gdk::Key::v, gdk::ModifierType::CONTROL_MASK);
+
+    wait_until("the pasted copy to be listed", || test.names() == ["Notes 2.txt"]);
+    let list = test.window.folder_pane().view_widget();
+    wait_until("focus on the list", || focus_is_in(&test, &list));
+}
+
+/// When a folder's last item goes, the empty page shows and the keyboard
+/// moves to it from the list.
+///
+/// parity: CMD-011
+#[gtk::test]
+fn the_keyboard_follows_a_folder_that_becomes_empty() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("One")).expect("the folder is made");
+    std::fs::write(fixture.path("One/Last.txt"), "last").expect("the file is written");
+    let test = TestWindow::open(&fixture.uri_of("One"));
+    test.window.folder_pane().focus_view();
+    let list = test.window.folder_pane().view_widget();
+    assert!(focus_is_in(&test, &list));
+
+    std::fs::remove_file(fixture.path("One/Last.txt")).expect("the file goes");
+    test.activate("refresh", None);
+
+    wait_until("the empty page", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+    let page = shown_empty_page(&test);
+    assert!(focus_is_in(&test, &page), "focus is on the empty page");
+}
+
+/// The message under "This location is unavailable" can be selected and
+/// copied: a click on it keeps it focused instead of moving the keyboard
+/// to the page.
+///
+/// parity: VIEW-048
+#[gtk::test]
+fn a_click_on_the_unavailable_message_keeps_its_text_selectable() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("go-to", Some(&fixture.uri_of("Gone")));
+    wait_until("the unavailable page", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+    let page = shown_empty_page(&test);
+    let message = descendants::<gtk::Label>(&page)
+        .into_iter()
+        .find(gtk::Label::is_selectable)
+        .expect("the message is selectable");
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    message.grab_focus();
+    message.select_region(0, 4);
+    let bounds = message.compute_bounds(&page).expect("the message is laid out");
+    let press = controllers::<gtk::GestureClick>(&page)
+        .into_iter()
+        .find(|gesture| gesture.button() == gdk::BUTTON_PRIMARY)
+        .expect("the empty page takes clicks");
+
+    press.emit_by_name::<()>(
+        "pressed",
+        &[&1_i32, &f64::from(bounds.x() + 2.0), &f64::from(bounds.y() + 2.0)],
+    );
+
+    assert!(message.has_focus(), "the message keeps the keyboard");
+    assert_eq!(message.selection_bounds(), Some((0, 4)));
+}
+
+/// In split view each pane's empty page takes the folder menu for its own
+/// folder.
+///
+/// parity: CMD-011, VIEW-059
+#[gtk::test]
+fn each_pane_of_a_split_tab_has_its_own_empty_page_menu() {
+    let fixture = Fixture::standard();
+    let empty = make_empty_folder(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("split-view", None);
+    let page = go_to_empty_folder(&test, &empty);
+    let shown_in = test.window.side_holding(&page).expect("the page is in a pane");
+
+    assert_eq!(shown_in, test.window.active_side());
+    let right_click = controllers::<gtk::GestureClick>(&page)
+        .into_iter()
+        .find(|gesture| gesture.button() == gdk::BUTTON_SECONDARY)
+        .expect("the empty page takes a right-click");
+    right_click.emit_by_name::<()>("pressed", &[&1_i32, &20.0_f64, &20.0_f64]);
+    let menu = menu_of(&page).expect("the page has the folder menu");
+    wait_until("the menu", || menu.is_visible());
+    assert!(menu.row("New…").is_sensitive());
+}
+
+/// An empty Recycle Bin shows "Recycle Bin is empty" and its page opens
+/// the Recycle Bin's own folder menu, with no Paste or New.
+///
+/// parity: OPS-040, CMD-011
+#[gtk::test]
+fn an_empty_recycle_bin_opens_its_own_menu() {
+    super::file_ops_support::require_private_trash();
+    let trash = glib::user_data_dir().join("Trash");
+    let _ = std::fs::remove_dir_all(&trash);
+    let test = TestWindow::open(ox_core::location::TRASH_URI);
+    choose_menu_style(&test, ContextMenu::Win10);
+    wait_until("the empty Recycle Bin", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+    let page = shown_empty_page(&test);
+
+    test.window.open_context_menu_from_keyboard();
+    let menu = menu_of(&page).expect("the page has the folder menu");
+    wait_until("the menu", || menu.is_visible());
+    let labels = menu.row_labels();
+    let sensitive = |label: &str| labels.iter().any(|shown| shown == label) && menu.row(label).is_sensitive();
+
+    assert!(
+        !sensitive("Paste"),
+        "nothing is pasted into the Recycle Bin: {labels:?}"
+    );
+    assert!(!sensitive("New…"), "nor made there: {labels:?}");
+}

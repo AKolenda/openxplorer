@@ -425,7 +425,7 @@ impl FolderPane {
     /// while it shows.
     pub(super) fn focus_view(&self) {
         if self.page() == Some(PanePage::Empty) {
-            self.parts().empty.root.grab_focus();
+            self.parts().empty_area.grab_focus();
         } else {
             self.view_widget().grab_focus();
         }

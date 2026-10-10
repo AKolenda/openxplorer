@@ -173,8 +173,11 @@ fn page_stack(
     // another one shows.
     // The page fills the whole pane, so a right-click, a key or a drop
     // anywhere on it reaches the empty folder; its words stay centred.
+    // Keyboard focus rests on it while the page shows, so the folder's
+    // keys work in an empty folder too.
     let empty_area = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
+        .focusable(true)
         .build();
     empty.root.set_vexpand(true);
     empty_area.append(&empty.root);

@@ -90,9 +90,6 @@ impl EmptyPage {
             .halign(gtk::Align::Center)
             .valign(gtk::Align::Center)
             .css_classes(["empty-state"])
-            // Keyboard focus rests here while the page shows, so the
-            // folder's keys work in an empty folder too.
-            .focusable(true)
             .build();
         let icon = icons::image(Icon::Folder, STATE_GLYPH);
         let title = centred_text();

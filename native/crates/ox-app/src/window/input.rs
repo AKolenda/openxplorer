@@ -222,7 +222,8 @@ impl BrowserWindow {
     }
 
     /// Gives the empty page's whole area in `pane` what an empty folder takes in
-    /// Windows Explorer: the folder's keys, focus on a click, the folder's
+    /// Windows Explorer: the folder's keys, focus on a click (but not on
+    /// the selectable message or Try again), the folder's
     /// right-click menu (New, Paste) and drops into the folder. Item
     /// gestures (rename, rubber band, dragging items out) have no items to
     /// act on here.
@@ -247,7 +248,19 @@ impl BrowserWindow {
         press.connect_pressed(glib::clone!(
             #[weak]
             pane,
-            move |_, _, _, _| pane.focus_view()
+            move |_, _, x, y| {
+                // The message can be selected and copied, and Try again
+                // pressed: a click on them keeps its own focus.
+                let area = pane.empty_area();
+                let on_focusable_part = area.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|picked| {
+                    std::iter::successors(Some(picked), WidgetExt::parent)
+                        .take_while(|widget| widget != &area)
+                        .any(|widget| widget.is_focusable())
+                });
+                if !on_focusable_part {
+                    pane.focus_view();
+                }
+            }
         ));
         area.add_controller(press);
         self.attach_context_menu(area);

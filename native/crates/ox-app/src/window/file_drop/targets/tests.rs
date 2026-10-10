@@ -616,3 +616,24 @@ fn a_drop_on_an_unavailable_location_is_not_taken() {
     assert!(spot.is_none(), "a failed listing takes no drop");
     assert!(!page.has_css_class(VIEW_DROP_CLASS));
 }
+
+/// A search that finds nothing shows the same page; a drag over it is
+/// not taken, as a drop on search results is not (DND-011).
+///
+/// parity: DND-011
+#[gtk::test]
+fn a_drop_on_a_search_with_no_matches_is_not_taken() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.search_box().entry().set_text("zzz-no-such-item");
+    wait_until("the no-matches page", || {
+        !test.window.is_loading()
+            && test.window.folder_pane().page() == Some(crate::window::folder_pane::PanePage::Empty)
+    });
+    let page = crate::window::tests::empty_folder::shown_empty_page(&test);
+
+    let spot = test.window.hover_drop_at(DropZone::FolderView, &page, 20.0, 20.0);
+    test.window.leave_drop_zone(DropZone::FolderView);
+
+    assert!(spot.is_none(), "search results take no drop");
+}
