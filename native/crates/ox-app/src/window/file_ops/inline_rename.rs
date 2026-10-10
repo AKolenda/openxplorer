@@ -249,6 +249,15 @@ impl BrowserWindow {
             self.close_name_editor(cell);
             return;
         }
+        // A name the backend refuses anyway is refused before anything is
+        // asked, with the message that says why (more than 255 bytes).
+        if let Err(error) = ox_core::location::validate_name(name) {
+            self.take_rename_next();
+            editor.set_sensitive(true);
+            editor.grab_focus();
+            self.show_message(&error.to_string());
+            return;
+        }
         let confirmed = self
             .confirm_extension_change(&target.name, name, target.is_folder)
             .await

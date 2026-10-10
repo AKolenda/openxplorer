@@ -155,6 +155,9 @@ impl BrowserWindow {
                 let window = window
                     .upgrade()
                     .ok_or_else(|| ox_core::i18n::gettext_static(NOT_RENAMED).to_owned())?;
+                // A name the backend refuses anyway is refused before
+                // anything is asked, with the message that says why.
+                ox_core::location::validate_name(&name).map_err(|error| error.to_string())?;
                 let confirmed = window.confirm_extension_change(&old_name, &name, is_folder).await
                     && window.confirm_hiding_rename(&old_name, &name).await;
                 if !confirmed {

@@ -23,14 +23,14 @@ const MESSAGE: &str = crate::i18n::message_id(
 
 /// The extension of the file name `name`, case-folded: what follows its
 /// last dot, unless that dot is a leading one (`.bashrc` has none) or
-/// nothing follows it. Folding upper case then lower case matches letters
-/// that differ only in case as Unicode case folding does, such as `ſ` and
-/// `S` or the Kelvin sign and `k`, which lower case alone keeps apart.
+/// nothing follows it. Unicode case folding matches letters that differ
+/// only in case where lower or upper case alone keeps them apart, such as
+/// `ſ` and `S`, the Kelvin sign and `k`, or `ß` and `ẞ`.
 fn extension(name: &str) -> Option<String> {
     let dot = name.rfind('.')?;
     let is_leading = name[..dot].chars().all(|character| character == '.');
     let extension = &name[dot + 1..];
-    (!is_leading && !extension.is_empty()).then(|| extension.to_uppercase().to_lowercase())
+    (!is_leading && !extension.is_empty()).then(|| gtk::glib::casefold(extension).to_string())
 }
 
 /// True when renaming the file `old_name` to `new_name` adds, removes or
@@ -115,6 +115,14 @@ mod tests {
         assert!(
             !changes_extension("photo.\u{212a}", "photo.k", false),
             "Kelvin sign and k"
+        );
+        assert!(
+            !changes_extension("report.\u{df}", "report.\u{1e9e}", false),
+            "sharp s and capital sharp s"
+        );
+        assert!(
+            !changes_extension("report.\u{df}", "report.SS", false),
+            "sharp s folds to ss"
         );
         assert!(changes_extension("report.s", "report.t", false));
     }

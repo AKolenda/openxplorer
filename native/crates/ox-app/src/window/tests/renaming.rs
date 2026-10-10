@@ -164,6 +164,32 @@ fn changing_the_extension_in_place_asks_first_as_windows_explorer_does() {
     assert!(!fixture.path("Notes 2.txt").exists());
 }
 
+/// A name longer than 255 bytes is refused before the extension question,
+/// with the message that says why, and the field stays open to fix it.
+///
+/// parity: OPS-049
+#[gtk::test]
+fn a_name_too_long_is_refused_in_place_before_the_extension_question() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    let too_long = format!("{}.md", "N".repeat(260));
+
+    field.set_text(&too_long);
+    field.emit_activate();
+
+    wait_until("the refusal", || {
+        test.window.shown_message_text() == "This name is longer than 255 bytes."
+    });
+    assert!(dialog_over(&test).is_none(), "no extension question");
+    wait_until("the field to come back", || field.is_sensitive());
+    assert!(is_renaming_in_place(&test), "editing goes on");
+    assert_eq!(field.text(), too_long, "the typed name is kept");
+    assert!(fixture.path("Notes 2.txt").is_file());
+}
+
 /// parity: OPS-049
 #[gtk::test]
 fn renaming_a_folder_with_a_dot_or_keeping_the_extension_never_asks() {
