@@ -26,6 +26,7 @@ use std::path::{Path, PathBuf};
 use gio::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use super::default_apps::APP_ID;
 use super::private_file::write_private_file;
 use super::sandbox::Sandbox;
 use super::worker::on_worker;
@@ -42,8 +43,13 @@ const SHORTCUT_INTERFACE: &str = "org.kde.KGlobalAccel";
 /// How long one call may take, in milliseconds.
 const CALL_TIMEOUT_MS: i32 = 5_000;
 
-/// The record of what turning it on took, in the settings folder.
-const RECORD_FILE_NAME: &str = "launch-shortcut.json";
+/// The record of what turning it on took, in the settings folder, which
+/// the stable and the preview package share: each keeps its own,
+/// `launch-shortcut-<desktop file>.json`.
+const RECORD_PREFIX: &str = "launch-shortcut-";
+
+/// The one record the stable package's earlier test builds kept.
+const EARLIER_RECORD: &str = "launch-shortcut.json";
 
 /// Qt's Meta modifier, which is Super.
 const META: i32 = 0x1000_0000;
@@ -304,13 +310,12 @@ pub enum RestoredShortcut {
     NotOurs,
 }
 
-/// What turning it on took: the action that had Super+E and all its keys.
+/// What turning it on took: the action that had Super+E. Earlier records
+/// also hold that action's keys, which are no longer used.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Record {
     /// The action Super+E was taken from.
     previous: ShortcutAction,
-    /// That action's keys before, Super+E among them.
-    keys: Vec<KeySequence>,
 }
 
 /// The opt-in that makes Super+E open `OpenXplorer` on KDE Plasma.
@@ -372,11 +377,12 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
     }
 
     /// Takes Super+E from the action that has it, keeping its other keys,
-    /// and gives it to `OpenXplorer`'s new-window action. When the service
-    /// does not give it, the other action gets its keys back. Super+E on
+    /// and gives it to `OpenXplorer`'s new-window action. Super+E on
     /// another action of `OpenXplorer`'s (the launch action of an earlier
-    /// version) moves to the new-window action, and the record of what was
-    /// first taken is kept.
+    /// version) moves to the new-window action. When anything fails after
+    /// Super+E was taken, as when KDE's service restarts, or the service
+    /// keeps Super+E for another action, Super+E goes back to the action
+    /// it was taken from.
     ///
     /// # Errors
     ///
@@ -393,45 +399,30 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         }
         let taken = match owner {
             Some(earlier) if self.is_ours_in_any_action(&earlier) => {
-                let mut keys = self.shortcuts.keys(&earlier)?;
-                keys.retain(|keys| *keys != SUPER_E);
-                self.shortcuts.set_keys(&earlier, &keys)?;
+                self.take_super_e_from(&earlier)?;
                 None
             }
             Some(previous) => {
-                let keys = self.shortcuts.keys(&previous)?;
-                let record = Record { previous, keys };
-                self.write_record(&record)?;
-                let kept: Vec<KeySequence> = record
-                    .keys
-                    .iter()
-                    .copied()
-                    .filter(|keys| *keys != SUPER_E)
-                    .collect();
-                self.shortcuts.set_keys(&record.previous, &kept)?;
-                Some(record)
+                self.write_record(&Record {
+                    previous: previous.clone(),
+                })?;
+                if let Err(error) = self.take_super_e_from(&previous) {
+                    self.remove_record();
+                    return Err(error);
+                }
+                Some(previous)
             }
             None => None,
         };
-        self.shortcuts.register(&self.ours)?;
-        self.shortcuts.set_keys(&self.ours, &[SUPER_E])?;
-        let given = self
-            .shortcuts
-            .owner(SUPER_E)?
-            .is_some_and(|owner| owner.is(&self.ours));
-        if given {
-            return Ok(());
-        }
-        if let Some(record) = taken {
-            self.shortcuts.set_keys(&record.previous, &record.keys)?;
-            self.remove_record();
-        }
-        Err(ShortcutError::NotGiven)
+        self.give_super_e_to_ours()
+            .inspect_err(|_| self.roll_back(taken.as_ref()))
     }
 
     /// Takes Super+E from `OpenXplorer` and gives it back to the action it
-    /// was taken from, with all that action's keys. A Super+E the user
-    /// has given to something else since is left alone.
+    /// was taken from, which keeps the keys it has now. A Super+E the user
+    /// has given to something else since is left alone. When giving it
+    /// back fails, `OpenXplorer` keeps Super+E and the record, so turning
+    /// it off again can finish.
     ///
     /// # Errors
     ///
@@ -450,18 +441,70 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             self.remove_record();
             return Ok(RestoredShortcut::NotOurs);
         };
-        let mut keys = self.shortcuts.keys(&owner)?;
-        keys.retain(|keys| *keys != SUPER_E);
-        self.shortcuts.set_keys(&owner, &keys)?;
+        let ours = self.shortcuts.keys(&owner)?;
+        self.take_super_e_from(&owner)?;
         let restored = match record {
             Some(record) => {
-                self.shortcuts.set_keys(&record.previous, &record.keys)?;
+                if let Err(error) = self.give_super_e_back(&record.previous) {
+                    let _ = self.shortcuts.set_keys(&owner, &ours);
+                    return Err(error);
+                }
                 RestoredShortcut::GivenBack
             }
             None => RestoredShortcut::Freed,
         };
         self.remove_record();
         Ok(restored)
+    }
+
+    /// Takes Super+E from `action`, which keeps its other keys.
+    fn take_super_e_from(&self, action: &ShortcutAction) -> Result<(), ShortcutError> {
+        let mut keys = self.shortcuts.keys(action)?;
+        keys.retain(|keys| *keys != SUPER_E);
+        self.shortcuts.set_keys(action, &keys)
+    }
+
+    /// Adds Super+E to the keys `action` has now, so changes the user made
+    /// to them meanwhile stay.
+    fn give_super_e_back(&self, action: &ShortcutAction) -> Result<(), ShortcutError> {
+        let mut keys = self.shortcuts.keys(action)?;
+        if !keys.contains(&SUPER_E) {
+            keys.push(SUPER_E);
+        }
+        self.shortcuts.set_keys(action, &keys)
+    }
+
+    /// Gives Super+E to `OpenXplorer`'s new-window action.
+    ///
+    /// # Errors
+    ///
+    /// [`ShortcutError::NotGiven`] when the service kept it for another
+    /// action, and the service's failure.
+    fn give_super_e_to_ours(&self) -> Result<(), ShortcutError> {
+        self.shortcuts.register(&self.ours)?;
+        self.shortcuts.set_keys(&self.ours, &[SUPER_E])?;
+        let given = self
+            .shortcuts
+            .owner(SUPER_E)?
+            .is_some_and(|owner| owner.is(&self.ours));
+        if given {
+            Ok(())
+        } else {
+            Err(ShortcutError::NotGiven)
+        }
+    }
+
+    /// Undoes a turning on that failed after Super+E was `taken`, as far
+    /// as the service lets it: Super+E leaves `OpenXplorer`'s action and
+    /// goes back to the action it was taken from. The record is kept when
+    /// that fails too, so turning it off can still give Super+E back.
+    fn roll_back(&self, taken: Option<&ShortcutAction>) {
+        let _ = self.take_super_e_from(&self.ours);
+        if let Some(previous) = taken {
+            if self.give_super_e_back(previous).is_ok() {
+                self.remove_record();
+            }
+        }
     }
 
     /// Runs `operation` on a worker thread, as the service's calls block.
@@ -477,13 +520,23 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
 
     /// The record's path.
     fn record_path(&self) -> PathBuf {
-        self.settings.join(RECORD_FILE_NAME)
+        self.settings
+            .join(format!("{RECORD_PREFIX}{}.json", self.ours.component))
+    }
+
+    /// The record an earlier test build of the stable package kept, which
+    /// only that package reads.
+    fn earlier_record_path(&self) -> Option<PathBuf> {
+        (self.ours.component == APP_ID).then(|| self.settings.join(EARLIER_RECORD))
     }
 
     /// The record, or `None` when there is none or it cannot be read.
     fn read_record(&self) -> Option<Record> {
-        let text = std::fs::read_to_string(self.record_path()).ok()?;
-        serde_json::from_str(&text).ok()
+        let read = |path: PathBuf| {
+            let text = std::fs::read_to_string(path).ok()?;
+            serde_json::from_str::<Record>(&text).ok()
+        };
+        read(self.record_path()).or_else(|| self.earlier_record_path().and_then(read))
     }
 
     /// Writes the record, privately.
@@ -495,9 +548,12 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             .map_err(|error| ShortcutError::Record { path, error })
     }
 
-    /// Removes the record; a missing one is fine.
+    /// Removes the record, and an earlier one; a missing one is fine.
     fn remove_record(&self) {
         let _ = std::fs::remove_file(self.record_path());
+        if let Some(earlier) = self.earlier_record_path() {
+            let _ = std::fs::remove_file(earlier);
+        }
     }
 }
 

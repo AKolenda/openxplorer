@@ -13,6 +13,16 @@ use ox_core::integration::{
 /// `OpenXplorer`'s desktop file.
 const OURS: &str = "io.winspace.Development.desktop";
 
+/// The record the stable package keeps of what it took.
+const RECORD: &str = "launch-shortcut-io.winspace.Development.desktop.json";
+
+/// The preview package's desktop file, which shares the settings folder.
+const PREVIEW: &str = "io.winspace.Development.Native.desktop";
+
+/// Ctrl+Alt+F, a key the user gives Dolphin while Super+E is
+/// `OpenXplorer`'s.
+const CTRL_ALT_F: KeySequence = [0x0400_0000 | 0x0800_0000 | 0x46, 0, 0, 0];
+
 /// Ctrl+Alt+D, a second key of Dolphin's in these tests.
 const CTRL_ALT_D: KeySequence = [0x0400_0000 | 0x0800_0000 | 0x44, 0, 0, 0];
 
@@ -24,6 +34,9 @@ struct Shortcuts {
     actions: RefCell<Vec<(ShortcutAction, Vec<KeySequence>)>>,
     /// The desktop files the service can launch.
     launchable: Vec<String>,
+    /// A call that fails, as when the service restarts: `register`, or
+    /// `set_keys` of `OpenXplorer`'s actions.
+    failing: RefCell<Option<&'static str>>,
 }
 
 impl Shortcuts {
@@ -32,8 +45,26 @@ impl Shortcuts {
         let dolphin = ShortcutAction::launch("org.kde.dolphin.desktop", "Dolphin");
         Self {
             actions: RefCell::new(vec![(dolphin, vec![SUPER_E, CTRL_ALT_D])]),
-            launchable: vec!["org.kde.dolphin.desktop".to_owned(), OURS.to_owned()],
+            launchable: vec![
+                "org.kde.dolphin.desktop".to_owned(),
+                OURS.to_owned(),
+                PREVIEW.to_owned(),
+            ],
+            failing: RefCell::new(None),
         }
+    }
+
+    /// Fails `call` from now on.
+    fn fail(&self, call: &'static str) {
+        *self.failing.borrow_mut() = Some(call);
+    }
+
+    /// The service's error for a failing `call`.
+    fn check(&self, call: &'static str) -> Result<(), ShortcutError> {
+        if *self.failing.borrow() == Some(call) {
+            return Err(ShortcutError::Unreachable("the service restarted".to_owned()));
+        }
+        Ok(())
     }
 
     /// The keys of `component`'s launch action, or of `OpenXplorer`'s
@@ -78,6 +109,7 @@ impl GlobalShortcuts for Shortcuts {
     }
 
     fn register(&self, action: &ShortcutAction) -> Result<(), ShortcutError> {
+        self.check("register")?;
         let mut actions = self.actions.borrow_mut();
         let known = actions.iter().any(|(known, _)| same(known, action));
         if !known && self.launchable.contains(&action.component) {
@@ -87,6 +119,9 @@ impl GlobalShortcuts for Shortcuts {
     }
 
     fn set_keys(&self, action: &ShortcutAction, keys: &[KeySequence]) -> Result<(), ShortcutError> {
+        if action.component == OURS {
+            self.check("set_keys")?;
+        }
         let mut actions = self.actions.borrow_mut();
         let free: Vec<KeySequence> = keys
             .iter()
@@ -144,7 +179,7 @@ fn super_e_moves_from_dolphin_to_openxplorer_and_back() {
         [CTRL_ALT_D],
         "Dolphin keeps its other keys"
     );
-    assert!(settings.path().join("launch-shortcut.json").is_file());
+    assert!(settings.path().join(RECORD).is_file());
     opt_in.enable().unwrap();
     assert_eq!(
         shortcuts.keys_of(OURS),
@@ -156,10 +191,10 @@ fn super_e_moves_from_dolphin_to_openxplorer_and_back() {
 
     assert_eq!(
         shortcuts.keys_of("org.kde.dolphin.desktop"),
-        [SUPER_E, CTRL_ALT_D]
+        [CTRL_ALT_D, SUPER_E]
     );
     assert_eq!(shortcuts.keys_of(OURS), Vec::<KeySequence>::new());
-    assert!(!settings.path().join("launch-shortcut.json").exists());
+    assert!(!settings.path().join(RECORD).exists());
     assert_eq!(opt_in.status(), LaunchShortcutStatus::Other("Dolphin".to_owned()));
 }
 
@@ -199,9 +234,9 @@ fn super_e_goes_back_when_the_service_does_not_give_it() {
     assert!(matches!(refusal, Err(ShortcutError::NotGiven)), "{refusal:?}");
     assert_eq!(
         shortcuts.keys_of("org.kde.dolphin.desktop"),
-        [SUPER_E, CTRL_ALT_D]
+        [CTRL_ALT_D, SUPER_E]
     );
-    assert!(!settings.path().join("launch-shortcut.json").exists());
+    assert!(!settings.path().join(RECORD).exists());
 }
 
 /// A Super+E the user gave to another app after turning it on is left
@@ -320,7 +355,7 @@ fn super_e_on_the_earlier_launch_action_moves_to_new_window_and_back() {
     assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
     assert_eq!(
         shortcuts.keys_of("org.kde.dolphin.desktop"),
-        [SUPER_E, CTRL_ALT_D]
+        [CTRL_ALT_D, SUPER_E]
     );
 
     // Turning it off while the earlier launch action has Super+E gives it
@@ -338,7 +373,7 @@ fn super_e_on_the_earlier_launch_action_moves_to_new_window_and_back() {
     assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
     assert_eq!(
         shortcuts.keys_of("org.kde.dolphin.desktop"),
-        [SUPER_E, CTRL_ALT_D]
+        [CTRL_ALT_D, SUPER_E]
     );
     assert_eq!(
         shortcuts.keys_of_action(OURS, "_launch"),
@@ -369,4 +404,107 @@ fn the_desktop_file_has_the_new_window_action() {
         .find_map(|line| line.strip_prefix("Exec="))
         .expect("the action has a command");
     assert_eq!(exec, "openxplorer --new-window");
+}
+
+/// Turning it off gives Super+E back to Dolphin and keeps the keys the user
+/// changed on Dolphin since it was turned on.
+///
+/// parity: INT-033
+#[test]
+fn turning_it_off_adds_super_e_back_and_keeps_later_changes() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+    opt_in.enable().unwrap();
+    let dolphin = ShortcutAction::launch("org.kde.dolphin.desktop", "Dolphin");
+    shortcuts.set_keys(&dolphin, &[CTRL_ALT_F]).unwrap();
+
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+
+    let mut keys = shortcuts.keys_of("org.kde.dolphin.desktop");
+    keys.sort_unstable();
+    let mut expected = vec![CTRL_ALT_F, SUPER_E];
+    expected.sort_unstable();
+    assert_eq!(
+        keys, expected,
+        "Ctrl+Alt+D was removed by the user and stays removed"
+    );
+}
+
+/// A failure partway through turning it on, as when KDE's service
+/// restarts, gives Super+E back to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn a_failure_while_turning_it_on_gives_super_e_back() {
+    for call in ["register", "set_keys"] {
+        let settings = tempfile::tempdir().unwrap();
+        let shortcuts = Shortcuts::plasma();
+        let opt_in = launch_shortcut(&shortcuts, settings.path());
+        shortcuts.fail(call);
+
+        assert!(opt_in.enable().is_err(), "{call} failed");
+
+        assert_eq!(
+            shortcuts.keys_of("org.kde.dolphin.desktop"),
+            [CTRL_ALT_D, SUPER_E],
+            "{call}: Dolphin has Super+E again"
+        );
+        assert!(!settings.path().join(RECORD).exists());
+    }
+}
+
+/// The stable and the preview package share the settings folder, and each
+/// keeps its own record of what it took, so turning both off in any order
+/// gives Super+E back to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn the_stable_and_preview_packages_keep_their_own_records() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = LaunchShortcut::new(
+        &shortcuts,
+        settings.path(),
+        PREVIEW,
+        vec!["kde".to_owned()],
+        Sandbox::Host,
+    );
+
+    stable.enable().unwrap();
+    preview.enable().unwrap();
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(
+        stable.status(),
+        LaunchShortcutStatus::Ours,
+        "the preview gave it back to the stable app"
+    );
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+
+    let keys = shortcuts.keys_of("org.kde.dolphin.desktop");
+    assert!(keys.contains(&SUPER_E), "Dolphin has Super+E again: {keys:?}");
+}
+
+/// A record an earlier test build of the stable package kept, under the
+/// one name every package shared, still gives Super+E back to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn an_earlier_record_still_gives_super_e_back() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+    opt_in.enable().unwrap();
+    let record = settings.path().join(RECORD);
+    let earlier = settings.path().join("launch-shortcut.json");
+    let text = std::fs::read_to_string(&record).unwrap();
+    let with_keys = text.replacen('{', "{\"keys\": [[268435525, 0, 0, 0]],", 1);
+    std::fs::write(&earlier, with_keys).unwrap();
+    std::fs::remove_file(&record).unwrap();
+
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+    assert!(!earlier.exists(), "the earlier record is gone");
 }
