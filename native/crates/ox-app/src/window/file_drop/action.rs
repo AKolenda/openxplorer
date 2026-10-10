@@ -17,10 +17,13 @@
 //! from another app that did not offer a copy when it reached the window
 //! is refused, as `NativeFileDrop` refused a source offering only Move.
 //! Once the desktop applies a modifier, the offer narrows to the chosen
-//! action, so the first offer is what tells the two apart. A drag from
-//! another app is never turned into a move; a move of this app's own items
+//! action, so the first offer is what tells the two apart. A plain drag
+//! from another app is never turned into a move (Shift held over it still
+//! moves, as the user asked); a move of this app's own items
 //! is run by its own transfer engine, and the drag is still finished as a
 //! copy, so its source never deletes anything.
+
+use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -28,8 +31,8 @@ use gtk::{gdk, glib};
 
 use ox_core::ops::is_recycle_bin_item;
 
-use super::drive::on_same_drive;
-use super::{own_dragged_items, DropDestination};
+use super::drive::{answer_within, on_same_drive};
+use super::DropDestination;
 use crate::icons::Icon;
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use crate::window::window_action::WindowAction;
@@ -57,17 +60,100 @@ impl DragOrigin {
     }
 }
 
+/// What deciding a drop reads from it: GTK's [`gdk::Drop`], or a stand-in
+/// in tests, as GDK makes drops only for a real drag. It holds nothing
+/// that reads the disk, as the decision runs at every motion of a drag on
+/// the GTK thread.
+pub(crate) trait OfferedDrop {
+    /// The object that stands for the drop while it lasts.
+    fn identity(&self) -> glib::Object;
+    /// What the drag offers now, once the desktop applied any modifier.
+    fn offered(&self) -> gdk::DragAction;
+    /// Where the drag comes from.
+    fn origin(&self) -> DragOrigin;
+}
+
+impl OfferedDrop for gdk::Drop {
+    fn identity(&self) -> glib::Object {
+        self.clone().upcast()
+    }
+
+    fn offered(&self) -> gdk::DragAction {
+        self.actions()
+    }
+
+    fn origin(&self) -> DragOrigin {
+        DragOrigin::of(self)
+    }
+}
+
 /// The actions a drag offered when it first reached the window, kept for
 /// the rest of its hover (see the module's safety rule).
 #[derive(Debug)]
 pub(crate) struct FirstOffer {
     /// The drop the offer belongs to.
-    drop: glib::WeakRef<gdk::Drop>,
+    drop: glib::WeakRef<glib::Object>,
     /// What it offered first.
     offered: gdk::DragAction,
-    /// The last folder the drag was over and whether its items are on that
-    /// folder's drive, so a hover does not read them again at each motion.
-    drive: Option<(String, bool)>,
+}
+
+/// What a drop runs, once the keys held at the drop are known.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DropRun {
+    /// This action.
+    Run(DropAction),
+    /// A plain drop of this app's own items: a move onto a folder of their
+    /// drive and a copy anywhere else, decided once the items are read,
+    /// off the GTK thread ([`drop_run_action`]).
+    MoveWithinDrive,
+}
+
+impl DropRun {
+    /// The action shown while the drag hovers, before the drive is known:
+    /// a copy for a plain drop of this app's own items.
+    pub(crate) fn shown(self) -> DropAction {
+        match self {
+            Self::Run(action) => action,
+            Self::MoveWithinDrive => DropAction::Copy,
+        }
+    }
+}
+
+/// How long a drop waits to learn whether its items are on the drive of
+/// the folder they are dropped on; past it, the drop copies.
+const DRIVE_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// The action `run` takes on `uris` dropped onto `destination`. A plain
+/// drop of this app's own items moves them onto a folder of their drive
+/// and copies them anywhere else, and items out of a ZIP or the Recycle
+/// Bin keep their own rules. The drive is read on a worker thread, for at
+/// most [`DRIVE_TIMEOUT`], so a share that stopped answering never
+/// freezes the window: a drive that does not answer in time counts as
+/// another, and the drop copies.
+pub(crate) async fn drop_run_action(
+    run: DropRun,
+    uris: &[String],
+    destination: &DropDestination,
+) -> DropAction {
+    let DropRun::MoveWithinDrive = run else {
+        return run.shown();
+    };
+    let DropDestination::Folder(folder) = destination else {
+        return DropAction::Copy;
+    };
+    if uris
+        .iter()
+        .any(|uri| is_zip_copy(uri) || is_recycle_bin_item(uri))
+    {
+        return DropAction::Copy;
+    }
+    let (uris, folder) = (uris.to_vec(), folder.clone());
+    let same = answer_within(DRIVE_TIMEOUT, move || on_same_drive(&uris, &folder)).await;
+    if same {
+        DropAction::Move
+    } else {
+        DropAction::Copy
+    }
 }
 
 /// The keys that change what a drop does.
@@ -117,26 +203,22 @@ impl DropAction {
         Self::from_offered(offered)
     }
 
-    /// The action a drop that settled on `self` runs once the keys `held`
-    /// at the drop and the drive are known, as in Windows Explorer: a copy
-    /// of this app's own items becomes a move when Shift is held, or when
-    /// no key is held and `same_drive` says the items are on the drive of
-    /// the folder they are dropped on. Ctrl keeps the copy, and a drop
-    /// from another app keeps whatever it settled on.
-    pub(crate) fn on_drive(
-        self,
-        origin: DragOrigin,
-        held: gdk::ModifierType,
-        same_drive: impl FnOnce() -> bool,
-    ) -> Self {
+    /// What a drop that settled on `self` runs once the keys `held` at the
+    /// drop are known, as in Windows Explorer: a copy of this app's own
+    /// items becomes a move when Shift is held, and with no key held it
+    /// moves within their drive ([`DropRun::MoveWithinDrive`]). Ctrl keeps
+    /// the copy, and a drop from another app keeps whatever it settled on.
+    pub(crate) fn with_keys(self, origin: DragOrigin, held: gdk::ModifierType) -> DropRun {
         if origin != DragOrigin::ThisApp || self != Self::Copy {
-            return self;
+            return DropRun::Run(self);
         }
         let held = held & ACTION_KEYS;
-        if held == gdk::ModifierType::SHIFT_MASK || (held.is_empty() && same_drive()) {
-            Self::Move
+        if held == gdk::ModifierType::SHIFT_MASK {
+            DropRun::Run(Self::Move)
+        } else if held.is_empty() {
+            DropRun::MoveWithinDrive
         } else {
-            self
+            DropRun::Run(self)
         }
     }
 
@@ -214,19 +296,18 @@ fn drop_menu_entries() -> Vec<MenuEntry> {
 }
 
 impl BrowserWindow {
-    /// The action `drop` would run now onto `destination`, or `None` when
-    /// it is refused.
-    pub(super) fn drop_action(
-        &self,
-        drop: &gdk::Drop,
-        destination: Option<&DropDestination>,
-    ) -> Option<DropAction> {
+    /// What `drop` would run now, or `None` when it is refused. Nothing
+    /// is read from disk: this runs at every motion of a drag.
+    pub(super) fn drop_run(&self, drop: &impl OfferedDrop) -> Option<DropRun> {
         let first_offered = self.first_offer(drop);
-        let origin = DragOrigin::of(drop);
-        let action = DropAction::for_drop(origin, first_offered, drop.actions())?;
-        Some(action.on_drive(origin, self.held_drop_keys(), || {
-            self.drop_on_same_drive(drop, destination)
-        }))
+        let origin = drop.origin();
+        let action = DropAction::for_drop(origin, first_offered, drop.offered())?;
+        Some(action.with_keys(origin, self.held_drop_keys()))
+    }
+
+    /// The action `drop` shows now, or `None` when it is refused.
+    pub(super) fn drop_action(&self, drop: &impl OfferedDrop) -> Option<DropAction> {
+        self.drop_run(drop).map(DropRun::shown)
     }
 
     /// The keys held now that change what a drop does.
@@ -239,56 +320,23 @@ impl BrowserWindow {
         })
     }
 
-    /// True when this app's own `drop` carries items that are all on the
-    /// drive of `destination`, a folder; remembered for the drop's last
-    /// folder.
-    fn drop_on_same_drive(&self, drop: &gdk::Drop, destination: Option<&DropDestination>) -> bool {
-        let Some(DropDestination::Folder(folder)) = destination else {
-            return false;
-        };
-        if let Some((known, same)) = self.known_drive(drop) {
-            if known == *folder {
-                return same;
-            }
-        }
-        let same = own_dragged_items(drop).is_some_and(|uris| {
-            !uris
-                .iter()
-                .any(|uri| is_zip_copy(uri) || is_recycle_bin_item(uri))
-                && on_same_drive(&uris, folder)
-        });
-        if let Some(offer) = self.imp().first_offer.borrow_mut().as_mut() {
-            offer.drive = Some((folder.clone(), same));
-        }
-        same
-    }
-
-    /// The folder and drive answer remembered for `drop`.
-    fn known_drive(&self, drop: &gdk::Drop) -> Option<(String, bool)> {
-        let first = self.imp().first_offer.borrow();
-        let offer = first.as_ref()?;
-        (offer.drop.upgrade().as_ref() == Some(drop))
-            .then(|| offer.drive.clone())
-            .flatten()
-    }
-
     /// What `drop` offered when it first reached the window, remembered
     /// now when it is new.
-    fn first_offer(&self, drop: &gdk::Drop) -> gdk::DragAction {
+    fn first_offer(&self, drop: &impl OfferedDrop) -> gdk::DragAction {
+        let identity = drop.identity();
         let mut first = self.imp().first_offer.borrow_mut();
         let is_known = first
             .as_ref()
-            .is_some_and(|offer| offer.drop.upgrade().as_ref() == Some(drop));
+            .is_some_and(|offer| offer.drop.upgrade().as_ref() == Some(&identity));
         if !is_known {
             *first = Some(FirstOffer {
-                drop: drop.downgrade(),
-                offered: drop.actions(),
-                drive: None,
+                drop: identity.downgrade(),
+                offered: drop.offered(),
             });
         }
         first
             .as_ref()
-            .map_or_else(|| drop.actions(), |offer| offer.offered)
+            .map_or_else(|| drop.offered(), |offer| offer.offered)
     }
 
     /// Opens the drop menu where the drop happened, keeping the drop of
@@ -414,7 +462,7 @@ mod tests {
 
     /// parity: DND-017
     #[test]
-    fn a_plain_drag_of_own_items_moves_within_a_drive_and_copies_across() {
+    fn a_plain_drag_of_own_items_moves_within_a_drive_and_keys_choose_otherwise() {
         let none = gdk::ModifierType::empty();
         let control = gdk::ModifierType::CONTROL_MASK;
         let shift = gdk::ModifierType::SHIFT_MASK;
@@ -422,52 +470,74 @@ mod tests {
         let own = DragOrigin::ThisApp;
         let copy = DropAction::Copy;
 
-        assert_eq!(copy.on_drive(own, none, || true), DropAction::Move);
-        assert_eq!(copy.on_drive(own, none, || false), DropAction::Copy);
+        assert_eq!(copy.with_keys(own, none), DropRun::MoveWithinDrive);
         assert_eq!(
-            copy.on_drive(own, control, || true),
-            DropAction::Copy,
+            copy.with_keys(own, control),
+            DropRun::Run(DropAction::Copy),
             "Ctrl copies"
         );
         assert_eq!(
-            copy.on_drive(own, shift, || false),
-            DropAction::Move,
+            copy.with_keys(own, shift),
+            DropRun::Run(DropAction::Move),
             "Shift moves"
         );
-        assert_eq!(copy.on_drive(own, alt, || true), DropAction::Copy);
+        assert_eq!(copy.with_keys(own, alt), DropRun::Run(DropAction::Copy));
         assert_eq!(
-            copy.on_drive(own, gdk::ModifierType::BUTTON1_MASK, || true),
-            DropAction::Move,
+            copy.with_keys(own, gdk::ModifierType::BUTTON1_MASK),
+            DropRun::MoveWithinDrive,
             "a held button is no key"
         );
         assert_eq!(
-            copy.on_drive(DragOrigin::OtherApp, none, || true),
-            DropAction::Copy,
+            copy.with_keys(DragOrigin::OtherApp, none),
+            DropRun::Run(DropAction::Copy),
             "another app's items are never moved unasked"
         );
-        assert_eq!(
-            copy.on_drive(DragOrigin::OtherApp, shift, || true),
-            DropAction::Copy
-        );
         for settled in [DropAction::Move, DropAction::Link, DropAction::Ask] {
-            assert_eq!(settled.on_drive(own, control, || true), settled);
+            assert_eq!(settled.with_keys(own, none), DropRun::Run(settled));
         }
+        assert_eq!(
+            DropRun::MoveWithinDrive.shown(),
+            DropAction::Copy,
+            "a hover shows a copy"
+        );
     }
 
+    /// The drop moves its items within their drive and copies them across
+    /// drives, out of a ZIP and onto anything but a folder; a drop that
+    /// settled on an action keeps it.
+    ///
     /// parity: DND-017
-    #[test]
-    fn the_drive_is_only_read_for_a_plain_drop_of_own_items() {
-        let read = std::cell::Cell::new(false);
-        let mark = || {
-            read.set(true);
-            true
+    #[gtk::test]
+    fn a_plain_drop_of_own_items_reads_their_drive_once_dropped() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let item = folder.path().join("Notes.txt");
+        std::fs::write(&item, "notes").expect("the item is written");
+        let destination = folder.path().join("Documents");
+        std::fs::create_dir(&destination).expect("the folder is made");
+        let uri = |path: &std::path::Path| gtk::gio::File::for_path(path).uri().to_string();
+        let items = [uri(&item)];
+        let into_folder = DropDestination::Folder(uri(&destination));
+        let into_share = DropDestination::Folder("smb://nas/share/".to_owned());
+        let run = |run, items: &[String], destination: &DropDestination| {
+            glib::MainContext::default().block_on(drop_run_action(run, items, destination))
         };
 
-        DropAction::Copy.on_drive(DragOrigin::ThisApp, gdk::ModifierType::CONTROL_MASK, mark);
-        DropAction::Copy.on_drive(DragOrigin::OtherApp, gdk::ModifierType::empty(), mark);
-        DropAction::Link.on_drive(DragOrigin::ThisApp, gdk::ModifierType::empty(), mark);
-
-        assert!(!read.get());
+        assert_eq!(
+            run(DropRun::MoveWithinDrive, &items, &into_folder),
+            DropAction::Move
+        );
+        assert_eq!(
+            run(DropRun::MoveWithinDrive, &items, &into_share),
+            DropAction::Copy
+        );
+        assert_eq!(
+            run(DropRun::MoveWithinDrive, &items, &DropDestination::RecycleBin),
+            DropAction::Copy
+        );
+        assert_eq!(
+            run(DropRun::Run(DropAction::Link), &items, &into_folder),
+            DropAction::Link
+        );
     }
 
     /// parity: DND-018

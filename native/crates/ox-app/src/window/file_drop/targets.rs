@@ -26,7 +26,7 @@ pub(in crate::window) use autoscroll::DragScroll;
 
 use spot::DropSpot;
 
-use super::DropAction;
+use super::action::OfferedDrop;
 use crate::window::file_drag::DraggedItems;
 use crate::window::BrowserWindow;
 
@@ -96,7 +96,7 @@ impl BrowserWindow {
         &self,
         zone: DropZone,
         target: &gtk::DropTargetAsync,
-        drop: &gdk::Drop,
+        drop: &impl OfferedDrop,
         x: f64,
         y: f64,
     ) -> gdk::DragAction {
@@ -119,11 +119,13 @@ impl BrowserWindow {
             DropZone::CrumbMenu => self.keep_drag_crumb_menu(),
             DropZone::FolderView | DropZone::Sidebar | DropZone::Tabs => self.close_drag_crumb_menu(),
         }
-        let Some(spot) = spot else {
-            return gdk::DragAction::empty();
-        };
-        self.drop_action(drop, Some(&spot.destination()))
-            .map_or_else(gdk::DragAction::empty, DropAction::as_drag_action)
+        // Asked at every motion, even where nothing takes the drop, so the
+        // first offer is remembered as the drag reaches the window.
+        let action = self.drop_action(drop);
+        match (spot, action) {
+            (Some(_), Some(action)) => action.as_drag_action(),
+            _ => gdk::DragAction::empty(),
+        }
     }
 
     /// A drag is at (`x`, `y`) of `widget`, the window's `zone`: scrolls
@@ -171,11 +173,7 @@ impl BrowserWindow {
         let spot = self.drop_spot(zone, &widget, x, y);
         self.leave_drop_zone(zone);
         self.close_drag_crumb_menu();
-        let Some(spot) = spot else {
-            return false;
-        };
-        let destination = spot.destination();
-        let Some(action) = self.drop_action(drop, Some(&destination)) else {
+        let (Some(spot), Some(run)) = (spot, self.drop_run(drop)) else {
             return false;
         };
         if let Err(refusal) = self.check_ready() {
@@ -183,13 +181,14 @@ impl BrowserWindow {
             return false;
         }
         self.remember_drop_point(&widget, x, y);
+        let destination = spot.destination();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[strong]
             drop,
             async move {
-                window.receive_drop(drop, destination, action).await;
+                window.receive_drop(drop, destination, run).await;
             }
         ));
         true
