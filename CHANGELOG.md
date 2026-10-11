@@ -4,6 +4,8 @@
   its "This folder is empty" page for the folder menu (New, Paste and the
   rest), paste with Ctrl+V or the menu, and drop files on it. The
   keyboard stays on the folder too, so the Menu key and Backspace work.
+  A location that could not be opened offers neither New nor Paste, and
+  a screen reader reads the page's own words.
 - An empty folder looks like one in Windows Explorer: the list and its
   column titles stay, with a small grey "This folder is empty." under
   them, instead of a large icon and message in the middle of the pane.

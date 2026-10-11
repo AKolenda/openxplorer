@@ -204,6 +204,9 @@ fn page_stack(
         .build();
     empty.root.set_vexpand(true);
     empty_area.append(&empty.root);
+    // A screen reader says what the page says ("This folder is empty"),
+    // not the list's type-to-select hint: there is nothing to select.
+    empty.label_area(&empty_area);
     let empty_scroll = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)
         .vscrollbar_policy(gtk::PolicyType::Automatic)

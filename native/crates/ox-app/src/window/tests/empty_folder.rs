@@ -96,7 +96,7 @@ fn right_clicking_an_empty_folder_opens_its_menu_and_paste_works() {
 /// its page, the Menu key opens the folder menu there, and Backspace goes
 /// back.
 ///
-/// parity: CMD-011, NAV-004
+/// parity: CMD-011, CMD-013, NAV-004
 #[gtk::test]
 fn an_empty_folder_takes_the_folder_keys() {
     let fixture = Fixture::standard();
@@ -158,7 +158,7 @@ fn focus_is_in(test: &TestWindow, widget: &gtk::Widget) -> bool {
 /// Closing the folder menu on an empty folder gives the keyboard back to
 /// its page, as closing it on the list gives it back to the list.
 ///
-/// parity: CMD-011
+/// parity: CMD-011, CMD-013
 #[gtk::test]
 fn closing_the_menu_gives_the_keyboard_back_to_the_empty_page() {
     let fixture = Fixture::standard();
@@ -354,4 +354,119 @@ fn a_window_opening_on_an_empty_folder_gives_its_page_the_keyboard() {
     wait_until("the empty folder", || shows_empty_folder(&test));
     let list = test.window.folder_pane().input_widget();
     wait_until("focus on the list", || focus_is_in(&test, &list));
+}
+
+/// When the folder fills while its menu is open on the empty page, as when
+/// another app copies a file in, closing the menu gives the keyboard to
+/// the list that shows now, not to the hidden empty page.
+///
+/// parity: CMD-011, CMD-013
+#[gtk::test]
+fn closing_the_menu_after_the_folder_fills_gives_the_keyboard_to_the_list() {
+    let fixture = Fixture::standard();
+    let empty = make_empty_folder(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let page = go_to_empty_folder(&test, &empty);
+    test.window.folder_pane().focus_view();
+    test.window.open_context_menu_from_keyboard();
+    let menu = menu_of(&page).expect("the empty page has the folder menu");
+    wait_until("the menu", || menu.is_visible());
+
+    std::fs::write(fixture.path("Empty/Arrived.txt"), "new").expect("the file is written");
+    test.activate("refresh", None);
+    wait_until("the list", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Listing)
+    });
+    menu.popdown();
+
+    wait_until("the menu to close", || !menu.is_visible());
+    let list = test.window.folder_pane().view_widget();
+    assert!(
+        focus_is_in(&test, &list),
+        "focus is on the list, not {:?}",
+        gtk::prelude::GtkWindowExt::focus(&test.window)
+    );
+}
+
+/// "This location is unavailable" takes no drop, so its menu does not
+/// offer New or Paste either: the folder could not be read.
+///
+/// parity: CMD-011
+#[gtk::test]
+fn an_unavailable_location_offers_no_new_or_paste() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win10);
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri_of("Gone")));
+    wait_until("the unavailable page", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+    let page = shown_empty_page(&test);
+    test.window.folder_pane().focus_view();
+
+    test.window.open_context_menu_from_keyboard();
+    let menu = menu_of(&page).expect("the page has the folder menu");
+    wait_until("the menu", || menu.is_visible());
+
+    assert!(!menu.row("New…").is_sensitive(), "New is off");
+    assert!(!menu.row("Paste").is_sensitive(), "Paste is off");
+}
+
+/// A screen reader hears what the empty page says ("This folder is
+/// empty", "This location is unavailable"), not the list's
+/// type-to-select hint, as there is nothing to select.
+///
+/// parity: CMD-011
+#[gtk::test]
+fn a_screen_reader_hears_what_the_empty_page_says() {
+    let fixture = Fixture::standard();
+    let empty = make_empty_folder(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+
+    let page = go_to_empty_folder(&test, &empty);
+
+    assert!(
+        !gtk::test_accessible_has_property(&page, gtk::AccessibleProperty::Label),
+        "no type-to-select label"
+    );
+    assert!(gtk::test_accessible_has_relation(
+        &page,
+        gtk::AccessibleRelation::LabelledBy
+    ));
+}
+
+/// Try again with the keyboard on it, once the missing folder exists but
+/// is empty, shows "This folder is empty": Try again hides, and the
+/// keyboard moves to the page, so the Menu key and Backspace still work.
+///
+/// parity: CMD-011, VIEW-048
+#[gtk::test]
+fn try_again_that_finds_an_empty_folder_keeps_the_keyboard_on_the_page() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("go-to", Some(&fixture.uri_of("Gone")));
+    wait_until("the unavailable page", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+    let page = shown_empty_page(&test);
+    let retry = descendants::<gtk::Button>(&page)
+        .into_iter()
+        .find(WidgetExt::is_visible)
+        .expect("Try again shows");
+    retry.grab_focus();
+    std::fs::create_dir(fixture.path("Gone")).expect("the folder is made");
+
+    retry.emit_clicked();
+
+    wait_until("the empty folder", || {
+        !retry.is_visible() && !test.window.is_loading()
+    });
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
+    assert_eq!(
+        focus.as_ref(),
+        Some(&page),
+        "the page has the keyboard, not the hidden Try again"
+    );
 }

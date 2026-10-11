@@ -264,8 +264,18 @@ impl FolderPane {
 
     /// Shows the empty page in `state`.
     pub(super) fn show_empty(&self, state: &EmptyState) {
+        // Try again may have the keyboard, and the new state hides it, as
+        // when trying again finds the folder empty: the keyboard then
+        // goes to the page, never staying on a hidden button.
+        let had_focus = self.view_has_focus();
         self.parts().empty.show(state);
         self.show_page(PanePage::Empty);
+        if had_focus {
+            let focus = self.parts().stack.root().and_then(|root| root.focus());
+            if !focus.is_some_and(|focus| focus.is_drawable()) {
+                self.focus_view();
+            }
+        }
     }
 
     /// Shows the loading line over the items while `loading` lasts (see
