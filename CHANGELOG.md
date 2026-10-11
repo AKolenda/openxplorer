@@ -3,8 +3,10 @@
 - Renaming a file to a different extension asks first, as Windows
   Explorer does: "If you change a file name extension, the file might
   become unusable. Are you sure you want to change it?" It applies to
-  renaming in place, the Rename dialog and the name in Properties;
-  folders and a change of case only (.JPG to .jpg) never ask.
+  renaming in place, the Rename dialog and the name in Properties, and to
+  a batch rename whose name gives an extension to a file without one;
+  folders, links to folders and a change of case only (.JPG to .jpg)
+  never ask.
 
 # 2.0.4 — 2026-10-09
 

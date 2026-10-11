@@ -201,7 +201,8 @@ fn header(properties: &ItemProperties, can_rename: bool) -> gtk::Box {
         .build();
     header.append(&ArtImage::new(Art::for_entry(&properties.entry), HEADER_ART_SIZE));
     if can_rename {
-        header.append(&name_field(&properties.entry));
+        let is_folder = properties.entry.is_dir || properties.links_to_folder;
+        header.append(&name_field(&properties.entry, is_folder));
         return header;
     }
     let name = gtk::Label::builder()
@@ -217,9 +218,11 @@ fn header(properties: &ItemProperties, can_rename: bool) -> gtk::Box {
     header
 }
 
-/// The editable name of `entry`; Enter asks the window to rename it, and
-/// the dialog closes once it is renamed.
-fn name_field(entry: &Entry) -> gtk::Entry {
+/// The editable name of `entry`, a folder or a link to one when
+/// `is_folder`; Enter asks the window to rename it, and the dialog closes
+/// once it is renamed. Enter again while a rename is asked about or runs
+/// does nothing, so one Enter asks one question.
+fn name_field(entry: &Entry, is_folder: bool) -> gtk::Entry {
     let field = gtk::Entry::builder()
         .text(&entry.name)
         .hexpand(true)
@@ -228,13 +231,15 @@ fn name_field(entry: &Entry) -> gtk::Entry {
     field.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext("Name"))]);
     let uri = entry.uri.clone();
     let original = entry.name.clone();
-    let is_folder = entry.is_dir;
+    let renaming = std::rc::Rc::new(std::cell::Cell::new(false));
     field.connect_activate(move |field| {
         let name = field.text().to_string();
         let window = field.root().and_downcast::<crate::window::BrowserWindow>();
-        let (false, Some(window)) = (name == original, window) else {
+        let (false, false, Some(window)) = (renaming.get(), name == original, window) else {
             return;
         };
+        renaming.set(true);
+        let renaming = renaming.clone();
         let frame = field
             .ancestor(DialogFrame::static_type())
             .and_downcast::<DialogFrame>();
@@ -242,6 +247,7 @@ fn name_field(entry: &Entry) -> gtk::Entry {
         let original = original.clone();
         glib::spawn_future_local(async move {
             let renamed = window.rename_item_at(&uri, &original, &name, is_folder).await;
+            renaming.set(false);
             match (renamed, frame) {
                 (Ok(()), Some(frame)) => frame.close(),
                 (Err(message), Some(frame)) => frame.show_error(&message),

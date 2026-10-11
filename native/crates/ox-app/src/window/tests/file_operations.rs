@@ -362,6 +362,50 @@ fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together
     assert!(!fixture.path("Plan 1.txt").exists());
 }
 
+/// A batch name with a dot gives an extension to a file that had none
+/// (README becomes Plan.md): that asks first, as renaming one file does.
+/// Cancel keeps the dialog open with the typed name; the other files keep
+/// their extensions.
+///
+/// parity: OPS-014, OPS-049
+#[gtk::test]
+fn a_batch_name_that_adds_an_extension_asks_first() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("README"), "read me").expect("the file is written");
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["README", "Notes 2.txt"]);
+    test.activate("rename", None);
+    let dialog = open_dialog(&test);
+    let field = text_field(&dialog);
+    field.set_text("Plan.md");
+
+    dialog.press("Rename");
+    let question = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .find(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+    };
+    wait_until("the extension question", || question().is_some());
+    question().expect("it shows").press("Cancel");
+    wait_until("the question to close", || question().is_none());
+    assert!(dialog.is_visible(), "the batch dialog stays");
+    assert_eq!(field.text(), "Plan.md");
+    assert!(fixture.path("README").is_file());
+
+    dialog.press("Rename");
+    wait_until("the extension question", || question().is_some());
+    question().expect("it shows").press("Change extension");
+
+    wait_until("the batch", || {
+        fixture.path("Plan.md").is_file() && fixture.path("Plan.md.txt").is_file()
+    });
+    assert_eq!(
+        fs::read_to_string(fixture.path("Plan.md")).expect("renamed"),
+        "read me"
+    );
+}
+
 /// parity: OPS-015, OPS-018, OPS-023, OPS-029, OPS-032
 #[gtk::test]
 fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {

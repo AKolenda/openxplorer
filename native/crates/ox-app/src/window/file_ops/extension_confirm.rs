@@ -35,7 +35,7 @@ fn extension(name: &str) -> Option<String> {
 
 /// True when renaming the file `old_name` to `new_name` adds, removes or
 /// changes its extension; never for a folder.
-fn changes_extension(old_name: &str, new_name: &str, is_folder: bool) -> bool {
+pub(super) fn changes_extension(old_name: &str, new_name: &str, is_folder: bool) -> bool {
     !is_folder && extension(old_name) != extension(new_name)
 }
 
