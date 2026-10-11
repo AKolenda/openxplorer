@@ -1,3 +1,11 @@
+# Unreleased
+
+- The Show button of the desktop notification after a delete no longer
+  selects some other file in the folder. After moving items to the Recycle
+  Bin, Show opens the Recycle Bin with them selected. After deleting
+  permanently, nothing is left to show, so Show only brings the window
+  back.
+
 # 2.0.4 — 2026-10-09
 
 ## What's Changed

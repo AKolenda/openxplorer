@@ -789,3 +789,80 @@ fn an_operation_ending_in_the_background_notifies_the_desktop() {
             && test.selected_names() == ["Notes 2.txt"]
     });
 }
+
+/// A deletion that ends while another application has focus notifies the
+/// desktop, and Show never selects the item that followed the removed
+/// ones: after a Move to Trash it opens the Recycle Bin with the trashed
+/// item selected, and after a permanent delete, which leaves nothing to
+/// show, it only brings the window back.
+///
+/// parity: INT-026, OPS-040
+#[gtk::test]
+fn show_on_a_deletions_notice_opens_the_recycle_bin_or_only_the_window() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let update = PreferencesUpdate {
+        confirm_trash: Some(false),
+        confirm_delete: Some(false),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choices");
+    test.context.reload_settings();
+    wait_until("the window to read the choices", || {
+        !test.context.settings_data().preferences.confirm_trash
+    });
+    crate::window::background_notice::take_sent();
+    // Not added to the application: it stands in for another app's window.
+    let other = gtk::Window::new();
+    other.present();
+    wait_until("the other window has focus", || {
+        other.is_active() && !test.window.is_active()
+    });
+    let next = fixture.uri_of("Notes 10.txt");
+
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("trash", None);
+    wait_until("the trash notice", || {
+        crate::window::background_notice::SENT.with(|sent| !sent.borrow().is_empty())
+    });
+    let trashed = crate::window::background_notice::take_sent().remove(0);
+    assert!(!trashed.destination.items.contains(&next), "not the next item");
+    assert_eq!(
+        trashed.destination.folder.as_deref(),
+        Some(ox_core::location::TRASH_URI)
+    );
+    assert_eq!(trashed.destination.items.len(), 1, "{:?}", trashed.destination);
+    assert!(trashed.destination.items[0].starts_with("trash:///"));
+    let (action, target) = trashed.show_action();
+    assert_eq!(action, "app.show-destination");
+    let (_, _, items) = target
+        .get::<(u32, String, Vec<String>)>()
+        .expect("the Show target");
+
+    wait_until("the next item selected", || {
+        test.selected_names() == ["Notes 10.txt"]
+    });
+    select_names(&test, &["Documents"]);
+    test.activate("delete-permanently", None);
+    wait_until("the delete notice", || {
+        crate::window::background_notice::SENT.with(|sent| !sent.borrow().is_empty())
+    });
+    let deleted = crate::window::background_notice::take_sent().remove(0);
+    other.destroy();
+    assert_eq!(
+        deleted.show_action().0,
+        "app.focus-window",
+        "{:?}",
+        deleted.destination
+    );
+
+    test.window
+        .show_destination(Some(ox_core::location::TRASH_URI), &items);
+    wait_until("the Recycle Bin with the trashed item selected", || {
+        test.window.current_uri().as_deref() == Some(ox_core::location::TRASH_URI)
+            && test.selected_names() == ["Notes 2.txt"]
+    });
+}
