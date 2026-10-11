@@ -232,9 +232,6 @@ impl BrowserWindow {
     /// act on here.
     fn empty_folder_input(&self, pane: &super::folder_pane::FolderPane) {
         let area = &pane.empty_area();
-        area.update_property(&[gtk::accessible::Property::Label(ox_core::i18n::gettext_static(
-            FOLDER_VIEW_LABEL,
-        ))]);
         let input = self.typing_input(area);
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);

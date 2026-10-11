@@ -117,6 +117,15 @@ impl EmptyPage {
         }
     }
 
+    /// Makes `area`, which holds the page, named by its title and
+    /// described by its message, for screen readers.
+    pub(super) fn label_area(&self, area: &impl IsA<gtk::Accessible>) {
+        area.update_relation(&[
+            gtk::accessible::Relation::LabelledBy(&[self.title.upcast_ref()]),
+            gtk::accessible::Relation::DescribedBy(&[self.message.upcast_ref()]),
+        ]);
+    }
+
     /// Shows `state`, with the app.js wording (`renderRows`).
     pub(super) fn show(&self, state: &EmptyState) {
         let glyph = match state {

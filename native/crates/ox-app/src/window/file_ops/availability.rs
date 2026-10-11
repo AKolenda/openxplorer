@@ -307,8 +307,14 @@ impl BrowserWindow {
         let model = self.folder_pane().model();
         let locations = self.imp().locations.borrow();
         let folder_uri = self.current_uri().unwrap_or_default();
+        // A folder that could not be listed ("This location is
+        // unavailable") takes no new items, as it takes no drop.
+        let listing_failed = {
+            let session = self.imp().session.borrow();
+            session.active().is_some_and(|tab| tab.error.is_some())
+        };
         let folder = FolderFacts {
-            is_writable: locations.is_writable_location(&folder_uri),
+            is_writable: locations.is_writable_location(&folder_uri) && !listing_failed,
             is_searching: self.is_searching(),
             is_recycle_bin: same_location(&folder_uri, TRASH_URI),
             has_items: model.n_items() > 0,

@@ -4,6 +4,8 @@
   its "This folder is empty" page for the folder menu (New, Paste and the
   rest), paste with Ctrl+V or the menu, and drop files on it. The
   keyboard stays on the folder too, so the Menu key and Backspace work.
+  A location that could not be opened offers neither New nor Paste, and
+  a screen reader reads the page's own words.
 
 # 2.0.4 — 2026-10-09
 

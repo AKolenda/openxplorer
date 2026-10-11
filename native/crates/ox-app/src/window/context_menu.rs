@@ -88,10 +88,19 @@ impl BrowserWindow {
         // to the file pane; a chosen command runs after this, so a
         // rename field or a dialog still takes it.
         popover.connect_closed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
             #[weak]
             view,
             move |_| {
-                view.grab_focus();
+                // The folder may have filled or emptied while the menu was
+                // open, hiding `view`: the keyboard goes to the page that
+                // shows now.
+                if view.is_drawable() {
+                    view.grab_focus();
+                } else if let Some(side) = window.side_holding(&view) {
+                    window.pane_on(side).focus_view();
+                }
             }
         ));
         view.connect_destroy(glib::clone!(
