@@ -56,6 +56,13 @@ const RECORD_PREFIX: &str = "launch-shortcut-";
 /// to whichever package has Super+E now, and to none while it is free.
 const EARLIER_RECORD: &str = "launch-shortcut.json";
 
+/// The desktop files of `OpenXplorer`'s packages, the stable and the
+/// preview, which take Super+E from each other.
+const PACKAGE_DESKTOP_IDS: [&str; 2] = [
+    super::default_apps::APP_ID,
+    "io.winspace.Development.Native.desktop",
+];
+
 /// The lock both packages hold while they read and change Super+E, as
 /// they run in two processes and may be switched at the same moment.
 const LOCK_FILE: &str = "launch-shortcut.lock";
@@ -669,7 +676,11 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
     /// The record of the other package of `OpenXplorer` whose action
     /// `owner` is, when that package took Super+E from this one.
     fn sibling_record_pointing_here(&self, owner: &ShortcutAction) -> Option<(PathBuf, Record)> {
-        if owner.component == self.ours.component || !is_super_e_action_of(owner, &owner.component) {
+        // Only the other package of `OpenXplorer` counts: another app's
+        // launch action, such as Konsole's, is taken from like any app's.
+        let is_other_package =
+            owner.component != self.ours.component && PACKAGE_DESKTOP_IDS.contains(&owner.component.as_str());
+        if !is_other_package || !is_super_e_action_of(owner, &owner.component) {
             return None;
         }
         // `owner` has Super+E, so the record earlier builds shared is its.

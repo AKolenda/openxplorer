@@ -880,3 +880,35 @@ fn turning_it_off_says_super_e_is_free_when_its_old_action_is_gone() {
     assert_eq!(opt_in.status(), LaunchShortcutStatus::Free);
     assert!(!settings.path().join(RECORD).exists());
 }
+
+/// The shared old record can point back at this package while Super+E
+/// has since gone to another app's launch action, such as Konsole's.
+/// That app is no package of `OpenXplorer`: turning the switch on records
+/// it, and turning it off gives Super+E back to it.
+///
+/// parity: INT-033
+#[test]
+fn another_apps_launch_action_is_never_taken_for_the_other_package() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let dolphin = ShortcutAction::launch("org.kde.dolphin.desktop", "Dolphin");
+    shortcuts.set_keys(&dolphin, &[CTRL_ALT_D]).unwrap();
+    let konsole = ShortcutAction::launch("org.kde.konsole.desktop", "Konsole");
+    shortcuts.actions.borrow_mut().push((konsole, vec![SUPER_E]));
+    let pointing_here = format!(
+        "{{\"previous\": {{\"component\": \"{OURS}\", \"action\": \"{NEW_WINDOW_ACTION}\", \
+         \"component_name\": \"OpenXplorer\", \"action_name\": \"New window\"}}}}"
+    );
+    std::fs::write(settings.path().join(EARLIER), pointing_here).unwrap();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+
+    opt_in.enable().unwrap();
+    assert_eq!(opt_in.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+
+    assert_eq!(
+        shortcuts.keys_of("org.kde.konsole.desktop"),
+        [SUPER_E],
+        "Konsole has it back"
+    );
+}
