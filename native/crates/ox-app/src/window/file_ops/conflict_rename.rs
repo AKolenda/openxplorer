@@ -6,8 +6,10 @@
 //! Name". The native dialog fills the field with the suggestion at once:
 //! the first free `- Copy` name, the name Keep both would give. A typed
 //! name must be valid ([`validate_name`]), differ from the item's own and
-//! be free in the destination folder; the engine still refuses a name
-//! taken meanwhile rather than replacing anything.
+//! be free in the destination folder, and not one another item of the
+//! same paste will take (an automatic `- Copy`, or an earlier new name);
+//! the engine still refuses a name taken meanwhile rather than replacing
+//! anything.
 
 use gtk::gio;
 use gtk::gio::prelude::*;
@@ -31,8 +33,9 @@ async fn is_taken(folder: &gio::File, name: &str) -> bool {
 }
 
 /// The first free `- Copy` name for the item at `uri` in
-/// `destination_folder`, or the item's own name when none is found.
-pub(super) async fn suggested_name(uri: &str, destination_folder: &str) -> String {
+/// `destination_folder`, besides the names in `reserved` that other items
+/// of the same paste will take, or the item's own name when none is found.
+pub(crate) async fn suggested_name(uri: &str, destination_folder: &str, reserved: &[String]) -> String {
     let item = gio::File::for_uri(uri);
     let name = item
         .basename()
@@ -56,7 +59,7 @@ pub(super) async fn suggested_name(uri: &str, destination_folder: &str) -> Strin
         let Ok(candidate) = new_copy_name(&name, number, kind) else {
             break;
         };
-        if !is_taken(&folder, &candidate).await {
+        if !reserved.contains(&candidate) && !is_taken(&folder, &candidate).await {
             return candidate;
         }
     }
@@ -64,11 +67,13 @@ pub(super) async fn suggested_name(uri: &str, destination_folder: &str) -> Strin
 }
 
 /// The name `typed` gives the item at `uri` in `destination_folder`, or
-/// why it cannot.
+/// why it cannot; the names in `reserved` are taken by other items of the
+/// same paste.
 pub(super) async fn checked_new_name(
     typed: &str,
     uri: &str,
     destination_folder: &str,
+    reserved: &[String],
 ) -> Result<String, String> {
     let name = typed.trim();
     validate_name(name).map_err(|error| error.to_string())?;
@@ -78,7 +83,8 @@ pub(super) async fn checked_new_name(
             "Enter a name that differs from the item's own name.",
         ));
     }
-    if is_taken(&gio::File::for_uri(destination_folder), name).await {
+    let is_reserved = reserved.iter().any(|taken| taken == name);
+    if is_reserved || is_taken(&gio::File::for_uri(destination_folder), name).await {
         return Err(ox_core::i18n::format_message(
             "“{name}” already exists here too. Enter another name.",
             &[("name", name)],

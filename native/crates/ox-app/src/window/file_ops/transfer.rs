@@ -242,6 +242,13 @@ impl BrowserWindow {
                 && parent_location(uri)
                     .is_some_and(|parent| same_location(&parent, &incoming.destination_folder))
         });
+        // The names those copies will take are not offered to the others.
+        let mut reserved = Vec::new();
+        for uri in &own {
+            let planned =
+                super::conflict_rename::suggested_name(uri, &incoming.destination_folder, &reserved).await;
+            reserved.push(planned);
+        }
         let mut answers: Vec<ConflictAnswer> = own
             .into_iter()
             .map(|uri| ConflictAnswer {
@@ -259,7 +266,7 @@ impl BrowserWindow {
             .borrow()
             .display_location(&incoming.destination_folder);
         let asked = self
-            .ask_about_conflicts(&others, &incoming.destination_folder, &destination)
+            .ask_about_conflicts(&others, &incoming.destination_folder, &destination, reserved)
             .await?;
         answers.extend(asked);
         Some(answers)

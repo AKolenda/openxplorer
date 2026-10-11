@@ -182,6 +182,52 @@ fn pasting_a_copy_into_its_own_folder_makes_a_copy_without_asking() {
     );
 }
 
+/// One drop brings a file into its own folder and another file of the
+/// same name. The first becomes "Notes 2 - Copy.txt" without asking, so
+/// the Rename suggestion for the second skips that name, and accepting it
+/// copies both.
+///
+/// parity: OPS-026, OPS-028
+#[gtk::test]
+fn the_rename_suggestion_skips_the_name_an_automatic_copy_takes() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/Notes 2.txt"), b"Another file\n").expect("the namesake is written");
+    let test = TestWindow::open(&fixture.uri());
+
+    let taken = test.window.drop_files(
+        &[
+            fixture.uri_of("Notes 2.txt"),
+            fixture.uri_of("Documents/Notes 2.txt"),
+        ],
+        None,
+        crate::window::file_drop::DropAction::Copy,
+    );
+    assert!(taken);
+    let dialog = open_dialog(&test);
+    let new_name = descendants::<gtk::Entry>(&dialog)
+        .into_iter()
+        .next()
+        .expect("the dialog has a New name field");
+    assert_ne!(
+        new_name.text(),
+        "Notes 2 - Copy.txt",
+        "that name is the automatic copy's"
+    );
+    dialog.press("Rename");
+
+    wait_until("both copies", || {
+        fixture.path("Notes 2 - Copy.txt").is_file() && fixture.path("Notes 2 - Copy (2).txt").is_file()
+    });
+    assert_eq!(
+        fs::read(fixture.path("Notes 2 - Copy.txt")).expect("the automatic copy"),
+        b"Synthetic test data\n"
+    );
+    assert_eq!(
+        fs::read(fixture.path("Notes 2 - Copy (2).txt")).expect("the renamed copy"),
+        b"Another file\n"
+    );
+}
+
 /// parity: OPS-026, OPS-028, XFER-008
 #[gtk::test]
 fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {

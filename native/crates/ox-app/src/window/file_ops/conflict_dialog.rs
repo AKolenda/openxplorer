@@ -171,23 +171,33 @@ fn policy_for(choice: &Choice, comparison: Option<&Comparison>) -> ConflictPolic
 
 impl BrowserWindow {
     /// Asks what happens to each of `conflicts`, items whose names are
-    /// taken in `destination_folder`, shown as `destination`. `None` when
+    /// taken in `destination_folder`, shown as `destination`; the names in
+    /// `reserved` are taken by other items of the same paste. `None` when
     /// the user cancels: nothing may change then.
     pub(super) async fn ask_about_conflicts(
         &self,
         conflicts: &[String],
         destination_folder: &str,
         destination: &str,
+        mut reserved: Vec<String>,
     ) -> Option<Vec<ConflictAnswer>> {
         let mut answers = Vec::with_capacity(conflicts.len());
         while answers.len() < conflicts.len() {
             let remaining = &conflicts[answers.len()..];
             let first = compare(&remaining[0], destination_folder).await;
             let (choice, applies_to_all) = self
-                .ask_once(remaining, destination_folder, destination, first.as_ref())
+                .ask_once(
+                    remaining,
+                    destination_folder,
+                    destination,
+                    first.as_ref(),
+                    &reserved,
+                )
                 .await?;
             if let Choice::Rename(name) = choice {
-                // A typed name is for one item only.
+                // A typed name is for one item only, and later items of
+                // the paste may not take it.
+                reserved.push(name.clone());
                 answers.push(ConflictAnswer {
                     uri: remaining[0].clone(),
                     policy: ConflictPolicy::Skip,
@@ -225,9 +235,10 @@ impl BrowserWindow {
         destination_folder: &str,
         destination: &str,
         first: Option<&Comparison>,
+        reserved: &[String],
     ) -> Option<(Choice, bool)> {
         let first_uri = &remaining[0];
-        let suggestion = suggested_name(first_uri, destination_folder).await;
+        let suggestion = suggested_name(first_uri, destination_folder, reserved).await;
         let dialog = Dialog::new(
             self,
             ox_core::i18n::gettext_static(TITLE),
@@ -259,7 +270,7 @@ impl BrowserWindow {
             if let Some(choice) = buttons.policy_choice(pressed) {
                 break choice;
             }
-            match checked_new_name(&new_name.text(), first_uri, destination_folder).await {
+            match checked_new_name(&new_name.text(), first_uri, destination_folder, reserved).await {
                 Ok(name) => break Choice::Rename(name),
                 Err(message) => dialog.show_error(&message),
             }
