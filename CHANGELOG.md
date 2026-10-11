@@ -1,3 +1,10 @@
+# Unreleased
+
+- Apply to all folders, in View > Adjust view display style, now applies
+  what the dialog shows. A Group by, sort or layout picked there before
+  pressing it was ignored, and every folder got the view the folder had
+  when the dialog opened.
+
 # 2.0.4 — 2026-10-09
 
 ## What's Changed
