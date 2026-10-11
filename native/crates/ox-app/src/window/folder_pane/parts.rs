@@ -178,6 +178,7 @@ fn page_stack(
     let empty_area = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .focusable(true)
+        .css_classes(["empty-folder-area"])
         .build();
     empty.root.set_vexpand(true);
     empty_area.append(&empty.root);

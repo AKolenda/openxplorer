@@ -298,3 +298,98 @@ fn an_empty_recycle_bin_opens_its_own_menu() {
     );
     assert!(!sensitive("New…"), "nor made there: {labels:?}");
 }
+
+/// Space on Try again, under "This location is unavailable", reaches the
+/// button, which tries again: the folder's own Space (select the current
+/// item) does not take it first.
+///
+/// parity: VIEW-048
+#[gtk::test]
+fn space_on_try_again_reaches_the_button() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("go-to", Some(&fixture.uri_of("Gone")));
+    wait_until("the unavailable page", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+    let page = shown_empty_page(&test);
+    let retry = descendants::<gtk::Button>(&page)
+        .into_iter()
+        .find(WidgetExt::is_visible)
+        .expect("Try again shows");
+    retry.grab_focus();
+    let keys = controllers::<gtk::EventControllerKey>(&page)
+        .into_iter()
+        .next()
+        .expect("the empty page takes the folder keys");
+
+    for key in [gdk::Key::space, gdk::Key::Return] {
+        let taken: bool = keys.emit_by_name(
+            "key-pressed",
+            &[&key.into_glib(), &0_u32, &gdk::ModifierType::empty()],
+        );
+        assert!(!taken, "{key:?} goes on to Try again");
+    }
+}
+
+/// A window that opens on an empty folder gives its page the keyboard,
+/// as a window opening on a listed folder gives the list it.
+///
+/// parity: CMD-011, NAV-004
+#[gtk::test]
+fn a_window_opening_on_an_empty_folder_gives_its_page_the_keyboard() {
+    let fixture = Fixture::standard();
+    let empty = make_empty_folder(&fixture);
+
+    let test = TestWindow::open(&empty);
+
+    wait_until("the empty page", || {
+        test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+    let page = shown_empty_page(&test);
+    wait_until("focus on the empty page", || focus_is_in(&test, &page));
+}
+
+/// A drag over an empty folder draws the accent outline around its page,
+/// as it does around the list.
+///
+/// parity: DND-011
+#[gtk::test]
+fn the_empty_page_draws_the_drop_outline() {
+    const ACCENT: [u8; 3] = [0x00, 0x67, 0xc0];
+    let fixture = Fixture::standard();
+    let empty = make_empty_folder(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let page = go_to_empty_folder(&test, &empty);
+    page.add_css_class("file-drop-active");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+
+    let paintable = gtk::WidgetPaintable::new(Some(&page));
+    let snapshot = gtk::Snapshot::new();
+    paintable.snapshot(&snapshot, f64::from(page.width()), f64::from(page.height()));
+    let node = snapshot.to_node().expect("the page draws");
+    let renderer = page
+        .native()
+        .and_then(|native| native.renderer())
+        .expect("a drawn window");
+    let texture = renderer.render_texture(&node, None::<&gtk::graphene::Rect>);
+    let rows = super::icons::pixel_rows(&texture);
+    page.remove_css_class("file-drop-active");
+    let left_edge: Vec<[u8; 3]> = rows
+        .iter()
+        .map(|row| {
+            let [blue, green, red, _] = row[0];
+            [red, green, blue]
+        })
+        .collect();
+    let outlined = left_edge
+        .iter()
+        .filter(|pixel| pixel.iter().zip(ACCENT).all(|(a, b)| a.abs_diff(b) <= 3))
+        .count();
+
+    assert!(
+        outlined > left_edge.len() / 2,
+        "the page's left edge is the accent outline ({outlined} of {} pixels)",
+        left_edge.len()
+    );
+}

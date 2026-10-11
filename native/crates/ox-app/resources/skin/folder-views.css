@@ -267,10 +267,11 @@ gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
    .file-dragging .drag-source, .file-drop-active, .tab-drag-hint) ---- */
 /* Items this window is dragging out fade until the drag ends. */
 .files .drag-source { opacity: 0.55; }
-/* The folder a drop would go into: the whole view for the folder shown,
-   or the row or tile of a folder under the pointer. No outline means no
-   drop. */
+/* The folder a drop would go into: the whole view for the folder shown
+   (or an empty folder's whole page), or the row or tile of a folder under
+   the pointer. No outline means no drop. */
 columnview.files.file-drop-active, gridview.files.file-drop-active,
+.empty-folder-area.file-drop-active,
 columnview.files > listview > row.file-drop-active,
 gridview.files > child.file-drop-active {
   outline: 2px solid @ox_accent;

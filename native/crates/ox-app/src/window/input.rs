@@ -110,10 +110,10 @@ impl BrowserWindow {
     /// Gives a new window's file list keyboard focus once the window is
     /// shown and its first location is listed, as `#main` has focus when
     /// app.js starts, and again after Settings hides (see
-    /// `settings_tab.rs`). A landing page or an empty folder has no list to
-    /// focus, so nothing keeps focus: GTK would otherwise leave it on the
-    /// first focusable widget, and a focused crumb draws the address bar's
-    /// editing line.
+    /// `settings_tab.rs`). An empty folder's page takes it as the list
+    /// would. A landing page has nothing to focus, so nothing keeps focus:
+    /// GTK would otherwise leave it on the first focusable widget, and a
+    /// focused crumb draws the address bar's editing line.
     pub(super) fn focus_new_file_list(&self) {
         if !(self.is_mapped() && self.is_listed()) {
             return;
@@ -123,7 +123,10 @@ impl BrowserWindow {
         if !awaits_focus {
             return;
         }
-        if self.folder_pane().page() == Some(PanePage::Listing) {
+        if matches!(
+            self.folder_pane().page(),
+            Some(PanePage::Listing | PanePage::Empty)
+        ) {
             self.folder_pane().focus_view();
         } else {
             GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
@@ -238,9 +241,24 @@ impl BrowserWindow {
         keys.connect_key_pressed(glib::clone!(
             #[weak(rename_to = window)]
             self,
+            #[weak]
+            area,
             #[upgrade_or]
             glib::Propagation::Proceed,
-            move |controller, key, _, modifiers| window.folder_key(controller, &input, key, modifiers)
+            move |controller, key, _, modifiers| {
+                // Space and Enter on Try again, or on the selectable
+                // message, belong to them: the folder's Space would select
+                // an item there is not.
+                let on_a_part = GtkWindowExt::focus(&window).is_some_and(|focus| focus != area);
+                let activates = matches!(
+                    key,
+                    gdk::Key::space | gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::ISO_Enter
+                );
+                if on_a_part && activates {
+                    return glib::Propagation::Proceed;
+                }
+                window.folder_key(controller, &input, key, modifiers)
+            }
         ));
         area.add_controller(keys);
         let press = gtk::GestureClick::new();
