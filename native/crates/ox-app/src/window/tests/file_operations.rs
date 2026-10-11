@@ -866,3 +866,55 @@ fn show_on_a_deletions_notice_opens_the_recycle_bin_or_only_the_window() {
             && test.selected_names() == ["Notes 2.txt"]
     });
 }
+
+/// While a Move to Trash that ended in the background looks up the
+/// trashed items for its notice, Ctrl+Z must undo that Move to Trash:
+/// once its job has ended and until the notice is sent, Undo already has
+/// its step. Undo would otherwise take back the action before.
+///
+/// parity: INT-026, OPS-029
+#[gtk::test]
+fn undo_reverses_a_background_trash_while_its_notice_is_prepared() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let update = PreferencesUpdate {
+        confirm_trash: Some(false),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choices");
+    test.context.reload_settings();
+    wait_until("the window to read the choices", || {
+        !test.context.settings_data().preferences.confirm_trash
+    });
+    crate::window::background_notice::take_sent();
+    let other = gtk::Window::new();
+    other.present();
+    wait_until("the other window has focus", || {
+        other.is_active() && !test.window.is_active()
+    });
+
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("trash", None);
+    let context = glib::MainContext::default();
+    let started = std::time::Instant::now();
+    let mut gaps = 0;
+    while crate::window::background_notice::SENT.with(|sent| sent.borrow().is_empty()) {
+        assert!(started.elapsed().as_secs() < 30, "the trash notice");
+        context.iteration(true);
+        let gone = !fixture.path("Notes 2.txt").exists();
+        let ended = test.window.imp().file_operations.borrow().is_idle();
+        let recorded = test
+            .context
+            .journal_label(ox_core::ops::JournalDirection::Undo)
+            .is_some();
+        if gone && ended && !recorded {
+            gaps += 1;
+        }
+    }
+    other.destroy();
+
+    assert_eq!(gaps, 0, "Ctrl+Z had nothing of this trash to undo meanwhile");
+}
