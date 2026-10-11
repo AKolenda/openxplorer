@@ -25,6 +25,8 @@ use crate::test_support::harness::{
 use crate::window::command_bar::menus::sort_menu;
 use crate::window::menu_popover::MenuEntry;
 
+use super::view_styles::ask_from_the_display_style_dialog;
+
 /// The headings the details view draws, top to bottom.
 fn headings(test: &TestWindow) -> Vec<String> {
     wait_for_frames(&test.window, 3);
@@ -325,6 +327,49 @@ fn downloads_keeps_its_own_group_by_when_each_folder_keeps_a_style() {
     test.window.navigate(&downloads).expect("Downloads");
     test.wait_for_listing("Downloads");
     assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
+}
+
+/// Folder views > Apply to all folders and Reset folders cover the
+/// Group by kept for Downloads apart from the shared style: Apply gives
+/// Downloads the applied Group by, and Reset groups it by date again.
+///
+/// parity: VIEW-020, VIEW-022
+#[gtk::test]
+fn apply_to_all_and_reset_folders_cover_the_group_by_of_downloads() {
+    let home = TestHome::new();
+    let downloads = home.downloads();
+    let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    test.activate("group-by", Some("type"));
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.downloads_group_by == Some(GroupBy::Type)
+    });
+    test.window
+        .navigate(&file_uri(&home.home))
+        .expect("the home folder");
+    test.wait_for_listing("the home folder");
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+
+    ask_from_the_display_style_dialog(&test, "Apply to all folders").press("Apply");
+    wait_until("the applied view", || {
+        test.context.settings_data().preferences.view_defaults.is_some()
+    });
+    test.window.navigate(&downloads).expect("Downloads");
+    test.wait_for_listing("Downloads");
+    assert_eq!(
+        test.action_state("group-by").as_deref(),
+        Some("none"),
+        "Downloads shows the applied view, not the Group by chosen there before"
+    );
+
+    test.activate("group-by", Some("type"));
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.downloads_group_by == Some(GroupBy::Type)
+    });
+    ask_from_the_display_style_dialog(&test, "Reset folders").press("Reset");
+    wait_until("the default view of Downloads", || {
+        test.action_state("group-by").as_deref() == Some("modified")
+    });
+    assert_eq!(test.context.settings_data().preferences.downloads_group_by, None);
 }
 
 /// The first group's heading is in sight when a grouped folder opens: no

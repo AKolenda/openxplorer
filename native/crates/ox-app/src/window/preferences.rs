@@ -233,11 +233,16 @@ impl BrowserWindow {
         self.imp().handlers.borrow_mut().folder_views = Some(handler);
     }
 
-    /// Shows the folder of each pane in the style now saved for it.
+    /// Shows the folder of each pane in the style now saved for it, with
+    /// Downloads' own Group by (VIEW-022).
     fn show_saved_folder_views(&self) {
         let preferences = self.context().settings_data().preferences;
+        let downloads = self.downloads_location();
         for (side, uri) in self.shown_panes() {
-            self.apply_style_to(self.pane_on(side), &preferences.view_for(&uri));
+            self.apply_style_to(
+                self.pane_on(side),
+                &preferences.view_in(&uri, downloads.as_deref()),
+            );
         }
         self.show_pane_view_state();
     }
