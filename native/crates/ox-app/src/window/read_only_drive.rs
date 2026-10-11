@@ -36,7 +36,8 @@ async fn read_only_drive_of_file(file: &gio::File) -> Option<ReadOnlyDrive> {
     ReadOnlyDrive::from_filesystem(read_only, kind.as_deref())
 }
 
-/// Whether GIO says the user may not write into the local folder `file`:
+/// Whether GIO says the user may not create items in the local folder
+/// `file`, which needs both write and execute (search) permission on it:
 /// false when it may, or when GIO cannot tell. Only a local folder is
 /// asked, where GIO answers with access(2); a remote backend may guess
 /// from permission bits that do not apply to the user.
@@ -44,16 +45,17 @@ async fn is_unwritable_folder(file: &gio::File) -> bool {
     if !file.is_native() {
         return false;
     }
+    let attributes = format!(
+        "{},{}",
+        gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
+        gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE
+    );
     let info = file
-        .query_info_future(
-            gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
-            gio::FileQueryInfoFlags::NONE,
-            glib::Priority::LOW,
-        )
+        .query_info_future(&attributes, gio::FileQueryInfoFlags::NONE, glib::Priority::LOW)
         .await;
     info.is_ok_and(|info| {
-        info.has_attribute(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
-            && !info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
+        let refuses = |attribute: &str| info.has_attribute(attribute) && !info.boolean(attribute);
+        refuses(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE) || refuses(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE)
     })
 }
 

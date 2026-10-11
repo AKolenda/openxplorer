@@ -285,6 +285,41 @@ fn a_folder_without_write_permission_offers_neither_new_nor_paste() {
     });
 }
 
+/// A folder with write but no execute permission (mode 0666) cannot take
+/// new items either: creating one needs both. New and Paste are off there
+/// too.
+///
+/// parity: CMD-011, CMD-031
+#[gtk::test]
+fn a_folder_without_execute_permission_offers_neither_new_nor_paste() {
+    use std::os::unix::fs::PermissionsExt;
+
+    /// Gives the folder its permissions back, also when the test fails.
+    struct Locked(std::path::PathBuf);
+    impl Drop for Locked {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    let fixture = Fixture::standard();
+    let locked = Locked(fixture.path("Documents"));
+    fs::set_permissions(&locked.0, fs::Permissions::from_mode(0o666)).expect("take execute permission away");
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    assert!(is_enabled(&test, "paste"), "something to paste");
+
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the folder without execute permission");
+    wait_for_frames(&test.window, 5);
+    wait_until("New and Paste to turn off", || {
+        !is_enabled(&test, "new-folder") && !is_enabled(&test, "paste")
+    });
+}
+
 /// The folder menu's "Sort by" opens the command bar's Sort menu in
 /// place, and a choice there sorts the folder.
 ///
