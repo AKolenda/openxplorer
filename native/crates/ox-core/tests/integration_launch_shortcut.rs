@@ -34,9 +34,10 @@ struct Shortcuts {
     actions: RefCell<Vec<(ShortcutAction, Vec<KeySequence>)>>,
     /// The desktop files the service can launch.
     launchable: Vec<String>,
-    /// A call that fails, as when the service restarts: `register`, or
-    /// `set_keys` of `OpenXplorer`'s actions.
-    failing: RefCell<Option<&'static str>>,
+    /// The calls that fail, as when the service restarts: `register`,
+    /// `set_keys` of `OpenXplorer`'s actions, or `give_back`, a `set_keys`
+    /// that adds Super+E to any action but the New window action.
+    failing: RefCell<Vec<&'static str>>,
     /// Runs before each `set_keys`, with its action, as another process
     /// could act at that moment.
     before_set_keys: RefCell<Option<Hook>>,
@@ -62,19 +63,19 @@ impl Shortcuts {
                 OURS.to_owned(),
                 PREVIEW.to_owned(),
             ],
-            failing: RefCell::new(None),
+            failing: RefCell::new(Vec::new()),
             before_set_keys: RefCell::new(None),
         }
     }
 
     /// Fails `call` from now on.
     fn fail(&self, call: &'static str) {
-        *self.failing.borrow_mut() = Some(call);
+        self.failing.borrow_mut().push(call);
     }
 
     /// The service's error for a failing `call`.
     fn check(&self, call: &'static str) -> Result<(), ShortcutError> {
-        if *self.failing.borrow() == Some(call) {
+        if self.failing.borrow().contains(&call) {
             return Err(ShortcutError::Unreachable("the service restarted".to_owned()));
         }
         Ok(())
@@ -137,6 +138,9 @@ impl GlobalShortcuts for Shortcuts {
         }
         if action.component == OURS {
             self.check("set_keys")?;
+        }
+        if keys.contains(&SUPER_E) && !(action.component == OURS && action.action == NEW_WINDOW_ACTION) {
+            self.check("give_back")?;
         }
         let mut actions = self.actions.borrow_mut();
         let free: Vec<KeySequence> = keys
@@ -693,7 +697,7 @@ fn a_failure_while_taking_super_e_back_leaves_the_other_package_as_it_was() {
 
     assert!(stable.enable().is_err());
 
-    *shortcuts.failing.borrow_mut() = None;
+    shortcuts.failing.borrow_mut().clear();
     assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
     assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
     assert_eq!(
@@ -911,4 +915,97 @@ fn another_apps_launch_action_is_never_taken_for_the_other_package() {
         [SUPER_E],
         "Konsole has it back"
     );
+}
+
+/// Super+E an earlier version gave to `OpenXplorer`'s launch action goes
+/// back to that action when turning the switch on fails, instead of being
+/// left on no action.
+///
+/// parity: INT-033
+#[test]
+fn a_failure_while_moving_super_e_from_the_earlier_launch_action_gives_it_back() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+    opt_in.enable().unwrap();
+    shortcuts
+        .set_keys(
+            &ShortcutAction::desktop_action(OURS, NEW_WINDOW_ACTION, "", ""),
+            &[],
+        )
+        .unwrap();
+    let earlier = ShortcutAction::launch(OURS, "OpenXplorer");
+    shortcuts.actions.borrow_mut().push((earlier, vec![SUPER_E]));
+    shortcuts.fail("register");
+
+    assert!(opt_in.enable().is_err());
+
+    assert_eq!(
+        shortcuts.keys_of_action(OURS, "_launch"),
+        [SUPER_E],
+        "the earlier launch action has Super+E again"
+    );
+    shortcuts.failing.borrow_mut().clear();
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(
+        shortcuts.keys_of("org.kde.dolphin.desktop"),
+        [CTRL_ALT_D, SUPER_E]
+    );
+}
+
+/// When turning it on fails and giving Super+E back to Dolphin fails too,
+/// the record of Dolphin is kept: turning the switch on and off again,
+/// once the service works, gives Super+E back to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn a_failed_give_back_keeps_the_way_back_to_dolphin() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+    shortcuts.fail("register");
+    shortcuts.fail("give_back");
+
+    assert!(opt_in.enable().is_err());
+    assert_eq!(opt_in.status(), LaunchShortcutStatus::Free);
+
+    shortcuts.failing.borrow_mut().clear();
+    opt_in.enable().unwrap();
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(
+        shortcuts.keys_of("org.kde.dolphin.desktop"),
+        [CTRL_ALT_D, SUPER_E]
+    );
+}
+
+/// The same after an upgrade: Super+E was on the earlier launch action,
+/// and both moving it and giving it back fail. The record of Dolphin
+/// still leads Super+E back there.
+///
+/// parity: INT-033
+#[test]
+fn a_failed_give_back_to_the_earlier_launch_action_keeps_the_way_back_to_dolphin() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+    opt_in.enable().unwrap();
+    shortcuts
+        .set_keys(
+            &ShortcutAction::desktop_action(OURS, NEW_WINDOW_ACTION, "", ""),
+            &[],
+        )
+        .unwrap();
+    let earlier = ShortcutAction::launch(OURS, "OpenXplorer");
+    shortcuts.actions.borrow_mut().push((earlier, vec![SUPER_E]));
+    make_it_an_earlier_record(settings.path(), &format!("{OURS}.json"));
+    shortcuts.fail("register");
+    shortcuts.fail("give_back");
+
+    assert!(opt_in.enable().is_err());
+    assert_eq!(opt_in.status(), LaunchShortcutStatus::Free);
+
+    shortcuts.failing.borrow_mut().clear();
+    opt_in.enable().unwrap();
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
 }

@@ -332,6 +332,23 @@ pub enum RestoredShortcut {
 struct Record {
     /// The action Super+E was taken from.
     previous: ShortcutAction,
+    /// True when a turning on failed and Super+E could not be given back
+    /// to `previous` either, so it is free: the next turning on keeps the
+    /// record, so turning it off still gives Super+E back.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    stranded: bool,
+}
+
+/// What turning it on took Super+E from, so a failure can give it back.
+#[derive(Debug)]
+enum Taken {
+    /// Nothing: Super+E was free, or the other package had it.
+    Nothing,
+    /// The action of the record written just now.
+    Recorded(ShortcutAction),
+    /// `OpenXplorer`'s own action from an earlier version, whose record
+    /// stays as it is.
+    Earlier(ShortcutAction),
 }
 
 /// The opt-in that makes Super+E open `OpenXplorer` on KDE Plasma.
@@ -421,10 +438,11 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             return Ok(());
         }
         let mut sibling = None;
+        let mut kept = None;
         let taken = match owner {
             Some(earlier) if self.is_ours_or_earlier(&earlier) => {
                 self.take_super_e_from(&earlier)?;
-                None
+                Taken::Earlier(earlier)
             }
             // The other package took Super+E from this one: taking it back
             // keeps this package's record and ends the other's, which only
@@ -432,24 +450,34 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             Some(other) if self.sibling_record_pointing_here(&other).is_some() => {
                 self.take_super_e_from(&other)?;
                 sibling = Some(other);
-                None
+                Taken::Nothing
             }
             Some(previous) => {
                 self.write_record(&Record {
                     previous: previous.clone(),
+                    stranded: false,
                 })?;
                 if let Err(error) = self.take_super_e_from(&previous) {
                     self.remove_record(false);
                     return Err(error);
                 }
-                Some(previous)
+                Taken::Recorded(previous)
             }
             // A free Super+E has nothing to go back to. A record left from
             // before the user cleared Super+E would give it to that action,
-            // and the record earlier builds shared is nobody's now.
+            // and the record earlier builds shared is nobody's now. A
+            // record a failed turning on kept is the way back, so it stays.
             None => {
-                self.remove_record(true);
-                None
+                match self.read_record(false) {
+                    Some(record) if record.stranded => {
+                        if let Some(earlier) = self.earlier_record_path(true) {
+                            let _ = std::fs::remove_file(earlier);
+                        }
+                        kept = Some(record);
+                    }
+                    _ => self.remove_record(true),
+                }
+                Taken::Nothing
             }
         };
         match self.give_super_e_to_ours() {
@@ -458,10 +486,18 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
                 if let Some((path, _)) = record {
                     let _ = std::fs::remove_file(path);
                 }
+                // `OpenXplorer` has Super+E again, so the kept record is
+                // an ordinary one.
+                if let Some(record) = kept {
+                    let _ = self.write_record(&Record {
+                        stranded: false,
+                        ..record
+                    });
+                }
                 Ok(())
             }
             Err(error) => {
-                self.roll_back(taken.as_ref());
+                self.roll_back(&taken);
                 if let Some(other) = sibling {
                     let _ = self.give_super_e_back(&other);
                 }
@@ -570,14 +606,39 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
 
     /// Undoes a turning on that failed after Super+E was `taken`, as far
     /// as the service lets it: Super+E leaves `OpenXplorer`'s action and
-    /// goes back to the action it was taken from. The record is kept when
-    /// that fails too, so turning it off can still give Super+E back.
-    fn roll_back(&self, taken: Option<&ShortcutAction>) {
+    /// goes back to the action it was taken from. When that fails too,
+    /// Super+E is left free and the record is kept, marked so turning it
+    /// on again keeps it: turning it off then still gives Super+E back.
+    fn roll_back(&self, taken: &Taken) {
         let _ = self.take_super_e_from(&self.ours);
-        if let Some(previous) = taken {
-            if self.give_super_e_back(previous).is_ok() {
-                self.remove_record(false);
+        match taken {
+            Taken::Nothing => {}
+            Taken::Recorded(previous) => {
+                if self.give_super_e_back(previous).is_ok() {
+                    self.remove_record(false);
+                } else {
+                    self.strand_record(false);
+                }
             }
+            // The record stays as it was: it says where Super+E goes once
+            // the earlier action, or this package, gives it up.
+            Taken::Earlier(earlier) => {
+                if self.give_super_e_back(earlier).is_err() {
+                    self.strand_record(true);
+                }
+            }
+        }
+    }
+
+    /// Marks the record, with `claims_earlier` the one earlier builds
+    /// shared too, as kept by a failed turning on, under this package's
+    /// own name; a record that cannot be read or written is left as it is.
+    fn strand_record(&self, claims_earlier: bool) {
+        if let Some(record) = self.read_record(claims_earlier) {
+            let _ = self.write_record(&Record {
+                stranded: true,
+                ..record
+            });
         }
     }
 
@@ -818,10 +879,12 @@ mod tests {
         );
         let dolphin = Record {
             previous: ShortcutAction::launch("org.kde.dolphin.desktop", "Dolphin"),
+            stranded: false,
         };
         stable.write_record(&dolphin).unwrap();
         let pointing_here = Record {
             previous: stable.ours.clone(),
+            stranded: false,
         };
         let preview_record = record_path_of(settings.path(), preview_id);
         let text = serde_json::to_string(&pointing_here).unwrap();
