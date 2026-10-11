@@ -10,6 +10,12 @@
 //! a network share (CIFS/SMB3, NFS and the like) or a FUSE mount other
 //! than a local disk's (`fuseblk`, as ntfs-3g mounts one) is a network
 //! place, never a drive, so a drag there, or from there, copies.
+//!
+//! An overlay filesystem (overlayfs, as containers and live sessions use)
+//! is one drive, but the kernel refuses to rename a folder on it (EXDEV)
+//! unless it was mounted with `redirect_dir=on`, so a folder dragged there
+//! counts as going to another drive and is copied, as a plain drag to
+//! another drive is.
 
 use std::path::Path;
 
@@ -33,18 +39,26 @@ pub struct Drive {
     device: u64,
     /// Whether the filesystem is a network place rather than a drive.
     is_network: bool,
+    /// A folder the kernel refuses to move by renaming, on an overlay
+    /// filesystem without `redirect_dir=on`.
+    is_unrenamable_folder: bool,
 }
 
 impl Drive {
-    /// True when both are the same local drive, so a rename can move an
-    /// item from one to the other: the same filesystem through the same
-    /// mount, and neither a network place.
+    /// True when the item on this drive and the folder on `other` are on
+    /// the same local drive, so a rename can move the item into it: the
+    /// same filesystem through the same mount, neither a network place,
+    /// and not a folder an overlay filesystem refuses to rename.
     pub fn is_same_local_drive(&self, other: &Drive) -> bool {
         let same_mount = match (self.mount, other.mount) {
             (Some(own), Some(theirs)) => own == theirs,
             _ => true,
         };
-        !self.is_network && !other.is_network && self.device == other.device && same_mount
+        !self.is_network
+            && !other.is_network
+            && !self.is_unrenamable_folder
+            && self.device == other.device
+            && same_mount
     }
 }
 
@@ -64,42 +78,54 @@ pub fn drive_of(path: &Path, follow: bool) -> Option<Drive> {
             mount: None,
             device: 0,
             is_network: true,
+            is_unrenamable_folder: false,
         });
     }
     let mut flags = AtFlags::NO_AUTOMOUNT;
     if !follow {
         flags |= AtFlags::SYMLINK_NOFOLLOW;
     }
-    let (mount, device) = match rustix::fs::statx(CWD, path, flags, StatxFlags::MNT_ID) {
+    let (mount, device, mode) = match rustix::fs::statx(CWD, path, flags, StatxFlags::MNT_ID) {
         Ok(status) => {
             let has_id = status.stx_mask & StatxFlags::MNT_ID.bits() != 0;
             let device = rustix::fs::makedev(status.stx_dev_major, status.stx_dev_minor);
-            (has_id.then_some(status.stx_mnt_id), device)
+            (
+                has_id.then_some(status.stx_mnt_id),
+                device,
+                u32::from(status.stx_mode),
+            )
         }
         Err(rustix::io::Errno::NOSYS | rustix::io::Errno::PERM) => {
             let status = rustix::fs::statat(CWD, path, flags).ok()?;
-            (None, status.st_dev)
+            (None, status.st_dev, status.st_mode)
         }
         Err(_) => return None,
     };
+    let is_folder = rustix::fs::FileType::from_raw_mode(mode) == rustix::fs::FileType::Directory;
     let filesystem = mount
         .zip(table.as_deref())
         .and_then(|(mount, table)| filesystem_of_mount(table, mount));
     // Without the mount table, the filesystem's magic number tells: the
     // folder holding a link that is not followed decides.
-    let is_network = if let Some(filesystem) = filesystem {
-        is_network_filesystem(&filesystem)
+    let (is_network, is_unrenamable_folder) = if let Some((filesystem, options)) = filesystem {
+        let refuses = is_folder && refuses_folder_renames(&filesystem, &options);
+        (is_network_filesystem(&filesystem), refuses)
     } else {
         let folder = if follow { Some(path) } else { path.parent() };
         let status = folder.and_then(|folder| rustix::fs::statfs(folder).ok());
         // `f_type` is narrower than i64 on some targets.
         #[allow(clippy::useless_conversion)]
-        status.is_none_or(|status| is_network_magic(i64::from(status.f_type)))
+        let magic = status.map(|status| i64::from(status.f_type));
+        let is_network = magic.is_none_or(is_network_magic);
+        // Without its options, an overlay is taken to refuse, as it does
+        // by default.
+        (is_network, is_folder && magic == Some(OVERLAY_MAGIC))
     };
     Some(Drive {
         mount,
         device,
         is_network,
+        is_unrenamable_folder,
     })
 }
 
@@ -114,16 +140,30 @@ fn is_below_network_mount(table: &str, path: &Path) -> bool {
     mount_for_path(text, &mounts).is_some_and(|mount| is_network_filesystem(&mount.filesystem))
 }
 
-/// The filesystem type of the mount `mount` in the mount table `table`.
-fn filesystem_of_mount(table: &str, mount: u64) -> Option<String> {
+/// The filesystem type of the mount `mount` in the mount table `table`,
+/// and its filesystem's options (the line's last field).
+fn filesystem_of_mount(table: &str, mount: u64) -> Option<(String, String)> {
     table.lines().find_map(|line| {
         let id: u64 = line.split_whitespace().next()?.parse().ok()?;
         if id != mount {
             return None;
         }
         let (_, after) = line.split_once(SEPARATOR)?;
-        after.split_whitespace().next().map(str::to_owned)
+        let mut fields = after.split_whitespace();
+        let filesystem = fields.next()?.to_owned();
+        let options = fields.nth(1).unwrap_or_default().to_owned();
+        Some((filesystem, options))
     })
+}
+
+/// `statfs`'s `f_type` of an overlay filesystem.
+const OVERLAY_MAGIC: i64 = 0x794C_7630;
+
+/// True when the filesystem `filesystem`, mounted with the filesystem
+/// options `options`, refuses to rename a folder (EXDEV): an overlay,
+/// unless `redirect_dir=on` lets it.
+fn refuses_folder_renames(filesystem: &str, options: &str) -> bool {
+    filesystem == "overlay" && !options.split(',').any(|option| option == "redirect_dir=on")
 }
 
 /// True for the filesystem types of network places: kernel network
@@ -177,6 +217,7 @@ mod tests {
             mount,
             device,
             is_network: false,
+            is_unrenamable_folder: false,
         }
     }
 
@@ -222,6 +263,7 @@ mod tests {
             mount: Some(50),
             device: 60,
             is_network: true,
+            is_unrenamable_folder: false,
         };
         assert!(!share.is_same_local_drive(&share));
     }
@@ -250,9 +292,53 @@ mod tests {
 97 41 0:55 / /mnt/share rw,relatime shared:60 - cifs //nas/share rw,vers=3.1.1
 98 41 8:2 /srv /mnt/srv rw - ext4 /dev/sda2 rw
 ";
-        assert_eq!(filesystem_of_mount(table, 97).as_deref(), Some("cifs"));
-        assert_eq!(filesystem_of_mount(table, 98).as_deref(), Some("ext4"));
-        assert_eq!(filesystem_of_mount(table, 99), None);
+        let filesystem = |mount| filesystem_of_mount(table, mount).map(|(filesystem, _)| filesystem);
+        assert_eq!(filesystem(97).as_deref(), Some("cifs"));
+        assert_eq!(filesystem(98).as_deref(), Some("ext4"));
+        assert_eq!(filesystem(99), None);
+        assert_eq!(
+            filesystem_of_mount(table, 97)
+                .map(|(_, options)| options)
+                .as_deref(),
+            Some("rw,vers=3.1.1")
+        );
+    }
+
+    /// A folder on an overlay filesystem (containers, live sessions) is
+    /// on the same drive as the folder it is dragged to, but the kernel
+    /// refuses to rename it (EXDEV), so a plain drag copies it, as to
+    /// another drive, instead of asking about moving by copying. Files on
+    /// it, and folders on an overlay mounted with `redirect_dir=on`, move.
+    ///
+    /// parity: DND-017
+    #[test]
+    fn a_folder_on_an_overlay_is_copied_by_a_plain_drag() {
+        let table = "\
+41 1 8:2 / / rw,relatime shared:1 - ext4 /dev/sda2 rw
+52 41 0:42 / /work rw,relatime - overlay overlay rw,lowerdir=/l,upperdir=/u,workdir=/w,uuid=on
+53 41 0:43 / /work2 rw,relatime - overlay overlay rw,lowerdir=/l,upperdir=/u,workdir=/w,redirect_dir=on
+";
+        let refuses = |mount| {
+            let (filesystem, options) = filesystem_of_mount(table, mount).expect("a mount");
+            refuses_folder_renames(&filesystem, &options)
+        };
+        assert!(refuses(52));
+        assert!(!refuses(53), "redirect_dir=on renames folders");
+        assert!(!refuses(41));
+
+        let folder = Drive {
+            is_unrenamable_folder: true,
+            ..local(Some(52), 42)
+        };
+        let destination = Drive {
+            is_unrenamable_folder: true,
+            ..local(Some(52), 42)
+        };
+        assert!(!folder.is_same_local_drive(&destination));
+        assert!(
+            local(Some(52), 42).is_same_local_drive(&destination),
+            "a file moves into the folder"
+        );
     }
 
     /// A path on a share the mount table already names is a network place
