@@ -7,7 +7,9 @@ use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use super::file_ops_support::{dialog_over, is_renaming_in_place, name_editor, require_private_trash};
+use super::file_ops_support::{
+    dialog_over, is_enabled, is_renaming_in_place, name_editor, require_private_trash,
+};
 use crate::test_support::harness::{settle, wait_until, Fixture, TestWindow};
 
 /// Presses `key` in the in-place name field `editor`, as far as its own
@@ -133,8 +135,10 @@ fn new_folder_renames_in_place_in_an_empty_folder_and_in_icon_views() {
     assert_eq!(field.text(), "New folder (2)");
 }
 
-/// Where the folder cannot be made, the toast says why and nothing asks
-/// for a name.
+/// Where the folder cannot be made, nothing asks for a name and nothing
+/// is made: New is disabled there, or, when it runs, the toast says why.
+/// (Disabling New in a folder you cannot write to is its own fix; this
+/// holds with or without it.)
 ///
 /// parity: OPS-001
 #[gtk::test]
@@ -146,8 +150,12 @@ fn a_folder_that_cannot_take_a_new_folder_says_why() {
     std::fs::set_permissions(fixture.path("Locked"), std::fs::Permissions::from_mode(0o555))
         .expect("the folder is ours");
 
+    let enabled = is_enabled(&test, "new-folder");
     test.activate("new-folder", None);
-    wait_until("the refusal", || !test.window.shown_message().is_empty());
+    if enabled {
+        wait_until("the refusal", || !test.window.shown_message().is_empty());
+    }
+    settle();
     let shown = test.window.shown_message().to_string();
     std::fs::set_permissions(fixture.path("Locked"), std::fs::Permissions::from_mode(0o755))
         .expect("the folder is ours");
@@ -155,7 +163,7 @@ fn a_folder_that_cannot_take_a_new_folder_says_why() {
     assert!(dialog_over(&test).is_none(), "no dialog");
     assert!(!is_renaming_in_place(&test));
     assert!(!fixture.path("Locked/New folder").exists());
-    assert!(!shown.is_empty(), "the toast says why");
+    assert!(!enabled || !shown.is_empty(), "when New runs, the toast says why");
 }
 
 /// A new folder that sorts far down a long list, with folders not kept
