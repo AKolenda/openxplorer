@@ -71,7 +71,12 @@ impl BrowserWindow {
                 first_number: u32::try_from(first_number.value_as_int()).unwrap_or(0),
             };
             let names = match batch.new_names() {
-                Ok(names) => names,
+                Ok(names) => {
+                    // The reason an earlier name was refused no longer
+                    // holds, whatever is asked next.
+                    dialog.hide_error();
+                    names
+                }
                 Err(refusal) => {
                     dialog.show_error(&refusal.to_string());
                     continue;

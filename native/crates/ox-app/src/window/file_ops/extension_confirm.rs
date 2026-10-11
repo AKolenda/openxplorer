@@ -22,15 +22,14 @@ const MESSAGE: &str = crate::i18n::message_id(
 );
 
 /// The extension of the file name `name`, case-folded: what follows its
-/// last dot, unless that dot is a leading one (`.bashrc` has none) or
-/// nothing follows it. Unicode case folding matches letters that differ
+/// last dot, unless that dot starts the name (`.bashrc` has none, `..txt`
+/// has `txt`) or nothing follows it. Unicode case folding matches letters that differ
 /// only in case where lower or upper case alone keeps them apart, such as
 /// `ſ` and `S`, the Kelvin sign and `k`, or `ß` and `ẞ`.
 fn extension(name: &str) -> Option<String> {
     let dot = name.rfind('.')?;
-    let is_leading = name[..dot].chars().all(|character| character == '.');
     let extension = &name[dot + 1..];
-    (!is_leading && !extension.is_empty()).then(|| gtk::glib::casefold(extension).to_string())
+    (dot > 0 && !extension.is_empty()).then(|| gtk::glib::casefold(extension).to_string())
 }
 
 /// True when renaming the file `old_name` to `new_name` adds, removes or
@@ -80,6 +79,17 @@ mod tests {
         assert!(changes_extension("report.txt", "report", false), "removed");
         assert!(changes_extension("archive.tar.gz", "archive.tar", false));
         assert!(changes_extension(".bashrc", ".bashrc.old", false));
+    }
+
+    /// Only a dot at the very start of the name is no extension: in
+    /// "..txt" the last dot starts the extension "txt".
+    ///
+    /// parity: OPS-049
+    #[test]
+    fn a_name_after_several_leading_dots_has_an_extension() {
+        assert!(changes_extension("..txt", "..pdf", false));
+        assert!(!changes_extension("..txt", "..TXT", false), "only its case");
+        assert!(changes_extension(".a.txt", ".a.pdf", false));
     }
 
     /// parity: OPS-049

@@ -362,6 +362,40 @@ fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together
     assert!(!fixture.path("Plan 1.txt").exists());
 }
 
+/// An error shown for an earlier name goes once a name is accepted, also
+/// when the extension question that follows is cancelled: the dialog then
+/// shows the typed name without a stale reason.
+///
+/// parity: OPS-014, OPS-049
+#[gtk::test]
+fn a_batch_error_goes_once_a_name_is_accepted() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("README"), "read me").expect("the file is written");
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["README", "Notes 2.txt"]);
+    test.activate("rename", None);
+    let dialog = open_dialog(&test);
+    let field = text_field(&dialog);
+    field.set_text("");
+    dialog.press("Rename");
+    wait_until("the refusal", || dialog.error_text().is_some());
+
+    field.set_text("Plan.md");
+    dialog.press("Rename");
+    let question = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .find(|shown| shown.is_visible() && shown.title_text() == "Change the extension?")
+    };
+    wait_until("the extension question", || question().is_some());
+    question().expect("it shows").press("Cancel");
+    wait_until("the question to close", || question().is_none());
+
+    assert_eq!(dialog.error_text(), None, "no stale error");
+    dialog.press("Cancel");
+}
+
 /// A batch name with a dot gives an extension to a file that had none
 /// (README becomes Plan.md): that asks first, as renaming one file does.
 /// Cancel keeps the dialog open with the typed name; the other files keep
