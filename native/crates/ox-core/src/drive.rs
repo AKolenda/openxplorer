@@ -12,12 +12,13 @@
 //! place, never a drive, so a drag there, or from there, copies.
 //!
 //! An overlay filesystem (overlayfs, as containers and live sessions use)
-//! is one drive, but the kernel refuses to rename a folder on it (EXDEV)
-//! unless it was mounted with `redirect_dir=on`, so a folder dragged there
-//! counts as going to another drive and is copied, as a plain drag to
-//! another drive is.
+//! is one drive, but unless it was mounted with `redirect_dir=on` the
+//! kernel refuses to rename a folder that is also in one of its lower
+//! layers (EXDEV). Such a folder counts as going to another drive and is
+//! copied, as a plain drag to another drive is; a folder made on the
+//! overlay since (only in its upper layer) moves.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rustix::fs::{AtFlags, StatxFlags, CWD};
 
@@ -39,8 +40,8 @@ pub struct Drive {
     device: u64,
     /// Whether the filesystem is a network place rather than a drive.
     is_network: bool,
-    /// A folder the kernel refuses to move by renaming, on an overlay
-    /// filesystem without `redirect_dir=on`.
+    /// A folder the kernel refuses to move by renaming: one also in a
+    /// lower layer of an overlay filesystem without `redirect_dir=on`.
     is_unrenamable_folder: bool,
 }
 
@@ -107,9 +108,11 @@ pub fn drive_of(path: &Path, follow: bool) -> Option<Drive> {
         .and_then(|(mount, table)| filesystem_of_mount(table, mount));
     // Without the mount table, the filesystem's magic number tells: the
     // folder holding a link that is not followed decides.
-    let (is_network, is_unrenamable_folder) = if let Some((filesystem, options)) = filesystem {
-        let refuses = is_folder && refuses_folder_renames(&filesystem, &options);
-        (is_network_filesystem(&filesystem), refuses)
+    let (is_network, is_unrenamable_folder) = if let Some(mount) = filesystem {
+        let refuses = is_folder
+            && refuses_folder_renames(&mount.filesystem, &mount.options)
+            && is_in_a_lower_layer(path, &mount);
+        (is_network_filesystem(&mount.filesystem), refuses)
     } else {
         let folder = if follow { Some(path) } else { path.parent() };
         let status = folder.and_then(|folder| rustix::fs::statfs(folder).ok());
@@ -140,20 +143,126 @@ fn is_below_network_mount(table: &str, path: &Path) -> bool {
     mount_for_path(text, &mounts).is_some_and(|mount| is_network_filesystem(&mount.filesystem))
 }
 
-/// The filesystem type of the mount `mount` in the mount table `table`,
-/// and its filesystem's options (the line's last field).
-fn filesystem_of_mount(table: &str, mount: u64) -> Option<(String, String)> {
+/// One mount of the mount table, as a drive needs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MountLine {
+    /// The filesystem type, for example `ext4`.
+    filesystem: String,
+    /// The folder of the filesystem mounted (`/` for its whole tree).
+    root: String,
+    /// Where it is mounted.
+    mount_point: String,
+    /// Its filesystem's options (the line's last field), still escaped.
+    options: String,
+}
+
+/// The mount `mount` in the mount table `table`.
+fn filesystem_of_mount(table: &str, mount: u64) -> Option<MountLine> {
     table.lines().find_map(|line| {
-        let id: u64 = line.split_whitespace().next()?.parse().ok()?;
+        let mut fields = line.split_whitespace();
+        let id: u64 = fields.next()?.parse().ok()?;
         if id != mount {
             return None;
         }
+        let root = unescape(fields.nth(2)?);
+        let mount_point = unescape(fields.next()?);
         let (_, after) = line.split_once(SEPARATOR)?;
         let mut fields = after.split_whitespace();
         let filesystem = fields.next()?.to_owned();
         let options = fields.nth(1).unwrap_or_default().to_owned();
-        Some((filesystem, options))
+        Some(MountLine {
+            filesystem,
+            root,
+            mount_point,
+            options,
+        })
     })
+}
+
+/// `text` with the mount table's octal escapes (`\040` for a space)
+/// decoded.
+fn unescape(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        let octal = bytes.get(index + 1..index + 4).filter(|digits| {
+            bytes[index] == b'\\' && digits.iter().all(|digit| (b'0'..=b'7').contains(digit))
+        });
+        if let Some(digits) = octal {
+            let value = digits
+                .iter()
+                .fold(0_u32, |value, digit| value * 8 + u32::from(digit - b'0'));
+            decoded.push(u8::try_from(value).unwrap_or(b'?'));
+            index += 4;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+/// The lower layers an overlay mount's `options` name (`lowerdir=a:b`, or
+/// one `lowerdir+=` each), in order.
+fn lower_layers(options: &str) -> Vec<PathBuf> {
+    let mut layers = Vec::new();
+    for option in options.split(',') {
+        if let Some(list) = option.strip_prefix("lowerdir=") {
+            layers.extend(
+                split_layers(list)
+                    .into_iter()
+                    .map(|layer| PathBuf::from(unescape(&layer))),
+            );
+        } else if let Some(layer) = option.strip_prefix("lowerdir+=") {
+            layers.push(PathBuf::from(unescape(layer)));
+        }
+    }
+    layers
+}
+
+/// The layers of a `lowerdir` list, split at each `:` that `\` does not
+/// escape.
+fn split_layers(list: &str) -> Vec<String> {
+    let mut layers = vec![String::new()];
+    let mut characters = list.chars();
+    while let Some(character) = characters.next() {
+        match character {
+            '\\' => {
+                if let Some(next) = characters.next() {
+                    if next != ':' {
+                        layers.last_mut().expect("one layer").push('\\');
+                    }
+                    layers.last_mut().expect("one layer").push(next);
+                }
+            }
+            ':' => layers.push(String::new()),
+            other => layers.last_mut().expect("one layer").push(other),
+        }
+    }
+    layers.retain(|layer| !layer.is_empty());
+    layers
+}
+
+/// True when the folder `path`, on the overlay `mount`, may be in one of
+/// its lower layers, where a rename of it fails: its place there exists,
+/// or cannot be checked (no lower layer named, a layer that cannot be
+/// read). A folder only in the upper layer, made on the overlay, is not.
+fn is_in_a_lower_layer(path: &Path, mount: &MountLine) -> bool {
+    let Ok(inside) = path.strip_prefix(&mount.mount_point) else {
+        return true;
+    };
+    let layers = lower_layers(&mount.options);
+    if layers.is_empty() {
+        return true;
+    }
+    let root = mount.root.trim_start_matches('/');
+    layers.iter().any(
+        |layer| match std::fs::symlink_metadata(layer.join(root).join(inside)) {
+            Ok(_) => true,
+            Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+        },
+    )
 }
 
 /// `statfs`'s `f_type` of an overlay filesystem.
@@ -292,15 +401,18 @@ mod tests {
 97 41 0:55 / /mnt/share rw,relatime shared:60 - cifs //nas/share rw,vers=3.1.1
 98 41 8:2 /srv /mnt/srv rw - ext4 /dev/sda2 rw
 ";
-        let filesystem = |mount| filesystem_of_mount(table, mount).map(|(filesystem, _)| filesystem);
+        let filesystem = |mount| filesystem_of_mount(table, mount).map(|line| line.filesystem);
         assert_eq!(filesystem(97).as_deref(), Some("cifs"));
         assert_eq!(filesystem(98).as_deref(), Some("ext4"));
         assert_eq!(filesystem(99), None);
         assert_eq!(
-            filesystem_of_mount(table, 97)
-                .map(|(_, options)| options)
-                .as_deref(),
+            filesystem_of_mount(table, 97).map(|line| line.options).as_deref(),
             Some("rw,vers=3.1.1")
+        );
+        let srv = filesystem_of_mount(table, 98).expect("a mount");
+        assert_eq!(
+            (srv.root.as_str(), srv.mount_point.as_str()),
+            ("/srv", "/mnt/srv")
         );
     }
 
@@ -319,8 +431,8 @@ mod tests {
 53 41 0:43 / /work2 rw,relatime - overlay overlay rw,lowerdir=/l,upperdir=/u,workdir=/w,redirect_dir=on
 ";
         let refuses = |mount| {
-            let (filesystem, options) = filesystem_of_mount(table, mount).expect("a mount");
-            refuses_folder_renames(&filesystem, &options)
+            let line = filesystem_of_mount(table, mount).expect("a mount");
+            refuses_folder_renames(&line.filesystem, &line.options)
         };
         assert!(refuses(52));
         assert!(!refuses(53), "redirect_dir=on renames folders");
@@ -338,6 +450,75 @@ mod tests {
         assert!(
             local(Some(52), 42).is_same_local_drive(&destination),
             "a file moves into the folder"
+        );
+    }
+
+    /// On an overlay that refuses folder renames, only a folder that is
+    /// also in a lower layer refuses: one made on the overlay since lives
+    /// only in its upper layer and moves. A folder whose lower layers
+    /// cannot be told is taken to refuse, so the drag copies.
+    ///
+    /// parity: DND-017
+    #[test]
+    fn only_an_overlay_folder_also_in_a_lower_layer_refuses_a_rename() {
+        let layers = tempfile::tempdir().expect("a folder");
+        let first = layers.path().join("first layer");
+        let second = layers.path().join("second");
+        std::fs::create_dir_all(first.join("Shared/Inside")).expect("a lower folder");
+        std::fs::create_dir_all(second.join("Older")).expect("a lower folder");
+        let escaped = |path: &Path| path.display().to_string().replace(' ', "\\040");
+        let mount = MountLine {
+            filesystem: "overlay".to_owned(),
+            root: "/".to_owned(),
+            mount_point: "/work".to_owned(),
+            options: format!(
+                "rw,lowerdir={}:{},upperdir=/u,workdir=/w",
+                escaped(&first),
+                escaped(&second)
+            ),
+        };
+        let at = |inside: &str| Path::new("/work").join(inside);
+
+        assert!(is_in_a_lower_layer(&at("Shared/Inside"), &mount));
+        assert!(is_in_a_lower_layer(&at("Older"), &mount), "the second layer");
+        assert!(
+            !is_in_a_lower_layer(&at("Made since"), &mount),
+            "only in the upper layer"
+        );
+        assert!(
+            !is_in_a_lower_layer(&at("Shared/Made since"), &mount),
+            "a new folder inside a lower one"
+        );
+        let unnamed = MountLine {
+            options: "rw,upperdir=/u,workdir=/w".to_owned(),
+            ..mount.clone()
+        };
+        assert!(
+            is_in_a_lower_layer(&at("Made since"), &unnamed),
+            "no lower layer named"
+        );
+        assert!(
+            is_in_a_lower_layer(Path::new("/elsewhere/Folder"), &mount),
+            "not on the mount"
+        );
+    }
+
+    /// The mount table escapes spaces and the like as octal; a `lowerdir`
+    /// list is split at each `:` a backslash does not escape, and newer
+    /// kernels name each layer with `lowerdir+=`.
+    ///
+    /// parity: DND-017
+    #[test]
+    fn overlay_layers_are_read_from_the_mount_options() {
+        assert_eq!(unescape("/my\\040files"), "/my files");
+        assert_eq!(unescape("/plain\\x"), "/plain\\x");
+        assert_eq!(
+            lower_layers("rw,lowerdir=/a:/b\\:c:/my\\040d,upperdir=/u"),
+            [PathBuf::from("/a"), PathBuf::from("/b:c"), PathBuf::from("/my d")]
+        );
+        assert_eq!(
+            lower_layers("rw,lowerdir+=/a,lowerdir+=/b,datadir+=/d"),
+            [PathBuf::from("/a"), PathBuf::from("/b")]
         );
     }
 
