@@ -6110,7 +6110,7 @@ bridge = [
 ]
 dolphin = "Viewport context menu"
 native = "done"
-native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (the_background_menu_acts_on_the_folder); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place). Open in Terminal, the cache toggle, Calculate folder sizes, Previous versions and Properties all work on the current folder. Adds Undo and Redo, named after what they undo."
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (the_background_menu_acts_on_the_folder); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place). Open in Terminal, the cache toggle, Calculate folder sizes, Previous versions and Properties all work on the current folder. Adds Undo and Redo, named after what they undo. 'Writable' includes the folder's own write permission: window/read_only_drive.rs also asks GIO for access::can-write, so in a folder the user may not write to (a chmod 555 folder on a writable drive) New… and Paste are off with 'This folder is read-only.', empty or not (context_menus.rs: a_folder_without_write_permission_offers_neither_new_nor_paste)."
 
 [[feature]]
 id = "CMD-012"
