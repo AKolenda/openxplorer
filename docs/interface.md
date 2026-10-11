@@ -76,7 +76,7 @@ Snapshot tabs carry a “Previous version” badge and an amber top edge. A bann
 
 Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and Properties shows the space they take as Size on disk, as Windows Explorer does. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
 
-These are not ZFS dataset used/referenced values, compressed allocation measurements or snapshot-exclusive block counts.
+Size counts logical file bytes; Size on disk counts the blocks the files take, which on a compressing filesystem such as ZFS is the compressed space. Neither is a ZFS dataset used/referenced value or a snapshot-exclusive block count.
 
 ## Browse a ZIP, without extracting everything
 

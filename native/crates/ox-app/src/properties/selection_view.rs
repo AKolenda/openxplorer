@@ -237,13 +237,14 @@ fn add_allocated(total: Option<u64>, allocated: Option<u64>) -> Option<u64> {
         .map(|(total, allocated)| total.saturating_add(allocated))
 }
 
-/// The bytes the file at `uri` takes on disk, without following a link;
-/// `None` when it cannot be read or its backend does not say.
+/// The bytes the file at `uri` takes on disk; for a link, the file it
+/// points to, as the Size row counts it (a listed link has its target's
+/// size). `None` when it cannot be read or its backend does not say.
 async fn size_on_disk(uri: &str) -> Option<u64> {
     let info = gio::File::for_uri(uri)
         .query_info_future(
             "standard::allocated-size",
-            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            gio::FileQueryInfoFlags::NONE,
             glib::Priority::DEFAULT,
         )
         .await

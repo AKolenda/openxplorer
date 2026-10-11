@@ -2397,7 +2397,7 @@ msgid "Item check boxes"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Logical file bytes, what a scan skips, and its limits."
+msgid "Logical file bytes, the space on disk, what a scan skips, and its limits."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -2517,7 +2517,7 @@ msgid "view properties per folder display style layout sort group remember globa
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "zfs logical bytes snapshots disk usage. Results are kept only for this window session."
+msgid "zfs logical bytes size on disk compressed snapshots disk usage. Results are kept only for this window session."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs

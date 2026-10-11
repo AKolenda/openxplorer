@@ -13002,7 +13002,7 @@ native_note = "native/crates/ox-app/src/properties/selection_view.rs, properties
 id = "PROP-003"
 area = "PROP"
 title = "Properties General tab"
-behaviour = "The General tab shows 'Reading file properties…', then the icon and name and rows Type, Location, Full path, Size (files formatted; folders measured or 'Not scanned'), 'Opens with' (files: default app or 'No default application'), Created, Modified and Accessed (locale date-time or 'Not provided'). Buttons: 'Change app…' (files outside snapshots; closes and opens Open with), 'Copy full path' (toast 'Full path copied.') and, for folders, 'Calculate folder size' with 'Logical file bytes, measured on demand. Skips links, nested mounts and snapshot collections. The result may be partial; it is not ZFS compressed or snapshot usage.'. A read failure shows the error and 'Metadata could not be read.' under Permissions."
+behaviour = "The General tab shows 'Reading file properties…', then the icon and name and rows Type, Location, Full path, Size (files formatted; folders measured or 'Not scanned'), 'Opens with' (files: default app or 'No default application'), Created, Modified and Accessed (locale date-time or 'Not provided'). Buttons: 'Change app…' (files outside snapshots; closes and opens Open with), 'Copy full path' (toast 'Full path copied.') and, for folders, 'Calculate folder size' with 'Logical file bytes, measured on demand. Skips links, nested mounts and snapshot collections. The result may be partial; it is not ZFS compressed or snapshot usage.'. A read failure shows the error and 'Metadata could not be read.' under Permissions. Since PROP-033, Size on disk shows the space the files take, which on ZFS is the compressed space; Size stays logical bytes."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -13762,7 +13762,7 @@ native_note = "native/crates/ox-core/src/versions/lookup.rs and tests/versions_l
 id = "PROP-033"
 area = "PROP"
 title = "Size on disk"
-behaviour = "As in Windows Explorer, the General tab shows 'Size on disk' under 'Size': the space the item takes on its drive, from the blocks it uses. A folder's is measured with its size (Calculate folder size; 'Not scanned' until then, '≥' for a partial scan) and counts a hard-linked file once; several items show their combined space. Where the backend does not report the space of every file it shows 'not provided' rather than a smaller total."
+behaviour = "As in Windows Explorer, the General tab shows 'Size on disk' under 'Size': the space the item takes on its drive, from the blocks it uses. A folder's is measured with its size (Calculate folder size; 'Not scanned' until then, '≥' for a partial scan) and counts a hard-linked file once; several items show their combined space. Where the backend does not report the space of every file it shows 'not provided' rather than a smaller total. With several items, a link to a file counts as the file, in Size on disk as in Size."
 origin = ["openxplorer"]
 priority = "should"
 openxplorer = "missing"
@@ -13771,7 +13771,7 @@ python_tests = []
 bridge = []
 gnome = "GFileInfo standard::allocated-size"
 native = "done"
-native_note = "native/crates/ox-core/tests/sizes_scan.rs (the_space_files_take_on_disk_is_totalled_with_hard_links_once, the_space_on_disk_is_unknown_when_a_file_does_not_report_it); native/crates/ox-app/src/properties/folder_sizes.rs (size_on_disk_reads_like_the_size_or_is_not_provided); native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_of_several_items_total_them_and_change_them_together, calculate_folder_size_shows_the_size_everywhere_the_folder_is). Files read standard::allocated-size; the local scan adds st_blocks × 512 and the GIO scan standard::allocated-size."
+native_note = "native/crates/ox-core/tests/sizes_scan.rs (the_space_files_take_on_disk_is_totalled_with_hard_links_once, the_space_on_disk_is_unknown_when_a_file_does_not_report_it); native/crates/ox-app/src/properties/folder_sizes.rs (size_on_disk_reads_like_the_size_or_is_not_provided); native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_of_several_items_total_them_and_change_them_together, size_on_disk_of_several_items_follows_links_as_size_does, calculate_folder_size_shows_the_size_everywhere_the_folder_is). Files read standard::allocated-size; the local scan adds st_blocks × 512 and the GIO scan standard::allocated-size."
 
 [[feature]]
 id = "SET-001"

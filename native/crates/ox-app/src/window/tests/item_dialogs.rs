@@ -314,6 +314,33 @@ fn the_owner_changes_a_files_permissions() {
     wait_until("the advanced mode", || mode() == 0o2600);
 }
 
+/// With several items selected, Size on disk counts a link to a file as
+/// the file it points to, as Size does, so the two describe the same
+/// files.
+///
+/// parity: PROP-033
+#[gtk::test]
+fn size_on_disk_of_several_items_follows_links_as_size_does() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Big.bin"), vec![7_u8; 200_000]).expect("the file is written");
+    std::os::unix::fs::symlink(fixture.path("Big.bin"), fixture.path("Big link.bin"))
+        .expect("the link is made");
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Big.bin", "Big link.bin"]);
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+
+    wait_until("the space on disk", || {
+        value_after(&frame, "Size on disk").is_some_and(|text| text != "Calculating…")
+    });
+    assert_eq!(
+        value_after(&frame, "Size").as_deref(),
+        Some(ox_core::format::pretty_bytes(400_000).as_str())
+    );
+    let both = [fixture.path("Big.bin"), fixture.path("Big link.bin")];
+    assert_eq!(value_after(&frame, "Size on disk"), Some(on_disk_text(&both)));
+}
+
 /// Properties of several items total them, folders' content included,
 /// and a permission change reaches every one while every bit the user did
 /// not change stays as each item has it.
