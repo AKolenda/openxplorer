@@ -529,7 +529,9 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             .filter(|owner| self.is_ours_or_earlier(owner));
         // The record earlier builds shared is this package's only while it
         // has Super+E.
-        let record = self.read_record(owner.is_some());
+        let found = self.read_record_and_source(owner.is_some());
+        let used_earlier = found.as_ref().is_some_and(|(_, earlier)| *earlier);
+        let record = found.map(|(record, _)| record);
         let Some(owner) = owner else {
             // Another package of `OpenXplorer` may have taken Super+E from
             // this one; it now gives it back to where this one took it.
@@ -538,12 +540,20 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             self.remove_record(false);
             return Ok(RestoredShortcut::NotOurs);
         };
+        let back_to_other_package = record
+            .as_ref()
+            .is_some_and(|record| self.is_other_package(&record.previous));
         let ours = self.shortcuts.keys(&owner)?;
         self.take_super_e_from(&owner)?;
         let restored = match record {
             Some(record) => {
                 if let Err(error) = self.give_super_e_back(&record.previous) {
-                    let _ = self.shortcuts.set_keys(&owner, &ours);
+                    // When even putting Super+E back on `OpenXplorer`
+                    // fails, it is free: the record is marked, so turning
+                    // it on again keeps it and turning it off gives it back.
+                    if self.shortcuts.set_keys(&owner, &ours).is_err() {
+                        self.strand_record(true);
+                    }
                     return Err(error);
                 }
                 // The action may be gone, as when its app was uninstalled:
@@ -562,8 +572,16 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             }
             None => RestoredShortcut::Freed,
         };
-        self.remove_record(true);
+        // The record earlier builds shared belongs to the package that has
+        // Super+E: when it went back to the other package, that record is
+        // that package's way back, unless this one just used it.
+        self.remove_record(used_earlier || !back_to_other_package);
         Ok(restored)
+    }
+
+    /// True for an action of the other package of `OpenXplorer`.
+    fn is_other_package(&self, action: &ShortcutAction) -> bool {
+        action.component != self.ours.component && PACKAGE_DESKTOP_IDS.contains(&action.component.as_str())
     }
 
     /// Takes Super+E from `action`, which keeps its other keys.
@@ -692,11 +710,24 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
     /// The record, or `None` when there is none or it cannot be read; with
     /// `claims_earlier`, the record earlier builds shared too.
     fn read_record(&self, claims_earlier: bool) -> Option<Record> {
+        self.read_record_and_source(claims_earlier)
+            .map(|(record, _)| record)
+    }
+
+    /// [`Self::read_record`], and whether the record came from the one
+    /// earlier builds shared.
+    fn read_record_and_source(&self, claims_earlier: bool) -> Option<(Record, bool)> {
         let read = |path: PathBuf| {
             let text = std::fs::read_to_string(path).ok()?;
             serde_json::from_str::<Record>(&text).ok()
         };
-        read(self.record_path()).or_else(|| self.earlier_record_path(claims_earlier).and_then(read))
+        read(self.record_path())
+            .map(|record| (record, false))
+            .or_else(|| {
+                self.earlier_record_path(claims_earlier)
+                    .and_then(read)
+                    .map(|record| (record, true))
+            })
     }
 
     /// Writes the record, privately.
