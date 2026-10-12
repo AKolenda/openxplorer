@@ -8,6 +8,9 @@
   drag out to another app offers it a copy or the drop menu, plus a move
   or a link when Shift or Ctrl+Shift is held as the drag starts;
   OpenXplorer itself never deletes what it offered.
+- Properties shows "Size on disk" under Size, as Windows Explorer does:
+  the space a file takes on its drive. A folder's is measured with
+  Calculate folder size, and several items show their combined space.
 
 # 2.0.4 — 2026-10-09
 
