@@ -586,3 +586,41 @@ fn typing_on_an_empty_page_starts_no_prefix_and_backspace_goes_back() {
         test.window.current_uri().as_deref() == Some(fixture.uri().as_str())
     });
 }
+
+/// With "Tab key switches between split panes" on, Tab on "This location
+/// is unavailable" moves through its message and Try again instead of
+/// switching panes, so the keyboard can reach them.
+///
+/// parity: VIEW-048, VIEW-059
+#[gtk::test]
+fn tab_on_an_unavailable_page_moves_through_its_controls_in_split_view() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    ox_core::settings::Settings::open(test.settings_directory())
+        .update_preferences(&ox_core::settings::PreferencesUpdate {
+            tab_switches_split_panes: Some(true),
+            ..ox_core::settings::PreferencesUpdate::default()
+        })
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the choice", || {
+        test.context.settings_data().preferences.tab_switches_split_panes
+    });
+    test.activate("split-view", None);
+    go_to_unavailable(&test, &fixture.uri_of("Gone"));
+    let page = shown_empty_page(&test);
+    let side = test.window.active_side();
+    test.window.folder_pane().focus_view();
+    let keys = controllers::<gtk::EventControllerKey>(&page)
+        .into_iter()
+        .next()
+        .expect("the page takes the folder keys");
+
+    let taken: bool = keys.emit_by_name(
+        "key-pressed",
+        &[&gdk::Key::Tab.into_glib(), &0_u32, &gdk::ModifierType::empty()],
+    );
+
+    assert_eq!(test.window.active_side(), side, "the pane stays active");
+    assert!(!taken, "Tab goes on to move the keyboard within the page");
+}
