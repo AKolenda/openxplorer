@@ -19,15 +19,17 @@
 //!   the source allows one, so a source is never told to delete what it
 //!   offered. A move is done by the window's own transfer engine, with
 //!   all its rules.
-//! - "A plain drop copies": without a modifier a drop copies, as the
-//!   Python app always did; Shift moves and Ctrl+Shift links only when the
-//!   user holds them ([`action`]).
+//! - "A plain drop of another app's items copies": only this app's own
+//!   items are moved by a plain drag, within their drive, as Windows
+//!   Explorer does; Shift moves and Ctrl+Shift links only when the user
+//!   holds them ([`action`], [`drive`]).
 //! - The drag has finished before any dialog or menu opens, and a drop
 //!   never touches the clipboard.
 //! - Items dragged out of a ZIP arrive as copies that are removed after a
 //!   day, so they are never linked to (ARC-026).
 
 mod action;
+mod drive;
 mod launcher;
 mod program;
 mod targets;
@@ -48,6 +50,7 @@ use super::session::{TabPlacement, TabPosition};
 use super::zip_copies::{is_zip_copy, ZipDragContent};
 use super::BrowserWindow;
 
+use action::{drop_run_action, DropRun};
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{query_program, ProgramChecks, ProgramTarget};
 pub(super) use targets::{DragScroll, DropZone};
@@ -257,6 +260,19 @@ async fn read_dropped_uris(drop: &gdk::Drop) -> Result<Vec<String>, DropRefusal>
     Ok(files.files().iter().map(|file| file.uri().to_string()).collect())
 }
 
+/// The action `run` takes on the items a drop `read` onto `destination`;
+/// the shown one when reading failed.
+async fn read_drop_action(
+    run: DropRun,
+    read: &Result<Vec<String>, DropRefusal>,
+    destination: &DropDestination,
+) -> DropAction {
+    match read {
+        Ok(uris) => drop_run_action(run, uris, destination).await,
+        Err(_) => run.shown(),
+    }
+}
+
 /// The value `reading` gives within `timeout`: a drop whose data is late
 /// or fails is [`DropRefusal::Unreadable`], and data arriving after the
 /// timeout is never used.
@@ -293,7 +309,7 @@ impl BrowserWindow {
 
     /// Reads the items of `drop`, which is going to `destination`,
     /// finishes it, then runs `action` on them.
-    async fn receive_drop(&self, drop: gdk::Drop, destination: DropDestination, action: DropAction) {
+    async fn receive_drop(&self, drop: gdk::Drop, destination: DropDestination, run: DropRun) {
         let shown = self.current_uri();
         if let Some(content) = own_zip_drag(&drop) {
             // Items dragged out of a ZIP in this app: nothing more is read
@@ -301,6 +317,7 @@ impl BrowserWindow {
             // timeout, as a large member can take longer to extract.
             drop.finish(finish_action(&drop));
             let read = content.copies().await.map_err(DropRefusal::NotCopied);
+            let action = read_drop_action(run, &read, &destination).await;
             self.take_read_drop(shown.as_deref(), read, destination, action);
             return;
         }
@@ -313,6 +330,7 @@ impl BrowserWindow {
             gdk::DragAction::empty()
         };
         drop.finish(finished_as);
+        let action = read_drop_action(run, &read, &destination).await;
         self.take_read_drop(shown.as_deref(), read, destination, action);
     }
 
