@@ -139,7 +139,6 @@ impl BrowserWindow {
             initial_name: &entry.name,
             selection,
             folder: &folder,
-            takes_folder_path: false,
         };
         let protection = self.context().write_protection();
         ask_for_name(self, request, |name, cancel| {

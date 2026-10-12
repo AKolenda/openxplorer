@@ -208,10 +208,12 @@ fn renaming_a_folder_with_a_dot_or_keeping_the_extension_never_asks() {
 
 /// parity: OPS-007
 #[gtk::test]
-fn the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
-    let fixture = Fixture::standard();
+fn the_rename_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
+    // An item not on screen is renamed with the dialog (OPS-009).
+    let fixture = Fixture::with_files(400);
     let test = TestWindow::open(&fixture.uri());
-    test.activate("new-folder", None);
+    select_names(&test, &["file 0399.txt"]);
+    test.activate("rename", None);
     let dialog = open_dialog(&test);
     let field = text_field(&dialog);
     let warning = || {
@@ -221,7 +223,7 @@ fn the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
             .map(|label| label.text().to_string())
     };
 
-    field.set_text("Documents");
+    field.set_text("file 0001.txt");
     wait_until("the taken-name warning", || warning().is_some());
     let taken = warning();
     field.set_text(".cache");
@@ -229,11 +231,6 @@ fn the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
         warning().is_some_and(|text| text.contains("dot"))
     });
     let hidden = warning();
-    field.set_text("Plans/2026");
-    wait_until("the nested-folders preview", || {
-        warning().is_some_and(|text| text.contains("inside"))
-    });
-    let nested = warning();
     field.set_text("Plans");
     wait_until("no warning for a plain free name", || warning().is_none());
     dialog.press("Cancel");
@@ -241,14 +238,10 @@ fn the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing() {
 
     assert_eq!(
         taken.as_deref(),
-        Some("An item named “Documents” already exists here.")
+        Some("An item named “file 0001.txt” already exists here.")
     );
     assert_eq!(
         hidden.as_deref(),
         Some("A name starting with a dot hides the item.")
-    );
-    assert_eq!(
-        nested.as_deref(),
-        Some("Creates “Plans” › “2026”, each inside the one before.")
     );
 }

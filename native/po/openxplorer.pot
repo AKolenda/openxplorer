@@ -4385,19 +4385,11 @@ msgid "“{name}” cannot be moved directly to “{destination}”, which is on
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/name_dialog.rs
-msgid "A slash makes a folder inside the one before it."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/name_dialog.rs
 msgid "Names must not contain slashes."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-app/src/window/service_actions.rs
 msgid "Save"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/name_dialog.rs
-msgid "Use names without backslashes or control characters, one slash between folders."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/names.rs
@@ -4417,13 +4409,12 @@ msgstr ""
 msgid "An item named “{name}” already exists here."
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/names.rs
-msgid "Creates {join}, each inside the one before."
-msgstr ""
-
 #: crates/ox-app/src/window/file_ops/names.rs
 msgid "Use a name without slashes or control characters."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+msgid "New folder"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/recycle_bin.rs
@@ -5084,10 +5075,6 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/window.ui crates/ox-app/src/window/shortcuts_window.rs
 msgid "Navigation"
-msgstr ""
-
-#: crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
-msgid "New folder"
 msgstr ""
 
 #: crates/ox-app/resources/ui/window.ui crates/ox-app/src/window/shortcuts_window.rs

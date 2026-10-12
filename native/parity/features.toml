@@ -4549,7 +4549,7 @@ python_tests = []
 bridge = ["operate", "create", "rename"]
 dolphin = "m_selectJobCreatedItems / forceUrlsSelection"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_ops/running.rs (reload_selecting) selects the created, pasted, moved, duplicated or renamed items after the reload and scrolls to the first. native/crates/ox-app/src/window/tests/selection.rs (a_created_item_is_selected_and_scrolled_into_view), file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy, new_folder_asks_for_a_name_then_creates_and_selects_the_folder)."
+native_note = "native/crates/ox-app/src/window/file_ops/running.rs (reload_selecting) selects the created, pasted, moved, duplicated or renamed items after the reload and scrolls to the first. native/crates/ox-app/src/window/tests/selection.rs (a_created_item_is_selected_and_scrolled_into_view), file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy), new_folder.rs (new_folder_makes_the_folder_at_once_and_renames_it_in_place)."
 
 [[feature]]
 id = "SEL-017"
@@ -6556,8 +6556,8 @@ native_note = "Every letter shortcut (Ctrl+A, C, X, V, F, H, L, N, R, T, W, Z, C
 [[feature]]
 id = "OPS-001"
 area = "OPS"
-title = "New folder dialog and Ctrl+Shift+N"
-behaviour = "New > 'Folder', or Ctrl+Shift+N when New is enabled, opens the dialog 'New folder' with the description 'Names must not contain slashes.' and a 'Name' field prefilled with 'New folder' and fully selected. Buttons are 'Cancel' and primary 'Save'. Save creates the folder in the current location and reloads the listing, keeping the selection. Validation or backend errors (e.g. name exists) appear inside the dialog, which stays open. Nothing happens during search or in non-writable locations."
+title = "New folder and Ctrl+Shift+N"
+behaviour = "New > 'Folder', or Ctrl+Shift+N when New is enabled, creates the folder in the current location at once, as Windows Explorer does: 'New folder', or 'New folder (2)', '(3)' and so on when that name is taken, never overwriting anything. The folder is then selected, scrolled to and renamed in place with its whole name selected: Enter keeps the typed name, Escape keeps 'New folder'. A folder that cannot be created says why in the toast. Nothing happens during search or in non-writable locations. (Before, a 'New folder' dialog asked for the name first, a port of app.js newItem.)"
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -6580,7 +6580,7 @@ python_tests = [
 bridge = ["create", "list"]
 dolphin = "Dolphin: F10 opens New Folder dialog; Windows Ctrl+Shift+N creates 'New folder' and starts inline rename.; F10 / Ctrl+Shift+N creates and selects; create_dir: F10"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (new_folder_asks_for_a_name_then_creates_and_selects_the_folder, a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten, new_is_disabled_where_nothing_can_be_created); native/crates/ox-app/src/window/file_ops/shortcuts.rs binds Ctrl+Shift+N. Gain: the new folder is selected afterwards, as in Explorer and Dolphin. Explorer's create-then-rename-inline flow needs inline rename (OPS-010)."
+native_note = "native/crates/ox-app/src/window/tests/new_folder.rs (new_folder_makes_the_folder_at_once_and_renames_it_in_place, a_taken_name_gives_the_next_numbered_folder, escape_keeps_the_name_new_folder, undo_takes_the_new_folder_away, new_folder_renames_in_place_in_an_empty_folder_and_in_icon_views, a_folder_that_cannot_take_a_new_folder_says_why, a_new_folder_far_down_the_list_is_scrolled_to_and_renamed_in_place); native/crates/ox-app/src/window/tests/file_operations.rs (new_is_disabled_where_nothing_can_be_created); native/crates/ox-core/src/ops/create.rs (create_numbered_folder) makes the numbered folder with exclusive creations; native/crates/ox-app/src/window/file_ops/shortcuts.rs binds Ctrl+Shift+N. Explorer's create-then-rename-inline flow, now that inline rename (OPS-010) exists."
 
 [[feature]]
 id = "OPS-002"
@@ -6692,13 +6692,13 @@ python_tests = [
 ]
 bridge = ["create", "rename", "createTemplate", "archiveExtract"]
 native = "done"
-native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_an_empty_folder_and_keeps_the_dialog_open) keeps the Extract dialog open with its reason, and the last part of a folder Extract all… creates is checked by the same rule (native/crates/ox-app/src/window/extract_into.rs). Differs: New folder takes slashes for folders inside folders (OPS-007, Dolphin), so it refuses only backslashes, control characters and empty parts, with 'Use names without backslashes or control characters, one slash between folders.'"
+native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (several_selected_items_are_renamed_with_one_numbered_name_and_undone_together) shows a refusal inside the Rename items dialog; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_an_empty_folder_and_keeps_the_dialog_open) keeps the Extract dialog open with its reason, and the last part of a folder Extract all… creates is checked by the same rule (native/crates/ox-app/src/window/extract_into.rs). Differs: New folder takes slashes for folders inside folders (OPS-007, Dolphin), so it refuses only backslashes, control characters and empty parts, with 'Use names without backslashes or control characters, one slash between folders.'"
 
 [[feature]]
 id = "OPS-007"
 area = "OPS"
 title = "Live warnings while typing a new name"
-behaviour = "The name field warns live that a leading dot hides the item, that a leading space or tilde is unusual, and that 'A file/directory with name X already exists'. A slash in a new folder name creates nested folders, previewed before creation."
+behaviour = "The name field of the Rename dialog warns live that a leading dot hides the item, that a leading space or tilde is unusual, and that 'A file/directory with name X already exists'. (New folder no longer asks for a name, so Dolphin's nested folders from a slash in a new folder's name went with its dialog.)"
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -6711,7 +6711,7 @@ python_tests = ["v2.0.0:desktop/tests/test_core.py::CoreTests::test_names"]
 bridge = ["create"]
 dolphin = "KNewFileMenu name validation"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/renaming.rs (the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing); native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-core/src/ops/create.rs (a_folder_path_creates_each_folder_inside_the_one_before). While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. New folder takes slashes, as Dolphin's does: its description reads 'A slash makes a folder inside the one before it.', the line previews 'Creates “Plans” › “2026”, each inside the one before.', and Save makes each folder inside the one before (an existing folder on the way is entered, the last name must be free), selects the first one in the current folder, and Undo moves the outermost new folder to the Trash. Rename and Extract still refuse slashes (OPS-006)."
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (the_rename_dialog_warns_about_a_taken_or_hiding_name_while_typing); native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing). While the user types in the Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. New folder makes its folder at once and renames it in place (OPS-001), so the slash-separated nested folders its dialog offered, as Dolphin does, are gone from the window; native/crates/ox-core/src/ops/create.rs (create_folder_path, a_folder_path_creates_each_folder_inside_the_one_before) still has them."
 
 [[feature]]
 id = "OPS-008"
@@ -6742,7 +6742,7 @@ python_tests = [
 bridge = ["create", "createTemplate", "rename"]
 dolphin = "Create New > Folder (F10); Rename (F2); KIO::moveAs + slotRenamingResult"
 native = "done"
-native_note = "native/crates/ox-core/tests/ops_rename.rs and ops_create.rs cover the backend rules; native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows the refusal in the dialog."
+native_note = "native/crates/ox-core/tests/ops_rename.rs and ops_create.rs cover the backend rules; native/crates/ox-app/src/window/tests/new_folder.rs (a_taken_name_gives_the_next_numbered_folder) shows New folder taking the next numbered name and leaving the taken folder alone."
 
 [[feature]]
 id = "OPS-009"

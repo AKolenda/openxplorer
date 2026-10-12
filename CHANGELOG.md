@@ -23,6 +23,10 @@
   Win+E opens a new File Explorer window. On takes the shortcut from Dolphin (keeping Dolphin's other
   shortcuts) through KDE's own shortcut service; off gives it back. Log
   out and back in after changing it for Super+E to follow.
+- New folder works like Windows Explorer: Ctrl+Shift+N or New > Folder
+  makes "New folder" at once ("New folder (2)" and so on if taken),
+  selects it and starts renaming it in place, instead of asking for the
+  name in a dialog first. Escape keeps "New folder".
 
 # 2.0.4 — 2026-10-09
 
