@@ -35,6 +35,20 @@
   what the dialog shows. A Group by, sort or layout picked there before
   pressing it was ignored, and every folder got the view the folder had
   when the dialog opened.
+- The Show button of the desktop notification after a delete no longer
+  selects some other file in the folder. After moving items to the Recycle
+  Bin, Show opens the Recycle Bin with them selected. After deleting
+  permanently, nothing is left to show, so Show only brings the window
+  back.
+- Copies are named as Windows Explorer names them: Duplicate, pasting
+  into the same folder and Keep both now give `Notes - Copy.txt`, then
+  `Notes - Copy (2).txt`, instead of `Notes (copy 2).txt`. Pasting a
+  copy into its own folder makes `Notes - Copy.txt` straight away, without
+  the "Items already exist" question, as Windows Explorer does.
+- Apply to all folders and Reset folders now cover Downloads too. Before,
+  Downloads kept the Group by chosen there, so it stayed grouped by date
+  after Apply to all folders. Apply now gives Downloads the applied Group
+  by, and Reset groups it by date again, as by default.
 - An empty folder now works like one in Windows Explorer: right-click
   its "This folder is empty" page for the folder menu (New, Paste and the
   rest), paste with Ctrl+V or the menu, and drop files on it. The

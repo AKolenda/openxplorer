@@ -220,7 +220,7 @@ fn three_saved_views(test: &TestWindow, fixture: &Fixture) {
 
 /// Opens the display style dialog, presses `button` and returns the
 /// question it asks.
-fn ask_from_the_display_style_dialog(test: &TestWindow, button: &str) -> crate::dialog::Dialog {
+pub(super) fn ask_from_the_display_style_dialog(test: &TestWindow, button: &str) -> crate::dialog::Dialog {
     test.activate("view-properties", None);
     let dialog = open_dialog(test);
     dialog.press(button);

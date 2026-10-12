@@ -5,6 +5,7 @@
 //! `test_v06.py` and `test_zip_extract.py`.
 
 use super::*;
+use crate::grouping::GroupBy;
 
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic`
 /// parity: SET-016
@@ -259,4 +260,59 @@ fn zip_opening_is_the_window_until_the_folder_is_chosen() {
     save_preferences(&mut store, &json!({"zipOpening": "window"}));
     let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
     assert!(!file.contains("zipOpening"), "the window is not stored");
+}
+
+/// Apply to all folders gives Downloads the applied Group by too: the
+/// Group by kept for Downloads apart from the shared style would
+/// otherwise outlive the change, so Downloads stayed grouped by date.
+/// parity: VIEW-020, VIEW-022
+#[test]
+fn apply_to_all_folders_gives_downloads_the_applied_group_by() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    store
+        .update_preferences(&PreferencesUpdate {
+            downloads_group_by: Some(GroupBy::Type),
+            ..PreferencesUpdate::default()
+        })
+        .unwrap();
+    let mut applied = ViewProperties::default();
+    applied.set_grouping(GroupBy::None);
+
+    let saved = store.remember_view("", applied, ViewScope::AllFolders).unwrap();
+
+    let downloads = "file:///home/someone/Downloads";
+    assert_eq!(saved.downloads_group_by, Some(GroupBy::None));
+    assert_eq!(
+        saved.view_in(downloads, Some(downloads)).grouping(),
+        GroupBy::None
+    );
+    let reread = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(reread.downloads_group_by, Some(GroupBy::None), "saved to disk");
+}
+
+/// Reset folders forgets the Group by chosen in Downloads too, so
+/// Downloads is grouped by date again, as it is by default.
+/// parity: VIEW-020, VIEW-022
+#[test]
+fn reset_folders_forgets_the_group_by_chosen_in_downloads() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    store
+        .update_preferences(&PreferencesUpdate {
+            downloads_group_by: Some(GroupBy::None),
+            ..PreferencesUpdate::default()
+        })
+        .unwrap();
+
+    let reset = store.reset_folder_views().unwrap();
+
+    let downloads = "file:///home/someone/Downloads";
+    assert_eq!(reset.downloads_group_by, None);
+    assert_eq!(
+        reset.view_in(downloads, Some(downloads)).grouping(),
+        GroupBy::Modified
+    );
+    let reread = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(reread.downloads_group_by, None, "saved to disk");
 }
