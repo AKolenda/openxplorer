@@ -885,6 +885,38 @@ fn restore_goes_on_past_an_unreadable_kde_script_path() {
     assert!(script.is_dir(), "left alone");
 }
 
+/// The portal's folder named through a symlink to it is the same folder:
+/// enabling there again (after the backend's link went missing) keeps the
+/// first Enable's record, so Restore still takes the app's line away.
+///
+/// parity: INT-032
+#[test]
+fn the_portal_folder_through_a_symlink_keeps_the_record() {
+    let fixture = OptInFixture::new();
+    let folder = fixture.portal_folder();
+    let alias = fixture.root.path().join("portals-alias");
+    symlink(&folder, &alias).expect("an alias of the folder");
+    fixture
+        .registration_reading_only(&folder)
+        .enable()
+        .expect("enable");
+    fs::remove_file(folder.join("io.winspace.Development.portal")).expect("the link goes missing");
+
+    let through_alias = fixture.registration_reading_only(&alias);
+    assert!(!through_alias.is_enabled());
+    through_alias.enable().expect("enable through the alias");
+    assert!(through_alias.is_enabled());
+    assert_eq!(
+        through_alias.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert!(
+        !folder.join("zorin-portals.conf").exists(),
+        "the file the app made is gone"
+    );
+    assert!(!folder.join("io.winspace.Development.portal").exists());
+}
+
 /// Apply now refuses, before restarting anything, when the folder the
 /// portal reads could not be told, since the change could not be checked.
 ///

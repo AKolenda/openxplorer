@@ -422,7 +422,7 @@ impl FileDialogRegistration {
         // (written before XDG_DESKTOP_PORTAL_DIR was set, say) is settled
         // first, so Restore later puts back the file changed now.
         let record = match self.read_record()? {
-            Some(record) if record.file != file => {
+            Some(record) if !same_path(&record.file, &file) => {
                 self.settle(&record)?;
                 remove_file(&self.record_path())?;
                 None
@@ -890,17 +890,20 @@ fn service_portal_dir() -> Result<Option<String>, String> {
 }
 
 /// Whether two portal folders are the same: both unset, or naming one
-/// folder, also through a symlink.
+/// folder ([`same_path`]).
 fn same_folder(one: Option<&Path>, other: Option<&Path>) -> bool {
     match (one, other) {
-        (Some(one), Some(other)) => {
-            one == other
-                || fs::canonicalize(one)
-                    .ok()
-                    .is_some_and(|one| fs::canonicalize(other).ok().as_ref() == Some(&one))
-        }
+        (Some(one), Some(other)) => same_path(one, other),
         (one, other) => one == other,
     }
+}
+
+/// Whether two paths name one file or folder, also through a symlink.
+fn same_path(one: &Path, other: &Path) -> bool {
+    one == other
+        || fs::canonicalize(one)
+            .ok()
+            .is_some_and(|one| fs::canonicalize(other).ok().as_ref() == Some(&one))
 }
 
 /// The value of `name` in a process's environment as `/proc/<pid>/environ`
