@@ -91,8 +91,8 @@ pub use background_portal::{
 };
 pub use brave::{
     BraveActivity, BraveChannel, BraveError, BraveIntegration, BravePaths, BraveProfile, BraveReach,
-    BraveStatus, Confirmation, DownloadPreference, ProcessTable, ProfileFailure, SandboxedBrave, SyncOutcome,
-    MANUAL_SETTINGS_URL,
+    BraveStatus, Confirmation, DownloadPreference, DownloadPrompt, ProcessTable, ProfileFailure,
+    RestoredSettings, SandboxedBrave, SyncOutcome, MANUAL_SETTINGS_URL,
 };
 pub use default_apps::{
     DefaultApps, DefaultAppsError, DefaultsStatus, DesktopId, MimeDefaults, RestoreScope, XdgMime,

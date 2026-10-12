@@ -98,7 +98,15 @@ msgid "Apply to Brave"
 msgstr ""
 
 #: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Ask where to save each file before downloading"
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
 msgid "Back up and update the selected Brave profiles."
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Brave then opens a Save dialog for each download: OpenXplorer’s when “Other apps' Open and Save dialogs” is on in Settings > Default apps."
 msgstr ""
 
 #: crates/ox-app/resources/ui/brave-dialog.ui
@@ -907,6 +915,10 @@ msgstr ""
 
 #: crates/ox-app/src/integration/applications.rs
 msgid "The selected application could not be started."
+msgstr ""
+
+#: crates/ox-app/src/integration/brave_dialog.rs
+msgid "Asks where to save each file"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -2069,7 +2081,7 @@ msgid "Flatpak/Snap, custom profiles, or managed browsers: open brave://settings
 msgstr ""
 
 #: crates/ox-app/src/settings_page/brave.rs
-msgid "Fully quit Brave first, including background processes. OpenXplorer backs up Preferences and changes only the download and Save as directories. This is a one-time sync, not a managed browser policy."
+msgid "Fully quit Brave first, including background processes. OpenXplorer backs up Preferences and changes only the download and Save as directories and, if you choose, whether Brave asks where to save each file. This is a one-time sync, not a managed browser policy."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/brave.rs
@@ -2081,7 +2093,7 @@ msgid "Use Linux Downloads in Brave…"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/brave.rs
-msgid "use linux downloads in brave brave download location downloads sync save as browser profile. Use the Linux Downloads location in selected native Brave profiles."
+msgid "use linux downloads in brave brave download location downloads sync save as browser profile. Use the Linux Downloads location in selected native Brave profiles. ask where to save each file before downloading prompt save dialog"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/confirmations.rs

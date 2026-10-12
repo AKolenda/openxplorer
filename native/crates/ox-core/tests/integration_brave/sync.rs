@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
-use ox_core::integration::{BraveError, Confirmation};
+use ox_core::integration::{BraveError, Confirmation, DownloadPrompt};
 use serde_json::json;
 
 use super::{
@@ -104,6 +104,7 @@ fn a_profile_outside_the_detected_ones_is_refused() {
     let refused = fixture.brave().sync(
         &["Brave-Browser:../outside".to_owned()],
         &fixture.destination_text(),
+        DownloadPrompt::Unchanged,
         Confirmation::Confirmed,
     );
 
@@ -178,6 +179,7 @@ fn brave_starting_during_a_sync_leaves_the_profile_unchanged() {
         .sync(
             &[PROFILE_ID.to_owned()],
             &fixture.destination_text(),
+            DownloadPrompt::Unchanged,
             Confirmation::Confirmed,
         )
         .expect("checked");
@@ -206,6 +208,7 @@ fn preferences_changed_during_a_sync_are_not_overwritten() {
         .sync(
             &[PROFILE_ID.to_owned()],
             &fixture.destination_text(),
+            DownloadPrompt::Unchanged,
             Confirmation::Confirmed,
         )
         .expect("checked");
@@ -246,7 +249,12 @@ fn several_profiles_are_updated_together() {
 
     let outcome = fixture
         .brave()
-        .sync(&profiles, &fixture.destination_text(), Confirmation::Confirmed)
+        .sync(
+            &profiles,
+            &fixture.destination_text(),
+            DownloadPrompt::Unchanged,
+            Confirmation::Confirmed,
+        )
         .expect("sync");
 
     assert_eq!(outcome.updated.len(), 2);
@@ -281,9 +289,12 @@ fn only_one_to_forty_distinct_profiles_can_be_selected() {
     ];
 
     for selection in selections {
-        let refused = fixture
-            .brave()
-            .sync(&selection, &destination, Confirmation::Confirmed);
+        let refused = fixture.brave().sync(
+            &selection,
+            &destination,
+            DownloadPrompt::Unchanged,
+            Confirmation::Confirmed,
+        );
 
         assert!(
             matches!(refused, Err(BraveError::InvalidSelection)),
@@ -315,6 +326,7 @@ fn inside_flatpak_brave_is_never_changed() {
     let synced = brave.sync(
         &[PROFILE_ID.to_owned()],
         &fixture.destination_text(),
+        DownloadPrompt::Unchanged,
         Confirmation::Confirmed,
     );
     let restored = brave.restore(PROFILE_ID, Confirmation::Confirmed);
@@ -322,4 +334,83 @@ fn inside_flatpak_brave_is_never_changed() {
     assert!(matches!(synced, Err(BraveError::Sandboxed)), "{synced:?}");
     assert!(matches!(restored, Err(BraveError::Sandboxed)), "{restored:?}");
     assert_eq!(fixture.preferences_json(), original_preferences());
+}
+
+/// Without the option, the prompt is neither changed nor recorded.
+///
+/// parity: INT-034
+#[test]
+fn syncing_without_asking_leaves_the_prompt_alone() {
+    let fixture = Fixture::new();
+    fixture.set_download_prompt(Some(false));
+
+    fixture.sync(Confirmation::Confirmed).expect("sync");
+
+    assert_eq!(
+        fixture.preferences_json()["download"]["prompt_for_download"],
+        json!(false)
+    );
+    let record = read_json(&fixture.undo_record());
+    assert!(record.get("prompt_for_download").is_none(), "{record}");
+}
+
+/// With the option, each profile asks where to save each download, and
+/// the record keeps whether the prompt was set before, and to what.
+///
+/// parity: INT-034
+#[test]
+fn syncing_with_asking_makes_brave_ask_where_to_save() {
+    for previous in [None, Some(false)] {
+        let fixture = Fixture::new();
+        fixture.set_download_prompt(previous);
+
+        let outcome = fixture.sync_asking().expect("sync");
+
+        assert_eq!(outcome.updated, [PROFILE_ID]);
+        let preferences = fixture.preferences_json();
+        let destination = fixture.destination_text();
+        assert_eq!(preferences["download"]["prompt_for_download"], json!(true));
+        assert_eq!(preferences["download"]["default_directory"], json!(destination));
+        assert_eq!(preferences["savefile"]["default_directory"], json!(destination));
+        assert_eq!(preferences["unrelated"], original_preferences()["unrelated"]);
+        let record = read_json(&fixture.undo_record());
+        let expected = json!({"present": previous.is_some(), "value": previous});
+        assert_eq!(record["prompt_for_download"], expected, "{previous:?}");
+    }
+}
+
+/// The prompt is set in a profile that has no download group yet.
+///
+/// parity: INT-034
+#[test]
+fn asking_where_to_save_creates_a_missing_download_group() {
+    let fixture = Fixture::new();
+    fs::write(&fixture.preferences, "{}").expect("preferences");
+
+    fixture.sync_asking().expect("sync");
+
+    assert_eq!(
+        fixture.preferences_json()["download"]["prompt_for_download"],
+        json!(true)
+    );
+}
+
+/// Asking where to save follows the sync's rules: nothing is written
+/// while Brave runs.
+///
+/// parity: INT-034, SAFE-020
+#[test]
+fn asking_where_to_save_waits_until_brave_is_closed() {
+    let fixture = Fixture::new();
+    fixture.set_download_prompt(Some(false));
+    let before = fixture.preferences_json();
+    fixture.brave_switch.set_running(true);
+
+    let refused = fixture.sync_asking();
+
+    assert!(
+        matches!(refused, Err(BraveError::BraveRunningBeforeSync)),
+        "{refused:?}"
+    );
+    assert_eq!(fixture.preferences_json(), before);
 }
