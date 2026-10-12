@@ -240,9 +240,17 @@ impl BrowserWindow {
             self,
             #[weak]
             area,
+            #[weak]
+            pane,
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |controller, key, _, modifiers| {
+                // Tab moves through the message and Try again of "This
+                // location is unavailable" before anything else, also
+                // where Tab switches split panes.
+                if is_plain_tab(key, modifiers) && pane.shows_unavailable_page() {
+                    return glib::Propagation::Proceed;
+                }
                 // Space and Enter on Try again, or on the selectable
                 // message, belong to them: the folder's Space would select
                 // an item there is not.

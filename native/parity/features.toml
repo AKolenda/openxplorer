@@ -3839,7 +3839,7 @@ python_tests = [
 bridge = ["list"]
 dolphin = "DolphinView::updatePlaceholderLabel"
 native = "done"
-native_note = "Empty listings say 'The Recycle Bin is empty' in trash:///, 'No shared folders found' on an SMB server, 'No MTP-compatible devices found' in mtp:/// and 'This folder is empty' elsewhere; a search with no results keeps 'No matching items' with its reason (native/crates/ox-app/src/window/empty_page.rs, empty_listings_say_what_is_missing_where). The message stays selectable: a click on it keeps its focus (native/crates/ox-app/src/window/tests/empty_folder.rs, a_click_on_the_unavailable_message_keeps_its_text_selectable), and Space or Enter on Try again reaches the button (space_on_try_again_reaches_the_button)."
+native_note = "Empty listings say 'The Recycle Bin is empty' in trash:///, 'No shared folders found' on an SMB server, 'No MTP-compatible devices found' in mtp:/// and 'This folder is empty' elsewhere; a search with no results keeps 'No matching items' with its reason (native/crates/ox-app/src/window/empty_page.rs, empty_listings_say_what_is_missing_where). The message stays selectable: a click on it keeps its focus (native/crates/ox-app/src/window/tests/empty_folder.rs, a_click_on_the_unavailable_message_keeps_its_text_selectable), and Space or Enter on Try again reaches the button (space_on_try_again_reaches_the_button). Tab moves through the message and Try again even where Tab switches split panes (tab_on_an_unavailable_page_moves_through_its_controls_in_split_view)."
 
 [[feature]]
 id = "VIEW-049"
