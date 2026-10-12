@@ -126,6 +126,14 @@ impl FolderPane {
             .css_classes(["folder-pane-overlay"])
             .build();
         overlay.add_overlay(&parts.loading_line);
+        overlay.add_overlay(&parts.empty_note);
+        overlay.connect_get_child_position(glib::clone!(
+            #[weak(rename_to = pane)]
+            self,
+            #[upgrade_or]
+            None,
+            move |overlay, child| pane.empty_note_place(overlay, child)
+        ));
         overlay.add_overlay(&parts.drag_hint);
         overlay.add_overlay(&parts.rubber_band);
         overlay.set_parent(self);
@@ -182,6 +190,76 @@ impl FolderPane {
         PanePage::ALL
             .into_iter()
             .find(|page| page.name() == name.as_str())
+    }
+
+    /// Shows or hides "This folder is empty." near the top of the list.
+    /// While it shows, the list is described by it for screen readers;
+    /// the list's own description stays as it is.
+    pub(super) fn show_empty_note(&self, show: bool) {
+        let note = &self.parts().empty_note;
+        // The row with keyboard focus goes with the last item: the list
+        // keeps the keyboard, on its rows' area.
+        if show && !note.is_visible() && self.view_has_focus() {
+            self.focus_empty_list();
+        }
+        note.set_visible(show);
+        let lists: [gtk::Widget; 2] = [
+            self.details().column_view().clone().upcast(),
+            self.icon_view().grid().clone().upcast(),
+        ];
+        for list in lists {
+            if show {
+                list.update_relation(&[gtk::accessible::Relation::DescribedBy(&[note.upcast_ref()])]);
+            } else {
+                list.reset_relation(gtk::AccessibleRelation::DescribedBy);
+            }
+        }
+    }
+
+    /// Whether "This folder is empty." shows.
+    pub(super) fn shows_empty_note(&self) -> bool {
+        self.parts().empty_note.is_visible()
+    }
+
+    /// Where the overlay puts "This folder is empty.": centred, a little
+    /// under the details view's column titles, or under the top of an
+    /// icon view. `None` for its other overlays.
+    fn empty_note_place(&self, overlay: &gtk::Overlay, child: &gtk::Widget) -> Option<gtk::gdk::Rectangle> {
+        /// Pixels between the titles, or the top, and the note.
+        const GAP: f32 = 12.0;
+        /// Pixels the note keeps from the pane's sides.
+        const SIDE: i32 = 12;
+        if child != self.parts().empty_note.upcast_ref::<gtk::Widget>() {
+            return None;
+        }
+        let (_, natural) = child.preferred_size();
+        let width = natural.width().min((overlay.width() - 2 * SIDE).max(1));
+        let (_, height, _, _) = child.measure(gtk::Orientation::Vertical, width);
+        let top = match self.view() {
+            FolderView::Details => {
+                let titles = self
+                    .details()
+                    .column_view()
+                    .first_child()
+                    .filter(|titles| titles.css_name() == "header");
+                titles
+                    .and_then(|titles| titles.compute_bounds(overlay))
+                    .map_or(0.0, |bounds| bounds.y() + bounds.height())
+            }
+            FolderView::Compact | FolderView::Icons(_) => self
+                .icon_view()
+                .grid()
+                .compute_bounds(overlay)
+                .map_or(0.0, |bounds| bounds.y()),
+        };
+        #[expect(clippy::cast_possible_truncation, reason = "pane coordinates are small")]
+        let y = (top + GAP).round() as i32;
+        Some(gtk::gdk::Rectangle::new(
+            (overlay.width() - width) / 2,
+            y,
+            width,
+            height,
+        ))
     }
 
     /// True while the pane shows "This location is unavailable", also
@@ -442,9 +520,22 @@ impl FolderPane {
     pub(super) fn focus_view(&self) {
         if self.page() == Some(PanePage::Empty) {
             self.parts().empty_area.grab_focus();
+        } else if self.model().n_items() == 0 {
+            self.focus_empty_list();
         } else {
             self.view_widget().grab_focus();
         }
+    }
+
+    /// Gives an empty list keyboard focus on its rows' area. The details
+    /// view would hand it to its first column title, whose Space and Enter
+    /// sort the folder instead of acting on it.
+    fn focus_empty_list(&self) {
+        let view = self.view_widget();
+        let rows = std::iter::successors(view.first_child(), WidgetExt::next_sibling)
+            .find(ObjectExt::is::<gtk::ListView>)
+            .unwrap_or(view);
+        rows.grab_focus();
     }
 
     /// Scrolls to `position` and gives it keyboard focus.

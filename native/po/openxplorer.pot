@@ -4514,6 +4514,10 @@ msgstr ""
 msgid "“{name}” is a symbolic link, which the destination file system cannot store."
 msgstr ""
 
+#: crates/ox-app/src/window/folder_pane/parts.rs
+msgid "This folder is empty."
+msgstr ""
+
 #: crates/ox-app/src/window/folder_size_scan.rs
 msgid "A folder size calculation is already running."
 msgstr ""

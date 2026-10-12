@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! An empty folder in a real window: its "This folder is empty" page takes
-//! the folder pane's right-click menu, keys and drops, as an empty folder
-//! does in Windows Explorer, so New and Paste work there.
+//! An empty folder in a real window takes the folder pane's right-click
+//! menu, keys and drops, as an empty folder does in Windows Explorer, so
+//! New and Paste work there. It keeps its list (see `empty_folder_look`);
+//! the page other empty states show (an unavailable location, a search
+//! without matches, an empty Recycle Bin) takes them too.
 
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
@@ -21,14 +23,22 @@ fn make_empty_folder(fixture: &Fixture) -> String {
     fixture.uri_of("Empty")
 }
 
-/// Goes to `uri` in `test`'s tab and returns the empty page's area, the
-/// whole of the pane, once it shows.
+/// Whether `test` shows an empty folder: its list, with no items and the
+/// note that says so.
+fn shows_empty_folder(test: &TestWindow) -> bool {
+    let pane = test.window.folder_pane();
+    !test.window.is_loading()
+        && test.names().is_empty()
+        && pane.page() == Some(PanePage::Listing)
+        && pane.shows_empty_note()
+}
+
+/// Goes to the empty folder `uri` in `test`'s tab and returns the widget
+/// that takes its input, the list, once it shows.
 pub(in crate::window) fn go_to_empty_folder(test: &TestWindow, uri: &str) -> gtk::Widget {
     test.activate("go-to", Some(uri));
-    wait_until("the empty page", || {
-        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
-    });
-    shown_empty_page(test)
+    wait_until("the empty folder", || shows_empty_folder(test));
+    test.window.folder_pane().input_widget()
 }
 
 /// The area of the empty page that shows now.
@@ -204,11 +214,9 @@ fn the_keyboard_follows_a_folder_that_becomes_empty() {
     std::fs::remove_file(fixture.path("One/Last.txt")).expect("the file goes");
     test.activate("refresh", None);
 
-    wait_until("the empty page", || {
-        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
-    });
-    let page = shown_empty_page(&test);
-    assert!(focus_is_in(&test, &page), "focus is on the empty page");
+    wait_until("the empty folder", || shows_empty_folder(&test));
+    let list = test.window.folder_pane().input_widget();
+    assert!(focus_is_in(&test, &list), "focus stays on the list");
 }
 
 /// The message under "This location is unavailable" can be selected and
@@ -344,55 +352,9 @@ fn a_window_opening_on_an_empty_folder_gives_its_page_the_keyboard() {
 
     let test = TestWindow::open(&empty);
 
-    wait_until("the empty page", || {
-        test.window.folder_pane().page() == Some(PanePage::Empty)
-    });
-    let page = shown_empty_page(&test);
-    wait_until("focus on the empty page", || focus_is_in(&test, &page));
-}
-
-/// A drag over an empty folder draws the accent outline around its page,
-/// as it does around the list.
-///
-/// parity: DND-011
-#[gtk::test]
-fn the_empty_page_draws_the_drop_outline() {
-    const ACCENT: [u8; 3] = [0x00, 0x67, 0xc0];
-    let fixture = Fixture::standard();
-    let empty = make_empty_folder(&fixture);
-    let test = TestWindow::open(&fixture.uri());
-    let page = go_to_empty_folder(&test, &empty);
-    page.add_css_class("file-drop-active");
-    crate::test_support::harness::wait_for_frames(&test.window, 3);
-
-    let paintable = gtk::WidgetPaintable::new(Some(&page));
-    let snapshot = gtk::Snapshot::new();
-    paintable.snapshot(&snapshot, f64::from(page.width()), f64::from(page.height()));
-    let node = snapshot.to_node().expect("the page draws");
-    let renderer = page
-        .native()
-        .and_then(|native| native.renderer())
-        .expect("a drawn window");
-    let texture = renderer.render_texture(&node, None::<&gtk::graphene::Rect>);
-    let rows = super::icons::pixel_rows(&texture);
-    page.remove_css_class("file-drop-active");
-    let left_edge: Vec<[u8; 3]> = rows
-        .iter()
-        .map(|row| {
-            let [blue, green, red, _] = row[0];
-            [red, green, blue]
-        })
-        .collect();
-    let outlined = left_edge
-        .iter()
-        .filter(|pixel| pixel.iter().zip(ACCENT).all(|(a, b)| a.abs_diff(b) <= 3))
-        .count();
-
-    assert!(
-        outlined > left_edge.len() / 2,
-        "the page's left edge is the accent outline ({outlined} of {} pixels)",
-        left_edge.len()
-    );
+    wait_until("the empty folder", || shows_empty_folder(&test));
+    let list = test.window.folder_pane().input_widget();
+    wait_until("focus on the list", || focus_is_in(&test, &list));
 }
 
 /// When the folder fills while its menu is open on the empty page, as when
@@ -453,18 +415,21 @@ fn an_unavailable_location_offers_no_new_or_paste() {
     assert!(!menu.row("Paste").is_sensitive(), "Paste is off");
 }
 
-/// A screen reader hears what the empty page says ("This folder is
-/// empty", "This location is unavailable"), not the list's
-/// type-to-select hint, as there is nothing to select.
+/// A screen reader hears what "This location is unavailable" says, not
+/// the list's type-to-select hint, as there is nothing to select. (An
+/// empty folder keeps its list, described by its note.)
 ///
 /// parity: CMD-011
 #[gtk::test]
 fn a_screen_reader_hears_what_the_empty_page_says() {
     let fixture = Fixture::standard();
-    let empty = make_empty_folder(&fixture);
     let test = TestWindow::open(&fixture.uri());
 
-    let page = go_to_empty_folder(&test, &empty);
+    test.activate("go-to", Some(&fixture.uri_of("Gone")));
+    wait_until("the unavailable page", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+    let page = shown_empty_page(&test);
 
     assert!(
         !gtk::test_accessible_has_property(&page, gtk::AccessibleProperty::Label),
@@ -477,12 +442,12 @@ fn a_screen_reader_hears_what_the_empty_page_says() {
 }
 
 /// Try again with the keyboard on it, once the missing folder exists but
-/// is empty, shows "This folder is empty": Try again hides, and the
-/// keyboard moves to the page, so the Menu key and Backspace still work.
+/// is empty, shows its empty list: Try again hides, and the keyboard
+/// moves to the list, so the Menu key and Backspace still work.
 ///
 /// parity: CMD-011, VIEW-048
 #[gtk::test]
-fn try_again_that_finds_an_empty_folder_keeps_the_keyboard_on_the_page() {
+fn try_again_that_finds_an_empty_folder_gives_the_keyboard_to_its_list() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.activate("go-to", Some(&fixture.uri_of("Gone")));
@@ -499,14 +464,12 @@ fn try_again_that_finds_an_empty_folder_keeps_the_keyboard_on_the_page() {
 
     retry.emit_clicked();
 
-    wait_until("the empty folder", || {
-        !retry.is_visible() && !test.window.is_loading()
-    });
-    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
-    assert_eq!(
-        focus.as_ref(),
-        Some(&page),
-        "the page has the keyboard, not the hidden Try again"
+    wait_until("the empty folder", || shows_empty_folder(&test));
+    let list = test.window.folder_pane().view_widget();
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window).expect("something has the keyboard");
+    assert!(
+        focus.is_drawable() && focus_is_in(&test, &list),
+        "the list has the keyboard, not the hidden Try again: {focus:?}"
     );
 }
 
