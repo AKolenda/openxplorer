@@ -31,6 +31,10 @@
   otherwise writable), New and Paste are now off in the folder's
   right-click menu and the command bar, with "This folder is read-only."
   as the reason. Before, they stayed on and the action then failed.
+- Apply to all folders, in View > Adjust view display style, now applies
+  what the dialog shows. A Group by, sort or layout picked there before
+  pressing it was ignored, and every folder got the view the folder had
+  when the dialog opened.
 
 # 2.0.4 — 2026-10-09
 
