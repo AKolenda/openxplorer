@@ -126,6 +126,32 @@ class ProcessCleanupTests(MarkedProcessTestCase):
         self.assertEqual(raised.exception.returncode, 3)
 
 
+class LiveGroupMemberTests(unittest.TestCase):
+    """live_group_members() reads the process table and leaves zombies out."""
+
+    def write_stat(self, proc: Path, pid: int, comm: str, state: str, group: int) -> None:
+        (proc / str(pid)).mkdir()
+        (proc / str(pid) / 'stat').write_text(f'{pid} ({comm}) {state} 1 {group} {group} 0 -1\n')
+
+    def test_zombies_and_other_groups_are_not_members(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            proc = Path(directory)
+            self.write_stat(proc, 10, 'gvfsd', 'Z', 7)
+            self.write_stat(proc, 11, 'odd ) name', 'S', 7)
+            self.write_stat(proc, 12, 'Xvfb', 'S', 8)
+            (proc / 'self').mkdir()
+            self.assertEqual(check.live_group_members(7, proc), [11])
+
+    def test_only_zombies_leave_the_group_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            proc = Path(directory)
+            self.write_stat(proc, 10, 'gvfsd', 'Z', 7)
+            self.assertEqual(check.live_group_members(7, proc), [])
+
+    def test_without_a_process_table_it_cannot_tell(self) -> None:
+        self.assertIsNone(check.live_group_members(7, Path('/nonexistent-proc')))
+
+
 @unittest.skipUnless(all(shutil.which(tool) for tool in ISOLATION_TOOLS),
                      'needs xvfb-run, Xvfb, xauth and dbus-run-session')
 class IsolatedRunTests(MarkedProcessTestCase):
