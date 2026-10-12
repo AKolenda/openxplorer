@@ -89,7 +89,7 @@ impl Notice {
     /// The action and target of the Show button: `app.show-destination`
     /// with the window, the folder (empty when unknown) and the items, or
     /// `app.focus-window` when the operation wrote nowhere to show, as a
-    /// deletion.
+    /// permanent delete.
     pub(super) fn show_action(&self) -> (String, glib::Variant) {
         let destination = &self.destination;
         if !destination.is_known() {
@@ -102,13 +102,20 @@ impl Notice {
 }
 
 impl BrowserWindow {
+    /// Whether no window of the application has focus, when an ended
+    /// operation is told to the desktop.
+    pub(super) fn is_in_background(&self) -> bool {
+        self.application()
+            .is_some_and(|app| !app.windows().iter().any(GtkWindowExt::is_active))
+    }
+
     /// Sends a notification about `summary` when no window of the
     /// application has focus; its Show button opens `destination`.
     pub(super) fn notify_if_in_background(&self, summary: &OperationSummary, destination: Destination) {
         let Some(app) = self.application() else {
             return;
         };
-        if app.windows().iter().any(GtkWindowExt::is_active) {
+        if !self.is_in_background() {
             return;
         }
         let notice = Notice::of(summary, self.id(), destination);

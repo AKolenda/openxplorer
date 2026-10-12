@@ -220,7 +220,11 @@ impl BrowserWindow {
         dialog.finish();
         match answer {
             None => return,
-            Some(button) if button == apply_to_all => return self.apply_view_to_all_folders(shown).await,
+            // The choices made in the dialog go to every folder, as OK
+            // gives them to this one.
+            Some(button) if button == apply_to_all => {
+                return self.apply_view_to_all_folders(form.style(&shown)).await;
+            }
             Some(button) if button == reset_all => return self.reset_folder_views().await,
             Some(_) => {}
         }
@@ -234,9 +238,10 @@ impl BrowserWindow {
         self.save_chosen_style(style, scope, form.as_default.is_active());
     }
 
-    /// Folder views > Apply to all folders: after asking, every folder
-    /// shows `shown`, this folder's view, and keeps no style of its own.
-    async fn apply_view_to_all_folders(&self, shown: ViewProperties) {
+    /// Folder views > Apply to all folders: after asking, every folder,
+    /// this one too, shows `chosen`, the style the dialog shows, and keeps
+    /// no style of its own.
+    async fn apply_view_to_all_folders(&self, chosen: ViewProperties) {
         let asked = self
             .confirm(
                 message_id("Apply this view to all folders?"),
@@ -249,7 +254,7 @@ impl BrowserWindow {
             .await;
         if asked {
             self.context()
-                .apply_view_to_all_folders(shown, self.preference_failure_reply());
+                .apply_view_to_all_folders(chosen, self.preference_failure_reply());
         }
     }
 

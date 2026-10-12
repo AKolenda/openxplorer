@@ -9,7 +9,7 @@ use std::fs;
 use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
-use super::file_ops_support::select_names;
+use super::file_ops_support::{is_enabled, select_names};
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuStyle;
 
@@ -220,6 +220,69 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
             "Link to file or folder…",
         ]
     );
+}
+
+/// In a folder the user may not write to (no write permission, on a
+/// writable drive), the folder menu's New… and Paste are off and say why,
+/// whether the folder holds items or not, as CMD-011 asks. Tests run as a
+/// normal user: root ignores the permission.
+///
+/// parity: CMD-011, CMD-031
+#[gtk::test]
+fn a_folder_without_write_permission_offers_neither_new_nor_paste() {
+    use std::os::unix::fs::PermissionsExt;
+
+    /// Gives the folders their write permission back, also when the test
+    /// fails, so the fixture can be removed.
+    struct Locked(Vec<std::path::PathBuf>);
+    impl Drop for Locked {
+        fn drop(&mut self) {
+            for folder in &self.0 {
+                let _ = fs::set_permissions(folder, fs::Permissions::from_mode(0o755));
+            }
+        }
+    }
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Locked")).expect("a folder");
+    fixture.write("Locked/inside.txt");
+    let locked = Locked(vec![fixture.path("Locked"), fixture.path("Documents")]);
+    for folder in &locked.0 {
+        fs::set_permissions(folder, fs::Permissions::from_mode(0o555)).expect("take write permission away");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    assert!(is_enabled(&test, "paste"), "something to paste");
+
+    for (folder, what) in [
+        ("Locked", "a folder with items"),
+        ("Documents", "an empty folder"),
+    ] {
+        test.window.navigate(&fixture.uri_of(folder)).expect("a folder");
+        test.wait_for_listing(what);
+        wait_until("New and Paste to turn off", || {
+            !is_enabled(&test, "new-folder") && !is_enabled(&test, "paste")
+        });
+        test.window.right_click(None);
+        let menu = test.window.context_menu();
+        for label in ["New…", "Paste"] {
+            let row = menu.row(label);
+            assert!(!row.is_sensitive(), "{label} in {what}");
+            assert_eq!(
+                row.tooltip_text().unwrap_or_default(),
+                format!("{label}\nThis folder is read-only."),
+                "{label} in {what} says why"
+            );
+        }
+        menu.popdown();
+    }
+
+    test.window.navigate(&fixture.uri()).expect("a folder");
+    test.wait_for_listing("the writable folder");
+    wait_until("New and Paste to come back", || {
+        is_enabled(&test, "new-folder") && is_enabled(&test, "paste")
+    });
 }
 
 /// The folder menu's "Sort by" opens the command bar's Sort menu in

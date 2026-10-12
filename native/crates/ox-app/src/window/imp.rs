@@ -182,6 +182,9 @@ pub(crate) struct BrowserWindow {
     /// The folder shown last whose drive is mounted read-only, and why
     /// (DEV-015); see [`super::read_only_drive`].
     pub(super) read_only_drive: RefCell<Option<(String, ox_core::read_only::ReadOnlyDrive)>>,
+    /// The folder shown last when the user may not write to it, on a
+    /// writable drive (CMD-011); see [`super::read_only_drive`].
+    pub(super) unwritable_folder: RefCell<Option<String>>,
     /// The type-to-select prefix of the folder views.
     pub(super) typeahead: RefCell<Typeahead>,
     /// The column Up and Down keep to in the icon grid, across rows of
