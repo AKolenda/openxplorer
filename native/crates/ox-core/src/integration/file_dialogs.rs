@@ -728,11 +728,13 @@ impl FileDialogRegistration {
 }
 
 /// [`PORTAL_DIR_VARIABLE`] in the environment the systemd user manager
-/// starts [`PORTAL_SERVICE`] with: the manager's own environment, then
-/// the unit's `Environment=` lines, which win. Asked over D-Bus without
-/// starting anything. `None` when it is not set there, or no service
-/// manager answers (the portal then has the session's environment and is
-/// taken to read the usual folders).
+/// starts [`PORTAL_SERVICE`] with, in systemd's order: the manager's own
+/// environment, the unit's `Environment=` lines, then its
+/// `EnvironmentFile=` files, each winning over the one before, and last
+/// its `UnsetEnvironment=`. Asked over D-Bus without starting anything.
+/// `None` when it is not set there, or no service manager answers (the
+/// portal then has the session's environment and is taken to read the
+/// usual folders).
 fn service_portal_dir() -> Option<String> {
     let connection = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).ok()?;
     let call = |path: &str, interface: &str, method: &str, parameters: &glib::Variant| {
@@ -750,18 +752,22 @@ fn service_portal_dir() -> Option<String> {
             )
             .ok()
     };
-    let environment = |path: &str, interface: &str| -> Vec<String> {
+    let property = |path: &str, interface: &str, name: &str| -> Option<glib::Variant> {
         call(
             path,
             "org.freedesktop.DBus.Properties",
             "Get",
-            &(interface, "Environment").to_variant(),
+            &(interface, name).to_variant(),
         )
         .and_then(|reply| reply.get::<(glib::Variant,)>())
-        .and_then(|(value,)| value.get::<Vec<String>>())
-        .unwrap_or_default()
+        .map(|(value,)| value)
     };
-    let manager = environment(SYSTEMD_PATH, SYSTEMD_MANAGER);
+    let strings = |path: &str, interface: &str, name: &str| -> Vec<String> {
+        property(path, interface, name)
+            .and_then(|value| value.get::<Vec<String>>())
+            .unwrap_or_default()
+    };
+    let mut environments = vec![strings(SYSTEMD_PATH, SYSTEMD_MANAGER, "Environment")];
     // GetUnit knows the unit once it ran this session; LoadUnit reads its
     // files without starting it.
     let unit = ["GetUnit", "LoadUnit"]
@@ -774,19 +780,62 @@ fn service_portal_dir() -> Option<String> {
                 &(PORTAL_SERVICE,).to_variant(),
             )
         })
-        .and_then(|reply| reply.get::<(glib::variant::ObjectPath,)>())
-        .map(|(path,)| environment(path.as_str(), SYSTEMD_SERVICE))
-        .unwrap_or_default();
-    variable_in(&[manager, unit], PORTAL_DIR_VARIABLE)
+        .and_then(|reply| reply.get::<(glib::variant::ObjectPath,)>());
+    let mut unset = Vec::new();
+    if let Some((unit,)) = unit {
+        let unit = unit.as_str();
+        environments.push(strings(unit, SYSTEMD_SERVICE, "Environment"));
+        // `(path, ignore if missing)`; a missing file the unit needs keeps
+        // the portal from starting at all, so either way it adds nothing.
+        let files = property(unit, SYSTEMD_SERVICE, "EnvironmentFiles")
+            .and_then(|value| value.get::<Vec<(String, bool)>>())
+            .unwrap_or_default();
+        environments.extend(
+            files
+                .iter()
+                .filter_map(|(file, _)| fs::read_to_string(file).ok())
+                .map(|contents| environment_file_assignments(&contents)),
+        );
+        unset = strings(unit, SYSTEMD_SERVICE, "UnsetEnvironment");
+    }
+    variable_in(&environments, &unset, PORTAL_DIR_VARIABLE)
 }
 
 /// The value of `name` in `environments`, lists of `NAME=value`
-/// assignments applied in order, so the last one wins.
-fn variable_in(environments: &[Vec<String>], name: &str) -> Option<String> {
-    environments.iter().flatten().rev().find_map(|assignment| {
+/// assignments applied in order, so the last one wins, unless `unset`
+/// (`UnsetEnvironment=`) removes it: by name, or as `NAME=value` when it
+/// holds that value.
+fn variable_in(environments: &[Vec<String>], unset: &[String], name: &str) -> Option<String> {
+    let value = environments.iter().flatten().rev().find_map(|assignment| {
         let (key, value) = assignment.split_once('=')?;
         (key == name).then(|| value.to_owned())
-    })
+    })?;
+    let removed = unset.iter().any(|entry| match entry.split_once('=') {
+        Some((key, removed)) => key == name && removed == value,
+        None => entry == name,
+    });
+    (!removed).then_some(value)
+}
+
+/// The `NAME=value` assignments of an `EnvironmentFile=` file as systemd
+/// reads them: blank lines and lines starting with `#` or `;` are
+/// skipped, space around the name and the value is dropped, and a value
+/// in matching single or double quotes loses them.
+fn environment_file_assignments(contents: &str) -> Vec<String> {
+    contents
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with(['#', ';']))
+        .filter_map(|line| {
+            let (key, value) = line.split_once('=')?;
+            let value = value.trim();
+            let unquoted = ['"', '\'']
+                .into_iter()
+                .find_map(|quote| value.strip_prefix(quote)?.strip_suffix(quote))
+                .unwrap_or(value);
+            Some(format!("{}={unquoted}", key.trim()))
+        })
+        .collect()
 }
 
 /// Removes the backend's link `link` if it is still the symlink the app
@@ -1050,19 +1099,49 @@ mod tests {
             "XDG_DESKTOP_PORTAL_DIR=/home/someone/.local/share/xdg-desktop-portal/portals",
         ]);
         assert_eq!(
-            variable_in(&[manager.clone(), unit], PORTAL_DIR_VARIABLE).as_deref(),
+            variable_in(&[manager.clone(), unit.clone()], &[], PORTAL_DIR_VARIABLE).as_deref(),
             Some("/home/someone/.local/share/xdg-desktop-portal/portals")
         );
         assert_eq!(
-            variable_in(&[manager, Vec::new()], PORTAL_DIR_VARIABLE).as_deref(),
+            variable_in(&[manager.clone(), Vec::new()], &[], PORTAL_DIR_VARIABLE).as_deref(),
             Some("/from/manager")
         );
         let unset = lines(&["XDG_DESKTOP_PORTAL_DIR_OLD=/x", "PATH=/usr/bin"]);
-        assert_eq!(variable_in(&[unset], PORTAL_DIR_VARIABLE), None);
+        assert_eq!(variable_in(&[unset], &[], PORTAL_DIR_VARIABLE), None);
         assert_eq!(
-            variable_in(&[lines(&["XDG_DESKTOP_PORTAL_DIR="])], PORTAL_DIR_VARIABLE).as_deref(),
+            variable_in(&[lines(&["XDG_DESKTOP_PORTAL_DIR="])], &[], PORTAL_DIR_VARIABLE).as_deref(),
             Some(""),
             "set to nothing is set, and not absolute"
+        );
+        let file = environment_file_assignments(
+            "# portal folder\n; old\n\n  XDG_DESKTOP_PORTAL_DIR = \"/from/file\"  \nOTHER='x'\n",
+        );
+        assert_eq!(file, lines(&["XDG_DESKTOP_PORTAL_DIR=/from/file", "OTHER=x"]));
+        assert_eq!(
+            variable_in(&[manager.clone(), unit.clone(), file], &[], PORTAL_DIR_VARIABLE).as_deref(),
+            Some("/from/file"),
+            "an EnvironmentFile= wins over Environment="
+        );
+        for removing in ["XDG_DESKTOP_PORTAL_DIR", "XDG_DESKTOP_PORTAL_DIR=/from/manager"] {
+            assert_eq!(
+                variable_in(
+                    std::slice::from_ref(&manager),
+                    &lines(&[removing]),
+                    PORTAL_DIR_VARIABLE
+                ),
+                None,
+                "{removing}"
+            );
+        }
+        assert_eq!(
+            variable_in(
+                &[manager],
+                &lines(&["XDG_DESKTOP_PORTAL_DIR=/elsewhere"]),
+                PORTAL_DIR_VARIABLE
+            )
+            .as_deref(),
+            Some("/from/manager"),
+            "UnsetEnvironment= with another value keeps it"
         );
     }
 

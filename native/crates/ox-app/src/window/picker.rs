@@ -297,7 +297,7 @@ fn renamed_for_type(name: &str, from: &FileFilter, to: &FileFilter) -> Option<St
         .map(|old| format!(".{old}"))
         .filter(|old| {
             let start = name.len().saturating_sub(old.len());
-            start > 0 && name.is_char_boundary(start) && name[start..].to_lowercase() == *old
+            start > 0 && name.is_char_boundary(start) && name[start..].to_lowercase() == old.to_lowercase()
         })
         .max_by_key(String::len)?;
     Some(format!("{}.{extension}", &name[..name.len() - old.len()]))
@@ -2662,6 +2662,17 @@ mod tests {
         assert_eq!(
             renamed("backup.tar.gz", &archives, &zip).as_deref(),
             Some("backup.zip")
+        );
+        let upper = file_type("HTML", &["*.HTML"]);
+        let lower = file_type("MHTML", &["*.mhtml"]);
+        assert_eq!(
+            renamed("Title.HTML", &upper, &lower).as_deref(),
+            Some("Title.mhtml"),
+            "a plain glob in capitals"
+        );
+        assert_eq!(
+            renamed("Title.html", &upper, &lower).as_deref(),
+            Some("Title.mhtml")
         );
         let pages = file_type("Seiten", &["*.[äÄ]"]);
         assert_eq!(
