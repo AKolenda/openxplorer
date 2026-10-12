@@ -5,7 +5,9 @@
 //! `renderSettingsPage` in `v2.0.0:desktop/ui/app.js` (SET-006, SET-008,
 //! SET-009), with the options of the settings mockup, including "Index
 //! pinned folders automatically" (the owner's decision of 2026-09-28 that
-//! anything pinned is indexed by default, SRCH-040). A status card says
+//! anything pinned is indexed by default, SRCH-040), and the experimental
+//! "Index frequently opened folders" (off by default; see
+//! `ox_core::search` `frequent`). A status card says
 //! how many folders and names instant search covers, with "Refresh all".
 //! The folder list opens as a page of its own
 //! ([`super::indexed_folders`]), with the limits of indexing. The note on
@@ -13,11 +15,14 @@
 //! Python app's `autoIndex` and `networkInterval`, which the index service
 //! follows at once.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format;
-use ox_core::search::{CacheStatus, PinIndexing};
+use ox_core::search::{CacheStatus, FrequentIndexing, PinIndexing};
 use ox_core::settings::PreferencesUpdate;
 
 use super::bindings::{Choice, PreferenceBinding};
@@ -46,6 +51,16 @@ const PINNED_FOLDERS: RowText = RowText {
     description: "Pinning a folder adds it to instant search. Unpinning removes it unless you \
                   added it yourself.",
     keywords: "quick access pin search cache",
+};
+
+const FREQUENT_FOLDERS: RowText = RowText {
+    title: "Index frequently opened folders (experimental)",
+    description: "Folders you open often are added to instant search, and removed again once you \
+                  stop opening them. While this is on, OpenXplorer remembers which local folders \
+                  you open; hidden and network folders never count. Turning this off forgets \
+                  them.",
+    keywords: "smart cache frequent recent often used folders automatic instant indexing \
+               experimental",
 };
 
 const WATCH_FOLDERS: RowText = RowText {
@@ -214,6 +229,7 @@ fn instant_search_group(page: &SettingsPage) -> SettingsGroup {
     row.add_control(&manage, ControlName::OwnLabel);
     group.add_row(&row);
     group.add_row(&pinned_folders_row(page));
+    group.add_row(&frequent_folders_row(page));
     let watch = SettingRow::new(WATCH_FOLDERS);
     let auto_index = PreferenceBinding {
         read: |preferences| preferences.auto_index,
@@ -265,7 +281,102 @@ fn pinned_folders_row(page: &SettingsPage) -> SettingRow {
     row
 }
 
+/// "Index frequently opened folders (experimental)", off by default. As
+/// the pinned folders' switch, the search cache keeps it.
+fn frequent_folders_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(FREQUENT_FOLDERS);
+    let switch = parts::switch();
+    let flips = Rc::new(SwitchFlips::default());
+    switch.connect_active_notify(glib::clone!(
+        #[weak]
+        page,
+        #[strong]
+        flips,
+        move |switch| {
+            if page.is_user_change() {
+                flips.count.set(flips.count.get() + 1);
+                page.save_frequent_indexing(switch, &flips);
+            }
+        }
+    ));
+    page.when_opened(glib::clone!(
+        #[weak]
+        page,
+        #[weak]
+        switch,
+        #[strong]
+        flips,
+        move || page.show_frequent_indexing(&switch, &flips)
+    ));
+    row.add_control(&switch, ControlName::RowTitle);
+    row
+}
+
+/// The user's flips of a switch whose state the search cache keeps, so a
+/// slow read does not undo a flip and quick flips are stored in order.
+#[derive(Debug, Default)]
+struct SwitchFlips {
+    /// How many times the user flipped it.
+    count: Cell<u64>,
+    /// Whether a flip is being stored.
+    is_saving: Cell<bool>,
+}
+
 impl SettingsPage {
+    /// Shows the cache's "Index frequently opened folders" on `switch`,
+    /// unless the user flips it while it is read.
+    fn show_frequent_indexing(&self, switch: &gtk::Switch, flips: &Rc<SwitchFlips>) {
+        let cache = self.context().search_cache().clone();
+        let page = self.downgrade();
+        let switch = switch.downgrade();
+        let flips = Rc::clone(flips);
+        let flipped = flips.count.get();
+        glib::spawn_future_local(async move {
+            let Ok(indexing) = cache.frequent_indexing().await else {
+                return;
+            };
+            let (Some(page), Some(switch)) = (page.upgrade(), switch.upgrade()) else {
+                return;
+            };
+            if flips.count.get() != flipped || flips.is_saving.get() {
+                return;
+            }
+            let is_on = indexing == FrequentIndexing::Automatic;
+            page.while_showing_preferences(|| switch.set_active(is_on));
+        });
+    }
+
+    /// Turns indexing of frequently opened folders on or off as `switch`
+    /// shows, one change at a time until the cache holds its last state.
+    fn save_frequent_indexing(&self, switch: &gtk::Switch, flips: &Rc<SwitchFlips>) {
+        if flips.is_saving.replace(true) {
+            // The running save stores the last state when it is done.
+            return;
+        }
+        let cache = self.context().search_cache().clone();
+        let page = self.downgrade();
+        let switch = switch.downgrade();
+        let flips = Rc::clone(flips);
+        glib::spawn_future_local(async move {
+            while let Some(is_on) = switch.upgrade().map(|switch| switch.is_active()) {
+                let indexing = if is_on {
+                    FrequentIndexing::Automatic
+                } else {
+                    FrequentIndexing::Off
+                };
+                let outcome = cache.set_frequent_indexing(indexing).await;
+                if let (Err(error), Some(page)) = (outcome, page.upgrade()) {
+                    page.emit_by_name::<()>(MESSAGE, &[&error.to_string()]);
+                    break;
+                }
+                if switch.upgrade().is_none_or(|switch| switch.is_active() == is_on) {
+                    break;
+                }
+            }
+            flips.is_saving.set(false);
+        });
+    }
+
     /// Shows the cache's "Index pinned folders automatically" on `switch`.
     fn show_pin_indexing(&self, switch: &gtk::Switch) {
         let cache = self.context().search_cache().clone();

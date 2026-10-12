@@ -10,7 +10,8 @@
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::search::{
-    Caching, HiddenItems, IndexService, PinIndexing, SearchError, SearchQuery, SearchResults,
+    Caching, FrequentIndexing, HiddenItems, IndexService, PinIndexing, SearchError, SearchQuery,
+    SearchResults,
 };
 use ox_core::settings::Bookmark;
 use ox_core::LOG_DOMAIN;
@@ -111,6 +112,51 @@ impl SearchCache {
     ) -> Result<(), CacheError> {
         self.change(move |service| service.set_pin_indexing(&pins, indexing))
             .await
+    }
+
+    /// The experimental "Index frequently opened folders" switch as last
+    /// set.
+    ///
+    /// # Errors
+    ///
+    /// The cache's errors.
+    pub(crate) async fn frequent_indexing(&self) -> Result<FrequentIndexing, CacheError> {
+        self.run(|service| service.index().frequent_indexing()).await
+    }
+
+    /// Turns indexing of frequently opened folders on or off; off forgets
+    /// the opens recorded and removes the folders it indexed.
+    ///
+    /// # Errors
+    ///
+    /// The cache's errors.
+    pub(crate) async fn set_frequent_indexing(&self, indexing: FrequentIndexing) -> Result<(), CacheError> {
+        self.change(move |service| service.set_frequent_indexing(indexing))
+            .await
+    }
+
+    /// Tells the service that the user opened the folder `uri`, so a folder
+    /// opened often is indexed while that switch is on. The status is read
+    /// again only when an indexed folder was added or removed, so opening
+    /// folders does not re-run a shown search.
+    pub(crate) fn folder_opened(&self, uri: &str) {
+        if self.imp().indexer.borrow().is_none() {
+            return;
+        }
+        let uri = uri.to_owned();
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = cache)]
+            self,
+            async move {
+                match cache.run(move |service| service.folder_opened(&uri)).await {
+                    Ok(true) => cache.read_status(StatusReading::AfterChange),
+                    Ok(false) | Err(CacheError::NotStarted) => {}
+                    Err(error) => {
+                        glib::g_warning!(LOG_DOMAIN, "Could not count the folder opened: {error}");
+                    }
+                }
+            }
+        ));
     }
 
     /// Pauses indexing of SMB server `host` while the user signs out of it

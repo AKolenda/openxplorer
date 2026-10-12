@@ -134,14 +134,15 @@ fn an_item_check_box_selects_its_item_alone() {
 }
 
 /// The box keeps its room but shows only while its row is hovered,
-/// anywhere on it, or its item is selected; on a tile it sits on the
-/// icon's corner and shows the same way.
+/// anywhere on it, with Ctrl held, or its item is selected; on a tile it
+/// sits on the icon's corner and shows the same way.
 ///
 /// parity: SEL-014
 #[gtk::test]
 fn an_item_check_box_shows_on_hover_and_while_selected() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    test.window.hold_ctrl(true);
     for view in ["details", "large"] {
         test.activate("view", Some(view));
         wait_for_frames(&test.window, 3);
@@ -248,6 +249,64 @@ fn view_item_check_boxes_turns_them_off_and_is_saved() {
     });
 }
 
+/// Whether a press at the middle of `cell`'s check box reaches the box.
+fn press_hits_check(cell: &FileCell) -> bool {
+    let check = cell.item_check();
+    let bounds = check.compute_bounds(cell).expect("laid out");
+    let (x, y) = (
+        bounds.x() + bounds.width() / 2.0,
+        bounds.y() + bounds.height() / 2.0,
+    );
+    cell.pick(f64::from(x), f64::from(y), gtk::PickFlags::DEFAULT)
+        .is_some_and(|picked| picked == check.clone().upcast::<gtk::Widget>() || picked.is_ancestor(&check))
+}
+
+/// By default a hovered item's box waits for Ctrl, as the user asked:
+/// without it the box stays transparent and a press there reaches the
+/// row; with Ctrl held it shows and takes the press; once Ctrl is let go,
+/// or the window loses focus, it goes again. A checked box shows either
+/// way. With the setting off, hovering shows the box as before.
+///
+/// parity: SEL-014
+#[gtk::test]
+fn a_hovered_item_check_box_waits_for_ctrl() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    assert!(
+        test.context.settings_data().preferences.item_checks_on_ctrl,
+        "on by default"
+    );
+    let cell = cell_at(&test, 2);
+    let row = row_of(&cell);
+    row.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+    assert_eq!(check_ink(&cell), 0, "hidden while hovered without Ctrl");
+    assert!(!press_hits_check(&cell), "a press reaches the row");
+
+    test.window.hold_ctrl(true);
+    assert!(check_ink(&cell) > 0, "shown while Ctrl is held");
+    assert!(press_hits_check(&cell), "and takes the press");
+    test.window.hold_ctrl(false);
+    assert_eq!(check_ink(&cell), 0, "hidden once Ctrl is let go");
+
+    test.window.folder_pane().model().select_only(2);
+    assert!(check_ink(&cell) > 0, "a checked box shows without Ctrl");
+    assert!(press_hits_check(&cell), "and takes the press that unchecks it");
+    test.window.folder_pane().model().select_none();
+    assert!(!press_hits_check(&cell), "unchecked, it waits for Ctrl again");
+
+    let off = PreferencesUpdate {
+        item_checks_on_ctrl: Some(false),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&off)
+        .expect("the settings file takes the change");
+    test.context.reload_settings();
+    wait_until("the window to follow", || press_hits_check(&cell));
+    assert!(check_ink(&cell) > 0, "shown on hover alone with the setting off");
+    row.unset_state_flags(gtk::StateFlags::PRELIGHT);
+}
+
 /// Item check boxes turned off in Settings, or by another window, reach
 /// an open window at once: its toggle clears and its boxes go.
 ///
@@ -280,6 +339,7 @@ fn a_click_just_outside_the_box_still_hits_it() {
     const REACH: f32 = 4.0;
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    test.window.hold_ctrl(true);
     let cell = cell_at(&test, 2);
     let check = cell.item_check();
     let bounds = check.compute_bounds(&cell).expect("laid out");

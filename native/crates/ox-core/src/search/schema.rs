@@ -5,7 +5,9 @@
 //! Both apps open the same `search.sqlite3`, so the tables, columns and
 //! stored words are Python's. The additions for pinned folders (SRCH-040),
 //! the `roots.pin_added` column with a default and the `index_migrations`
-//! table, are ones the Python app reads past.
+//! table, and for frequently opened folders, the `roots.frequent_added`
+//! column and the `folder_visits` table, are ones the Python app reads
+//! past.
 
 use rusqlite::{Connection, ErrorCode, Transaction, TransactionBehavior};
 
@@ -30,17 +32,20 @@ const TABLES: &str = "
     CREATE TABLE IF NOT EXISTS index_requests (key TEXT PRIMARY KEY, kind TEXT, uri TEXT, created REAL);
     CREATE TABLE IF NOT EXISTS index_migrations(name TEXT PRIMARY KEY, applied REAL NOT NULL);
     CREATE TABLE IF NOT EXISTS index_options(name TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS folder_visits(uri TEXT PRIMARY KEY, score REAL NOT NULL, updated REAL NOT NULL);
 ";
 
 /// Columns added to `roots` after the first release, with their
 /// declarations (SRCH-034). `pin_added` marks roots added because their
-/// folder is pinned (SRCH-040).
-const ADDED_ROOT_COLUMNS: [(&str, &str); 5] = [
+/// folder is pinned (SRCH-040), `frequent_added` roots added because their
+/// folder is opened often.
+const ADDED_ROOT_COLUMNS: [(&str, &str); 6] = [
     ("update_mode", "TEXT NOT NULL DEFAULT 'Not watching'"),
     ("watch_count", "INTEGER NOT NULL DEFAULT 0"),
     ("watch_error", "TEXT NOT NULL DEFAULT ''"),
     ("last_event", "REAL NOT NULL DEFAULT 0"),
     ("pin_added", "INTEGER NOT NULL DEFAULT 0"),
+    ("frequent_added", "INTEGER NOT NULL DEFAULT 0"),
 ];
 
 /// The trigram full-text index over `entries.search_text`.

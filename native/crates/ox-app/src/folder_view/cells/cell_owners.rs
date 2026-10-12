@@ -124,6 +124,9 @@ pub(crate) struct CellOwners {
     counts_items: Cell<bool>,
     /// Item check boxes are off (SEL-014); on by default, as in Windows 11.
     hides_item_checks: Cell<bool>,
+    /// Item check boxes let clicks through to their rows: they wait for
+    /// Ctrl and it is not held.
+    item_checks_pass_clicks: Cell<bool>,
 }
 
 impl CellOwners {
@@ -394,6 +397,22 @@ impl CellOwners {
         for (cell, _) in self.owners.borrow().iter().filter_map(CellOwner::bound_cell) {
             if let Some(cell) = cell.downcast_ref::<FileCell>() {
                 cell.show_item_check(shown);
+            }
+        }
+    }
+
+    /// Whether item check boxes take clicks.
+    pub(crate) fn item_checks_take_clicks(&self) -> bool {
+        !self.item_checks_pass_clicks.get()
+    }
+
+    /// Makes every item check box take clicks, or let them through to
+    /// its row while it is not shown; a cell bound later follows.
+    pub(crate) fn set_item_checks_take_clicks(&self, take: bool) {
+        self.item_checks_pass_clicks.set(!take);
+        for (cell, _) in self.owners.borrow().iter().filter_map(CellOwner::bound_cell) {
+            if let Some(cell) = cell.downcast_ref::<FileCell>() {
+                cell.item_check_takes_clicks(take);
             }
         }
     }
