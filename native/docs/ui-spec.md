@@ -647,7 +647,8 @@ All transitions follow M01.
 
 | State | Target | Tag |
 |---|---|---|
-| Empty folder or no results | Centred block starting 30 % down the pane, 20 px from each side, gap 12: glyph 44 at `opacity: .6` in `@ox_muted`; title 16 / **600** in `@ox_text`; message 12 px `@ox_muted`, max width 460, wrapping; optional action as a bordered button, padding `8 20`. | visible (subtle), P3 (weight, T13) |
+| Empty folder | The list stays, with its column titles in Details; "This folder is empty." in `@ox_muted`, centred just under the titles (near the top in the icon views), wrapping in a narrow pane, as in Windows Explorer. | safe |
+| No results, unavailable location, empty Recycle Bin | Centred block starting 30 % down the pane, 20 px from each side, gap 12: glyph 44 at `opacity: .6` in `@ox_muted`; title 16 / **600** in `@ox_text`; message 12 px `@ox_muted`, max width 460, wrapping; optional action as a bordered button, padding `8 20`. | visible (subtle), P3 (weight, T13) |
 | Error (unreachable share, denied) | The same block with the error text and a Retry button. | Keep. |
 | Loading | 2 px line across the top of the content pane: track `@ox_selected`, 25 % bar `@ox_accent` moving left to right in `1s ease-in-out infinite`; appears after 150 ms (M06); static when animations are off (M08). | safe |
 | Search in progress or cached | Search-info bar under the header area: min height 40, padding `7 14`, `@ox_chrome`, 1 px bottom border, **12** px text (11), accent glyph; cache freshness on the right in `@ox_muted`. | text visible, P2 |
