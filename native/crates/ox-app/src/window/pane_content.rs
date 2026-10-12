@@ -62,15 +62,18 @@ pub(super) fn show_pane_state(
         error,
     } = state;
     pane.set_loading(loading && page.is_none());
+    let shows_empty = pane.page() == Some(PanePage::Empty) || pane.shows_empty_note();
     if page.is_some() {
+        pane.show_empty_note(false);
         pane.show_page(PanePage::Landing);
-    } else if loading && reloading && pane.model().n_items() == 0 && pane.page() == Some(PanePage::Empty) {
+    } else if loading && reloading && pane.model().n_items() == 0 && shows_empty {
         // Listing an empty or unavailable location again keeps its page
         // until the listing ends, as a reload keeps its rows. A tab with
         // rows never keeps the page another tab left.
     } else if pane.model().n_items() > 0 || (loading && error.is_none()) {
         // A folder being listed keeps the blank list, with its column
         // titles, until items come: no "Loading" text, no page swap.
+        pane.show_empty_note(false);
         pane.show_page(PanePage::Listing);
         return error;
     } else {
@@ -78,7 +81,15 @@ pub(super) fn show_pane_state(
             Some(error) => EmptyState::Unavailable(error),
             None => empty_state().unwrap_or_else(|| EmptyState::empty_listing(&uri)),
         };
-        pane.show_empty(&state);
+        if state == EmptyState::EmptyFolder {
+            // As in Windows Explorer, an empty folder keeps its list, with
+            // the column titles, and says so near its top.
+            pane.show_page(PanePage::Listing);
+            pane.show_empty_note(true);
+        } else {
+            pane.show_empty_note(false);
+            pane.show_empty(&state);
+        }
     }
     None
 }

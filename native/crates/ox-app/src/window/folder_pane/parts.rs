@@ -44,6 +44,9 @@ pub(super) struct PaneParts {
     pub(super) landing: gtk::Box,
     /// The line over the pane while a folder is listed.
     pub(super) loading_line: LoadingLine,
+    /// "This folder is empty." near the top of the list, as Windows
+    /// Explorer says it, while the folder shown has no items.
+    pub(super) empty_note: gtk::Label,
     /// The note over the pane that says what a drag would do there, such
     /// as "Open with convert".
     pub(super) drag_hint: gtk::Label,
@@ -78,6 +81,7 @@ impl PaneParts {
             empty_area,
             landing,
             loading_line: LoadingLine::new(),
+            empty_note: empty_note(),
             drag_hint: drag_hint(),
             rubber_band: rubber_band(),
             previews_enabled: Cell::new(true),
@@ -98,6 +102,24 @@ fn drag_hint() -> gtk::Label {
         .css_classes(["drag-hint"])
         .build()
 }
+
+/// The note an empty folder shows near the top of its list, under the
+/// column titles, as Windows Explorer does. It never takes the pointer,
+/// so clicks, right-clicks and drops go to the list beneath it.
+fn empty_note() -> gtk::Label {
+    gtk::Label::builder()
+        .label(ox_core::i18n::gettext_static(EMPTY_NOTE))
+        // A longer translation wraps inside a narrow pane.
+        .wrap(true)
+        .justify(gtk::Justification::Center)
+        .can_target(false)
+        .visible(false)
+        .css_classes(["empty-folder-note"])
+        .build()
+}
+
+/// What the note says.
+pub(super) const EMPTY_NOTE: &str = crate::i18n::message_id("This folder is empty.");
 
 /// The rectangle a rubber band draws, hidden until one is drawn. It never
 /// takes the pointer.

@@ -308,7 +308,12 @@ fn a_missing_folder_says_it_is_unavailable_and_offers_try_again() {
     test.activate("refresh", None);
     test.wait_for_listing("the retried listing");
     assert_eq!(test.window.load_error(), None);
-    assert_eq!(pane.empty_page().title(), "This folder is empty");
+    assert_eq!(
+        pane.page(),
+        Some(PanePage::Listing),
+        "an empty folder keeps its list"
+    );
+    assert!(pane.shows_empty_note());
 }
 
 /// parity: SRCH-003, VIEW-023
@@ -467,7 +472,7 @@ fn assert_no_loading_state(test: &TestWindow, what: &str, listing_page: PanePage
 /// Moving between folders and landing pages never says "Loading": a fast
 /// listing keeps the blank list with no page swap, no loading line and no
 /// "Loading…" in the status bar, and listing an empty folder again keeps
-/// its page (see `loading_line.rs`), as Windows Explorer and Dolphin do.
+/// its note (see `loading_line.rs`), as Windows Explorer and Dolphin do.
 ///
 /// parity: VIEW-047
 #[gtk::test]
@@ -492,16 +497,18 @@ fn switching_pages_never_flashes_a_loading_state() {
     }
     test.window.navigate(&empty.uri()).expect("a folder");
     test.wait_for_listing("the empty folder");
-    assert_eq!(pane.page(), Some(PanePage::Empty));
-    assert_eq!(pane.empty_page().title(), "This folder is empty");
     assert_eq!(
-        pane.empty_page().message(),
-        "Create a folder or paste files here."
+        pane.page(),
+        Some(PanePage::Listing),
+        "an empty folder keeps its list"
     );
+    assert!(pane.shows_empty_note());
     test.window.refresh();
     assert!(test.window.is_loading(), "F5 lists the folder again");
-    assert_no_loading_state(&test, "F5 in the empty folder", PanePage::Empty);
-    assert_eq!(pane.page(), Some(PanePage::Empty));
+    assert!(pane.shows_empty_note(), "the note stays while it is listed again");
+    assert_no_loading_state(&test, "F5 in the empty folder", PanePage::Listing);
+    assert_eq!(pane.page(), Some(PanePage::Listing));
+    assert!(pane.shows_empty_note());
 }
 
 /// A tab whose reload is still running shows its own rows when it comes
@@ -540,11 +547,12 @@ fn a_reloading_tab_shows_its_rows_after_an_empty_tab() {
 
     test.activate_tab(empty_tab);
     test.wait_for_listing("the empty folder");
-    let empty_page = pane.page();
+    let empty_note = pane.shows_empty_note();
     test.activate_tab(rows_tab);
 
-    assert_eq!(empty_page, Some(PanePage::Empty));
+    assert!(empty_note, "the empty tab says it is empty");
     assert_eq!(pane.page(), Some(PanePage::Listing));
+    assert!(!pane.shows_empty_note(), "the tab with rows does not");
     assert_eq!(test.names(), STANDARD_NAMES);
 }
 

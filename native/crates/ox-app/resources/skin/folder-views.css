@@ -262,6 +262,9 @@ gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
 .empty-state .empty-title { color: @ox_text; font-weight: 500; }
 .empty-state image { opacity: .6; color: @ox_muted; }
 .empty-state button { padding: 8px 20px; }
+/* An empty folder keeps its list and says so near its top, under the
+   column titles, in small grey text as Windows Explorer does. */
+.empty-folder-note { color: @ox_muted; }
 
 /* ---- Drag and drop (DND-007, DND-011, DND-026; style.css
    .file-dragging .drag-source, .file-drop-active, .tab-drag-hint) ---- */
@@ -269,8 +272,9 @@ gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
 .files .drag-source { opacity: 0.55; }
 /* The folder a drop would go into: the whole view for the folder shown
    (or an empty folder's whole page), or the row or tile of a folder under
-   the pointer. No outline means no drop. */
-columnview.files.file-drop-active, gridview.files.file-drop-active,
+   the pointer. No outline means no drop. The details view draws it on its
+   rows' area: its own outline is painted over by that area. */
+columnview.files.file-drop-active > listview, gridview.files.file-drop-active,
 .empty-folder-area.file-drop-active,
 columnview.files > listview > row.file-drop-active,
 gridview.files > child.file-drop-active {
