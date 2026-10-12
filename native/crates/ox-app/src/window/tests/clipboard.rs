@@ -182,6 +182,95 @@ fn pasting_a_copy_into_its_own_folder_makes_a_copy_without_asking() {
     );
 }
 
+/// The names in `folder`, sorted.
+fn names_in(folder: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(folder)
+        .expect("the folder is readable")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Lets the main loop run for a while, long enough for a paste to have
+/// asked or moved something.
+fn wait_a_moment() {
+    let waited = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = std::rc::Rc::clone(&waited);
+    glib::timeout_add_local_once(std::time::Duration::from_millis(700), move || done.set(true));
+    wait_until("a moment", || waited.get());
+}
+
+/// Cutting a file and pasting it back into its own folder does nothing,
+/// as in Windows Explorer: no "Items already exist" question, and the
+/// file stays where it is, unchanged.
+///
+/// parity: OPS-026, CLIP-003
+#[gtk::test]
+fn pasting_a_cut_item_into_its_own_folder_does_nothing() {
+    let fixture = Fixture::standard();
+    let before = names_in(fixture.root());
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("cut", None);
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+
+    test.activate("paste", None);
+    wait_a_moment();
+
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing is asked"
+    );
+    assert_eq!(names_in(fixture.root()), before, "nothing moved or copied");
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).expect("kept"),
+        b"Synthetic test data\n"
+    );
+    wait_until("the window to be free again", || is_enabled(&test, "paste"));
+}
+
+/// Moving items into a folder some of them are already in, as a cut
+/// from another app may hold items of several folders, moves the others
+/// and leaves those where they are, without asking.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn a_move_into_the_folder_an_item_is_in_moves_only_the_others() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/Plan.txt"), b"Plan\n").expect("a file in Documents");
+    let test = TestWindow::open(&fixture.uri());
+
+    let incoming = crate::window::file_ops::IncomingItems {
+        mode: ox_core::transfer::TransferMode::Move,
+        uris: vec![
+            fixture.uri_of("Notes 2.txt"),
+            fixture.uri_of("Documents/Plan.txt"),
+        ],
+        destination_folder: fixture.uri(),
+    };
+    let window = test.window.clone();
+    glib::spawn_future_local(async move {
+        window.transfer_with_conflicts(incoming).await;
+    });
+
+    wait_until("Plan.txt to move in", || fixture.path("Plan.txt").is_file());
+    wait_a_moment();
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing is asked"
+    );
+    assert!(!fixture.path("Documents/Plan.txt").exists());
+    assert!(fixture.path("Notes 2.txt").is_file(), "Notes 2.txt stays");
+    assert!(!fixture.path("Notes 2 - Copy.txt").exists());
+}
+
 /// One drop brings a file into its own folder and another file of the
 /// same name. The first becomes "Notes 2 - Copy.txt" without asking, so
 /// the Rename suggestion for the second skips that name, and accepting it
