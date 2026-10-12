@@ -5,7 +5,9 @@
 //! <n> selected items to:", a name that starts as "New name #", and the
 //! number `#` starts at. Each item keeps its extension, and a name
 //! without `#` is accepted only when the items' types differ
-//! ([`BatchRename::new_names`]); a refused name stays in the dialog. The
+//! ([`BatchRename::new_names`]); a refused name stays in the dialog. A
+//! name with a dot gives an extension to a file that had none (README
+//! becomes Plan.md), which asks first (OPS-049). The
 //! renames run as the window's one operation, the renamed items are
 //! selected afterwards, and Undo renames the whole batch back (OPS-029).
 
@@ -15,6 +17,7 @@ use ox_core::ops::{
     rename_batch, summarize_batch_rename, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER,
 };
 
+use super::extension_confirm::changes_extension;
 use super::running::FinishedOperation;
 use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
@@ -67,10 +70,30 @@ impl BrowserWindow {
                 pattern: name.text().to_string(),
                 first_number: u32::try_from(first_number.value_as_int()).unwrap_or(0),
             };
-            match batch.new_names() {
-                Ok(_) => break batch,
-                Err(refusal) => dialog.show_error(&refusal.to_string()),
+            let names = match batch.new_names() {
+                Ok(names) => {
+                    // The reason an earlier name was refused no longer
+                    // holds, whatever is asked next.
+                    dialog.hide_error();
+                    names
+                }
+                Err(refusal) => {
+                    dialog.show_error(&refusal.to_string());
+                    continue;
+                }
+            };
+            // Cancel keeps the dialog open with the typed name.
+            let changed = batch
+                .items
+                .iter()
+                .zip(&names)
+                .find(|(item, name)| changes_extension(&item.name, name, item.is_dir));
+            if let Some((item, name)) = changed {
+                if !self.confirm_extension_change(&item.name, name, item.is_dir).await {
+                    continue;
+                }
             }
+            break batch;
         };
         dialog.finish();
         self.run_batch_rename(&batch).await;

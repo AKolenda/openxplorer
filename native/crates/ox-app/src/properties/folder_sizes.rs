@@ -50,6 +50,25 @@ impl FolderSizeState {
         }
     }
 
+    /// The Size on disk text of Properties: like [`size_text`](Self::size_text)
+    /// for the space the counted files take; empty when the backend did not
+    /// report it, which Properties shows as "not provided".
+    pub(crate) fn size_on_disk_text(&self) -> String {
+        let size = match self {
+            FolderSizeState::Unavailable(_) => return UNAVAILABLE.to_owned(),
+            FolderSizeState::Measured(size) => size,
+        };
+        let Some(allocated) = size.allocated else {
+            return String::new();
+        };
+        let bytes = format::pretty_bytes(allocated);
+        match size.status {
+            ScanStatus::Scanning => SCANNING.to_owned(),
+            ScanStatus::Complete => bytes,
+            ScanStatus::Partial(_) | ScanStatus::Cancelled => format!("≥ {bytes}"),
+        }
+    }
+
     /// The Contains text of Properties: `12 files, 1 folder`, with `≥`
     /// for a lower bound, `Scanning…` or `Unavailable` (PROP-004).
     pub(crate) fn contains_text(&self) -> String {
@@ -192,6 +211,7 @@ mod tests {
         FolderSizeState::Measured(FolderSize {
             uri: "file:///tmp/ox-test/Projects".to_owned(),
             bytes,
+            allocated: Some(bytes.next_multiple_of(4096)),
             files: 3,
             folders: 1,
             entries: 4,
@@ -207,6 +227,27 @@ mod tests {
     struct SizeTextCase {
         state: FolderSizeState,
         text: &'static str,
+    }
+
+    /// parity: PROP-033
+    #[test]
+    fn size_on_disk_reads_like_the_size_or_is_not_provided() {
+        assert_eq!(measured(1280, ScanStatus::Complete).size_on_disk_text(), "4.0 KB");
+        assert_eq!(
+            measured(1280, ScanStatus::Partial(PartialReason::EntriesExcluded)).size_on_disk_text(),
+            "≥ 4.0 KB"
+        );
+        assert_eq!(measured(0, ScanStatus::Scanning).size_on_disk_text(), "Scanning…");
+        let FolderSizeState::Measured(size) = measured(1280, ScanStatus::Complete) else {
+            unreachable!("measured gives a measured size");
+        };
+        let unreported = FolderSizeState::Measured(FolderSize {
+            allocated: None,
+            ..size
+        });
+        assert_eq!(unreported.size_on_disk_text(), "");
+        let failed = FolderSizeState::Unavailable("denied".to_owned());
+        assert_eq!(failed.size_on_disk_text(), "Unavailable");
     }
 
     /// parity: PROP-027
