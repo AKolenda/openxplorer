@@ -885,6 +885,38 @@ fn restore_goes_on_past_an_unreadable_kde_script_path() {
     assert!(script.is_dir(), "left alone");
 }
 
+/// Enabling again after the user changed the file (here: another backend
+/// for file dialogs and another default) keeps that change: Restore then
+/// puts back the file as the user left it, not as it was before the
+/// first Enable.
+///
+/// parity: INT-032
+#[test]
+fn enabling_again_after_an_edit_restores_the_edit() {
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    registration.enable().expect("enable");
+    let enabled = fs::read_to_string(fixture.user_file()).expect("file");
+    let edited = with_preference(
+        &enabled.replace("default=kde", "default=gtk"),
+        FILE_CHOOSER_KEY,
+        "kde",
+    );
+    fs::write(fixture.user_file(), &edited).expect("edit");
+    assert!(!registration.is_enabled());
+
+    registration.enable().expect("enable again");
+    assert!(registration.is_enabled());
+    assert_eq!(
+        registration.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.user_file()).expect("user file"),
+        edited
+    );
+}
+
 /// A later edit by the user wins: disabling then removes only the app's
 /// line.
 ///

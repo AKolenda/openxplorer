@@ -62,6 +62,7 @@ use std::sync::Mutex;
 
 use gio::prelude::*;
 
+use super::background_portal::{DESKTOP_PORTAL_NAME, DESKTOP_PORTAL_PATH};
 use super::private_file::write_private_file;
 use super::sandbox::Sandbox;
 use super::worker::on_worker;
@@ -174,6 +175,8 @@ pub enum PortalDir {
     /// The variable's value, or `None` when it is not set and the portal
     /// reads the usual folders.
     Fixed(Option<PathBuf>),
+    /// Which folder the portal reads cannot be told, for this reason.
+    Unknown(String),
 }
 
 /// The desktops of an `XDG_CURRENT_DESKTOP` value, lowercase, skipping
@@ -215,6 +218,15 @@ pub enum FileDialogError {
         /// What is wrong with it.
         reason: String,
     },
+    /// Which folder the portal reads its settings from cannot be told.
+    #[error("Cannot tell where the desktop portal reads its settings: {0}")]
+    PortalUnknown(String),
+    /// Once restarted, the portal reads its settings from another folder
+    /// than the one the change was made in.
+    #[error(
+        "The desktop portal now reads its settings from another folder. Turn Open and Save dialogs on again."
+    )]
+    PortalMoved,
     /// Reading, writing or removing a file failed.
     #[error("{error}: {}", path.display())]
     Io {
@@ -332,7 +344,10 @@ impl FileDialogRegistration {
     fn portal_dir(&self) -> Result<Option<PathBuf>, FileDialogError> {
         let dir = match &self.paths.portal_dir {
             PortalDir::Fixed(dir) => dir.clone(),
-            PortalDir::FromService => service_portal_dir().map(PathBuf::from),
+            PortalDir::FromService => service_portal_dir()
+                .map_err(FileDialogError::PortalUnknown)?
+                .map(PathBuf::from),
+            PortalDir::Unknown(reason) => return Err(FileDialogError::PortalUnknown(reason.clone())),
         };
         match dir {
             Some(dir) if !dir.is_absolute() => Err(FileDialogError::PortalDir {
@@ -442,11 +457,19 @@ impl FileDialogRegistration {
             let written = with_preference(&base, FILE_CHOOSER_KEY, &self.portal_name);
             let record = match record {
                 // Keeps the first `previous` but remembers the newest
-                // write.
-                Some(record) => Record {
+                // write, while the file still holds what the app wrote;
+                // once the user changed it, what it holds now is what
+                // Restore puts back, so their change is kept.
+                Some(record) if previous.as_ref() == Some(&record.written) => Record {
                     written: written.clone(),
                     link: link.clone().or(record.link),
                     ..record
+                },
+                Some(record) => Record {
+                    file: file.clone(),
+                    previous: previous.clone(),
+                    written: written.clone(),
+                    link: link.clone().or(record.link),
                 },
                 None => Record {
                     file: file.clone(),
@@ -643,14 +666,29 @@ impl FileDialogRegistration {
     ///
     /// # Errors
     ///
-    /// [`FileDialogError::Unsupported`] inside Flatpak, and
+    /// [`FileDialogError::Unsupported`] inside Flatpak,
     /// [`FileDialogError::Io`] when `systemctl` cannot run, the restart
-    /// fails, or the portal is not running after it.
+    /// fails, or the portal is not running after it, and
+    /// [`FileDialogError::PortalMoved`] when the restarted portal reads
+    /// another folder than the one the operation found.
     pub fn restart_portal(&self) -> Result<PortalRestart, FileDialogError> {
         if !self.is_available() {
             return Err(FileDialogError::Unsupported);
         }
-        restart_portal_with(Path::new("systemctl"))
+        let restart = restart_portal_with(Path::new("systemctl"))?;
+        // systemd builds the environment again for the new process, so
+        // the folder the change was made for is checked against it.
+        if restart == PortalRestart::Restarted {
+            if let PortalDir::Fixed(before) = &self.paths.portal_dir {
+                let now = service_portal_dir()
+                    .map_err(FileDialogError::PortalUnknown)?
+                    .map(PathBuf::from);
+                if now != *before {
+                    return Err(FileDialogError::PortalMoved);
+                }
+            }
+        }
+        Ok(restart)
     }
 
     /// Runs `operation` on a GIO worker thread, as the other integrations'
@@ -670,7 +708,10 @@ impl FileDialogRegistration {
         on_worker(move || {
             one_at_a_time(|| {
                 if registration.paths.portal_dir == PortalDir::FromService && registration.is_available() {
-                    registration.paths.portal_dir = PortalDir::Fixed(service_portal_dir().map(PathBuf::from));
+                    registration.paths.portal_dir = match service_portal_dir() {
+                        Ok(dir) => PortalDir::Fixed(dir.map(PathBuf::from)),
+                        Err(reason) => PortalDir::Unknown(reason),
+                    };
                 }
                 operation(&registration)
             })
@@ -728,28 +769,40 @@ impl FileDialogRegistration {
 }
 
 /// [`PORTAL_DIR_VARIABLE`] in the environment of [`PORTAL_SERVICE`], asked
-/// over D-Bus from the systemd user manager without starting anything.
-/// While the portal runs, that is its process's own environment, which is
-/// exact. Otherwise it is worked out as systemd would start it: the
-/// manager's own environment, the unit's `Environment=` lines, then its
-/// `EnvironmentFile=` files, each winning over the one before, and last its
-/// `UnsetEnvironment=`; files are read by the common rules only
-/// ([`environment_file_assignments`]), as the portal is normally running.
-/// `None` when it is not set there, or no service manager answers (the
-/// portal then has the session's environment and is taken to read the
-/// usual folders).
-fn service_portal_dir() -> Option<String> {
-    let connection = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).ok()?;
-    let call = |path: &str, interface: &str, method: &str, parameters: &glib::Variant| {
+/// over D-Bus from the systemd user manager. That is the running portal's
+/// own environment, which is exact; a portal that is not running is
+/// started first through its D-Bus name, as any application's first portal
+/// call starts it. Only when no process can be read is the environment
+/// worked out as systemd would start it: the manager's own environment,
+/// the unit's `Environment=` lines, then its `EnvironmentFile=` files,
+/// each winning over the one before, and last its `UnsetEnvironment=`.
+/// `Ok(None)` when it is not set there, or no service manager answers
+/// (the portal then has the session's environment and is taken to read
+/// the usual folders).
+///
+/// # Errors
+///
+/// Why the folder cannot be told: an environment file the fallback cannot
+/// read as systemd does ([`environment_file_assignments`]).
+fn service_portal_dir() -> Result<Option<String>, String> {
+    let Ok(connection) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE) else {
+        return Ok(None);
+    };
+    let call = |name: &str, path: &str, interface: &str, method: &str, parameters: &glib::Variant| {
+        let flags = if name == SYSTEMD_NAME {
+            gio::DBusCallFlags::NO_AUTO_START
+        } else {
+            gio::DBusCallFlags::NONE
+        };
         connection
             .call_sync(
-                Some(SYSTEMD_NAME),
+                Some(name),
                 path,
                 interface,
                 method,
                 Some(parameters),
                 None,
-                gio::DBusCallFlags::NO_AUTO_START,
+                flags,
                 SYSTEMD_TIMEOUT_MS,
                 gio::Cancellable::NONE,
             )
@@ -757,6 +810,7 @@ fn service_portal_dir() -> Option<String> {
     };
     let property = |path: &str, interface: &str, name: &str| -> Option<glib::Variant> {
         call(
+            SYSTEMD_NAME,
             path,
             "org.freedesktop.DBus.Properties",
             "Get",
@@ -777,6 +831,7 @@ fn service_portal_dir() -> Option<String> {
         .into_iter()
         .find_map(|method| {
             call(
+                SYSTEMD_NAME,
                 SYSTEMD_PATH,
                 SYSTEMD_MANAGER,
                 method,
@@ -784,30 +839,48 @@ fn service_portal_dir() -> Option<String> {
             )
         })
         .and_then(|reply| reply.get::<(glib::variant::ObjectPath,)>());
-    let mut unset = Vec::new();
-    if let Some((unit,)) = unit {
-        let unit = unit.as_str();
-        let running = property(unit, SYSTEMD_SERVICE, "MainPID")
+    let Some((unit,)) = unit else {
+        return Ok(variable_in(&environments, &[], PORTAL_DIR_VARIABLE));
+    };
+    let unit = unit.as_str();
+    let process_environment = || {
+        property(unit, SYSTEMD_SERVICE, "MainPID")
             .and_then(|value| value.get::<u32>())
-            .filter(|pid| *pid > 0);
-        if let Some(environment) = running.and_then(|pid| fs::read(format!("/proc/{pid}/environ")).ok()) {
-            return process_variable(&environment, PORTAL_DIR_VARIABLE);
-        }
-        environments.push(strings(unit, SYSTEMD_SERVICE, "Environment"));
-        // `(path, ignore if missing)`; a missing file the unit needs keeps
-        // the portal from starting at all, so either way it adds nothing.
-        let files = property(unit, SYSTEMD_SERVICE, "EnvironmentFiles")
-            .and_then(|value| value.get::<Vec<(String, bool)>>())
-            .unwrap_or_default();
-        environments.extend(
-            files
-                .iter()
-                .filter_map(|(file, _)| fs::read_to_string(file).ok())
-                .map(|contents| environment_file_assignments(&contents)),
-        );
-        unset = strings(unit, SYSTEMD_SERVICE, "UnsetEnvironment");
+            .filter(|pid| *pid > 0)
+            .and_then(|pid| fs::read(format!("/proc/{pid}/environ")).ok())
+    };
+    let running = process_environment().or_else(|| {
+        call(
+            DESKTOP_PORTAL_NAME,
+            DESKTOP_PORTAL_PATH,
+            "org.freedesktop.DBus.Peer",
+            "Ping",
+            &().to_variant(),
+        )?;
+        process_environment()
+    });
+    if let Some(environment) = running {
+        return Ok(process_variable(&environment, PORTAL_DIR_VARIABLE));
     }
-    variable_in(&environments, &unset, PORTAL_DIR_VARIABLE)
+    environments.push(strings(unit, SYSTEMD_SERVICE, "Environment"));
+    // `(path, ignore if missing)`; a missing file the unit needs keeps the
+    // portal from starting at all, so either way it adds nothing.
+    let files = property(unit, SYSTEMD_SERVICE, "EnvironmentFiles")
+        .and_then(|value| value.get::<Vec<(String, bool)>>())
+        .unwrap_or_default();
+    for (file, _) in &files {
+        if file.contains(['*', '?', '[']) {
+            return Err(format!("its environment file {file} names several files"));
+        }
+        let Ok(contents) = fs::read_to_string(file) else {
+            continue;
+        };
+        let assignments = environment_file_assignments(&contents)
+            .ok_or_else(|| format!("its environment file {file} uses escapes or continued lines"))?;
+        environments.push(assignments);
+    }
+    let unset = strings(unit, SYSTEMD_SERVICE, "UnsetEnvironment");
+    Ok(variable_in(&environments, &unset, PORTAL_DIR_VARIABLE))
 }
 
 /// The value of `name` in a process's environment as `/proc/<pid>/environ`
@@ -839,21 +912,23 @@ fn variable_in(environments: &[Vec<String>], unset: &[String], name: &str) -> Op
 /// rules such files commonly keep to: blank lines and lines starting with
 /// `#` or `;` are skipped, space around the name and the value is
 /// dropped, and a value in matching single or double quotes loses them.
-/// systemd also reads escapes, continued lines and wildcard file names,
-/// which this does not.
-fn environment_file_assignments(contents: &str) -> Vec<String> {
+/// `None` for a file that uses what systemd reads further (a backslash
+/// escape, a continued line or a quote left open), so that it is never
+/// read differently.
+fn environment_file_assignments(contents: &str) -> Option<Vec<String>> {
     contents
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with(['#', ';']))
-        .filter_map(|line| {
-            let (key, value) = line.split_once('=')?;
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| {
             let value = value.trim();
             let unquoted = ['"', '\'']
                 .into_iter()
                 .find_map(|quote| value.strip_prefix(quote)?.strip_suffix(quote))
                 .unwrap_or(value);
-            Some(format!("{}={unquoted}", key.trim()))
+            let plain = !value.contains('\\') && !unquoted.contains(['"', '\'']);
+            plain.then(|| format!("{}={unquoted}", key.trim()))
         })
         .collect()
 }
@@ -1145,7 +1220,15 @@ mod tests {
         let file = environment_file_assignments(
             "# portal folder\n; old\n\n  XDG_DESKTOP_PORTAL_DIR = \"/from/file\"  \nOTHER='x'\n",
         );
+        let file = file.expect("plain assignments are read");
         assert_eq!(file, lines(&["XDG_DESKTOP_PORTAL_DIR=/from/file", "OTHER=x"]));
+        for unreadable in [
+            "XDG_DESKTOP_PORTAL_DIR=/tmp/portal\\ files\n",
+            "XDG_DESKTOP_PORTAL_DIR=/tmp/\\\nportal\n",
+            "XDG_DESKTOP_PORTAL_DIR=\"/tmp/portal\n",
+        ] {
+            assert_eq!(environment_file_assignments(unreadable), None, "{unreadable:?}");
+        }
         assert_eq!(
             variable_in(&[manager.clone(), unit.clone(), file], &[], PORTAL_DIR_VARIABLE).as_deref(),
             Some("/from/file"),
