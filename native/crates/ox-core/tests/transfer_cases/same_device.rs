@@ -31,7 +31,7 @@ fn same_device_keep_both_renames_inside_staging_and_refreshes_before_cleanup() {
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(read(&fixture.destination_folder.join("photo.jpg")), "original");
     assert_eq!(
-        read(&fixture.destination_folder.join("photo (copy 2).jpg")),
+        read(&fixture.destination_folder.join("photo - Copy.jpg")),
         "incoming"
     );
     assert_eq!(read(&source), "incoming");

@@ -5,14 +5,14 @@
 //! is a copy into the item's own folder with the Keep both policy, so it
 //! has every safety rule of a copy (private staging, publishing that never
 //! overwrites, the write protection) and the app's own duplicate names:
-//! `report (copy 2).pdf`, then `(copy 3)`, as Keep both names them
-//! (XFER-008). Items from several folders, as a search can select, are
+//! `report - Copy.pdf`, then `report - Copy (2).pdf`, as Keep both names
+//! them (XFER-008). Items from several folders, as a search can select, are
 //! copied into their own folders one folder at a time.
 //!
 //! Dolphin names a duplicate `report copy.pdf`; OPS-034 in
 //! `native/parity/features.toml` records that Duplicate keeps the app's
-//! own `(copy N)` names instead, so a duplicate and a Keep both copy are
-//! named alike.
+//! own Windows Explorer names (`- Copy`) instead, so a duplicate and a
+//! Keep both copy are named alike.
 
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;

@@ -47,7 +47,17 @@ fn capture_dialog(test: &TestWindow, dialog: &Dialog, filename: &str) {
 fn the_delete_and_conflict_dialogs_are_captured_light_and_dark() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
+    // Other files with the names of two in the folder: pasting them there
+    // asks. (A copy pasted into its own folder asks nothing.)
+    fixture.write("Documents/Notes 2.txt");
+    fixture.write("Documents/Notes 10.txt");
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri()));
+    wait_until("the fixture's folder", || {
+        !test.window.is_loading() && test.names().iter().any(|name| name == "Documents")
+    });
     for theme in THEMES {
         test.activate("theme", Some(theme));
         select_names(&test, &["Notes 2.txt"]);
@@ -56,8 +66,6 @@ fn the_delete_and_conflict_dialogs_are_captured_light_and_dark() {
         capture_dialog(&test, &delete, &format!("native-dialog-delete-{theme}.png"));
         delete.press("Cancel");
         wait_for_no_dialog(&test);
-        select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
-        test.activate("copy", None);
         wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
         test.activate("paste", None);
         let conflict = open_dialog(&test);

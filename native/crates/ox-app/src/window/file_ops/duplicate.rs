@@ -4,7 +4,7 @@
 //! New in the native app, from the Dolphin baseline ("Duplicate Here").
 //! ox-core copies each item into its own folder with the Keep both
 //! policy, so the copy is staged privately and never overwrites, and is
-//! named as Keep both names copies (`report (copy 2).pdf`). It runs as
+//! named as Keep both names copies (`report - Copy.pdf`). It runs as
 //! the window's one operation with the transfer panel; the duplicates are
 //! selected afterwards and Undo moves them to the Trash.
 

@@ -14,7 +14,7 @@ Resize the sidebar and column edges. Double-click an edge to reset or fit it, de
 
 View offers Details, List and icon sizes. Use Ctrl+mouse wheel or the status-bar slider to change icon size. Details can expand folders in place; drag from empty space to select items, hold Ctrl to toggle them or Shift to add them. View → Compact view, also in Settings → Appearance → Files and folders, draws the Details rows and the navigation pane closer together, as in Windows 11, so more items fit. View → Item check boxes, on by default as in Windows 11, gives each item a check box that shows while you point at it and stays checked while it is selected; click it to select or deselect that item alone, or use the box before Name in Details to select every item, and again to select none.
 
-Right-click a Details heading to choose columns, then drag headings to reorder them. The Recycle Bin includes Original location and Date deleted. Sort is laid out like Windows Explorer’s: Name, Date modified and Type, with Size and the other file properties under More. Sort › Group by groups the folder apart from its sort, so a folder grouped by date modified can be sorted by name within each group: choose Name (A – H, I – P, Q – Z), Date modified, Type, Size, Date created, Same as sort (groups that follow the sort), or (None). Downloads is grouped by date modified until you choose otherwise there. Sort also has a Folders first switch. Relative dates include the time; Settings → Appearance → Files and folders can show absolute dates instead.
+Right-click a Details heading to choose columns, then drag headings to reorder them. The Recycle Bin includes Original location and Date deleted. Sort is laid out like Windows Explorer’s: Name, Date modified and Type, with Size and the other file properties under More. Sort › Group by groups the folder apart from its sort, so a folder grouped by date modified can be sorted by name within each group: choose Name (A – H, I – P, Q – Z), Date modified, Type, Size, Date created, Same as sort (groups that follow the sort), or (None). Downloads is grouped by date modified until you choose otherwise there; Apply to all folders gives Downloads the applied Group by too, and Reset folders groups it by date again. Sort also has a Folders first switch. Relative dates include the time; Settings → Appearance → Files and folders can show absolute dates instead.
 
 ## Two folders in one tab
 
@@ -74,9 +74,9 @@ Snapshot tabs carry a “Previous version” badge and an amber top edge. A bann
 
 ## Measure folder sizes on demand
 
-Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
+Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and Properties shows the space they take as Size on disk, as Windows Explorer does. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
 
-These are not ZFS dataset used/referenced values, compressed allocation measurements or snapshot-exclusive block counts.
+Size counts logical file bytes; Size on disk counts the blocks the files take, which on a compressing filesystem such as ZFS is the compressed space. Neither is a ZFS dataset used/referenced value or a snapshot-exclusive block count.
 
 ## Browse a ZIP, without extracting everything
 
@@ -118,9 +118,9 @@ Drag a tab onto another OpenXplorer tab strip to merge it. To open a separate wi
 
 Select one or more files or folders and drag them into an application that accepts native file drops. The desktop app supplies file URIs and readable paths through GTK, including already-mounted network paths when available. Ctrl-click or Shift-click to select multiple items. Press Escape to cancel.
 
-Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. Choose Replace existing or Skip duplicates. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Quick access drops pin or reorder folders. File drops never request deletion of the source.
+Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. As in Windows Explorer, a plain drag of OpenXplorer's own items moves them to a folder on the same drive and copies them to another drive; hold Ctrl to copy or Shift to move. A plain drag of items from another app always copies them; hold Shift to move them instead. Choose Replace existing or Skip duplicates. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Quick access drops pin or reorder folders. File drops never request deletion of the source.
 
-ZIP members must be extracted first. Some editors only accept local files: network items need an existing GVfs/FUSE or CIFS path for those applications. Dragging does not mount a share or download a temporary copy. Drag-to-move, automatic extraction, and undo remain unavailable; use Cut and Paste for supported same-filesystem moves.
+ZIP members must be extracted first. Some editors only accept local files: network items need an existing GVfs/FUSE or CIFS path for those applications. Dragging does not mount a share or download a temporary copy. Automatic extraction remains unavailable. Undo (Ctrl+Z) takes back a drop into an OpenXplorer folder, a copy or a move, as it takes back Paste.
 
 The website tour shows pictures and cannot drag files. Compatibility with a particular editor or a Wayland desktop must be checked on that system.
 

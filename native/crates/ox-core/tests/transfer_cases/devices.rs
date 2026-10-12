@@ -191,7 +191,7 @@ fn file_uploads_work_on_devices_without_move_object() {
         UploadCase {
             policy: ConflictPolicy::KeepBoth,
             existing: Some("old"),
-            published: "photo (copy 2).jpg",
+            published: "photo - Copy.jpg",
         },
         UploadCase {
             policy: ConflictPolicy::Replace,

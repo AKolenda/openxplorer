@@ -335,7 +335,9 @@ impl Settings {
         })
     }
 
-    /// Saves a folder or shared display style.
+    /// Saves a folder or shared display style. A style for every folder
+    /// (Windows' Apply to Folders) also becomes Downloads' Group by, which
+    /// is otherwise kept apart from the shared style (VIEW-022).
     ///
     /// # Errors
     ///
@@ -348,6 +350,9 @@ impl Settings {
     ) -> Result<Preferences, SettingsError> {
         self.mutate(|data| {
             let preferences = &mut data.preferences;
+            if scope == ViewScope::AllFolders {
+                preferences.downloads_group_by = Some(properties.grouping());
+            }
             view_properties::remember(
                 &mut preferences.folder_views,
                 &mut preferences.view_defaults,
@@ -359,8 +364,9 @@ impl Settings {
         })
     }
 
-    /// Forgets every folder's display style and the shared one, so every
-    /// folder shows the default style (Windows' Reset Folders).
+    /// Forgets every folder's display style, the shared one and the Group
+    /// by chosen in Downloads, so every folder shows the default style
+    /// (Windows' Reset Folders) and Downloads is grouped by date again.
     ///
     /// # Errors
     ///
@@ -369,6 +375,7 @@ impl Settings {
         self.mutate(|data| {
             let preferences = &mut data.preferences;
             view_properties::reset(&mut preferences.folder_views, &mut preferences.view_defaults);
+            preferences.downloads_group_by = None;
             Ok(preferences.clone())
         })
     }

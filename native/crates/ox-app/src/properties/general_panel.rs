@@ -11,6 +11,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
+use ox_core::entry::Entry;
 use ox_core::format;
 use ox_core::integration::DiskTool;
 use ox_core::location::{is_smb_server, LocationContext};
@@ -18,7 +19,7 @@ use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::{ItemProperties, MountFacts};
-use crate::dialog::{note, quiet_text, DialogFrame, PropertyGrid};
+use crate::dialog::{note, quiet_text, value_or_not_provided, DialogFrame, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::integration;
 use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};
@@ -32,9 +33,9 @@ const BUTTON_GLYPH: i32 = 16;
 
 /// Under Calculate folder size: what the measured size is, and is not.
 const SIZE_EXPLANATION: &str = crate::i18n::message_id(
-    "Logical file bytes, measured on demand. Skips links, nested mounts and \
-                                snapshot collections. The result may be partial; it is not ZFS compressed \
-                                or snapshot usage.",
+    "Size counts logical file bytes and Size on disk the space they take, measured \
+                                on demand. Skips links, nested mounts and snapshot collections. The result \
+                                may be partial; it is not snapshot usage.",
 );
 
 /// Under the permissions: what the tab does not do.
@@ -73,6 +74,8 @@ pub(super) struct GeneralFacts<'a> {
 pub(super) struct FolderRows {
     /// The Size value.
     pub size: gtk::Label,
+    /// The Size on disk value.
+    pub size_on_disk: gtk::Label,
     /// The Contains value: how many files and folders it holds.
     pub contains: gtk::Label,
 }
@@ -82,6 +85,8 @@ impl FolderRows {
     pub(super) fn show(&self, state: &FolderSizeState) {
         self.size.set_text(&state.size_text());
         self.size.set_tooltip_text(Some(&state.summary_tooltip()));
+        self.size_on_disk
+            .set_text(value_or_not_provided(&state.size_on_disk_text()));
         self.contains.set_text(&state.contains_text());
     }
 }
@@ -108,6 +113,7 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     if let Some(state) = facts.folder_size.filter(|_| entry.is_dir) {
         size_value.set_tooltip_text(Some(&state.summary_tooltip()));
     }
+    let size_on_disk = grid.add_row(&ox_core::i18n::gettext("Size on disk"), &size_on_disk_text(facts));
     let contains = entry.is_dir.then(|| {
         let text = facts
             .folder_size
@@ -155,6 +161,7 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     }
     contains.map(|contains| FolderRows {
         size: size_value,
+        size_on_disk,
         contains,
     })
 }
@@ -200,7 +207,8 @@ fn header(properties: &ItemProperties, can_rename: bool) -> gtk::Box {
         .build();
     header.append(&ArtImage::new(Art::for_entry(&properties.entry), HEADER_ART_SIZE));
     if can_rename {
-        header.append(&name_field(&properties.entry.uri, &properties.entry.name));
+        let is_folder = properties.entry.is_dir || properties.links_to_folder;
+        header.append(&name_field(&properties.entry, is_folder));
         return header;
     }
     let name = gtk::Label::builder()
@@ -216,29 +224,36 @@ fn header(properties: &ItemProperties, can_rename: bool) -> gtk::Box {
     header
 }
 
-/// The editable name of the item at `uri`; Enter asks the window to
-/// rename it, and the dialog closes once it is renamed.
-fn name_field(uri: &str, name: &str) -> gtk::Entry {
+/// The editable name of `entry`, a folder or a link to one when
+/// `is_folder`; Enter asks the window to rename it, and the dialog closes
+/// once it is renamed. Enter again while a rename is asked about or runs
+/// does nothing, so one Enter asks one question.
+fn name_field(entry: &Entry, is_folder: bool) -> gtk::Entry {
     let field = gtk::Entry::builder()
-        .text(name)
+        .text(&entry.name)
         .hexpand(true)
         .valign(gtk::Align::Center)
         .build();
     field.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext("Name"))]);
-    let uri = uri.to_owned();
-    let original = name.to_owned();
+    let uri = entry.uri.clone();
+    let original = entry.name.clone();
+    let renaming = std::rc::Rc::new(std::cell::Cell::new(false));
     field.connect_activate(move |field| {
         let name = field.text().to_string();
         let window = field.root().and_downcast::<crate::window::BrowserWindow>();
-        let (false, Some(window)) = (name == original, window) else {
+        let (false, false, Some(window)) = (renaming.get(), name == original, window) else {
             return;
         };
+        renaming.set(true);
+        let renaming = renaming.clone();
         let frame = field
             .ancestor(DialogFrame::static_type())
             .and_downcast::<DialogFrame>();
         let uri = uri.clone();
+        let original = original.clone();
         glib::spawn_future_local(async move {
-            let renamed = window.rename_item_at(&uri, &name).await;
+            let renamed = window.rename_item_at(&uri, &original, &name, is_folder).await;
+            renaming.set(false);
             match (renamed, frame) {
                 (Ok(()), Some(frame)) => frame.close(),
                 (Err(message), Some(frame)) => frame.show_error(&message),
@@ -259,6 +274,21 @@ fn size_text(facts: &GeneralFacts<'_>) -> String {
     facts
         .folder_size
         .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::size_text)
+}
+
+/// The Size on disk value: the space a file takes, or a folder's measured
+/// space or "Not scanned"; empty when the backend does not report it.
+fn size_on_disk_text(facts: &GeneralFacts<'_>) -> String {
+    let properties = facts.properties;
+    if !properties.entry.is_dir {
+        return properties
+            .size_on_disk
+            .map(format::pretty_bytes)
+            .unwrap_or_default();
+    }
+    facts
+        .folder_size
+        .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::size_on_disk_text)
 }
 
 /// Change app…, Copy full path and, for a folder, Calculate folder size.

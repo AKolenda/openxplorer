@@ -361,7 +361,7 @@ fn a_created_item_is_selected_and_scrolled_into_view() {
     wait_until("the copy to be selected", || {
         test.selected_names()
             .first()
-            .is_some_and(|name| name.contains("(copy"))
+            .is_some_and(|name| name.contains(" - Copy"))
     });
     wait_until("the copy to be scrolled into view", || {
         test.window.folder_pane().scroll_position() > 0.0

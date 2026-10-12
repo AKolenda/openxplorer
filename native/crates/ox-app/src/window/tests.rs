@@ -47,6 +47,7 @@ mod middle_click;
 mod narrow_windows;
 mod network;
 mod network_shares;
+mod new_folder;
 mod opening;
 mod panes_layout;
 mod recycle_bin;

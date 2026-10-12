@@ -18,7 +18,7 @@ use crate::test_support::harness::{descendants, wait_until};
 
 /// Every setting row before the settings were rearranged, by its title
 /// then, and the row that offers it now.
-const MOVED_ROWS: [(&str, &str); 60] = [
+const MOVED_ROWS: [(&str, &str); 61] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -63,6 +63,7 @@ const MOVED_ROWS: [(&str, &str); 60] = [
     ("Restore previous", "Restore the previous file handlers"),
     ("Restore ZIP handler", "Give ZIP files back to the previous app"),
     ("Disable Show in folder", "Turn off Show in folder"),
+    ("Super+E opens OpenXplorer", "Super+E opens OpenXplorer"),
     (
         "Restore Open and Save dialogs",
         "Turn off OpenXplorer's Open and Save dialogs",

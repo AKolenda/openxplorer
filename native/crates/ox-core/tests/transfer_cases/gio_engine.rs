@@ -163,7 +163,7 @@ fn keep_both_copies_folders_with_names_that_are_not_utf8() {
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
-    assert_latin1_album(&fixture.destination_folder.join("album (copy 2)"));
+    assert_latin1_album(&fixture.destination_folder.join("album - Copy"));
     assert!(list(&fixture.destination_folder.join("album")).is_empty());
     fixture.assert_no_staging();
 }
@@ -189,7 +189,7 @@ fn a_selected_item_named_in_latin1_is_copied_under_exactly_that_name() {
     fixture.assert_no_staging();
 }
 
-/// Keep both cannot make a text "(copy N)" name from a name that is not
+/// Keep both cannot make a text "- Copy" name from a name that is not
 /// UTF-8, so it says so instead of renaming the item lossily, and the item
 /// that holds the name is untouched.
 #[test]
