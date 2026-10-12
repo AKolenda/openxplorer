@@ -50,6 +50,10 @@ pub struct SizeEntry {
     /// The logical size in bytes (`st_size`, `standard::size`), or `None`
     /// when the backend does not report one.
     pub size: Option<u64>,
+    /// The bytes the item takes on disk (`st_blocks` × 512,
+    /// `standard::allocated-size`), or `None` when the backend does not
+    /// report them.
+    pub allocated: Option<u64>,
     /// The filesystem the item is on (`st_dev`, `id::filesystem`), when
     /// known.
     pub filesystem: Option<String>,
@@ -67,6 +71,7 @@ impl SizeEntry {
             name: name.into(),
             kind: SizeEntryKind::Unreadable,
             size: None,
+            allocated: None,
             filesystem: None,
             identity: None,
             is_mount_point: false,

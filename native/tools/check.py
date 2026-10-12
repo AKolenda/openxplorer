@@ -268,9 +268,36 @@ def isolated_command(root: Path, command: Sequence[str]) -> list[str]:
     ]
 
 
+def live_group_members(group: int, proc: Path = Path('/proc')) -> list[int] | None:
+    """Return the processes of a group that are not zombies, or None without /proc.
+
+    A child left behind by a test, such as a GVfs daemon, is reparented to PID 1.
+    In a container whose PID 1 never reaps children it stays a zombie for good;
+    it runs nothing, so it must not keep the driver waiting.
+    """
+    if not proc.is_dir():
+        return None
+    members = []
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = (entry / 'stat').read_text()
+        except OSError:
+            continue  # The process exited while the table was read.
+        # The command name in parentheses may hold spaces and parentheses.
+        fields = stat[stat.rfind(')') + 2:].split()
+        if len(fields) > 2 and fields[0] != 'Z' and fields[2] == str(group):
+            members.append(int(entry.name))
+    return members
+
+
 def group_has_members(process: subprocess.Popen[bytes]) -> bool:
-    """Return whether any process is left in the process group led by process."""
+    """Return whether any running process is left in the group led by process."""
     process.poll()  # Reap the leader: an unreaped child still counts as a member.
+    members = live_group_members(process.pid)
+    if members is not None:
+        return bool(members)
     try:
         os.killpg(process.pid, 0)
     except ProcessLookupError:
