@@ -176,9 +176,14 @@ fn file_names_are_validated_like_core_py() {
 /// parity: XFER-008
 #[test]
 fn copy_names_are_chosen_like_core_py() {
+    // The app names copies as Windows Explorer does (`name - Copy (2)`);
+    // the Python app's `name (copy 2)` marker is given here, so the rest of
+    // the rule (where the marker goes, how a long stem is shortened, which
+    // names are refused) is still checked against core.py.
     let mut mismatches = Mismatches::new("new_copy_name");
     for case in &fixture().copies {
-        let actual = location::new_copy_name(&case.name, case.number, case.kind());
+        let marker = format!(" (copy {})", case.number);
+        let actual = location::name_with_copy_marker(&case.name, &marker, case.kind());
         let input = (&case.name, case.number, case.is_dir);
         mismatches.expect_outcome(input, &case.outcome, &actual);
     }

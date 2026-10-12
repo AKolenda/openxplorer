@@ -8,7 +8,9 @@
 //! conflict the copy starts at once with the Skip policy, so a name that
 //! appears after the check is still never overwritten. With conflicts the
 //! dialog asks ([`super::conflict_dialog`]); items without a conflict
-//! keep the Skip policy whatever the answers. The check and the dialog
+//! keep the Skip policy whatever the answers. A copy of an item into its
+//! own folder is kept as "name - Copy" without asking, as Windows Explorer
+//! does: the only name it meets there is its own. The check and the dialog
 //! count as the running operation, so a second paste cannot start
 //! meanwhile. After a move, the moved items leave a cut clipboard.
 
@@ -16,6 +18,7 @@ use std::collections::HashMap;
 
 use gtk::subclass::prelude::*;
 use ox_core::clipboard::{ClipboardFiles, ClipboardMode};
+use ox_core::location::{parent_location, same_location};
 use ox_core::ops::{
     find_conflicts, run_chosen_transfer, starting_label, ChosenTransfer, ItemChoice, OpsError,
     TransferOutcome, TransferRequest,
@@ -193,7 +196,8 @@ impl BrowserWindow {
                 }
             }
         });
-        self.conclude_operation_in(finished, origin.as_deref()).await;
+        self.conclude_operation_in(finished, origin.as_deref(), None)
+            .await;
         outcome.ok()
     }
 
@@ -232,16 +236,41 @@ impl BrowserWindow {
                 return None;
             }
         };
-        if conflicts.is_empty() {
-            return Some(Vec::new());
+        // An item copied into its own folder meets only its own name:
+        // Keep both, without asking. The others are asked about.
+        let (own, others): (Vec<String>, Vec<String>) = conflicts.into_iter().partition(|uri| {
+            incoming.mode == TransferMode::Copy
+                && parent_location(uri)
+                    .is_some_and(|parent| same_location(&parent, &incoming.destination_folder))
+        });
+        // The names those copies will take are not offered to the others.
+        let mut reserved = Vec::new();
+        for uri in &own {
+            let planned =
+                super::conflict_rename::suggested_name(uri, &incoming.destination_folder, &reserved).await;
+            reserved.push(planned);
+        }
+        let mut answers: Vec<ConflictAnswer> = own
+            .into_iter()
+            .map(|uri| ConflictAnswer {
+                uri,
+                policy: ConflictPolicy::KeepBoth,
+                rename_to: None,
+            })
+            .collect();
+        if others.is_empty() {
+            return Some(answers);
         }
         let destination = self
             .imp()
             .locations
             .borrow()
             .display_location(&incoming.destination_folder);
-        self.ask_about_conflicts(&conflicts, &incoming.destination_folder, &destination)
-            .await
+        let asked = self
+            .ask_about_conflicts(&others, &incoming.destination_folder, &destination, reserved)
+            .await?;
+        answers.extend(asked);
+        Some(answers)
     }
 
     /// Runs `plan` as a transfer job with independent progress and cancellation.

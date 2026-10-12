@@ -22,6 +22,16 @@ use crate::window::tests::file_ops_support::open_dialog;
 use crate::window::widget_tree::children;
 use crate::window::WindowAction;
 
+/// The Size on disk text of `files`: the blocks they take, as Properties
+/// shows it.
+fn on_disk_text(files: &[std::path::PathBuf]) -> String {
+    use std::os::unix::fs::MetadataExt;
+    let bytes: u64 = files
+        .iter()
+        .map(|file| fs::metadata(file).expect("a fixture file").blocks() * 512)
+        .sum();
+    ox_core::format::pretty_bytes(bytes)
+}
 /// The name of the snapshot the fixtures create.
 pub(super) const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
 
@@ -131,7 +141,7 @@ fn show_item_properties_opens_the_folder_and_the_properties() {
     wait_until("the selection", || test.selected_names() == ["report.txt"]);
 }
 
-/// parity: PROP-001, PROP-003, PROP-006
+/// parity: PROP-001, PROP-003, PROP-006, PROP-033
 #[gtk::test]
 fn alt_enter_opens_the_properties_of_the_selected_file() {
     let fixture = Fixture::standard();
@@ -153,6 +163,11 @@ fn alt_enter_opens_the_properties_of_the_selected_file() {
     });
     assert_eq!(value_after(&general, "Type").as_deref(), Some("Text document"));
     assert_eq!(value_after(&general, "Size").as_deref(), Some("20 bytes"));
+    assert_eq!(
+        value_after(&general, "Size on disk"),
+        Some(on_disk_text(&[fixture.path("Notes 2.txt")])),
+        "the blocks the file takes, as Windows Explorer's Size on disk"
+    );
     assert_eq!(
         value_after(&general, "Full path"),
         Some(fixture.path("Notes 2.txt").display().to_string())
@@ -248,6 +263,145 @@ fn the_name_in_properties_renames_the_item() {
     wait_until("the dialog to close", || frame.is_closed());
 }
 
+/// An invalid name in Properties is refused before anything is asked, as
+/// renaming in place and the Rename dialog refuse it: an empty name does
+/// not open the extension question.
+///
+/// parity: PROP-005, OPS-049
+#[gtk::test]
+fn an_invalid_name_in_properties_is_refused_before_the_extension_question() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the name field", || {
+        !descendants::<gtk::Entry>(&general).is_empty()
+    });
+    let name = descendants::<gtk::Entry>(&general).remove(0);
+
+    name.set_text("");
+    name.emit_activate();
+
+    wait_until("the refusal", || !frame.error_text().is_empty());
+    assert_eq!(
+        frame.error_text(),
+        "Enter a non-empty file name, not “.” or “..”."
+    );
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "no extension question"
+    );
+    assert!(fixture.path("Notes 2.txt").is_file());
+}
+
+/// The name in Properties asks before it changes a file's extension, as
+/// Windows Explorer does, and renames only once the user confirms.
+///
+/// parity: PROP-005, OPS-049
+#[gtk::test]
+fn the_name_in_properties_asks_before_changing_the_extension() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the name field", || {
+        !descendants::<gtk::Entry>(&general).is_empty()
+    });
+    let name = descendants::<gtk::Entry>(&general).remove(0);
+
+    name.set_text("Notes 2.md");
+    name.emit_activate();
+    let question = open_dialog(&test);
+    assert_eq!(question.title_text(), "Change the extension?");
+    question.press("Cancel");
+    wait_until("the refusal", || {
+        frame.error_text() == "The name was not changed."
+    });
+    assert!(fixture.path("Notes 2.txt").is_file());
+
+    name.emit_activate();
+    open_dialog(&test).press("Change extension");
+
+    wait_until("the rename", || fixture.path("Notes 2.md").exists());
+    wait_until("the dialog to close", || frame.is_closed());
+}
+
+/// The Properties dialog's name field, once it shows, for the item called
+/// `name` in `test`'s folder.
+fn properties_name_field(test: &TestWindow, name: &str) -> (DialogFrame, gtk::Entry) {
+    test.select_named(name);
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the name field", || {
+        !descendants::<gtk::Entry>(&general).is_empty()
+    });
+    let field = descendants::<gtk::Entry>(&general).remove(0);
+    (frame, field)
+}
+
+/// The extension questions open over `test`'s window.
+fn extension_questions(test: &TestWindow) -> usize {
+    gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|window| window.downcast::<crate::dialog::Dialog>().ok())
+        .filter(|dialog| {
+            dialog.is_visible()
+                && dialog.transient_for().as_ref() == Some(test.window.upcast_ref())
+                && dialog.title_text() == "Change the extension?"
+        })
+        .count()
+}
+
+/// Pressing Enter twice quickly in the name field asks about the
+/// extension once, not twice.
+///
+/// parity: PROP-005, OPS-049
+#[gtk::test]
+fn enter_twice_in_properties_asks_about_the_extension_once() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let (_frame, name) = properties_name_field(&test, "Notes 2.txt");
+
+    name.set_text("Notes 2.md");
+    name.emit_activate();
+    name.emit_activate();
+
+    wait_until("the question", || extension_questions(&test) > 0);
+    wait_for_frames(&test.window, 3);
+    assert_eq!(extension_questions(&test), 1, "one question");
+    open_dialog(&test).press("Cancel");
+    wait_until("no question", || extension_questions(&test) == 0);
+    assert!(fixture.path("Notes 2.txt").is_file());
+}
+
+/// A link to a folder is renamed in Properties without the extension
+/// question, as renaming it in place does: like the folder it opens, its
+/// name has no extension.
+///
+/// parity: PROP-005, OPS-049
+#[gtk::test]
+fn a_link_to_a_folder_is_renamed_in_properties_without_the_extension_question() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Target")).expect("the folder is made");
+    std::os::unix::fs::symlink(fixture.path("Target"), fixture.path("Docs.old")).expect("the link is made");
+    let test = TestWindow::open(&fixture.uri());
+    let (frame, name) = properties_name_field(&test, "Docs.old");
+
+    name.set_text("Docs.new");
+    name.emit_activate();
+
+    wait_until("the rename", || {
+        fixture.path("Docs.new").is_symlink() || extension_questions(&test) > 0
+    });
+    assert_eq!(extension_questions(&test), 0, "no extension question");
+    wait_until("the dialog to close", || frame.is_closed());
+}
+
 /// The owner changes who may view or modify a file on the Permissions
 /// tab.
 ///
@@ -299,6 +453,33 @@ fn the_owner_changes_a_files_permissions() {
     wait_until("the advanced mode", || mode() == 0o2600);
 }
 
+/// With several items selected, Size on disk counts a link to a file as
+/// the file it points to, as Size does, so the two describe the same
+/// files.
+///
+/// parity: PROP-033
+#[gtk::test]
+fn size_on_disk_of_several_items_follows_links_as_size_does() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Big.bin"), vec![7_u8; 200_000]).expect("the file is written");
+    std::os::unix::fs::symlink(fixture.path("Big.bin"), fixture.path("Big link.bin"))
+        .expect("the link is made");
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Big.bin", "Big link.bin"]);
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+
+    wait_until("the space on disk", || {
+        value_after(&frame, "Size on disk").is_some_and(|text| text != "Calculating…")
+    });
+    assert_eq!(
+        value_after(&frame, "Size").as_deref(),
+        Some(ox_core::format::pretty_bytes(400_000).as_str())
+    );
+    let both = [fixture.path("Big.bin"), fixture.path("Big link.bin")];
+    assert_eq!(value_after(&frame, "Size on disk"), Some(on_disk_text(&both)));
+}
+
 /// Properties of several items total them, folders' content included,
 /// and a permission change reaches every one while every bit the user did
 /// not change stays as each item has it.
@@ -337,6 +518,8 @@ fn properties_of_several_items_total_them_and_change_them_together() {
         value_after(&frame, "Contains").as_deref() == Some("3 files, 1 folder")
     });
     assert_eq!(value_after(&frame, "Size").as_deref(), Some("60 bytes"));
+    let files = ["Documents/inside.txt", "Notes 2.txt", "Notes 10.txt"].map(|name| fixture.path(name));
+    assert_eq!(value_after(&frame, "Size on disk"), Some(on_disk_text(&files)));
     assert_eq!(
         value_after(&frame, "Location").as_deref(),
         Some(format!("All in {}", fixture.path("").display()).trim_end_matches('/'))
@@ -568,9 +751,18 @@ fn calculate_folder_size_shows_the_size_everywhere_the_folder_is() {
 
     test.activate("calculate-folder-size-of", Some(&fixture.uri_of("Documents")));
 
+    let general = view.general_panel();
+    assert_eq!(
+        value_after(&general, "Size on disk").as_deref(),
+        Some("Not scanned")
+    );
     wait_until("the scan to finish", || {
         view.size_text().as_deref() == Some("10 bytes")
     });
+    assert_eq!(
+        value_after(&general, "Size on disk"),
+        Some(on_disk_text(&[fixture.path("Documents").join("a.txt")]))
+    );
     let strip = test.window.size_strip();
     wait_until("the bar to show the end", || strip.button_label() == "Dismiss");
     assert_eq!(

@@ -50,6 +50,25 @@ fn clipboard_then_documents(fixture: &Fixture, command: &str, names: &[&str]) ->
     test
 }
 
+/// Copies the files `names` of the folder Documents, other files with the
+/// names of files in the fixture's folder, and shows that folder again: a
+/// paste there meets other items of those names, which it asks about. (A
+/// copy pasted into its own folder meets only itself and asks nothing.)
+fn copy_namesakes_from_documents(fixture: &Fixture, names: &[&str]) -> TestWindow {
+    for name in names {
+        fs::write(fixture.path(&format!("Documents/{name}")), b"Another file\n")
+            .expect("the namesake is written");
+    }
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    select_names(&test, names);
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri()));
+    wait_until("the fixture's folder", || {
+        !test.window.is_loading() && test.names().iter().any(|name| name == "Documents")
+    });
+    test
+}
+
 /// parity: CLIP-001, CLIP-003, CLIP-004, OPS-023, OPS-027
 #[gtk::test]
 fn copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy() {
@@ -132,13 +151,88 @@ fn text_on_the_clipboard_is_no_file_list_and_disables_paste() {
     wait_until("Paste to be disabled", || !is_enabled(&test, "paste"));
 }
 
-/// parity: OPS-026, OPS-028, XFER-008
+/// Pasting a copy into the folder it came from makes "Notes 2 - Copy.txt"
+/// at once, as Windows Explorer does: the item's own name is not a
+/// conflict to ask about.
+///
+/// parity: OPS-026, XFER-008
 #[gtk::test]
-fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {
+fn pasting_a_copy_into_its_own_folder_makes_a_copy_without_asking() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt"]);
     test.activate("copy", None);
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+
+    test.activate("paste", None);
+
+    wait_until("the copy, or a question", || {
+        fixture.path("Notes 2 - Copy.txt").is_file() || super::file_ops_support::dialog_over(&test).is_some()
+    });
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing is asked"
+    );
+    wait_until("the copy to be selected", || {
+        test.selected_names() == ["Notes 2 - Copy.txt"]
+    });
+    assert_eq!(
+        fs::read(fixture.path("Notes 2 - Copy.txt")).expect("copied"),
+        fs::read(fixture.path("Notes 2.txt")).expect("kept")
+    );
+}
+
+/// One drop brings a file into its own folder and another file of the
+/// same name. The first becomes "Notes 2 - Copy.txt" without asking, so
+/// the Rename suggestion for the second skips that name, and accepting it
+/// copies both.
+///
+/// parity: OPS-026, OPS-028
+#[gtk::test]
+fn the_rename_suggestion_skips_the_name_an_automatic_copy_takes() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/Notes 2.txt"), b"Another file\n").expect("the namesake is written");
+    let test = TestWindow::open(&fixture.uri());
+
+    let taken = test.window.drop_files(
+        &[
+            fixture.uri_of("Notes 2.txt"),
+            fixture.uri_of("Documents/Notes 2.txt"),
+        ],
+        None,
+        crate::window::file_drop::DropAction::Copy,
+    );
+    assert!(taken);
+    let dialog = open_dialog(&test);
+    let new_name = descendants::<gtk::Entry>(&dialog)
+        .into_iter()
+        .next()
+        .expect("the dialog has a New name field");
+    assert_ne!(
+        new_name.text(),
+        "Notes 2 - Copy.txt",
+        "that name is the automatic copy's"
+    );
+    dialog.press("Rename");
+
+    wait_until("both copies", || {
+        fixture.path("Notes 2 - Copy.txt").is_file() && fixture.path("Notes 2 - Copy (2).txt").is_file()
+    });
+    assert_eq!(
+        fs::read(fixture.path("Notes 2 - Copy.txt")).expect("the automatic copy"),
+        b"Synthetic test data\n"
+    );
+    assert_eq!(
+        fs::read(fixture.path("Notes 2 - Copy (2).txt")).expect("the renamed copy"),
+        b"Another file\n"
+    );
+}
+
+/// parity: OPS-026, OPS-028, XFER-008
+#[gtk::test]
+fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {
+    let fixture = Fixture::standard();
+    let test = copy_namesakes_from_documents(&fixture, &["Notes 2.txt"]);
     wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
 
     test.activate("paste", None);
@@ -151,11 +245,17 @@ fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {
         "{}",
         dialog.message_text()
     );
-    // The copy is of the existing item itself, which may not replace
-    // itself.
+    // Another file of that name may be replaced.
     assert_eq!(
         dialog.button_labels(),
-        ["Cancel", "Skip duplicates", "Keep both", "Rename"]
+        [
+            "Cancel",
+            "Skip duplicates",
+            "Keep both",
+            "Rename",
+            "Replace older",
+            "Replace existing"
+        ]
     );
     assert!(
         descendants::<gtk::CheckButton>(&dialog).is_empty(),
@@ -165,7 +265,7 @@ fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {
     wait_until("the second copy to be selected", || {
         test.selected_names()
             .first()
-            .is_some_and(|name| name.starts_with("Notes 2 (copy"))
+            .is_some_and(|name| name.starts_with("Notes 2 - Copy"))
     });
     assert!(fixture.path("Notes 2.txt").is_file());
 }
@@ -174,9 +274,7 @@ fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {
 #[gtk::test]
 fn cancelling_the_conflict_dialog_changes_nothing() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    select_names(&test, &["Notes 2.txt"]);
-    test.activate("copy", None);
+    let test = copy_namesakes_from_documents(&fixture, &["Notes 2.txt"]);
     wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
     let names_before = test.names();
 
@@ -193,9 +291,7 @@ fn cancelling_the_conflict_dialog_changes_nothing() {
 #[gtk::test]
 fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
-    test.activate("copy", None);
+    let test = copy_namesakes_from_documents(&fixture, &["Notes 2.txt", "Notes 10.txt"]);
     wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
 
     test.activate("paste", None);
@@ -217,12 +313,12 @@ fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
     wait_until("the answered copy to be selected", || {
         test.selected_names()
             .first()
-            .is_some_and(|name| name.starts_with("Notes 10 (copy"))
+            .is_some_and(|name| name.starts_with("Notes 10 - Copy"))
     });
     let copies: Vec<String> = test
         .names()
         .into_iter()
-        .filter(|name| name.contains("(copy"))
+        .filter(|name| name.contains(" - Copy"))
         .collect();
     assert_eq!(copies.len(), 1, "Notes 2.txt was skipped: {copies:?}");
     let report = open_dialog(&test);
@@ -238,9 +334,7 @@ fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
 #[gtk::test]
 fn rename_in_the_conflict_dialog_copies_under_the_typed_name() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    select_names(&test, &["Notes 2.txt"]);
-    test.activate("copy", None);
+    let test = copy_namesakes_from_documents(&fixture, &["Notes 2.txt"]);
     wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
 
     test.activate("paste", None);
@@ -249,11 +343,7 @@ fn rename_in_the_conflict_dialog_copies_under_the_typed_name() {
         .into_iter()
         .next()
         .expect("the dialog has a New name field");
-    assert_eq!(
-        new_name.text(),
-        "Notes 2 (copy 2).txt",
-        "a free name is suggested"
-    );
+    assert_eq!(new_name.text(), "Notes 2 - Copy.txt", "a free name is suggested");
     new_name.set_text("Notes 10.txt");
     dialog.press("Rename");
     wait_until("the taken name to be refused", || dialog.error_text().is_some());
@@ -265,7 +355,11 @@ fn rename_in_the_conflict_dialog_copies_under_the_typed_name() {
     });
     assert_eq!(
         fs::read(fixture.path("Renamed notes.txt")).expect("the copy exists"),
-        fs::read(fixture.path("Notes 2.txt")).expect("the original stays")
+        fs::read(fixture.path("Documents/Notes 2.txt")).expect("the original stays")
+    );
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).expect("the other file stays"),
+        b"Synthetic test data\n"
     );
 }
 
@@ -398,7 +492,7 @@ fn paste_during_a_search_asks_to_open_the_destination_folder() {
     wait_until("the refusal", || {
         test.window.shown_message() == "Open the destination folder before pasting."
     });
-    assert!(!fixture.path("Notes 2 (copy 2).txt").exists());
+    assert!(!fixture.path("Notes 2 - Copy.txt").exists());
 }
 
 /// parity: CLIP-002, CLIP-009, LOOK-014

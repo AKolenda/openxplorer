@@ -63,7 +63,7 @@ pub enum ConflictPolicy {
     Skip,
     /// Replace existing files and merge same-name folders (Windows-style).
     Replace,
-    /// Use the next free `name (copy N)` name.
+    /// Use the next free `name - Copy (N)` name.
     KeepBoth,
 }
 
@@ -207,7 +207,7 @@ pub struct TransferResult {
     /// The user cancelled; later items were not started.
     pub cancelled: bool,
     /// Where each copied or moved item of `done` is now, in the same
-    /// order, under the name the engine gave it (a Keep both `(copy N)`
+    /// order, under the name the engine gave it (a Keep both `- Copy`
     /// name or a name with unstorable characters replaced). Undo and the
     /// selection after a paste use it (OPS-029, SEL-016).
     pub landed: Vec<Landed>,
