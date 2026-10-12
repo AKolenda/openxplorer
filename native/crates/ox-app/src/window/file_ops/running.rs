@@ -14,9 +14,10 @@
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
+use ox_core::location::TRASH_URI;
 use ox_core::ops::{
-    run_transfer, starting_label, summarize, OperationContext, OperationSummary, OpsError, TransferOutcome,
-    TransferRequest, UndoRecord, RESULT_TITLE, STOPPED_TITLE,
+    run_transfer, starting_label, summarize, trashed_items_since, OperationContext, OperationSummary,
+    OpsError, TransferOutcome, TransferRequest, UndoRecord, RESULT_TITLE, STOPPED_TITLE,
 };
 use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
@@ -190,6 +191,8 @@ impl BrowserWindow {
     /// Runs `request`, a move to the Trash or a delete, and concludes it:
     /// [`Self::run_request`], then [`Self::conclude_operation`], which
     /// selects `next`, the item that followed the removed ones (SEL-017).
+    /// The notification's Show opens what [`Self::removed_destination`]
+    /// says, never `next`.
     pub(super) async fn run_deletion(&self, request: &TransferRequest, next: Option<&str>) {
         let origin = self.current_uri();
         let Some(outcome) = self.run_request(request).await else {
@@ -199,7 +202,58 @@ impl BrowserWindow {
             select_after: next.map(str::to_owned).into_iter().collect(),
             ..FinishedOperation::of_transfer(request.mode, outcome)
         });
-        self.conclude_operation_in(finished, origin.as_deref()).await;
+        // Undo knows the deletion before the notice's lookup is awaited:
+        // Ctrl+Z meanwhile must take back this deletion, not the action
+        // before it.
+        let recorded = match &finished {
+            Ok(FinishedOperation {
+                undo: Some(record), ..
+            }) => {
+                self.context().record_operation(record.clone());
+                true
+            }
+            _ => false,
+        };
+        let shown = match &finished {
+            Ok(finished) => {
+                self.removed_destination(request.mode, finished.undo.as_ref())
+                    .await
+            }
+            Err(_) => Destination::default(),
+        };
+        self.conclude_recorded_operation_in(finished, origin.as_deref(), Some(shown), recorded)
+            .await;
+    }
+
+    /// What the Show button of a deletion's notification opens: the
+    /// Recycle Bin with the items `undo` says a Move to Trash put there
+    /// selected, or the Recycle Bin alone when they cannot be found. A
+    /// permanent delete leaves nothing to show, so Show only brings the
+    /// window back, as for any operation with no destination (INT-026).
+    /// The Recycle Bin is listed only while no window has focus, the only
+    /// time a notification is sent.
+    async fn removed_destination(&self, mode: TransferMode, undo: Option<&UndoRecord>) -> Destination {
+        let trashed = match (mode, undo) {
+            (
+                TransferMode::Trash,
+                Some(UndoRecord::Trash {
+                    original_paths,
+                    trashed_since,
+                }),
+            ) => (original_paths.clone(), *trashed_since),
+            _ => return Destination::default(),
+        };
+        if !self.is_in_background() {
+            return Destination::folder(TRASH_URI);
+        }
+        let (original_paths, since) = trashed;
+        let items = trashed_items_since(original_paths, since, &Cancellation::new())
+            .await
+            .unwrap_or_default();
+        Destination {
+            folder: Some(TRASH_URI.to_owned()),
+            items,
+        }
     }
 
     /// Concludes an ended operation: Undo remembers it, the folder is
@@ -209,23 +263,39 @@ impl BrowserWindow {
     /// button (OPS-032).
     pub(super) async fn conclude_operation(&self, outcome: Result<FinishedOperation, OpsError>) {
         let origin = self.current_uri();
-        self.conclude_operation_in(outcome, origin.as_deref()).await;
+        self.conclude_operation_in(outcome, origin.as_deref(), None).await;
     }
 
-    /// Completion must not replace a selection made while browsing another folder.
+    /// Completion must not replace a selection made while browsing another
+    /// folder. The notification's Show opens `shown`, or by default the
+    /// items the operation selects afterwards.
     pub(super) async fn conclude_operation_in(
         &self,
         outcome: Result<FinishedOperation, OpsError>,
         origin: Option<&str>,
+        shown: Option<Destination>,
+    ) {
+        self.conclude_recorded_operation_in(outcome, origin, shown, false)
+            .await;
+    }
+
+    /// [`Self::conclude_operation_in`]; `recorded` when Undo already
+    /// remembers the operation.
+    async fn conclude_recorded_operation_in(
+        &self,
+        outcome: Result<FinishedOperation, OpsError>,
+        origin: Option<&str>,
+        shown: Option<Destination>,
+        recorded: bool,
     ) {
         let still_here = self.current_uri().as_deref() == origin;
         match outcome {
             Ok(finished) => {
                 let is_undoable = finished.undo.is_some();
-                if let Some(record) = finished.undo {
+                if let Some(record) = finished.undo.filter(|_| !recorded) {
                     self.context().record_operation(record);
                 }
-                let destination = Destination::items(finished.select_after.clone());
+                let destination = shown.unwrap_or_else(|| Destination::items(finished.select_after.clone()));
                 if still_here {
                     self.reload_selecting(finished.select_after);
                 }

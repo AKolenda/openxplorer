@@ -35,10 +35,11 @@ use crate::gio_node::GioNode;
 use crate::location::TRASH_URI;
 use crate::transfer::{Cancellation, Node, SourceChange, TransferResult};
 
-/// How often Undo of Move to Trash lists the Recycle Bin again when an
-/// item it restores is not listed yet, and how long it waits each time:
-/// while a window watches `trash:///`, the backend may list a moment
-/// after the Move to Trash finished.
+/// How often Undo of Move to Trash, or finding what it put in the
+/// Recycle Bin, lists the Recycle Bin again when an item it looks for is
+/// not listed yet, and how long it waits each time: while a window
+/// watches `trash:///`, the backend may list a moment after the Move to
+/// Trash finished.
 const RELISTS: u32 = 4;
 const RELIST_WAIT: Duration = Duration::from_millis(250);
 
@@ -340,17 +341,7 @@ pub(crate) fn restore_trashed_since(
     since: u64,
     context: &OperationContext,
 ) -> Result<TransferResult, OpsError> {
-    let mut items = list_recycle_bin_blocking(&context.cancel)?;
-    let mut relists = 0;
-    while relists < RELISTS
-        && original_paths
-            .iter()
-            .any(|path| newest_trashed_from(&items, path, since).is_none())
-    {
-        thread::sleep(RELIST_WAIT);
-        items = list_recycle_bin_blocking(&context.cancel)?;
-        relists += 1;
-    }
+    let items = listing_holding(original_paths, since, &context.cancel)?;
     let mut result = TransferResult::default();
     for original_path in original_paths {
         let restored = match newest_trashed_from(&items, original_path, since) {
@@ -371,6 +362,53 @@ pub(crate) fn restore_trashed_since(
         forget_removed_items();
     }
     Ok(result)
+}
+
+/// The `trash:///` URIs of the items a Move to Trash put in the Recycle
+/// Bin: for each of `original_paths`, the newest item deleted from there
+/// since `since` (seconds since the Unix epoch), as Undo finds them. An
+/// item that is not there (restored or deleted since) is left out.
+///
+/// # Errors
+///
+/// Cancellation, or a Recycle Bin that cannot be listed.
+pub async fn trashed_items_since(
+    original_paths: Vec<PathBuf>,
+    since: u64,
+    cancel: &Cancellation,
+) -> Result<Vec<String>, OpsError> {
+    let cancel = cancel.clone();
+    on_worker(move || {
+        let items = listing_holding(&original_paths, since, &cancel)?;
+        Ok(original_paths
+            .iter()
+            .filter_map(|path| newest_trashed_from(&items, path, since))
+            .map(|item| item.uri.clone())
+            .collect())
+    })
+    .await
+}
+
+/// The Recycle Bin's items, listed again a few times while one of
+/// `original_paths` deleted since `since` is not listed yet: the backend
+/// may list an item a moment after the Move to Trash finished.
+fn listing_holding(
+    original_paths: &[PathBuf],
+    since: u64,
+    cancel: &Cancellation,
+) -> Result<Vec<RecycledItem>, OpsError> {
+    let mut items = list_recycle_bin_blocking(cancel)?;
+    let mut relists = 0;
+    while relists < RELISTS
+        && original_paths
+            .iter()
+            .any(|path| newest_trashed_from(&items, path, since).is_none())
+    {
+        thread::sleep(RELIST_WAIT);
+        items = list_recycle_bin_blocking(cancel)?;
+        relists += 1;
+    }
+    Ok(items)
 }
 
 /// The newest of `items` deleted from `original_path` since `since`.
