@@ -7820,6 +7820,10 @@ msgid "Adds item check boxes as in Windows 11 and a redesigned Settings page wit
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Copies, drags and new folders work as in Windows Explorer: a copy is named “name - Copy”, a plain drag moves within a drive and copies to another, and New folder makes the folder at once to rename in place. Properties shows Size on disk, a rename that changes the extension asks first, and Super+E can open OpenXplorer on KDE Plasma. An empty folder looks as it does in Windows and takes right-click, paste and drops, New and Paste are off in a folder you cannot write to, Apply to all folders uses the choices in the dialog, and Show after a delete opens the Recycle Bin."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "File Manager"
 msgstr ""
 

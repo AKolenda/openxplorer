@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.4
+Version:        2.0.5
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -116,6 +116,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Mon Oct 12 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.5-1
+- OpenXplorer 2.0.5: copies, drags and new folders that work as in Windows
+  Explorer, Size on disk in Properties, a warning before a rename changes an
+  extension, Super+E on KDE Plasma and fixes for empty and read-only folders.
+
 * Fri Oct 09 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.4-1
 - OpenXplorer 2.0.4: item check boxes as in Windows 11, a redesigned
   Settings page, Open and Save dialogs that no longer wait on shares, and

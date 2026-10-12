@@ -1,60 +1,36 @@
-# Unreleased
+# 2.0.5 — 2026-10-12
 
-- Dragging files works like Windows Explorer: a plain drag of
-  OpenXplorer's own items moves them to a folder on the same drive and
-  copies them to another drive (another partition, a USB stick, the
-  Windows drive or a network place). Hold Ctrl to copy or Shift to move.
-  A plain drag from another app still copies (hold Shift to move). A
-  drag out to another app offers it a copy or the drop menu, plus a move
-  or a link when Shift or Ctrl+Shift is held as the drag starts;
-  OpenXplorer itself never deletes what it offered.
-- Properties shows "Size on disk" under Size, as Windows Explorer does:
-  the space a file takes on its drive. A folder's is measured with
-  Calculate folder size, and several items show their combined space.
-- Renaming a file to a different extension asks first, as Windows
-  Explorer does: "If you change a file name extension, the file might
-  become unusable. Are you sure you want to change it?" It applies to
-  renaming in place, the Rename dialog and the name in Properties, and to
-  a batch rename whose name gives an extension to a file without one;
-  folders, links to folders and a change of case only (.JPG to .jpg)
-  never ask.
-- On KDE Plasma, the switch Settings > Default apps > Super+E opens
-  OpenXplorer makes Super+E open a new OpenXplorer window each time, as
-  Win+E opens a new File Explorer window. On takes the shortcut from Dolphin (keeping Dolphin's other
-  shortcuts) through KDE's own shortcut service; off gives it back. Log
-  out and back in after changing it for Super+E to follow.
-- New folder works like Windows Explorer: Ctrl+Shift+N or New > Folder
-  makes "New folder" at once ("New folder (2)" and so on if taken),
-  selects it and starts renaming it in place, instead of asking for the
-  name in a dialog first. Escape keeps "New folder".
-- In a folder you are not allowed to write to (on a drive that is
-  otherwise writable), New and Paste are now off in the folder's
-  right-click menu and the command bar, with "This folder is read-only."
-  as the reason. Before, they stayed on and the action then failed.
-- Apply to all folders, in View > Adjust view display style, now applies
-  what the dialog shows. A Group by, sort or layout picked there before
-  pressing it was ignored, and every folder got the view the folder had
-  when the dialog opened.
-- The Show button of the desktop notification after a delete no longer
-  selects some other file in the folder. After moving items to the Recycle
-  Bin, Show opens the Recycle Bin with them selected. After deleting
-  permanently, nothing is left to show, so Show only brings the window
-  back.
-- Copies are named as Windows Explorer names them: Duplicate, pasting
-  into the same folder and Keep both now give `Notes - Copy.txt`, then
-  `Notes - Copy (2).txt`, instead of `Notes (copy 2).txt`. Pasting a
-  copy into its own folder makes `Notes - Copy.txt` straight away, without
-  the "Items already exist" question, as Windows Explorer does.
-- Apply to all folders and Reset folders now cover Downloads too. Before,
-  Downloads kept the Group by chosen there, so it stayed grouped by date
-  after Apply to all folders. Apply now gives Downloads the applied Group
-  by, and Reset groups it by date again, as by default.
-- An empty folder now works like one in Windows Explorer: right-click
-  its "This folder is empty" page for the folder menu (New, Paste and the
-  rest), paste with Ctrl+V or the menu, and drop files on it. The
-  keyboard stays on the folder too, so the Menu key and Backspace work.
-  A location that could not be opened offers neither New nor Paste, and
-  a screen reader reads the page's own words.
+## What's Changed
+* fix(ci): stop waiting 10 s on zombie processes after each test binary by @AKolenda in https://github.com/AKolenda/openxplorer/pull/90
+* feat(drag): move a plain drag within a drive and copy it across drives by @addition-official in https://github.com/AKolenda/openxplorer/pull/91
+* feat(properties): show Size on disk like Windows Explorer by @addition-official in https://github.com/AKolenda/openxplorer/pull/93
+* feat(rename): ask before a rename changes a file's extension by @addition-official in https://github.com/AKolenda/openxplorer/pull/94
+* feat(integration): let Super+E open OpenXplorer on KDE Plasma by @addition-official in https://github.com/AKolenda/openxplorer/pull/95
+* feat(files): make a new folder at once and rename it in place, as Windows does by @addition-official in https://github.com/AKolenda/openxplorer/pull/100
+* fix(menus): disable New and Paste in a folder you cannot write to by @addition-official in https://github.com/AKolenda/openxplorer/pull/101
+* fix(views): make Apply to all folders apply the choices in the dialog by @addition-official in https://github.com/AKolenda/openxplorer/pull/103
+* fix(notifications): make Show after a delete open the Recycle Bin by @addition-official in https://github.com/AKolenda/openxplorer/pull/102
+* chore(deps): bump next from 16.3.8 to 16.4.0 by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/96
+* chore(deps-dev): bump wrangler from 4.147.0 to 4.148.0 by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/97
+* feat(files): name copies like Windows Explorer ("name - Copy", "name - Copy (2)") by @addition-official in https://github.com/AKolenda/openxplorer/pull/92
+* fix(views): let Apply to all and Reset cover Downloads' Group by by @addition-official in https://github.com/AKolenda/openxplorer/pull/104
+* fix(views): let an empty folder take right-click, paste and drops by @addition-official in https://github.com/AKolenda/openxplorer/pull/98
+* feat(views): show an empty folder as Windows Explorer does by @addition-official in https://github.com/AKolenda/openxplorer/pull/99
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.5_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.5-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.5-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.5-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.5-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.4...v2.0.5
 
 # 2.0.4 — 2026-10-09
 
