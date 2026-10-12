@@ -670,10 +670,16 @@ impl FileDialogRegistration {
     /// [`FileDialogError::Io`] when `systemctl` cannot run, the restart
     /// fails, or the portal is not running after it, and
     /// [`FileDialogError::PortalMoved`] when the restarted portal reads
-    /// another folder than the one the operation found.
+    /// another folder than the one the operation found, and
+    /// [`FileDialogError::PortalUnknown`], before restarting, when that
+    /// folder could not be told.
     pub fn restart_portal(&self) -> Result<PortalRestart, FileDialogError> {
         if !self.is_available() {
             return Err(FileDialogError::Unsupported);
+        }
+        // A change made without knowing the folder could not be checked.
+        if let PortalDir::Unknown(reason) = &self.paths.portal_dir {
+            return Err(FileDialogError::PortalUnknown(reason.clone()));
         }
         let restart = restart_portal_with(Path::new("systemctl"))?;
         // systemd builds the environment again for the new process, so
@@ -683,7 +689,7 @@ impl FileDialogRegistration {
                 let now = service_portal_dir()
                     .map_err(FileDialogError::PortalUnknown)?
                     .map(PathBuf::from);
-                if now != *before {
+                if !same_folder(now.as_deref(), before.as_deref()) {
                     return Err(FileDialogError::PortalMoved);
                 }
             }
@@ -881,6 +887,20 @@ fn service_portal_dir() -> Result<Option<String>, String> {
     }
     let unset = strings(unit, SYSTEMD_SERVICE, "UnsetEnvironment");
     Ok(variable_in(&environments, &unset, PORTAL_DIR_VARIABLE))
+}
+
+/// Whether two portal folders are the same: both unset, or naming one
+/// folder, also through a symlink.
+fn same_folder(one: Option<&Path>, other: Option<&Path>) -> bool {
+    match (one, other) {
+        (Some(one), Some(other)) => {
+            one == other
+                || fs::canonicalize(one)
+                    .ok()
+                    .is_some_and(|one| fs::canonicalize(other).ok().as_ref() == Some(&one))
+        }
+        (one, other) => one == other,
+    }
 }
 
 /// The value of `name` in a process's environment as `/proc/<pid>/environ`
@@ -1255,6 +1275,29 @@ mod tests {
             Some("/from/manager"),
             "UnsetEnvironment= with another value keeps it"
         );
+    }
+
+    /// The folder a restarted portal reads is the same when it is named
+    /// through a symlink to it.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn a_folder_named_through_a_symlink_is_the_same_folder() {
+        let root = tempfile::tempdir().expect("temporary folder");
+        let folder = root.path().join("portals");
+        fs::create_dir(&folder).expect("folder");
+        let alias = root.path().join("alias");
+        std::os::unix::fs::symlink(&folder, &alias).expect("link");
+        let elsewhere = root.path().join("elsewhere");
+        fs::create_dir(&elsewhere).expect("folder");
+        assert!(same_folder(Some(&folder), Some(&alias)));
+        assert!(same_folder(None, None));
+        assert!(!same_folder(Some(&folder), Some(&elsewhere)));
+        assert!(!same_folder(Some(&folder), None));
+        assert!(!same_folder(
+            Some(&root.path().join("missing")),
+            Some(&root.path().join("missing-too"))
+        ));
     }
 
     /// A record written before the app knew the portal's folder has no

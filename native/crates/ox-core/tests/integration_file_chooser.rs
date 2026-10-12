@@ -885,6 +885,32 @@ fn restore_goes_on_past_an_unreadable_kde_script_path() {
     assert!(script.is_dir(), "left alone");
 }
 
+/// Apply now refuses, before restarting anything, when the folder the
+/// portal reads could not be told, since the change could not be checked.
+///
+/// parity: INT-032
+#[test]
+fn apply_now_refuses_when_the_portal_folder_is_unknown() {
+    let fixture = OptInFixture::new();
+    let registration = FileDialogRegistration::new(
+        FileDialogPaths {
+            portal_dir: PortalDir::Unknown("its environment file uses escapes".to_owned()),
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    );
+    assert!(matches!(
+        registration.restart_portal(),
+        Err(FileDialogError::PortalUnknown(_))
+    ));
+    assert!(matches!(
+        registration.enable(),
+        Err(FileDialogError::PortalUnknown(_))
+    ));
+    assert!(!registration.is_enabled());
+}
+
 /// Enabling again after the user changed the file (here: another backend
 /// for file dialogs and another default) keeps that change: Restore then
 /// puts back the file as the user left it, not as it was before the
