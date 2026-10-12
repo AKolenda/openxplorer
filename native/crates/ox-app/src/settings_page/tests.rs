@@ -576,11 +576,13 @@ fn every_setting_of_the_python_page_has_a_row() {
 }
 
 /// Rows that work but disable their button while there is nothing for it
-/// to do, as Restore previous with no handler recorded (INT-030).
-const ROWS_FOLLOWING_THEIR_STATE: [&str; 3] = [
+/// to do, as Restore previous with no handler recorded (INT-030), or the
+/// Super+E switch outside KDE Plasma (INT-033).
+const ROWS_FOLLOWING_THEIR_STATE: [&str; 4] = [
     "Restore the previous file handlers",
     "Give ZIP files back to the previous app",
     "Open ZIP files from other apps with OpenXplorer",
+    "Super+E opens OpenXplorer",
 ];
 
 /// Every row of every category works: its controls take input, except
@@ -883,7 +885,8 @@ fn how_sizes_are_counted_opens_the_folder_sizes_help() {
     assert_eq!(settings.page.view(), SettingsView::Subpage(Subpage::FolderSizes));
     let subpage = settings.page.imp().subpages.borrow()[&Subpage::FolderSizes].clone();
     let text = crate::settings_page::search::shown_text(&subpage);
-    assert!(text.contains("Results are logical file bytes"), "{text}");
+    assert!(text.contains("Size is the logical file bytes"), "{text}");
+    assert!(text.contains("which on ZFS is the compressed space"), "{text}");
     assert!(text.contains("Cancel stops the active scan"), "{text}");
 }
 

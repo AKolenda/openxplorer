@@ -2,25 +2,24 @@
 //! New folder (Ctrl+Shift+N), and the New menu's files (OPS-001,
 //! OPS-002, CMD-004).
 //!
-//! Ports `newItem` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`. New folder
-//! asks for the name first, "New folder" selected, and creates the folder
-//! with an exclusive creation, so an existing name is refused inside the
-//! dialog and never overwritten (OPS-008). The new folder is selected
-//! afterwards, as Windows and Dolphin do (the Python app left the
-//! selection as it was), and Undo moves it to the Trash (OPS-029). A name
-//! with slashes makes folders inside folders, as Dolphin's New folder
-//! does (OPS-007).
+//! New folder makes the folder at once, as Windows Explorer does: "New
+//! folder", or "New folder (2)" and so on when that is taken, each made
+//! with an exclusive creation so nothing is overwritten (OPS-008). The new
+//! folder is then selected and renamed in place, its whole name selected
+//! (OPS-010): Enter keeps the typed name, Escape keeps "New folder". Undo
+//! moves it to the Trash (OPS-029). This replaces the port of `newItem` in
+//! `v2.0.0:desktop/ui/app.js`, which asked for the name in a dialog first.
 //! Every file of the New menu opens the template dialog
 //! ([`super::template_dialog`]) with its template chosen.
 
-use ox_core::ops::{create_folder_path, BuiltinTemplate, CreatedItem, OperationContext, TemplateId};
+use gtk::subclass::prelude::*;
+use ox_core::ops::{create_numbered_folder, BuiltinTemplate, CreatedItem, OperationContext, TemplateId};
 
-use super::name_dialog::{ask_for_name, NameRequest, NameSelection};
 use super::FileCommand;
 use crate::window::BrowserWindow;
 
-/// The name a new folder starts with.
-const NEW_FOLDER_NAME: &str = "New folder";
+/// The name a new folder starts with, as Windows names it.
+const NEW_FOLDER_NAME: &str = crate::i18n::message_id("New folder");
 
 /// The template a New menu item starts its dialog with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,10 +36,12 @@ pub(crate) enum NewFileKind {
 }
 
 impl BrowserWindow {
-    /// New ▸ Folder and Ctrl+Shift+N: asks for the name, creates the
-    /// folder, then selects it. Does nothing where New is disabled: during
-    /// a search, while an operation runs, or in a folder that is not
-    /// writable.
+    /// New ▸ Folder and Ctrl+Shift+N: makes "New folder" (or the next
+    /// free numbered name) at once, then selects it and renames it in
+    /// place, as Windows Explorer does. Does nothing where New is
+    /// disabled: during a search, while an operation runs, or in a folder
+    /// that is not writable. A folder that cannot be made says why in the
+    /// toast.
     pub(crate) async fn create_folder(&self) {
         if !self.allows(FileCommand::New) || self.refuses_writes_during_update() {
             return;
@@ -48,31 +49,19 @@ impl BrowserWindow {
         let Some(folder) = self.current_uri() else {
             return;
         };
-        let protection = self.context().write_protection();
-        let request = NameRequest {
-            title: NEW_FOLDER_NAME,
-            initial_name: NEW_FOLDER_NAME,
-            selection: NameSelection::Whole,
-            folder: &folder,
-            takes_folder_path: true,
-        };
-        let created = ask_for_name(self, request, |name, cancel| {
-            let folder = folder.clone();
-            let context = OperationContext {
-                cancel,
-                ..OperationContext::new(protection.clone())
-            };
-            async move {
-                let names: Vec<&str> = name.split('/').collect();
-                create_folder_path(&folder, &names, &context)
-                    .await
-                    .map_err(|error| error.to_string())
+        let context = OperationContext::new(self.context().write_protection());
+        let name = ox_core::i18n::gettext_static(NEW_FOLDER_NAME);
+        match create_numbered_folder(&folder, name, &context).await {
+            Ok(created) => {
+                self.context().record_operation(created.undo_record());
+                // Listed again, the new folder is selected, scrolled to and
+                // renamed in place, as Tab moves a rename on (OPS-012).
+                if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
+                    tab.renames_selection = true;
+                }
+                self.reload_selecting(vec![created.uri]);
             }
-        })
-        .await;
-        if let Some(created) = created {
-            self.context().record_operation(created.created.undo_record());
-            self.reload_selecting(vec![created.first]);
+            Err(error) => self.show_message(&error.to_string()),
         }
     }
 

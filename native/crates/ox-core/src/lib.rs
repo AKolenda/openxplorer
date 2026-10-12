@@ -35,6 +35,7 @@
 pub mod archive;
 pub mod checksums;
 pub mod clipboard;
+pub mod drive;
 pub mod entry;
 pub mod folder_locations;
 pub mod format;
