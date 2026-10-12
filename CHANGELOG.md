@@ -45,6 +45,10 @@
   `Notes - Copy (2).txt`, instead of `Notes (copy 2).txt`. Pasting a
   copy into its own folder makes `Notes - Copy.txt` straight away, without
   the "Items already exist" question, as Windows Explorer does.
+- Apply to all folders and Reset folders now cover Downloads too. Before,
+  Downloads kept the Group by chosen there, so it stayed grouped by date
+  after Apply to all folders. Apply now gives Downloads the applied Group
+  by, and Reset groups it by date again, as by default.
 
 # 2.0.4 — 2026-10-09
 
