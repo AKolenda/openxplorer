@@ -392,7 +392,9 @@ fn a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance() {
     let test = laid_out(&fixture.uri());
     for (theme, content) in [("light", "#ffffff"), ("dark", "#202020")] {
         show_theme(&test, theme);
-        test.activate("new-folder", None);
+        // Renaming several items asks in a dialog; New folder asks nothing.
+        super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+        test.activate("rename", None);
         let dialog = open_dialog(&test);
         wait_for_frames(&dialog, 3);
         assert_eq!(painted(&dialog).width(), 510, "the dialog's width");
@@ -401,7 +403,7 @@ fn a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance() {
         let save = buttons
             .iter()
             .find(|button| button.has_css_class("accent"))
-            .expect("Save is the accent button");
+            .expect("the dialog has its accent button");
         let save_place = bounds_in(save, &dialog);
         assert!(
             save_place.height >= 32 && save_place.width >= 92,

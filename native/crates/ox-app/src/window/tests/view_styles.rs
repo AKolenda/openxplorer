@@ -270,6 +270,60 @@ fn apply_to_all_folders_shows_this_folders_view_everywhere_after_asking() {
     );
 }
 
+/// Apply to all folders applies what the dialog shows, as OK does: a
+/// Group by chosen there before pressing it is saved for every folder and
+/// shown in this one, instead of the view the folder had when the dialog
+/// opened.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn apply_to_all_folders_applies_the_choices_made_in_the_dialog() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+    test.activate("view-properties", None);
+    let dialog = open_dialog(&test);
+    let choices = descendants::<gtk::DropDown>(&dialog);
+    let [_, _, _, group_by] = choices.as_slice() else {
+        panic!("the dialog has four choices: {}", choices.len());
+    };
+    let by_type = GroupBy::ALL
+        .iter()
+        .position(|by| *by == GroupBy::Type)
+        .expect("Type is offered");
+    group_by.set_selected(u32::try_from(by_type).expect("a small index"));
+
+    dialog.press("Apply to all folders");
+    wait_until("the question", || {
+        open_dialog(&test).title_text() != dialog.title_text()
+    });
+    open_dialog(&test).press("Apply");
+
+    wait_until("Group by Type saved for every folder", || {
+        let saved = test.context.settings_data().preferences;
+        saved
+            .view_defaults
+            .is_some_and(|style| style.grouping() == GroupBy::Type)
+    });
+    wait_until("this folder grouped by type", || {
+        test.action_state("group-by").as_deref() == Some("type")
+    });
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("Documents");
+    assert_eq!(
+        test.action_state("group-by").as_deref(),
+        Some("type"),
+        "Documents shows the applied Group by"
+    );
+    test.activate("view-properties", None);
+    let reopened = open_dialog(&test);
+    let shown = descendants::<gtk::DropDown>(&reopened)[3].selected();
+    assert_eq!(shown as usize, by_type, "the dialog shows Group by Type again");
+    reopened.press("Cancel");
+}
+
 /// Folder views > Reset folders: after asking, every folder forgets its
 /// view and the shared one, and the window shows the default at once.
 /// Cancel changes nothing.

@@ -47,6 +47,9 @@ pub(crate) enum IntegrationError {
     /// Changing where Open and Save dialogs go failed (INT-032).
     #[error(transparent)]
     FileDialogs(#[from] ox_core::integration::FileDialogError),
+    /// Changing what Super+E opens failed (INT-033).
+    #[error(transparent)]
+    LaunchShortcut(#[from] ox_core::integration::ShortcutError),
     /// The `FileManager1` object could not be exported.
     #[error(transparent)]
     Registration(#[from] RegistrationFailed),

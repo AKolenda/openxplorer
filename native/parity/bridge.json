@@ -248,14 +248,14 @@
     },
     "create": {
       "status": "native-tested",
-      "note": "ox_core::ops::create_item ports create_item in v2.0.0:desktop/gio_backend.py and the checks of the create branch of dispatch: name validation, the refusal inside an SMB server listing, the snapshot write guard, and an exclusive make_directory or create that never overwrites. Native: The New folder dialog runs it: a refused name stays in the dialog, the new folder is selected and Undo removes it.",
+      "note": "ox_core::ops::create_item ports create_item in v2.0.0:desktop/gio_backend.py and the checks of the create branch of dispatch: name validation, the refusal inside an SMB server listing, the snapshot write guard, and an exclusive make_directory or create that never overwrites. Native: New folder runs it through create_numbered_folder: a taken name gives the next numbered folder, the new folder is selected and renamed in place, and Undo removes it.",
       "evidence": [
         "native/crates/ox-core/tests/ops_create.rs::new_folder_and_new_file_appear_under_their_names",
         "native/crates/ox-core/tests/ops_create.rs::creating_onto_a_taken_name_never_overwrites",
         "native/crates/ox-core/tests/ops_create.rs::invalid_names_are_refused_before_anything_is_created",
         "native/crates/ox-core/tests/ops_create.rs::a_server_listing_or_a_protected_folder_gets_no_new_items",
-        "native/crates/ox-app/src/window/tests/file_operations.rs::new_folder_asks_for_a_name_then_creates_and_selects_the_folder",
-        "native/crates/ox-app/src/window/tests/file_operations.rs::a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten"
+        "native/crates/ox-app/src/window/tests/new_folder.rs::new_folder_makes_the_folder_at_once_and_renames_it_in_place",
+        "native/crates/ox-app/src/window/tests/new_folder.rs::a_taken_name_gives_the_next_numbered_folder"
       ]
     },
     "createTemplate": {

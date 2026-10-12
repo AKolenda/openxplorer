@@ -50,7 +50,7 @@ openxplorer --software-rendering
 
 ## Remove the application
 
-In Settings, restore previous default handlers and disable Show in folder integration before removal. Unmount/remove persistent mounts separately after closing files. Removing the application does not undo custom folder locations or delete your files.
+In Settings, restore previous default handlers, disable Show in folder integration and, on KDE Plasma, turn off Super+E opens OpenXplorer before removal, so Super+E goes back to the app that had it. Unmount/remove persistent mounts separately after closing files. Removing the application does not undo custom folder locations or delete your files.
 
 ```sh
 sudo apt remove openxplorer
