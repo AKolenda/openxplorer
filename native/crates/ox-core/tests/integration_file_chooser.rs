@@ -917,6 +917,37 @@ fn the_portal_folder_through_a_symlink_keeps_the_record() {
     assert!(!folder.join("io.winspace.Development.portal").exists());
 }
 
+/// The other way round: enabled through an alias of the folder, then
+/// again through the folder itself, the record follows the folder, so
+/// Restore still works once the alias is gone.
+///
+/// parity: INT-032
+#[test]
+fn the_record_follows_the_folder_when_its_alias_goes() {
+    let fixture = OptInFixture::new();
+    let folder = fixture.portal_folder();
+    let alias = fixture.root.path().join("portals-alias");
+    symlink(&folder, &alias).expect("an alias of the folder");
+    fixture
+        .registration_reading_only(&alias)
+        .enable()
+        .expect("enable through the alias");
+    fs::remove_file(folder.join("io.winspace.Development.portal")).expect("the link goes missing");
+
+    let registration = fixture.registration_reading_only(&folder);
+    registration.enable().expect("enable through the folder");
+    fs::remove_file(&alias).expect("the alias goes");
+    assert_eq!(
+        registration.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert!(
+        !folder.join("zorin-portals.conf").exists(),
+        "the file the app made is gone"
+    );
+    assert!(!folder.join("io.winspace.Development.portal").exists());
+}
+
 /// Apply now refuses, before restarting anything, when the folder the
 /// portal reads could not be told, since the change could not be checked.
 ///

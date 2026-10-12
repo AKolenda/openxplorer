@@ -457,10 +457,12 @@ impl FileDialogRegistration {
             let written = with_preference(&base, FILE_CHOOSER_KEY, &self.portal_name);
             let record = match record {
                 // Keeps the first `previous` but remembers the newest
-                // write, while the file still holds what the app wrote;
-                // once the user changed it, what it holds now is what
-                // Restore puts back, so their change is kept.
+                // write, and the file's path as named now (a folder alias
+                // may have gone since), while the file still holds what
+                // the app wrote; once the user changed it, what it holds
+                // now is what Restore puts back, so their change is kept.
                 Some(record) if previous.as_ref() == Some(&record.written) => Record {
+                    file: file.clone(),
                     written: written.clone(),
                     link: link.clone().or(record.link),
                     ..record
