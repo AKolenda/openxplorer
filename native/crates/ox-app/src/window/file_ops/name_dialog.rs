@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The dialog that asks for a name: New folder and Rename (OPS-001,
-//! OPS-006, OPS-009).
+//! The dialog that asks for a name: Rename, when the item is not on
+//! screen to rename in place (OPS-006, OPS-009).
 //!
 //! Ports `nameDialog` in `v2.0.0:desktop/ui/app.js`: the title, "Names must not
 //! contain slashes.", a Name field and Cancel and Save. Save checks the
@@ -8,11 +8,11 @@
 //! as a taken name, appears inside the dialog, which stays open for
 //! another try. For a file, Rename selects the name without its extension,
 //! as Windows and Dolphin do (OPS-010); the Python app selected all of it.
-//! While the user types, a line under the field warns, as Dolphin's New
-//! folder dialog does, about a taken name, a leading dot that hides the
-//! item, and a leading space or tilde (OPS-007). New folder takes slashes,
-//! as Dolphin's does: `Photos/2026` makes a folder inside a folder, and
-//! the line names the folders it will make before Save.
+//! While the user types, a line under the field warns, as Dolphin's name
+//! dialogs do, about a taken name, a leading dot that hides the item, and
+//! a leading space or tilde (OPS-007). New folder asks for no name: it
+//! makes "New folder" and renames it in place, as Windows Explorer does
+//! (see `new_items.rs`).
 
 use std::future::Future;
 
@@ -20,7 +20,7 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::transfer::Cancellation;
 
-use super::names::{check_folder_path, check_typed_name, folder_path_preview, name_warning};
+use super::names::{check_typed_name, name_warning};
 use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
@@ -28,13 +28,10 @@ use crate::window::ButtonStyle;
 /// The line under the title (`nameDialog`).
 const NAME_HINT: &str = crate::i18n::message_id("Names must not contain slashes.");
 
-/// The line under New folder's title, which takes slashes (OPS-007).
-const FOLDER_PATH_HINT: &str = crate::i18n::message_id("A slash makes a folder inside the one before it.");
-
 /// How much of the name the field selects when the dialog opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum NameSelection {
-    /// All of it: a new folder's name, or a folder being renamed.
+    /// All of it: a folder being renamed.
     Whole,
     /// The name without its extension: a file being renamed.
     Stem,
@@ -52,27 +49,13 @@ pub(super) struct NameRequest<'a> {
     /// The folder the name is for, which the dialog checks each typed
     /// name against while the user types.
     pub(super) folder: &'a str,
-    /// Whether slashes make folders inside folders (New folder).
-    pub(super) takes_folder_path: bool,
 }
 
-/// Why a dialog that takes slashes refuses a name.
-const INVALID_FOLDER_PATH: &str = crate::i18n::message_id(
-    "Use names without backslashes or control characters, one slash between folders.",
-);
-
-/// Whether a name dialog takes `typed`, or why not: with
-/// `takes_folder_path`, slashes make folders inside folders.
-fn check_name(typed: &str, takes_folder_path: bool) -> Result<(), String> {
-    if takes_folder_path {
-        check_folder_path(typed)
-            .map(drop)
-            .map_err(|_| ox_core::i18n::gettext_static(INVALID_FOLDER_PATH).to_owned())
-    } else {
-        check_typed_name(typed)
-            .map(drop)
-            .map_err(|invalid| invalid.to_string())
-    }
+/// Whether a name dialog takes `typed`, or why not.
+fn check_name(typed: &str) -> Result<(), String> {
+    check_typed_name(typed)
+        .map(drop)
+        .map_err(|invalid| invalid.to_string())
 }
 
 /// The number of characters of `name` before its extension: up to its last
@@ -92,10 +75,9 @@ fn warn_while_typing(dialog: &Dialog, field: &gtk::Entry, request: &NameRequest<
     warning.set_visible(false);
     let folder = gio::File::for_uri(request.folder);
     let initial_name = request.initial_name.to_owned();
-    let takes_folder_path = request.takes_folder_path;
     field.connect_changed(move |field| {
         let typed = field.text().to_string();
-        if typed == initial_name || check_name(&typed, takes_folder_path).is_err() {
+        if typed == initial_name || check_name(&typed).is_err() {
             warning.set_visible(false);
             return;
         }
@@ -118,13 +100,7 @@ fn warn_while_typing(dialog: &Dialog, field: &gtk::Entry, request: &NameRequest<
                 if field.text() != typed {
                     return;
                 }
-                let path_preview = takes_folder_path && !taken;
-                let preview = check_folder_path(&typed)
-                    .ok()
-                    .and_then(|names| folder_path_preview(&names));
-                let text = preview
-                    .filter(|_| path_preview)
-                    .or_else(|| name_warning(&typed, taken));
+                let text = name_warning(&typed, taken);
                 warning.set_text(text.as_deref().unwrap_or_default());
                 warning.set_visible(text.is_some());
             }
@@ -144,11 +120,7 @@ where
     Attempt: FnMut(String, Cancellation) -> Outcome,
     Outcome: Future<Output = Result<T, String>>,
 {
-    let hint = if request.takes_folder_path {
-        ox_core::i18n::gettext_static(FOLDER_PATH_HINT)
-    } else {
-        ox_core::i18n::gettext_static(NAME_HINT)
-    };
+    let hint = ox_core::i18n::gettext_static(NAME_HINT);
     let dialog = Dialog::new(window, request.title, hint);
     let field = dialog.add_text_field(ox_core::i18n::gettext_static("Name"), request.initial_name);
     warn_while_typing(&dialog, &field, &request);
@@ -162,7 +134,7 @@ where
     loop {
         dialog.next_response().await?;
         let typed = field.text().to_string();
-        if let Err(message) = check_name(&typed, request.takes_folder_path) {
+        if let Err(message) = check_name(&typed) {
             dialog.show_error(&message);
             continue;
         }

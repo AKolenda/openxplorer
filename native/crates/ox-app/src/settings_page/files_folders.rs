@@ -98,13 +98,13 @@ const ITEM_COUNTS: RowText = RowText {
 const FOLDER_SIZES: RowText = RowText {
     title: "Calculate folder sizes",
     description: "Right-click a folder → Calculate folder size. Results last for this session.",
-    keywords: "zfs logical bytes snapshots disk usage. Results are kept only for this window \
-               session.",
+    keywords: "zfs logical bytes size on disk compressed snapshots disk usage. Results are kept \
+               only for this window session.",
 };
 
 const HOW_SIZES_ARE_COUNTED: RowText = RowText {
     title: "How sizes are counted",
-    description: "Logical file bytes, what a scan skips, and its limits.",
+    description: "Logical file bytes, the space on disk, what a scan skips, and its limits.",
     keywords: "folder sizes scans run on demand outside the browsing worker pool compressed zfs \
                space snapshot usage hidden files links nested filesystem mounts snapshot \
                collections 1 million entries 5 minutes partial total cancel recalculate",
@@ -113,8 +113,9 @@ const HOW_SIZES_ARE_COUNTED: RowText = RowText {
 /// The two paragraphs of the Python "Folder sizes" section.
 const FOLDER_SIZES_HELP: [&str; 2] = [
     "Right-click a folder → Calculate folder size. Scans run on demand, outside the browsing worker \
-     pool. Results are logical file bytes, not compressed ZFS space or snapshot usage. They are \
-     kept only for this window session. Recalculate to pick up later changes.",
+     pool. Size is the logical file bytes; Size on disk is the space the files take, which on \
+     ZFS is the compressed space. Neither is snapshot usage. Results are kept only for this \
+     window session. Recalculate to pick up later changes.",
     "Scans include hidden files, but skip links, nested filesystem mounts and snapshot \
      collections. Each folder is limited to 1 million entries or 5 minutes between I/O calls. \
      Inaccessible or excluded entries produce a partial total. Cancel stops the active scan and \

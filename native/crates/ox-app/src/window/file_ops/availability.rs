@@ -308,7 +308,8 @@ impl BrowserWindow {
         let locations = self.imp().locations.borrow();
         let folder_uri = self.current_uri().unwrap_or_default();
         let folder = FolderFacts {
-            is_writable: locations.is_writable_location(&folder_uri),
+            is_writable: locations.is_writable_location(&folder_uri)
+                && !self.is_unwritable_folder(&folder_uri),
             is_searching: self.is_searching(),
             is_recycle_bin: same_location(&folder_uri, TRASH_URI),
             has_items: model.n_items() > 0,
