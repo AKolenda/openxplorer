@@ -263,6 +263,145 @@ fn the_name_in_properties_renames_the_item() {
     wait_until("the dialog to close", || frame.is_closed());
 }
 
+/// An invalid name in Properties is refused before anything is asked, as
+/// renaming in place and the Rename dialog refuse it: an empty name does
+/// not open the extension question.
+///
+/// parity: PROP-005, OPS-049
+#[gtk::test]
+fn an_invalid_name_in_properties_is_refused_before_the_extension_question() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the name field", || {
+        !descendants::<gtk::Entry>(&general).is_empty()
+    });
+    let name = descendants::<gtk::Entry>(&general).remove(0);
+
+    name.set_text("");
+    name.emit_activate();
+
+    wait_until("the refusal", || !frame.error_text().is_empty());
+    assert_eq!(
+        frame.error_text(),
+        "Enter a non-empty file name, not “.” or “..”."
+    );
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "no extension question"
+    );
+    assert!(fixture.path("Notes 2.txt").is_file());
+}
+
+/// The name in Properties asks before it changes a file's extension, as
+/// Windows Explorer does, and renames only once the user confirms.
+///
+/// parity: PROP-005, OPS-049
+#[gtk::test]
+fn the_name_in_properties_asks_before_changing_the_extension() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the name field", || {
+        !descendants::<gtk::Entry>(&general).is_empty()
+    });
+    let name = descendants::<gtk::Entry>(&general).remove(0);
+
+    name.set_text("Notes 2.md");
+    name.emit_activate();
+    let question = open_dialog(&test);
+    assert_eq!(question.title_text(), "Change the extension?");
+    question.press("Cancel");
+    wait_until("the refusal", || {
+        frame.error_text() == "The name was not changed."
+    });
+    assert!(fixture.path("Notes 2.txt").is_file());
+
+    name.emit_activate();
+    open_dialog(&test).press("Change extension");
+
+    wait_until("the rename", || fixture.path("Notes 2.md").exists());
+    wait_until("the dialog to close", || frame.is_closed());
+}
+
+/// The Properties dialog's name field, once it shows, for the item called
+/// `name` in `test`'s folder.
+fn properties_name_field(test: &TestWindow, name: &str) -> (DialogFrame, gtk::Entry) {
+    test.select_named(name);
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the name field", || {
+        !descendants::<gtk::Entry>(&general).is_empty()
+    });
+    let field = descendants::<gtk::Entry>(&general).remove(0);
+    (frame, field)
+}
+
+/// The extension questions open over `test`'s window.
+fn extension_questions(test: &TestWindow) -> usize {
+    gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|window| window.downcast::<crate::dialog::Dialog>().ok())
+        .filter(|dialog| {
+            dialog.is_visible()
+                && dialog.transient_for().as_ref() == Some(test.window.upcast_ref())
+                && dialog.title_text() == "Change the extension?"
+        })
+        .count()
+}
+
+/// Pressing Enter twice quickly in the name field asks about the
+/// extension once, not twice.
+///
+/// parity: PROP-005, OPS-049
+#[gtk::test]
+fn enter_twice_in_properties_asks_about_the_extension_once() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let (_frame, name) = properties_name_field(&test, "Notes 2.txt");
+
+    name.set_text("Notes 2.md");
+    name.emit_activate();
+    name.emit_activate();
+
+    wait_until("the question", || extension_questions(&test) > 0);
+    wait_for_frames(&test.window, 3);
+    assert_eq!(extension_questions(&test), 1, "one question");
+    open_dialog(&test).press("Cancel");
+    wait_until("no question", || extension_questions(&test) == 0);
+    assert!(fixture.path("Notes 2.txt").is_file());
+}
+
+/// A link to a folder is renamed in Properties without the extension
+/// question, as renaming it in place does: like the folder it opens, its
+/// name has no extension.
+///
+/// parity: PROP-005, OPS-049
+#[gtk::test]
+fn a_link_to_a_folder_is_renamed_in_properties_without_the_extension_question() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Target")).expect("the folder is made");
+    std::os::unix::fs::symlink(fixture.path("Target"), fixture.path("Docs.old")).expect("the link is made");
+    let test = TestWindow::open(&fixture.uri());
+    let (frame, name) = properties_name_field(&test, "Docs.old");
+
+    name.set_text("Docs.new");
+    name.emit_activate();
+
+    wait_until("the rename", || {
+        fixture.path("Docs.new").is_symlink() || extension_questions(&test) > 0
+    });
+    assert_eq!(extension_questions(&test), 0, "no extension question");
+    wait_until("the dialog to close", || frame.is_closed());
+}
+
 /// The owner changes who may view or modify a file on the Permissions
 /// tab.
 ///

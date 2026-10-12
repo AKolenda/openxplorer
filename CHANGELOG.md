@@ -11,6 +11,13 @@
 - Properties shows "Size on disk" under Size, as Windows Explorer does:
   the space a file takes on its drive. A folder's is measured with
   Calculate folder size, and several items show their combined space.
+- Renaming a file to a different extension asks first, as Windows
+  Explorer does: "If you change a file name extension, the file might
+  become unusable. Are you sure you want to change it?" It applies to
+  renaming in place, the Rename dialog and the name in Properties, and to
+  a batch rename whose name gives an extension to a file without one;
+  folders, links to folders and a change of case only (.JPG to .jpg)
+  never ask.
 
 # 2.0.4 — 2026-10-09
 

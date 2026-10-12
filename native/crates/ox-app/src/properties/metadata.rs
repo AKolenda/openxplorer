@@ -51,6 +51,9 @@ pub(crate) struct ItemProperties {
     pub access: Access,
     /// Where a symbolic link points.
     pub link_target: Option<String>,
+    /// A symbolic link to a folder: its name, like the folder's, has no
+    /// extension (OPS-049).
+    pub links_to_folder: bool,
     /// The name of the application a file opens with.
     pub default_app: Option<String>,
     /// What is mounted at the item, when a folder is a mount point.
@@ -169,6 +172,9 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
             executable: optional_bool(&info, "access::can-execute"),
         },
         link_target: link_target(&info),
+        links_to_folder: info.is_symlink()
+            && file.query_file_type(gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
+                == gio::FileType::Directory,
         default_app,
         mount,
         dimensions,
@@ -279,6 +285,7 @@ mod tests {
             mode: Some(0o100_644),
             access: Access::default(),
             link_target: None,
+            links_to_folder: false,
             default_app: None,
             mount: None,
             dimensions: None,
