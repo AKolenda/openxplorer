@@ -96,6 +96,11 @@ impl BrowserWindow {
     /// Adds one typed character to the prefix. Each character moves the
     /// selection the next one starts from, so the rows are read again.
     fn type_character(&self, character: char) {
+        // With no items, as on an empty folder's page, there is nothing
+        // to select: no prefix starts, so Backspace still goes back.
+        if self.folder_pane().model().n_items() == 0 {
+            return;
+        }
         let rows = typeahead_rows(self.folder_pane().model());
         let typed = character.to_string();
         let result = self

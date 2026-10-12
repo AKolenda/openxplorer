@@ -5,6 +5,7 @@
 
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::settings::ContextMenu;
 
@@ -507,4 +508,118 @@ fn try_again_that_finds_an_empty_folder_keeps_the_keyboard_on_the_page() {
         Some(&page),
         "the page has the keyboard, not the hidden Try again"
     );
+}
+
+/// A folder the user may write into but not read (mode 0333) cannot be
+/// listed: "This location is unavailable". Gives its permissions back
+/// when dropped, so the fixture can be removed.
+struct Unreadable(std::path::PathBuf);
+
+impl Unreadable {
+    fn make(fixture: &Fixture) -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = fixture.path("Unreadable");
+        std::fs::create_dir(&folder).expect("the folder is made");
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o333))
+            .expect("no read permission");
+        Self(folder)
+    }
+}
+
+impl Drop for Unreadable {
+    fn drop(&mut self) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+    }
+}
+
+/// Goes to `uri`, which cannot be listed, and waits for its page.
+fn go_to_unavailable(test: &TestWindow, uri: &str) {
+    test.activate("go-to", Some(uri));
+    wait_until("the unavailable page", || {
+        !test.window.is_loading() && test.window.folder_pane().page() == Some(PanePage::Empty)
+    });
+}
+
+/// Ctrl+V on "This location is unavailable" pastes nothing, as its menu
+/// offers no Paste: the folder could not be read, even when it could be
+/// written to.
+///
+/// parity: CMD-011
+#[gtk::test]
+fn ctrl_v_pastes_nothing_into_a_folder_that_could_not_be_read() {
+    let fixture = Fixture::standard();
+    let unreadable = Unreadable::make(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    go_to_unavailable(&test, &fixture.uri_of("Unreadable"));
+
+    press_shortcut(&test, gdk::Key::v, gdk::ModifierType::CONTROL_MASK);
+
+    crate::test_support::harness::settle();
+    wait_until("the window to be idle", || {
+        test.window.imp().file_operations.borrow().is_idle()
+    });
+    assert!(!unreadable.0.join("Notes 2.txt").exists(), "nothing was pasted");
+}
+
+/// Try again on "This location is unavailable" keeps New and Paste off
+/// while the folder is listed again, until a listing succeeds.
+///
+/// parity: CMD-011
+#[gtk::test]
+fn new_and_paste_stay_off_while_an_unavailable_folder_is_listed_again() {
+    let fixture = Fixture::standard();
+    let _unreadable = Unreadable::make(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    go_to_unavailable(&test, &fixture.uri_of("Unreadable"));
+    assert!(!super::file_ops_support::is_enabled(&test, "paste"));
+
+    test.activate("refresh", None);
+    let context = glib::MainContext::default();
+    let mut enabled = 0;
+    for _ in 0..200 {
+        context.iteration(false);
+        if super::file_ops_support::is_enabled(&test, "paste")
+            || super::file_ops_support::is_enabled(&test, "new-folder")
+        {
+            enabled += 1;
+        }
+    }
+
+    assert_eq!(enabled, 0, "New or Paste came on while listing again");
+}
+
+/// Typing on an empty page selects nothing, as there is nothing to
+/// select: the letters do not start a type-to-select prefix, and
+/// Backspace then goes back instead of erasing one.
+///
+/// parity: CMD-011, NAV-004
+#[gtk::test]
+fn typing_on_an_empty_page_starts_no_prefix_and_backspace_goes_back() {
+    let fixture = Fixture::standard();
+    let empty = make_empty_folder(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let page = go_to_empty_folder(&test, &empty);
+    test.window.folder_pane().focus_view();
+    let keys = controllers::<gtk::EventControllerKey>(&page)
+        .into_iter()
+        .next()
+        .expect("the empty page takes the folder keys");
+    let press = |key: gdk::Key| {
+        let _: bool = keys.emit_by_name(
+            "key-pressed",
+            &[&key.into_glib(), &0_u32, &gdk::ModifierType::empty()],
+        );
+    };
+
+    test.window.type_text("n");
+    press(gdk::Key::BackSpace);
+
+    wait_until("Back", || {
+        test.window.current_uri().as_deref() == Some(fixture.uri().as_str())
+    });
 }

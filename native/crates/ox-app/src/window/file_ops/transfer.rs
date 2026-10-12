@@ -113,6 +113,12 @@ impl BrowserWindow {
             ));
             return;
         }
+        // Ctrl+V pastes without the Paste button, which a folder that
+        // could not be read disables: it takes nothing either.
+        if into.is_none() && self.shown_folder_is_unreadable() {
+            self.show_message(ox_core::i18n::gettext_static("This location is unavailable"));
+            return;
+        }
         let Some(destination_folder) = into.or_else(|| self.current_uri()) else {
             return;
         };
