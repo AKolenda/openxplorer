@@ -18,6 +18,11 @@
   a batch rename whose name gives an extension to a file without one;
   folders, links to folders and a change of case only (.JPG to .jpg)
   never ask.
+- On KDE Plasma, the switch Settings > Default apps > Super+E opens
+  OpenXplorer makes Super+E open a new OpenXplorer window each time, as
+  Win+E opens a new File Explorer window. On takes the shortcut from Dolphin (keeping Dolphin's other
+  shortcuts) through KDE's own shortcut service; off gives it back. Log
+  out and back in after changing it for Super+E to follow.
 
 # 2.0.4 — 2026-10-09
 
