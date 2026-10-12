@@ -1,3 +1,12 @@
+# Unreleased
+
+- Menus with submenus (Sort > More and Group by, template folders in
+  New, Service actions) now show the submenu in the same popup, with a
+  back row at the top, instead of opening a second popup beside the
+  menu. A submenu opens on a click, Enter or Right (Left goes back), no
+  longer when the pointer rests on it. Opening Group by in the Sort menu
+  of a Save dialog once froze the whole KDE Plasma Wayland desktop.
+
 # 2.0.5 — 2026-10-12
 
 ## What's Changed

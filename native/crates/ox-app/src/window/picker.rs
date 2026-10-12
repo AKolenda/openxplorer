@@ -2978,4 +2978,80 @@ mod tests {
             );
         }
     }
+
+    /// The command bar's Sort menu in a Save dialog, as Chrome opens one
+    /// through the portal: Group by shows its choices in the same popup,
+    /// so there is only ever one menu on screen, and a choice there groups
+    /// the dialog's list and closes the menu. More works the same way.
+    ///
+    /// parity: VIEW-022, INT-032
+    #[gtk::test]
+    fn the_sort_menu_of_a_save_dialog_keeps_one_popup() {
+        sort_menu_keeps_one_popup("SaveFile", vec![("current_name", "page.html".to_variant())]);
+    }
+
+    /// The same in an Open dialog.
+    ///
+    /// parity: VIEW-022, INT-032
+    #[gtk::test]
+    fn the_sort_menu_of_an_open_dialog_keeps_one_popup() {
+        sort_menu_keeps_one_popup("OpenFile", Vec::new());
+    }
+
+    /// Opens a `method` dialog with `entries` and goes through its Sort
+    /// menu's Group by and More, checking one popup shows at a time.
+    fn sort_menu_keeps_one_popup(method: &str, entries: Vec<(&str, glib::Variant)>) {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, method, entries);
+        let test = &portal.test;
+        let window = &test.window;
+        let sort = crate::window::widget_tree::descendants::<gtk::MenuButton>(window)
+            .into_iter()
+            .find(|button| button.has_css_class("sort-command"))
+            .expect("the dialog's command bar has Sort");
+        let menu = sort
+            .popover()
+            .and_downcast::<crate::window::menu_popover::MenuPopover>()
+            .expect("an app menu");
+        let shown_menus = || {
+            crate::window::widget_tree::descendants::<crate::window::menu_popover::MenuPopover>(window)
+                .into_iter()
+                .filter(|menu| menu.is_visible() || menu.is_mapped())
+                .count()
+        };
+
+        sort.popup();
+        wait_until("the Sort menu", || menu.is_visible());
+        menu.row("Group by").emit_activate();
+        wait_until("Group by's choices", || {
+            menu.row_labels().contains(&"Same as sort".to_owned())
+        });
+        settle();
+        assert_eq!(shown_menus(), 1, "Group by opens no second popup");
+        assert!(menu.is_visible(), "the Sort menu shows Group by");
+        menu.row("Type").emit_activate();
+        assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
+        wait_until("the menu to close", || !menu.is_visible());
+        settle();
+        assert_eq!(shown_menus(), 0, "no menu is left on screen");
+
+        sort.popup();
+        wait_until("the Sort menu again", || menu.is_visible());
+        assert!(
+            menu.row_labels().contains(&"Group by".to_owned())
+                && menu.row_labels().contains(&"Ascending".to_owned()),
+            "it opens at its top level: {:?}",
+            menu.row_labels()
+        );
+        menu.row("More").emit_activate();
+        wait_until("More's choices", || {
+            menu.row_labels().contains(&"Size".to_owned())
+        });
+        assert_eq!(shown_menus(), 1, "More opens no second popup");
+        menu.row("Size").emit_activate();
+        assert_eq!(test.action_state("sort").as_deref(), Some("size"));
+        wait_until("the menu to close", || !menu.is_visible());
+    }
 }
