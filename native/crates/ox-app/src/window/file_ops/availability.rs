@@ -302,14 +302,28 @@ pub(crate) fn selection_facts(items: &[FileItem], locations: &LocationContext) -
 }
 
 impl BrowserWindow {
+    /// True while the folder shown could not be read ("This location is
+    /// unavailable"): its listing failed, or it is listed again from that
+    /// page and has not been read yet. It takes no new items then, as it
+    /// takes no drop.
+    pub(crate) fn shown_folder_is_unreadable(&self) -> bool {
+        let failed = {
+            let session = self.imp().session.borrow();
+            session.active().is_some_and(|tab| tab.error.is_some())
+        };
+        failed || self.folder_pane().shows_unavailable_page()
+    }
+
     /// The facts the rules read now.
     pub(crate) fn command_facts(&self) -> CommandFacts {
         let model = self.folder_pane().model();
         let locations = self.imp().locations.borrow();
         let folder_uri = self.current_uri().unwrap_or_default();
+        let listing_failed = self.shown_folder_is_unreadable();
         let folder = FolderFacts {
             is_writable: locations.is_writable_location(&folder_uri)
-                && !self.is_unwritable_folder(&folder_uri),
+                && !self.is_unwritable_folder(&folder_uri)
+                && !listing_failed,
             is_searching: self.is_searching(),
             is_recycle_bin: same_location(&folder_uri, TRASH_URI),
             has_items: model.n_items() > 0,

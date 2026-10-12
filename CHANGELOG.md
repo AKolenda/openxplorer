@@ -49,6 +49,12 @@
   Downloads kept the Group by chosen there, so it stayed grouped by date
   after Apply to all folders. Apply now gives Downloads the applied Group
   by, and Reset groups it by date again, as by default.
+- An empty folder now works like one in Windows Explorer: right-click
+  its "This folder is empty" page for the folder menu (New, Paste and the
+  rest), paste with Ctrl+V or the menu, and drop files on it. The
+  keyboard stays on the folder too, so the Menu key and Backspace work.
+  A location that could not be opened offers neither New nor Paste, and
+  a screen reader reads the page's own words.
 
 # 2.0.4 — 2026-10-09
 

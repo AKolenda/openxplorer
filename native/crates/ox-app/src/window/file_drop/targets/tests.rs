@@ -563,6 +563,82 @@ fn a_folder_dropped_on_the_pin_row_of_an_empty_quick_access_is_pinned() {
     });
 }
 
+/// A drag over an empty folder's "This folder is empty" page drops into
+/// that folder, as a drag over blank space in a listed folder does.
+///
+/// parity: DND-011
+#[gtk::test]
+fn a_drop_on_an_empty_folder_goes_into_it() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Empty")).expect("the empty folder is made");
+    let test = TestWindow::open(&fixture.uri());
+    let page = crate::window::tests::empty_folder::go_to_empty_folder(&test, &fixture.uri_of("Empty"));
+    let target = page
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .find_map(|controller| controller.downcast::<gtk::DropTargetAsync>().ok())
+        .expect("the empty page takes drops");
+
+    let spot = test.window.hover_drop_at(DropZone::FolderView, &page, 20.0, 20.0);
+    let highlighted = page.has_css_class(VIEW_DROP_CLASS);
+    test.window.leave_drop_zone(DropZone::FolderView);
+
+    assert!(target.widget().is_some_and(|widget| widget == page));
+    assert!(highlighted, "the whole page shows it takes the drop");
+    assert!(
+        !page.has_css_class(VIEW_DROP_CLASS),
+        "no highlight once the drag left"
+    );
+    assert_eq!(
+        spot.map(|spot| spot.destination()),
+        Some(DropDestination::for_folder(fixture.uri_of("Empty")))
+    );
+}
+
+/// The same page says a location is unavailable when listing it failed;
+/// a drag over it is not taken.
+///
+/// parity: DND-011
+#[gtk::test]
+fn a_drop_on_an_unavailable_location_is_not_taken() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("go-to", Some(&fixture.uri_of("Gone")));
+    wait_until("the unavailable page", || {
+        !test.window.is_loading()
+            && test.window.folder_pane().page() == Some(crate::window::folder_pane::PanePage::Empty)
+    });
+    let page = crate::window::tests::empty_folder::shown_empty_page(&test);
+
+    let spot = test.window.hover_drop_at(DropZone::FolderView, &page, 20.0, 20.0);
+    test.window.leave_drop_zone(DropZone::FolderView);
+
+    assert!(spot.is_none(), "a failed listing takes no drop");
+    assert!(!page.has_css_class(VIEW_DROP_CLASS));
+}
+
+/// A search that finds nothing shows the same page; a drag over it is
+/// not taken, as a drop on search results is not (DND-011).
+///
+/// parity: DND-011
+#[gtk::test]
+fn a_drop_on_a_search_with_no_matches_is_not_taken() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.search_box().entry().set_text("zzz-no-such-item");
+    wait_until("the no-matches page", || {
+        !test.window.is_loading()
+            && test.window.folder_pane().page() == Some(crate::window::folder_pane::PanePage::Empty)
+    });
+    let page = crate::window::tests::empty_folder::shown_empty_page(&test);
+
+    let spot = test.window.hover_drop_at(DropZone::FolderView, &page, 20.0, 20.0);
+    test.window.leave_drop_zone(DropZone::FolderView);
+
+    assert!(spot.is_none(), "search results take no drop");
+}
+
 /// A drop for tests: GDK makes drops only for a real drag on the display.
 struct FakeDrop {
     identity: glib::Object,

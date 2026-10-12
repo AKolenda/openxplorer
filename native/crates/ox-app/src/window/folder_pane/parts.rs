@@ -37,6 +37,9 @@ pub(super) struct PaneParts {
     pub(super) owners: Rc<CellOwners>,
     /// The empty, loading and error page.
     pub(super) empty: EmptyPage,
+    /// The whole area of the empty page, which takes the pane's
+    /// right-click menu, keys and drops while it shows.
+    pub(super) empty_area: gtk::Box,
     /// The landing page's contents.
     pub(super) landing: gtk::Box,
     /// The line over the pane while a folder is listed.
@@ -63,7 +66,7 @@ impl PaneParts {
         let top_keeper = keep_views_at_their_top(&model, &views, &details, &icon_view);
         let empty = EmptyPage::new();
         let (landing, landing_scroll) = landing_page();
-        let stack = page_stack(&views, &empty, &landing_scroll);
+        let (stack, empty_area) = page_stack(&views, &empty, &landing_scroll);
         Self {
             stack,
             views,
@@ -72,6 +75,7 @@ impl PaneParts {
             model,
             owners,
             empty,
+            empty_area,
             landing,
             loading_line: LoadingLine::new(),
             drag_hint: drag_hint(),
@@ -151,8 +155,12 @@ fn landing_page() -> (gtk::Box, gtk::ScrolledWindow) {
 }
 
 /// The folder pane's pages, one of them shown: the listing, the empty
-/// or error page and the landing page.
-fn page_stack(views: &gtk::Stack, empty: &EmptyPage, landing_scroll: &gtk::ScrolledWindow) -> gtk::Stack {
+/// or error page and the landing page; and the empty page's whole area.
+fn page_stack(
+    views: &gtk::Stack,
+    empty: &EmptyPage,
+    landing_scroll: &gtk::ScrolledWindow,
+) -> (gtk::Stack, gtk::Box) {
     let stack = gtk::Stack::builder().hexpand(true).vexpand(true).build();
     stack.add_css_class("folder-pane");
     stack.add_named(views, Some(PanePage::Listing.name()));
@@ -163,14 +171,28 @@ fn page_stack(views: &gtk::Stack, empty: &EmptyPage, landing_scroll: &gtk::Scrol
     // height it reports free of width, which GTK's box layout rejects
     // ("Expect overlapping widgets"). The stack counts the page even while
     // another one shows.
+    // The page fills the whole pane, so a right-click, a key or a drop
+    // anywhere on it reaches the empty folder; its words stay centred.
+    // Keyboard focus rests on it while the page shows, so the folder's
+    // keys work in an empty folder too.
+    let empty_area = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .focusable(true)
+        .css_classes(["empty-folder-area"])
+        .build();
+    empty.root.set_vexpand(true);
+    empty_area.append(&empty.root);
+    // A screen reader says what the page says ("This folder is empty"),
+    // not the list's type-to-select hint: there is nothing to select.
+    empty.label_area(&empty_area);
     let empty_scroll = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)
         .vscrollbar_policy(gtk::PolicyType::Automatic)
-        .child(&empty.root)
+        .child(&empty_area)
         .build();
     stack.add_named(&empty_scroll, Some(PanePage::Empty.name()));
     stack.add_named(landing_scroll, Some(PanePage::Landing.name()));
-    stack
+    (stack, empty_area)
 }
 
 fn scrolled(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {

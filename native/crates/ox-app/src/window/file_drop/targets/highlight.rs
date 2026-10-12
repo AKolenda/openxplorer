@@ -82,11 +82,15 @@ impl BrowserWindow {
             _ => (None, false, None),
         };
         pane.owners().show_drop_target(row);
-        let view = pane.view_widget();
-        if whole_view {
-            view.add_css_class(VIEW_DROP_CLASS);
-        } else {
-            view.remove_css_class(VIEW_DROP_CLASS);
+        // The empty page takes drops for an empty folder; whichever shows
+        // is highlighted, and the hidden one never keeps a highlight.
+        let shown = pane.input_widget();
+        for view in [pane.view_widget(), pane.empty_area()] {
+            if whole_view && view == shown {
+                view.add_css_class(VIEW_DROP_CLASS);
+            } else {
+                view.remove_css_class(VIEW_DROP_CLASS);
+            }
         }
         let hint = program.map(|name| ox_core::i18n::format_message("Open with {name}", &[("name", &name)]));
         pane.show_drag_hint(hint.as_deref());

@@ -167,7 +167,13 @@ impl FolderPane {
 
     /// Shows `page`.
     pub(super) fn show_page(&self, page: PanePage) {
+        // Keyboard focus follows the folder from the list to the empty
+        // page and back, never staying on a page that is hidden.
+        let had_focus = self.view_has_focus();
         self.parts().stack.set_visible_child_name(page.name());
+        if had_focus && !self.view_has_focus() {
+            self.focus_view();
+        }
     }
 
     /// The page shown now.
@@ -178,10 +184,26 @@ impl FolderPane {
             .find(|page| page.name() == name.as_str())
     }
 
+    /// True while the pane shows "This location is unavailable", also
+    /// while the location is listed again from it.
+    pub(super) fn shows_unavailable_page(&self) -> bool {
+        self.page() == Some(PanePage::Empty) && self.parts().empty.is_unavailable()
+    }
+
     /// Shows the empty page in `state`.
     pub(super) fn show_empty(&self, state: &EmptyState) {
+        // Try again may have the keyboard, and the new state hides it, as
+        // when trying again finds the folder empty: the keyboard then
+        // goes to the page, never staying on a hidden button.
+        let had_focus = self.view_has_focus();
         self.parts().empty.show(state);
         self.show_page(PanePage::Empty);
+        if had_focus {
+            let focus = self.parts().stack.root().and_then(|root| root.focus());
+            if !focus.is_some_and(|focus| focus.is_drawable()) {
+                self.focus_view();
+            }
+        }
     }
 
     /// Shows the loading line over the items while `loading` lasts (see
@@ -368,9 +390,27 @@ impl FolderPane {
         }
     }
 
-    /// True while keyboard focus is inside the visible view.
+    /// The widget that takes the folder's right-click menu, keys and
+    /// drops now: the visible view, or the empty page's whole area while
+    /// it shows ("This folder is empty"), as an empty folder in Windows
+    /// Explorer takes them too.
+    pub(super) fn input_widget(&self) -> gtk::Widget {
+        if self.page() == Some(PanePage::Empty) {
+            self.empty_area()
+        } else {
+            self.view_widget()
+        }
+    }
+
+    /// The empty page's whole area.
+    pub(super) fn empty_area(&self) -> gtk::Widget {
+        self.parts().empty_area.clone().upcast()
+    }
+
+    /// True while keyboard focus is inside the visible view, or on the
+    /// empty page while it shows.
     pub(super) fn view_has_focus(&self) -> bool {
-        let view = self.view_widget();
+        let view = self.input_widget();
         view.has_focus() || view.focus_child().is_some()
     }
 
@@ -397,9 +437,14 @@ impl FolderPane {
         ));
     }
 
-    /// Moves keyboard focus into the visible view.
+    /// Moves keyboard focus into the visible view, or onto the empty page
+    /// while it shows.
     pub(super) fn focus_view(&self) {
-        self.view_widget().grab_focus();
+        if self.page() == Some(PanePage::Empty) {
+            self.parts().empty_area.grab_focus();
+        } else {
+            self.view_widget().grab_focus();
+        }
     }
 
     /// Scrolls to `position` and gives it keyboard focus.
