@@ -161,6 +161,12 @@ impl EmptyPage {
             .set_visible(matches!(state, EmptyState::Unavailable(_)));
     }
 
+    /// True while the page says the location is unavailable, which only
+    /// that state offers Try again for.
+    pub(super) fn is_unavailable(&self) -> bool {
+        self.retry.get_visible()
+    }
+
     /// The title shown, for tests.
     #[cfg(test)]
     pub(super) fn title(&self) -> String {

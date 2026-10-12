@@ -3912,7 +3912,7 @@ msgstr ""
 msgid "This folder is empty"
 msgstr ""
 
-#: crates/ox-app/src/window/empty_page.rs
+#: crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/file_ops/transfer.rs
 msgid "This location is unavailable"
 msgstr ""
 

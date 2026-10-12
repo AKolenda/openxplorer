@@ -262,6 +262,12 @@ impl FolderPane {
         ))
     }
 
+    /// True while the pane shows "This location is unavailable", also
+    /// while the location is listed again from it.
+    pub(super) fn shows_unavailable_page(&self) -> bool {
+        self.page() == Some(PanePage::Empty) && self.parts().empty.is_unavailable()
+    }
+
     /// Shows the empty page in `state`.
     pub(super) fn show_empty(&self, state: &EmptyState) {
         // Try again may have the keyboard, and the new state hides it, as
