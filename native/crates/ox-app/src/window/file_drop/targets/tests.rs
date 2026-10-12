@@ -11,6 +11,7 @@ use crate::locations::Page;
 use crate::test_support::harness::{
     capture, capture_popover, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
+use crate::window::file_drop::action::{DragOrigin, DropRun, OfferedDrop};
 use crate::window::file_drop::{DropAction, DropDestination};
 
 /// Where a drop on the item called `name`, or on blank space for
@@ -560,4 +561,103 @@ fn a_folder_dropped_on_the_pin_row_of_an_empty_quick_access_is_pinned() {
     wait_until("the pin", || {
         sidebar.labels().contains(&"Example projects".to_owned())
     });
+}
+
+/// A drop for tests: GDK makes drops only for a real drag on the display.
+struct FakeDrop {
+    identity: glib::Object,
+    offered: std::cell::Cell<gdk::DragAction>,
+    origin: DragOrigin,
+}
+
+impl FakeDrop {
+    /// A drag from another app offering `offered`.
+    fn from_another_app(offered: gdk::DragAction) -> Self {
+        Self {
+            identity: glib::Object::new(),
+            offered: std::cell::Cell::new(offered),
+            origin: DragOrigin::OtherApp,
+        }
+    }
+
+    /// A plain drag of this app's own items, which offers Copy and Ask.
+    fn of_own_items() -> Self {
+        Self {
+            origin: DragOrigin::ThisApp,
+            ..Self::from_another_app(gdk::DragAction::COPY | gdk::DragAction::ASK)
+        }
+    }
+}
+
+impl OfferedDrop for FakeDrop {
+    fn identity(&self) -> glib::Object {
+        self.identity.clone()
+    }
+
+    fn offered(&self) -> gdk::DragAction {
+        self.offered.get()
+    }
+
+    fn origin(&self) -> DragOrigin {
+        self.origin
+    }
+}
+
+/// What a drag from another app offers when it first reaches the window
+/// is kept even when that is over a place that takes no drop, so Shift
+/// held afterwards still moves onto a folder instead of being refused as
+/// a source that offers only Move (DND-009).
+///
+/// parity: DND-009, DND-017
+#[gtk::test]
+fn the_first_offer_is_kept_over_a_place_that_takes_no_drop() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let list: gtk::Widget = test.window.sidebar().list().clone().upcast();
+    let target = list
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .find_map(|controller| controller.downcast::<gtk::DropTargetAsync>().ok())
+        .expect("the sidebar takes drops");
+    let drop = FakeDrop::from_another_app(gdk::DragAction::COPY | gdk::DragAction::MOVE);
+
+    let over_nothing = test
+        .window
+        .hover_drop(DropZone::Sidebar, &target, &drop, 10.0, -50.0);
+    drop.offered.set(gdk::DragAction::MOVE);
+
+    assert_eq!(
+        over_nothing,
+        gdk::DragAction::empty(),
+        "nothing takes the drop up there"
+    );
+    assert_eq!(test.window.drop_action(&drop), Some(DropAction::Move));
+}
+
+/// Deciding what a drop does, as every motion of a drag over the window
+/// does, never reads the dragged items' metadata on the GTK thread, where
+/// a share that stopped answering would freeze the window: a plain drag of
+/// this app's own items leaves the drive to be read once they are dropped,
+/// and the hover shows a copy meanwhile.
+///
+/// parity: DND-017
+#[gtk::test]
+fn deciding_a_drop_reads_nothing_from_the_dragged_items() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let drop = FakeDrop::of_own_items();
+
+    let run = test.window.drop_run(&drop);
+
+    assert_eq!(
+        run,
+        Some(DropRun::MoveWithinDrive),
+        "the drop reads their drive once dropped"
+    );
+    assert_eq!(
+        test.window.drop_action(&drop),
+        Some(DropAction::Copy),
+        "a hover shows a copy"
+    );
 }

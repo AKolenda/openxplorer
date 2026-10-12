@@ -885,7 +885,8 @@ fn how_sizes_are_counted_opens_the_folder_sizes_help() {
     assert_eq!(settings.page.view(), SettingsView::Subpage(Subpage::FolderSizes));
     let subpage = settings.page.imp().subpages.borrow()[&Subpage::FolderSizes].clone();
     let text = crate::settings_page::search::shown_text(&subpage);
-    assert!(text.contains("Results are logical file bytes"), "{text}");
+    assert!(text.contains("Size is the logical file bytes"), "{text}");
+    assert!(text.contains("which on ZFS is the compressed space"), "{text}");
     assert!(text.contains("Cancel stops the active scan"), "{text}");
 }
 

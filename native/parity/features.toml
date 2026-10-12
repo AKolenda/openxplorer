@@ -7596,6 +7596,20 @@ gnome = "G_USER_DIRECTORY_TEMPLATES; g_file_create with G_FILE_CREATE_PRIVATE an
 native = "done"
 native_note = "native/crates/ox-core/src/ops/templates.rs lists at most 100 user templates without following links; native/crates/ox-core/src/ops/new_from_template.rs opens with O_NOFOLLOW|O_NONBLOCK, checks fstat, reads in 64 KiB blocks up to 16 MiB with cancellation, stages to .winspace-new-<hex> and publishes without overwriting. Tests: native/crates/ox-core/tests/ops_create.rs (the_six_starters_come_first_with_their_fixed_names, only_visible_regular_files_up_to_sixteen_mebibytes_are_user_templates, at_most_one_hundred_user_templates_are_listed, a_user_template_is_copied_without_its_permissions, a_template_the_list_does_not_offer_is_refused, a_template_never_overwrites_and_never_goes_to_a_server_listing); new_from_template.rs (a_template_swapped_for_a_link_or_a_fifo_is_refused_without_blocking, a_template_that_grew_past_the_limit_is_refused_and_cancellation_stops_reading, a_name_taken_while_publishing_is_kept_and_the_stage_file_is_deleted)."
 
+
+[[feature]]
+id = "OPS-049"
+area = "OPS"
+title = "Confirm changing a file's extension on rename"
+behaviour = "As in Windows Explorer, a rename that adds, removes or changes the part after a file's last dot asks 'If you change a file name extension, the file might become unusable. Are you sure you want to change it?' with Cancel and 'Change extension'. Cancel keeps the item's name (in place, the field stays open with the typed name). Folders, names whose only dot is their first character ('.bashrc'; '..txt' has the extension 'txt'), and a change of the extension's case only ('.JPG' to '.jpg', compared with Unicode case folding) never ask; an invalid name, including one longer than 255 bytes, is refused before anything is asked, with the message that says why. It applies to F2 in place, the Rename dialog and the name in Properties, where Enter pressed again while the question is open asks nothing more. Batch rename keeps each file's extension, but a name with a dot gives one to a file that had none (README becomes Plan.md), so that asks too, once, and Cancel keeps the dialog open. A link to a folder counts as a folder, in Properties as in place."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows Explorer: Rename (extension change warning)"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_ops/extension_confirm.rs (adding_removing_or_changing_a_files_extension_asks, keeping_the_extension_or_renaming_a_folder_does_not_ask, a_case_change_that_only_case_folding_sees_does_not_ask, a_name_after_several_leading_dots_has_an_extension); native/crates/ox-app/src/window/tests/renaming.rs (changing_the_extension_in_place_asks_first_as_windows_explorer_does, renaming_a_folder_with_a_dot_or_keeping_the_extension_never_asks, a_name_too_long_is_refused_in_place_before_the_extension_question); native/crates/ox-app/src/window/tests/file_operations.rs (the_rename_dialog_refuses_a_name_too_long_before_the_extension_question); native/crates/ox-app/src/window/tests/item_dialogs.rs (the_name_in_properties_asks_before_changing_the_extension, an_invalid_name_in_properties_is_refused_before_the_extension_question, enter_twice_in_properties_asks_about_the_extension_once, a_link_to_a_folder_is_renamed_in_properties_without_the_extension_question); native/crates/ox-app/src/window/tests/file_operations.rs (a_batch_name_that_adds_an_extension_asks_first, a_batch_error_goes_once_a_name_is_accepted). The question comes before OPS-013's hide question."
 [[feature]]
 id = "XFER-001"
 area = "XFER"
@@ -8993,13 +9007,13 @@ python_tests = [
 ]
 bridge = ["beginFileDrag"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drag/payload.rs (local_files_never_consult_the_mount_resolver). A plain drag offers Copy and Ask only; Shift or Ctrl+Shift held as it starts adds Move or Link. The window never deletes what it offered, whatever the receiver answers."
+native_note = "native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drag/payload.rs (local_files_never_consult_the_mount_resolver). A plain drag offers Copy and Ask only; Shift or Ctrl+Shift held as it starts adds Move or Link. The window never deletes what it offered, whatever the receiver answers; a plain drag dropped in one of its own windows on the same drive is moved by the window's own transfer engine (DND-017)."
 
 [[feature]]
 id = "DND-009"
 area = "DND"
 title = "Drop files onto a folder to copy them"
-behaviour = "Files dropped from other apps or OpenXplorer windows onto a writable folder row/tile, a mounted sidebar folder, or blank space of the current folder are copied into that folder. A drop is always a copy: it never moves or deletes the source, and a source offering only MOVE is refused. The native grab finishes before any dialog opens; the drop never touches the clipboard."
+behaviour = "Files dropped from other apps or OpenXplorer windows onto a writable folder row/tile, a mounted sidebar folder, or blank space of the current folder are copied into that folder. A plain drop from another app is a copy: it never moves or deletes the source, and a source offering only MOVE is refused. Holding Shift over it moves the items, as the user asked; OpenXplorer's own transfer engine moves them, so the other app is never asked to delete anything. A plain drag of OpenXplorer's own items onto a folder of their drive is a move (DND-017). The native grab finishes before any dialog opens; the drop never touches the clipboard."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -9280,7 +9294,7 @@ native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_cru
 id = "DND-017"
 area = "DND"
 title = "Drag to move and Ctrl/Shift/Alt drop actions"
-behaviour = "Required: a drop moves or copies depending on the source/destination and the modifiers (Shift move, Ctrl copy, Alt/menu ask). Moving by drag handles a failing destination and cancellation safely. Today drag sources and receivers only copy."
+behaviour = "Required: a drop moves or copies depending on the source/destination and the modifiers (Shift move, Ctrl copy, Alt/menu ask). As in Windows Explorer, a plain drag moves items onto a folder of the same drive and copies them to another drive. Moving by drag handles a failing destination and cancellation safely."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "missing"
@@ -9298,7 +9312,7 @@ python_tests = [
 bridge = ["operate", "transferConflicts"]
 dolphin = "Drop menu Move/Copy/Link, Shift/Ctrl modifiers; DropJob MoveAction"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_shift_drop_moves_the_items_into_the_folder, moving_items_into_the_folder_they_are_in_changes_nothing); native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, another_apps_drag_that_offered_no_copy_is_refused). The move runs through the transfer engine and its conflict check. Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a Shift-drag moved a file into a folder."
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_shift_drop_moves_the_items_into_the_folder, moving_items_into_the_folder_they_are_in_changes_nothing); native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, another_apps_drag_that_offered_no_copy_is_refused, a_plain_drag_of_own_items_moves_within_a_drive_and_keys_choose_otherwise, a_plain_drop_of_own_items_reads_their_drive_once_dropped, a_move_the_drag_did_not_offer_is_answered_as_a_copy); native/crates/ox-app/src/window/file_drop/targets/tests.rs (the_first_offer_is_kept_over_a_place_that_takes_no_drop, deciding_a_drop_reads_nothing_from_the_dragged_items); native/crates/ox-app/src/window/file_drop/drive.rs (items_in_one_folder_are_on_its_drive_and_an_empty_drop_is_not, network_missing_and_runtime_items_are_never_on_the_drive, a_dragged_link_is_on_the_drive_of_the_folder_holding_it, a_drive_that_does_not_answer_in_time_is_another, a_drive_that_never_answers_ties_up_at_most_a_few_threads_of_its_own); native/crates/ox-core/src/drive.rs (items_in_one_folder_are_on_one_local_drive, a_bind_mount_of_the_same_filesystem_is_another_drive, a_network_mount_is_never_a_drive_to_move_on, network_filesystems_are_told_from_local_ones, the_mount_table_names_each_mounts_filesystem, a_path_on_a_known_network_mount_is_told_by_its_name). A plain drag of the window's own local items onto a folder on their drive (one device number and, where the kernel reports it, one mount ID, so a bind mount of the same filesystem is another drive) moves them, as Windows Explorer does; across drives, from or to a network place (including a kernel mount of a share such as CIFS/SMB3 or NFS, and FUSE mounts other than fuseblk, told by the mount table's filesystem type), out of a ZIP, or for a plain drag from another app it copies; Ctrl held at the drop copies and Shift moves, from this app or another. Deciding the action at each motion reads nothing from disk: the drive is read once the items are dropped, on a thread of its own (at most 4 such reads at once, so reads stuck on a dead share never hold GIO's shared threads) for at most 2 s, a path the mount table places on a network mount is not read at all, and a drive that does not answer in time counts as another, so the drop copies. A drag out offers other apps Copy and Ask, plus Move or Link when Shift or Ctrl+Shift is held as it starts (DND-008), and the window never deletes what it offered. Limit: a plain drag offers no Move, so the window answers it with Copy and runs the move itself, and the pointer shows a copy while the drop moves; Shift pressed only while hovering is answered the same way. The move runs through the transfer engine and its conflict check. Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a Shift-drag moved a file into a folder. A folder on an overlay filesystem without redirect_dir=on that is also in one of its lower layers, which the kernel will not rename, counts as going to another drive, so a plain drag copies it instead of asking about moving by copying; a folder made on the overlay since (only in its upper layer) moves, and one whose lower layers cannot be read copies (native/crates/ox-core/src/drive.rs: a_folder_on_an_overlay_is_copied_by_a_plain_drag, only_an_overlay_folder_also_in_a_lower_layer_refuses_a_rename, overlay_layers_are_read_from_the_mount_options)."
 
 [[feature]]
 id = "DND-018"
@@ -9325,7 +9339,7 @@ bridge = ["operate", "transferConflicts"]
 dolphin = "KIO::DropJob / DropMenu; Dolphin drop popup (Move Here / Copy Here / Link Here) and modifier keys"
 gnome = "GdkDragAction negotiation (COPY|MOVE|LINK|ASK) in GtkDropTarget; Nautilus moves within a filesystem and copies across"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, the_drop_menu_offers_copy_move_link_and_cancel); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer); native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder). Shift moves, Ctrl copies, Ctrl+Shift links and Alt opens Copy here, Move here, Create links here and Cancel; drops from the Recycle Bin are always moves and drops on it go to the Trash. Differs: a plain drop copies, the current app's default, instead of asking; GNOME has no stash, and the Recycle Bin has no sidebar place to drag as a link."
+native_note = "native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, the_drop_menu_offers_copy_move_link_and_cancel); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer); native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder). Shift moves, Ctrl copies, Ctrl+Shift links and Alt opens Copy here, Move here, Create links here and Cancel; drops from the Recycle Bin are always moves and drops on it go to the Trash. Differs: a plain drop does what Windows Explorer does instead of asking: this app's own items move within a drive and copy across drives, and items from other apps copy; GNOME has no stash, and the Recycle Bin has no sidebar place to drag as a link."
 
 [[feature]]
 id = "DND-019"
@@ -13002,7 +13016,7 @@ native_note = "native/crates/ox-app/src/properties/selection_view.rs, properties
 id = "PROP-003"
 area = "PROP"
 title = "Properties General tab"
-behaviour = "The General tab shows 'Reading file properties…', then the icon and name and rows Type, Location, Full path, Size (files formatted; folders measured or 'Not scanned'), 'Opens with' (files: default app or 'No default application'), Created, Modified and Accessed (locale date-time or 'Not provided'). Buttons: 'Change app…' (files outside snapshots; closes and opens Open with), 'Copy full path' (toast 'Full path copied.') and, for folders, 'Calculate folder size' with 'Logical file bytes, measured on demand. Skips links, nested mounts and snapshot collections. The result may be partial; it is not ZFS compressed or snapshot usage.'. A read failure shows the error and 'Metadata could not be read.' under Permissions."
+behaviour = "The General tab shows 'Reading file properties…', then the icon and name and rows Type, Location, Full path, Size (files formatted; folders measured or 'Not scanned'), 'Opens with' (files: default app or 'No default application'), Created, Modified and Accessed (locale date-time or 'Not provided'). Buttons: 'Change app…' (files outside snapshots; closes and opens Open with), 'Copy full path' (toast 'Full path copied.') and, for folders, 'Calculate folder size' with 'Logical file bytes, measured on demand. Skips links, nested mounts and snapshot collections. The result may be partial; it is not ZFS compressed or snapshot usage.'. A read failure shows the error and 'Metadata could not be read.' under Permissions. Since PROP-033, Size on disk shows the space the files take, which on ZFS is the compressed space; Size stays logical bytes."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -13757,6 +13771,21 @@ bridge = ["previousVersions"]
 gnome = "GIO enumerate_children and query_info with NOFOLLOW_SYMLINKS on local paths and GVfs smb://"
 native = "done"
 native_note = "native/crates/ox-core/src/versions/lookup.rs and tests/versions_lookup.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (previous_versions_lists_the_snapshots_of_the_folder, a_file_without_snapshots_explains_that_none_were_found) run the lookup through GIO from the dialog. Earlier evidence: native/crates/ox-core/src/versions/lookup.rs (an_smb_item_is_looked_up_at_its_share_root, a_local_file_is_looked_up_next_to_it_and_a_folder_inside_it, the_most_specific_configured_source_is_the_only_candidate); native/crates/ox-core/tests/versions_lookup.rs (share_items_are_found_at_the_share_root_and_failures_become_warnings, a_configured_source_is_used_and_an_empty_result_explains_itself, a_folder_is_found_in_snapper_snapshots_next_to_it, at_most_one_hundred_versions_are_returned_and_marked_truncated, at_most_eight_warnings_are_kept, a_version_is_dated_by_its_snapshot_name_never_by_its_modification_time, a_cancelled_lookup_stops_instead_of_reporting_warnings, a_collection_read_by_a_lookup_becomes_read_only); native/crates/ox-core/tests/versions_lookup_gio.rs (gio_finds_versions_in_local_snapshot_folders_without_following_links, a_background_lookup_finds_the_same_versions). Porting notes: PROP-019 covers the dialog, and PROP-021 and PROP-024 cover detection and read-only marking. No backend test covers the lookup; ui_release's snapshot checks run against preview fixtures."
+
+[[feature]]
+id = "PROP-033"
+area = "PROP"
+title = "Size on disk"
+behaviour = "As in Windows Explorer, the General tab shows 'Size on disk' under 'Size': the space the item takes on its drive, from the blocks it uses. A folder's is measured with its size (Calculate folder size; 'Not scanned' until then, '≥' for a partial scan) and counts a hard-linked file once; several items show their combined space. Where the backend does not report the space of every file it shows 'not provided' rather than a smaller total. With several items, a link to a file counts as the file, in Size on disk as in Size."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows Explorer: Properties > General > Size on disk", "GIO standard::allocated-size; stat st_blocks"]
+python_tests = []
+bridge = []
+gnome = "GFileInfo standard::allocated-size"
+native = "done"
+native_note = "native/crates/ox-core/tests/sizes_scan.rs (the_space_files_take_on_disk_is_totalled_with_hard_links_once, the_space_on_disk_is_unknown_when_a_file_does_not_report_it); native/crates/ox-app/src/properties/folder_sizes.rs (size_on_disk_reads_like_the_size_or_is_not_provided); native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_of_several_items_total_them_and_change_them_together, size_on_disk_of_several_items_follows_links_as_size_does, calculate_folder_size_shows_the_size_everywhere_the_folder_is). Files read standard::allocated-size; the local scan adds st_blocks × 512 and the GIO scan standard::allocated-size."
 
 [[feature]]
 id = "SET-001"

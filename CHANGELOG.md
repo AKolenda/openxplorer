@@ -1,5 +1,23 @@
 # Unreleased
 
+- Dragging files works like Windows Explorer: a plain drag of
+  OpenXplorer's own items moves them to a folder on the same drive and
+  copies them to another drive (another partition, a USB stick, the
+  Windows drive or a network place). Hold Ctrl to copy or Shift to move.
+  A plain drag from another app still copies (hold Shift to move). A
+  drag out to another app offers it a copy or the drop menu, plus a move
+  or a link when Shift or Ctrl+Shift is held as the drag starts;
+  OpenXplorer itself never deletes what it offered.
+- Properties shows "Size on disk" under Size, as Windows Explorer does:
+  the space a file takes on its drive. A folder's is measured with
+  Calculate folder size, and several items show their combined space.
+- Renaming a file to a different extension asks first, as Windows
+  Explorer does: "If you change a file name extension, the file might
+  become unusable. Are you sure you want to change it?" It applies to
+  renaming in place, the Rename dialog and the name in Properties, and to
+  a batch rename whose name gives an extension to a file without one;
+  folders, links to folders and a change of case only (.JPG to .jpg)
+  never ask.
 - On KDE Plasma, the switch Settings > Default apps > Super+E opens
   OpenXplorer makes Super+E open a new OpenXplorer window each time, as
   Win+E opens a new File Explorer window. On takes the shortcut from Dolphin (keeping Dolphin's other

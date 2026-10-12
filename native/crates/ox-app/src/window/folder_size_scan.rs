@@ -441,6 +441,7 @@ fn zero_size(uri: &str) -> FolderSize {
     FolderSize {
         uri: uri.to_owned(),
         bytes: 0,
+        allocated: Some(0),
         files: 0,
         folders: 0,
         entries: 0,
