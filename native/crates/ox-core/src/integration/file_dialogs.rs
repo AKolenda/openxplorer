@@ -727,11 +727,14 @@ impl FileDialogRegistration {
     }
 }
 
-/// [`PORTAL_DIR_VARIABLE`] in the environment the systemd user manager
-/// starts [`PORTAL_SERVICE`] with, in systemd's order: the manager's own
-/// environment, the unit's `Environment=` lines, then its
-/// `EnvironmentFile=` files, each winning over the one before, and last
-/// its `UnsetEnvironment=`. Asked over D-Bus without starting anything.
+/// [`PORTAL_DIR_VARIABLE`] in the environment of [`PORTAL_SERVICE`], asked
+/// over D-Bus from the systemd user manager without starting anything.
+/// While the portal runs, that is its process's own environment, which is
+/// exact. Otherwise it is worked out as systemd would start it: the
+/// manager's own environment, the unit's `Environment=` lines, then its
+/// `EnvironmentFile=` files, each winning over the one before, and last its
+/// `UnsetEnvironment=`; files are read by the common rules only
+/// ([`environment_file_assignments`]), as the portal is normally running.
 /// `None` when it is not set there, or no service manager answers (the
 /// portal then has the session's environment and is taken to read the
 /// usual folders).
@@ -784,6 +787,12 @@ fn service_portal_dir() -> Option<String> {
     let mut unset = Vec::new();
     if let Some((unit,)) = unit {
         let unit = unit.as_str();
+        let running = property(unit, SYSTEMD_SERVICE, "MainPID")
+            .and_then(|value| value.get::<u32>())
+            .filter(|pid| *pid > 0);
+        if let Some(environment) = running.and_then(|pid| fs::read(format!("/proc/{pid}/environ")).ok()) {
+            return process_variable(&environment, PORTAL_DIR_VARIABLE);
+        }
         environments.push(strings(unit, SYSTEMD_SERVICE, "Environment"));
         // `(path, ignore if missing)`; a missing file the unit needs keeps
         // the portal from starting at all, so either way it adds nothing.
@@ -799,6 +808,15 @@ fn service_portal_dir() -> Option<String> {
         unset = strings(unit, SYSTEMD_SERVICE, "UnsetEnvironment");
     }
     variable_in(&environments, &unset, PORTAL_DIR_VARIABLE)
+}
+
+/// The value of `name` in a process's environment as `/proc/<pid>/environ`
+/// holds it: `NAME=value` entries separated by NUL bytes.
+fn process_variable(environment: &[u8], name: &str) -> Option<String> {
+    environment.split(|byte| *byte == 0).find_map(|entry| {
+        let value = entry.strip_prefix(name.as_bytes())?.strip_prefix(b"=")?;
+        Some(String::from_utf8_lossy(value).into_owned())
+    })
 }
 
 /// The value of `name` in `environments`, lists of `NAME=value`
@@ -817,10 +835,12 @@ fn variable_in(environments: &[Vec<String>], unset: &[String], name: &str) -> Op
     (!removed).then_some(value)
 }
 
-/// The `NAME=value` assignments of an `EnvironmentFile=` file as systemd
-/// reads them: blank lines and lines starting with `#` or `;` are
-/// skipped, space around the name and the value is dropped, and a value
-/// in matching single or double quotes loses them.
+/// The `NAME=value` assignments of an `EnvironmentFile=` file by the
+/// rules such files commonly keep to: blank lines and lines starting with
+/// `#` or `;` are skipped, space around the name and the value is
+/// dropped, and a value in matching single or double quotes loses them.
+/// systemd also reads escapes, continued lines and wildcard file names,
+/// which this does not.
 fn environment_file_assignments(contents: &str) -> Vec<String> {
     contents
         .lines()
@@ -1112,6 +1132,15 @@ mod tests {
             variable_in(&[lines(&["XDG_DESKTOP_PORTAL_DIR="])], &[], PORTAL_DIR_VARIABLE).as_deref(),
             Some(""),
             "set to nothing is set, and not absolute"
+        );
+        let process = b"HOME=/home/someone\0XDG_DESKTOP_PORTAL_DIR_OLD=/x\0XDG_DESKTOP_PORTAL_DIR=/running\0";
+        assert_eq!(
+            process_variable(process, PORTAL_DIR_VARIABLE).as_deref(),
+            Some("/running")
+        );
+        assert_eq!(
+            process_variable(b"HOME=/home/someone\0", PORTAL_DIR_VARIABLE),
+            None
         );
         let file = environment_file_assignments(
             "# portal folder\n; old\n\n  XDG_DESKTOP_PORTAL_DIR = \"/from/file\"  \nOTHER='x'\n",
