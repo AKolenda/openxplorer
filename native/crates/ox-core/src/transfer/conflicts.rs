@@ -13,8 +13,8 @@ use super::node::{Node, NodeKind};
 use super::types::{ConflictPolicy, TransferMode};
 use crate::location::{new_copy_name, ItemKind};
 
-/// XFER-008: "Keep both" tries `(copy 2)` up to `(copy 9999)`, like the
-/// Python app, then gives up.
+/// XFER-008: "Keep both" tries `- Copy`, then `- Copy (2)` up to
+/// `- Copy (9999)`, then gives up.
 const MAX_COPY_NUMBER: u32 = 10_000;
 
 /// Where the items of one copy or move go.
@@ -82,7 +82,7 @@ impl Placement<'_> {
     }
 
     /// XFER-008: the first free Windows-style duplicate name, starting at
-    /// `(copy 2)`.
+    /// `name - Copy`.
     fn free_copy_name(
         &self,
         source_name: &OsStr,
@@ -90,7 +90,7 @@ impl Placement<'_> {
         cancel: &Cancellation,
     ) -> Result<Box<dyn Node>, TransferError> {
         // Duplicate names are text. A name that is not UTF-8 is refused
-        // rather than given a lossily converted "(copy N)" name.
+        // rather than given a lossily converted "- Copy" name.
         let Some(source_name) = source_name.to_str() else {
             return Err(TransferError::failed(crate::i18n::gettext(
                 "This item's name is not valid UTF-8, so no duplicate name can be made. \
@@ -102,7 +102,7 @@ impl Placement<'_> {
         } else {
             ItemKind::File
         };
-        for number in 2..MAX_COPY_NUMBER {
+        for number in 1..MAX_COPY_NUMBER {
             cancel.check()?;
             let name = new_copy_name(source_name, number, item_kind)?;
             let candidate = child_node(self.destination_folder, &name)?;

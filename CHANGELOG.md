@@ -40,6 +40,11 @@
   Bin, Show opens the Recycle Bin with them selected. After deleting
   permanently, nothing is left to show, so Show only brings the window
   back.
+- Copies are named as Windows Explorer names them: Duplicate, pasting
+  into the same folder and Keep both now give `Notes - Copy.txt`, then
+  `Notes - Copy (2).txt`, instead of `Notes (copy 2).txt`. Pasting a
+  copy into its own folder makes `Notes - Copy.txt` straight away, without
+  the "Items already exist" question, as Windows Explorer does.
 
 # 2.0.4 — 2026-10-09
 

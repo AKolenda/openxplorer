@@ -60,8 +60,8 @@ pub use archive_location::{is_archive_location, ArchiveLocation, ARCHIVE_SCHEME}
 pub use classify::{is_network_filesystem, is_smb_share_root};
 pub use display::{crumb_divider, device_root, parent_location, same_location, DeviceLabel, LocationContext};
 pub use names::{
-    ends_like_windows_drops, is_reserved_device_name, new_copy_name, safe_label, validate_name, ItemKind,
-    MAX_LABEL_CHARS,
+    ends_like_windows_drops, is_reserved_device_name, name_with_copy_marker, new_copy_name, safe_label,
+    validate_name, ItemKind, MAX_LABEL_CHARS,
 };
 pub use normalise::{
     file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
