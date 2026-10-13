@@ -69,7 +69,7 @@ impl BrowserWindow {
             starting_label(TransferMode::Copy),
             operation.cancel.clone(),
         );
-        let progress = self.operation_progress_sender();
+        let progress = self.progress_reporter(&operation.cancel);
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
