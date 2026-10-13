@@ -6,9 +6,12 @@
 //! Ports `braveDialog` in `v2.0.0:desktop/ui/app.js` (INT-019 to INT-021). Every
 //! profile starts ticked and the consent check box unticked; Apply to
 //! Brave needs the consent and at least one profile, Restore previous the
-//! consent and exactly one. The sync and its safety rules (never while
-//! Brave runs, check every profile first, back up, change only the two
-//! download folders) are ox-core's [`BraveIntegration`].
+//! consent and exactly one. "Ask where to save each file before
+//! downloading", unticked at first, also makes the profiles ask where to
+//! save each download (INT-034). The sync and its safety rules (never
+//! while Brave runs, check every profile first, back up, change only the
+//! two download folders and the prompt the user chose) are ox-core's
+//! [`BraveIntegration`].
 //!
 //! [`BraveDialog`] is a `GtkWindow` subclass laid out by the template
 //! `resources/ui/brave-dialog.ui`.
@@ -17,7 +20,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{
-    BraveError, BraveIntegration, BraveProfile, BraveReach, BraveStatus, Confirmation, SyncOutcome,
+    BraveError, BraveIntegration, BraveProfile, BraveReach, BraveStatus, Confirmation, DownloadPrompt,
+    SyncOutcome,
 };
 
 /// Why Apply to Brave did nothing.
@@ -111,6 +115,8 @@ mod imp {
         pub(super) profile_list: TemplateChild<gtk::Box>,
         #[template_child]
         pub(super) recheck_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub(super) prompt_check: TemplateChild<gtk::CheckButton>,
         #[template_child]
         pub(super) consent_check: TemplateChild<gtk::CheckButton>,
         #[template_child]
@@ -310,6 +316,15 @@ impl BraveDialog {
         }
     }
 
+    /// Whether "Ask where to save each file before downloading" is ticked.
+    fn download_prompt(&self) -> DownloadPrompt {
+        if self.imp().prompt_check.is_active() {
+            DownloadPrompt::Ask
+        } else {
+            DownloadPrompt::Unchanged
+        }
+    }
+
     /// Apply to Brave: needs the consent and a profile, then syncs every
     /// ticked profile and reports each failure.
     fn apply(&self) {
@@ -327,9 +342,10 @@ impl BraveDialog {
         }
         imp.apply_button.set_sensitive(false);
         let destination = imp.destination.get().cloned().unwrap_or_default();
-        let syncing = self
-            .brave()
-            .run_in_background(move |brave| brave.sync(&profiles, &destination, Confirmation::Confirmed));
+        let prompt = self.download_prompt();
+        let syncing = self.brave().run_in_background(move |brave| {
+            brave.sync(&profiles, &destination, prompt, Confirmation::Confirmed)
+        });
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = dialog)]
             self,
@@ -423,17 +439,29 @@ impl BraveDialog {
     pub(crate) fn set_consent(&self, consent: bool) {
         self.imp().consent_check.set_active(consent);
     }
+
+    /// The "Ask where to save each file before downloading" check box,
+    /// for tests.
+    #[cfg(test)]
+    pub(crate) fn prompt_check(&self) -> gtk::CheckButton {
+        self.imp().prompt_check.get()
+    }
 }
 
 /// The check box of `profile`: "<name> · <channel>", then its download
-/// folder or "Uses browser default". Ticked, as in the Python dialog.
+/// folder or "Uses browser default", and "Asks where to save each file"
+/// when Brave already does. Ticked, as in the Python dialog.
 fn profile_check(profile: &BraveProfile) -> gtk::CheckButton {
     let folder = if profile.download_path.is_empty() {
         ox_core::i18n::gettext_static("Uses browser default")
     } else {
         profile.download_path.as_str()
     };
-    let label = format!("{} · {}\n{folder}", profile.name, profile.channel.folder_name());
+    let mut label = format!("{} · {}\n{folder}", profile.name, profile.channel.folder_name());
+    if profile.asks_where_to_save {
+        label.push_str(" · ");
+        label.push_str(ox_core::i18n::gettext_static("Asks where to save each file"));
+    }
     gtk::CheckButton::builder().label(label).active(true).build()
 }
 
@@ -462,6 +490,7 @@ mod tests {
             channel: BraveChannel::Stable,
             directory: PathBuf::from("/home/demo/.config/BraveSoftware/Brave-Browser/Default"),
             download_path: String::new(),
+            asks_where_to_save: false,
         }
     }
 
@@ -526,5 +555,20 @@ mod tests {
             Some("Personal · Brave-Browser\nUses browser default")
         );
         assert!(check.is_active(), "every profile starts ticked");
+    }
+
+    /// parity: INT-034
+    #[gtk::test]
+    fn a_profile_says_when_brave_asks_where_to_save() {
+        let asking = BraveProfile {
+            download_path: "/home/demo/Downloads".to_owned(),
+            asks_where_to_save: true,
+            ..profile()
+        };
+        let check = profile_check(&asking);
+        assert_eq!(
+            check.label().as_deref(),
+            Some("Personal · Brave-Browser\n/home/demo/Downloads · Asks where to save each file")
+        );
     }
 }

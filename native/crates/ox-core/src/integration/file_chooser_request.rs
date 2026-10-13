@@ -116,6 +116,14 @@ impl FileFilter {
         })
     }
 
+    /// Whether the filter lets every file through: its patterns are all
+    /// `*` or `*.*`, as GTK's "All files" and Chromium's "All Files" are.
+    pub fn is_all_files(&self) -> bool {
+        self.patterns
+            .iter()
+            .all(|pattern| matches!(pattern, FilterPattern::Glob(glob) if glob == "*" || glob == "*.*"))
+    }
+
     /// The filter as the portal writes it, `(sa(us))`.
     fn to_variant(&self) -> glib::Variant {
         let patterns: Vec<(u32, String)> = self
@@ -247,8 +255,14 @@ impl ChooserRequest {
     }
 
     /// The window title: the caller's, or the method's own words.
+    ///
+    /// Chromium gives a Save dialog it has no title for the name of its
+    /// "All Files" filter (`IDS_SAVEAS_ALL_FILES`, in the user's language),
+    /// so every download's Save as would be titled "All Files". A Save
+    /// dialog's title that is the name of one of its filters that lets
+    /// every file through therefore gets the method's own words too.
     pub fn window_title(&self) -> String {
-        if !self.title.trim().is_empty() {
+        if !self.title.trim().is_empty() && !self.title_names_all_files() {
             return self.title.clone();
         }
         match &self.mode {
@@ -258,6 +272,16 @@ impl ChooserRequest {
             ChooserMode::Save { .. } => "Save as".to_owned(),
             ChooserMode::SaveFiles { .. } => "Save files to".to_owned(),
         }
+    }
+
+    /// Whether this is a Save dialog titled with the name of an "All
+    /// Files" filter of its own ([`FileFilter::is_all_files`]).
+    fn title_names_all_files(&self) -> bool {
+        matches!(self.mode, ChooserMode::Save { .. })
+            && self
+                .filters
+                .iter()
+                .any(|filter| filter.name == self.title && filter.is_all_files())
     }
 
     /// The accept button's label: the caller's, or "Open", "Select folder"
