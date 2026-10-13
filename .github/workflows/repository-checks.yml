@@ -58,6 +58,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level=moderate
       - run: pnpm check
+      - name: Check standalone design tooling
+        run: |
+          node --test tests/test_web_tooling.cjs
+          node tools/check-syntax.cjs
+          pnpm designs
       - run: pnpm build
       - name: Prepare production browser checks
         run: |
