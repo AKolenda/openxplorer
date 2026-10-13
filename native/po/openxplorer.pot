@@ -7876,6 +7876,10 @@ msgid "Adds item check boxes as in Windows 11 and a redesigned Settings page wit
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Brave downloads, Save page as, Save as PDF and uploads can use OpenXplorer’s Open and Save dialogs: the Brave dialog can make Brave ask where to save each download, and the dialog opt-in now works when the portal reads its settings from another folder. Item check boxes appear only while Ctrl is held, as in Windows, and an experimental, off-by-default switch indexes frequently opened folders. Opening a compressed archive can no longer use unbounded memory: XZ, ZIP-LZMA and Zstandard decoding is limited to 128 MiB, as the reference tools do. Live search lists at most 500 matches from the start, dragging over a launcher reads only its first 64 KiB, and progress, sorting and the search cache use less work. Setting up a mount for all users undoes only its own changes when it fails and refuses to run while another setup or removal is running."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Copies, drags and new folders work as in Windows Explorer: a copy is named “name - Copy”, a plain drag moves within a drive and copies to another, and New folder makes the folder at once to rename in place. Properties shows Size on disk, a rename that changes the extension asks first, and Super+E can open OpenXplorer on KDE Plasma. An empty folder looks as it does in Windows and takes right-click, paste and drops, New and Paste are off in a folder you cannot write to, Apply to all folders uses the choices in the dialog, and Show after moving items to the Recycle Bin opens it."
 msgstr ""
 
