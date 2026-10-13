@@ -19,6 +19,7 @@ on:
       - 'wrangler.jsonc'
       - 'native/**/Cargo.toml'
       - 'native/Cargo.lock'
+      - '.github/workflows/checks.yml'
       - '.github/workflows/repository-checks.yml'
   push:
     branches: [main]
@@ -65,8 +66,10 @@ jobs:
           "$RUNNER_TEMP/browser-tests/bin/python" -m playwright install --with-deps chromium
       - name: Check the production export, hydration and mobile iframe removal
         run: '"$RUNNER_TEMP/browser-tests/bin/python" tests/test_launch_production.py'
-      - name: Verify generated documentation
-        run: git diff --exit-code -- docs apps/web/public/docs-markdown apps/web/public/assets/markdown.json
+      - name: Verify generated guides and license, including new and obsolete pages
+        run: |
+          python3 -m unittest discover -s tests -p 'test_sync_docs.py'
+          python3 tools/sync-docs.py --check
       - name: Check source and public-data policies
         run: |
           pnpm security:source
