@@ -267,7 +267,7 @@ impl BrowserWindow {
         self.update_archive_actions();
         let mut extractor = self
             .zip_extractor()
-            .with_progress(self.operation_progress_sender());
+            .with_progress(self.progress_reporter(&cancel));
         if let Some(members) = selection {
             extractor = extractor.with_selection(members);
         }

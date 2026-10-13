@@ -12,7 +12,6 @@
 //! selection), Undo remembers how to reverse it, and a toast or the
 //! "Operation result" dialog says what happened.
 
-use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::location::TRASH_URI;
 use ox_core::ops::{
@@ -132,26 +131,11 @@ impl BrowserWindow {
     /// A progress sink for the worker thread of the operation that
     /// `cancel` stops. Its reports reach the panel on the main loop until
     /// the user cancels; after that the panel keeps saying "Cancelling…".
-    pub(super) fn progress_reporter(&self, cancel: &Cancellation) -> impl FnMut(Progress) + Send + 'static {
-        let (reports, report_queue) = async_channel::unbounded::<Progress>();
-        let panel = self.panel_for_operation(cancel);
-        let cancel = cancel.clone();
-        glib::spawn_future_local(glib::clone!(
-            #[weak]
-            panel,
-            async move {
-                // The loop ends when the worker drops its sender.
-                while let Ok(progress) = report_queue.recv().await {
-                    if !cancel.is_cancelled() && panel.tracks(&cancel) {
-                        panel.show_progress(&progress);
-                    }
-                }
-            }
-        ));
-        move |progress| {
-            // Fails only once the window has gone and stopped listening.
-            let _ = reports.try_send(progress);
-        }
+    pub(in crate::window) fn progress_reporter(
+        &self,
+        cancel: &Cancellation,
+    ) -> impl FnMut(Progress) + Send + 'static {
+        super::progress::report_to(&self.panel_for_operation(cancel), cancel.clone())
     }
 
     /// Stops every running operation between steps; each panel's Cancel
