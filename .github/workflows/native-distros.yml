@@ -101,7 +101,7 @@ jobs:
       - name: Build and verify the ${{ matrix.format }} package
         run: runuser -u builder -- sh native/packaging/ci/build-package.sh "${{ matrix.format }}"
       - name: Publish the package as a workflow artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: openxplorer-native-${{ matrix.family }}-${{ matrix.format }}
           path: dist/native/
@@ -136,7 +136,7 @@ jobs:
           cache-key: flatpak-builder-${{ hashFiles('native/Cargo.lock') }}
           upload-artifact: false
       - name: Publish the bundle as a workflow artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: io.winspace.Development.Native-x86_64.flatpak
           path: io.winspace.Development.Native.flatpak
