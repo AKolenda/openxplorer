@@ -11,6 +11,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
@@ -29,10 +30,14 @@ const MAX_ICON_BYTES: u64 = 16 * 1024 * 1024;
 const ICON_PIXELS: i32 = 256;
 /// How many decoded pictures are kept.
 const MAX_CACHED_ICONS: usize = 256;
+/// How many custom pictures are decoded at once, including workers whose
+/// rows scrolled away before their blocking decoder could finish.
+const DECODING_AT_ONCE: usize = 4;
 
 thread_local! {
     /// Decoded pictures by their URI.
     static DECODED: RefCell<HashMap<String, gdk::Texture>> = RefCell::new(HashMap::new());
+    static DECODING: Rc<thumbnails::Slots> = Rc::new(thumbnails::Slots::new(DECODING_AT_ONCE));
 }
 
 /// The decoded picture at `icon_uri`, decoding it off the main thread the
@@ -42,7 +47,11 @@ async fn icon_texture(icon_uri: String) -> Option<gdk::Texture> {
         return Some(texture);
     }
     let uri = icon_uri.clone();
-    let texture = gio::spawn_blocking(move || decode(&uri)).await.ok().flatten()?;
+    let texture = DECODING
+        .with(Rc::clone)
+        .blocking(move |_| decode(&uri))
+        .await
+        .flatten()?;
     DECODED.with_borrow_mut(|decoded| {
         if decoded.len() >= MAX_CACHED_ICONS {
             decoded.clear();
