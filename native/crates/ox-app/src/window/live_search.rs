@@ -25,6 +25,7 @@ impl BrowserWindow {
     pub(super) fn walk_folder(&self, run: SearchRun) {
         let rows = gio::ListStore::new::<FileItem>();
         let mut shown = HashSet::new();
+        let mut is_truncated = false;
         let active = self.imp().session.borrow().active_id();
         if let Some(store) = active.and_then(|id| self.tab_store(id)) {
             let listing = Listing {
@@ -33,8 +34,9 @@ impl BrowserWindow {
                 shows_hidden: self.hidden_files_shown(),
             };
             let listed = listed_name_matches(listing, &run.text);
-            shown.extend(listed.iter().map(|item| item.entry().uri.clone()));
-            rows.extend_from_slice(&listed);
+            is_truncated = listed.is_truncated;
+            shown.extend(listed.items.iter().map(|item| item.entry().uri.clone()));
+            rows.extend_from_slice(&listed.items);
         }
         self.imp().search.borrow_mut().show_found(&run, rows.clone());
         self.show_searched_items();
@@ -55,13 +57,14 @@ impl BrowserWindow {
         });
         let window = self.downgrade();
         glib::spawn_future_local(async move {
-            let mut is_truncated = false;
             while let Ok(batch) = batches.recv().await {
                 let new = batch.into_iter().filter(|entry| shown.insert(entry.uri.clone()));
                 let room = RESULT_LIMIT.saturating_sub(rows.n_items() as usize);
-                let found: Vec<FileItem> = new.map(FileItem::new).collect();
+                let mut found: Vec<Entry> = new.take(room + 1).collect();
                 is_truncated |= found.len() > room;
-                rows.extend_from_slice(&found[..found.len().min(room)]);
+                found.truncate(room);
+                let items: Vec<FileItem> = found.into_iter().map(FileItem::new).collect();
+                rows.extend_from_slice(&items);
             }
             let outcome = walk.await.unwrap_or(Err(SearchError::Cancelled));
             if let Some(window) = window.upgrade() {

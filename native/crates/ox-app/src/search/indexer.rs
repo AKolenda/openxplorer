@@ -18,7 +18,7 @@ use std::thread::{self, ThreadId};
 use std::time::{Duration, Instant};
 
 use gtk::glib;
-use ox_core::search::{GioFolderReader, IndexService, IndexSettings, SearchError, SearchIndex};
+use ox_core::search::{AutoIndex, GioFolderReader, IndexService, IndexSettings, SearchError, SearchIndex};
 use ox_core::settings::Bookmark;
 use ox_core::LOG_DOMAIN;
 
@@ -27,6 +27,11 @@ use super::error::CacheError;
 /// How long the thread waits between two ticks (`refresh_due` ran every
 /// second).
 const TICK_INTERVAL: Duration = Duration::from_secs(1);
+
+/// How often the frequently opened folders are brought up to date while
+/// nothing is opened (SRCH-041), so a folder no longer opened is not kept
+/// until the next one is.
+const FREQUENT_INTERVAL: Duration = Duration::from_secs(60 * 60);
 
 /// Where the search cache lives.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -181,6 +186,7 @@ fn run(
     };
     let _ = slot.set(Ok(Arc::clone(&service)));
     index_existing_pins(&service, &start.pins);
+    update_frequent_roots(&service, start.settings.auto_index);
     tick_until_stopped(&service, start.settings, updates, observer);
 }
 
@@ -207,6 +213,18 @@ fn index_existing_pins(service: &IndexService, pins: &[Bookmark]) {
     }
 }
 
+/// Removes the frequently opened folders that are no longer opened often
+/// (SRCH-041), as the switch and `auto_index` allow, at startup and
+/// hourly; otherwise only an opened folder would bring them up to date.
+fn update_frequent_roots(service: &IndexService, auto_index: AutoIndex) {
+    if let Err(error) = service.update_frequent_roots(auto_index) {
+        glib::g_warning!(
+            LOG_DOMAIN,
+            "Could not update the frequently opened folders: {error}"
+        );
+    }
+}
+
 /// Ticks `service` about once a second with the latest `settings` until
 /// the indexer is dropped. A failed tick is retried at the next one; its
 /// error is logged once, not every second.
@@ -217,7 +235,12 @@ fn tick_until_stopped(
     observer: Option<&Sender<Observed>>,
 ) {
     let mut last_error = String::new();
+    let mut frequent_updated = Instant::now();
     loop {
+        if frequent_updated.elapsed() >= FREQUENT_INTERVAL {
+            update_frequent_roots(service, settings.auto_index);
+            frequent_updated = Instant::now();
+        }
         match observed(observer, true, || service.tick(&settings)) {
             Ok(()) => last_error.clear(),
             Err(error) => {

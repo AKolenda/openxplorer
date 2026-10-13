@@ -135,6 +135,9 @@ mod imp {
         /// Checked while the item is selected; a click selects or
         /// deselects it alone (SEL-014).
         pub(super) check: gtk::CheckButton,
+        /// Whether the check box takes clicks though unchecked; else only a
+        /// checked one does, while the boxes wait for Ctrl (SEL-014).
+        pub(super) check_takes_clicks: Cell<bool>,
         /// Expands a folder of a details row in place (VIEW-035).
         pub(super) expander: gtk::Button,
         /// The tree row the cell follows, and its handler.

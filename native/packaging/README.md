@@ -121,6 +121,10 @@ never takes over the Python app's name. Every package build sets it.
   portal never picks it by itself: it is used only after the user enables
   "Apps' Open and Save dialogs" in Settings, which writes the preference into
   their own `~/.config/xdg-desktop-portal/<desktop>-portals.conf` (INT-032).
+  When the user's portal service sets `XDG_DESKTOP_PORTAL_DIR`, the portal
+  reads `.portal` files and its configuration only from that folder, so the
+  opt-in writes the preference there and links this packaged file into it,
+  recording the link so Restore removes only what it made.
   The existing D-Bus service file starts the app for the first call. The
   Flatpak installs none, since the host's portal reads only the host's data
   folders.

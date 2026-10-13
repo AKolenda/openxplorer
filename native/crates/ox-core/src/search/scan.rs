@@ -382,10 +382,56 @@ fn cached_children(
 /// Deletes the cached entry `uri` and everything cached below it.
 fn delete_subtree(transaction: &Transaction<'_>, root: &str, uri: &str) -> rusqlite::Result<()> {
     let prefix = folder_prefix(uri);
-    let prefix_chars = i64::try_from(prefix.chars().count()).unwrap_or(i64::MAX);
+    // '/' is followed by '0' in SQLite's binary text order. This half-open
+    // range therefore contains exactly the descendants, including encoded
+    // and Unicode names, while using the existing (root, uri) index. A
+    // substr predicate scanned the whole root for every removed child.
+    let end = format!("{}0", uri.trim_end_matches('/'));
+    transaction.execute("DELETE FROM entries WHERE root=?1 AND uri=?2", (root, uri))?;
     transaction.execute(
-        "DELETE FROM entries WHERE root=?1 AND (uri=?2 OR substr(uri, 1, ?3)=?4)",
-        (root, uri, prefix_chars, &prefix),
+        "DELETE FROM entries WHERE root=?1 AND uri>=?2 AND uri<?3",
+        (root, &prefix, &end),
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::search::fixtures::{listed_file, ScannedShare, SHARE};
+
+    /// Removing one child must not visit every other cached item. Count
+    /// SQLite work instead of elapsed time so slow CI machines can verify
+    /// that the URI index bounds the deletion.
+    #[test]
+    fn pruning_a_small_subtree_does_not_scan_unrelated_entries() {
+        let share = ScannedShare::new();
+        let items: Vec<_> = (0..4096)
+            .map(|number| listed_file(SHARE, &format!("report-{number}.txt")))
+            .collect();
+        share.store(&items);
+        let mut connection = share.index.connect().unwrap();
+        let steps = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&steps);
+        connection
+            .progress_handler(
+                1000,
+                Some(move || {
+                    observed.fetch_add(1000, Ordering::Relaxed);
+                    false
+                }),
+            )
+            .unwrap();
+        let transaction = begin_immediate(&mut connection).unwrap();
+
+        delete_subtree(&transaction, SHARE, &items[0].uri).unwrap();
+
+        let used = steps.load(Ordering::Relaxed);
+        assert!(used < 10_000, "deleting one cached file took {used} SQLite steps");
+        transaction.commit().unwrap();
+        assert!(share.found_names("report-0.txt").is_empty());
+    }
 }

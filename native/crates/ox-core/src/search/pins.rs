@@ -32,7 +32,7 @@ use rusqlite::OptionalExtension;
 use super::error::SearchError;
 use super::index::{begin_immediate, indexable_root, root_label, SearchIndex};
 use super::policy::IndexScope;
-use super::root::{HiddenItems, IndexRoot, RootOrigin};
+use super::root::{HiddenItems, RootOrigin};
 use super::service::{IndexService, ScanTrigger};
 use super::text::{folder_prefix, is_at_or_below, unix_now};
 use crate::location::normalise;
@@ -231,18 +231,26 @@ impl SearchIndex {
     /// has a root, or an enabled root already indexes it.
     ///
     /// Safety rule "the user's choice wins": an existing root, including
-    /// one the user switched off, is left exactly as it is.
+    /// one the user switched off, is left exactly as it is. A root that
+    /// frequent use added becomes the pin's, so that it stays while the
+    /// folder is pinned however rarely it is opened.
     fn add_pinned_root(&self, pin: &Bookmark) -> Result<Option<String>, SearchError> {
         let uri = match indexable_root(&pin.uri) {
             Ok(uri) => uri,
             Err(SearchError::DeviceLocation | SearchError::ServerList) => return Ok(None),
             Err(error) => return Err(error),
         };
+        let connection = self.connect()?;
+        // Before the check below, which a frequent root for the folder
+        // itself would pass: it is already indexed and needs no new scan.
+        connection.execute(
+            "UPDATE roots SET pin_added=1, frequent_added=0 WHERE uri=?1 AND frequent_added=1",
+            [&uri],
+        )?;
         if self.is_indexed_by_enabled_root(&uri)? {
             return Ok(None);
         }
         let label = root_label(&pin.label, &uri);
-        let connection = self.connect()?;
         let added = connection.execute(
             "INSERT INTO roots(uri, label, enabled, include_hidden, pin_added) VALUES(?1, ?2, 1, 0, 1)
              ON CONFLICT(uri) DO NOTHING",
@@ -256,39 +264,40 @@ impl SearchIndex {
     /// Safety rule "a folder is indexed once" (SRCH-032): a root for a
     /// folder inside another root would crawl, watch and store that
     /// subtree twice, and count it twice toward the entry limit.
-    fn is_indexed_by_enabled_root(&self, uri: &str) -> Result<bool, SearchError> {
+    pub(super) fn is_indexed_by_enabled_root(&self, uri: &str) -> Result<bool, SearchError> {
         let roots = self.roots()?;
         let is_indexed = roots
             .iter()
             .filter(|root| root.is_enabled() && is_at_or_below(uri, &root.uri))
-            .any(|root| self.root_reaches(root, uri));
+            .any(|root| self.root_reaches(&root.uri, root.hidden_items, uri));
         Ok(is_indexed)
     }
 
-    /// Whether `root`, at or above the folder `uri`, indexes it: `uri` is
-    /// in the root's scope (not another filesystem, a system folder or
-    /// snapshot history) and not hidden from a root that skips hidden
-    /// items.
-    fn root_reaches(&self, root: &IndexRoot, uri: &str) -> bool {
+    /// Whether the root `root`, at or above the folder `uri` and showing
+    /// `hidden_items`, indexes it: `uri` is in the root's scope (not
+    /// another filesystem, a system folder or snapshot history) and not
+    /// hidden from a root that skips hidden items.
+    pub(super) fn root_reaches(&self, root: &str, hidden_items: HiddenItems, uri: &str) -> bool {
         // Without the mount table, other filesystems cannot be told apart;
         // the pin then gets a root of its own, whose scan reports why.
-        let Ok(scope) = IndexScope::current(&root.uri, self.directory()) else {
+        let Ok(scope) = IndexScope::current(root, self.directory()) else {
             return false;
         };
-        let is_hidden_from_root =
-            root.hidden_items == HiddenItems::Skip && has_hidden_name_below(&root.uri, uri);
+        let is_hidden_from_root = hidden_items == HiddenItems::Skip && has_hidden_name_below(root, uri);
         scope.admits(uri) && !is_hidden_from_root
     }
 
     /// Who chose to index `uri`; `None` when it has no root.
-    fn root_origin(&self, uri: &str) -> Result<Option<RootOrigin>, SearchError> {
+    pub(super) fn root_origin(&self, uri: &str) -> Result<Option<RootOrigin>, SearchError> {
         let connection = self.connect()?;
-        let pin_added: Option<bool> = connection
-            .query_row("SELECT pin_added FROM roots WHERE uri=?1", [uri], |row| {
-                row.get(0)
-            })
+        let origin = connection
+            .query_row(
+                "SELECT pin_added, frequent_added FROM roots WHERE uri=?1",
+                [uri],
+                |row| Ok(RootOrigin::from_stored(row.get(0)?, row.get(1)?)),
+            )
             .optional()?;
-        Ok(pin_added.map(RootOrigin::from_stored))
+        Ok(origin)
     }
 
     /// Deletes the root `uri` and its entries if pinning added it.
@@ -308,7 +317,7 @@ impl SearchIndex {
     }
 
     /// Whether the one-time change `name` was applied to this cache.
-    fn is_migration_applied(&self, name: &str) -> Result<bool, SearchError> {
+    pub(super) fn is_migration_applied(&self, name: &str) -> Result<bool, SearchError> {
         let connection = self.connect()?;
         let applied: Option<f64> = connection
             .query_row(

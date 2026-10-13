@@ -9,8 +9,8 @@
 //! | Case file | What it covers |
 //! |---|---|
 //! | `status` | Detected profiles, sandboxed installs, running Brave |
-//! | `sync` | Pointing profiles at the download folder |
-//! | `restore` | Putting the previous folders back |
+//! | `sync` | Pointing profiles at the download folder, and asking where to save |
+//! | `restore` | Putting the previous folders and prompt back |
 
 use std::fs;
 use std::os::unix::fs::MetadataExt;
@@ -19,7 +19,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use ox_core::integration::{
-    BraveActivity, BraveError, BraveIntegration, BravePaths, Confirmation, Sandbox, SyncOutcome,
+    BraveActivity, BraveError, BraveIntegration, BravePaths, Confirmation, DownloadPrompt, Sandbox,
+    SyncOutcome,
 };
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -103,13 +104,51 @@ impl Fixture {
     }
 
     fn sync(&self, confirmation: Confirmation) -> Result<SyncOutcome, BraveError> {
-        self.brave()
-            .sync(&[PROFILE_ID.to_owned()], &self.destination_text(), confirmation)
+        self.brave().sync(
+            &[PROFILE_ID.to_owned()],
+            &self.destination_text(),
+            DownloadPrompt::Unchanged,
+            confirmation,
+        )
+    }
+
+    /// A confirmed sync that also makes Brave ask where to save.
+    fn sync_asking(&self) -> Result<SyncOutcome, BraveError> {
+        self.brave().sync(
+            &[PROFILE_ID.to_owned()],
+            &self.destination_text(),
+            DownloadPrompt::Ask,
+            Confirmation::Confirmed,
+        )
     }
 
     fn sync_to(&self, destination: &str) -> Result<SyncOutcome, BraveError> {
-        self.brave()
-            .sync(&[PROFILE_ID.to_owned()], destination, Confirmation::Confirmed)
+        self.brave().sync(
+            &[PROFILE_ID.to_owned()],
+            destination,
+            DownloadPrompt::Unchanged,
+            Confirmation::Confirmed,
+        )
+    }
+
+    /// Sets `download.prompt_for_download` to `prompt`, or removes it.
+    fn set_download_prompt(&self, prompt: Option<bool>) {
+        let mut preferences = self.preferences_json();
+        let download = preferences["download"]
+            .as_object_mut()
+            .expect("the download group");
+        match prompt {
+            Some(prompt) => download.insert("prompt_for_download".to_owned(), json!(prompt)),
+            None => download.remove("prompt_for_download"),
+        };
+        write_json(&self.preferences, &preferences);
+    }
+
+    /// The profile's one undo record.
+    fn undo_record(&self) -> PathBuf {
+        let records = self.backups_ending_in(".json");
+        assert_eq!(records.len(), 1, "{records:?}");
+        records[0].clone()
     }
 
     fn destination_text(&self) -> String {

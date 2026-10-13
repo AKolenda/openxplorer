@@ -91,8 +91,8 @@ pub use background_portal::{
 };
 pub use brave::{
     BraveActivity, BraveChannel, BraveError, BraveIntegration, BravePaths, BraveProfile, BraveReach,
-    BraveStatus, Confirmation, DownloadPreference, ProcessTable, ProfileFailure, SandboxedBrave, SyncOutcome,
-    MANUAL_SETTINGS_URL,
+    BraveStatus, Confirmation, DownloadPreference, DownloadPrompt, ProcessTable, ProfileFailure,
+    RestoredSettings, SandboxedBrave, SyncOutcome, MANUAL_SETTINGS_URL,
 };
 pub use default_apps::{
     DefaultApps, DefaultAppsError, DefaultsStatus, DesktopId, MimeDefaults, RestoreScope, XdgMime,
@@ -110,8 +110,8 @@ pub use file_chooser_request::{
 };
 pub use file_dialogs::{
     desktops_from, preferred_value, with_preference, without_preference, DisabledFileDialogs,
-    FileDialogError, FileDialogPaths, FileDialogRegistration, PortalRestart, FILE_CHOOSER_KEY,
-    KDE_PORTAL_VARIABLE, PORTAL_SERVICE,
+    FileDialogError, FileDialogPaths, FileDialogRegistration, PortalDir, PortalRestart, FILE_CHOOSER_KEY,
+    KDE_PORTAL_VARIABLE, PORTAL_DIR_VARIABLE, PORTAL_SERVICE,
 };
 pub use file_manager_bus::{
     BusStatus, FileManagerBus, RegistrationFailed, RequestNotOpened, BUS_NAME, OBJECT_PATH,
