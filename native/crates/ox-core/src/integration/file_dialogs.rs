@@ -791,7 +791,8 @@ impl FileDialogRegistration {
 /// # Errors
 ///
 /// Why the folder cannot be told: an environment file the fallback cannot
-/// read as systemd does ([`environment_file_assignments`]).
+/// read as systemd does ([`environment_file_assignments`]), or a folder
+/// or environment file that is not UTF-8.
 fn service_portal_dir() -> Result<Option<String>, String> {
     let Ok(connection) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE) else {
         return Ok(None);
@@ -868,7 +869,7 @@ fn service_portal_dir() -> Result<Option<String>, String> {
         process_environment()
     });
     if let Some(environment) = running {
-        return Ok(process_variable(&environment, PORTAL_DIR_VARIABLE));
+        return process_variable(&environment, PORTAL_DIR_VARIABLE);
     }
     environments.push(strings(unit, SYSTEMD_SERVICE, "Environment"));
     // `(path, ignore if missing)`; a missing file the unit needs keeps the
@@ -880,9 +881,13 @@ fn service_portal_dir() -> Result<Option<String>, String> {
         if file.contains(['*', '?', '[']) {
             return Err(format!("its environment file {file} names several files"));
         }
-        let Ok(contents) = fs::read_to_string(file) else {
+        let Ok(contents) = fs::read(file) else {
             continue;
         };
+        // Read as text, a file that is not UTF-8 would be skipped and the
+        // folder it sets taken for unset.
+        let contents =
+            String::from_utf8(contents).map_err(|_| format!("its environment file {file} is not UTF-8"))?;
         let assignments = environment_file_assignments(&contents)
             .ok_or_else(|| format!("its environment file {file} uses escapes or continued lines"))?;
         environments.push(assignments);
@@ -910,11 +915,18 @@ fn same_path(one: &Path, other: &Path) -> bool {
 
 /// The value of `name` in a process's environment as `/proc/<pid>/environ`
 /// holds it: `NAME=value` entries separated by NUL bytes.
-fn process_variable(environment: &[u8], name: &str) -> Option<String> {
-    environment.split(|byte| *byte == 0).find_map(|entry| {
-        let value = entry.strip_prefix(name.as_bytes())?.strip_prefix(b"=")?;
-        Some(String::from_utf8_lossy(value).into_owned())
-    })
+///
+/// # Errors
+///
+/// A value that is not UTF-8, which read lossily would name another
+/// folder than the one the portal reads.
+fn process_variable(environment: &[u8], name: &str) -> Result<Option<String>, String> {
+    let value = environment
+        .split(|byte| *byte == 0)
+        .find_map(|entry| entry.strip_prefix(name.as_bytes())?.strip_prefix(b"="));
+    value
+        .map(|value| String::from_utf8(value.to_vec()).map_err(|_| format!("its {name} is not UTF-8")))
+        .transpose()
 }
 
 /// The value of `name` in `environments`, lists of `NAME=value`
@@ -1235,12 +1247,16 @@ mod tests {
         );
         let process = b"HOME=/home/someone\0XDG_DESKTOP_PORTAL_DIR_OLD=/x\0XDG_DESKTOP_PORTAL_DIR=/running\0";
         assert_eq!(
-            process_variable(process, PORTAL_DIR_VARIABLE).as_deref(),
-            Some("/running")
+            process_variable(process, PORTAL_DIR_VARIABLE),
+            Ok(Some("/running".to_owned()))
         );
         assert_eq!(
             process_variable(b"HOME=/home/someone\0", PORTAL_DIR_VARIABLE),
-            None
+            Ok(None)
+        );
+        assert!(
+            process_variable(b"XDG_DESKTOP_PORTAL_DIR=/tmp/caf\xe9\0", PORTAL_DIR_VARIABLE).is_err(),
+            "a folder that is not UTF-8 is not read as another folder"
         );
         let file = environment_file_assignments(
             "# portal folder\n; old\n\n  XDG_DESKTOP_PORTAL_DIR = \"/from/file\"  \nOTHER='x'\n",
