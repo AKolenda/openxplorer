@@ -22,8 +22,8 @@ use ox_core::integration::{
     glob_matches, options_from_entries, path_variant, preferred_value, with_preference, without_preference,
     ChooserAnswer, ChooserCall, ChooserMode, ChooserNotShown, ChooserRequest, ChooserRequestError,
     DisabledFileDialogs, FileChooserBus, FileDialogError, FileDialogPaths, FileDialogRegistration,
-    FilterPattern, Sandbox, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY, KDE_PORTAL_VARIABLE, MAX_LIST_ITEMS,
-    PORTAL_BACKEND_PATH, RESPONSE_CANCELLED, RESPONSE_OTHER, RESPONSE_SUCCESS,
+    FilterPattern, PortalDir, Sandbox, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY, KDE_PORTAL_VARIABLE,
+    MAX_LIST_ITEMS, PORTAL_BACKEND_PATH, RESPONSE_CANCELLED, RESPONSE_OTHER, RESPONSE_SUCCESS,
 };
 use tempfile::TempDir;
 
@@ -107,6 +107,48 @@ fn an_unlisted_current_filter_is_added() {
         ["PDF", "All"]
     );
     assert_eq!(request.current_filter, Some(1));
+}
+
+/// Chromium titles a Save dialog it has no title for with the name of
+/// its "All Files" filter (`*.*`), in the user's language; that title
+/// gives way to the method's own words. A title that names another
+/// filter, an Open dialog's, or one with no such filter is kept.
+///
+/// parity: INT-032
+#[test]
+fn a_save_dialog_titled_with_its_all_files_filter_is_titled_save_as() {
+    let titled = |method: &str, title: &str, all_files: &str| {
+        let pdf = filter("PDF", &[(0, "*.[pP][dD][fF]")]);
+        let all = filter(all_files, &[(0, "*.*")]);
+        let filters = glib::Variant::array_from_iter_with_type(pdf.type_(), [pdf.clone(), all]);
+        ChooserRequest::from_call(method, title, &options_from_entries(&[("filters", filters)]))
+            .expect("a valid call")
+            .window_title()
+    };
+    assert_eq!(titled("SaveFile", "All Files", "All Files"), "Save as");
+    assert_eq!(
+        titled("SaveFile", "Tous les fichiers", "Tous les fichiers"),
+        "Save as"
+    );
+    assert_eq!(
+        titled("SaveFile", "PDF", "All Files"),
+        "PDF",
+        "not an All Files filter"
+    );
+    assert_eq!(titled("SaveFile", "Save page", "All Files"), "Save page");
+    assert_eq!(titled("OpenFile", "All Files", "All Files"), "All Files");
+    let unfiltered =
+        ChooserRequest::from_call("SaveFile", "All Files", &options_from_entries(&[])).expect("a valid call");
+    assert_eq!(unfiltered.window_title(), "All Files", "no filter to tell it by");
+
+    let everything = filter("Everything", &[(0, "*")]);
+    let narrowed = filter("Text", &[(0, "*.txt"), (0, "*")]);
+    let filters =
+        glib::Variant::array_from_iter_with_type(everything.type_(), [everything.clone(), narrowed]);
+    let request = ChooserRequest::from_call("SaveFile", "x", &options_from_entries(&[("filters", filters)]))
+        .expect("a valid call");
+    assert!(request.filters[0].is_all_files());
+    assert!(!request.filters[1].is_all_files(), "one pattern narrows it");
 }
 
 /// parity: INT-032
@@ -344,6 +386,7 @@ impl OptInFixture {
             config_home: self.root.path().join("config"),
             system_dirs: vec![self.root.path().join("etc"), self.system()],
             desktops: vec!["kde".to_owned()],
+            portal_dir: PortalDir::Fixed(None),
         }
     }
 
@@ -351,11 +394,252 @@ impl OptInFixture {
         FileDialogRegistration::new(self.paths(), "io.winspace.Development", Sandbox::Host)
     }
 
+    /// The folder a tool named in `XDG_DESKTOP_PORTAL_DIR`, set up as on
+    /// Zorin OS with such a tool: links to the desktop's packaged
+    /// backends and a backend of the tool's own, chosen by `UseIn`.
+    fn portal_folder(&self) -> PathBuf {
+        let packaged = self.system().join("xdg-desktop-portal/portals");
+        fs::create_dir_all(&packaged).expect("packaged backends");
+        for name in ["gnome.portal", "io.winspace.Development.portal"] {
+            fs::write(packaged.join(name), "[portal]\n").expect("a packaged backend");
+        }
+        let folder = self.root.path().join("local-share/xdg-desktop-portal/portals");
+        fs::create_dir_all(&folder).expect("the portal folder");
+        symlink(packaged.join("gnome.portal"), folder.join("gnome.portal")).expect("a link");
+        fs::write(folder.join("shortcuts.portal"), "[portal]\nUseIn=gnome\n").expect("the tool's backend");
+        folder
+    }
+
+    /// The opt-in on GNOME where the portal reads only `folder`.
+    fn registration_reading_only(&self, folder: &Path) -> FileDialogRegistration {
+        FileDialogRegistration::new(
+            FileDialogPaths {
+                desktops: vec!["zorin".to_owned(), "gnome".to_owned()],
+                portal_dir: PortalDir::Fixed(Some(folder.to_owned())),
+                ..self.paths()
+            },
+            "io.winspace.Development",
+            Sandbox::Host,
+        )
+    }
+
     fn user_file(&self) -> PathBuf {
         self.root
             .path()
             .join("config/xdg-desktop-portal/kde-portals.conf")
     }
+
+    fn record(&self) -> PathBuf {
+        self.root.path().join("settings/file-dialogs.json")
+    }
+}
+
+/// When the portal's service sets `XDG_DESKTOP_PORTAL_DIR`, the portal
+/// reads only that folder: Enable writes the first desktop's file there
+/// with nothing but the app's line (no copy of the system file, whose
+/// `[preferred]` keys would replace the backends found by `UseIn`), and
+/// links the packaged `.portal` file there; Restore takes both away and
+/// leaves the other backends.
+///
+/// parity: INT-032
+#[test]
+fn where_the_portal_reads_one_folder_enable_works_in_that_folder() {
+    let fixture = OptInFixture::new();
+    let folder = fixture.portal_folder();
+    let registration = fixture.registration_reading_only(&folder);
+    let file = folder.join("zorin-portals.conf");
+    let link = folder.join("io.winspace.Development.portal");
+    assert_eq!(registration.config_file().expect("an absolute folder"), file);
+    assert!(!registration.is_enabled());
+    assert_eq!(registration.current_backend(), None, "no file there names one");
+
+    registration.enable().expect("enable");
+    let written = fs::read_to_string(&file).expect("the portal's file");
+    assert_eq!(
+        written,
+        with_preference("", FILE_CHOOSER_KEY, "io.winspace.Development")
+    );
+    assert_eq!(preferred_value(&written, "default"), None);
+    assert_eq!(
+        fs::read_link(&link).expect("a link"),
+        fixture
+            .system()
+            .join("xdg-desktop-portal/portals/io.winspace.Development.portal")
+    );
+    assert!(
+        !fixture.root.path().join("config/xdg-desktop-portal").exists(),
+        "the folder the portal ignores is not written"
+    );
+    assert!(registration.is_enabled());
+    assert_eq!(
+        registration.current_backend().as_deref(),
+        Some("io.winspace.Development")
+    );
+    registration.enable().expect("enabling again does nothing");
+    assert_eq!(fs::read_to_string(&file).expect("the portal's file"), written);
+
+    assert_eq!(
+        registration.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert!(!file.exists());
+    assert!(fs::symlink_metadata(&link).is_err(), "the app's link is gone");
+    assert!(folder.join("gnome.portal").is_file(), "other backends stay");
+    assert!(folder.join("shortcuts.portal").is_file());
+    assert!(!registration.is_enabled());
+
+    // The line alone does not make the backend usable there: without its
+    // `.portal` file the portal cannot find it.
+    registration.enable().expect("enable");
+    fs::remove_file(&link).expect("the link");
+    assert!(!registration.is_enabled());
+    registration.enable().expect("enable again");
+    assert!(registration.is_enabled());
+    registration.disable().expect("disable");
+    assert!(fs::symlink_metadata(&link).is_err());
+}
+
+/// In that folder, the file the portal reads there is the one changed and
+/// put back byte for byte, and a backend file of that name the app did
+/// not make is kept; anything there that is not a usable backend file is
+/// not replaced, and Enable says so.
+///
+/// parity: INT-032
+#[test]
+fn files_in_the_portal_folder_that_are_not_the_apps_are_kept() {
+    let fixture = OptInFixture::new();
+    let folder = fixture.portal_folder();
+    let registration = fixture.registration_reading_only(&folder);
+    let in_use = folder.join("portals.conf");
+    let original = "[preferred]\norg.freedesktop.impl.portal.GlobalShortcuts=shortcuts\n";
+    fs::write(&in_use, original).expect("the user's file");
+    let link = folder.join("io.winspace.Development.portal");
+    let packaged = fixture
+        .system()
+        .join("xdg-desktop-portal/portals/io.winspace.Development.portal");
+    symlink(&packaged, &link).expect("a link the user made");
+    assert_eq!(registration.config_file().expect("an absolute folder"), in_use);
+
+    registration.enable().expect("enable");
+    let written = fs::read_to_string(&in_use).expect("the user's file");
+    assert_eq!(
+        preferred_value(&written, "org.freedesktop.impl.portal.GlobalShortcuts").as_deref(),
+        Some("shortcuts")
+    );
+    assert!(registration.is_enabled());
+    assert!(!folder.join("zorin-portals.conf").exists());
+    assert_eq!(
+        registration.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert_eq!(fs::read_to_string(&in_use).expect("the user's file"), original);
+    assert_eq!(
+        fs::read_link(&link).expect("kept"),
+        packaged,
+        "the user's link stays"
+    );
+
+    // A link that leads nowhere is not replaced.
+    fs::remove_file(&link).expect("the link");
+    symlink(folder.join("missing.portal"), &link).expect("a dangling link");
+    let refused = registration.enable().expect_err("a dangling link is in the way");
+    assert!(matches!(refused, FileDialogError::PortalDir { .. }), "{refused}");
+    assert!(refused.to_string().contains("in the way"), "{refused}");
+    assert_eq!(
+        fs::read_to_string(&in_use).expect("the user's file"),
+        original,
+        "nothing changed"
+    );
+    assert!(!fixture.record().exists());
+    assert_eq!(fs::read_link(&link).expect("kept"), folder.join("missing.portal"));
+}
+
+/// A folder the portal is told to read that cannot be used is reported,
+/// and nothing claims the dialogs use the app: a relative one, one that
+/// cannot be created, and one where the packaged backend is not
+/// installed.
+///
+/// parity: INT-032
+#[test]
+fn an_unusable_portal_folder_is_reported() {
+    let fixture = OptInFixture::new();
+    let relative = fixture.registration_reading_only(Path::new("portals"));
+    assert!(matches!(
+        relative.config_file(),
+        Err(FileDialogError::PortalDir { .. })
+    ));
+    let refused = relative.enable().expect_err("a relative folder");
+    assert!(
+        refused.to_string().contains("XDG_DESKTOP_PORTAL_DIR"),
+        "{refused}"
+    );
+    assert!(!relative.is_enabled());
+    assert_eq!(relative.current_backend(), None);
+
+    let blocker = fixture.root.path().join("a-file");
+    fs::write(&blocker, "").expect("a file");
+    let blocked = fixture.registration_reading_only(&blocker.join("portals"));
+    assert!(matches!(blocked.enable(), Err(FileDialogError::PortalDir { .. })));
+    assert!(!fixture.record().exists());
+
+    let folder = fixture.root.path().join("empty-portals");
+    let uninstalled = fixture.registration_reading_only(&folder);
+    let refused = uninstalled.enable().expect_err("no packaged backend");
+    assert!(refused.to_string().contains("not installed"), "{refused}");
+    assert!(!folder.join("zorin-portals.conf").exists(), "nothing written");
+    assert!(!uninstalled.is_enabled());
+}
+
+/// A record from before the app knew the portal's folder (no link in it)
+/// still restores; and Enable, once the portal reads only its folder,
+/// first puts back the user file it changed then, which the portal now
+/// ignores.
+///
+/// parity: INT-032
+#[test]
+fn an_older_record_is_restored_and_settled_when_the_portal_folder_appears() {
+    let fixture = OptInFixture::new();
+    let registration = FileDialogRegistration::new(
+        FileDialogPaths {
+            desktops: vec!["gnome".to_owned()],
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    );
+    let user_file = fixture
+        .root
+        .path()
+        .join("config/xdg-desktop-portal/gnome-portals.conf");
+    let older_record = |written: &str| {
+        let record = serde_json::json!({ "file": user_file, "previous": null, "written": written });
+        fs::write(fixture.record(), record.to_string()).expect("an older record");
+    };
+
+    registration.enable().expect("enable");
+    let written = fs::read_to_string(&user_file).expect("the user file");
+    older_record(&written);
+    assert_eq!(
+        registration.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert!(!user_file.exists());
+
+    registration.enable().expect("enable");
+    older_record(&fs::read_to_string(&user_file).expect("the user file"));
+    let folder = fixture.portal_folder();
+    let reading_only = fixture.registration_reading_only(&folder);
+    assert!(!reading_only.is_enabled(), "the portal ignores the user file");
+    reading_only.enable().expect("enable");
+    assert!(!user_file.exists(), "the ignored file is put back");
+    assert!(reading_only.is_enabled());
+    assert_eq!(
+        reading_only.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert!(!folder.join("zorin-portals.conf").exists());
+    assert!(fs::symlink_metadata(folder.join("io.winspace.Development.portal")).is_err());
+    assert!(!fixture.record().exists());
 }
 
 /// Enabling copies the desktop's system preferences into the user file and
@@ -441,7 +725,7 @@ fn the_user_file_in_use_is_changed_and_not_hidden() {
     fs::create_dir_all(&folder).expect("folder");
     fs::write(&in_use, original).expect("user file");
     let registration = fixture.registration();
-    assert_eq!(registration.config_file(), in_use);
+    assert_eq!(registration.config_file().expect("the usual folders"), in_use);
 
     registration.enable().expect("enable");
     assert!(
@@ -599,6 +883,127 @@ fn restore_goes_on_past_an_unreadable_kde_script_path() {
 
     assert!(!registration.is_enabled());
     assert!(script.is_dir(), "left alone");
+}
+
+/// The portal's folder named through a symlink to it is the same folder:
+/// enabling there again (after the backend's link went missing) keeps the
+/// first Enable's record, so Restore still takes the app's line away.
+///
+/// parity: INT-032
+#[test]
+fn the_portal_folder_through_a_symlink_keeps_the_record() {
+    let fixture = OptInFixture::new();
+    let folder = fixture.portal_folder();
+    let alias = fixture.root.path().join("portals-alias");
+    symlink(&folder, &alias).expect("an alias of the folder");
+    fixture
+        .registration_reading_only(&folder)
+        .enable()
+        .expect("enable");
+    fs::remove_file(folder.join("io.winspace.Development.portal")).expect("the link goes missing");
+
+    let through_alias = fixture.registration_reading_only(&alias);
+    assert!(!through_alias.is_enabled());
+    through_alias.enable().expect("enable through the alias");
+    assert!(through_alias.is_enabled());
+    assert_eq!(
+        through_alias.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert!(
+        !folder.join("zorin-portals.conf").exists(),
+        "the file the app made is gone"
+    );
+    assert!(!folder.join("io.winspace.Development.portal").exists());
+}
+
+/// The other way round: enabled through an alias of the folder, then
+/// again through the folder itself, the record follows the folder, so
+/// Restore still works once the alias is gone.
+///
+/// parity: INT-032
+#[test]
+fn the_record_follows_the_folder_when_its_alias_goes() {
+    let fixture = OptInFixture::new();
+    let folder = fixture.portal_folder();
+    let alias = fixture.root.path().join("portals-alias");
+    symlink(&folder, &alias).expect("an alias of the folder");
+    fixture
+        .registration_reading_only(&alias)
+        .enable()
+        .expect("enable through the alias");
+    fs::remove_file(folder.join("io.winspace.Development.portal")).expect("the link goes missing");
+
+    let registration = fixture.registration_reading_only(&folder);
+    registration.enable().expect("enable through the folder");
+    fs::remove_file(&alias).expect("the alias goes");
+    assert_eq!(
+        registration.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert!(
+        !folder.join("zorin-portals.conf").exists(),
+        "the file the app made is gone"
+    );
+    assert!(!folder.join("io.winspace.Development.portal").exists());
+}
+
+/// Apply now refuses, before restarting anything, when the folder the
+/// portal reads could not be told, since the change could not be checked.
+///
+/// parity: INT-032
+#[test]
+fn apply_now_refuses_when_the_portal_folder_is_unknown() {
+    let fixture = OptInFixture::new();
+    let registration = FileDialogRegistration::new(
+        FileDialogPaths {
+            portal_dir: PortalDir::Unknown("its environment file uses escapes".to_owned()),
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    );
+    assert!(matches!(
+        registration.restart_portal(),
+        Err(FileDialogError::PortalUnknown(_))
+    ));
+    assert!(matches!(
+        registration.enable(),
+        Err(FileDialogError::PortalUnknown(_))
+    ));
+    assert!(!registration.is_enabled());
+}
+
+/// Enabling again after the user changed the file (here: another backend
+/// for file dialogs and another default) keeps that change: Restore then
+/// puts back the file as the user left it, not as it was before the
+/// first Enable.
+///
+/// parity: INT-032
+#[test]
+fn enabling_again_after_an_edit_restores_the_edit() {
+    let fixture = OptInFixture::new();
+    let registration = fixture.registration();
+    registration.enable().expect("enable");
+    let enabled = fs::read_to_string(fixture.user_file()).expect("file");
+    let edited = with_preference(
+        &enabled.replace("default=kde", "default=gtk"),
+        FILE_CHOOSER_KEY,
+        "kde",
+    );
+    fs::write(fixture.user_file(), &edited).expect("edit");
+    assert!(!registration.is_enabled());
+
+    registration.enable().expect("enable again");
+    assert!(registration.is_enabled());
+    assert_eq!(
+        registration.disable().expect("disable"),
+        DisabledFileDialogs::Restored
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.user_file()).expect("user file"),
+        edited
+    );
 }
 
 /// A later edit by the user wins: disabling then removes only the app's

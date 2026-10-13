@@ -17,7 +17,7 @@
 //! | `terminal` | Questions, answers and a password typed without echo |
 //! | `setup` | Setting up, removing and printing a managed mount |
 
-use std::fs::{self, DirBuilder, OpenOptions};
+use std::fs::{self, DirBuilder, File, OpenOptions, TryLockError};
 use std::io::{self, Write};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
@@ -114,6 +114,14 @@ pub(crate) enum MountHelperError {
     /// A unit, the credential file or the mount point already exists.
     #[error("{}", crate::i18n::format_message("This mount already exists or a path is in use. Nothing was overwritten.\nRemoval command: {command}", &[("command", .0.as_str())]))]
     AlreadyExists(String),
+    /// Another helper is reviewing or changing the managed mounts.
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "Another mount setup or removal is in progress. Finish it before trying again."
+        )
+    )]
+    Busy,
     /// `systemctl` failed or took too long.
     #[error("{}", crate::i18n::format_message("systemctl {command} {reason}", &[("command", command), ("reason", reason)]))]
     Systemctl {
@@ -217,6 +225,28 @@ impl AdministrativeTree {
         }
         Ok(())
     }
+
+    /// Locks an existing administrative directory until the returned file
+    /// is dropped. The directory must stay in place so every helper locks
+    /// the same inode, including while waiting for terminal confirmation.
+    fn lock_directory(&self, path: &Path) -> Result<File, MountHelperError> {
+        let directory = OpenOptions::new()
+            .read(true)
+            .kernel_flags(OFlags::NOFOLLOW | OFlags::DIRECTORY)
+            .open(path)
+            .map_err(|error| MountHelperError::io(path, error))?;
+        let metadata = directory
+            .metadata()
+            .map_err(|error| MountHelperError::io(path, error))?;
+        if metadata.uid() != self.owner || metadata.mode() & GROUP_OR_OTHER_WRITE != 0 {
+            return Err(MountHelperError::UnsafeDirectory(path.to_path_buf()));
+        }
+        directory.try_lock().map_err(|error| match error {
+            TryLockError::WouldBlock => MountHelperError::Busy,
+            TryLockError::Error(error) => MountHelperError::io(path, error),
+        })?;
+        Ok(directory)
+    }
 }
 
 /// Writes `text` to a new file at `path` with `mode` and flushes it to
@@ -230,6 +260,19 @@ impl AdministrativeTree {
 /// The I/O error, including `AlreadyExists` for an existing path and
 /// `ELOOP` for a symlink.
 pub(crate) fn write_new_file(path: &Path, text: &str, mode: u32) -> Result<(), MountHelperError> {
+    write_new_file_with(path, mode, |file| {
+        file.write_all(text.as_bytes())?;
+        file.sync_all()
+    })
+}
+
+/// Removes an exclusively created file if writing or syncing it fails,
+/// before the caller can add it to its list of completed files.
+fn write_new_file_with(
+    path: &Path,
+    mode: u32,
+    write_and_sync: impl FnOnce(&mut File) -> io::Result<()>,
+) -> Result<(), MountHelperError> {
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -237,9 +280,11 @@ pub(crate) fn write_new_file(path: &Path, text: &str, mode: u32) -> Result<(), M
         .mode(mode)
         .open(path)
         .map_err(|error| MountHelperError::io(path, error))?;
-    file.write_all(text.as_bytes())
-        .and_then(|()| file.sync_all())
-        .map_err(|error| MountHelperError::io(path, error))
+    if let Err(error) = write_and_sync(&mut file) {
+        fs::remove_file(path).map_err(|error| MountHelperError::io(path, error))?;
+        return Err(MountHelperError::io(path, error));
+    }
+    Ok(())
 }
 
 /// The text of the `mount.cifs` credential file for the user name typed in

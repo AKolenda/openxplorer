@@ -2,7 +2,9 @@
 //! Syncing the download folder into Brave profiles, and restoring it.
 //!
 //! Ports `BraveIntegration.sync` and `BraveIntegration.restore` in
-//! `v2.0.0:desktop/brave_integration.py` (INT-020, INT-021).
+//! `v2.0.0:desktop/brave_integration.py` (INT-020, INT-021), and makes
+//! Brave ask where to save each download when the user chooses that
+//! (INT-034).
 
 use std::collections::HashSet;
 use std::fs::{self, DirBuilder, Permissions};
@@ -14,12 +16,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rustix::fs::Access;
 
 use super::preferences::{
-    compact_json, has_unsupported_structure, previous_folder, read_preferences, read_undo_record,
-    restore_download_folders, set_download_folders, write_private, write_undo_record, DownloadPreference,
-    Preferences, UndoRecord,
+    compact_json, has_unsupported_structure, previous_download_prompt, previous_folder, read_preferences,
+    read_undo_record, restore_download_folders, restore_download_prompt, set_download_folders,
+    set_download_prompt, write_private, write_undo_record, DownloadPreference, Preferences, UndoRecord,
 };
 use super::{
-    profile_hash, BraveActivity, BraveError, BraveIntegration, Confirmation, ProfileFailure, SyncOutcome,
+    profile_hash, BraveActivity, BraveError, BraveIntegration, Confirmation, DownloadPrompt, ProfileFailure,
+    RestoredSettings, SyncOutcome,
 };
 
 /// The most profiles one sync may update, as in the Python app.
@@ -40,8 +43,9 @@ struct PlannedSync {
 
 impl<A: BraveActivity> BraveIntegration<A> {
     /// Sets the download and "Save as" folders of `profile_ids` to
-    /// `destination` (INT-020). Failures after the checks are reported per
-    /// profile in the outcome.
+    /// `destination` (INT-020), and with [`DownloadPrompt::Ask`] makes
+    /// them ask where to save each download (INT-034). Failures after the
+    /// checks are reported per profile in the outcome.
     ///
     /// Safety rule "check every profile before writing any" (`sync` in
     /// `brave_integration.py`): the consent, the selection, the folder, that
@@ -57,6 +61,7 @@ impl<A: BraveActivity> BraveIntegration<A> {
         &self,
         profile_ids: &[String],
         destination: &str,
+        prompt: DownloadPrompt,
         confirmation: Confirmation,
     ) -> Result<SyncOutcome, BraveError> {
         self.refuse_in_sandbox()?;
@@ -81,7 +86,7 @@ impl<A: BraveActivity> BraveIntegration<A> {
         };
         for plan in plans {
             let profile = plan.profile_id.clone();
-            match self.apply_sync(plan, &folder) {
+            match self.apply_sync(plan, &folder, prompt) {
                 Ok(()) => outcome.updated.push(profile),
                 Err(error) => outcome.failures.push(ProfileFailure { profile, error }),
             }
@@ -89,9 +94,10 @@ impl<A: BraveActivity> BraveIntegration<A> {
         Ok(outcome)
     }
 
-    /// Puts back the folders the last sync of `profile_id` replaced, where
-    /// they still hold what it set (INT-021), and returns the groups put
-    /// back. The undo record is then removed.
+    /// Puts back the folders the last sync of `profile_id` replaced, and
+    /// whether Brave asked where to save each download if it set that,
+    /// where they still hold what it set (INT-021, INT-034), and returns
+    /// what was put back. The undo record is then removed.
     ///
     /// # Errors
     ///
@@ -101,7 +107,7 @@ impl<A: BraveActivity> BraveIntegration<A> {
         &self,
         profile_id: &str,
         confirmation: Confirmation,
-    ) -> Result<Vec<DownloadPreference>, BraveError> {
+    ) -> Result<RestoredSettings, BraveError> {
         self.refuse_in_sandbox()?;
         if confirmation != Confirmation::Confirmed {
             return Err(BraveError::RestoreNotConfirmed);
@@ -116,8 +122,11 @@ impl<A: BraveActivity> BraveIntegration<A> {
         let record = read_undo_record(&record_path)?;
         let path = self.preferences_path(profile_id)?;
         let Preferences { raw, mut data } = read_preferences(&path)?;
-        let restored = restore_download_folders(&mut data, &record);
-        if restored.is_empty() {
+        let restored = RestoredSettings {
+            folders: restore_download_folders(&mut data, &record),
+            download_prompt: restore_download_prompt(&mut data, &record),
+        };
+        if restored.folders.is_empty() && !restored.download_prompt {
             return Err(BraveError::ChangedSinceSync);
         }
         if !self.is_unchanged(&path, &raw)? {
@@ -145,8 +154,8 @@ impl<A: BraveActivity> BraveIntegration<A> {
     }
 
     /// Backs up one profile, records how to undo the change, and writes
-    /// the new folders.
-    fn apply_sync(&self, plan: PlannedSync, folder: &str) -> Result<(), BraveError> {
+    /// the new folders and, with [`DownloadPrompt::Ask`], the prompt.
+    fn apply_sync(&self, plan: PlannedSync, folder: &str, prompt: DownloadPrompt) -> Result<(), BraveError> {
         let PlannedSync {
             profile_id,
             path,
@@ -156,14 +165,24 @@ impl<A: BraveActivity> BraveIntegration<A> {
             .iter()
             .map(|group| (group.as_str().to_owned(), previous_folder(&data, *group)))
             .collect();
+        // Only a prompt the sync sets is recorded, so a restore never
+        // touches one it left alone.
+        let previous_prompt = match prompt {
+            DownloadPrompt::Ask => Some(previous_download_prompt(&data)),
+            DownloadPrompt::Unchanged => None,
+        };
         let backup = self.backup_path(&profile_id);
         write_private(&backup, &raw)?;
         set_download_folders(&mut data, folder);
+        if prompt == DownloadPrompt::Ask {
+            set_download_prompt(&mut data);
+        }
         let record = UndoRecord {
             profile: profile_id.clone(),
             previous,
             applied: folder.to_owned(),
             backup: backup.to_string_lossy().into_owned(),
+            prompt_for_download: previous_prompt,
         };
         // Safety rule "stop if Brave started or the file changed": checked
         // again right before writing, since Brave may start at any time.

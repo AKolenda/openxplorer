@@ -88,6 +88,46 @@ fn deleting_a_folder_prunes_only_its_descendants() {
     assert_eq!(share.found_names("keep"), ["keep.pdf"]);
 }
 
+/// The indexed prefix range keeps similarly named siblings and another
+/// root's copy of the same descendants, including escaped URI characters.
+#[test]
+fn pruning_keeps_similar_prefixes_and_overlapping_roots() {
+    for name in ["old", "r%C3%A9sum%C3%A9", "100%25_", "%5Bdraft%5D"] {
+        let share = ScannedShare::new();
+        let removed = format!("{SHARE}/{name}");
+        let sibling_name = format!("{name}0");
+        let sibling = format!("{SHARE}/{sibling_name}");
+        let kept = [
+            listed_folder(SHARE, &sibling_name),
+            listed_file(SHARE, &format!("{name}.txt")),
+        ];
+        share.store(&[
+            listed_folder(SHARE, name),
+            listed_file(&removed, "removed.pdf"),
+            listed_file(&format!("{removed}/nested"), "nested.pdf"),
+            kept[0].clone(),
+            kept[1].clone(),
+            listed_file(&sibling, "kept.pdf"),
+        ]);
+        share
+            .index
+            .configure(&removed, Caching::Enabled, "", HiddenItems::Skip)
+            .unwrap();
+        let generation = share.index.begin_scan(&removed).unwrap();
+        share
+            .index
+            .store_scanned(&removed, &generation, &[listed_file(&removed, "removed.pdf")])
+            .unwrap();
+
+        share.replace(SHARE, &kept);
+
+        assert_eq!(root_state(&share.index, SHARE).entry_count, 3, "{name}");
+        assert_eq!(root_state(&share.index, &removed).entry_count, 1, "{name}");
+        assert_eq!(share.found_names("kept.pdf"), ["kept.pdf"], "{name}");
+        assert!(share.found_names("nested.pdf").is_empty(), "{name}");
+    }
+}
+
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::IndexTests::test_new_directory_traversal_hint`
 ///
 /// parity: SRCH-028

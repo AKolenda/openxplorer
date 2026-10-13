@@ -15,7 +15,7 @@ use super::error::ZipFormatError;
 use super::member::{CompressionMethod, ZipMember};
 use super::names::decode_name;
 use super::records::LocalHeader;
-use crate::archive::ArchiveError;
+use crate::archive::{ArchiveError, MAX_DECODER_MEMORY_KIB};
 use crate::transfer::Cancellation;
 
 /// General purpose flag bit 5: compressed patched data.
@@ -219,8 +219,8 @@ fn decompressor<'a, S: Read>(
 
 /// ZIP's LZMA data starts with a version (2 bytes), the properties' size
 /// (2 bytes) and the properties, followed by a raw LZMA stream. The stream
-/// is read to the member's declared size, which also bounds the dictionary
-/// the decoder allocates.
+/// is read to the member's declared size. Decoder working memory is
+/// checked separately: the allowed output size can be several gigabytes.
 fn lzma_decompressor<'a, S: Read>(
     member: &ZipMember,
     mut compressed: Take<&'a mut S>,
@@ -243,6 +243,16 @@ fn lzma_decompressor<'a, S: Read>(
         .map_err(|error| corrupt(error.to_string()))?;
     let [literal_properties, dictionary @ ..] = properties;
     let dictionary_size = u32::from_le_bytes(dictionary);
+    // LzmaReader limits its history to the declared output length. Keep
+    // accepting a small member with a larger advertised dictionary, while
+    // bounding both its actual dictionary and probability tables.
+    let output_size = u32::try_from(member.size).unwrap_or(u32::MAX);
+    let memory =
+        lzma_rust2::lzma_get_memory_usage_by_props(dictionary_size.min(output_size), literal_properties)
+            .map_err(|error| corrupt(error.to_string()))?;
+    if memory > MAX_DECODER_MEMORY_KIB {
+        return Err(ArchiveError::DecoderMemoryLimit);
+    }
     let reader = lzma_rust2::LzmaReader::new_with_props(
         compressed,
         member.size,
@@ -252,4 +262,49 @@ fn lzma_decompressor<'a, S: Read>(
     )
     .map_err(|error| corrupt(error.to_string()))?;
     Ok(Box::new(reader))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::archive::zip::member::DosDateTime;
+
+    fn lzma_member(size: u64) -> ZipMember {
+        ZipMember {
+            name: "example.txt".to_owned(),
+            original_name: "example.txt".to_owned(),
+            flags: 0,
+            method: CompressionMethod::Lzma,
+            crc32: 0,
+            compressed_size: 14,
+            size,
+            header_offset: 0,
+            data_limit: 14,
+            external_attributes: 0,
+            modified: DosDateTime { date: 0x21, time: 0 },
+        }
+    }
+
+    #[test]
+    fn zip_lzma_memory_is_checked_before_reading_compressed_data() {
+        // A ZIP LZMA properties header only: no range-coder bytes. The
+        // memory error must precede reading or allocating for the member.
+        let mut header = vec![9, 4, 5, 0, 93];
+        header.extend_from_slice(&(128u32 * 1024 * 1024).to_le_bytes());
+        let mut source = header.as_slice();
+        let member = lzma_member(128 * 1024 * 1024);
+        let result = lzma_decompressor(&member, (&mut source).take(9));
+        assert!(matches!(result, Err(ArchiveError::DecoderMemoryLimit)));
+    }
+
+    #[test]
+    fn small_zip_lzma_members_keep_their_output_bounded_dictionary() {
+        let mut header = vec![9, 4, 5, 0, 93];
+        header.extend_from_slice(&(128u32 * 1024 * 1024).to_le_bytes());
+        // Range-coder initialization; only construction is exercised here.
+        header.extend_from_slice(&[0; 5]);
+        let mut source = header.as_slice();
+        let member = lzma_member(1);
+        assert!(lzma_decompressor(&member, (&mut source).take(14)).is_ok());
+    }
 }

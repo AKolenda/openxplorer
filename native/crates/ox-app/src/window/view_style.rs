@@ -285,11 +285,13 @@ impl BrowserWindow {
     }
 
     /// Follows the preferences of how items are shown: the date style
-    /// (VIEW-004), redrawn if it changed, item check boxes (SEL-014) and
+    /// (VIEW-004), redrawn if it changed, item check boxes (SEL-014), whether
+    /// they wait for Ctrl, and
     /// expandable folders (VIEW-035).
     pub(super) fn follow_item_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
         self.show_item_check_boxes(preferences.selection_marker);
+        self.wait_for_ctrl_with_item_checks(preferences.item_checks_on_ctrl);
         for pane in self.folder_panes() {
             pane.details().set_date_style(date_style(&preferences));
             self.update_expandability_for(pane);

@@ -185,7 +185,7 @@ impl SearchIndex {
         transaction.execute(
             "INSERT INTO roots(uri, label, enabled, include_hidden, pin_added) VALUES(?1, ?2, ?3, ?4, 0)
              ON CONFLICT(uri) DO UPDATE SET enabled=excluded.enabled, label=excluded.label,
-                 include_hidden=excluded.include_hidden, pin_added=0",
+                 include_hidden=excluded.include_hidden, pin_added=0, frequent_added=0",
             (
                 &uri,
                 &label,

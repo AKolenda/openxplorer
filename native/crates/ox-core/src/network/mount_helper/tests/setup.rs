@@ -177,3 +177,42 @@ fn a_failed_mount_rolls_the_setup_back() {
         terminal.warnings
     );
 }
+
+/// Once systemd might have loaded the new units, an unsuccessful stop
+/// must retain their files and credentials for manual recovery.
+#[test]
+fn a_failed_rollback_stop_retains_the_configuration() {
+    let root = FakeRoot::new();
+    let mut systemd = RecordedSystemd {
+        failing: Some(""),
+        ..RecordedSystemd::default()
+    };
+    let mut terminal = ScriptedTerminal::answering(&["SETUP", "sam", "secret"]);
+
+    let failed = run(
+        &arguments(false, false),
+        &account(),
+        &mut root.host(&mut systemd),
+        &mut terminal,
+    );
+
+    assert!(matches!(failed, Err(MountHelperError::Systemctl { .. })));
+    assert_eq!(
+        systemd.commands,
+        [
+            "daemon-reload".to_owned(),
+            format!("stop {UNIT}.mount {UNIT}.automount")
+        ]
+    );
+    for path in [
+        root.credentials(),
+        root.mount_unit(),
+        root.automount_unit(),
+        root.mountpoint(),
+    ] {
+        assert!(path.exists(), "{} remains for recovery", path.display());
+    }
+    assert!(terminal
+        .warnings
+        .contains("Configuration retained for manual recovery"));
+}
