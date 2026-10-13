@@ -33,6 +33,9 @@ const DESKTOP_CONTENT_TYPE: &str = "application/x-desktop";
 /// The group of a desktop entry's keys.
 const DESKTOP_GROUP: &str = "Desktop Entry";
 
+/// Like desktop links, launcher metadata is limited to 64 KiB.
+const LAUNCHER_SIZE_LIMIT: usize = 64 * 1024;
+
 /// `GLib`'s command that starts an application from a desktop entry.
 const GIO_COMMAND: &str = "gio";
 
@@ -54,7 +57,21 @@ pub(super) async fn query_launcher(entry: &Entry, info: &gio::FileInfo) -> Optio
     if !is_trusted(&path, info, keeps_permissions) {
         return None;
     }
-    let (contents, _) = gio::File::for_uri(&entry.uri).load_contents_future().await.ok()?;
+    let stream = gio::File::for_uri(&entry.uri)
+        .read_future(glib::Priority::DEFAULT)
+        .await
+        .ok()?;
+    // Read one byte beyond the limit to distinguish an exact fit from a
+    // truncated prefix, even when the file grows after its metadata query.
+    let read = stream
+        .read_all_future(vec![0; LAUNCHER_SIZE_LIMIT + 1], glib::Priority::DEFAULT)
+        .await;
+    let closed = stream.close_future(glib::Priority::DEFAULT).await;
+    let (mut contents, length, error) = read.ok()?;
+    if error.is_some() || closed.is_err() || length > LAUNCHER_SIZE_LIMIT {
+        return None;
+    }
+    contents.truncate(length);
     let name = application_name(&glib::Bytes::from_owned(contents))?;
     Some(ProgramTarget {
         uri: entry.uri.clone(),
@@ -117,10 +134,59 @@ pub(super) fn launch_folder() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
     use super::*;
+
+    const APPLICATION: &[u8] =
+        b"[Desktop Entry]\nType=Application\nName=Fictional Editor\nExec=fictional-editor %U\n";
 
     fn entry(text: &str) -> glib::Bytes {
         glib::Bytes::from_owned(text.as_bytes().to_vec())
+    }
+
+    /// Query a disposable launcher through the same asynchronous path as drag hover.
+    fn query_fixture(contents: &[u8], mode: u32) -> Option<ProgramTarget> {
+        let folder = tempfile::tempdir().expect("a disposable launcher folder");
+        let path = folder.path().join("fixture.desktop");
+        std::fs::write(&path, contents).expect("the launcher fixture is writable");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))
+            .expect("the fixture permissions can be set");
+        let file = gio::File::for_path(path);
+        let info = file
+            .query_info(
+                "standard::type,standard::content-type,access::can-execute",
+                gio::FileQueryInfoFlags::NONE,
+                None::<&gio::Cancellable>,
+            )
+            .expect("the fixture metadata is readable");
+        let entry = ox_core::entry::entry_from_info(&file, &info);
+        glib::MainContext::new().block_on(query_launcher(&entry, &info))
+    }
+
+    /// parity: DND-020
+    #[test]
+    fn launcher_queries_accept_small_applications_and_refuse_untrusted_or_malformed_files() {
+        let application = query_fixture(APPLICATION, 0o755).expect("a trusted launcher");
+        assert_eq!(application.name, "Fictional Editor");
+        assert_eq!(application.kind, ProgramKind::Launcher);
+        assert_eq!(query_fixture(APPLICATION, 0o644), None);
+        assert_eq!(query_fixture(b"not a desktop entry", 0o755), None);
+    }
+
+    /// A valid prefix must not turn an oversized file into a program target during hover.
+    #[test]
+    fn launcher_queries_enforce_the_64_kib_limit_before_parsing() {
+        for size in [64 * 1024, 64 * 1024 + 1, 128 * 1024] {
+            let mut contents = APPLICATION.to_vec();
+            contents.push(b'#');
+            contents.resize(size - 1, b'x');
+            contents.push(b'\n');
+
+            let launcher = query_fixture(&contents, 0o755);
+
+            assert_eq!(launcher.is_some(), size == 64 * 1024, "launcher size {size}");
+        }
     }
 
     /// parity: DND-020
