@@ -5718,6 +5718,10 @@ msgid "This archive member is missing or duplicated. Use an archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
+msgid "This archive requires too much decoder memory. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
 msgid "This file type cannot be previewed safely. Use an archive manager to extract it intentionally."
 msgstr ""
 
