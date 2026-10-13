@@ -6,8 +6,8 @@
 //! stored words are Python's. The additions for pinned folders (SRCH-040),
 //! the `roots.pin_added` column with a default and the `index_migrations`
 //! table, and for frequently opened folders, the `roots.frequent_added`
-//! column and the `folder_visits` table, are ones the Python app reads
-//! past.
+//! column and the `folder_visits` and `frequent_skipped` tables, are ones
+//! the Python app reads past.
 
 use rusqlite::{Connection, ErrorCode, Transaction, TransactionBehavior};
 
@@ -33,6 +33,7 @@ const TABLES: &str = "
     CREATE TABLE IF NOT EXISTS index_migrations(name TEXT PRIMARY KEY, applied REAL NOT NULL);
     CREATE TABLE IF NOT EXISTS index_options(name TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS folder_visits(uri TEXT PRIMARY KEY, score REAL NOT NULL, updated REAL NOT NULL);
+    CREATE TABLE IF NOT EXISTS frequent_skipped(uri TEXT PRIMARY KEY, skipped REAL NOT NULL);
 ";
 
 /// Columns added to `roots` after the first release, with their

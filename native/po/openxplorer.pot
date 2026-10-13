@@ -2919,7 +2919,7 @@ msgid "Check network and unwatched folders every"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
-msgid "Folders you open often are added to instant search, and removed again once you stop opening them. While this is on, OpenXplorer remembers which local folders you open; hidden and network folders never count. Turning this off forgets them."
+msgid "Folders you open often are added to instant search, and removed again once you stop opening them. While this is on, OpenXplorer remembers which local folders you open; hidden and network folders never count, and a folder too large to index is skipped for 30 days. Turning this off forgets them."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -7223,6 +7223,10 @@ msgstr ""
 
 #: crates/ox-core/src/search/error.rs
 msgid "This folder is not enabled for caching."
+msgstr ""
+
+#: crates/ox-core/src/search/error.rs
+msgid "This folder is too large to index automatically. Add it yourself to index it."
 msgstr ""
 
 #: crates/ox-core/src/search/error.rs

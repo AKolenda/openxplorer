@@ -11,9 +11,10 @@ use std::time::{Duration, Instant};
 
 use super::error::{check_cancelled, SearchError};
 use super::policy::{IndexScope, RootStorage};
-use super::root::{IndexRoot, ScanGeneration};
+use super::root::{IndexRoot, RootOrigin, ScanGeneration};
 use super::scan::{ListedItem, ScanOutcome};
 use super::state::Shared;
+use super::text::unix_now;
 
 /// Deepest folder level a scan descends to below its root.
 const MAX_DEPTH: usize = 128;
@@ -55,6 +56,7 @@ fn scan_and_record(shared: &Shared, job: &ScanJob, storage: RootStorage) {
     shared.notify();
     let outcome = match walk_root(shared, job, &generation, storage) {
         Ok(outcome) => outcome,
+        Err(SearchError::FrequentFolderTooLarge) if skip_frequent_root(shared, root) => return,
         Err(error) => ScanOutcome::Incomplete {
             error: error.to_string(),
         },
@@ -70,6 +72,20 @@ fn scan_and_record(shared: &Shared, job: &ScanJob, storage: RootStorage) {
     }
 }
 
+/// Removes the root that frequent use added and that turned out too large,
+/// and remembers to skip it for a while (see [`super::frequent`]). Returns
+/// `false`, changing nothing, when the root is no longer frequent use's,
+/// for example because the user chose it meanwhile.
+fn skip_frequent_root(shared: &Shared, root: &str) -> bool {
+    match shared.index.skip_frequent_root(root, unix_now()) {
+        Ok(true) => {
+            shared.forget_watches(root);
+            true
+        }
+        Ok(false) | Err(_) => false,
+    }
+}
+
 /// Reads every folder of the root that its scope admits and says how the
 /// scan ended.
 fn walk_root(
@@ -79,9 +95,63 @@ fn walk_root(
     storage: RootStorage,
 ) -> Result<ScanOutcome, SearchError> {
     let scope = shared.scope_of(&job.root.uri)?;
-    let mut crawl = Crawl::new(shared, job, generation, scope, storage);
+    let limit = EntryLimit::of(shared, &job.root)?;
+    let mut crawl = Crawl::new(shared, job, generation, scope, storage, limit);
     crawl.run()?;
     Ok(crawl.outcome())
+}
+
+/// The most entries one scan may store, and the error it stops with when
+/// there are more.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EntryLimit {
+    entries: usize,
+    is_frequent: bool,
+}
+
+impl EntryLimit {
+    /// The limit of a scan of `root`: [`ServiceLimits::entries_per_root`],
+    /// and for a root that frequent use added, also
+    /// [`ServiceLimits::entries_per_frequent_root`] and what is left of
+    /// [`ServiceLimits::frequent_entries`] beside its other roots.
+    ///
+    /// [`ServiceLimits::entries_per_root`]: super::limits::ServiceLimits::entries_per_root
+    /// [`ServiceLimits::entries_per_frequent_root`]: super::limits::ServiceLimits::entries_per_frequent_root
+    /// [`ServiceLimits::frequent_entries`]: super::limits::ServiceLimits::frequent_entries
+    fn of(shared: &Shared, root: &IndexRoot) -> Result<Self, SearchError> {
+        let limits = &shared.limits;
+        if root.origin != RootOrigin::Frequent {
+            return Ok(Self {
+                entries: limits.entries_per_root,
+                is_frequent: false,
+            });
+        }
+        let others: u64 = shared
+            .index
+            .roots()?
+            .iter()
+            .filter(|other| other.origin == RootOrigin::Frequent && other.uri != root.uri)
+            .map(|other| other.entry_count)
+            .sum();
+        let others = usize::try_from(others).unwrap_or(usize::MAX);
+        let entries = limits
+            .entries_per_root
+            .min(limits.entries_per_frequent_root)
+            .min(limits.frequent_entries.saturating_sub(others));
+        Ok(Self {
+            entries,
+            is_frequent: true,
+        })
+    }
+
+    /// The error a scan that reached the limit stops with.
+    fn error(self) -> SearchError {
+        if self.is_frequent {
+            SearchError::FrequentFolderTooLarge
+        } else {
+            SearchError::EntryLimit
+        }
+    }
 }
 
 /// A folder waiting to be read, with its depth below the root.
@@ -98,6 +168,8 @@ struct Crawl<'a> {
     generation: &'a ScanGeneration,
     scope: IndexScope,
     storage: RootStorage,
+    /// The most entries the scan may store.
+    limit: EntryLimit,
     /// Entries stored so far.
     stored: usize,
     /// Why folders could not be read; the scan goes on without them.
@@ -120,6 +192,7 @@ impl<'a> Crawl<'a> {
         generation: &'a ScanGeneration,
         scope: IndexScope,
         storage: RootStorage,
+        limit: EntryLimit,
     ) -> Self {
         Self {
             shared,
@@ -127,6 +200,7 @@ impl<'a> Crawl<'a> {
             generation,
             scope,
             storage,
+            limit,
             stored: 0,
             errors: Vec::new(),
             visited: HashSet::new(),
@@ -139,6 +213,8 @@ impl<'a> Crawl<'a> {
 impl Crawl<'_> {
     /// Reads every folder of the root. Unreadable folders are recorded
     /// and skipped, except the root itself: without it nothing is known.
+    /// A root that frequent use added and that holds too many entries ends
+    /// the scan with [`SearchError::FrequentFolderTooLarge`].
     fn run(&mut self) -> Result<(), SearchError> {
         let root = self.job.root.uri.clone();
         self.pending.push(PendingFolder {
@@ -161,8 +237,11 @@ impl Crawl<'_> {
             // A read that failed because of the cancellation reports the
             // cancellation.
             check_cancelled(&self.job.cancellable)?;
+            if matches!(error, SearchError::FrequentFolderTooLarge) {
+                return Err(error);
+            }
             self.errors.push(error.to_string());
-            if folder.uri == root || self.stored >= self.shared.limits.entries_per_root {
+            if folder.uri == root || self.stored >= self.limit.entries {
                 break;
             }
         }
@@ -194,11 +273,12 @@ impl Crawl<'_> {
     ///
     /// Safety rule "at most a million entries per root" (SRCH-032,
     /// `ServiceLimits::entries_per_root`): what does not fit is not
-    /// stored, and the scan stops with the limit message.
+    /// stored, and the scan stops with the limit message. A root that
+    /// frequent use added has the lower limit of [`EntryLimit::of`].
     fn store_batch(&mut self, batch: Vec<ListedItem>, child_depth: usize) -> Result<(), SearchError> {
         check_cancelled(&self.job.cancellable)?;
         let admitted = self.scope.admit(batch)?;
-        let limit = self.shared.limits.entries_per_root;
+        let limit = self.limit.entries;
         let room = limit.saturating_sub(self.stored);
         let fitting = &admitted[..admitted.len().min(room)];
         self.stored += self
@@ -206,8 +286,8 @@ impl Crawl<'_> {
             .index
             .store_scanned(&self.job.root.uri, self.generation, fitting)?;
         self.queue_folders(&admitted, child_depth);
-        if admitted.len() > room || self.stored >= limit {
-            return Err(SearchError::EntryLimit);
+        if admitted.len() > room {
+            return Err(self.limit.error());
         }
         self.report_progress();
         Ok(())

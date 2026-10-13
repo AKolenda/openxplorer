@@ -57,8 +57,8 @@ const FREQUENT_FOLDERS: RowText = RowText {
     title: "Index frequently opened folders (experimental)",
     description: "Folders you open often are added to instant search, and removed again once you \
                   stop opening them. While this is on, OpenXplorer remembers which local folders \
-                  you open; hidden and network folders never count. Turning this off forgets \
-                  them.",
+                  you open; hidden and network folders never count, and a folder too large to \
+                  index is skipped for 30 days. Turning this off forgets them.",
     keywords: "smart cache frequent recent often used folders automatic instant indexing \
                experimental",
 };

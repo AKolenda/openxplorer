@@ -18,7 +18,8 @@
 //! Privacy and safety rules, on top of those of the cache:
 //!
 //! - Off by default. Nothing is recorded while it is off, and turning it
-//!   off forgets every recorded open and removes the roots it added.
+//!   off forgets every recorded open and skipped folder and removes the
+//!   roots it added.
 //! - Only folders on this computer's own disks count: a share, or a
 //!   CIFS, NFS or sshfs mount, is never crawled because it was opened, as
 //!   opening one is no choice to index it. Without the mount table, no
@@ -38,12 +39,24 @@
 //!   indexes, which would crawl that folder twice. Of a folder and one
 //!   inside it, only the more used is indexed, and never more than
 //!   [`MAX_FREQUENT_ROOTS`], even when two opens are counted at once.
+//! - A folder too large to crawl unasked is skipped: a scan of a root
+//!   frequent use added stops once it would hold more than
+//!   [`ServiceLimits::entries_per_frequent_root`] entries (25,000), or more
+//!   than is left of [`ServiceLimits::frequent_entries`] (100,000) beside
+//!   the other roots frequent use added. The root and what the scan stored
+//!   are then removed, and the folder is not added again for
+//!   [`SKIP_SECONDS`] (30 days), however often it is opened. Nor is any
+//!   folder added while those roots already hold that many entries.
 //! - Turning the switch off wins over an open counted at the same moment:
 //!   an open is recorded, and a root added, only in a transaction that
 //!   finds the switch on.
 //!
 //! The switch is kept in the cache (the `index_options` table), as the
-//! pinned folders' switch is (see [`super::pins`]).
+//! pinned folders' switch is (see [`super::pins`]); the skipped folders
+//! are kept in the `frequent_skipped` table.
+//!
+//! [`ServiceLimits::entries_per_frequent_root`]: super::limits::ServiceLimits::entries_per_frequent_root
+//! [`ServiceLimits::frequent_entries`]: super::limits::ServiceLimits::frequent_entries
 
 use rusqlite::OptionalExtension;
 
@@ -83,6 +96,9 @@ const MAX_REMEMBERED_FOLDERS: usize = 256;
 /// Two opens of the same folder this close together count once, so that
 /// going into a subfolder and back is not two opens.
 const SAME_OPEN_SECONDS: f64 = 60.0;
+
+/// How long a folder too large to index is not added again: 30 days.
+const SKIP_SECONDS: f64 = 30.0 * 24.0 * 60.0 * 60.0;
 
 /// Folders, and everything below them, that frequent use never indexes.
 const SYSTEM_FOLDERS: [&str; 6] = [
@@ -334,15 +350,29 @@ impl IndexService {
     }
 
     /// Adds the roots frequent use now wants and removes those it no
-    /// longer does; returns whether it changed any.
+    /// longer does; returns whether it changed any. A folder skipped as
+    /// too large in the last [`SKIP_SECONDS`] is not added, nor is any
+    /// while the roots frequent use added hold
+    /// [`ServiceLimits::frequent_entries`](super::limits::ServiceLimits::frequent_entries).
     fn rebalance_frequent_roots(&self, now: f64) -> Result<bool, SearchError> {
         let visits = self.index().visits()?;
         let indexed = self.index().frequent_roots()?;
         let roots = self.index().roots()?;
+        let skipped = self.index().skipped_frequent_folders(now)?;
+        let frequent_entries: u64 = roots
+            .iter()
+            .filter(|root| root.origin == RootOrigin::Frequent)
+            .map(|root| root.entry_count)
+            .sum();
+        let is_full =
+            usize::try_from(frequent_entries).unwrap_or(usize::MAX) >= self.shared.limits.frequent_entries;
         let changes = rebalance(&visits, &indexed, now, |uri| {
-            !is_kept_by_other_root(&roots, uri, |root| {
-                self.index().root_reaches(&root.uri, root.hidden_items, uri)
-            })
+            let is_new = !indexed.iter().any(|root| root == uri);
+            let is_refused = is_new && (is_full || skipped.iter().any(|folder| folder == uri));
+            !is_refused
+                && !is_kept_by_other_root(&roots, uri, |root| {
+                    self.index().root_reaches(&root.uri, root.hidden_items, uri)
+                })
         });
         let mut is_changed = !changes.remove.is_empty();
         for uri in &changes.remove {
@@ -374,7 +404,8 @@ impl SearchIndex {
     }
 
     /// Remembers the switch for [`SearchIndex::frequent_indexing`]; off
-    /// also forgets every recorded open, in the same transaction.
+    /// also forgets every recorded open and skipped folder, in the same
+    /// transaction.
     fn store_frequent_indexing(&self, indexing: FrequentIndexing) -> Result<(), SearchError> {
         let mut connection = self.connect()?;
         let transaction = begin_immediate(&mut connection)?;
@@ -385,6 +416,7 @@ impl SearchIndex {
         )?;
         if indexing == FrequentIndexing::Off {
             transaction.execute("DELETE FROM folder_visits", ())?;
+            transaction.execute("DELETE FROM frequent_skipped", ())?;
         }
         transaction.commit()?;
         Ok(())
@@ -491,6 +523,47 @@ impl SearchIndex {
         Ok((added == 1).then_some(uri))
     }
 
+    /// Removes the root `uri`, which a scan found too large, and its
+    /// entries if frequent use added it, and remembers to skip the folder
+    /// until [`SKIP_SECONDS`] after `now`; skips older than that are
+    /// forgotten. Returns whether the root was removed: not when the user
+    /// chose or pinned it in the meantime, which keeps it. Nothing is
+    /// remembered once the switch is off.
+    pub(super) fn skip_frequent_root(&self, uri: &str, now: f64) -> Result<bool, SearchError> {
+        let mut connection = self.connect()?;
+        let transaction = begin_immediate(&mut connection)?;
+        let removed = transaction.execute(
+            "DELETE FROM roots WHERE uri=?1 AND frequent_added=1 AND pin_added=0",
+            [uri],
+        )?;
+        if removed != 1 {
+            return Ok(false);
+        }
+        transaction.execute("DELETE FROM entries WHERE root=?1", [uri])?;
+        transaction.execute(
+            "DELETE FROM frequent_skipped WHERE skipped<=?1",
+            [now - SKIP_SECONDS],
+        )?;
+        if read_frequent_indexing(&transaction)? == FrequentIndexing::Automatic {
+            transaction.execute(
+                "INSERT INTO frequent_skipped(uri, skipped) VALUES(?1, ?2)
+                 ON CONFLICT(uri) DO UPDATE SET skipped=excluded.skipped",
+                (uri, now),
+            )?;
+        }
+        transaction.commit()?;
+        Ok(true)
+    }
+
+    /// The folders skipped as too large in the [`SKIP_SECONDS`] before
+    /// `now`.
+    fn skipped_frequent_folders(&self, now: f64) -> Result<Vec<String>, SearchError> {
+        let connection = self.connect()?;
+        let mut statement = connection.prepare("SELECT uri FROM frequent_skipped WHERE skipped>?1")?;
+        let uris = statement.query_map([now - SKIP_SECONDS], |row| row.get(0))?;
+        Ok(uris.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// Deletes the root `uri` and its entries if frequent use added it.
     ///
     /// Safety rule "the user's choice wins": the check and the deletion
@@ -557,9 +630,10 @@ fn forgotten_visits(visits: &[Visit], now: f64) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::search::fixtures::open_index;
+    use crate::search::fixtures::{open_index, wait_until};
+    use crate::search::limits::ServiceLimits;
     use crate::search::reader::GioFolderReader;
-    use crate::search::root::{Caching, HiddenItems};
+    use crate::search::root::{Caching, HiddenItems, RootStatus};
     use crate::search::service::IndexSettings;
     use crate::search::PinIndexing;
     use crate::settings::Bookmark;
@@ -749,6 +823,163 @@ mod tests {
         }
         assert_eq!(index.add_frequent_root("file:///srv/one-more").unwrap(), None);
         assert_eq!(index.frequent_roots().unwrap().len(), MAX_FREQUENT_ROOTS);
+    }
+
+    /// A new folder `name` in `base` with `files` files, as a location.
+    fn folder_with_files(base: &std::path::Path, name: &str, files: usize) -> String {
+        let folder = base.join(name);
+        std::fs::create_dir(&folder).unwrap();
+        for number in 0..files {
+            std::fs::write(folder.join(format!("{number}.txt")), "x").unwrap();
+        }
+        file_uri(&folder)
+    }
+
+    /// A service over a new cache in `base` with `limits`.
+    fn start_with(base: &tempfile::TempDir, limits: ServiceLimits) -> IndexService {
+        let index = SearchIndex::open(&base.path().join("index")).unwrap();
+        let reader = Box::new(GioFolderReader);
+        let service = IndexService::start_with_limits(index, reader, Box::new(|| {}), limits).unwrap();
+        service
+            .set_frequent_indexing(FrequentIndexing::Automatic)
+            .unwrap();
+        service
+    }
+
+    /// Counts five opens, two minutes apart, of each of `uris` from `now`.
+    fn open_often(service: &IndexService, uris: &[&str], now: f64) {
+        for uri in uris {
+            for open in 0..5 {
+                let at = now + f64::from(open) * 120.0;
+                assert!(service.index().record_visit(uri, at).unwrap());
+            }
+        }
+    }
+
+    /// Ticks `service` until no root that frequent use added waits for or
+    /// runs a scan.
+    fn wait_for_frequent_scans(service: &IndexService, what: &str) {
+        let tick = || service.tick(&IndexSettings::default()).unwrap();
+        wait_until(what, tick, || {
+            service.index().roots().unwrap().iter().all(|root| {
+                root.origin != RootOrigin::Frequent
+                    || !matches!(
+                        root.status,
+                        RootStatus::NotIndexed | RootStatus::Queued | RootStatus::Indexing
+                    )
+            })
+        });
+    }
+
+    fn entry_count(service: &IndexService, uri: &str) -> u64 {
+        let roots = service.index().roots().unwrap();
+        roots.iter().find(|root| root.uri == uri).unwrap().entry_count
+    }
+
+    #[test]
+    fn a_skipped_folder_is_remembered_for_thirty_days_unless_the_user_keeps_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let index = open_index(&directory);
+        index
+            .store_frequent_indexing(FrequentIndexing::Automatic)
+            .unwrap();
+        let now = 100.0 * DAY;
+        index.add_frequent_root(PROJECTS).unwrap();
+        index.add_frequent_root("file:///srv/media").unwrap();
+        index
+            .configure("file:///srv/media", Caching::Enabled, "", HiddenItems::Skip)
+            .unwrap();
+
+        assert!(index.skip_frequent_root(PROJECTS, now).unwrap());
+        assert!(!index.skip_frequent_root("file:///srv/media", now).unwrap());
+
+        assert!(index.frequent_roots().unwrap().is_empty());
+        assert_eq!(
+            index.root_origin("file:///srv/media").unwrap(),
+            Some(RootOrigin::User)
+        );
+        assert_eq!(
+            index.skipped_frequent_folders(now + 29.0 * DAY).unwrap(),
+            [PROJECTS]
+        );
+        assert!(index
+            .skipped_frequent_folders(now + 31.0 * DAY)
+            .unwrap()
+            .is_empty());
+        index.store_frequent_indexing(FrequentIndexing::Off).unwrap();
+        assert!(index.skipped_frequent_folders(now).unwrap().is_empty());
+    }
+
+    /// parity: SRCH-041
+    #[test]
+    fn a_folder_beyond_the_frequent_entry_limits_is_skipped_for_thirty_days() {
+        let base = tempfile::tempdir().unwrap();
+        let large = folder_with_files(base.path(), "large", 3);
+        let small = folder_with_files(base.path(), "small", 2);
+        let more = folder_with_files(base.path(), "more", 2);
+        let limits = ServiceLimits {
+            entries_per_frequent_root: 2,
+            frequent_entries: 3,
+            ..ServiceLimits::default()
+        };
+        let service = start_with(&base, limits);
+        let now = unix_now();
+
+        // Larger than one root may be.
+        open_often(&service, &[&large, &small], now);
+        assert!(service.rebalance_frequent_roots(now).unwrap());
+        wait_for_frequent_scans(&service, "the first scans end");
+        assert_eq!(
+            service.index().frequent_roots().unwrap(),
+            std::slice::from_ref(&small)
+        );
+        assert_eq!(entry_count(&service, &small), 2);
+        assert_eq!(service.index().root_origin(&large).unwrap(), None);
+        // Larger than is left beside the other roots.
+        open_often(&service, &[&more], now);
+        assert!(service.rebalance_frequent_roots(now).unwrap());
+        wait_for_frequent_scans(&service, "the second scan ends");
+        assert_eq!(
+            service.index().frequent_roots().unwrap(),
+            std::slice::from_ref(&small)
+        );
+        assert_eq!(service.index().root_origin(&more).unwrap(), None);
+
+        let mut skipped = service.index().skipped_frequent_folders(now).unwrap();
+        skipped.sort();
+        assert_eq!(skipped, [large.clone(), more]);
+        open_often(&service, &[&large], now + DAY);
+        assert!(!service.rebalance_frequent_roots(now + DAY).unwrap());
+        // After 30 days, the folder is tried again.
+        let later = now + 31.0 * DAY;
+        open_often(&service, &[&large, &small], later);
+        assert!(service.rebalance_frequent_roots(later).unwrap());
+        service.close();
+    }
+
+    /// parity: SRCH-041
+    #[test]
+    fn no_folder_is_added_while_the_frequent_roots_hold_the_most_entries() {
+        let base = tempfile::tempdir().unwrap();
+        let small = folder_with_files(base.path(), "small", 2);
+        let other = folder_with_files(base.path(), "other", 1);
+        let limits = ServiceLimits {
+            frequent_entries: 2,
+            ..ServiceLimits::default()
+        };
+        let service = start_with(&base, limits);
+        let now = unix_now();
+        open_often(&service, &[&small], now);
+        assert!(service.rebalance_frequent_roots(now).unwrap());
+        wait_for_frequent_scans(&service, "the scan ends");
+        assert_eq!(entry_count(&service, &small), 2);
+
+        open_often(&service, &[&other], now + 600.0);
+
+        assert!(!service.rebalance_frequent_roots(now + 600.0).unwrap());
+        assert_eq!(service.index().frequent_roots().unwrap(), [small]);
+        assert!(service.index().skipped_frequent_folders(now).unwrap().is_empty());
+        service.close();
     }
 
     /// parity: SRCH-041

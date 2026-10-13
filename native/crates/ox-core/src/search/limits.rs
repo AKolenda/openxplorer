@@ -22,16 +22,24 @@ pub(crate) struct ServiceLimits {
     /// Most folders one live update may read, the changed folder included
     /// (SRCH-032).
     pub(crate) folders_per_update: usize,
+    /// Most entries one root that frequent use added may hold; a folder
+    /// beyond it is skipped (see [`super::frequent`]).
+    pub(crate) entries_per_frequent_root: usize,
+    /// Most entries the roots that frequent use added may hold together.
+    pub(crate) frequent_entries: usize,
 }
 
 impl Default for ServiceLimits {
-    /// The limits of the Python app.
+    /// The limits of the Python app, and those of frequent use, which the
+    /// Python app does not have.
     fn default() -> Self {
         Self {
             watched_folders: WATCH_LIMIT,
             entries_per_root: 1_000_000,
             entries_per_folder: 1_000_000,
             folders_per_update: 10_000,
+            entries_per_frequent_root: 25_000,
+            frequent_entries: 100_000,
         }
     }
 }
