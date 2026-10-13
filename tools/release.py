@@ -58,6 +58,7 @@ OMITTED_DIRECTORIES = frozenset({
 OMITTED_NAMES = (
     '.env*', '.dev.vars*', '.private-demo-terms*', 'private-terms.json',
     '.ds_store', '.coverage*', '*.py[cod]', '*.tsbuildinfo', '*.deb', '*.zip',
+    '*.rpm', '*.pkg.tar.zst', '*.flatpak',
     '*.log', '*.log.*', '*.sqlite', '*.sqlite-*', '*.sqlite3', '*.sqlite3-*',
     '*.db', '*.db-*', '*.pem', '*.key', '*.p12', '*.pfx', '*.credentials',
     'credentials.json', 'credentials.toml', 'credentials.yaml', 'credentials.yml',
@@ -133,8 +134,9 @@ def source_path_excluded(relative: Path, *, directory: bool = False) -> bool:
 
 
 def sha256_hex(path: Path) -> str:
-    """Return the SHA-256 digest of a file as hexadecimal text."""
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    """Hash a package with bounded memory, including large Flatpak bundles."""
+    with path.open('rb') as source:
+        return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
 def raise_walk_error(error: OSError) -> NoReturn:
@@ -247,14 +249,18 @@ def copy_extra_packages(version: str, packages: Path | None) -> list[Path]:
     """Copy the release's RPMs, Arch packages and Flatpak bundle from packages into dist/."""
     if packages is None:
         return []
-    patterns = [pattern.format(version=version) for pattern in EXTRA_PACKAGE_PATTERNS]
     copied = []
-    for path in sorted(packages.iterdir()):
-        wanted = any(fnmatchcase(path.name, pattern) for pattern in patterns)
-        if wanted and path.is_file():
-            shutil.copyfile(path, DIST / path.name)
-            copied.append(DIST / path.name)
+    for path in extra_package_files(version, packages):
+        shutil.copyfile(path, DIST / path.name)
+        copied.append(DIST / path.name)
     return copied
+
+
+def extra_package_files(version: str, packages: Path) -> list[Path]:
+    """Select the stable optional packages for both preflight and copying."""
+    patterns = [pattern.format(version=version) for pattern in EXTRA_PACKAGE_PATTERNS]
+    return [path for path in sorted(packages.iterdir()) if path.is_file()
+            and any(fnmatchcase(path.name, pattern) for pattern in patterns)]
 
 
 def flatpak_builder() -> list[str]:
@@ -328,6 +334,8 @@ def build_release(arguments: argparse.Namespace) -> None:
     """Build the installers, the corresponding source and their checksums."""
     packages = arguments.packages.resolve() if arguments.packages else None
     version = release_version()
+    if packages is not None:
+        validate_package_directory(packages, version)
     remove_website_downloads()
     prepare_output_directories()
     package = obtain_debian_package(version, packages)
@@ -339,6 +347,20 @@ def build_release(arguments: argparse.Namespace) -> None:
     source = DIST / f'openxplorer-{version}-source.zip'
     write_source_archive(source)
     write_checksums([*artifacts, source], DIST / 'SHA256SUMS')
+
+
+def validate_package_directory(packages: Path, version: str) -> None:
+    """Refuse inputs that cleanup would delete, before changing any output."""
+    required = packages / debian_package_name(version)
+    if not required.is_file():
+        raise FileNotFoundError(f'{required} is missing; build the stable Debian package first')
+    inputs = [packages, required, *extra_package_files(version, packages)]
+    for path in inputs:
+        resolved = path.resolve()
+        if resolved.is_relative_to(DIST.resolve()):
+            raise OSError('Keep --packages inputs outside the release output directory')
+        if any(resolved.is_relative_to(directory.resolve()) for directory in WEBSITE_DOWNLOADS):
+            raise OSError('Keep --packages inputs outside the website download directories')
 
 
 def describe_failed_command(error: subprocess.CalledProcessError) -> str:
