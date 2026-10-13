@@ -1,0 +1,92 @@
+name: Repository checks
+on:
+  pull_request:
+    paths: &checked-paths
+      - 'apps/**'
+      - 'tools/**'
+      - 'tests/**'
+      - 'docs/**'
+      - 'licenses/**'
+      - 'LICENSE'
+      - 'NOTICE'
+      - 'THIRD_PARTY_NOTICES.md'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.gitignore'
+      - 'vercel.json'
+      - 'wrangler.jsonc'
+      - 'native/**/Cargo.toml'
+      - 'native/Cargo.lock'
+      - '.github/workflows/repository-checks.yml'
+  push:
+    branches: [main]
+    paths: *checked-paths
+  # Newly published advisories also matter when the lockfiles do not change.
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  website:
+    name: Website and release policies
+    # Untrusted PR code stays on disposable hosted runners, away from deploy credentials.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Activate the pinned package manager
+        run: |
+          test -s pnpm-lock.yaml
+          npm install --prefix "$RUNNER_TEMP/package-manager" pnpm@10.34.5
+          echo "$RUNNER_TEMP/package-manager/node_modules/.bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=moderate
+      - run: pnpm check
+      - run: pnpm build
+      - name: Prepare production browser checks
+        run: |
+          python3 -m venv "$RUNNER_TEMP/browser-tests"
+          "$RUNNER_TEMP/browser-tests/bin/python" -m pip install playwright==1.62.0
+          "$RUNNER_TEMP/browser-tests/bin/python" -m playwright install --with-deps chromium
+      - name: Check the production export, hydration and mobile iframe removal
+        run: '"$RUNNER_TEMP/browser-tests/bin/python" tests/test_launch_production.py'
+      - name: Verify generated documentation
+        run: git diff --exit-code -- docs apps/web/public/docs-markdown apps/web/public/assets/markdown.json
+      - name: Check source and public-data policies
+        run: |
+          pnpm security:source
+          python3 -m unittest discover -s tests -p 'test_release_source.py'
+          python3 -m unittest discover -s tests -p 'test_public_data.py'
+          python3 tools/audit-public-data.py
+
+  rust-dependencies:
+    name: Rust dependency advisories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the locked advisory scanner
+        # Audit Cargo.lock without compiling the app or requiring GTK development files.
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal
+          cargo +1.92.0 install cargo-audit --version 0.22.2 --locked --no-default-features --root "$RUNNER_TEMP/cargo-audit"
+      - name: Audit the native dependency graph
+        run: '"$RUNNER_TEMP/cargo-audit/bin/cargo-audit" audit --file native/Cargo.lock'
