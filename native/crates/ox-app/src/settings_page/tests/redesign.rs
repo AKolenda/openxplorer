@@ -18,7 +18,7 @@ use crate::test_support::harness::{descendants, wait_until};
 
 /// Every setting row before the settings were rearranged, by its title
 /// then, and the row that offers it now.
-const MOVED_ROWS: [(&str, &str); 61] = [
+const MOVED_ROWS: [(&str, &str); 63] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -37,6 +37,10 @@ const MOVED_ROWS: [(&str, &str); 61] = [
     ("Relative dates", "Relative dates (Today, Yesterday)"),
     ("Remember each folder's view", "Remember each folder's view"),
     ("Selection marker", "Item check boxes"),
+    (
+        "Show check boxes only while Ctrl is held",
+        "Show check boxes only while Ctrl is held",
+    ),
     ("Expandable folders", "Expandable folders in Details"),
     ("Sidebar and column widths", "Sidebar and column widths"),
     ("Hide expand arrows", "Hide expand arrows in the sidebar"),
@@ -44,6 +48,10 @@ const MOVED_ROWS: [(&str, &str); 61] = [
     (
         "Index pinned folders automatically",
         "Index pinned folders automatically",
+    ),
+    (
+        "Index frequently opened folders (experimental)",
+        "Index frequently opened folders (experimental)",
     ),
     ("Watch folders for live changes", "Watch folders for changes"),
     (

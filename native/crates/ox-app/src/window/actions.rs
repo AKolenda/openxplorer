@@ -133,6 +133,7 @@ impl BrowserWindow {
         self.install_address_actions();
         self.install_compact_density_action();
         self.install_item_check_boxes_action();
+        self.install_ctrl_for_item_checks();
         self.install_crumb_actions();
         self.install_selection_actions();
         self.install_view_actions();

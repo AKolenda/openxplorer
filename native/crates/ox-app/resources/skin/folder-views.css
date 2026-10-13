@@ -173,6 +173,12 @@ columnview.files .folder-expander:hover { background-color: @ox_hover; color: @o
 .files row:hover checkbutton.item-check,
 .files > child:hover checkbutton.item-check,
 .files checkbutton.item-check:checked { opacity: 1; }
+/* With "Show check boxes only while Ctrl is held" on and Ctrl not held,
+   the window carries .checks-on-ctrl: a hovered item's box stays
+   transparent, and lets clicks through (src/window/item_check_boxes.rs);
+   a checked one still shows. */
+.checks-on-ctrl .files row:hover checkbutton.item-check:not(:checked),
+.checks-on-ctrl .files > child:hover checkbutton.item-check:not(:checked) { opacity: 0; }
 /* Select all, before the Name title: shown while the pointer is on the
    titles or some item is selected (src/folder_view/details/select_all.rs). */
 columnview.files checkbutton.select-all { margin-right: 2px; }

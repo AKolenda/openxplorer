@@ -56,6 +56,15 @@ pub enum SearchError {
         )
     )]
     EntryLimit,
+    /// A folder that frequent use added holds more entries than it may
+    /// index (see [`super::frequent`]).
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "This folder is too large to index automatically. Add it yourself to index it."
+        )
+    )]
+    FrequentFolderTooLarge,
     /// One folder holds more than a million entries.
     #[error(
         "{}",

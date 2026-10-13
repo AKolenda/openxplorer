@@ -362,6 +362,13 @@ impl BrowserWindow {
             if run.mode == LoadMode::Navigate && is_folder && remembers {
                 add_to_desktop_history(&run.uri, FOLDER_CONTENT_TYPE);
             }
+            // SRCH-041: a folder the user went to and that listed counts
+            // towards indexing frequently opened folders; a refresh, or a
+            // listing that failed or was superseded, does not. The cache
+            // ignores it while that switch is off.
+            if run.mode == LoadMode::Navigate && self.imp().session.borrow().is_active(id) {
+                self.context().search_cache().folder_opened(&run.uri);
+            }
         }
         let end = self.imp().session.borrow_mut().end_listing(id);
         if end == ListingEnd::TabClosed {

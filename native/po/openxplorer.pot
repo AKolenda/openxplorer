@@ -2449,6 +2449,10 @@ msgid "Item check boxes"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Item check boxes stay out of the way until you hold Ctrl to pick several items. Turn this off to show them whenever you point at an item."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Logical file bytes, the space on disk, what a scan skips, and its limits."
 msgstr ""
 
@@ -2492,6 +2496,10 @@ msgstr ""
 msgid "Rows in the file list and the navigation pane stand closer, so more items fit."
 msgstr ""
 
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Show check boxes only while Ctrl is held"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Show previews"
 msgstr ""
@@ -2514,6 +2522,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
 msgid "Videos"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "check box checkbox ctrl control key hold hover show hide select multiple"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -2837,6 +2849,10 @@ msgstr ""
 msgid "Clear cached names only"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
+msgid "Frequent"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
 msgid "Last full refresh: {value1}"
@@ -2915,6 +2931,14 @@ msgid "Check network and unwatched folders every"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
+msgid "Folders you open often are added to instant search, and removed again once you stop opening them. While this is on, OpenXplorer remembers which local folders you open; hidden and network folders never count, and a folder too large to index is skipped for 30 days. Turning this off forgets them."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Index frequently opened folders (experimental)"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
 msgid "Index pinned folders automatically"
 msgstr ""
 
@@ -2973,6 +2997,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
 msgid "quick access pin search cache"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "smart cache frequent recent often used folders automatic instant indexing experimental"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -7207,6 +7235,10 @@ msgstr ""
 
 #: crates/ox-core/src/search/error.rs
 msgid "This folder is not enabled for caching."
+msgstr ""
+
+#: crates/ox-core/src/search/error.rs
+msgid "This folder is too large to index automatically. Add it yourself to index it."
 msgstr ""
 
 #: crates/ox-core/src/search/error.rs
