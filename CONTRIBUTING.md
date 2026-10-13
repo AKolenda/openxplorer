@@ -68,7 +68,7 @@ python3 native/tools/verify_deb.py dist/native/<package>.deb
 
 For website and repository changes, also run `pnpm check`, `pnpm build`, `pnpm security:source`, `python3 -m unittest discover -s tests -p 'test_release_source.py'` and `python3 -m unittest discover -s tests -p 'test_public_data.py'`. The other scripts in `tests/` drive Chromium with Playwright (see [apps/web/README.md](apps/web/README.md)).
 
-GitHub checks use a read-only token. Pull requests run the native checks and the per-distribution package builds (Fedora, openSUSE Tumbleweed, Arch Linux, Ubuntu 24.04, Debian 13 and the Flatpak); the release and website jobs run only after a merge to `main`. A workflow file existing in the repository is not evidence that its hosted run passed.
+GitHub checks use a read-only token. Relevant pull requests run the native checks and the per-distribution package builds (Fedora, openSUSE Tumbleweed, Arch Linux, Ubuntu 24.04, Debian 13 and the Flatpak). Website, tooling and dependency changes also run the website audit, typecheck, production build, browser checks and release policies on hosted runners. The Rust lockfile is checked against RustSec advisories; both dependency audits repeat weekly even when the lockfiles do not change. Release publication and website deployment run only after a merge to `main`. A workflow file existing in the repository is not evidence that its hosted run passed.
 
 The 1.x Python/GTK 3/WebKitGTK app has left the tree. Its last release is tag `v1.1.4`; its final sources, the behavioural specification that `native/parity/` cites as `v2.0.0:desktop/<file>`, are `desktop/` at tag `v2.0.0`. The native check driver extracts them from that tag for the compatibility tests (`native/tools/python_app.py`).
 

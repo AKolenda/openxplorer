@@ -89,6 +89,25 @@ fn a_folder_nobody_indexed_is_searched_with_its_subfolders() {
     assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes archive.TXT"]);
 }
 
+/// parity: SRCH-035, PERF-005
+#[gtk::test]
+fn a_live_search_caps_the_initial_listing_and_reports_truncation() {
+    let fixture = Fixture::standard();
+    for number in 0..=crate::search::RESULT_LIMIT {
+        fs::write(fixture.path(&format!("match {number}.txt")), b"x").expect("fixture file");
+    }
+    let test = TestWindow::open(&fixture.uri());
+
+    test.search_for("match");
+
+    assert_eq!(test.names().len(), crate::search::RESULT_LIMIT);
+    assert_eq!(test.status_count(), "500 results (first 500)");
+    assert_eq!(
+        test.window.search_strip().shown_note().as_deref(),
+        Some("First 500 results · narrow your search")
+    );
+}
+
 /// parity: SRCH-001, SRCH-002
 #[gtk::test]
 fn escape_empties_the_box_and_brings_the_listing_back() {

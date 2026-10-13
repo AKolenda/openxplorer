@@ -28,8 +28,8 @@ pub(crate) struct Listing<'a> {
     pub shows_hidden: bool,
 }
 
-/// The rows of a cached search.
-#[derive(Debug)]
+/// The bounded rows of a cached or live search.
+#[derive(Debug, Default)]
 pub(crate) struct MergedResults {
     /// The rows, at most [`RESULT_LIMIT`].
     pub items: Vec<FileItem>,
@@ -41,45 +41,54 @@ pub(crate) struct MergedResults {
 /// matches in `listing`, when the search is of the current folder, then
 /// the cached items it does not list, without repeating a URI.
 pub(crate) fn merge_results(listing: Option<Listing<'_>>, text: &str, found: SearchResults) -> MergedResults {
-    let mut items = listing
+    let mut merged = listing
         .map(|listing| listing_matches(listing, text))
         .unwrap_or_default();
-    let mut shown: HashSet<String> = items.iter().map(|item| item.entry().uri.clone()).collect();
+    merged.is_truncated |= found.is_truncated;
+    if merged.items.len() == RESULT_LIMIT && merged.is_truncated {
+        return merged;
+    }
+    let mut shown: HashSet<String> = merged.items.iter().map(|item| item.entry().uri.clone()).collect();
     for hit in found.hits {
         if shown.insert(hit.uri.clone()) {
-            items.push(FileItem::new(hit.into_entry()));
+            if merged.items.len() == RESULT_LIMIT {
+                merged.is_truncated = true;
+                break;
+            }
+            merged.items.push(FileItem::new(hit.into_entry()));
         }
     }
-    let is_truncated = found.is_truncated || items.len() > RESULT_LIMIT;
-    items.truncate(RESULT_LIMIT);
-    MergedResults { items, is_truncated }
+    merged
 }
 
 /// The listed items whose names match `text` as the folder filter
 /// matches them (SRCH-003, SRCH-004): what a live search of the folder
-/// shows before its walk adds the subfolders' matches.
-pub(crate) fn listed_name_matches(listing: Listing<'_>, text: &str) -> Vec<FileItem> {
-    let pattern = NamePattern::new(text);
-    let items = listing.items.iter::<FileItem>().filter_map(Result::ok);
-    let matching = items.filter(|item| {
-        let is_listed = listing.shows_hidden || item.visibility() == Visibility::Visible;
-        is_listed && pattern.matches_lowercase(item.lowercase_name(), "")
-    });
-    matching.collect()
+/// shows before its walk adds the subfolders' matches, at most
+/// [`RESULT_LIMIT`] with a flag when more matched.
+pub(crate) fn listed_name_matches(listing: Listing<'_>, text: &str) -> MergedResults {
+    matching_items(listing, text, "")
 }
 
 /// The listed items whose name and folder hold every word of `text`,
 /// ignoring case (`currentFolderMatches`); a wildcard word matches the
 /// whole name (SRCH-004).
-fn listing_matches(listing: Listing<'_>, text: &str) -> Vec<FileItem> {
-    let pattern = NamePattern::new(text);
+fn listing_matches(listing: Listing<'_>, text: &str) -> MergedResults {
     let folder = display_path(listing.folder).to_lowercase();
+    matching_items(listing, text, &folder)
+}
+
+/// Stops after the first excess match, retaining at most the displayed
+/// rows even when the folder already lists many thousands of matches.
+fn matching_items(listing: Listing<'_>, text: &str, folder: &str) -> MergedResults {
+    let pattern = NamePattern::new(text);
     let items = listing.items.iter::<FileItem>().filter_map(Result::ok);
-    let matching = items.filter(|item| {
+    let mut matching = items.filter(|item| {
         let is_listed = listing.shows_hidden || item.visibility() == Visibility::Visible;
-        is_listed && pattern.matches_lowercase(item.lowercase_name(), &folder)
+        is_listed && pattern.matches_lowercase(item.lowercase_name(), folder)
     });
-    matching.collect()
+    let items = matching.by_ref().take(RESULT_LIMIT).collect();
+    let is_truncated = matching.next().is_some();
+    MergedResults { items, is_truncated }
 }
 
 #[cfg(test)]
@@ -174,7 +183,7 @@ mod tests {
             shows_hidden: false,
         };
 
-        let matches = |text| listing_matches(listing, text).len();
+        let matches = |text| listing_matches(listing, text).items.len();
 
         assert_eq!(matches("work plan"), 1);
         assert_eq!(matches("budget"), 0);
@@ -191,6 +200,66 @@ mod tests {
 
         assert_eq!(merged.items.len(), RESULT_LIMIT);
         assert!(merged.is_truncated);
+    }
+
+    #[test]
+    fn listed_matches_report_truncation_only_after_the_first_excess_match() {
+        for count in [RESULT_LIMIT - 1, RESULT_LIMIT, RESULT_LIMIT + 1, RESULT_LIMIT * 4] {
+            let names: Vec<String> = (0..count).map(|number| format!("file {number}.txt")).collect();
+            let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+            let store = store_of_files(&refs);
+            let listing = Listing {
+                items: &store,
+                folder: FOLDER,
+                shows_hidden: false,
+            };
+
+            let live = listed_name_matches(listing, "file");
+            let cached = merge_results(Some(listing), "work file", found(Vec::new(), false));
+
+            for matches in [live, cached] {
+                assert_eq!(matches.items.len(), count.min(RESULT_LIMIT));
+                assert_eq!(matches.is_truncated, count > RESULT_LIMIT);
+                assert_eq!(self::names(&matches), names[..count.min(RESULT_LIMIT)]);
+            }
+        }
+    }
+
+    #[test]
+    fn cached_duplicates_at_the_limit_do_not_claim_extra_results() {
+        let names: Vec<String> = (0..RESULT_LIMIT)
+            .map(|number| format!("file {number}.txt"))
+            .collect();
+        let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+        let store = store_of_files(&refs);
+        let listing = Listing {
+            items: &store,
+            folder: FOLDER,
+            shows_hidden: false,
+        };
+        let duplicate = SearchHit {
+            uri: store
+                .item(0)
+                .and_downcast::<FileItem>()
+                .unwrap()
+                .entry()
+                .uri
+                .clone(),
+            ..hit("file 0.txt")
+        };
+
+        let exact = merge_results(Some(listing), "file", found(vec![duplicate.clone()], false));
+        assert_eq!(exact.items.len(), RESULT_LIMIT);
+        assert!(!exact.is_truncated);
+
+        let extra = merge_results(
+            Some(listing),
+            "file",
+            found(vec![duplicate, hit("file extra.txt")], false),
+        );
+        assert_eq!(extra.items.len(), RESULT_LIMIT);
+        assert!(extra.is_truncated);
+        assert_eq!(self::names(&extra), names);
     }
 
     #[test]

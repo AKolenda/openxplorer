@@ -43,6 +43,14 @@ pub enum ArchiveError {
     )]
     DamagedArchive,
 
+    /// The compressed stream requests more decoder memory than the
+    /// built-in reader allows, before any dictionary is allocated.
+    #[error(
+        "{}",
+        crate::i18n::gettext("This archive requires too much decoder memory. Use an archive manager.")
+    )]
+    DecoderMemoryLimit,
+
     // Reading: v2.0.0:desktop/archives.py and v2.0.0:desktop/native_opening.py.
     /// ARC-005: the central directory is over 32 MiB.
     #[error(

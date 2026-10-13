@@ -74,10 +74,19 @@ def audit(paths):
         # Names are distinct publication data even when their payloads match.
         if contains_private_term(unquote(name)):issues.append(name+': rejected filename fingerprint')
         h=digest(data)
-        if h in seen:return
-        seen.add(h)
         if depth>8:issues.append(name+': nested archive depth exceeded');return
         suffix=Path(name).suffix.lower()
+        # The same bytes may first appear as an opaque file, then as text or
+        # an archive. Image provenance also depends on the publication path,
+        # including the enclosing archive's path. Cache only equal checks.
+        content_kind = 'text' if suffix in TEXT or suffix == '' else suffix
+        public_images = any(part in name for part in
+                            ('assets/screenshots/', 'docs/assets/', 'public/tour/'))
+        archive_depth = depth if suffix in {'.zip', '.deb'} else None
+        cache_key = (h, content_kind, public_images, archive_depth)
+        if cache_key in seen:
+            return
+        seen.add(cache_key)
         if suffix=='.zip':
             archives+=1
             with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -87,13 +96,20 @@ def audit(paths):
             archives+=1
             with tempfile.NamedTemporaryFile(suffix='.deb') as f:
                 f.write(data);f.flush()
-                payload=subprocess.check_output(['dpkg-deb','--fsys-tarfile',f.name])
-            with tarfile.open(fileobj=io.BytesIO(payload)) as t:
-                for m in t.getmembers():
-                    if m.isfile():visit(name+'!/'+m.name,t.extractfile(m).read(),depth+1)
+                # Maintainer metadata and scripts are publication data too;
+                # extract them as bytes without installing or executing them.
+                for flag, prefix in (('--fsys-tarfile', ''), ('--ctrl-tarfile', 'DEBIAN/')):
+                    payload = subprocess.check_output(['dpkg-deb', flag, f.name])
+                    with tarfile.open(fileobj=io.BytesIO(payload)) as bundle:
+                        for member in bundle.getmembers():
+                            if member.isfile():
+                                stream = bundle.extractfile(member)
+                                visit(name + '!/' + prefix + member.name,
+                                      stream.read(), depth + 1)
         elif suffix in {'.png','.jpg','.jpeg','.webp'}:
             images+=1
-            if any(part in name for part in ('assets/screenshots/','docs/assets/','public/tour/')) and h not in known_images:issues.append(name+': unregistered image inside publication/archive')
+            if public_images and h not in known_images:
+                issues.append(name + ': unregistered image inside publication/archive')
         elif suffix in TEXT or suffix=='':
             try:s=html.unescape(unquote(data.decode('utf-8'))).casefold()
             except UnicodeError:return
