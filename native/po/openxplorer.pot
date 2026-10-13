@@ -6607,6 +6607,10 @@ msgid "Administrative paths must be absolute, without parent traversal."
 msgstr ""
 
 #: crates/ox-core/src/network/mount_helper.rs
+msgid "Another mount setup or removal is in progress. Finish it before trying again."
+msgstr ""
+
+#: crates/ox-core/src/network/mount_helper.rs
 msgid "Enter a username after the domain."
 msgstr ""
 
