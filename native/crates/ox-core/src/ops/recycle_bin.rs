@@ -139,7 +139,34 @@ pub async fn empty_recycle_bin(cancel: &Cancellation) -> Result<TransferResult, 
 /// [`list_recycle_bin`] on the calling thread. The listing is closed on
 /// success, cancellation and error alike.
 fn list_recycle_bin_blocking(cancel: &Cancellation) -> Result<Vec<RecycledItem>, OpsError> {
+    cancel.check()?;
     let bin = gio::File::for_uri(TRASH_URI);
+    // Without a watcher, GVfs skips rescanning when the Trash folder's
+    // modification time is unchanged. A rapid delete and new Trash can
+    // share even a nanosecond timestamp, leaving the new item invisible.
+    // Requesting a monitor enables its backend's filesystem notifications.
+    // The private context releases the monitor's asynchronous subscription
+    // reference too; worker threads otherwise have no running main loop.
+    let context = glib::MainContext::new();
+    context
+        .with_thread_default(|| {
+            let monitor = bin
+                .monitor_directory(gio::FileMonitorFlags::NONE, Some(cancel.cancellable()))
+                .ok();
+            let result = enumerate_recycle_bin(&bin, cancel);
+            if let Some(monitor) = monitor {
+                monitor.cancel();
+            }
+            while context.pending() {
+                context.iteration(false);
+            }
+            result
+        })
+        .map_err(|error| OpsError::failed(error.to_string()))?
+}
+
+/// Reads a listing while its caller holds the Trash monitor.
+fn enumerate_recycle_bin(bin: &gio::File, cancel: &Cancellation) -> Result<Vec<RecycledItem>, OpsError> {
     let listing = bin.enumerate_children(
         ATTRIBUTES,
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
