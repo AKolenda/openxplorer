@@ -127,8 +127,6 @@ pub struct SignOutRequest<'a> {
 pub struct SigningOut<'a> {
     entry: RegistryEntry<'a>,
     prompts: &'a MountPrompts,
-    /// The canonical location the user chose.
-    uri: String,
     forget: ForgetScope,
 }
 
@@ -180,11 +178,10 @@ pub fn begin_sign_out<'a>(
     // Safety rule (NET-021, SAFE-012): every window's in-memory copy and
     // every keyring save still in flight for this server are discarded
     // from here on.
-    prompts.credentials().forget_memory(&uri);
+    prompts.credentials().forget_host_memory(&host);
     Ok(SigningOut {
         entry,
         prompts,
-        uri,
         forget: request.forget,
     })
 }
@@ -263,11 +260,10 @@ async fn forget_saved_credentials(
     deadline: Duration,
 ) -> Result<bool, NetworkError> {
     let credentials = Arc::clone(signing_out.prompts.credentials());
-    let uri = signing_out.uri.clone();
     let host = signing_out.host().to_owned();
     let forget = signing_out.forget;
     // The keyring may show an unlock prompt: never block the main thread.
-    let worker = gio::spawn_blocking(move || delete_saved_credentials(&credentials, &uri, &host, forget));
+    let worker = gio::spawn_blocking(move || delete_saved_credentials(&credentials, &host, forget));
     let Ok(finished) = glib::future_with_timeout(deadline, worker).await else {
         return Err(NetworkError::CredentialsNotRemoved(KeyringError::TimedOut));
     };
@@ -276,16 +272,15 @@ async fn forget_saved_credentials(
     deleted.map_err(NetworkError::CredentialsNotRemoved)
 }
 
-/// Deletes `OpenXplorer`'s entries for the server of `uri` in `forget`'s
+/// Deletes `OpenXplorer`'s entries for every port of `host` in `forget`'s
 /// scope and, when forgetting everything, the passwords `GVfs` remembered
 /// for `host`.
 fn delete_saved_credentials(
     credentials: &SessionCredentials,
-    uri: &str,
     host: &str,
     forget: ForgetScope,
 ) -> Result<bool, KeyringError> {
-    let own_removed = credentials.forget(uri, forget)?;
+    let own_removed = credentials.forget_host(host, forget)?;
     if forget == ForgetScope::SessionOnly {
         return Ok(own_removed);
     }

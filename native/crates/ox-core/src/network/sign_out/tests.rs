@@ -124,6 +124,54 @@ fn signing_out_forgets_every_saved_credential_of_that_server_only() {
     });
 }
 
+/// Host-wide Sign out matches the ports it disconnects, without sharing
+/// credentials between ports or forgetting another host's account.
+#[test]
+fn signing_out_forgets_every_port_and_window_in_the_chosen_scope() {
+    for scope in [ForgetScope::AllScopes, ForgetScope::SessionOnly] {
+        with_prompts(|fixture| {
+            let endpoints = ["smb://nas/a", "smb://nas:1445/a"];
+            let other_window = SessionCredentials::new(Arc::clone(&fixture.store));
+            for uri in endpoints.into_iter().chain(["smb://other:1445/a"]) {
+                save(fixture, uri, &sam(CredentialScope::Permanent));
+                save(fixture, uri, &sam(CredentialScope::Session));
+                other_window.accept_memory(uri, &sam(CredentialScope::Session));
+            }
+            let pending_uri = "smb://nas:2445/a";
+            let pending_generation = fixture.credentials.generation(pending_uri);
+            let registry = SignOutRegistry::default();
+            let signing_out = begin_sign_out(&fixture.prompts, &registry, request(endpoints[0], scope))
+                .expect("sign-out starts");
+
+            for uri in endpoints {
+                assert_eq!(other_window.peek(uri), None, "{uri}");
+                assert!(registry.is_signing_out(uri), "{uri}");
+            }
+            assert!(other_window.peek("smb://other:1445/a").is_some());
+            fixture
+                .block_on(finish_sign_out(&signing_out, &[]))
+                .expect("sign-out finishes");
+            fixture
+                .credentials
+                .persist(pending_uri, &sam(CredentialScope::Session), pending_generation)
+                .expect("a pending save on a previously unseen port is discarded");
+            let fresh_window = SessionCredentials::new(Arc::clone(&fixture.store));
+            for uri in endpoints {
+                let expected = match scope {
+                    ForgetScope::AllScopes => None,
+                    ForgetScope::SessionOnly => Some(sam(CredentialScope::Permanent)),
+                };
+                assert_eq!(fresh_window.load(uri).unwrap(), expected, "{uri}");
+            }
+            assert_eq!(fresh_window.load(pending_uri).unwrap(), None);
+            assert_eq!(
+                fresh_window.load("smb://other:1445/a").unwrap(),
+                Some(sam(CredentialScope::Session))
+            );
+        });
+    }
+}
+
 /// parity: NET-021
 #[test]
 fn keeping_saved_credentials_removes_only_session_entries() {

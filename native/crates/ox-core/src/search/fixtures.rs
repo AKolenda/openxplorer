@@ -141,7 +141,10 @@ impl ScannedShare {
     /// Makes the cached children of `folder` exactly `items` and returns
     /// the new folders among them (`replace_directory` in Python).
     pub(super) fn replace(&self, folder: &str, items: &[ListedItem]) -> Vec<String> {
-        let new_folders = self.index.replace_folder_contents(SHARE, folder, items);
+        let root = root_state(&self.index, SHARE);
+        let new_folders = self
+            .index
+            .replace_folder_contents(&root, folder, items, &gio::Cancellable::new());
         new_folders.expect("the folder's children are replaced")
     }
 

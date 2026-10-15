@@ -7,13 +7,65 @@ wrappers are omitted: the selected executable runs without taking a picture.
 """
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from tools import native_capture
+
+
+class CaptureBuildTests(unittest.TestCase):
+    """Captures use the executable Cargo built, including custom target locations."""
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory(prefix='openxplorer-capture-build-')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.native = self.root / 'native'
+        self.native.mkdir()
+        self.program = self.native / 'build/release/openxplorer-native'
+        self.program.parent.mkdir(parents=True)
+        self.program.write_bytes(b'fictional current executable')
+
+    def build(self, messages: list[dict], target: str | None = None) -> Path:
+        output = '\n'.join(json.dumps(message) for message in messages) + '\n'
+        result = subprocess.CompletedProcess(['cargo'], 0, stdout=output)
+        environment = dict(os.environ)
+        environment.pop('CARGO_TARGET_DIR', None)
+        if target is not None:
+            environment['CARGO_TARGET_DIR'] = target
+        with patch.object(native_capture, 'NATIVE', self.native), \
+                patch.object(native_capture.shutil, 'which', return_value='/fixture/tool'), \
+                patch.object(native_capture.subprocess, 'run', return_value=result), \
+                patch.dict(os.environ, environment, clear=True):
+            return native_capture.build_app()
+
+    def artifact(self) -> dict:
+        return {'reason': 'compiler-artifact', 'target': {'name': 'openxplorer-native'},
+                'executable': str(self.program)}
+
+    def test_relative_target_directory_uses_cargos_native_working_directory(self) -> None:
+        self.assertEqual(self.build([self.artifact()], 'build'), self.program)
+
+    def test_cargo_configuration_cannot_select_a_stale_default_executable(self) -> None:
+        stale = self.native / 'target/release/openxplorer-native'
+        stale.parent.mkdir(parents=True)
+        stale.write_bytes(b'fictional stale executable')
+        self.assertEqual(self.build([self.artifact()]), self.program)
+
+    def test_missing_app_artifact_never_falls_back_to_a_stale_binary(self) -> None:
+        stale = self.native / 'target/release/openxplorer-native'
+        stale.parent.mkdir(parents=True)
+        stale.write_bytes(b'fictional stale executable')
+        other = {'reason': 'compiler-artifact', 'target': {'name': 'build-script-build'},
+                 'executable': str(self.program)}
+        with self.assertRaises(native_capture.CaptureError):
+            self.build([other, {'reason': 'build-finished', 'success': True}])
 
 
 @unittest.skipUnless(shutil.which('bwrap'), 'Capture isolation requires bubblewrap')

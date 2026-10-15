@@ -160,8 +160,8 @@ impl BrowserWindow {
         }
     }
 
-    /// Runs a shown search again, after the cache changed.
-    fn run_search_again(&self) {
+    /// Runs a shown search again after the cache or its source listing changed.
+    pub(super) fn run_search_again(&self) {
         if self.is_searching() {
             self.run_search();
         }

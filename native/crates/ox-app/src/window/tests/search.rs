@@ -584,3 +584,67 @@ fn a_folder_another_process_indexed_is_searched_in_the_cache() {
         test.window.search_strip().caption() == "Cached names & paths"
     });
 }
+
+/// Polling a shared cache must invalidate an already displayed search in
+/// the follower, even though only the owner's worker emits local notices.
+#[gtk::test]
+fn a_followers_active_search_updates_when_the_owner_changes_names() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/cached-old.txt"), b"Synthetic data").unwrap();
+    let test = TestWindow::open(&fixture.uri());
+    let index = SearchIndex::open(&test.settings_directory().join("cache")).unwrap();
+    let owner = IndexService::start(index.clone(), GioFolderReader, || {}).unwrap();
+    assert!(owner.is_owner());
+    owner
+        .configure(&fixture.uri(), Caching::Enabled, "Shared", HiddenItems::Skip)
+        .unwrap();
+    wait_until("the owner's first scan", || {
+        index
+            .roots()
+            .unwrap()
+            .iter()
+            .any(|root| root.status == RootStatus::Ready)
+    });
+    test.start_search_cache();
+    test.search_for("cached");
+    assert_eq!(test.names(), ["cached-old.txt"]);
+    assert_eq!(test.window.search_strip().caption(), "Cached names & paths");
+
+    fs::rename(
+        fixture.path("Documents/cached-old.txt"),
+        fixture.path("Documents/cached-new.txt"),
+    )
+    .unwrap();
+    owner.folder_changed(&fixture.uri_of("Documents")).unwrap();
+    wait_until("the owner to index the rename", || {
+        owner.tick(&ox_core::search::IndexSettings::default()).unwrap();
+        index
+            .search(&ox_core::search::SearchQuery::new("cached-new"), None)
+            .unwrap()
+            .hits
+            .len()
+            == 1
+    });
+    test.context.search_cache().refresh_status();
+    wait_until("the follower's shown search to follow the owner", || {
+        test.names() == ["cached-new.txt"]
+    });
+    owner.shut_down();
+}
+
+/// A live search has its own result store. Finishing a directory reload
+/// must replace matches that disappeared while the query stayed open.
+#[gtk::test]
+fn a_directory_reload_updates_an_active_search_after_a_rename() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.search_for("notes");
+    assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt"]);
+    fs::rename(fixture.path("Notes 10.txt"), fixture.path("Renamed.txt")).unwrap();
+
+    test.window.folder_changed(test.active_tab().unwrap());
+
+    wait_until("the search to reflect the completed directory listing", || {
+        test.names() == ["Notes 2.txt"]
+    });
+}

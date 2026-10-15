@@ -13,9 +13,9 @@ use std::collections::{BTreeMap, HashMap};
 
 use rusqlite::{OptionalExtension, Transaction};
 
-use super::error::SearchError;
+use super::error::{check_cancelled, SearchError};
 use super::index::{begin_immediate, SearchIndex, MAX_ERROR_CHARS};
-use super::root::{RootStatus, ScanGeneration};
+use super::root::{HiddenItems, IndexRoot, RootStatus, ScanGeneration};
 use super::text::{
     display_path, fold, folder_prefix, is_at_or_below, is_same_folder, parent_uri, truncate_chars, unix_now,
 };
@@ -262,7 +262,8 @@ impl SearchIndex {
     /// only a complete listing. A deleted or renamed folder, or one that
     /// became a file, loses its cached descendants; the files themselves
     /// are never touched. Items outside `root` or not directly in `folder`
-    /// are ignored.
+    /// are ignored. A listing whose root was cleared, reconfigured or
+    /// rescanned while it was read is discarded inside the transaction.
     ///
     /// # Errors
     ///
@@ -270,16 +271,35 @@ impl SearchIndex {
     /// and database errors.
     pub(crate) fn replace_folder_contents(
         &self,
-        root: &str,
+        root: &IndexRoot,
         folder: &str,
         items: &[ListedItem],
+        cancellable: &gio::Cancellable,
     ) -> Result<Vec<String>, SearchError> {
-        let children = children_of(root, folder, items)?;
-        let mut connection = self.connect()?;
-        let transaction = begin_immediate(&mut connection)?;
-        let Some(generation) = current_generation(&transaction, root)? else {
+        let Some(generation) = &root.generation else {
             return Ok(Vec::new());
         };
+        let children = children_of(&root.uri, folder, items)?;
+        let mut connection = self.connect()?;
+        let transaction = begin_immediate(&mut connection)?;
+        check_cancelled(cancellable)?;
+        // A clear, reconfiguration or new scan may have happened during the
+        // listing, or while this writer waited for SQLite. Check the state
+        // the listing belongs to under the same lock as its replacement.
+        let is_current: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM roots
+             WHERE uri=?1 AND enabled=1 AND generation=?2 AND include_hidden=?3)",
+            (
+                &root.uri,
+                generation.as_str(),
+                root.hidden_items == HiddenItems::Include,
+            ),
+            |row| row.get(0),
+        )?;
+        if !is_current {
+            return Ok(Vec::new());
+        }
+        let root = root.uri.as_str();
         let cached = cached_children(&transaction, root, folder)?;
         for (uri, was_folder) in &cached {
             let still_a_folder = children.get(uri).is_some_and(|item| item.is_dir);
@@ -290,9 +310,10 @@ impl SearchIndex {
         let seen = unix_now();
         for (uri, item) in &children {
             let entry = StoredEntry::new(uri.clone(), folder.to_owned(), item);
-            entry.upsert(&transaction, root, &generation, seen)?;
+            entry.upsert(&transaction, root, generation.as_str(), seen)?;
         }
         transaction.execute("UPDATE roots SET last_event=?1 WHERE uri=?2", (seen, root))?;
+        check_cancelled(cancellable)?;
         transaction.commit()?;
         let new_folders = children
             .into_iter()

@@ -392,6 +392,56 @@ fn forgetting_waits_for_a_save_in_flight() {
     assert!(keyring.is_empty());
 }
 
+/// A save already inside the keyring on a custom port cannot restore
+/// the account after host-wide Sign out completes.
+#[test]
+fn forgetting_a_host_waits_for_a_custom_port_save_in_flight() {
+    let (credentials, keyring) = window_with_keyring();
+    let uri = "smb://security-test-nas:1445/Projects";
+    let held = HeldSaves::on(&keyring);
+    let generation = credentials.generation(uri);
+    let writer = thread::spawn({
+        let credentials = Arc::clone(&credentials);
+        move || credentials.persist(uri, &sam(), generation)
+    });
+    held.started
+        .recv_timeout(Duration::from_secs(1))
+        .expect("the save starts");
+    let clearer = thread::spawn({
+        let credentials = Arc::clone(&credentials);
+        move || credentials.forget_host("security-test-nas", ForgetScope::AllScopes)
+    });
+    wait_until("host-wide invalidation", || {
+        credentials.generation(uri) != generation
+    });
+    thread::sleep(Duration::from_millis(50));
+    assert!(
+        !clearer.is_finished(),
+        "host-wide clear waits for the port's save"
+    );
+    held.release.send(()).expect("release the save");
+    writer.join().unwrap().unwrap();
+    assert!(clearer.join().unwrap().unwrap());
+    assert_eq!(keyring.changes(), [KeyringChange::Stored, KeyringChange::Cleared]);
+    assert!(keyring.is_empty());
+}
+
+#[test]
+fn a_custom_port_lookup_racing_host_sign_out_is_discarded() {
+    let (credentials, keyring) = window_with_keyring();
+    let uri = "smb://nas:1445/a";
+    persist(&credentials, uri, &sam());
+    let signing_out = Arc::downgrade(&credentials);
+    keyring.set_lookup_hook(move || {
+        if let Some(credentials) = signing_out.upgrade() {
+            credentials.forget_host_memory("nas");
+        }
+    });
+
+    assert_eq!(load(&credentials, uri), None);
+    assert_eq!(credentials.peek(uri), None);
+}
+
 /// A keyring lookup that raced Sign out does not bring the credential
 /// back (`generation != self.generation(uri)` in `load`).
 ///

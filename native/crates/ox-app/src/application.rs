@@ -471,16 +471,14 @@ fn refuse_command_line(error: &CommandLineError) -> glib::ExitCode {
 /// the launch exits with status 2, before it reaches the running
 /// instance (`argparse` in `main`).
 fn check_command_line(arguments: &[String]) -> Result<(), CommandLineError> {
-    let (options, locations): (Vec<&String>, Vec<&String>) = arguments
-        .iter()
-        .skip(1)
-        .partition(|argument| argument.starts_with("--"));
+    let parsed = crate::arguments::Arguments::parse(arguments);
     let has_option = |option: CommandOption| {
         let name = format!("--{}", option.name());
-        options.iter().any(|given| **given == name)
+        parsed.has(&name)
     };
-    let resolved = locations
-        .into_iter()
+    let resolved = parsed
+        .locations
+        .iter()
         .map(gio::File::for_commandline_arg)
         .map(|file| ox_core::location::normalise(&file.uri()))
         .collect::<Result<Vec<_>, _>>()?;
@@ -501,7 +499,7 @@ fn choose_renderer(arguments: &[String]) {
 /// unless the user already chose one (`is_chosen`), which is kept.
 fn renderer_for(arguments: &[String], is_chosen: bool) -> Option<&'static str> {
     let option = format!("--{}", CommandOption::SoftwareRendering.name());
-    let asks_software = arguments.iter().skip(1).any(|argument| *argument == option);
+    let asks_software = crate::arguments::Arguments::parse(arguments).has(&option);
     (asks_software && !is_chosen).then_some(SOFTWARE_RENDERER)
 }
 
@@ -587,6 +585,16 @@ mod tests {
         assert_eq!(renderer_for(&software, false), Some("cairo"));
         assert_eq!(renderer_for(&software, true), None);
         assert_eq!(renderer_for(&words(&["openxplorer", "/tmp"]), false), None);
+        assert_eq!(
+            renderer_for(&words(&["openxplorer", "--", "--software-rendering"]), false),
+            None
+        );
+    }
+
+    #[test]
+    fn select_accepts_an_option_like_filename_after_the_terminator() {
+        assert!(check_command_line(&words(&["openxplorer", "--select", "--", "--quit"])).is_ok());
+        assert!(check_command_line(&words(&["openxplorer", "--select", "--"])).is_err());
     }
 
     /// The dock groups the windows under the launcher: the program name

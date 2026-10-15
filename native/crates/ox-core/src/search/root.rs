@@ -295,6 +295,8 @@ impl SearchEngine {
 /// never file contents.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CacheStatus {
+    /// Durable content revision, including changes made by other processes.
+    pub contents_revision: u64,
     /// Every root, enabled or not, by label.
     pub roots: Vec<IndexRoot>,
     /// Entries cached for the enabled roots.

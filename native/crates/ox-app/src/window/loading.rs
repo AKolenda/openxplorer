@@ -384,6 +384,12 @@ impl BrowserWindow {
             self.restore_scroll_after_listing(id);
             self.restore_expanded_after_listing(id);
             self.reveal_located_item(id);
+            if is_listed {
+                // Searches keep a separate result store. A cache refresh
+                // may have merged the old listing while this reload was
+                // running; show the completed listing's matches now.
+                self.run_search_again();
+            }
         } else {
             self.finish_beside_listing(id);
         }

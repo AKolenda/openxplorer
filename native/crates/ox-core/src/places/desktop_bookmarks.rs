@@ -13,7 +13,7 @@
 //! here.
 
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::location::same_location;
@@ -90,12 +90,17 @@ fn read_or_empty(path: &Path) -> io::Result<String> {
 /// replaced.
 fn replace_file(path: &Path, text: &str) -> io::Result<()> {
     let path = fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
-    if let Some(folder) = path.parent() {
-        fs::create_dir_all(folder)?;
-    }
-    let partial = path.with_extension("openxplorer-partial");
-    fs::write(&partial, text)?;
-    fs::rename(&partial, &path)
+    let folder = crate::private_storage::parent_directory(&path);
+    fs::create_dir_all(folder)?;
+    // A unique, exclusively created sibling cannot truncate an unrelated
+    // file or write through a link left at a predictable staging path.
+    let mut partial = tempfile::Builder::new()
+        .prefix(".openxplorer-bookmarks-")
+        .tempfile_in(folder)?;
+    partial.write_all(text.as_bytes())?;
+    partial.as_file().sync_all()?;
+    partial.persist(&path).map_err(|error| error.error)?;
+    Ok(())
 }
 
 /// Brings the bookmarks file at `list` up to date with `pins`, creating it
@@ -192,5 +197,39 @@ mod tests {
             "file:///home/demo/Work Work\n"
         );
         assert!(!real.with_extension("openxplorer-partial").exists());
+    }
+
+    #[test]
+    fn existing_staging_paths_never_overwrite_unrelated_files() {
+        for kind in ["file", "symlink", "hardlink"] {
+            let folder = tempfile::tempdir().expect("a temporary folder");
+            let list = folder.path().join("bookmarks");
+            let owned = folder.path().join("owned");
+            let victim = folder.path().join("unrelated.txt");
+            fs::write(&victim, "keep this document").unwrap();
+            for path in [&list, &owned] {
+                let partial = path.with_extension("openxplorer-partial");
+                match kind {
+                    "symlink" => std::os::unix::fs::symlink(&victim, partial).unwrap(),
+                    "hardlink" => fs::hard_link(&victim, partial).unwrap(),
+                    _ => fs::write(partial, "keep this document").unwrap(),
+                }
+            }
+
+            sync_bookmarks(&list, &owned, &[pin("file:///srv/projects", "Projects")]).unwrap();
+
+            assert_eq!(fs::read_to_string(&victim).unwrap(), "keep this document");
+            for path in [&list, &owned] {
+                assert_eq!(
+                    fs::read_to_string(path.with_extension("openxplorer-partial")).unwrap(),
+                    "keep this document"
+                );
+            }
+            assert_eq!(
+                fs::read_to_string(&list).unwrap(),
+                "file:///srv/projects Projects\n"
+            );
+            assert_eq!(fs::read_to_string(&owned).unwrap(), "file:///srv/projects\n");
+        }
     }
 }
