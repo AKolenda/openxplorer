@@ -34,7 +34,7 @@ fn request(mode: TransferMode, items: &[&Path], folder: Option<&Path>) -> Transf
     }
 }
 
-/// Waits for GVfs's asynchronous monitor to report the expected state.
+/// Waits for `GVfs`'s asynchronous monitor to report the expected state.
 fn assert_in_recycle_bin(path: &Path, expected: bool) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
