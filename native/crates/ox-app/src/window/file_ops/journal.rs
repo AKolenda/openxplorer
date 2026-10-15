@@ -87,11 +87,11 @@ impl BrowserWindow {
         };
         let message = if changed.len() == 1 {
             ox_core::i18n::format_message(
-                "“{first}” was changed after it was copied. Undo moves it to the Recycle Bin anyway?",
+                "“{first}” may have changed after it was copied. Undo moves it to the Recycle Bin anyway?",
                 &[("first", first)],
             )
         } else {
-            ox_core::i18n::format_message("{len} copies, such as “{first}”, were changed after they were copied. Undo moves them to the Recycle Bin anyway?", &[("len", &changed.len().to_string()), ("first", first)])
+            ox_core::i18n::format_message("{len} copies, such as “{first}”, may have changed after they were copied. Undo moves them to the Recycle Bin anyway?", &[("len", &changed.len().to_string()), ("first", first)])
         };
         let dialog = Dialog::new(self, ox_core::i18n::gettext_static(UNDO_COPY_TITLE), &message);
         dialog.add_cancel_button();

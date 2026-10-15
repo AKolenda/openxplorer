@@ -63,6 +63,7 @@ pub(super) fn run_update(shared: &Shared, job: &UpdateJob) {
     match update_folders(shared, job, storage) {
         Ok(UpdateEnd::Finished) => shared.report_monitoring(root, storage),
         Ok(UpdateEnd::Abandoned) => {}
+        Err(error) if error.is_cancelled() => {}
         // Safety rule "a failed check keeps the last good data" (SRCH-030):
         // only the status changes; nothing cached is removed.
         Err(error) => shared.report_failed_check(root, &error.to_string()),
@@ -73,6 +74,9 @@ pub(super) fn run_update(shared: &Shared, job: &UpdateJob) {
 /// Re-reads the changed folder and every folder that appeared below it.
 fn update_folders(shared: &Shared, job: &UpdateJob, storage: RootStorage) -> Result<UpdateEnd, SearchError> {
     let root = &job.root.uri;
+    if job.root.generation.is_none() {
+        return Ok(UpdateEnd::Abandoned);
+    }
     let scope = shared.scope_of(root)?;
     let mut pending = vec![job.folder.clone()];
     let mut seen = HashSet::new();
@@ -127,7 +131,10 @@ fn update_folder(
     // `search_index.py`): a read that failed returns here, before the
     // cached children are replaced by an incomplete listing.
     let items = read?;
-    let new_folders = shared.index.replace_folder_contents(root, folder, &items)?;
+    check_cancelled(&job.cancellable)?;
+    let new_folders = shared
+        .index
+        .replace_folder_contents(&job.root, folder, &items, &job.cancellable)?;
     Ok(FolderUpdate::Replaced { new_folders })
 }
 
@@ -162,4 +169,79 @@ fn read_whole_folder(
         .reader
         .read_folder(folder, job.root.hidden_items, &job.cancellable, &mut receive)?;
     Ok(items)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{mpsc, Mutex};
+    use std::time::Duration;
+
+    use super::*;
+    use crate::search::fixtures::{listed_file, root_state, ScannedShare, SHARE};
+    use crate::search::{FolderReader, HiddenItems, IndexService, RootStatus};
+
+    /// Hands over its last batch, then holds the read open while the user
+    /// clears the cache or signs out. No real network location is read.
+    struct PausedReader {
+        read: mpsc::Sender<()>,
+        resume: Mutex<mpsc::Receiver<()>>,
+    }
+
+    impl FolderReader for PausedReader {
+        fn read_folder(
+            &self,
+            folder: &str,
+            _hidden_items: HiddenItems,
+            _cancellable: &gio::Cancellable,
+            receive: &mut dyn FnMut(Vec<ListedItem>) -> Result<(), SearchError>,
+        ) -> Result<(), SearchError> {
+            receive(vec![listed_file(folder, "old.pdf")])?;
+            self.read.send(()).unwrap();
+            self.resume
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn clearing_during_the_last_read_does_not_restore_cached_names() {
+        interrupted_update(|service| service.clear(SHARE).unwrap(), true);
+    }
+
+    #[test]
+    fn signing_out_cancels_a_live_update_waiting_in_its_last_read() {
+        interrupted_update(|service| service.pause_server("nas").unwrap(), false);
+    }
+
+    fn interrupted_update(interrupt: impl FnOnce(&IndexService), cleared: bool) {
+        let share = ScannedShare::new();
+        share.store(&[]);
+        let (read, has_read) = mpsc::channel();
+        let (resume, resumed) = mpsc::channel();
+        let reader = PausedReader {
+            read,
+            resume: Mutex::new(resumed),
+        };
+        let (finished, has_finished) = mpsc::channel();
+        let service = IndexService::start(share.index.clone(), reader, move || {
+            let _ = finished.send(());
+        })
+        .unwrap();
+        assert!(service.start_update(&root_state(&share.index, SHARE), SHARE));
+        has_read.recv_timeout(Duration::from_secs(10)).unwrap();
+
+        interrupt(&service);
+        resume.send(()).unwrap();
+        has_finished.recv_timeout(Duration::from_secs(10)).unwrap();
+
+        assert!(share.found_names("old").is_empty());
+        assert_eq!(root_state(&share.index, SHARE).watch_error, None);
+        if cleared {
+            assert_eq!(root_state(&share.index, SHARE).status, RootStatus::NotIndexed);
+        }
+        service.shut_down();
+    }
 }

@@ -284,3 +284,42 @@ fn a_change_holds_the_settings_lock_until_it_is_written() {
     let other = fs::File::open(&lock_path).unwrap();
     other.try_lock().expect("the lock is released after the change");
 }
+
+/// parity: SAFE-022
+#[test]
+fn forgetting_recent_files_reloads_before_deciding_there_is_nothing_to_clear() {
+    for cutoff in [None, Some(100)] {
+        let root = temporary_folder();
+        let mut stale = Settings::open(root.path());
+        let mut other = Settings::open(root.path());
+        for opened in [50, 150] {
+            other
+                .remember_open(RecentEntry {
+                    uri: format!("file:///srv/document-{opened}.txt"),
+                    name: format!("document-{opened}.txt"),
+                    type_label: "Text".into(),
+                    is_dir: false,
+                    size: 1,
+                    modified: 1,
+                    opened: Some(opened),
+                })
+                .unwrap();
+        }
+        save_preferences(&mut other, &json!({"theme": "dark"}));
+
+        stale.forget_recent(cutoff).unwrap();
+
+        let reread = Settings::open(root.path());
+        assert_eq!(reread.data().recent.len(), usize::from(cutoff.is_some()));
+        assert!(reread.data().recent.iter().all(|entry| entry.is_kept_by(cutoff)));
+        assert_eq!(stale.data(), reread.data());
+        assert_eq!(reread.data().preferences.theme, Theme::Dark);
+        let inode = fs::metadata(stale.path()).unwrap().ino();
+        stale.forget_recent(cutoff).unwrap();
+        assert_eq!(
+            fs::metadata(stale.path()).unwrap().ino(),
+            inode,
+            "a no-op does not replace the file"
+        );
+    }
+}

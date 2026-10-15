@@ -124,15 +124,20 @@ impl ServiceState {
         }
     }
 
-    /// Cancels the full scans of roots on `host`. Live updates stop by
-    /// themselves once they see the host paused.
-    pub(super) fn cancel_scans_on_host(&self, host: &str) {
+    /// Cancels scans and live updates on `host`, including an update
+    /// currently blocked in a folder read while the user signs out.
+    pub(super) fn cancel_jobs_on_host(&self, host: &str) {
         let on_host = self
             .scans
             .iter()
             .filter(|(root, _)| host_of(root).as_deref() == Some(host));
         for (_, scan) in on_host {
             scan.cancel();
+        }
+        for (key, update) in &self.updates {
+            if host_of(&key.root).as_deref() == Some(host) {
+                update.cancel();
+            }
         }
     }
 

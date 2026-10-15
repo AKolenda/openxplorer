@@ -27,7 +27,17 @@ pub const SMB_CREDENTIAL_SCHEMA: &str = "io.winspace.SmbCredentials";
 /// credential kept, or a keyring read or write started, under an older
 /// generation is stale.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct CredentialGeneration(u64);
+pub struct CredentialGeneration {
+    server: u64,
+    host: u64,
+}
+
+/// Per-endpoint invalidation and host-wide Sign out share one snapshot.
+#[derive(Default)]
+struct Generations {
+    servers: HashMap<ServerKey, u64>,
+    hosts: HashMap<String, u64>,
+}
 
 /// Which saved credentials of a server are deleted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,10 +56,10 @@ pub struct CredentialStore {
     /// The keyring, or `None` to keep credentials in memory only.
     keyring: Option<Arc<dyn Keyring>>,
     /// Sign-out generations by server.
-    generations: Mutex<HashMap<ServerKey, CredentialGeneration>>,
-    /// Serialises keyring writes and clears per server, so Sign out waits
-    /// for a save that is in flight.
-    server_locks: Mutex<HashMap<ServerKey, Arc<Mutex<()>>>>,
+    generations: Mutex<Generations>,
+    /// Serialises writes and clears across every port of a host, so a
+    /// host-wide Sign out waits for all saves that are in flight.
+    host_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
 }
 
 impl CredentialStore {
@@ -67,7 +77,7 @@ impl CredentialStore {
         Self {
             keyring,
             generations: Mutex::default(),
-            server_locks: Mutex::default(),
+            host_locks: Mutex::default(),
         }
     }
 
@@ -78,23 +88,32 @@ impl CredentialStore {
 
     /// The current sign-out generation of the server `key`.
     pub(super) fn generation_of(&self, key: &ServerKey) -> CredentialGeneration {
-        locked(&self.generations).get(key).copied().unwrap_or_default()
+        let generations = locked(&self.generations);
+        CredentialGeneration {
+            server: generations.servers.get(key).copied().unwrap_or_default(),
+            host: generations.hosts.get(key.host()).copied().unwrap_or_default(),
+        }
     }
 
     /// Makes every credential kept in memory, and every keyring read or
     /// write in flight, for the server `key` stale.
     pub(super) fn advance_generation(&self, key: &ServerKey) {
         let mut generations = locked(&self.generations);
-        let generation = generations.entry(key.clone()).or_default();
-        generation.0 += 1;
+        *generations.servers.entry(key.clone()).or_default() += 1;
     }
 
-    /// The lock that serialises the keyring writes and clears of the
-    /// server `key`. Lock it around every [`save`](Self::save) and
-    /// [`clear`](Self::clear).
-    pub(super) fn server_lock(&self, key: &ServerKey) -> Arc<Mutex<()>> {
-        let mut server_locks = locked(&self.server_locks);
-        Arc::clone(server_locks.entry(key.clone()).or_default())
+    /// Invalidates every port, including an endpoint whose first save
+    /// has not started yet.
+    pub(super) fn advance_host_generation(&self, host: &str) {
+        *locked(&self.generations)
+            .hosts
+            .entry(host.to_owned())
+            .or_default() += 1;
+    }
+
+    /// Lock around every save or clear on any port of `host`.
+    pub(super) fn host_lock(&self, host: &str) -> Arc<Mutex<()>> {
+        Arc::clone(locked(&self.host_locks).entry(host.to_owned()).or_default())
     }
 
     /// The saved credential of the server `key`, where a session entry
@@ -169,16 +188,32 @@ impl CredentialStore {
         };
         keyring.clear(&credential_attributes(key, scope))
     }
+
+    /// Deletes the selected scopes on every port of `host`. The caller
+    /// holds the host's lock, also used by endpoint-specific saves.
+    pub(super) fn clear_host(&self, host: &str, scope: ForgetScope) -> Result<bool, KeyringError> {
+        let Some(keyring) = self.keyring.as_deref() else {
+            return Ok(false);
+        };
+        let attributes = host_attributes(host);
+        let attributes = match scope {
+            ForgetScope::AllScopes => attributes,
+            ForgetScope::SessionOnly => attributes.with("scope", CredentialScope::Session.as_str()),
+        };
+        keyring.clear(&attributes)
+    }
 }
 
 impl fmt::Debug for CredentialStore {
     /// Shows whether there is a keyring and how many servers were signed
     /// out of, never a credential.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let generations = locked(&self.generations);
         formatter
             .debug_struct("CredentialStore")
             .field("has_keyring", &self.keyring.is_some())
-            .field("signed_out_servers", &locked(&self.generations).len())
+            .field("signed_out_servers", &generations.servers.len())
+            .field("signed_out_hosts", &generations.hosts.len())
             .finish_non_exhaustive()
     }
 }
@@ -186,13 +221,15 @@ impl fmt::Debug for CredentialStore {
 /// The keyring attributes of the credentials of `key`: those of one scope,
 /// or of every scope for `None`.
 fn credential_attributes(key: &ServerKey, scope: Option<CredentialScope>) -> SecretAttributes {
-    let attributes = SecretAttributes::for_schema(SMB_CREDENTIAL_SCHEMA)
-        .with("server", key.host())
-        .with("port", &key.port().to_string());
+    let attributes = host_attributes(key.host()).with("port", &key.port().to_string());
     match scope {
         Some(scope) => attributes.with("scope", scope.as_str()),
         None => attributes,
     }
+}
+
+fn host_attributes(host: &str) -> SecretAttributes {
+    SecretAttributes::for_schema(SMB_CREDENTIAL_SCHEMA).with("server", host)
 }
 
 /// Locks `mutex`, recovering the data if a thread panicked while holding

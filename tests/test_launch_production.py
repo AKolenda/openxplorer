@@ -88,6 +88,24 @@ def main():
             check('Production hydration preserves the inert iframe template',page.locator('[data-demo-template]').evaluate('(e)=>e.content.querySelectorAll("iframe").length')==1)
             check('Desktop production preview loads in a script-only sandbox',
                   page.locator('iframe').count()==1 and page.locator('iframe').get_attribute('sandbox')=='allow-scripts')
+            theme = page.locator('[data-demo-command="theme"]')
+            tour = page.frame_locator('iframe')
+            theme.click()
+            tour.locator('html[data-theme="dark"]').wait_for()
+            page.set_viewport_size({'width':390,'height':844})
+            page.locator('iframe').wait_for(state='detached')
+            page.set_viewport_size({'width':1440,'height':1000})
+            page.locator('[data-product-demo]').scroll_into_view_if_needed()
+            page.wait_for_function('document.querySelector("[data-product-demo]").dataset.phase==="ready"')
+            check('Desktop re-entry preserves the selected dark tour theme',
+                  tour.locator('html').get_attribute('data-theme')=='dark' and
+                  tour.locator('#picture').get_attribute('src').endswith('-dark.png') and
+                  theme.get_attribute('data-demo-value')=='light')
+            theme.click()
+            tour.locator('html[data-theme="light"]').wait_for()
+            check('First theme click after re-entry switches to light',
+                  tour.locator('#picture').get_attribute('src').endswith('-light.png') and
+                  theme.get_attribute('data-demo-value')=='dark')
             for width in [320,390,768,959]:
                 page.set_viewport_size({'width':width,'height':844})
                 page.wait_for_timeout(120)
