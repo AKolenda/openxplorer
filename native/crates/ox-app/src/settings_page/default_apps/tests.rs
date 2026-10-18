@@ -163,8 +163,10 @@ fn making_openxplorer_the_default_can_be_undone() {
         .set_active(false);
 
     default_apps.button("Make OpenXplorer default").emit_clicked();
+    // The dialogs were left out, which the card names.
     wait_until("the page to say so", || {
-        default_apps.card_title() == "OpenXplorer is your default file explorer"
+        default_apps.card_title()
+            == "OpenXplorer is your default file explorer, except for Open and Save dialogs"
     });
 
     assert_eq!(default_apps.handler(MimeType::Directory), APP_ID);
