@@ -280,10 +280,11 @@ fn make_default_also_takes_open_and_save_dialogs() {
         )),
         "{written}"
     );
+    // The test's desktop is KDE Plasma, whose own apps need a new login.
     assert_eq!(
         default_apps.test.window.shown_message_text(),
         "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log \
-         out and back in."
+         out and back in; KDE apps follow after you log out and back in."
     );
     assert!(default_apps
         .row(super::FILE_DIALOGS.title)
@@ -339,6 +340,14 @@ fn make_default_adds_the_kde_login_script_to_dialogs_enabled_before() {
     default_apps.button("Make OpenXplorer default").emit_clicked();
     wait_until("the login script again", || script.is_file());
     default_apps.wait_for_status("the status after the change");
+    assert!(
+        default_apps
+            .test
+            .window
+            .shown_message_text()
+            .ends_with("KDE apps follow after you log out and back in."),
+        "Apply now does not reach KDE apps"
+    );
 }
 
 /// Restore previous undoes a recorded Enable of the dialogs even when the

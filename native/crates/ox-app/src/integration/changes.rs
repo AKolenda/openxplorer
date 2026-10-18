@@ -119,8 +119,12 @@ pub(crate) enum ChangeOutcome {
     /// app runs; the text says why.
     ShowInFolderWhileRunning(String),
     /// The handlers changed and Open and Save dialogs will use the app
-    /// once the desktop portal restarts.
-    FileDialogsPending,
+    /// once the desktop portal restarts; KDE's own apps, when their login
+    /// script is in place, from the next login.
+    FileDialogsPending {
+        /// KDE's own apps are covered, which only a new login applies.
+        kde_apps: bool,
+    },
     /// The handlers changed, but Open and Save dialogs could not be sent
     /// to the app.
     FileDialogsFailed(String),
@@ -138,9 +142,14 @@ impl ChangeOutcome {
             Self::ShowInFolderWhileRunning(note) => {
                 ox_core::i18n::format_message("File handlers updated. {note}", &[("note", note)])
             }
-            Self::FileDialogsPending => ox_core::i18n::gettext_static(
+            Self::FileDialogsPending { kde_apps: false } => ox_core::i18n::gettext_static(
                 "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or \
                  log out and back in.",
+            )
+            .to_owned(),
+            Self::FileDialogsPending { kde_apps: true } => ox_core::i18n::gettext_static(
+                "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or \
+                 log out and back in; KDE apps follow after you log out and back in.",
             )
             .to_owned(),
             Self::FileDialogsFailed(error) => ox_core::i18n::format_message(
@@ -206,16 +215,18 @@ impl DesktopIntegration {
                     && !registration.covers_kde_apps()
                     && !registration.kde_script_is_someone_elses();
                 if !registration.is_available() || (registration.is_enabled() && !kde_apps_left_out) {
-                    return Ok(false);
+                    return Ok(None);
                 }
-                registration.enable().map(|()| true)
+                registration
+                    .enable()
+                    .map(|()| Some(registration.covers_kde_apps()))
             })
             .await;
         match enabled {
-            Ok(false) => None,
-            Ok(true) => {
+            Ok(None) => None,
+            Ok(Some(kde_apps)) => {
                 self.notify_changed();
-                Some(ChangeOutcome::FileDialogsPending)
+                Some(ChangeOutcome::FileDialogsPending { kde_apps })
             }
             Err(error) => Some(ChangeOutcome::FileDialogsFailed(error.to_string())),
         }

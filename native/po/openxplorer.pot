@@ -1012,6 +1012,10 @@ msgid "Requested associations updated. For other apps' Open and Save dialogs, cl
 msgstr ""
 
 #: crates/ox-app/src/integration/changes.rs
+msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in; KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
 msgid "Requested associations updated. Review each status below."
 msgstr ""
 
