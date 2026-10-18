@@ -4,7 +4,7 @@ Make explicit changes, with a way back.
 
 ## Set folder and SMB handlers
 
-Settings → Default apps → Make OpenXplorer default changes the per-user folder and SMB associations and records previous handlers. Installing the package does not do this for you.
+Settings → Default apps → Make OpenXplorer default changes the per-user folder and SMB associations and records previous handlers. With Also handle Open and Save dialogs, which starts on, it also sends other apps’ file pickers, such as Brave’s uploads and Save dialogs, to OpenXplorer (see Open and Save dialogs below); click Apply now beside Open and Save dialogs, or log out and back in, for them to follow. If the card says OpenXplorer is your default file explorer, except for Open and Save dialogs, click Make OpenXplorer default again with that option on. Installing the package does not do this for you.
 
 ## Brave: Show in folder
 
@@ -28,7 +28,7 @@ openxplorer --diagnose
 
 ## Open and Save dialogs
 
-Settings → Default apps → Other apps' Open and Save dialogs → Enable makes other applications choose and save files in an OpenXplorer window: the same navigation pane, address bar and search, with File name, Save as type and the Save or Open button at the bottom. It works for applications that use the desktop portal for file dialogs, such as Chrome, Firefox and Flatpak apps; applications that draw their own dialog keep it. As in Windows, the File name box takes a name, a path from the folder shown, ~/… or a full path: a folder opens, a file is chosen, and Save adds the chosen type’s extension unless the name has it already or ends in another known type’s (so “Notes v2.1” is saved as “Notes v2.1.pdf”); choosing another Save as type changes the name’s extension to the new type’s. A file typed in the address bar is chosen too. Escape and Ctrl+Q cancel the dialog, Alt+Left, Alt+Right and Alt+Up work from the File name box, and Ctrl+N opens no other window.
+Settings → Default apps → Other apps' Open and Save dialogs → Enable, or Make OpenXplorer default with Also handle Open and Save dialogs on, makes other applications choose and save files in an OpenXplorer window: the same navigation pane, address bar and search, with File name, Save as type and the Save or Open button at the bottom. It works for applications that use the desktop portal for file dialogs, such as Chrome, Firefox and Flatpak apps; applications that draw their own dialog keep it. As in Windows, the File name box takes a name, a path from the folder shown, ~/… or a full path: a folder opens, a file is chosen, and Save adds the chosen type’s extension unless the name has it already or ends in another known type’s (so “Notes v2.1” is saved as “Notes v2.1.pdf”); choosing another Save as type changes the name’s extension to the new type’s. A file typed in the address bar is chosen too. Escape and Ctrl+Q cancel the dialog, Alt+Left, Alt+Right and Alt+Up work from the File name box, and Ctrl+N opens no other window.
 
 Enabling writes one preference into your own desktop-portal configuration (the file the portal reads now, or a new ~/.config/xdg-desktop-portal/<desktop>-portals.conf) and records what the file held; every other portal, such as screenshots or screen sharing, keeps its backend. If the portal service is set to read one folder only (XDG_DESKTOP_PORTAL_DIR in its environment, which some tools set to add a portal of their own), OpenXplorer works in that folder instead: it adds its line to the file the portal reads there, or a new file holding only that line, and links its packaged .portal file there, and Restore removes both again. Click Apply now to restart the desktop portal when it runs as a user service, or log out and back in. Saving over an existing file always asks first.
 
@@ -49,7 +49,7 @@ Log out and back in after turning it on or off: Plasma follows the new Super+E o
 
 ## What this does not replace
 
-Browsers can route reveal actions through desktop portals or keep a previous application choice. Choose OpenXplorer in a chooser when available. Upload/save file-picker dialogs stay with the system unless you turn on Open and Save dialogs. On other desktops Super+E stays a separate desktop keyboard shortcut; the app changes it only on KDE Plasma, when you turn on Super+E (above).
+Browsers can route reveal actions through desktop portals or keep a previous application choice. Choose OpenXplorer in a chooser when available. Upload/save file-picker dialogs stay with the system unless you turn on Open and Save dialogs, alone or with Make OpenXplorer default. On other desktops Super+E stays a separate desktop keyboard shortcut; the app changes it only on KDE Plasma, when you turn on Super+E (above).
 
 ## Tabs, windows and the taskbar
 
@@ -59,7 +59,7 @@ The installed launcher offers New window, Open windows and Settings. File draggi
 
 ## Restore the previous setup
 
-Disable Show in folder removes only OpenXplorer’s unmodified user-level service files. Restore previous also restores recorded file associations. Modified or third-party configuration is preserved for manual review. Restore Open and Save dialogs gives file dialogs back to the desktop the same way.
+Disable Show in folder removes only OpenXplorer’s unmodified user-level service files. Restore previous also restores recorded file associations and gives Open and Save dialogs back to the desktop. Modified or third-party configuration is preserved for manual review. Restore Open and Save dialogs gives file dialogs back to the desktop the same way.
 
 ---
 
