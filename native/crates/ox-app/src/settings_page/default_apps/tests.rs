@@ -306,7 +306,51 @@ fn make_default_also_takes_open_and_save_dialogs() {
     );
     assert_eq!(
         default_apps.test.window.shown_message_text(),
-        "Previous recorded handlers restored."
+        "Previous recorded handlers restored. For other apps' Open and Save dialogs to return to the \
+         desktop's, click Apply now, or log out and back in."
+    );
+}
+
+/// Restore previous undoes a recorded Enable of the dialogs even when the
+/// portal's configuration cannot be read, and says it failed instead of
+/// reporting everything restored.
+///
+/// parity: INT-032
+#[gtk::test]
+fn restore_previous_reports_dialogs_it_could_not_give_back() {
+    let default_apps = DefaultAppsTest::open();
+    default_apps
+        .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+        .set_active(false);
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the card to say so", || {
+        default_apps.card_title() == "OpenXplorer is your default file explorer"
+    });
+    // A folder where the configuration was cannot be read as a file, so
+    // the dialogs no longer read as enabled; the record remains.
+    let file = default_apps.portal_file();
+    std::fs::remove_file(&file).expect("the portal configuration");
+    std::fs::create_dir(&file).expect("a folder in its place");
+    default_apps.wait_for_status("the status after the change");
+
+    default_apps.button("Restore previous").emit_clicked();
+    wait_until("Dolphin to open folders again", || {
+        default_apps.handler(MimeType::Directory) == DOLPHIN
+    });
+    default_apps.wait_for_status("the restored status");
+
+    let message = default_apps.test.window.shown_message_text();
+    assert!(
+        message.ends_with(&file.display().to_string()),
+        "the failure names the configuration: {message}"
+    );
+    assert!(
+        default_apps
+            .root
+            .path()
+            .join("winspace/file-dialogs.json")
+            .is_file(),
+        "the record stays for a later Restore"
     );
 }
 

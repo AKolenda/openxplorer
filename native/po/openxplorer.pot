@@ -1004,6 +1004,10 @@ msgid "Previous recorded handlers restored."
 msgstr ""
 
 #: crates/ox-app/src/integration/changes.rs
+msgid "Previous recorded handlers restored. For other apps' Open and Save dialogs to return to the desktop's, click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
 msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in."
 msgstr ""
 

@@ -370,6 +370,13 @@ impl FileDialogRegistration {
             .is_ok_and(|only| self.is_enabled_in(only.as_deref()))
     }
 
+    /// Whether an Enable is on record, which [`Self::disable`] undoes even
+    /// when the portal's configuration cannot be read now, as
+    /// [`Self::is_enabled`] then says it is off. Reading only reads.
+    pub fn has_record(&self) -> bool {
+        self.record_path().is_file()
+    }
+
     /// [`Self::is_enabled`] for the portal's folder `only`.
     fn is_enabled_in(&self, only: Option<&Path>) -> bool {
         let Ok(contents) = fs::read_to_string(self.config_file_in(only)) else {

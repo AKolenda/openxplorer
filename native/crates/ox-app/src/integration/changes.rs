@@ -234,17 +234,24 @@ impl DesktopIntegration {
             .services()
             .file_dialogs
             .run_in_background(|registration| {
-                if !registration.is_enabled() {
+                // A recorded Enable is undone even when the configuration
+                // cannot be read now, so a failure is told, not skipped.
+                if !registration.is_available() || !(registration.has_record() || registration.is_enabled()) {
                     return Ok(false);
                 }
                 registration.disable().map(|_| true)
             })
             .await?;
-        if gave_back {
-            self.notify_changed();
+        if !gave_back {
+            return Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
+                "Previous recorded handlers restored.",
+            )));
         }
+        self.notify_changed();
+        // The running portal keeps its backend until it restarts.
         Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
-            "Previous recorded handlers restored.",
+            "Previous recorded handlers restored. For other apps' Open and Save dialogs to return to the \
+             desktop's, click Apply now, or log out and back in.",
         )))
     }
 
