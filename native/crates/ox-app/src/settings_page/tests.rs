@@ -334,7 +334,7 @@ fn the_search_filters_rows_across_every_category() {
     }
     let count = settings.page.imp().match_count();
     assert!(count.is_visible());
-    assert_eq!(count.text(), "5 matching settings");
+    assert_eq!(count.text(), "6 matching settings");
 }
 
 /// A search for what a setting shows, and the category, status card and
