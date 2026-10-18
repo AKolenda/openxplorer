@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Changing the defaults on request: Make `OpenXplorer` default, Restore
 //! previous, the ZIP handler, and enabling, testing and disabling Show in
-//! folder. Inside Flatpak, Show in folder also asks the Background portal
-//! to start the app at login, in place of the host's autostart entry.
+//! folder. Make default can also send other apps' Open and Save dialogs
+//! to the app (INT-032), and Restore previous gives them back. Inside
+//! Flatpak, Show in folder also asks the Background portal to start the
+//! app at login, in place of the host's autostart entry.
 //!
 //! Ports the `desktopDefault`, `desktopRestore`, `zipDefault`,
 //! `zipRestore`, `revealEnable`, `revealDisable` and `revealTest`
@@ -101,6 +103,9 @@ pub(crate) struct MakeDefaultChoice {
     pub(crate) zip: ZipAssociation,
     /// Whether Show in folder is enabled too; on by default.
     pub(crate) show_in_folder: bool,
+    /// Whether other apps' Open and Save dialogs use the app too (INT-032);
+    /// on by default, and skipped where the opt-in cannot work.
+    pub(crate) file_dialogs: bool,
 }
 
 /// What a change did, for its toast.
@@ -113,6 +118,12 @@ pub(crate) enum ChangeOutcome {
     /// The handlers changed and Show in folder answers, but only while the
     /// app runs; the text says why.
     ShowInFolderWhileRunning(String),
+    /// The handlers changed and Open and Save dialogs will use the app
+    /// once the desktop portal restarts.
+    FileDialogsPending,
+    /// The handlers changed, but Open and Save dialogs could not be sent
+    /// to the app.
+    FileDialogsFailed(String),
 }
 
 impl ChangeOutcome {
@@ -127,14 +138,25 @@ impl ChangeOutcome {
             Self::ShowInFolderWhileRunning(note) => {
                 ox_core::i18n::format_message("File handlers updated. {note}", &[("note", note)])
             }
+            Self::FileDialogsPending => ox_core::i18n::gettext_static(
+                "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or \
+                 log out and back in.",
+            )
+            .to_owned(),
+            Self::FileDialogsFailed(error) => ox_core::i18n::format_message(
+                "File handlers updated, but Open and Save dialogs setup failed: {error}",
+                &[("error", error)],
+            ),
         }
     }
 }
 
 impl DesktopIntegration {
     /// Makes the app the default for folders and SMB links, and ZIP files
-    /// when chosen, then enables Show in folder when chosen
-    /// (`desktopDefault`).
+    /// when chosen, then enables Show in folder and Open and Save dialogs
+    /// when chosen (`desktopDefault`). The desktop portal is not restarted
+    /// here: that is Apply now's, since a restart interrupts what other
+    /// apps do through it, such as screen sharing.
     ///
     /// # Errors
     ///
@@ -147,34 +169,80 @@ impl DesktopIntegration {
         defaults
             .run_in_background(move |defaults| defaults.make_default(choice.zip))
             .await?;
-        if choice.show_in_folder {
+        let show_in_folder = if choice.show_in_folder {
             match self.enable_show_in_folder().await {
-                Err(error) => return Ok(ChangeOutcome::ShowInFolderFailed(error.to_string())),
-                Ok(reach) => {
-                    if let Some(note) = reach.message() {
-                        return Ok(ChangeOutcome::ShowInFolderWhileRunning(note));
-                    }
-                }
+                Err(error) => Some(ChangeOutcome::ShowInFolderFailed(error.to_string())),
+                Ok(reach) => reach.message().map(ChangeOutcome::ShowInFolderWhileRunning),
             }
+        } else {
+            None
+        };
+        let file_dialogs = if choice.file_dialogs {
+            self.enable_file_dialogs_with_default().await
+        } else {
+            None
+        };
+        // A Show in folder problem is told first; the status lines show
+        // the rest.
+        Ok(show_in_folder.or(file_dialogs).unwrap_or_else(|| {
+            ChangeOutcome::Done(ox_core::i18n::gettext_static(
+                "Requested associations updated. Review each status below.",
+            ))
+        }))
+    }
+
+    /// Sends Open and Save dialogs to the app as part of Make default,
+    /// where the opt-in can work and is not on yet. `None` when there was
+    /// nothing to do.
+    async fn enable_file_dialogs_with_default(&self) -> Option<ChangeOutcome> {
+        let enabled = self
+            .services()
+            .file_dialogs
+            .run_in_background(|registration| {
+                if !registration.is_available() || registration.is_enabled() {
+                    return Ok(false);
+                }
+                registration.enable().map(|()| true)
+            })
+            .await;
+        match enabled {
+            Ok(false) => None,
+            Ok(true) => {
+                self.notify_changed();
+                Some(ChangeOutcome::FileDialogsPending)
+            }
+            Err(error) => Some(ChangeOutcome::FileDialogsFailed(error.to_string())),
         }
-        Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
-            "Requested associations updated. Review each status below.",
-        )))
     }
 
     /// Puts every recorded handler back where the app is still the
-    /// default, then turns Show in folder off (`desktopRestore`).
+    /// default, then turns Show in folder off (`desktopRestore`) and gives
+    /// Open and Save dialogs back to the desktop.
     ///
     /// # Errors
     ///
     /// The [`DefaultAppsError`] of the restore, when nothing is recorded
-    /// or the desktop refuses; Show in folder stays as it was then.
+    /// or the desktop refuses; Show in folder and the dialogs stay as they
+    /// were then.
     pub(crate) async fn restore_previous(&self) -> Result<ChangeOutcome, IntegrationError> {
         let defaults = &self.services().defaults;
         defaults
             .run_in_background(|defaults| defaults.restore(RestoreScope::Everything))
             .await?;
         self.disable_show_in_folder().await?;
+        let gave_back = self
+            .services()
+            .file_dialogs
+            .run_in_background(|registration| {
+                if !registration.is_enabled() {
+                    return Ok(false);
+                }
+                registration.disable().map(|_| true)
+            })
+            .await?;
+        if gave_back {
+            self.notify_changed();
+        }
         Ok(ChangeOutcome::Done(ox_core::i18n::gettext_static(
             "Previous recorded handlers restored.",
         )))

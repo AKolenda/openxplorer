@@ -29,7 +29,7 @@ struct DefaultAppsTest {
     handlers: Arc<Mutex<BTreeMap<MimeType, String>>>,
     _fixture: Fixture,
     /// Holds the integration's records and session files.
-    _root: tempfile::TempDir,
+    root: tempfile::TempDir,
 }
 
 impl DefaultAppsTest {
@@ -54,7 +54,7 @@ impl DefaultAppsTest {
             page,
             handlers,
             _fixture: fixture,
-            _root: root,
+            root,
         };
         default_apps.wait_for_status("the first status");
         default_apps
@@ -112,6 +112,14 @@ impl DefaultAppsTest {
             .expect("the option is a switch")
     }
 
+    /// The portal configuration Open and Save dialogs are enabled in: the
+    /// user's, for the test's KDE desktop.
+    fn portal_file(&self) -> std::path::PathBuf {
+        self.root
+            .path()
+            .join("config/xdg-desktop-portal/kde-portals.conf")
+    }
+
     fn wait_for_status(&self, what: &str) {
         wait_until(what, || {
             self.button("Make OpenXplorer default").is_sensitive() && self.route("Folders") != super::CHECKING
@@ -145,9 +153,13 @@ fn making_openxplorer_the_default_can_be_undone() {
         !default_apps.switch_of("Also open ZIP files").is_active(),
         "off by default"
     );
-    // Show in folder writes session files; this test leaves it alone.
+    // Show in folder writes session files and the dialogs the portal's
+    // configuration; this test leaves both alone.
     default_apps
         .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+        .set_active(false);
+    default_apps
+        .switch_of(super::ALSO_FILE_DIALOGS.title)
         .set_active(false);
 
     default_apps.button("Make OpenXplorer default").emit_clicked();
@@ -166,6 +178,10 @@ fn making_openxplorer_the_default_can_be_undone() {
     assert_eq!(
         default_apps.test.window.shown_message_text(),
         "Requested associations updated. Review each status below."
+    );
+    assert!(
+        !default_apps.portal_file().exists(),
+        "the dialogs were not chosen"
     );
     capture(&default_apps.test.window, "native-default-apps-made-default.png");
     wait_until("Restore previous to be offered", || {
@@ -204,6 +220,10 @@ fn the_dialog_buttons_wait_while_a_change_runs() {
     default_apps
         .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
         .set_active(false);
+    // Make default would enable the dialogs, which changes what applies.
+    default_apps
+        .switch_of(super::ALSO_FILE_DIALOGS.title)
+        .set_active(false);
 
     default_apps.button("Make OpenXplorer default").emit_clicked();
 
@@ -217,6 +237,77 @@ fn the_dialog_buttons_wait_while_a_change_runs() {
     default_apps.wait_for_status("the status after the change");
     let after: Vec<bool> = buttons.iter().map(gtk::Button::is_sensitive).collect();
     assert_eq!(after, before, "the status turns them back on as before");
+}
+
+/// Folders alone do not make `OpenXplorer` the default for everything:
+/// the card says when other apps' Open and Save dialogs, such as Brave's
+/// uploads, still use the desktop's, and Make default with its dialogs
+/// option, on by default, sends them to `OpenXplorer` too. Restore
+/// previous gives them back with the handlers.
+///
+/// parity: INT-009, INT-032
+#[gtk::test]
+fn make_default_also_takes_open_and_save_dialogs() {
+    let default_apps = DefaultAppsTest::open();
+    let dialogs = default_apps.switch_of(super::ALSO_FILE_DIALOGS.title);
+    assert!(dialogs.is_active(), "on by default");
+    assert!(dialogs.is_sensitive(), "the opt-in works outside Flatpak");
+    default_apps
+        .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+        .set_active(false);
+    // Folders made default without the dialogs, as by an earlier version.
+    dialogs.set_active(false);
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the card to name the dialogs", || {
+        default_apps.card_title()
+            == "OpenXplorer is your default file explorer, except for Open and Save dialogs"
+    });
+    assert_eq!(default_apps.handler(MimeType::Directory), APP_ID);
+
+    dialogs.set_active(true);
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the card to say so", || {
+        default_apps.card_title() == "OpenXplorer is your default file explorer"
+    });
+
+    let written = std::fs::read_to_string(default_apps.portal_file()).expect("the portal configuration");
+    assert!(
+        written.contains(&format!(
+            "org.freedesktop.impl.portal.FileChooser={}",
+            crate::config::APP_ID
+        )),
+        "{written}"
+    );
+    assert_eq!(
+        default_apps.test.window.shown_message_text(),
+        "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log \
+         out and back in."
+    );
+    assert!(default_apps
+        .row(super::FILE_DIALOGS.title)
+        .shown_description()
+        .starts_with("Open and Save dialogs: OpenXplorer."));
+    wait_until("Restore previous to be offered", || {
+        default_apps.button("Restore previous").is_sensitive()
+    });
+
+    default_apps.button("Restore previous").emit_clicked();
+    wait_until("Dolphin to open folders again", || {
+        default_apps.handler(MimeType::Directory) == DOLPHIN
+    });
+    default_apps.wait_for_status("the restored status");
+    assert!(
+        !default_apps.portal_file().exists(),
+        "the portal configuration the app created is removed"
+    );
+    assert_eq!(
+        default_apps.row(super::FILE_DIALOGS.title).shown_description(),
+        "Open and Save dialogs: the desktop's."
+    );
+    assert_eq!(
+        default_apps.test.window.shown_message_text(),
+        "Previous recorded handlers restored."
+    );
 }
 
 /// Use `OpenXplorer` for ZIPs takes every ZIP type and leaves folders

@@ -24,12 +24,16 @@ use super::super::SettingsPage;
 use super::Controls;
 use crate::integration::{DesktopIntegration, IntegrationError, IntegrationStatus, MakeDefaultChoice};
 
-/// The status card's title once the defaults are read.
-fn status_title(is_default: bool) -> &'static str {
-    if is_default {
-        ox_core::i18n::gettext_static("OpenXplorer is your default file explorer")
-    } else {
-        ox_core::i18n::gettext_static("OpenXplorer isn't your default file explorer yet")
+/// The status card's title once the defaults are read. Folders decide
+/// whether `OpenXplorer` is the default; Open and Save dialogs that could
+/// use it but do not are named, since Make default turns them on too.
+fn status_title(is_default: bool, dialogs_left_out: bool) -> &'static str {
+    match (is_default, dialogs_left_out) {
+        (true, false) => ox_core::i18n::gettext_static("OpenXplorer is your default file explorer"),
+        (true, true) => ox_core::i18n::gettext_static(
+            "OpenXplorer is your default file explorer, except for Open and Save dialogs",
+        ),
+        (false, _) => ox_core::i18n::gettext_static("OpenXplorer isn't your default file explorer yet"),
     }
 }
 
@@ -40,6 +44,7 @@ pub(super) struct DefaultAppsView {
     card: glib::WeakRef<StatusCard>,
     make_default: glib::WeakRef<gtk::Button>,
     include_show_in_folder: glib::WeakRef<gtk::Switch>,
+    include_file_dialogs: glib::WeakRef<gtk::Switch>,
     include_zip: glib::WeakRef<gtk::Switch>,
     folders: glib::WeakRef<gtk::Label>,
     smb_links: glib::WeakRef<gtk::Label>,
@@ -74,6 +79,7 @@ impl DefaultAppsView {
             card: controls.card.downgrade(),
             make_default: controls.make_default.downgrade(),
             include_show_in_folder: controls.include_show_in_folder.downgrade(),
+            include_file_dialogs: controls.include_file_dialogs.downgrade(),
             include_zip: controls.include_zip.downgrade(),
             folders: controls.folders.downgrade(),
             smb_links: controls.smb_links.downgrade(),
@@ -224,6 +230,10 @@ impl DefaultAppsView {
                 .include_show_in_folder
                 .upgrade()
                 .is_some_and(|switch| switch.is_active()),
+            file_dialogs: self
+                .include_file_dialogs
+                .upgrade()
+                .is_some_and(|switch| switch.is_active()),
         }
     }
 
@@ -314,6 +324,9 @@ impl DefaultAppsView {
         );
         set_sensitive(&self.apply_file_dialogs, dialogs.is_available);
         set_sensitive(&self.restore_file_dialogs, dialogs.is_enabled);
+        if let Some(switch) = self.include_file_dialogs.upgrade() {
+            switch.set_sensitive(dialogs.is_available);
+        }
         let shortcut = &status.launch_shortcut;
         if let Some(row) = self.super_e_row.upgrade() {
             row.set_description(&shortcut.text());
@@ -327,19 +340,23 @@ impl DefaultAppsView {
         if let Some(button) = self.make_default.upgrade() {
             button.set_sensitive(true);
         }
+        let dialogs_left_out = dialogs.is_available && !dialogs.is_enabled;
         match &status.defaults {
-            Ok(report) => self.show_defaults(report),
+            Ok(report) => self.show_defaults(report, dialogs_left_out),
             Err(message) => self.show_status_error(message),
         }
     }
 
-    fn show_defaults(&self, report: &crate::integration::DefaultsReport) {
+    fn show_defaults(&self, report: &crate::integration::DefaultsReport, dialogs_left_out: bool) {
         let defaults = &report.status;
         set_text(&self.folders, &report.handler_label(MimeType::Directory));
         set_text(&self.smb_links, &report.handler_label(MimeType::SmbLink));
         set_text(&self.zip_files, &report.handler_label(MimeType::Zip));
         if let Some(card) = self.card.upgrade() {
-            card.set_title(status_title(defaults.is_default_for_folder_types()));
+            card.set_title(status_title(
+                defaults.is_default_for_folder_types(),
+                dialogs_left_out,
+            ));
         }
         if let Some(row) = self.zip_row.upgrade() {
             row.set_description(&report.zip_text());
@@ -379,9 +396,20 @@ mod tests {
 
     #[test]
     fn the_card_states_whether_openxplorer_is_the_default() {
-        assert_eq!(status_title(true), "OpenXplorer is your default file explorer");
         assert_eq!(
-            status_title(false),
+            status_title(true, false),
+            "OpenXplorer is your default file explorer"
+        );
+        assert_eq!(
+            status_title(true, true),
+            "OpenXplorer is your default file explorer, except for Open and Save dialogs"
+        );
+        assert_eq!(
+            status_title(false, false),
+            "OpenXplorer isn't your default file explorer yet"
+        );
+        assert_eq!(
+            status_title(false, true),
             "OpenXplorer isn't your default file explorer yet"
         );
     }
