@@ -313,6 +313,34 @@ fn make_default_also_takes_open_and_save_dialogs() {
     );
 }
 
+/// Make default finishes dialogs enabled before KDE's own apps were
+/// covered: it adds their missing login script, as Enable does.
+///
+/// parity: INT-032
+#[gtk::test]
+fn make_default_adds_the_kde_login_script_to_dialogs_enabled_before() {
+    let default_apps = DefaultAppsTest::open();
+    default_apps
+        .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+        .set_active(false);
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the card to say so", || {
+        default_apps.card_title() == "OpenXplorer is your default file explorer"
+    });
+    let script = default_apps
+        .root
+        .path()
+        .join("config/plasma-workspace/env/openxplorer-file-dialogs.sh");
+    assert!(script.is_file(), "the test's desktop is KDE Plasma");
+    // As enabled by a version without the script.
+    std::fs::remove_file(&script).expect("the login script");
+    default_apps.wait_for_status("the status after the change");
+
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the login script again", || script.is_file());
+    default_apps.wait_for_status("the status after the change");
+}
+
 /// Restore previous undoes a recorded Enable of the dialogs even when the
 /// portal's configuration cannot be read, and says it failed instead of
 /// reporting everything restored.

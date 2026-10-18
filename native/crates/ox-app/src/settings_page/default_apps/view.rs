@@ -37,6 +37,19 @@ fn status_title(is_default: bool, dialogs_left_out: bool) -> &'static str {
     }
 }
 
+/// The line under the card's title: what Make default sends to
+/// `OpenXplorer`, the dialogs only where the opt-in can work (not inside
+/// Flatpak).
+pub(super) fn card_text(dialogs_available: bool) -> &'static str {
+    if dialogs_available {
+        ox_core::i18n::gettext_static(
+            "Open local folders, SMB links and other apps' Open and Save dialogs in OpenXplorer.",
+        )
+    } else {
+        ox_core::i18n::gettext_static("Open local folders and SMB links in OpenXplorer.")
+    }
+}
+
 /// The page's controls, held weakly: the page owns them.
 #[derive(Debug, Clone)]
 pub(super) struct DefaultAppsView {
@@ -327,6 +340,9 @@ impl DefaultAppsView {
         if let Some(switch) = self.include_file_dialogs.upgrade() {
             switch.set_sensitive(dialogs.is_available);
         }
+        if let Some(card) = self.card.upgrade() {
+            card.set_text(card_text(dialogs.is_available));
+        }
         let shortcut = &status.launch_shortcut;
         if let Some(row) = self.super_e_row.upgrade() {
             row.set_description(&shortcut.text());
@@ -411,6 +427,22 @@ mod tests {
         assert_eq!(
             status_title(false, true),
             "OpenXplorer isn't your default file explorer yet"
+        );
+    }
+
+    /// The card promises the dialogs only where Make default can send
+    /// them, so not in the Flatpak.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn the_card_names_the_dialogs_only_where_they_can_be_sent() {
+        assert_eq!(
+            card_text(true),
+            "Open local folders, SMB links and other apps' Open and Save dialogs in OpenXplorer."
+        );
+        assert_eq!(
+            card_text(false),
+            "Open local folders and SMB links in OpenXplorer."
         );
     }
 }

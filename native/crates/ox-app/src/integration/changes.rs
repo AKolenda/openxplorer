@@ -192,14 +192,20 @@ impl DesktopIntegration {
     }
 
     /// Sends Open and Save dialogs to the app as part of Make default,
-    /// where the opt-in can work and is not on yet. `None` when there was
-    /// nothing to do.
+    /// where the opt-in can work and has something to do: the dialogs do
+    /// not use the app yet, or, enabled before KDE's own apps were
+    /// covered, those still lack their login script (as
+    /// [`crate::integration::FileDialogsStatus::can_enable`]). `None` when
+    /// there was nothing to do.
     async fn enable_file_dialogs_with_default(&self) -> Option<ChangeOutcome> {
         let enabled = self
             .services()
             .file_dialogs
             .run_in_background(|registration| {
-                if !registration.is_available() || registration.is_enabled() {
+                let kde_apps_left_out = registration.is_kde_session()
+                    && !registration.covers_kde_apps()
+                    && !registration.kde_script_is_someone_elses();
+                if !registration.is_available() || (registration.is_enabled() && !kde_apps_left_out) {
                     return Ok(false);
                 }
                 registration.enable().map(|()| true)

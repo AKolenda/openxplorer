@@ -2406,6 +2406,14 @@ msgid "“Show in folder” from browsers and apps"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps/view.rs
+msgid "Open local folders and SMB links in OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps/view.rs
+msgid "Open local folders, SMB links and other apps' Open and Save dialogs in OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps/view.rs
 msgid "OpenXplorer is your default file explorer"
 msgstr ""
 

@@ -185,8 +185,8 @@ impl Controls {
         let status = StatusText {
             glyph: Icon::Apps,
             title: ox_core::i18n::gettext_static(CHECKING_TITLE),
-            text: "Open local folders, SMB links and other apps' Open and Save dialogs in \
-                   OpenXplorer.",
+            // The status says whether the dialogs can be sent here.
+            text: view::card_text(true),
             notice: None,
         };
         let card = StatusCard::new(status, &[make_default.clone().upcast()]);
