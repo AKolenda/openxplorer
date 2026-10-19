@@ -245,7 +245,10 @@ fn labels_fit_each_file_system() {
     // FAT refuses these; Windows drops them the same way.
     assert_eq!(FileSystem::Fat32.fitted_label("Backup:2026"), "BACKUP2026");
     assert_eq!(FileSystem::Fat32.fitted_label("a*?.,;:/\\|+=<>[]\"b"), "AB");
-    assert_eq!(FileSystem::ExFat.fitted_label("Backup:2026"), "Backup:2026");
+    assert_eq!(FileSystem::ExFat.fitted_label("Backup:2026"), "Backup2026");
+    assert_eq!(FileSystem::ExFat.fitted_label("a*?:/\\|<>\"b"), "ab");
+    assert_eq!(FileSystem::ExFat.fitted_label("Photos, 2026"), "Photos, 202");
+    assert_eq!(FileSystem::Ntfs.fitted_label("Backup:2026"), "Backup:2026");
     assert_eq!(
         FileSystem::Ntfs.fitted_label("My Holiday Photos"),
         "My Holiday Photos"

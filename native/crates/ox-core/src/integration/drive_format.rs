@@ -56,6 +56,10 @@ const FAT32_MIN_SIZE: u64 = 64 * 1024 * 1024;
 /// unmounted.
 const FAT_LABEL_FORBIDDEN: &str = "*?.,;:/\\|+=<>[]\"";
 
+/// The characters an exFAT volume label cannot hold: those a file name
+/// cannot, as its specification says.
+const EXFAT_LABEL_FORBIDDEN: &str = "*?:/\\|<>\"";
+
 /// The D-Bus error of a call to a method the service lacks.
 const UNKNOWN_METHOD_ERROR: &str = "org.freedesktop.DBus.Error.UnknownMethod";
 
@@ -136,18 +140,30 @@ impl FileSystem {
         }
     }
 
-    /// `label` as the file system keeps it: trimmed and cut to its
-    /// length without splitting a character; for FAT32 in capitals as
-    /// Windows writes them, without the characters FAT refuses.
+    /// The characters a volume label of the file system cannot hold,
+    /// besides control characters for FAT32 and exFAT.
+    fn label_forbidden(self) -> Option<&'static str> {
+        match self {
+            Self::Fat32 => Some(FAT_LABEL_FORBIDDEN),
+            Self::ExFat => Some(EXFAT_LABEL_FORBIDDEN),
+            Self::Ntfs | Self::Ext4 => None,
+        }
+    }
+
+    /// `label` as the file system keeps it: trimmed, without the
+    /// characters it refuses, and cut to its length without splitting a
+    /// character; for FAT32 in capitals as Windows writes them.
     pub fn fitted_label(self, label: &str) -> String {
+        let label = match self.label_forbidden() {
+            Some(forbidden) => label
+                .chars()
+                .filter(|character| !character.is_control() && !forbidden.contains(*character))
+                .collect(),
+            None => label.to_owned(),
+        };
         let label = label.trim();
         let label = if self == Self::Fat32 {
-            label
-                .chars()
-                .filter(|character| !character.is_control() && !FAT_LABEL_FORBIDDEN.contains(*character))
-                .collect::<String>()
-                .trim()
-                .to_uppercase()
+            label.to_uppercase()
         } else {
             label.to_owned()
         };
