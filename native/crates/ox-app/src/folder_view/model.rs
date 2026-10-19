@@ -56,6 +56,9 @@ pub(crate) struct FolderModel {
     /// The total size of the files shown, once added up; forgotten when
     /// the items shown change.
     shown_bytes: Rc<Cell<Option<u64>>>,
+    /// Entries visited when computing totals, for complexity regressions.
+    #[cfg(test)]
+    shown_bytes_visits: Cell<u64>,
     sort_options: SharedOptions,
     folders_first: gtk::CustomSorter,
     role_sorter: gtk::CustomSorter,
@@ -90,6 +93,8 @@ impl FolderModel {
             tree,
             selection,
             shown_bytes,
+            #[cfg(test)]
+            shown_bytes_visits: Cell::new(0),
             folders_first: folders_first(&sort_options),
             role_sorter: role_sorter(&sort_options),
             group_sorter: group_sorter(&sort_options),
@@ -103,10 +108,19 @@ impl FolderModel {
         if let Some(bytes) = self.shown_bytes.get() {
             return bytes;
         }
+        #[cfg(test)]
+        self.shown_bytes_visits
+            .set(self.shown_bytes_visits.get() + u64::from(self.filter_model.n_items()));
         let items = self.filter_model.iter::<glib::Object>().filter_map(Result::ok);
         let bytes = items.filter_map(|item| as_item(&item).file_size()).sum();
         self.shown_bytes.set(Some(bytes));
         bytes
+    }
+
+    /// Takes the number of entries visited by total-size computations.
+    #[cfg(test)]
+    pub(crate) fn take_total_visits(&self) -> u64 {
+        self.shown_bytes_visits.replace(0)
     }
 
     /// Completes the sorter once the details view exists: folders first,

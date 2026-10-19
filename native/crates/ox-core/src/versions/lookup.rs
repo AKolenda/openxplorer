@@ -346,17 +346,27 @@ impl<'a> VersionSearch<'a> {
     ) -> Result<Option<PreviousVersion>, SnapshotProblem> {
         let snapshot_root = snapshot_root(source, &snapshot.name)?;
         let relative = relative_uri(self.uri, source.live()).ok_or(SnapshotProblem::OutsideLiveFolder)?;
-        let item_uri = if relative.is_empty() {
-            snapshot_root.clone()
-        } else {
-            format!("{snapshot_root}/{relative}")
-        };
-        let mut entry = self.provider.inspect(&item_uri, self.cancel)?;
-        // Safety rule (`list` in previous_versions.py): a link inside a
-        // snapshot is never offered as a version, so Browse and Restore
-        // never leave the snapshot through it.
-        if entry.is_symlink {
-            return Ok(None);
+        let mut item_uri = child_uri(source.collection(), &snapshot.name)?;
+        let mut entry = snapshot.clone();
+        let layout = (source.layout() == SnapshotLayout::Snapper).then_some(SNAPPER_FILES_FOLDER);
+        let components = layout
+            .into_iter()
+            .chain(relative.split('/').filter(|part| !part.is_empty()));
+        // NOFOLLOW_SYMLINKS checks only the final component of a query.
+        // Inspect each descendant before proceeding through it, including
+        // Snapper's layout directory, so a static link cannot make a live
+        // file appear to be a previous version. These metadata checks do
+        // not make traversal atomic against concurrent replacements.
+        for component in components {
+            if !entry.is_dir || entry.is_symlink {
+                return Ok(None);
+            }
+            item_uri.push('/');
+            item_uri.push_str(component);
+            entry = self.provider.inspect(&item_uri, self.cancel)?;
+            if entry.is_symlink {
+                return Ok(None);
+            }
         }
         entry.uri = item_uri;
         Ok(Some(PreviousVersion {

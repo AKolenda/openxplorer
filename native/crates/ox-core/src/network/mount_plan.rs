@@ -51,6 +51,12 @@ pub enum MountPlanError {
     /// Not an SMB shared folder.
     #[error(transparent)]
     Location(#[from] LocationError),
+    /// The address names another network protocol, not an SMB share.
+    #[error(
+        "{}",
+        crate::i18n::gettext("The persistent mount assistant supports SMB shares only.")
+    )]
+    UnsupportedProtocol,
     /// A port, or a host name the unit files cannot carry.
     #[error(
         "{}",
@@ -60,8 +66,13 @@ pub enum MountPlanError {
     )]
     UnsupportedServer,
     /// A share name outside the allowed characters.
-    #[error("{}", crate::i18n::gettext("This share name needs manual mounting. The assistant allows letters, numbers, spaces, dots, _, $, \
-         and hyphens."))]
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "This share name needs manual mounting. The assistant allows letters, numbers, spaces, dots, _, $, \
+         and hyphens."
+        )
+    )]
     UnsupportedShareName,
     /// An empty, `.` or `..` path component, or a root or invalid user.
     #[error("{}", crate::i18n::gettext("Invalid mount destination or user identity."))]
@@ -101,6 +112,9 @@ impl DesktopUser {
 pub fn mount_plan(address: &str, user: DesktopUser) -> Result<MountPlan, MountPlanError> {
     let uri = require_share(address)?;
     let parts = split_location(&uri)?;
+    if !parts.is_smb() {
+        return Err(MountPlanError::UnsupportedProtocol);
+    }
     let server = parts.hostname().unwrap_or_default();
     if parts.port()?.is_some() || !is_plain_host_name(&server) {
         return Err(MountPlanError::UnsupportedServer);

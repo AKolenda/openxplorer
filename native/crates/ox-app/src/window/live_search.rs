@@ -74,6 +74,55 @@ impl BrowserWindow {
         });
     }
 
+    /// Updates the rows of a finished walk after the folder was listed
+    /// again: its own matches that went away are removed and new ones
+    /// added, in place, so the rows the walk found below it stay.
+    pub(super) fn update_walked_listing(&self) {
+        let Some(rows) = self.imp().search.borrow().results().cloned() else {
+            return;
+        };
+        let text = self.imp().search.borrow().query().trim().to_owned();
+        let Some(folder) = self.current_uri() else {
+            return;
+        };
+        let active = self.imp().session.borrow().active_id();
+        let Some(store) = active.and_then(|id| self.tab_store(id)) else {
+            return;
+        };
+        let listing = Listing {
+            items: &store,
+            folder: &folder,
+            shows_hidden: self.hidden_files_shown(),
+        };
+        let listed = listed_name_matches(listing, &text).items;
+        let listed_uris: HashSet<String> = listed.iter().map(|item| item.entry().uri.clone()).collect();
+        let parent = gio::File::for_uri(&folder);
+        for position in (0..rows.n_items()).rev() {
+            let Some(item) = rows.item(position).and_downcast::<FileItem>() else {
+                continue;
+            };
+            let uri = &item.entry().uri;
+            let in_folder = gio::File::for_uri(uri)
+                .parent()
+                .is_some_and(|file| file.equal(&parent));
+            if in_folder && !listed_uris.contains(uri) {
+                rows.remove(position);
+            }
+        }
+        let shown: HashSet<String> = rows
+            .iter::<FileItem>()
+            .filter_map(Result::ok)
+            .map(|item| item.entry().uri.clone())
+            .collect();
+        let room = RESULT_LIMIT.saturating_sub(rows.n_items() as usize);
+        let new: Vec<FileItem> = listed
+            .into_iter()
+            .filter(|item| !shown.contains(&item.entry().uri))
+            .take(room)
+            .collect();
+        rows.extend_from_slice(&new);
+    }
+
     /// Shows the rows the walk of `run` found, or why it failed; a late
     /// answer never replaces a newer one (SAFE-013). `outcome` says
     /// whether more matched than are shown.

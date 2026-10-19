@@ -391,6 +391,9 @@ impl DefaultAppsView {
         if let Some(card) = self.card.upgrade() {
             card.set_title(message);
         }
+        if let Some(row) = self.zip_row.upgrade() {
+            row.set_description(message);
+        }
     }
 }
 
@@ -409,6 +412,26 @@ fn set_sensitive(button: &glib::WeakRef<gtk::Button>, sensitive: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A failed lookup ends the ZIP route's loading state and explains
+    /// the failure where that route appears on the Archives page.
+    #[gtk::test]
+    fn a_failed_default_lookup_replaces_the_zip_routes_loading_message() {
+        let _skin = crate::test_support::harness::skin();
+        let page: SettingsPage = glib::Object::new();
+        let controls = Controls::new();
+        let view = DefaultAppsView::new(&page, &controls);
+        let message = ox_core::integration::DefaultAppsError::XdgUtilsMissing.to_string();
+        assert_eq!(controls.zip_row.shown_description(), super::super::CHECKING);
+
+        view.show_status_error(&message);
+
+        assert_eq!(controls.zip_row.shown_description(), message);
+        assert_eq!(controls.card.title(), message);
+        for label in [&controls.folders, &controls.smb_links, &controls.zip_files] {
+            assert_eq!(label.text(), "Unknown");
+        }
+    }
 
     #[test]
     fn the_card_states_whether_openxplorer_is_the_default() {

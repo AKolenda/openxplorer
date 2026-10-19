@@ -16,6 +16,8 @@ use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use crate::location::{normalise, require_share, split_location, unquote_lossy, LocationError};
 use crate::places::StableMount;
 
+use super::server::ServerKey;
+
 /// This process's mount table.
 const MOUNT_INFO: &str = "/proc/self/mountinfo";
 
@@ -71,13 +73,39 @@ impl MountEntry {
         if !self.is_smb() {
             return None;
         }
-        let share = require_share(&self.source).ok()?;
+        let share = self.share_uri()?;
         if self.root == "/" || self.root.is_empty() {
             return Some(share);
         }
         let subfolder = utf8_percent_encode(self.root.trim_start_matches('/'), PATH_SAFE);
         let bound_folder = format!("{}/{subfolder}", share.trim_end_matches('/'));
         normalise(&bound_folder).ok()
+    }
+
+    /// CIFS names the UNC share separately from its connection port in
+    /// mountinfo. Preserve that endpoint when mapping a URI to local files.
+    fn share_uri(&self) -> Option<String> {
+        let share = require_share(&self.source).ok()?;
+        let parts = split_location(&share).ok()?;
+        if !parts.is_smb() {
+            return None;
+        }
+        let port = self
+            .options
+            .split(',')
+            .rev()
+            .find_map(|option| option.strip_prefix("port="));
+        let Some(port) = port else {
+            return Some(share);
+        };
+        let port = port.parse::<u16>().ok()?;
+        let host = parts.hostname()?;
+        let host = if host.contains(':') {
+            format!("[{host}]")
+        } else {
+            host
+        };
+        Some(format!("smb://{host}:{port}{}", parts.path))
     }
 }
 
@@ -210,21 +238,20 @@ fn join_below(mount_path: &str, below: &[String]) -> PathBuf {
 
 /// An SMB location as `resolve_smb_path` compares it.
 struct SmbPath {
-    /// The authority, lower-cased (`netloc.lower()`).
-    authority: String,
+    /// The lower-case host and effective port; explicit 445 is the default.
+    server: ServerKey,
     /// The decoded path components; the first is the share.
     components: Vec<String>,
 }
 
 impl SmbPath {
     fn parse(uri: &str) -> Result<Self, LocationError> {
+        let server = ServerKey::for_location(uri)
+            .ok_or_else(|| LocationError::new(crate::i18n::gettext("Enter an SMB shared folder.")))?;
         let parts = split_location(uri.trim_end_matches('/'))?;
         let decoded = unquote_lossy(&parts.path);
         let components = decoded.trim_matches('/').split('/').map(str::to_owned).collect();
-        Ok(Self {
-            authority: parts.authority.to_lowercase(),
-            components,
-        })
+        Ok(Self { server, components })
     }
 
     /// The components of `self` below the mounted location `mounted`, or
@@ -233,7 +260,7 @@ impl SmbPath {
         let (share, folders) = self.components.split_first()?;
         let (mounted_share, mounted_folders) = mounted.components.split_first()?;
         let same_share = glib::casefold(share) == glib::casefold(mounted_share);
-        if self.authority != mounted.authority || !same_share {
+        if self.server != mounted.server || !same_share {
             return None;
         }
         let below = folders.strip_prefix(mounted_folders)?;
