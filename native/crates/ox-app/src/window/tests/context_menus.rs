@@ -459,8 +459,9 @@ fn the_disk_tools_run_on_the_items_local_path() {
     );
 }
 
-/// Format… waits for the window's file operation, as Disconnect does, so
-/// no write goes on onto the drive once it is formatted.
+/// Format… waits for the window's file operation, as Disconnect does, and
+/// for a rename or a new item, so no write goes on onto the drive once it
+/// is formatted.
 ///
 /// parity: DEV-012
 #[gtk::test]
@@ -473,12 +474,22 @@ fn format_waits_for_a_running_file_operation() {
     test.activate("format-drive", Some("file:///media/demo/USB"));
     let refusal = test.window.shown_message().to_string();
     test.window.end_operation();
+    test.window.show_message("");
+    let renaming = test.context.hold_quick_write();
+    test.activate("format-drive", Some("file:///media/demo/USB"));
+    let quick_refusal = test.window.shown_message().to_string();
+    drop(renaming);
 
     assert_eq!(refusal, "Finish the current operation before formatting.");
+    assert_eq!(
+        quick_refusal, "Finish the current operation before formatting.",
+        "a rename or a new item running counts too"
+    );
 }
 
 /// While a drive is formatted, no window starts writing files, so a
-/// transfer cannot go on onto the formatted drive.
+/// transfer, an extraction, a rename or a new item cannot go on onto the
+/// formatted drive.
 ///
 /// parity: DEV-012
 #[gtk::test]
@@ -489,11 +500,18 @@ fn writes_wait_while_a_drive_is_formatted() {
 
     let refused = test.window.begin_operation("Preparing copy…").is_none();
     let refusal = test.window.shown_message().to_string();
+    let archive = test.window.archive_operation_refusal();
+    let quick = test.window.admit_write().err();
     drop(hold);
     let operation = test.window.begin_operation("Preparing copy…");
     test.window.end_operation();
+    let admitted = test.window.admit_write().is_ok();
 
+    let waiting = "Wait until the drive is formatted, then try again.";
     assert!(refused, "no copy starts while a drive is formatted");
-    assert_eq!(refusal, "Wait until the drive is formatted, then try again.");
+    assert_eq!(refusal, waiting);
+    assert_eq!(archive.as_deref(), Some(waiting), "nor an extraction");
+    assert_eq!(quick.as_deref(), Some(waiting), "nor a rename or a new item");
     assert!(operation.is_some(), "writes go on once it is formatted");
+    assert!(admitted, "quick writes too");
 }

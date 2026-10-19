@@ -17,7 +17,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::entry::Entry;
-use ox_core::ops::{rename_item, OperationContext};
+use ox_core::ops::rename_item;
 
 use super::names::check_typed_name;
 use super::rename::selected_name_length;
@@ -268,7 +268,16 @@ impl BrowserWindow {
             editor.grab_focus();
             return;
         }
-        let context = OperationContext::new(self.context().write_protection());
+        // A drive may have started formatting during the questions.
+        let (context, _writing) = match self.admit_write() {
+            Ok(admitted) => admitted,
+            Err(refusal) => {
+                self.take_rename_next();
+                self.close_name_editor(cell);
+                self.show_message(&refusal);
+                return;
+            }
+        };
         match rename_item(&target.uri, name, &context).await {
             Ok(renamed) => {
                 // Before the folder is listed again, which rebinds the cell.

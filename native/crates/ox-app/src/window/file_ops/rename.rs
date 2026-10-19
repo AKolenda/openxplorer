@@ -140,15 +140,10 @@ impl BrowserWindow {
             selection,
             folder: &folder,
         };
-        let protection = self.context().write_protection();
         ask_for_name(self, request, |name, cancel| {
             let uri = entry.uri.clone();
             let old_name = entry.name.clone();
             let is_folder = entry.is_dir;
-            let context = OperationContext {
-                cancel,
-                ..OperationContext::new(protection.clone())
-            };
             let window = self.downgrade();
             async move {
                 let window = window
@@ -162,6 +157,8 @@ impl BrowserWindow {
                 if !confirmed {
                     return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
                 }
+                let (admitted, _writing) = window.admit_write()?;
+                let context = OperationContext { cancel, ..admitted };
                 rename_item(&uri, &name, &context)
                     .await
                     .map_err(|error| error.to_string())
@@ -187,7 +184,7 @@ impl BrowserWindow {
         if !self.confirm_extension_change(old_name, name, is_folder).await {
             return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
         }
-        let context = OperationContext::new(self.context().write_protection());
+        let (context, _writing) = self.admit_write()?;
         let renamed = rename_item(uri, name, &context)
             .await
             .map_err(|error| error.to_string())?;

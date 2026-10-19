@@ -20,6 +20,8 @@ use ox_core::ops::{
 };
 use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
+use crate::app_context::WriteHold;
+
 use super::unfinished::mark_unfinished;
 use crate::dialog;
 use crate::search::changed_folders;
@@ -83,16 +85,33 @@ impl BrowserWindow {
     /// extraction, compression, a restored version, rename and new items,
     /// as the Python app refused every file request during an update.
     pub(in crate::window) fn refuses_writes(&self) -> bool {
-        let refusal = if self.context().formats_a_drive() {
-            Some(ox_core::i18n::gettext_static(FORMATTING_A_DRIVE).to_owned())
-        } else {
-            self.context().updates().file_refusal()
-        };
-        let Some(refusal) = refusal else {
+        let Some(refusal) = self.write_refusal() else {
             return false;
         };
         self.show_message(&refusal);
         true
+    }
+
+    /// Why no write may start now (see [`Self::refuses_writes`]), or
+    /// `None` when one may.
+    pub(in crate::window) fn write_refusal(&self) -> Option<String> {
+        if self.context().formats_a_drive() {
+            return Some(ox_core::i18n::gettext_static(FORMATTING_A_DRIVE).to_owned());
+        }
+        self.context().updates().file_refusal()
+    }
+
+    /// Admits a quick write, one outside the operation panel (a new
+    /// folder, file or link, or a rename), right before it starts, after
+    /// its questions: the context it runs with, and a hold that counts it
+    /// as writing until dropped, so no drive is formatted meanwhile
+    /// (DEV-012). The error says why it may not start.
+    pub(in crate::window) fn admit_write(&self) -> Result<(OperationContext, WriteHold), String> {
+        if let Some(refusal) = self.write_refusal() {
+            return Err(refusal);
+        }
+        let context = OperationContext::new(self.context().write_protection());
+        Ok((context, self.context().hold_quick_write()))
     }
 
     /// Starts an exclusive operation whose panel reads `label` until the first

@@ -194,9 +194,10 @@ impl BrowserWindow {
         ));
     }
 
-    /// True when no write runs in this window and no update waits for its
-    /// restart; otherwise says why, as one operation runs at a time
-    /// (OPS-024) and writes wait for the restart (UPD-006).
+    /// True when no write runs in this window, no update waits for its
+    /// restart and no drive is formatted; otherwise says why, as one
+    /// operation runs at a time (OPS-024) and writes wait for the restart
+    /// (UPD-006) and the format (DEV-012).
     pub(super) fn may_start_archive_operation(&self) -> bool {
         match self.archive_operation_refusal() {
             Some(refusal) => {
@@ -213,7 +214,7 @@ impl BrowserWindow {
         if self.is_writing_files() {
             return Some(ox_core::i18n::gettext_static(OPERATION_RUNNING).to_owned());
         }
-        self.context().updates().file_refusal()
+        self.write_refusal()
     }
 
     /// Asks where to extract `archive` (Extract all…).

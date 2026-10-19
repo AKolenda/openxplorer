@@ -17,12 +17,11 @@
 //! also holds the search cache the windows share ([`search_cache`]), and
 //! the application's [`Updates`] and [`DesktopIntegration`], so every
 //! window shows the same update and integration state, and the drives
-//! being formatted, which every window's writes wait for
-//! ([`drive_formatting`]).
+//! being formatted and the quick writes, which wait for each other in
+//! every window ([`write_holds`]).
 
 mod default_open;
 mod desktop_bookmarks;
-mod drive_formatting;
 mod external_open;
 mod file_operations;
 mod known_folders;
@@ -31,9 +30,11 @@ mod previous_versions;
 mod recent_privacy;
 mod saved_searches;
 mod search_cache;
+mod write_holds;
 
 pub(crate) use default_open::add_to_desktop_history;
 pub(crate) use recent_privacy::desktop_recent_policy;
+pub(crate) use write_holds::WriteHold;
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -135,6 +136,9 @@ mod imp {
         /// The number of drives being formatted, which file writes wait
         /// for.
         pub(super) drives_formatting: Rc<Cell<u32>>,
+        /// The number of quick writes running, which formatting waits
+        /// for.
+        pub(super) quick_writes: Rc<Cell<u32>>,
         /// The desktop integration, made on first use.
         pub(super) desktop_integration: OnceCell<DesktopIntegration>,
         /// The worker mirroring the pins into the desktop's places list,
