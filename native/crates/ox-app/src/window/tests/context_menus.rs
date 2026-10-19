@@ -475,7 +475,7 @@ fn format_waits_for_a_running_file_operation() {
     let refusal = test.window.shown_message().to_string();
     test.window.end_operation();
     test.window.show_message("");
-    let renaming = test.context.hold_quick_write();
+    let renaming = test.context.hold_write();
     test.activate("format-drive", Some("file:///media/demo/USB"));
     let quick_refusal = test.window.shown_message().to_string();
     drop(renaming);

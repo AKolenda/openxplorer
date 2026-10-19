@@ -309,10 +309,22 @@ fn start_change(
         }
         return;
     }
+    // No drive is formatted while the items change, nor are they changed
+    // while one is (DEV-012).
+    let writing = match window.as_ref().map(crate::window::BrowserWindow::hold_write) {
+        Some(Err(refusal)) => {
+            if let Some(frame) = frame {
+                frame.show_error(&refusal);
+            }
+            return;
+        }
+        writing => writing.and_then(Result::ok),
+    };
     button.set_sensitive(false);
     let uris = uris.to_vec();
     let button = button.downgrade();
     glib::spawn_future_local(async move {
+        let _writing = writing;
         let mut result = Ok(());
         for uri in uris {
             result = apply_in_background(uri, request, Cancellation::new()).await;

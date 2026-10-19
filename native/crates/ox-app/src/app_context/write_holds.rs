@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The drives being formatted and the quick writes running, which wait
-//! for each other in every window (DEV-012): a write going on when the
-//! drive is unmounted would go on in the empty mount point or on the new
-//! file system.
+//! The drives being formatted and the writes running outside the
+//! operation panel, which wait for each other in every window (DEV-012):
+//! a write going on when the drive is unmounted would go on in the empty
+//! mount point or on the new file system.
 //!
 //! Transfers and other operations count through their window's panel;
-//! a new folder, file or link, or a rename, counts with a hold here.
+//! a new folder, file or link, a rename, a permission change and the
+//! steps of an extraction around its panel count with a hold here.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -14,8 +15,7 @@ use gtk::subclass::prelude::*;
 
 use super::AppContext;
 
-/// Counts a drive being formatted, or a quick write, until it is
-/// dropped.
+/// Counts a drive being formatted, or a write, until it is dropped.
 #[derive(Debug)]
 pub(crate) struct WriteHold(Rc<Cell<u32>>);
 
@@ -44,14 +44,14 @@ impl AppContext {
         self.imp().drives_formatting.get() > 0
     }
 
-    /// Counts a quick write as running, so no drive is formatted, until
-    /// the returned hold is dropped.
-    pub(crate) fn hold_quick_write(&self) -> WriteHold {
-        WriteHold::new(&self.imp().quick_writes)
+    /// Counts a write outside the operation panel as running, so no
+    /// drive is formatted, until the returned hold is dropped.
+    pub(crate) fn hold_write(&self) -> WriteHold {
+        WriteHold::new(&self.imp().held_writes)
     }
 
-    /// Whether a quick write runs in any window.
-    pub(crate) fn writes_quickly(&self) -> bool {
-        self.imp().quick_writes.get() > 0
+    /// Whether a write outside the operation panel runs in any window.
+    pub(crate) fn holds_writes(&self) -> bool {
+        self.imp().held_writes.get() > 0
     }
 }

@@ -101,17 +101,22 @@ impl BrowserWindow {
         self.context().updates().file_refusal()
     }
 
-    /// Admits a quick write, one outside the operation panel (a new
-    /// folder, file or link, or a rename), right before it starts, after
-    /// its questions: the context it runs with, and a hold that counts it
-    /// as writing until dropped, so no drive is formatted meanwhile
-    /// (DEV-012). The error says why it may not start.
-    pub(in crate::window) fn admit_write(&self) -> Result<(OperationContext, WriteHold), String> {
-        if let Some(refusal) = self.write_refusal() {
-            return Err(refusal);
+    /// Admits a write outside the operation panel (a new folder, file or
+    /// link, a rename or a permission change) right before it starts,
+    /// after its questions: a hold that counts it as writing until
+    /// dropped, so no drive is formatted meanwhile (DEV-012). The error
+    /// says why it may not start.
+    pub(crate) fn hold_write(&self) -> Result<WriteHold, String> {
+        match self.write_refusal() {
+            Some(refusal) => Err(refusal),
+            None => Ok(self.context().hold_write()),
         }
-        let context = OperationContext::new(self.context().write_protection());
-        Ok((context, self.context().hold_quick_write()))
+    }
+
+    /// [`Self::hold_write`], with the context the write runs with.
+    pub(in crate::window) fn admit_write(&self) -> Result<(OperationContext, WriteHold), String> {
+        let hold = self.hold_write()?;
+        Ok((OperationContext::new(self.context().write_protection()), hold))
     }
 
     /// Starts an exclusive operation whose panel reads `label` until the first

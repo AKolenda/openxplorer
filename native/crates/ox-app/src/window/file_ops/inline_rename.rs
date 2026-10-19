@@ -244,8 +244,10 @@ impl BrowserWindow {
         target: &RenameTarget,
         name: &str,
     ) {
-        // An update may have finished installing while the field was open.
+        // An update may have finished installing, or a drive started
+        // formatting, while the field was open.
         if self.refuses_writes() {
+            self.take_rename_next();
             self.close_name_editor(cell);
             return;
         }

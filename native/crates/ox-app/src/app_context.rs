@@ -136,9 +136,9 @@ mod imp {
         /// The number of drives being formatted, which file writes wait
         /// for.
         pub(super) drives_formatting: Rc<Cell<u32>>,
-        /// The number of quick writes running, which formatting waits
-        /// for.
-        pub(super) quick_writes: Rc<Cell<u32>>,
+        /// The number of writes running outside the operation panel,
+        /// which formatting waits for.
+        pub(super) held_writes: Rc<Cell<u32>>,
         /// The desktop integration, made on first use.
         pub(super) desktop_integration: OnceCell<DesktopIntegration>,
         /// The worker mirroring the pins into the desktop's places list,
