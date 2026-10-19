@@ -466,13 +466,16 @@ impl BrowserWindow {
 }
 
 /// Whether any window of `app` has work an update must not interrupt:
-/// folder listings and file writes (UPD-007, OPS-024).
-fn work_in_windows(app: Option<&gtk::Application>) -> Activity {
+/// folder listings, file writes and a drive being formatted (UPD-007,
+/// OPS-024, DEV-012).
+pub(in crate::window) fn work_in_windows(app: Option<&gtk::Application>) -> Activity {
     let windows = app.map(GtkApplicationExt::windows).unwrap_or_default();
     let busy = windows
         .into_iter()
         .filter_map(|window| window.downcast::<BrowserWindow>().ok())
-        .any(|window| window.is_listing_any_tab() || window.is_writing_files());
+        .any(|window| {
+            window.is_listing_any_tab() || window.is_writing_files() || window.context().formats_a_drive()
+        });
     if busy {
         Activity::Busy
     } else {

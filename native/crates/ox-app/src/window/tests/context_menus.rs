@@ -519,6 +519,7 @@ fn writes_wait_while_a_drive_is_formatted() {
     let refusal = test.window.shown_message().to_string();
     let archive = test.window.archive_operation_refusal();
     let quick = test.window.admit_write().err();
+    let update = crate::window::integration_actions::work_in_windows(test.window.application().as_ref());
     drop(hold);
     let operation = test.window.begin_operation("Preparing copy…");
     test.window.end_operation();
@@ -529,6 +530,7 @@ fn writes_wait_while_a_drive_is_formatted() {
     assert_eq!(refusal, waiting);
     assert_eq!(archive.as_deref(), Some(waiting), "nor an extraction");
     assert_eq!(quick.as_deref(), Some(waiting), "nor a rename or a new item");
+    assert_eq!(update, ox_core::update::Activity::Busy, "nor an update's restart");
     assert!(operation.is_some(), "writes go on once it is formatted");
     assert!(admitted, "quick writes too");
 }

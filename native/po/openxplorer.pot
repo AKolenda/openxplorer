@@ -3580,6 +3580,10 @@ msgstr ""
 msgid "Wait for the update to finish before closing OpenXplorer."
 msgstr ""
 
+#: crates/ox-app/src/window/closing.rs
+msgid "Wait until the drive is formatted before closing OpenXplorer."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/closing.rs
 msgid "{len} windows have {tabs} tabs open. Close them all and quit?"
