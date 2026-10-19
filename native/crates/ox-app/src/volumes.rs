@@ -64,8 +64,11 @@ pub(crate) struct MountControls {
     /// (`g_drive_can_stop`).
     pub can_stop: bool,
     /// A removable drive with a block device, and GNOME Disks is
-    /// installed: Open in Disks and Format… (DEV-012).
+    /// installed: Open in Disks (DEV-012).
     pub can_open_in_disks: bool,
+    /// A removable drive with a block device: Format…, the app's own
+    /// dialog (DEV-012).
+    pub can_format: bool,
 }
 
 impl MountControls {
@@ -75,6 +78,7 @@ impl MountControls {
         can_eject: false,
         can_stop: false,
         can_open_in_disks: false,
+        can_format: false,
     };
 
     /// A mount that can only be unmounted, such as an internal partition
@@ -85,6 +89,7 @@ impl MountControls {
         can_eject: false,
         can_stop: false,
         can_open_in_disks: false,
+        can_format: false,
     };
 
     /// Reads what `mount` and its drive allow.
@@ -103,6 +108,7 @@ impl MountControls {
             can_open_in_disks: is_removable
                 && has_block_device
                 && crate::window::is_disk_tool_installed(DiskTool::OpenInDisks),
+            can_format: is_removable && has_block_device,
         }
     }
 }

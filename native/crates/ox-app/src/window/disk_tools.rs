@@ -6,7 +6,9 @@
 //! Dolphin offers these through KDE Partition Manager, image mounting and
 //! Filelight; here GNOME Disks, GNOME's Disk Image Mounter and Disk Usage
 //! Analyzer (or Filelight) do the work, and an item is only offered where
-//! its tool is installed ([`is_installed`]).
+//! its tool is installed ([`is_installed`]). Format… is the app's own
+//! dialog ([`crate::dialogs::format_drive_dialog`]), which formats through
+//! UDisks, so it needs no tool.
 //!
 //! Dolphin's status bar also offers its disk-usage analyser from the menu
 //! of its space indicator; here a secondary click on the status bar
@@ -16,17 +18,33 @@ use std::path::{Path, PathBuf};
 
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
-use ox_core::integration::{DiskTool, ExecutableSearch, Sandbox};
+use ox_core::integration::{
+    available_file_systems, drive_facts, format_drive, DiskTool, DriveFacts, ExecutableSearch, FileSystem,
+    FormatError, FormatRequest, Sandbox, UDISKS_NAME,
+};
 use ox_core::location::normalise;
+use ox_core::transfer::Cancellation;
 
 use super::actions::text_action;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use crate::dialogs::{confirm_erase, format_drive_dialog};
 use crate::icons::Icon;
+use crate::window::Dialog;
 
 /// Shown when a drive has no block device for Disks.
 const NO_BLOCK_DEVICE: &str = crate::i18n::message_id("Disks cannot open this drive.");
+
+/// Shown when a drive has no block device to format.
+const NOT_FORMATTABLE: &str = crate::i18n::message_id("This drive cannot be formatted.");
+
+/// Shown when the system cannot make any file system the dialog offers.
+const NO_FILE_SYSTEMS: &str =
+    crate::i18n::message_id("No program to make a file system is installed on this computer.");
+
+/// Start's label while the drive is formatted.
+const FORMATTING: &str = crate::i18n::message_id("Formatting…");
 
 /// Shown for a location without a local path.
 const NO_LOCAL_PATH: &str = crate::i18n::message_id("This tool needs a location on this computer.");
@@ -42,14 +60,50 @@ fn installed_program(tool: DiskTool) -> Option<PathBuf> {
     tool.find(&ExecutableSearch::for_sandbox(Sandbox::detect()))
 }
 
+/// The mount at the canonical root `uri` among `mounts`.
+fn mount_at<'a>(mounts: &'a [gio::Mount], uri: &str) -> Option<&'a gio::Mount> {
+    mounts
+        .iter()
+        .find(|mount| normalise(&mount.root().uri()).as_deref() == Ok(uri))
+}
+
 /// The block device, such as `/dev/sdb1`, of the mount at the canonical
 /// root `uri` among `mounts`.
 fn block_device_of(mounts: &[gio::Mount], uri: &str) -> Option<String> {
-    let mount = mounts
-        .iter()
-        .find(|mount| normalise(&mount.root().uri()).as_deref() == Ok(uri))?;
-    let device = mount.volume()?.identifier("unix-device")?;
+    let device = mount_at(mounts, uri)?.volume()?.identifier("unix-device")?;
     Some(device.to_string())
+}
+
+/// The bus UDisks is on: the system bus, and in tests the private session
+/// bus they run on, where no UDisks answers.
+fn udisks_bus() -> gio::BusType {
+    if cfg!(test) {
+        gio::BusType::Session
+    } else {
+        gio::BusType::System
+    }
+}
+
+/// What the Format dialog needs: the bus UDisks answers on, the drive,
+/// and the file systems the system can make.
+struct FormatTarget {
+    connection: gio::DBusConnection,
+    facts: DriveFacts,
+    available: Vec<FileSystem>,
+}
+
+/// Asks UDisks about the block device `device` for the Format dialog.
+async fn read_format_target(device: &str) -> Result<FormatTarget, FormatError> {
+    let connection = gio::bus_get_future(udisks_bus())
+        .await
+        .map_err(FormatError::Unavailable)?;
+    let facts = drive_facts(&connection, UDISKS_NAME, device).await?;
+    let available = available_file_systems(&connection, UDISKS_NAME, facts.size).await;
+    Ok(FormatTarget {
+        connection,
+        facts,
+        available,
+    })
 }
 
 impl BrowserWindow {
@@ -59,9 +113,7 @@ impl BrowserWindow {
             text_action(WindowAction::OpenInDisks, |window, uri| {
                 window.open_drive_in_disks(uri, DiskTool::OpenInDisks);
             }),
-            text_action(WindowAction::FormatDrive, |window, uri| {
-                window.open_drive_in_disks(uri, DiskTool::FormatDrive);
-            }),
+            text_action(WindowAction::FormatDrive, BrowserWindow::open_format_dialog),
             text_action(WindowAction::MountDiskImage, |window, uri| {
                 window.run_disk_tool_at(DiskTool::MountImage, uri);
             }),
@@ -121,7 +173,120 @@ impl BrowserWindow {
         Some(popover)
     }
 
-    /// Opens Disks, or its Format dialog, for the drive mounted at `uri`.
+    /// Format…: asks UDisks about the drive mounted at `uri`, then shows
+    /// the Format dialog for it.
+    fn open_format_dialog(&self, uri: &str) {
+        let mounts = self.volume_monitor().mounts();
+        let (Some(mount), Some(device)) = (mount_at(&mounts, uri), block_device_of(&mounts, uri)) else {
+            self.show_message(ox_core::i18n::gettext_static(NOT_FORMATTABLE));
+            return;
+        };
+        let name = mount.name().to_string();
+        let window = self.downgrade();
+        glib::spawn_future_local(async move {
+            let target = read_format_target(&device).await;
+            let Some(window) = window.upgrade() else {
+                return;
+            };
+            match target {
+                Ok(target) => window.show_format_dialog(&name, target),
+                Err(error) => window.show_message(&error.to_string()),
+            }
+        });
+    }
+
+    /// Shows the Format dialog for the drive `name` that `target`
+    /// describes.
+    fn show_format_dialog(&self, name: &str, target: FormatTarget) {
+        if target.available.is_empty() {
+            self.show_message(ox_core::i18n::gettext_static(NO_FILE_SYSTEMS));
+            return;
+        }
+        let FormatTarget {
+            connection,
+            facts,
+            available,
+        } = target;
+        let name = name.to_owned();
+        let dialog = format_drive_dialog(
+            self,
+            &name,
+            &facts,
+            &available,
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[strong]
+                facts,
+                #[strong]
+                name,
+                move |dialog, request| window.start_format(dialog, &connection, &facts, &name, request)
+            ),
+        );
+        dialog.open();
+    }
+
+    /// Start: once the user confirms, formats the drive `facts` describes
+    /// as `request` asks, with "Formatting…" in `dialog` meanwhile, and
+    /// reports the result there.
+    ///
+    /// UDisks cannot be stopped once it formats, so the buttons are
+    /// disabled until it is done. Closing the dialog meanwhile leaves the
+    /// format running, and the window reports how it ended.
+    fn start_format(
+        &self,
+        dialog: &Dialog,
+        connection: &gio::DBusConnection,
+        facts: &DriveFacts,
+        name: &str,
+        request: FormatRequest,
+    ) {
+        let (window, form) = (self.downgrade(), dialog.downgrade());
+        let (connection, facts) = (connection.clone(), facts.clone());
+        let done = ox_core::i18n::format_message("{drive} is formatted.", &[("drive", name)]);
+        glib::spawn_future_local(async move {
+            let Some(dialog) = form.upgrade() else {
+                return;
+            };
+            if !confirm_erase(&dialog).await {
+                return;
+            }
+            let (sender, receiver) = async_channel::bounded::<Result<Option<String>, FormatError>>(1);
+            let shown = (window.clone(), form.clone(), done.clone());
+            dialog.run(ox_core::i18n::gettext_static(FORMATTING), async move {
+                let Ok(formatted) = receiver.recv().await else {
+                    return;
+                };
+                let (window, form, done) = shown;
+                let (Some(window), Some(dialog)) = (window.upgrade(), form.upgrade()) else {
+                    return;
+                };
+                dialog.set_busy(None);
+                match formatted {
+                    Ok(_) => {
+                        dialog.finish();
+                        window.show_message(&done);
+                    }
+                    Err(error) => dialog.show_error(&error.to_string()),
+                }
+            });
+            dialog.set_busy(Some(&Cancellation::new()));
+            drop(dialog);
+            let formatted = format_drive(&connection, UDISKS_NAME, &facts, &request).await;
+            // The dialog was closed: the window reports the result.
+            if let Err(unheard) = sender.try_send(formatted) {
+                let Some(window) = window.upgrade() else {
+                    return;
+                };
+                match unheard.into_inner() {
+                    Ok(_) => window.show_message(&done),
+                    Err(error) => window.show_message(&error.to_string()),
+                }
+            }
+        });
+    }
+
+    /// Opens Disks for the drive mounted at `uri`.
     fn open_drive_in_disks(&self, uri: &str, tool: DiskTool) {
         match block_device_of(&self.volume_monitor().mounts(), uri) {
             Some(device) => self.run_disk_tool(tool, PathBuf::from(device)),

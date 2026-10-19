@@ -3,6 +3,6 @@
 #
 # Names that documentation may write without backticks. Clippy 1.92, the
 # minimum supported Rust that CI checks with, does not yet know "SQLite";
-# newer versions do. "WebDAV" is the protocol's own spelling. ".." keeps
-# Clippy's own list.
-doc-valid-idents = ["SQLite", "WebDAV", ".."]
+# newer versions do. "WebDAV" is the protocol's own spelling, and "UDisks"
+# the disk service's. ".." keeps Clippy's own list.
+doc-valid-idents = ["SQLite", "WebDAV", "UDisks", ".."]

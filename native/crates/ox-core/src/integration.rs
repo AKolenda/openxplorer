@@ -57,6 +57,7 @@
 //! | `mime_type` | The handled MIME types | `desktop_integration.py`, `activation.py` |
 //! | `sandbox`, `host_command` | Flatpak detection; running host programs | (new) |
 //! | `disk_tools` | Disks, the Disk Image Mounter and a disk-usage analyser | (new) |
+//! | `drive_format` | Formatting a removable drive through UDisks | (new) |
 //! | `program` | Starting a program the user chose: drops, custom commands | (new) |
 //! | `private_file`, `worker` | Atomic private writes; worker threads | the Python modules' helpers |
 
@@ -67,6 +68,7 @@ mod background_portal;
 mod brave;
 mod default_apps;
 mod disk_tools;
+mod drive_format;
 mod file_chooser_bus;
 mod file_chooser_request;
 mod file_dialogs;
@@ -99,6 +101,10 @@ pub use default_apps::{
     ZipAssociation, APP_ID, RESTORE_NOTE,
 };
 pub use disk_tools::{is_disk_image, DiskTool};
+pub use drive_format::{
+    available_file_systems, default_file_system, drive_facts, format_drive, DriveFacts, FileSystem,
+    FormatError, FormatRequest, UDISKS_NAME,
+};
 pub use file_chooser_bus::{
     ChooserCall, ChooserNotShown, ChooserRegistrationFailed, ChooserReply, FileChooserBus,
     PORTAL_BACKEND_PATH,

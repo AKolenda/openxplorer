@@ -307,8 +307,8 @@ pub(crate) enum WindowAction {
     SafelyRemove,
     /// Shows the drive mounted at the string target in GNOME Disks.
     OpenInDisks,
-    /// Opens GNOME Disks' Format dialog for the drive mounted at the
-    /// string target.
+    /// Opens the Format dialog for the drive mounted at the string
+    /// target.
     FormatDrive,
     /// Attaches the disk image whose URI is the string target, read-only.
     MountDiskImage,
