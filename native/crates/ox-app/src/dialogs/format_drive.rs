@@ -8,7 +8,7 @@
 //! system, the volume label and Quick format, then asks once more before
 //! anything is erased. It only asks; the window formats.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::glib;
@@ -57,7 +57,7 @@ pub(crate) fn format_drive_dialog(
     );
     fit_label_field(&label, first);
     let system = Rc::new(Cell::new(first));
-    refit_while_typing(&label, Rc::clone(&system));
+    fit_while_typing(&label, Rc::clone(&system));
     let chosen = {
         let available = available.clone();
         move |choice: &gtk::DropDown| {
@@ -103,34 +103,29 @@ fn fit_label_field(field: &gtk::Entry, file_system: FileSystem) {
     }
 }
 
-/// Keeps what is typed into the label `field` to what the file system
-/// in `system` keeps, so the field shows the label that is written.
-fn refit_while_typing(field: &gtk::Entry, system: Rc<Cell<FileSystem>>) {
-    field.connect_changed(move |field| {
-        if system.get().typed_label(&field.text()) == field.text() {
+/// Keeps what is typed or pasted into the label `field` to what the
+/// file system in `system` keeps, as it is inserted, so the field shows
+/// the label that is written and Undo takes back what was inserted.
+fn fit_while_typing(field: &gtk::Entry, system: Rc<Cell<FileSystem>>) {
+    let Some(text) = field.delegate() else {
+        return;
+    };
+    let handler = Rc::new(RefCell::new(None::<glib::SignalHandlerId>));
+    let own = Rc::clone(&handler);
+    let id = text.connect_insert_text(move |text, inserted, position| {
+        let kept = system.get().inserted_label(&text.text(), inserted);
+        if kept == inserted {
             return;
         }
-        // Once the edit is done: the entry still moves its cursor after
-        // telling of the change.
-        glib::idle_add_local_once(glib::clone!(
-            #[weak]
-            field,
-            #[strong]
-            system,
-            move || {
-                let text = field.text();
-                let typed = system.get().typed_label(&text);
-                if typed == text {
-                    return;
-                }
-                let cursor = usize::try_from(field.position()).unwrap_or_default();
-                let before: String = text.chars().take(cursor).collect();
-                let position = system.get().typed_label(&before).chars().count();
-                field.set_text(&typed);
-                field.set_position(i32::try_from(position).unwrap_or(-1));
-            }
-        ));
+        // What the file system keeps is inserted in place of what was.
+        if let Some(id) = own.borrow().as_ref() {
+            text.block_signal(id);
+            text.insert_text(&kept, position);
+            text.unblock_signal(id);
+        }
+        text.stop_signal_emission_by_name("insert-text");
     });
+    handler.replace(Some(id));
 }
 
 /// Asks, over `dialog`, whether to erase the drive; true for Format.
@@ -266,7 +261,7 @@ mod tests {
 
     /// What is typed into the label is fitted as it is typed, so the
     /// field shows the label Start formats with; spaces stay until Start,
-    /// so a word can follow.
+    /// so a word can follow, and Undo still takes back what was typed.
     ///
     /// parity: DEV-012
     #[gtk::test]
@@ -292,13 +287,13 @@ mod tests {
         }
         assert_eq!(label.text(), "MY PHOTOS", "FAT32 refuses ':' and keeps capitals");
         assert_eq!(label.position(), 9, "the cursor stays after the text typed");
+        typing.activate_action("text.undo", None).expect("undo");
+        assert_eq!(label.text(), "MY", "Undo takes back the last word typed");
         label.set_text("my ");
-        settle();
         dialog.press("Start");
         settle();
         choice.set_selected(3);
         label.set_text("ÄÄÄÄÄÄÄÄÄÄ");
-        settle();
         assert_eq!(label.text(), "ÄÄÄÄÄÄÄÄ", "ext4 keeps 16 bytes");
         dialog.press("Start");
         settle();

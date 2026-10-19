@@ -258,11 +258,17 @@ fn labels_fit_each_file_system() {
     );
     assert_eq!(FileSystem::Ext4.fitted_label("ÄÄÄÄÄÄÄÄÄÄ"), "ÄÄÄÄÄÄÄÄ");
     assert_eq!(FileSystem::Ext4.fitted_label("ÄÄÄÄÄÄÄÄÄÄ").len(), 16);
-    // While it is typed, the label keeps its spaces, so a word can follow.
-    assert_eq!(FileSystem::Fat32.typed_label("my: "), "MY ");
-    assert_eq!(FileSystem::Fat32.typed_label(" my holiday photos"), " MY HOLIDAY");
-    assert_eq!(FileSystem::Ext4.typed_label("ÄÄÄÄÄÄÄÄÄÄ"), "ÄÄÄÄÄÄÄÄ");
-    assert_eq!(FileSystem::ExFat.typed_label("a<b>"), "ab");
+    // What is typed keeps its spaces, so a word can follow, and fits in
+    // what is left of the length.
+    assert_eq!(FileSystem::Fat32.inserted_label("", "my: "), "MY ");
+    assert_eq!(
+        FileSystem::Fat32.inserted_label("MY ", "holiday photos"),
+        "HOLIDAY "
+    );
+    assert_eq!(FileSystem::Fat32.inserted_label("MY HOLIDAY ", "x"), "");
+    assert_eq!(FileSystem::Ext4.inserted_label("ÄÄÄÄÄÄÄ", "ÄÄÄ"), "Ä");
+    assert_eq!(FileSystem::ExFat.inserted_label("", "a<b>"), "ab");
+    assert_eq!(FileSystem::ExFat.inserted_label("ABCDEFGHI", "😀😀"), "😀");
     for system in FileSystem::ALL {
         assert_eq!(FileSystem::from_udisks_type(system.udisks_type()), Some(system));
     }
@@ -360,6 +366,10 @@ fn a_drive_is_read_unmounted_formatted_and_mounted_again() {
     assert_eq!(
         methods,
         ["Filesystem.Unmount", "Block.Format", "Filesystem.Mount"]
+    );
+    assert_eq!(
+        calls[2], "Filesystem.Mount (@a{sv} {},)",
+        "it may ask for a password"
     );
     assert!(calls[1].starts_with("Block.Format ('exfat',"), "{calls:?}");
     assert!(calls[1].contains("'erase': <'zero'>"), "{calls:?}");
@@ -540,6 +550,10 @@ fn a_busy_drive_or_a_dismissed_prompt_stops_the_format() {
         methods,
         ["Filesystem.Unmount", "Block.Format", "Filesystem.Mount"],
         "the drive left as it was is mounted again"
+    );
+    assert!(
+        dismissed_calls[2].contains("'auth.no_user_interaction': <true>"),
+        "without asking for a password again: {dismissed_calls:?}"
     );
     assert_eq!(
         refused.map_err(|error| error.to_string()),

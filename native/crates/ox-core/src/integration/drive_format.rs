@@ -154,16 +154,19 @@ impl FileSystem {
     /// characters it refuses, and cut to its length without splitting a
     /// character; for FAT32 in capitals as Windows writes them.
     pub fn fitted_label(self, label: &str) -> String {
-        self.cut_label(self.kept_label(label).trim())
+        self.cut_label(self.kept_label(label).trim(), self.max_label_length())
             .trim_end()
             .to_owned()
     }
 
-    /// `label` as it may stand in the label field while it is typed: as
-    /// [`Self::fitted_label`] keeps it, but with its spaces, so a word
-    /// can follow the one typed.
-    pub fn typed_label(self, label: &str) -> String {
-        self.cut_label(&self.kept_label(label))
+    /// What of `inserted`, typed or pasted into the label `label`, the
+    /// field takes: as [`Self::fitted_label`] keeps it, but with its
+    /// spaces, so a word can follow, and cut to what is left of the
+    /// file system's length.
+    pub fn inserted_label(self, label: &str, inserted: &str) -> String {
+        let used: usize = label.chars().map(|character| self.label_units(character)).sum();
+        let left = self.max_label_length().saturating_sub(used);
+        self.cut_label(&self.kept_label(inserted), left)
     }
 
     /// `label` without the characters the file system refuses, for FAT32
@@ -183,15 +186,15 @@ impl FileSystem {
         }
     }
 
-    /// `label` cut to the file system's length without splitting a
-    /// character.
-    fn cut_label(self, label: &str) -> String {
+    /// `label` cut to `length` of the units the file system counts,
+    /// without splitting a character.
+    fn cut_label(self, label: &str, length: usize) -> String {
         let mut used = 0;
         label
             .chars()
             .take_while(|character| {
                 used += self.label_units(*character);
-                used <= self.max_label_length()
+                used <= length
             })
             .collect()
     }
@@ -479,13 +482,14 @@ pub async fn format_drive(
     if let Err(error) = formatted {
         // A refused prompt leaves the old file system as it was: mounted
         // again, it stays in the sidebar. A failed format may have left
-        // none, and mounting it then fails harmlessly.
+        // none, and mounting it then fails harmlessly. It does not ask
+        // for a password again after one was refused.
         if unmounted_here {
-            let _ = mount(connection, service, &facts.object).await;
+            let _ = mount(connection, service, &facts.object, false).await;
         }
         return Err(FormatError::from_call(error));
     }
-    let mounted = mount(connection, service, &facts.object).await;
+    let mounted = mount(connection, service, &facts.object, true).await;
     // The desktop may have mounted the new file system first.
     Ok(match mounted {
         Ok(_) => Formatted::Mounted,
@@ -498,19 +502,25 @@ pub async fn format_drive(
 }
 
 /// Mounts the file system on the block device `object` through UDisks
-/// `service` on `connection`.
+/// `service` on `connection`, letting polkit ask for a password when
+/// `may_ask`.
 async fn mount(
     connection: &gio::DBusConnection,
     service: &str,
     object: &str,
+    may_ask: bool,
 ) -> Result<glib::Variant, glib::Error> {
+    let options = glib::VariantDict::new(None);
+    if !may_ask {
+        options.insert("auth.no_user_interaction", true);
+    }
     call(
         connection,
         service,
         object,
         FILESYSTEM_INTERFACE,
         "Mount",
-        &(glib::VariantDict::new(None),).to_variant(),
+        &(options,).to_variant(),
     )
     .await
 }
