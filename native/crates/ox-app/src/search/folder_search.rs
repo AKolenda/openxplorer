@@ -125,6 +125,22 @@ impl FolderSearch {
         progress == Some(&SearchProgress::Searching)
     }
 
+    /// Whether the shown search asked the cache, so asking it again is
+    /// quick.
+    pub(crate) fn uses_cache(&self) -> bool {
+        self.report
+            .as_ref()
+            .is_some_and(|report| report.source.uses_cache())
+    }
+
+    /// Whether the shown rows are those of a finished walk of the folder.
+    pub(crate) fn is_walk_shown(&self) -> bool {
+        self.report.as_ref().is_some_and(|report| {
+            report.source == SearchSource::CurrentFolder
+                && matches!(report.progress, SearchProgress::Shown { .. })
+        })
+    }
+
     /// The search box's text.
     pub(crate) fn query(&self) -> &str {
         &self.query

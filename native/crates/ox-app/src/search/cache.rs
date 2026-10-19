@@ -257,9 +257,12 @@ impl SearchCache {
     /// changed since the status shown before.
     fn show_status(&self, status: CacheStatus) {
         let imp = self.imp();
-        imp.status.replace(Some(status));
+        let revision = status.contents_revision;
+        let previous = imp.status.replace(Some(status));
+        let contents_changed = previous.is_none_or(|previous| previous.contents_revision != revision);
+        let locally_changed = imp.has_unannounced_change.replace(false);
         self.emit_by_name::<()>(STATUS_CHANGED, &[]);
-        if imp.has_unannounced_change.replace(false) {
+        if contents_changed || locally_changed {
             self.emit_by_name::<()>(CONTENTS_CHANGED, &[]);
         }
     }
@@ -333,4 +336,30 @@ fn is_any_window_shown() -> bool {
         .iter()
         .filter_map(|window| window.downcast_ref::<gtk::Window>())
         .any(|window| window.is_visible() && !window.is_suspended())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use super::*;
+    use ox_core::search::SearchIndex;
+
+    #[gtk::test]
+    fn unchanged_polled_content_does_not_restart_a_search() {
+        let directory = tempfile::tempdir().unwrap();
+        let index = SearchIndex::open(directory.path()).unwrap();
+        let cache = SearchCache::default();
+        let changes = Rc::new(Cell::new(0));
+        let observed = Rc::clone(&changes);
+        cache.connect_contents_changed(move || observed.set(observed.get() + 1));
+        cache.show_status(index.status().unwrap());
+        assert_eq!(changes.get(), 1);
+
+        cache.show_status(index.status().unwrap());
+        cache.show_status(index.status().unwrap());
+
+        assert_eq!(changes.get(), 1, "unchanged polls leave shown searches alone");
+    }
 }

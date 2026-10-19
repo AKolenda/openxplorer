@@ -4479,12 +4479,12 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/journal.rs
-msgid "{len} copies, such as “{first}”, were changed after they were copied. Undo moves them to the Recycle Bin anyway?"
+msgid "{len} copies, such as “{first}”, may have changed after they were copied. Undo moves them to the Recycle Bin anyway?"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/journal.rs
-msgid "“{first}” was changed after it was copied. Undo moves it to the Recycle Bin anyway?"
+msgid "“{first}” may have changed after it was copied. Undo moves it to the Recycle Bin anyway?"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/links.rs
@@ -6854,11 +6854,19 @@ msgid "Invalid mount destination or user identity."
 msgstr ""
 
 #: crates/ox-core/src/network/mount_plan.rs
+msgid "The persistent mount assistant supports SMB shares only."
+msgstr ""
+
+#: crates/ox-core/src/network/mount_plan.rs
 msgid "The persistent mount assistant supports a hostname or IPv4 address without a port."
 msgstr ""
 
 #: crates/ox-core/src/network/mount_plan.rs
 msgid "This share name needs manual mounting. The assistant allows letters, numbers, spaces, dots, _, $, and hyphens."
+msgstr ""
+
+#: crates/ox-core/src/network/mount_table.rs
+msgid "Enter an SMB shared folder."
 msgstr ""
 
 #: crates/ox-core/src/network/prompts/challenge.rs

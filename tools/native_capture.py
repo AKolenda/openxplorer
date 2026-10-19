@@ -214,13 +214,23 @@ def build_app() -> Path:
         if shutil.which(tool) is None:
             raise CaptureError(f'{tool} is required to capture the native app.')
     environment = dict(os.environ, OX_APP_ID=STABLE_APP_ID)
-    subprocess.run(['cargo', 'build', '--locked', '--release', '--bin', 'openxplorer-native'],
-                   cwd=NATIVE, env=environment, check=True)
-    target = Path(os.environ.get('CARGO_TARGET_DIR', NATIVE / 'target'))
-    program = target / 'release' / 'openxplorer-native'
-    if not program.is_file():
-        raise CaptureError(f'Cargo did not build {program}.')
-    return program
+    result = subprocess.run(
+        ['cargo', 'build', '--locked', '--release', '--bin', 'openxplorer-native',
+         '--message-format=json-render-diagnostics'],
+        cwd=NATIVE, env=environment, check=True, stdout=subprocess.PIPE, text=True)
+    # Cargo resolves configured target folders relative to its own working
+    # directory and may include a target triple. Its artifact names the binary
+    # actually built, even when an old one remains in the default target folder.
+    for line in result.stdout.splitlines():
+        message = json.loads(line)
+        if (message.get('reason') == 'compiler-artifact'
+                and message.get('target', {}).get('name') == 'openxplorer-native'
+                and message.get('executable')):
+            program = Path(message['executable'])
+            if not program.is_file():
+                raise CaptureError(f'Cargo did not build {program}.')
+            return program
+    raise CaptureError('Cargo did not report the openxplorer-native executable.')
 
 
 def locale_name() -> str:

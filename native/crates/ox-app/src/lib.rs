@@ -17,6 +17,7 @@ mod announcement;
 mod app_context;
 pub mod application;
 mod archive_view;
+mod arguments;
 mod config;
 mod devices;
 mod dialog;

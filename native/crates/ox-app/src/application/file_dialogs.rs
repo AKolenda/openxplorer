@@ -128,11 +128,26 @@ pub(super) fn export(
 /// window, rather than quitting before the request that started it, and
 /// makes it wait for the desktop portal instead of starting it.
 pub(super) fn linger_as_service(application: &impl IsA<gio::Application>, arguments: &[String]) {
-    if arguments.iter().any(|argument| argument == SERVICE_OPTION) {
+    if crate::arguments::Arguments::parse(arguments).has(SERVICE_OPTION) {
         let milliseconds = u32::try_from(SERVICE_LINGER.as_millis()).unwrap_or(u32::MAX);
         application.set_inactivity_timeout(milliseconds);
         // The portal may be what started this instance, and still be
         // starting: wait for it rather than start a second one.
         crate::theme::system::wait_for_portal_before_reading();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_positional_service_option_does_not_change_the_application_lifetime() {
+        let application = gio::Application::new(None, gio::ApplicationFlags::NON_UNIQUE);
+        let arguments = ["openxplorer", "--", "--gapplication-service"].map(str::to_owned);
+
+        linger_as_service(&application, &arguments);
+
+        assert_eq!(application.inactivity_timeout(), 0);
     }
 }

@@ -342,3 +342,52 @@ fn a_symlinked_cache_directory_is_refused() {
     assert!(opened.is_err());
     assert!(fs::read_dir(target.path()).unwrap().next().is_none());
 }
+
+/// A listing is tied to the state before its I/O began. The comparison
+/// belongs inside the write transaction, including for changes made by a
+/// second process that cannot cancel this process's worker immediately.
+#[test]
+fn a_stale_live_listing_cannot_write_after_the_root_changes() {
+    for change in ["clear", "rescan", "hidden", "disable", "replace"] {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "keep.pdf")]);
+        let before = root_state(&share.index, SHARE);
+        match change {
+            "clear" => share.index.clear(SHARE).unwrap(),
+            "rescan" => {
+                share.index.begin_scan(SHARE).unwrap();
+            }
+            "hidden" => share
+                .index
+                .configure(SHARE, Caching::Enabled, "", HiddenItems::Include)
+                .unwrap(),
+            "disable" => share
+                .index
+                .configure(SHARE, Caching::Disabled, "", HiddenItems::Skip)
+                .unwrap(),
+            "replace" => {
+                share.index.remove(SHARE).unwrap();
+                share
+                    .index
+                    .configure(SHARE, Caching::Enabled, "", HiddenItems::Skip)
+                    .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let expected = share.index.status().unwrap();
+
+        let added = share
+            .index
+            .replace_folder_contents(
+                &before,
+                SHARE,
+                &[listed_file(SHARE, "stale.pdf")],
+                &gio::Cancellable::new(),
+            )
+            .unwrap();
+
+        assert!(added.is_empty(), "{change}");
+        assert!(share.found_names("stale").is_empty(), "{change}");
+        assert_eq!(share.index.status().unwrap(), expected, "{change}");
+    }
+}

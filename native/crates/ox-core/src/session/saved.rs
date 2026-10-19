@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use super::{TabSnapshot, WindowStateError};
-use crate::location::without_user;
+use crate::location::{without_user, ArchiveLocation};
 use crate::private_storage::{
     private_file_if_present, read_limited_text, replace_file_atomically, PrivateFileOptions, StorageError,
 };
@@ -134,16 +134,23 @@ fn saved_tab(value: &Value) -> Result<SavedTab, WindowStateError> {
 /// In-process tab transfers keep their original addresses so they reach
 /// the mounted account; reopening a saved tab asks for that account again.
 fn for_saved_session(mut pane: TabSnapshot) -> TabSnapshot {
-    let saved_uri = |uri: &str| {
-        let uri = without_user(uri);
-        uri.strip_prefix("admin:")
-            .map_or_else(|| uri.clone(), |path| format!("file:{path}"))
-    };
     pane.uri = saved_uri(&pane.uri);
     for uri in pane.history.iter_mut().chain(pane.selection.iter_mut()) {
         *uri = saved_uri(uri);
     }
     pane
+}
+
+/// ZIP locations wrap their source URI, which needs the same privacy and
+/// elevation rules as a directly browsed folder.
+fn saved_uri(uri: &str) -> String {
+    if let Some(mut archive) = ArchiveLocation::from_uri(uri) {
+        archive.archive_uri = saved_uri(&archive.archive_uri);
+        return archive.uri();
+    }
+    let uri = without_user(uri);
+    uri.strip_prefix("admin:")
+        .map_or_else(|| uri.clone(), |path| format!("file:{path}"))
 }
 
 /// An index into a list of `length` items, the first when it is missing
@@ -236,5 +243,67 @@ mod tests {
         let saved = SavedSession::from_json(&json!({"tabs": [{"panes": [{"uri": "admin:///etc", "history": ["admin:///etc"], "index": 0}], "activePane": 0}], "activeTab": 0})).unwrap();
         assert_eq!(saved.tabs[0].panes[0].uri, "file:///etc");
         assert!(!saved.to_json().to_string().contains("admin:"));
+    }
+
+    /// parity: SAFE-010, OPS-039, TAB-053
+    #[test]
+    fn archive_sessions_strip_accounts_and_elevation_from_every_location() {
+        let directory = tempfile::tempdir().expect("a temporary directory");
+        for (original, expected) in [
+            ("sftp://demo@server/srv/plans.zip", "sftp://server/srv/plans.zip"),
+            ("admin:///etc/plans.zip", "file:///etc/plans.zip"),
+        ] {
+            let archive = ArchiveLocation::root(original);
+            let raw = json!({
+                "uri": archive.member("Docs/").uri(),
+                "history": [archive.uri(), archive.member("Docs/").uri()],
+                "index": 1,
+                "selection": [archive.member("Docs/notes.txt").uri()]
+            });
+            let pane = TabSnapshot::from_json(&raw).expect("a valid live tab");
+            let session = SavedSession {
+                tabs: vec![SavedTab {
+                    panes: vec![pane.clone()],
+                    active_pane: 0,
+                }],
+                active_tab: 0,
+            };
+
+            session.save(directory.path()).unwrap();
+
+            let check = |restored: SavedSession| {
+                let restored = &restored.tabs[0].panes[0];
+                for uri in std::iter::once(&restored.uri)
+                    .chain(&restored.history)
+                    .chain(&restored.selection)
+                {
+                    assert_eq!(ArchiveLocation::from_uri(uri).unwrap().archive_uri, expected);
+                }
+                assert_eq!(
+                    ArchiveLocation::from_uri(&restored.selection[0]).unwrap().member,
+                    "Docs/notes.txt"
+                );
+                assert_eq!(restored.index, 1);
+            };
+            // Check the saved bytes directly, before the load-time sanitizer.
+            let written: Value =
+                serde_json::from_str(&std::fs::read_to_string(session_file(directory.path())).unwrap())
+                    .unwrap();
+            let saved_pane = TabSnapshot::from_json(&written["tabs"][0]["panes"][0]).unwrap();
+            check(SavedSession {
+                tabs: vec![SavedTab {
+                    panes: vec![saved_pane],
+                    active_pane: 0,
+                }],
+                active_tab: 0,
+            });
+            check(SavedSession::load(directory.path()).unwrap());
+            assert_eq!(session.tabs[0].panes[0], pane, "the live tab keeps its source");
+
+            // Files produced by earlier versions are sanitized on read too.
+            let earlier = json!({"tabs": [{"panes": [raw], "activePane": 0}], "activeTab": 0});
+            std::fs::write(session_file(directory.path()), earlier.to_string()).unwrap();
+            check(SavedSession::load(directory.path()).unwrap());
+        }
     }
 }

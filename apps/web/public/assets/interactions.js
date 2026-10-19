@@ -54,7 +54,7 @@
    if(dialog?.open){const links=Array.from(results.querySelectorAll('a'));if(e.key==='ArrowDown'){e.preventDefault();links[Math.min(links.length-1,links.indexOf(document.activeElement)+1)]?.focus();}if(e.key==='ArrowUp'){e.preventDefault();const n=links.indexOf(document.activeElement);n<=0?input.focus():links[n-1]?.focus();}if(e.key==='Enter'&&document.activeElement===input){e.preventDefault();links[0]?.click();}}
   });
   const demos=[...document.querySelectorAll('[data-product-demo]')];
-  function sendDemo(host,command,value){if(!host)return;if(command==='play'&&(!host.dataset.phase||host.dataset.phase==='loading')){host.dataset.pendingPlay='true';return;}if(command==='stop')delete host.dataset.pendingPlay;if(command==='reset'||command==='scene'){host.dataset.phase='loading';host.querySelector('[data-demo-status]').textContent='Loading sample files…';}const frame=host?.querySelector('iframe');frame?.contentWindow?.postMessage({channel:'openxplorer-demo-command',command,value},'*');}
+  function sendDemo(host,command,value){if(!host)return;if(command==='theme')host.dataset.demoTheme=value;if(command==='play'&&(!host.dataset.phase||host.dataset.phase==='loading')){host.dataset.pendingPlay='true';return;}if(command==='stop')delete host.dataset.pendingPlay;if(command==='reset'||command==='scene'){host.dataset.phase='loading';host.querySelector('[data-demo-status]').textContent='Loading sample files…';}const frame=host?.querySelector('iframe');frame?.contentWindow?.postMessage({channel:'openxplorer-demo-command',command,value},'*');}
   const desktopDemo=window.matchMedia('(min-width: 960px)');
   function syncDemos(){
    if(desktopDemo.matches)closeMobileMenu(false);
@@ -65,6 +65,9 @@
     const template=host.querySelector('[data-demo-template]');if(!template)continue;
     host.dataset.phase='loading';
     const clone=template.content.cloneNode(true),next=clone.querySelector('iframe');
+    // The controls survive mobile disposal. Restore their selected theme in
+    // the new frame before it loads so its picture and next action agree.
+    if(next&&host.dataset.demoTheme){const src=new URL(next.getAttribute('src'),document.baseURI);src.searchParams.set('theme',host.dataset.demoTheme);next.src=src.href;}
     next?.addEventListener('load',()=>sendDemo(host,'status'));
     host.querySelector('.demo-viewport').append(clone);setTimeout(()=>sendDemo(host,'status'),0);
    }

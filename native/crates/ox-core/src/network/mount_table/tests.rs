@@ -90,6 +90,52 @@ fn a_share_path_resolves_inside_its_cifs_mount() {
     assert_eq!(local, Some(PathBuf::from("/mnt/nas/folder/file.pdf")));
 }
 
+#[test]
+fn mount_resolution_compares_effective_ports_from_cifs_options() {
+    let text = "40 1 0:40 / /mnt/custom rw - cifs //nas/share rw,port=1445\n\
+                41 1 0:41 / /mnt/default rw - cifs //nas/share rw,port=445\n\
+                42 1 0:42 /folder /mnt/bound rw - cifs //nas/share rw,port=1445\n";
+    let mounts = parse_mount_table(text);
+    assert_eq!(
+        resolve("smb://nas/share/file", &mounts),
+        Some("/mnt/default/file".into())
+    );
+    assert_eq!(
+        resolve("smb://nas:445/share/file", &mounts),
+        Some("/mnt/default/file".into())
+    );
+    assert_eq!(
+        resolve("smb://nas:1445/share/file", &mounts),
+        Some("/mnt/custom/file".into())
+    );
+    assert_eq!(
+        resolve("smb://nas:1445/share/folder/file", &mounts),
+        Some("/mnt/bound/file".into())
+    );
+    assert_eq!(resolve("smb://nas:2445/share/file", &mounts), None);
+    assert_eq!(resolve("smb://nas/share/file", &mounts[..1]), None);
+    let default = [cifs_mount("/mnt/default", "//nas/share", "/")];
+    assert_eq!(
+        resolve("smb://nas:445/share/file", &default),
+        Some("/mnt/default/file".into())
+    );
+}
+
+#[test]
+fn invalid_cifs_ports_and_other_protocols_do_not_map_to_local_files() {
+    for options in ["port=invalid", "port=65536", "port="] {
+        let mounts = [MountEntry {
+            options: options.into(),
+            ..cifs_mount("/mnt/nas", "//nas/share", "/")
+        }];
+        assert_eq!(resolve("smb://nas/share/file", &mounts), None, "{options}");
+    }
+    let mounts = [cifs_mount("/mnt/nas", "//nas/share", "/")];
+    assert!(resolve_smb_path("sftp://nas/share/file", &mounts).is_err());
+    let non_smb_source = cifs_mount("/mnt/nas", "nfs://nas/share", "/");
+    assert_eq!(non_smb_source.remote_root(), None);
+}
+
 /// parity: NET-026
 #[test]
 fn the_most_specific_mount_wins_and_host_and_share_ignore_case() {

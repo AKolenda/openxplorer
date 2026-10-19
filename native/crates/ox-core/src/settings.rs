@@ -325,14 +325,16 @@ impl Settings {
     ///
     /// Every error of [`update_preferences`](Self::update_preferences).
     pub fn forget_recent(&mut self, opened_before: Option<u64>) -> Result<(), SettingsError> {
-        let mut kept = self.data.clone();
-        if !mutate::forget_recent(&mut kept, opened_before) {
-            return Ok(());
+        let lock = SettingsLock::acquire(&self.directory)?;
+        let mut updated = self.clone();
+        updated.reload();
+        // Another process may have remembered a file since our last read.
+        // Decide whether a write is needed only after taking the lock.
+        if mutate::forget_recent(&mut updated.data, opened_before) {
+            updated.save_while_locked(&lock)?;
         }
-        self.mutate(move |data| {
-            mutate::forget_recent(data, opened_before);
-            Ok(())
-        })
+        *self = updated;
+        Ok(())
     }
 
     /// Saves a folder or shared display style. A style for every folder
