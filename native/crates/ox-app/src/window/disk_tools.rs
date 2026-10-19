@@ -83,6 +83,14 @@ fn block_device_of(mounts: &[gio::Mount], uri: &str) -> Option<String> {
     Some(device.to_string())
 }
 
+/// Whether `facts`, read from UDisks after Format… was chosen, describe
+/// the drive chosen: its mount is still `mounted`, and its file system
+/// has the UUID GIO gave it then, `uuid`, if any. A drive plugged in at
+/// the same device meanwhile has another mount and, usually, another UUID.
+fn is_chosen_drive(mounted: bool, uuid: Option<&str>, facts: &DriveFacts) -> bool {
+    mounted && uuid.is_none_or(|uuid| uuid == facts.uuid)
+}
+
 /// The bus UDisks is on: the system bus, and in tests the private session
 /// bus they run on, where no UDisks answers.
 fn udisks_bus() -> gio::BusType {
@@ -209,12 +217,27 @@ impl BrowserWindow {
             return;
         };
         let name = mount.name().to_string();
+        // The drive chosen: its mount, and the UUID of its file system, so
+        // a drive plugged in at the same device during the lookup is not
+        // taken for it.
+        let (mount, uuid) = (
+            mount.clone(),
+            mount.volume().and_then(|volume| volume.identifier("uuid")),
+        );
         let window = self.downgrade();
         glib::spawn_future_local(async move {
             let target = read_format_target(&device).await;
             let Some(window) = window.upgrade() else {
                 return;
             };
+            let mounted = window.volume_monitor().mounts().contains(&mount);
+            let target = target.and_then(|target| {
+                if is_chosen_drive(mounted, uuid.as_deref(), &target.facts) {
+                    Ok(target)
+                } else {
+                    Err(FormatError::NotFound)
+                }
+            });
             match target {
                 Ok(target) => window.show_format_dialog(&name, target),
                 Err(error) => window.show_message(&error.to_string()),
@@ -483,6 +506,37 @@ mod tests {
         assert_eq!(
             formatted_message("USB Drive", &Formatted::NotMounted("Not permitted".to_owned())),
             "USB Drive is formatted, but could not be mounted again: Not permitted"
+        );
+    }
+
+    /// Format… formats only the drive it was chosen for: not one plugged
+    /// in at the same device while the dialog looked it up.
+    ///
+    /// parity: DEV-012
+    #[test]
+    fn format_keeps_to_the_drive_chosen() {
+        let facts = DriveFacts {
+            object: "/org/freedesktop/UDisks2/block_devices/sdb1".to_owned(),
+            drive: "/org/freedesktop/UDisks2/drives/USB_Stick_1234".to_owned(),
+            uuid: "ABCD-1234".to_owned(),
+            size: 16_000_000_000,
+            label: "STICK".to_owned(),
+            file_system: Some(FileSystem::Fat32),
+            read_only: false,
+            has_file_system: true,
+        };
+        assert!(is_chosen_drive(true, Some("ABCD-1234"), &facts));
+        assert!(
+            is_chosen_drive(true, None, &facts),
+            "a volume GIO knows no UUID for"
+        );
+        assert!(
+            !is_chosen_drive(false, Some("ABCD-1234"), &facts),
+            "its mount is gone"
+        );
+        assert!(
+            !is_chosen_drive(true, Some("EF01-5678"), &facts),
+            "another drive at the device"
         );
     }
 }
