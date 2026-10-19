@@ -245,7 +245,7 @@ impl BrowserWindow {
         name: &str,
     ) {
         // An update may have finished installing while the field was open.
-        if self.refuses_writes_during_update() {
+        if self.refuses_writes() {
             self.close_name_editor(cell);
             return;
         }

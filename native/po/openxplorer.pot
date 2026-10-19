@@ -4570,6 +4570,10 @@ msgstr ""
 msgid "The name was not changed."
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/running.rs
+msgid "Wait until the drive is formatted, then try again."
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/template_dialog.rs
 msgid " · Your template"
 msgstr ""
@@ -6409,6 +6413,11 @@ msgstr ""
 
 #: crates/ox-core/src/integration/drive_format.rs
 msgid "You are not allowed to format this drive."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "{error} (It could not be mounted again: {reason})"
 msgstr ""
 
 #: crates/ox-core/src/integration/file_manager_bus.rs

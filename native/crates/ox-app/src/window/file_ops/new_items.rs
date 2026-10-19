@@ -43,7 +43,7 @@ impl BrowserWindow {
     /// that is not writable. A folder that cannot be made says why in the
     /// toast.
     pub(crate) async fn create_folder(&self) {
-        if !self.allows(FileCommand::New) || self.refuses_writes_during_update() {
+        if !self.allows(FileCommand::New) || self.refuses_writes() {
             return;
         }
         let Some(folder) = self.current_uri() else {

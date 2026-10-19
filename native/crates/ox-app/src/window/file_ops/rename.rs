@@ -62,7 +62,7 @@ impl BrowserWindow {
     /// cell is not on screen; several selected items are renamed together
     /// (OPS-014).
     pub(crate) async fn rename_selection(&self) {
-        if !self.allows(FileCommand::Rename) || self.refuses_writes_during_update() {
+        if !self.allows(FileCommand::Rename) || self.refuses_writes() {
             return;
         }
         let model = self.folder_pane().model();
@@ -88,7 +88,7 @@ impl BrowserWindow {
     /// Rename… of the folder tree's folder at `uri` (SIDE-028): asks for
     /// its new name in the Rename dialog.
     pub(crate) async fn rename_folder_at(&self, uri: &str) {
-        if self.refuses_writes_during_update() {
+        if self.refuses_writes() {
             return;
         }
         let file = gio::File::for_uri(uri);

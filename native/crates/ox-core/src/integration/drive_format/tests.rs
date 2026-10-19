@@ -494,7 +494,8 @@ fn fat32_is_made_as_fat32_on_any_drive() {
 }
 
 /// A drive in use is not formatted, and a dismissed password prompt is
-/// a cancellation rather than a failure.
+/// a cancellation rather than a failure; a drive left unmounted after a
+/// failed format says so.
 ///
 /// parity: DEV-012
 #[test]
@@ -534,6 +535,18 @@ fn a_busy_drive_or_a_dismissed_prompt_stops_the_format() {
             .expect("the drive");
         format_drive(&connection, &name, &facts, &request(FileSystem::Fat32, true)).await
     });
+    let unmountable = Answers {
+        format_error: Some("Failed"),
+        mount_error: Some("Failed"),
+        ..Answers::default()
+    };
+    let unmountable = with_udisks(unmountable, |connection, fake| async move {
+        let name = fake.name();
+        let facts = drive_facts(&connection, &name, "/dev/sdb1")
+            .await
+            .expect("the drive");
+        format_drive(&connection, &name, &facts, &request(FileSystem::Fat32, true)).await
+    });
 
     assert!(matches!(busy, Err(FormatError::Busy)), "{busy:?}");
     assert_eq!(
@@ -558,6 +571,11 @@ fn a_busy_drive_or_a_dismissed_prompt_stops_the_format() {
     assert_eq!(
         refused.map_err(|error| error.to_string()),
         Err("Could not format the drive: refused".to_owned())
+    );
+    assert_eq!(
+        unmountable.map_err(|error| error.to_string()),
+        Err("Could not format the drive: refused (It could not be mounted again: refused)".to_owned()),
+        "a drive left unmounted says so"
     );
 }
 

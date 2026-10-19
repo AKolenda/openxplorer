@@ -261,12 +261,18 @@ impl BrowserWindow {
             if !confirm_erase(&dialog).await {
                 return;
             }
+            let Some(holder) = window.upgrade() else {
+                return;
+            };
             // A write may have started while the dialog was open.
-            let writing = window.upgrade().map(|window| window.writes_in_any_window());
-            if writing == Some(WriteActivity::Writing) {
+            if holder.writes_in_any_window() == WriteActivity::Writing {
                 dialog.show_error(ox_core::i18n::gettext_static(FINISH_WRITING));
                 return;
             }
+            // From here until the drive is mounted again no window starts
+            // writing, so no transfer goes on onto the formatted drive.
+            let hold = holder.context().hold_writes_for_formatting();
+            drop(holder);
             let (sender, receiver) = async_channel::bounded::<Result<Formatted, FormatError>>(1);
             let shown = (window.clone(), form.clone(), name.clone());
             dialog.run(ox_core::i18n::gettext_static(FORMATTING), async move {
@@ -289,6 +295,7 @@ impl BrowserWindow {
             dialog.set_busy(Some(&Cancellation::new()));
             drop(dialog);
             let formatted = format_drive(&connection, UDISKS_NAME, &facts, &request).await;
+            drop(hold);
             // The dialog was closed: the window reports the result.
             if let Err(unheard) = sender.try_send(formatted) {
                 let Some(window) = window.upgrade() else {

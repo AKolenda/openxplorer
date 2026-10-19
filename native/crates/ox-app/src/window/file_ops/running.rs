@@ -32,6 +32,10 @@ use crate::window::BrowserWindow;
 /// The label of the toast's button that reverses the operation it reports.
 const UNDO_BUTTON: &str = "Undo";
 
+/// Why files are not written while a drive is formatted.
+const FORMATTING_A_DRIVE: &str =
+    crate::i18n::message_id("Wait until the drive is formatted, then try again.");
+
 /// What a finished operation leaves behind.
 #[derive(Debug)]
 pub(super) struct FinishedOperation {
@@ -74,12 +78,17 @@ impl BrowserWindow {
     }
 
     /// True, after saying why, once an application update installed files
-    /// and waits for its restart (UPD-006). Every writer asks before it
-    /// starts: file operations, extraction, compression, a restored
-    /// version, rename and new items, as the Python app refused every
-    /// file request in that state.
-    pub(in crate::window) fn refuses_writes_during_update(&self) -> bool {
-        let Some(refusal) = self.context().updates().file_refusal() else {
+    /// and waits for its restart (UPD-006), or while a drive is formatted
+    /// (DEV-012). Every writer asks before it starts: file operations,
+    /// extraction, compression, a restored version, rename and new items,
+    /// as the Python app refused every file request during an update.
+    pub(in crate::window) fn refuses_writes(&self) -> bool {
+        let refusal = if self.context().formats_a_drive() {
+            Some(ox_core::i18n::gettext_static(FORMATTING_A_DRIVE).to_owned())
+        } else {
+            self.context().updates().file_refusal()
+        };
+        let Some(refusal) = refusal else {
             return false;
         };
         self.show_message(&refusal);
@@ -95,7 +104,7 @@ impl BrowserWindow {
         if self.is_writing_files() {
             return None;
         }
-        if self.refuses_writes_during_update() {
+        if self.refuses_writes() {
             return None;
         }
         let mut context = OperationContext::new(self.context().write_protection());

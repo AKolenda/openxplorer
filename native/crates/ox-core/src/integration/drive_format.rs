@@ -310,6 +310,21 @@ pub enum FormatError {
         crate::i18n::format_message("Could not format the drive: {error}", &[("error", .0.as_str())])
     )]
     Failed(String),
+    /// Formatting failed as `error` says, and the drive it unmounted
+    /// could not be mounted again, for the `reason` UDisks gave.
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "{error} (It could not be mounted again: {reason})",
+            &[("error", error.to_string().as_str()), ("reason", reason.as_str())]
+        )
+    )]
+    NotMountedAgain {
+        /// Why formatting failed.
+        error: Box<FormatError>,
+        /// Why mounting it again failed.
+        reason: String,
+    },
 }
 
 impl FormatError {
@@ -482,12 +497,23 @@ pub async fn format_drive(
     if let Err(error) = formatted {
         // A refused prompt leaves the old file system as it was: mounted
         // again, it stays in the sidebar. A failed format may have left
-        // none, and mounting it then fails harmlessly. It does not ask
-        // for a password again after one was refused.
-        if unmounted_here {
-            let _ = mount(connection, service, &facts.object, false).await;
+        // none, and then the error also says why it is not mounted. It
+        // does not ask for a password again after one was refused.
+        let failed = FormatError::from_call(error);
+        if !unmounted_here {
+            return Err(failed);
         }
-        return Err(FormatError::from_call(error));
+        return match mount(connection, service, &facts.object, false).await {
+            Ok(_) => Err(failed),
+            Err(error) if is_udisks_error(&error, "AlreadyMounted") => Err(failed),
+            Err(mut error) => {
+                gio::DBusError::strip_remote_error(&mut error);
+                Err(FormatError::NotMountedAgain {
+                    error: Box::new(failed),
+                    reason: error.message().to_owned(),
+                })
+            }
+        };
     }
     let mounted = mount(connection, service, &facts.object, true).await;
     // The desktop may have mounted the new file system first.

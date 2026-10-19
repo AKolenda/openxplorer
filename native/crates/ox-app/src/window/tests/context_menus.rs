@@ -476,3 +476,24 @@ fn format_waits_for_a_running_file_operation() {
 
     assert_eq!(refusal, "Finish the current operation before formatting.");
 }
+
+/// While a drive is formatted, no window starts writing files, so a
+/// transfer cannot go on onto the formatted drive.
+///
+/// parity: DEV-012
+#[gtk::test]
+fn writes_wait_while_a_drive_is_formatted() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let hold = test.context.hold_writes_for_formatting();
+
+    let refused = test.window.begin_operation("Preparing copy…").is_none();
+    let refusal = test.window.shown_message().to_string();
+    drop(hold);
+    let operation = test.window.begin_operation("Preparing copy…");
+    test.window.end_operation();
+
+    assert!(refused, "no copy starts while a drive is formatted");
+    assert_eq!(refusal, "Wait until the drive is formatted, then try again.");
+    assert!(operation.is_some(), "writes go on once it is formatted");
+}
