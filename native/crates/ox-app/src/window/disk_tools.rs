@@ -259,7 +259,8 @@ impl BrowserWindow {
     ///
     /// UDisks cannot be stopped once it formats, so the buttons are
     /// disabled until it is done. Closing the dialog meanwhile leaves the
-    /// format running, and the window reports how it ended.
+    /// format running, and the window reports how it ended, or another
+    /// window once that one is closed.
     fn start_format(
         &self,
         dialog: &Dialog,
@@ -294,7 +295,8 @@ impl BrowserWindow {
             // application stays running too, even if its last window is a
             // picker that closes.
             let hold = holder.context().hold_writes_for_formatting();
-            let running = holder.application().map(|app| app.hold());
+            let app = holder.application();
+            let running = app.as_ref().map(gio::prelude::ApplicationExtManual::hold);
             drop(holder);
             let (sender, receiver) = async_channel::bounded::<Result<Formatted, FormatError>>(1);
             let shown = (window.clone(), form.clone(), name.clone());
@@ -318,17 +320,17 @@ impl BrowserWindow {
             dialog.set_busy(Some(&Cancellation::new()));
             drop(dialog);
             let formatted = format_drive(&connection, UDISKS_NAME, &facts, &request).await;
-            drop((hold, running));
-            // The dialog was closed: the window reports the result.
+            drop(hold);
+            // The dialog was closed: the window reports the result, or
+            // another one if that window was closed too.
             if let Err(unheard) = sender.try_send(formatted) {
-                let Some(window) = window.upgrade() else {
-                    return;
+                let message = match unheard.into_inner() {
+                    Ok(formatted) => formatted_message(&name, &formatted),
+                    Err(error) => error.to_string(),
                 };
-                match unheard.into_inner() {
-                    Ok(formatted) => window.show_message(&formatted_message(&name, &formatted)),
-                    Err(error) => window.show_message(&error.to_string()),
-                }
+                report_format_result(&window, app.as_ref(), &message);
             }
+            drop(running);
         });
     }
 
@@ -368,6 +370,34 @@ impl BrowserWindow {
                 window.show_message(&failure);
             }
         });
+    }
+}
+
+/// Shows a format's result `message` in `window`, or, once that window is
+/// closed, in another window of `app`: the focused browsing window, else
+/// the most recent one, else a file dialog. A format's result, perhaps a
+/// drive that was not mounted again, is never lost.
+pub(in crate::window) fn report_format_result(
+    window: &glib::WeakRef<BrowserWindow>,
+    app: Option<&gtk::Application>,
+    message: &str,
+) {
+    let open = window.upgrade().filter(WidgetExt::is_visible);
+    let another = || {
+        let windows: Vec<BrowserWindow> = app?
+            .windows()
+            .into_iter()
+            .filter_map(|window| window.downcast::<BrowserWindow>().ok())
+            .filter(WidgetExt::is_visible)
+            .collect();
+        let browsing = || windows.iter().find(|window| !window.is_picking());
+        let focused = windows
+            .iter()
+            .find(|window| window.is_active() && !window.is_picking());
+        focused.or_else(browsing).or_else(|| windows.first()).cloned()
+    };
+    if let Some(window) = open.or_else(another) {
+        window.show_message(message);
     }
 }
 

@@ -10,7 +10,7 @@ use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
 use super::file_ops_support::{is_enabled, select_names};
-use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{settle, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuStyle;
 
 /// The position of the item called `name` in `test`'s view.
@@ -533,4 +533,32 @@ fn writes_wait_while_a_drive_is_formatted() {
     assert_eq!(update, ox_core::update::Activity::Busy, "nor an update's restart");
     assert!(operation.is_some(), "writes go on once it is formatted");
     assert!(admitted, "quick writes too");
+}
+
+/// A format's result is shown in the window it was started from, or, once
+/// that window is closed, in another one, so a failure is never lost.
+///
+/// parity: DEV-012
+#[gtk::test]
+fn a_formats_result_outlives_its_window() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let other = test.open_beside(&fixture.uri());
+    let (started, app) = (test.window.downgrade(), test.window.application());
+    let report = crate::window::disk_tools::report_format_result;
+
+    report(&started, app.as_ref(), "Formatted while open.");
+    let while_open = test.window.shown_message_text();
+    let elsewhere_before = other.window.shown_message_text();
+    test.window.close();
+    settle();
+    report(&started, app.as_ref(), "Formatted after closing.");
+
+    assert_eq!(while_open, "Formatted while open.");
+    assert_ne!(
+        elsewhere_before, "Formatted while open.",
+        "only its own window says so"
+    );
+    assert!(!test.window.is_visible());
+    assert_eq!(other.window.shown_message_text(), "Formatted after closing.");
 }
