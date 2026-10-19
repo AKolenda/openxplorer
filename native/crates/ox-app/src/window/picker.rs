@@ -60,8 +60,9 @@ mod probe;
 const DEFAULT_SIZE: (i32, i32) = (980, 640);
 
 /// The window commands that make no sense while choosing a file: more tabs,
-/// windows or panes, and Settings.
-const DISABLED_ACTIONS: [WindowAction; 14] = [
+/// windows or panes, Settings, and Format…, as a dialog closes on its own
+/// once answered, leaving no window to report the format in.
+const DISABLED_ACTIONS: [WindowAction; 15] = [
     WindowAction::NewTab,
     WindowAction::OpenTab,
     WindowAction::OpenTabBackground,
@@ -76,6 +77,7 @@ const DISABLED_ACTIONS: [WindowAction; 14] = [
     WindowAction::OpenFileLocationInTab,
     WindowAction::OpenFileLocationInWindow,
     WindowAction::SplitView,
+    WindowAction::FormatDrive,
 ];
 
 /// Shown when the File name box names nothing that exists.
@@ -3030,6 +3032,7 @@ mod tests {
     /// A dialog does not stand in for the last browsing window while a
     /// drive is formatted: that window still waits, as the dialog closes on
     /// its own once answered, which would end the application mid-format.
+    /// For the same reason a dialog formats no drive itself.
     ///
     /// parity: DEV-012, INT-032
     #[gtk::test]
@@ -3044,6 +3047,7 @@ mod tests {
             )],
         );
         let browsing = portal.test.open_beside(&fixture.uri());
+        let dialog_formats = portal.test.window.is_action_enabled("format-drive");
         let formatting = portal.test.context.hold_writes_for_formatting();
 
         browsing.window.close();
@@ -3056,6 +3060,8 @@ mod tests {
         browsing.window.close();
         settle();
 
+        assert!(!dialog_formats, "a dialog offers no Format…");
+        assert!(browsing.window.is_action_enabled("format-drive"));
         assert!(stayed, "the last browsing window stays open");
         assert_eq!(
             refusal,
