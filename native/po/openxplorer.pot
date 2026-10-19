@@ -4058,6 +4058,10 @@ msgstr ""
 msgid "This tool needs a location on this computer."
 msgstr ""
 
+#: crates/ox-app/src/window/disk_tools.rs crates/ox-app/src/window/file_ops/running.rs
+msgid "Wait until the drive is formatted, then try again."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/disk_tools.rs
 msgid "{drive} is formatted, but could not be mounted again: {error}"
@@ -4568,10 +4572,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/rename.rs
 msgid "The name was not changed."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/running.rs
-msgid "Wait until the drive is formatted, then try again."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/template_dialog.rs

@@ -459,9 +459,9 @@ fn the_disk_tools_run_on_the_items_local_path() {
     );
 }
 
-/// Format… waits for the window's file operation, as Disconnect does, and
-/// for a rename or a new item, so no write goes on onto the drive once it
-/// is formatted.
+/// Format… waits for the window's file operation, as Disconnect does, for
+/// a rename or a new item, so no write goes on onto the drive once it is
+/// formatted, and for another format, so two never overlap.
 ///
 /// parity: DEV-012
 #[gtk::test]
@@ -479,12 +479,29 @@ fn format_waits_for_a_running_file_operation() {
     test.activate("format-drive", Some("file:///media/demo/USB"));
     let quick_refusal = test.window.shown_message().to_string();
     drop(renaming);
+    let formatting = test.context.hold_writes_for_formatting();
+    test.activate("format-drive", Some("file:///media/demo/USB"));
+    let second_format = test.window.shown_message().to_string();
+    let confirmed_second = test.window.format_refusal();
+    drop(formatting);
+    let free = test.window.format_refusal();
 
     assert_eq!(refusal, "Finish the current operation before formatting.");
     assert_eq!(
         quick_refusal, "Finish the current operation before formatting.",
         "a rename or a new item running counts too"
     );
+    let waiting = "Wait until the drive is formatted, then try again.";
+    assert_eq!(
+        second_format, waiting,
+        "another format, perhaps of the same drive, runs"
+    );
+    assert_eq!(
+        confirmed_second,
+        Some(waiting),
+        "checked again once the erase is confirmed"
+    );
+    assert_eq!(free, None, "a drive may be formatted once nothing else runs");
 }
 
 /// While a drive is formatted, no window starts writing files, so a

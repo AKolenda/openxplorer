@@ -48,6 +48,10 @@ const NO_FILE_SYSTEMS: &str =
 /// could resume on the drive once it is formatted.
 const FINISH_WRITING: &str = crate::i18n::message_id("Finish the current operation before formatting.");
 
+/// Why a format waits for another, perhaps of the same drive.
+const FORMATTING_ANOTHER: &str =
+    crate::i18n::message_id("Wait until the drive is formatted, then try again.");
+
 /// Start's label while the drive is formatted.
 const FORMATTING: &str = crate::i18n::message_id("Formatting…");
 
@@ -178,12 +182,25 @@ impl BrowserWindow {
         Some(popover)
     }
 
-    /// Format…: asks UDisks about the drive mounted at `uri`, then shows
-    /// the Format dialog for it. Refused while any window writes files,
-    /// as Disconnect is, so no write goes on onto the formatted drive.
-    fn open_format_dialog(&self, uri: &str) {
+    /// Why no drive may be formatted now, or `None` when one may: a
+    /// window writes files, as for Disconnect, or another format runs,
+    /// perhaps of the same drive from another window.
+    pub(in crate::window) fn format_refusal(&self) -> Option<&'static str> {
         if self.writes_in_any_window() == WriteActivity::Writing {
-            self.show_message(ox_core::i18n::gettext_static(FINISH_WRITING));
+            return Some(ox_core::i18n::gettext_static(FINISH_WRITING));
+        }
+        self.context()
+            .formats_a_drive()
+            .then(|| ox_core::i18n::gettext_static(FORMATTING_ANOTHER))
+    }
+
+    /// Format…: asks UDisks about the drive mounted at `uri`, then shows
+    /// the Format dialog for it. Refused while any window writes files or
+    /// formats a drive (see [`Self::format_refusal`]), so no write goes on
+    /// onto the formatted drive and two formats never overlap.
+    fn open_format_dialog(&self, uri: &str) {
+        if let Some(refusal) = self.format_refusal() {
+            self.show_message(refusal);
             return;
         }
         let mounts = self.volume_monitor().mounts();
@@ -264,13 +281,16 @@ impl BrowserWindow {
             let Some(holder) = window.upgrade() else {
                 return;
             };
-            // A write may have started while the dialog was open.
-            if holder.writes_in_any_window() == WriteActivity::Writing {
-                dialog.show_error(ox_core::i18n::gettext_static(FINISH_WRITING));
+            // A write or another format may have started while the dialog
+            // was open.
+            if let Some(refusal) = holder.format_refusal() {
+                dialog.show_error(refusal);
                 return;
             }
             // From here until the drive is mounted again no window starts
-            // writing, so no transfer goes on onto the formatted drive.
+            // writing or formatting, so no transfer goes on onto the
+            // formatted drive. Nothing awaits between the check and the
+            // hold, so two confirmed formats cannot both pass.
             let hold = holder.context().hold_writes_for_formatting();
             drop(holder);
             let (sender, receiver) = async_channel::bounded::<Result<Formatted, FormatError>>(1);
