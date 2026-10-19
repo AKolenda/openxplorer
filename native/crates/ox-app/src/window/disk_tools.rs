@@ -20,7 +20,7 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::integration::{
     available_file_systems, drive_facts, format_drive, DiskTool, DriveFacts, ExecutableSearch, FileSystem,
-    FormatError, FormatRequest, Sandbox, UDISKS_NAME,
+    FormatError, FormatRequest, Formatted, Sandbox, UDISKS_NAME,
 };
 use ox_core::location::normalise;
 use ox_core::transfer::Cancellation;
@@ -243,7 +243,7 @@ impl BrowserWindow {
     ) {
         let (window, form) = (self.downgrade(), dialog.downgrade());
         let (connection, facts) = (connection.clone(), facts.clone());
-        let done = ox_core::i18n::format_message("{drive} is formatted.", &[("drive", name)]);
+        let name = name.to_owned();
         glib::spawn_future_local(async move {
             let Some(dialog) = form.upgrade() else {
                 return;
@@ -251,21 +251,21 @@ impl BrowserWindow {
             if !confirm_erase(&dialog).await {
                 return;
             }
-            let (sender, receiver) = async_channel::bounded::<Result<Option<String>, FormatError>>(1);
-            let shown = (window.clone(), form.clone(), done.clone());
+            let (sender, receiver) = async_channel::bounded::<Result<Formatted, FormatError>>(1);
+            let shown = (window.clone(), form.clone(), name.clone());
             dialog.run(ox_core::i18n::gettext_static(FORMATTING), async move {
                 let Ok(formatted) = receiver.recv().await else {
                     return;
                 };
-                let (window, form, done) = shown;
+                let (window, form, name) = shown;
                 let (Some(window), Some(dialog)) = (window.upgrade(), form.upgrade()) else {
                     return;
                 };
                 dialog.set_busy(None);
                 match formatted {
-                    Ok(_) => {
+                    Ok(formatted) => {
                         dialog.finish();
-                        window.show_message(&done);
+                        window.show_message(&formatted_message(&name, &formatted));
                     }
                     Err(error) => dialog.show_error(&error.to_string()),
                 }
@@ -279,7 +279,7 @@ impl BrowserWindow {
                     return;
                 };
                 match unheard.into_inner() {
-                    Ok(_) => window.show_message(&done),
+                    Ok(formatted) => window.show_message(&formatted_message(&name, &formatted)),
                     Err(error) => window.show_message(&error.to_string()),
                 }
             }
@@ -358,6 +358,18 @@ fn start(tool: DiskTool, target: &Path) -> Result<(), String> {
     })
 }
 
+/// What the window says once the drive `name` is `formatted`: that it is
+/// formatted, and why it is not mounted again when it is not.
+fn formatted_message(name: &str, formatted: &Formatted) -> String {
+    match formatted {
+        Formatted::Mounted => ox_core::i18n::format_message("{drive} is formatted.", &[("drive", name)]),
+        Formatted::NotMounted(error) => ox_core::i18n::format_message(
+            "{drive} is formatted, but could not be mounted again: {error}",
+            &[("drive", name), ("error", error)],
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -378,5 +390,21 @@ mod tests {
         assert!(status_bar_entries("file:///srv/media", false).is_empty());
         assert!(status_bar_entries("smb://nas/share", true).is_empty());
         assert!(status_bar_entries("ox:this-pc", true).is_empty());
+    }
+
+    /// A drive formatted but not mounted again says why it is not mounted,
+    /// not only that it is formatted.
+    ///
+    /// parity: DEV-012
+    #[test]
+    fn a_drive_not_mounted_again_says_why() {
+        assert_eq!(
+            formatted_message("USB Drive", &Formatted::Mounted),
+            "USB Drive is formatted."
+        );
+        assert_eq!(
+            formatted_message("USB Drive", &Formatted::NotMounted("Not permitted".to_owned())),
+            "USB Drive is formatted, but could not be mounted again: Not permitted"
+        );
     }
 }

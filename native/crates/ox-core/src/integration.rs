@@ -103,7 +103,7 @@ pub use default_apps::{
 pub use disk_tools::{is_disk_image, DiskTool};
 pub use drive_format::{
     available_file_systems, default_file_system, drive_facts, format_drive, DriveFacts, FileSystem,
-    FormatError, FormatRequest, UDISKS_NAME,
+    FormatError, FormatRequest, Formatted, UDISKS_NAME,
 };
 pub use file_chooser_bus::{
     ChooserCall, ChooserNotShown, ChooserRegistrationFailed, ChooserReply, FileChooserBus,

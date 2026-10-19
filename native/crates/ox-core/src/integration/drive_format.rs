@@ -245,6 +245,15 @@ pub struct FormatRequest {
     pub quick: bool,
 }
 
+/// A drive [`format_drive`] formatted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Formatted {
+    /// It is mounted again.
+    Mounted,
+    /// It is formatted but not mounted again, for the reason UDisks gave.
+    NotMounted(String),
+}
+
 /// Why the drive was not formatted. `Display` is the message the window
 /// shows.
 #[derive(Debug, thiserror::Error)]
@@ -394,7 +403,8 @@ pub async fn available_file_systems(
 
 /// Formats the drive `facts` describes as `request` asks, through UDisks
 /// `service` on `connection`: unmounts it, makes the file system, and
-/// mounts it again. Returns where it is mounted, if mounting succeeded.
+/// mounts it again. A drive formatted but not mounted again is still
+/// formatted: the [`Formatted`] answer tells why it is not mounted.
 ///
 /// The drive is read again first: one removed while the dialog was open,
 /// or another plugged in at its device since, is not touched.
@@ -409,7 +419,7 @@ pub async fn format_drive(
     service: &str,
     facts: &DriveFacts,
     request: &FormatRequest,
-) -> Result<Option<String>, FormatError> {
+) -> Result<Formatted, FormatError> {
     if facts.read_only {
         return Err(FormatError::ReadOnly);
     }
@@ -456,10 +466,15 @@ pub async fn format_drive(
         &(glib::VariantDict::new(None),).to_variant(),
     )
     .await;
-    Ok(mounted
-        .ok()
-        .and_then(|reply| reply.get::<(String,)>())
-        .map(|(path,)| path))
+    // The desktop may have mounted the new file system first.
+    Ok(match mounted {
+        Ok(_) => Formatted::Mounted,
+        Err(error) if is_udisks_error(&error, "AlreadyMounted") => Formatted::Mounted,
+        Err(mut error) => {
+            gio::DBusError::strip_remote_error(&mut error);
+            Formatted::NotMounted(error.message().to_owned())
+        }
+    })
 }
 
 /// The options of `Block.Format` (`a{sv}`): the label, fitted again so

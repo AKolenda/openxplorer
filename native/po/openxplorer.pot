@@ -4056,6 +4056,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/disk_tools.rs
+msgid "{drive} is formatted, but could not be mounted again: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/disk_tools.rs
 msgid "{drive} is formatted."
 msgstr ""
 

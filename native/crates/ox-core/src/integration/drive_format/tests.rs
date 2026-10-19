@@ -70,6 +70,8 @@ struct Answers {
     unmount_error: Option<&'static str>,
     /// The UDisks error `Format` answers.
     format_error: Option<&'static str>,
+    /// The UDisks error `Mount` answers.
+    mount_error: Option<&'static str>,
     /// Another drive is at `/dev/sdb1` once the first was read.
     replaced: bool,
 }
@@ -140,6 +142,7 @@ impl FakeUdisks {
                     let error = match method {
                         "Unmount" => answering.unmount_error,
                         "Format" => answering.format_error,
+                        "Mount" => answering.mount_error,
                         _ => None,
                     };
                     match (error, method) {
@@ -344,7 +347,7 @@ fn a_drive_is_read_unmounted_formatted_and_mounted_again() {
             has_file_system: true,
         }
     );
-    assert_eq!(mounted.as_deref(), Some("/media/demo/USB"));
+    assert_eq!(mounted, Formatted::Mounted);
     let methods: Vec<&str> = calls
         .iter()
         .map(|call| call.split(' ').next().unwrap_or_default())
@@ -527,6 +530,38 @@ fn a_busy_drive_or_a_dismissed_prompt_stops_the_format() {
         refused.map_err(|error| error.to_string()),
         Err("Could not format the drive: refused".to_owned())
     );
+}
+
+/// A drive formatted but refused mounting again is still formatted, and
+/// the answer keeps why it is not mounted; one the desktop mounted first
+/// is mounted.
+///
+/// parity: DEV-012
+#[test]
+fn a_drive_formatted_but_not_mounted_again_says_why() {
+    let format_then_mount = |mount_error: &'static str| {
+        let answers = Answers {
+            mount_error: Some(mount_error),
+            ..Answers::default()
+        };
+        with_udisks(answers, |connection, fake| async move {
+            let name = fake.name();
+            let facts = drive_facts(&connection, &name, "/dev/sdb1")
+                .await
+                .expect("the drive");
+            let formatted = format_drive(&connection, &name, &facts, &request(FileSystem::ExFat, true)).await;
+            (formatted, fake.drive_calls())
+        })
+    };
+    let (refused, calls) = format_then_mount("NotAuthorized");
+    let (already, _) = format_then_mount("AlreadyMounted");
+
+    assert_eq!(
+        refused.expect("formatted"),
+        Formatted::NotMounted("refused".to_owned())
+    );
+    assert!(calls[1].starts_with("Block.Format "), "{calls:?}");
+    assert_eq!(already.expect("formatted"), Formatted::Mounted);
 }
 
 /// parity: DEV-012
