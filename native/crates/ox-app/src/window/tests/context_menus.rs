@@ -458,3 +458,21 @@ fn the_disk_tools_run_on_the_items_local_path() {
         ]
     );
 }
+
+/// Format… waits for the window's file operation, as Disconnect does, so
+/// no write goes on onto the drive once it is formatted.
+///
+/// parity: DEV-012
+#[gtk::test]
+fn format_waits_for_a_running_file_operation() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let operation = test.window.begin_operation("Preparing copy…");
+    assert!(operation.is_some(), "no other operation runs");
+
+    test.activate("format-drive", Some("file:///media/demo/USB"));
+    let refusal = test.window.shown_message().to_string();
+    test.window.end_operation();
+
+    assert_eq!(refusal, "Finish the current operation before formatting.");
+}

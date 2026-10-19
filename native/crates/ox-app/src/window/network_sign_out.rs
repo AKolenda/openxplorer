@@ -116,9 +116,9 @@ impl BrowserWindow {
         });
     }
 
-    /// Whether any window of the app writes files, which Sign out waits
-    /// for.
-    fn writes_in_any_window(&self) -> WriteActivity {
+    /// Whether any window of the app writes files, which Sign out and
+    /// Format… wait for.
+    pub(super) fn writes_in_any_window(&self) -> WriteActivity {
         let windows = self.browser_windows();
         let writing = windows
             .iter()

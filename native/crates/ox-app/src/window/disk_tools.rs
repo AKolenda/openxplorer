@@ -23,6 +23,7 @@ use ox_core::integration::{
     FormatError, FormatRequest, Formatted, Sandbox, UDISKS_NAME,
 };
 use ox_core::location::normalise;
+use ox_core::network::WriteActivity;
 use ox_core::transfer::Cancellation;
 
 use super::actions::text_action;
@@ -42,6 +43,10 @@ const NOT_FORMATTABLE: &str = crate::i18n::message_id("This drive cannot be form
 /// Shown when the system cannot make any file system the dialog offers.
 const NO_FILE_SYSTEMS: &str =
     crate::i18n::message_id("No program to make a file system is installed on this computer.");
+
+/// Shown when Format… is chosen while files are written, as a write
+/// could resume on the drive once it is formatted.
+const FINISH_WRITING: &str = crate::i18n::message_id("Finish the current operation before formatting.");
 
 /// Start's label while the drive is formatted.
 const FORMATTING: &str = crate::i18n::message_id("Formatting…");
@@ -174,8 +179,13 @@ impl BrowserWindow {
     }
 
     /// Format…: asks UDisks about the drive mounted at `uri`, then shows
-    /// the Format dialog for it.
+    /// the Format dialog for it. Refused while any window writes files,
+    /// as Disconnect is, so no write goes on onto the formatted drive.
     fn open_format_dialog(&self, uri: &str) {
+        if self.writes_in_any_window() == WriteActivity::Writing {
+            self.show_message(ox_core::i18n::gettext_static(FINISH_WRITING));
+            return;
+        }
         let mounts = self.volume_monitor().mounts();
         let (Some(mount), Some(device)) = (mount_at(&mounts, uri), block_device_of(&mounts, uri)) else {
             self.show_message(ox_core::i18n::gettext_static(NOT_FORMATTABLE));
@@ -249,6 +259,12 @@ impl BrowserWindow {
                 return;
             };
             if !confirm_erase(&dialog).await {
+                return;
+            }
+            // A write may have started while the dialog was open.
+            let writing = window.upgrade().map(|window| window.writes_in_any_window());
+            if writing == Some(WriteActivity::Writing) {
+                dialog.show_error(ox_core::i18n::gettext_static(FINISH_WRITING));
                 return;
             }
             let (sender, receiver) = async_channel::bounded::<Result<Formatted, FormatError>>(1);

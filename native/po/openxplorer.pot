@@ -4035,6 +4035,10 @@ msgid "Disks cannot open this drive."
 msgstr ""
 
 #: crates/ox-app/src/window/disk_tools.rs
+msgid "Finish the current operation before formatting."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
 msgid "Formatting…"
 msgstr ""
 
