@@ -219,11 +219,10 @@ impl BrowserWindow {
         let name = mount.name().to_string();
         // The drive chosen: its mount, and the UUID of its file system, so
         // a drive plugged in at the same device during the lookup is not
-        // taken for it.
-        let (mount, uuid) = (
-            mount.clone(),
-            mount.volume().and_then(|volume| volume.identifier("uuid")),
-        );
+        // taken for it. The volume's UUID, not its "uuid" identifier: for
+        // an unlocked encrypted drive the identifier is the container's,
+        // while the device UDisks is asked about is the unlocked one.
+        let (mount, uuid) = (mount.clone(), mount.volume().and_then(|volume| volume.uuid()));
         let window = self.downgrade();
         glib::spawn_future_local(async move {
             let target = read_format_target(&device).await;
