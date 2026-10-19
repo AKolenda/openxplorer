@@ -1276,14 +1276,14 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/lzma-rust2/lzma-rust2-0.21.0.crate",
-        "sha256": "fde178a3caf126c440fa15628147772d8ee590a39477d711353fbe2e58a73a5b",
-        "dest": "cargo/vendor/lzma-rust2-0.21.0"
+        "url": "https://static.crates.io/crates/lzma-rust2/lzma-rust2-0.22.0.crate",
+        "sha256": "7277c9742229dc25243236d578b6471a798c554512c6f6a04365ec2e87c2a3bb",
+        "dest": "cargo/vendor/lzma-rust2-0.22.0"
     },
     {
         "type": "inline",
-        "contents": "{\"package\": \"fde178a3caf126c440fa15628147772d8ee590a39477d711353fbe2e58a73a5b\", \"files\": {}}",
-        "dest": "cargo/vendor/lzma-rust2-0.21.0",
+        "contents": "{\"package\": \"7277c9742229dc25243236d578b6471a798c554512c6f6a04365ec2e87c2a3bb\", \"files\": {}}",
+        "dest": "cargo/vendor/lzma-rust2-0.22.0",
         "dest-filename": ".cargo-checksum.json"
     },
     {
