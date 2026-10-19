@@ -14,6 +14,8 @@
 //! taken from the caller. Options of an unexpected type are ignored, as the
 //! portal's own backends do, so a newer caller still gets a dialog.
 
+use std::ffi::OsString;
+use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 
 use gio::prelude::*;
@@ -79,8 +81,8 @@ pub enum ChooserMode {
     },
     /// A folder for files with these names.
     SaveFiles {
-        /// The names, in the caller's order.
-        names: Vec<String>,
+        /// The filesystem-encoded names, in the caller's order.
+        names: Vec<OsString>,
     },
 }
 
@@ -216,11 +218,7 @@ impl ChooserRequest {
         };
         let current_filter = match method {
             ChooserMethod::SaveFiles => None,
-            ChooserMethod::OpenFile | ChooserMethod::SaveFile => {
-                lookup::<(String, Vec<(u32, String)>)>(options, "current_filter")
-                    .and_then(filter_from_parts)
-                    .map(|filter| select_filter(&mut filters, filter))
-            }
+            ChooserMethod::OpenFile | ChooserMethod::SaveFile => read_current_filter(options, &mut filters)?,
         };
         let mode = match method {
             ChooserMethod::OpenFile => ChooserMode::Open {
@@ -453,6 +451,26 @@ fn filter_from_parts((name, patterns): (String, Vec<(u32, String)>)) -> Option<F
     })
 }
 
+/// Checks a standalone current filter with the same limits as listed filters.
+fn read_current_filter(
+    options: &glib::VariantDict,
+    filters: &mut Vec<FileFilter>,
+) -> Result<Option<usize>, ChooserRequestError> {
+    let Some(parts) = lookup::<(String, Vec<(u32, String)>)>(options, "current_filter") else {
+        return Ok(None);
+    };
+    if parts.1.len() > MAX_LIST_ITEMS {
+        return Err(ChooserRequestError::TooMany("filter patterns"));
+    }
+    let Some(filter) = filter_from_parts(parts) else {
+        return Ok(None);
+    };
+    if filters.len() >= MAX_LIST_ITEMS && !filters.contains(&filter) {
+        return Err(ChooserRequestError::TooMany("filters"));
+    }
+    Ok(Some(select_filter(filters, filter)))
+}
+
 /// The index of `current` in `filters`, adding it at the end when the
 /// caller did not list it (as GTK's dialog shows it).
 fn select_filter(filters: &mut Vec<FileFilter>, current: FileFilter) -> usize {
@@ -478,7 +496,7 @@ fn suggested_name(options: &glib::VariantDict) -> Result<String, ChooserRequestE
 }
 
 /// The names of `SaveFiles`' `files`, `aay`.
-fn file_names(options: &glib::VariantDict) -> Result<Vec<String>, ChooserRequestError> {
+fn file_names(options: &glib::VariantDict) -> Result<Vec<OsString>, ChooserRequestError> {
     let files = options
         .lookup_value("files", Some(glib::VariantTy::BYTE_STRING_ARRAY))
         .map(|files| files.iter().collect::<Vec<_>>())
@@ -496,7 +514,21 @@ fn file_names(options: &glib::VariantDict) -> Result<Vec<String>, ChooserRequest
         .map(|file| {
             let bytes = file.fixed_array::<u8>().unwrap_or_default();
             let bytes = bytes.strip_suffix(&[0]).unwrap_or(bytes);
-            checked_name(&String::from_utf8_lossy(bytes))
+            // These are Unix filesystem bytes, not UTF-8 strings. Lossy
+            // conversion or truncation can make two outputs the same path.
+            if bytes.is_empty()
+                || bytes == b"."
+                || bytes == b".."
+                || bytes.contains(&b'/')
+                || bytes.contains(&0)
+                || bytes.len() > MAX_TEXT_CHARS
+            {
+                return Err(ChooserRequestError::BadName(format!(
+                    "Not a file name: {}",
+                    bounded(&String::from_utf8_lossy(bytes))
+                )));
+            }
+            Ok(OsString::from_vec(bytes.to_vec()))
         })
         .collect()
 }

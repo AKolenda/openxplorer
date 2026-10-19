@@ -688,9 +688,10 @@ impl BrowserWindow {
                 Some(typed) => typed,
                 None => self.chosen_files(&selected, *multiple).await,
             },
-            ChooserMode::Open { directory: true, .. } => {
-                self.chosen_folder(&selected).await.map(|folder| vec![folder])
-            }
+            ChooserMode::Open {
+                directory: true,
+                multiple,
+            } => self.chosen_folders(&selected, *multiple).await,
             ChooserMode::Save { .. } => self.chosen_save(picker).await,
             ChooserMode::SaveFiles { names } => {
                 let folder = self.chosen_folder(&selected).await?;
@@ -698,7 +699,7 @@ impl BrowserWindow {
                 for name in names {
                     match probe(&folder.join(name)).await {
                         Probe::NoAnswer => return Err(not_answering(&folder)),
-                        found if found.exists() => existing.push(name.clone()),
+                        found if found.exists() => existing.push(name.to_string_lossy().into_owned()),
                         _ => {}
                     }
                 }
@@ -733,7 +734,30 @@ impl BrowserWindow {
         Ok(paths)
     }
 
-    /// The folder of a folder dialog or `SaveFiles`: the one selected
+    /// All selected folders for an Open dialog; the current folder only
+    /// when no items were selected.
+    async fn chosen_folders(&self, selected: &[Entry], multiple: bool) -> Result<Vec<PathBuf>, String> {
+        if selected.is_empty() {
+            return self.chosen_folder(selected).await.map(|folder| vec![folder]);
+        }
+        if selected.len() > 1 && !multiple {
+            return Err(ox_core::i18n::gettext(CHOOSE_ONE));
+        }
+        let mut paths = Vec::with_capacity(selected.len());
+        for entry in selected {
+            if !entry.is_dir {
+                return Ok(Vec::new());
+            }
+            paths.push(
+                self.local_path_now(entry.navigation_uri())
+                    .await
+                    .ok_or_else(not_local)?,
+            );
+        }
+        Ok(paths)
+    }
+
+    /// The folder of `SaveFiles`: the one selected
     /// folder, else the current folder.
     async fn chosen_folder(&self, selected: &[Entry]) -> Result<PathBuf, String> {
         if let [entry] = selected {
@@ -2075,6 +2099,51 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("Exports")]);
+    }
+
+    /// Multiple directory selection grants exactly the selected folders;
+    /// selecting nothing still chooses the currently displayed folder.
+    #[gtk::test]
+    fn a_multiple_folder_dialog_never_substitutes_the_parent_for_selected_children() {
+        let fixture = Fixture::empty();
+        for name in ["First", "Second", "Unselected"] {
+            std::fs::create_dir(fixture.path(name)).unwrap();
+        }
+        for choose_children in [true, false] {
+            let portal = Portal::new();
+            let answer = portal.call(
+                "OpenFile",
+                &[
+                    ("directory", true.to_variant()),
+                    ("multiple", true.to_variant()),
+                    (
+                        "current_folder",
+                        path_variant(&fixture.root().display().to_string()),
+                    ),
+                ],
+            );
+            let window = &portal.test.window;
+            if choose_children {
+                for name in ["First", "Second"] {
+                    window
+                        .folder_model()
+                        .selection()
+                        .select_item(portal.test.position_of(name), false);
+                }
+                settle();
+                assert_eq!(window.selected_entries().len(), 2);
+            }
+            window.picker().unwrap().accept.emit_clicked();
+            let (response, mut uris) = Portal::finish(&answer);
+            assert_eq!(response, RESPONSE_SUCCESS);
+            uris.sort();
+            let expected = if choose_children {
+                vec![fixture.uri_of("First"), fixture.uri_of("Second")]
+            } else {
+                vec![gio::File::for_path(fixture.root()).uri().to_string()]
+            };
+            assert_eq!(uris, expected);
+        }
     }
 
     /// Escape in the file list cancels the dialog, as in Windows, even

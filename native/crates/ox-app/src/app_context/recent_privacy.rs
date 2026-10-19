@@ -205,10 +205,8 @@ impl AppContext {
     /// Forgets the app's recent files opened before `opened_before`, or
     /// all of them for `None`.
     fn forget_recent(&self, opened_before: Option<u64>) {
-        let recent = self.settings_data().recent;
-        if recent.iter().all(|entry| entry.is_kept_by(opened_before)) {
-            return;
-        }
+        // Earlier queued opens may not be in the cached snapshot yet. Run
+        // the clear after those changes; Settings skips an unnecessary save.
         let change: Change = Box::new(move |settings| settings.forget_recent(opened_before));
         self.change_settings(change, |_| {});
     }
@@ -217,6 +215,44 @@ impl AppContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// parity: SAFE-022
+    #[gtk::test]
+    fn clearing_recent_files_also_clears_an_open_waiting_on_the_settings_worker() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+
+        use ox_core::settings::Settings;
+
+        use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        assert!(test.context.settings_data().recent.is_empty());
+        test.context.remember_open(RecentEntry {
+            uri: fixture.uri_of("Notes 2.txt"),
+            name: "Notes 2.txt".into(),
+            type_label: "Text".into(),
+            is_dir: false,
+            size: 1,
+            modified: 1,
+            opened: Some(now()),
+        });
+        // The main loop has not delivered the pending write's result yet.
+        assert!(test.context.settings_data().recent.is_empty());
+        test.context.clear_recent_files();
+        let drained = Rc::new(Cell::new(false));
+        let finished = Rc::clone(&drained);
+        test.context.change_settings(Box::new(|_| Ok(())), move |result| {
+            result.unwrap();
+            finished.set(true);
+        });
+        wait_until("the remember and clear to finish", || drained.get());
+
+        assert!(test.context.settings_data().recent.is_empty());
+        assert!(Settings::open(test.settings_directory()).data().recent.is_empty());
+    }
+
     /// parity: SAFE-022, SIDE-026
     #[gtk::test]
     fn both_recent_views_honor_desktop_privacy_even_when_gtk_history_is_enabled() {

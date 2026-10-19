@@ -92,7 +92,8 @@ impl LaunchCheck {
 
     /// [`Self::run`] for the effective user `user_id`.
     fn run_as(arguments: Vec<String>, user_id: u32) -> Self {
-        let has = |option: &str| arguments.iter().skip(1).any(|argument| argument == option);
+        let parsed = crate::arguments::Arguments::parse(&arguments);
+        let has = |option: &str| parsed.has(option);
         if has(VERSION_OPTION) {
             println!("OpenXplorer {}", running_version());
             return Self::Exit(glib::ExitCode::SUCCESS);
@@ -151,10 +152,7 @@ fn effective_user_id() -> u32 {
 
 /// `arguments` without `--restart`.
 fn without_restart(arguments: Vec<String>) -> Vec<String> {
-    arguments
-        .into_iter()
-        .filter(|argument| argument != RESTART_OPTION)
-        .collect()
+    crate::arguments::without_option(arguments, RESTART_OPTION)
 }
 
 /// `--quit`: asks the running instance, if any, to quit safely and waits
@@ -256,6 +254,18 @@ mod tests {
     fn the_restart_option_is_not_passed_on() {
         let passed = without_restart(arguments(&["openxplorer", "--restart", "/tmp"]));
         assert_eq!(passed, arguments(&["openxplorer", "/tmp"]));
+        let passed = without_restart(arguments(&[
+            "openxplorer",
+            "--restart",
+            "--",
+            "--restart",
+            "--quit",
+            "--version",
+        ]));
+        assert_eq!(
+            passed,
+            arguments(&["openxplorer", "--", "--restart", "--quit", "--version"])
+        );
     }
 
     /// Root is refused with status 1; any other user goes on to the
@@ -266,6 +276,11 @@ mod tests {
     fn a_launch_as_root_is_refused_with_status_1() {
         assert_eq!(refuse_root(ROOT_USER_ID), Some(glib::ExitCode::FAILURE));
         assert_eq!(refuse_root(1000), None);
+        assert_eq!(
+            LaunchCheck::run_as(arguments(&["openxplorer", "--", "--version"]), ROOT_USER_ID),
+            LaunchCheck::Exit(glib::ExitCode::FAILURE),
+            "a positional --version must not bypass the root check"
+        );
         assert_eq!(
             LaunchCheck::run_as(arguments(&["openxplorer", "--version"]), ROOT_USER_ID),
             LaunchCheck::Exit(glib::ExitCode::SUCCESS),

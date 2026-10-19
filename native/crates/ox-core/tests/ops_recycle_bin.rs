@@ -225,7 +225,8 @@ fn deleting_from_the_recycle_bin_removes_only_the_chosen_items() {
 
 /// Regression: the Trash backend of `GVfs` stopped listing an item that
 /// was trashed after an item with the same name had been deleted from the
-/// Recycle Bin.
+/// Recycle Bin. Pin its private files folder's time to reproduce a
+/// filesystem whose timestamp does not advance between the operations.
 #[test]
 fn an_item_trashed_after_deleting_one_with_the_same_name_is_listed() {
     let _recycle_bin = use_recycle_bin();
@@ -236,8 +237,11 @@ fn an_item_trashed_after_deleting_one_with_the_same_name_is_listed() {
     let first = recycled_from(&draft);
 
     let deleted = block_on(delete_from_recycle_bin(&[first.uri], &Cancellation::new())).unwrap();
+    let trash_files = fs::File::open(glib::user_data_dir().join("Trash/files")).unwrap();
+    let after_delete = trash_files.metadata().unwrap().modified().unwrap();
     fs::write(&draft, b"second").unwrap();
     trash(&[&draft]);
+    trash_files.set_modified(after_delete).unwrap();
 
     assert!(deleted.errors.is_empty(), "{:?}", deleted.errors);
     assert_eq!(recycled_from(&draft).name, "draft.txt");
@@ -253,6 +257,10 @@ fn emptying_the_recycle_bin_deletes_everything_in_it_folders_included() {
     let file = temp.path().join("old.txt");
     fs::write(&file, b"old").unwrap();
     trash(&[&folder, &file]);
+    // A monitored Trash learns of additions asynchronously. The Empty
+    // command is tested only once both fixture items are actually listed.
+    recycled_from(&folder);
+    recycled_from(&file);
     let before = recycle_bin();
     let temp_root = std::env::temp_dir();
     // Everything about to be deleted was trashed by these tests; see

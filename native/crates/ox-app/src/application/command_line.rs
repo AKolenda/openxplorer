@@ -143,9 +143,21 @@ impl CommandRequest {
     ) -> Result<Self, CommandLineError> {
         let options = command_line.options_dict();
         let arguments = command_line.arguments();
+        // GApplication removes parsed options, but preserves the first
+        // `--` when later operands begin with a dash. Only that separator
+        // is syntax; later `--` and option-like names remain file names.
+        let mut passed_separator = false;
         let locations = arguments
             .iter()
             .skip(1)
+            .filter(|argument| {
+                if !passed_separator && argument.as_os_str() == std::ffi::OsStr::new("--") {
+                    passed_separator = true;
+                    false
+                } else {
+                    true
+                }
+            })
             .map(|argument| command_line.create_file_for_arg(argument))
             .map(|file| normalise(&file.uri()))
             .collect::<Result<Vec<_>, _>>()?;
@@ -293,6 +305,54 @@ mod tests {
     fn select_needs_a_file() {
         let error = request(&[CommandOption::Select], &[]).expect_err("nothing to select");
         assert_eq!(error.to_string(), "--select needs a file path.");
+    }
+
+    /// `GApplication` conditionally retains the separator in its remaining
+    /// arguments, so exercise its parser before resolving file locations.
+    #[gtk::test]
+    fn gapplication_keeps_option_like_operands_without_a_phantom_separator() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let cases: &[(&[&str], &[&str])] = &[
+            (&["--", "--quit"], &["--quit"]),
+            (&["--", "example.txt", "--quit"], &["example.txt", "--quit"]),
+            (&["example.txt", "--", "--quit"], &["example.txt", "--quit"]),
+            (&["--", "--"], &["--"]),
+            (&["--", "example.txt", "--"], &["example.txt", "--"]),
+            (&["--", "example.txt"], &["example.txt"]),
+            (
+                &["example.txt", "--", "second.txt"],
+                &["example.txt", "second.txt"],
+            ),
+        ];
+        for &(operands, expected) in cases {
+            let application = gio::Application::new(
+                None,
+                gio::ApplicationFlags::HANDLES_COMMAND_LINE | gio::ApplicationFlags::NON_UNIQUE,
+            );
+            add_options(&application);
+            let received = Rc::new(RefCell::new(None));
+            let answer = Rc::clone(&received);
+            application.connect_command_line(move |_, command_line| {
+                answer.replace(Some(CommandRequest::from_command_line(command_line)));
+                glib::ExitCode::SUCCESS
+            });
+            let arguments: Vec<&str> = ["openxplorer", "--select"]
+                .into_iter()
+                .chain(operands.iter().copied())
+                .collect();
+            assert_eq!(application.run_with_args(&arguments), glib::ExitCode::SUCCESS);
+            let expected = expected
+                .iter()
+                .map(|name| gio::File::for_commandline_arg(name).uri().to_string())
+                .collect();
+            assert_eq!(
+                received.take().expect("the command line arrived").unwrap(),
+                CommandRequest::Select(expected),
+                "{arguments:?}"
+            );
+        }
     }
 
     #[test]

@@ -10,6 +10,8 @@ mod private_trash;
 
 use std::fs;
 use std::path::Path;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
@@ -32,12 +34,23 @@ fn request(mode: TransferMode, items: &[&Path], folder: Option<&Path>) -> Transf
     }
 }
 
-/// True when the Recycle Bin holds an item that came from `path`.
-fn is_in_recycle_bin(path: &Path) -> bool {
-    let items = block_on(list_recycle_bin(&Cancellation::new())).expect("a readable Recycle Bin");
-    items
-        .iter()
-        .any(|item| item.original_path.as_deref() == Some(path))
+/// Waits for `GVfs`'s asynchronous monitor to report the expected state.
+fn assert_in_recycle_bin(path: &Path, expected: bool) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let items = block_on(list_recycle_bin(&Cancellation::new())).expect("a readable Recycle Bin");
+        let present = items
+            .iter()
+            .any(|item| item.original_path.as_deref() == Some(path));
+        if present == expected {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Unexpected Recycle Bin state: {items:?}"
+        );
+        thread::sleep(Duration::from_millis(50));
+    }
 }
 
 /// Runs `request` and returns how to undo it.
@@ -86,7 +99,7 @@ fn undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources() {
     assert_eq!(record.undo_label(), "Undo: Copy");
     assert!(!destination.join("a.txt").exists());
     assert_eq!(fs::read(source.join("a.txt")).unwrap(), b"a");
-    assert!(is_in_recycle_bin(&destination.join("a.txt")));
+    assert_in_recycle_bin(&destination.join("a.txt"), true);
 }
 
 /// A file edited inside a copied folder leaves the folder's own time
@@ -199,13 +212,14 @@ fn undoing_move_to_trash_restores_the_items_where_they_were() {
     fs::write(folder.join("report.txt"), b"report").unwrap();
 
     let record = undo_record_of(&request(TransferMode::Trash, &[&folder.join("report.txt")], None));
-    let trashed = !folder.join("report.txt").exists() && is_in_recycle_bin(&folder.join("report.txt"));
+    let trashed = !folder.join("report.txt").exists();
+    assert_in_recycle_bin(&folder.join("report.txt"), true);
     undo_fully(&record);
 
     assert!(trashed);
     assert_eq!(record.undo_label(), "Undo: Move to Trash");
     assert_eq!(fs::read(folder.join("report.txt")).unwrap(), b"report");
-    assert!(!is_in_recycle_bin(&folder.join("report.txt")));
+    assert_in_recycle_bin(&folder.join("report.txt"), false);
 }
 
 #[test]
@@ -227,7 +241,7 @@ fn undoing_move_to_trash_leaves_items_trashed_before_the_operation() {
 
     assert_eq!(result.errors, ["old.txt: It is no longer in the Recycle Bin."]);
     assert!(!item.exists());
-    assert!(is_in_recycle_bin(&item));
+    assert_in_recycle_bin(&item, true);
 }
 
 #[test]
@@ -263,7 +277,7 @@ fn undoing_new_folder_and_duplicate_moves_the_new_items_to_the_trash() {
     assert!(!temp.path().join("New folder").exists());
     assert!(!temp.path().join("a - Copy.txt").exists());
     assert_eq!(fs::read(temp.path().join("a.txt")).unwrap(), b"a");
-    assert!(is_in_recycle_bin(&temp.path().join("a - Copy.txt")));
+    assert_in_recycle_bin(&temp.path().join("a - Copy.txt"), true);
 }
 
 #[test]
