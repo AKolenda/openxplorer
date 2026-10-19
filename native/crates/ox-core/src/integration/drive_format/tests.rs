@@ -258,6 +258,11 @@ fn labels_fit_each_file_system() {
     );
     assert_eq!(FileSystem::Ext4.fitted_label("ÄÄÄÄÄÄÄÄÄÄ"), "ÄÄÄÄÄÄÄÄ");
     assert_eq!(FileSystem::Ext4.fitted_label("ÄÄÄÄÄÄÄÄÄÄ").len(), 16);
+    // While it is typed, the label keeps its spaces, so a word can follow.
+    assert_eq!(FileSystem::Fat32.typed_label("my: "), "MY ");
+    assert_eq!(FileSystem::Fat32.typed_label(" my holiday photos"), " MY HOLIDAY");
+    assert_eq!(FileSystem::Ext4.typed_label("ÄÄÄÄÄÄÄÄÄÄ"), "ÄÄÄÄÄÄÄÄ");
+    assert_eq!(FileSystem::ExFat.typed_label("a<b>"), "ab");
     for system in FileSystem::ALL {
         assert_eq!(FileSystem::from_udisks_type(system.udisks_type()), Some(system));
     }
@@ -500,12 +505,13 @@ fn a_busy_drive_or_a_dismissed_prompt_stops_the_format() {
         format_error: Some("NotAuthorizedDismissed"),
         ..Answers::default()
     };
-    let dismissed = with_udisks(dismissed, |connection, fake| async move {
+    let (dismissed, dismissed_calls) = with_udisks(dismissed, |connection, fake| async move {
         let name = fake.name();
         let facts = drive_facts(&connection, &name, "/dev/sdb1")
             .await
             .expect("the drive");
-        format_drive(&connection, &name, &facts, &request(FileSystem::Fat32, true)).await
+        let formatted = format_drive(&connection, &name, &facts, &request(FileSystem::Fat32, true)).await;
+        (formatted, fake.drive_calls())
     });
     let refused = Answers {
         format_error: Some("Failed"),
@@ -526,6 +532,15 @@ fn a_busy_drive_or_a_dismissed_prompt_stops_the_format() {
         "nothing after the refused unmount: {busy_calls:?}"
     );
     assert!(matches!(dismissed, Err(FormatError::Cancelled)), "{dismissed:?}");
+    let methods: Vec<&str> = dismissed_calls
+        .iter()
+        .map(|call| call.split(' ').next().unwrap_or_default())
+        .collect();
+    assert_eq!(
+        methods,
+        ["Filesystem.Unmount", "Block.Format", "Filesystem.Mount"],
+        "the drive left as it was is mounted again"
+    );
     assert_eq!(
         refused.map_err(|error| error.to_string()),
         Err("Could not format the drive: refused".to_owned())

@@ -154,28 +154,46 @@ impl FileSystem {
     /// characters it refuses, and cut to its length without splitting a
     /// character; for FAT32 in capitals as Windows writes them.
     pub fn fitted_label(self, label: &str) -> String {
-        let label = match self.label_forbidden() {
+        self.cut_label(self.kept_label(label).trim())
+            .trim_end()
+            .to_owned()
+    }
+
+    /// `label` as it may stand in the label field while it is typed: as
+    /// [`Self::fitted_label`] keeps it, but with its spaces, so a word
+    /// can follow the one typed.
+    pub fn typed_label(self, label: &str) -> String {
+        self.cut_label(&self.kept_label(label))
+    }
+
+    /// `label` without the characters the file system refuses, for FAT32
+    /// in capitals.
+    fn kept_label(self, label: &str) -> String {
+        let label: String = match self.label_forbidden() {
             Some(forbidden) => label
                 .chars()
                 .filter(|character| !character.is_control() && !forbidden.contains(*character))
                 .collect(),
             None => label.to_owned(),
         };
-        let label = label.trim();
-        let label = if self == Self::Fat32 {
+        if self == Self::Fat32 {
             label.to_uppercase()
         } else {
-            label.to_owned()
-        };
+            label
+        }
+    }
+
+    /// `label` cut to the file system's length without splitting a
+    /// character.
+    fn cut_label(self, label: &str) -> String {
         let mut used = 0;
-        let fitted: String = label
+        label
             .chars()
             .take_while(|character| {
                 used += self.label_units(*character);
                 used <= self.max_label_length()
             })
-            .collect();
-        fitted.trim_end().to_owned()
+            .collect()
     }
 }
 
@@ -407,7 +425,8 @@ pub async fn available_file_systems(
 /// formatted: the [`Formatted`] answer tells why it is not mounted.
 ///
 /// The drive is read again first: one removed while the dialog was open,
-/// or another plugged in at its device since, is not touched.
+/// or another plugged in at its device since, is not touched. When
+/// formatting fails, a drive it unmounted is mounted again.
 ///
 /// # Errors
 ///
@@ -430,6 +449,7 @@ pub async fn format_drive(
     if current.read_only {
         return Err(FormatError::ReadOnly);
     }
+    let mut unmounted_here = false;
     if facts.has_file_system {
         let unmounted = call(
             connection,
@@ -441,13 +461,13 @@ pub async fn format_drive(
         )
         .await;
         match unmounted {
-            Ok(_) => {}
+            Ok(_) => unmounted_here = true,
             Err(error) if is_udisks_error(&error, "NotMounted") => {}
             Err(error) => return Err(FormatError::from_call(error)),
         }
     }
     let arguments = (request.file_system.udisks_type(), format_options(request)).to_variant();
-    call(
+    let formatted = call(
         connection,
         service,
         &facts.object,
@@ -455,17 +475,17 @@ pub async fn format_drive(
         "Format",
         &arguments,
     )
-    .await
-    .map_err(FormatError::from_call)?;
-    let mounted = call(
-        connection,
-        service,
-        &facts.object,
-        FILESYSTEM_INTERFACE,
-        "Mount",
-        &(glib::VariantDict::new(None),).to_variant(),
-    )
     .await;
+    if let Err(error) = formatted {
+        // A refused prompt leaves the old file system as it was: mounted
+        // again, it stays in the sidebar. A failed format may have left
+        // none, and mounting it then fails harmlessly.
+        if unmounted_here {
+            let _ = mount(connection, service, &facts.object).await;
+        }
+        return Err(FormatError::from_call(error));
+    }
+    let mounted = mount(connection, service, &facts.object).await;
     // The desktop may have mounted the new file system first.
     Ok(match mounted {
         Ok(_) => Formatted::Mounted,
@@ -475,6 +495,24 @@ pub async fn format_drive(
             Formatted::NotMounted(error.message().to_owned())
         }
     })
+}
+
+/// Mounts the file system on the block device `object` through UDisks
+/// `service` on `connection`.
+async fn mount(
+    connection: &gio::DBusConnection,
+    service: &str,
+    object: &str,
+) -> Result<glib::Variant, glib::Error> {
+    call(
+        connection,
+        service,
+        object,
+        FILESYSTEM_INTERFACE,
+        "Mount",
+        &(glib::VariantDict::new(None),).to_variant(),
+    )
+    .await
 }
 
 /// The options of `Block.Format` (`a{sv}`): the label, fitted again so

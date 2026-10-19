@@ -8,6 +8,9 @@
 //! system, the volume label and Quick format, then asks once more before
 //! anything is erased. It only asks; the window formats.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::integration::{default_file_system, DriveFacts, FileSystem, FormatRequest};
@@ -53,6 +56,8 @@ pub(crate) fn format_drive_dialog(
         &first.fitted_label(&facts.label),
     );
     fit_label_field(&label, first);
+    let system = Rc::new(Cell::new(first));
+    refit_while_typing(&label, Rc::clone(&system));
     let chosen = {
         let available = available.clone();
         move |choice: &gtk::DropDown| {
@@ -65,7 +70,10 @@ pub(crate) fn format_drive_dialog(
         label,
         #[strong]
         chosen,
-        move |choice| fit_label_field(&label, chosen(choice))
+        move |choice| {
+            system.set(chosen(choice));
+            fit_label_field(&label, system.get());
+        }
     ));
     let quick = dialog.add_check_button(&ox_core::i18n::gettext("Quick format"), true);
     dialog.add_cancel_button();
@@ -93,6 +101,36 @@ fn fit_label_field(field: &gtk::Entry, file_system: FileSystem) {
     if field.text() != fitted {
         field.set_text(&fitted);
     }
+}
+
+/// Keeps what is typed into the label `field` to what the file system
+/// in `system` keeps, so the field shows the label that is written.
+fn refit_while_typing(field: &gtk::Entry, system: Rc<Cell<FileSystem>>) {
+    field.connect_changed(move |field| {
+        if system.get().typed_label(&field.text()) == field.text() {
+            return;
+        }
+        // Once the edit is done: the entry still moves its cursor after
+        // telling of the change.
+        glib::idle_add_local_once(glib::clone!(
+            #[weak]
+            field,
+            #[strong]
+            system,
+            move || {
+                let text = field.text();
+                let typed = system.get().typed_label(&text);
+                if typed == text {
+                    return;
+                }
+                let cursor = usize::try_from(field.position()).unwrap_or_default();
+                let before: String = text.chars().take(cursor).collect();
+                let position = system.get().typed_label(&before).chars().count();
+                field.set_text(&typed);
+                field.set_position(i32::try_from(position).unwrap_or(-1));
+            }
+        ));
+    });
 }
 
 /// Asks, over `dialog`, whether to erase the drive; true for Format.
@@ -222,6 +260,50 @@ mod tests {
         choice.set_selected(1);
         assert_eq!(label.text(), "HOLIDAY PHO");
         assert_eq!(label.max_length(), 11);
+        dialog.close();
+        parent.close();
+    }
+
+    /// What is typed into the label is fitted as it is typed, so the
+    /// field shows the label Start formats with; spaces stay until Start,
+    /// so a word can follow.
+    ///
+    /// parity: DEV-012
+    #[gtk::test]
+    fn the_label_is_fitted_as_it_is_typed() {
+        let parent = gtk::Window::new();
+        let requests = Rc::new(RefCell::new(Vec::new()));
+        let heard = Rc::clone(&requests);
+        let dialog = format_drive_dialog(
+            &parent,
+            "USB",
+            &usb_stick(),
+            &FileSystem::ALL,
+            move |_, request| heard.borrow_mut().push(request.label),
+        );
+
+        let [choice] = <[gtk::DropDown; 1]>::try_from(descendants::<gtk::DropDown>(&dialog)).unwrap();
+        let label = descendants::<gtk::Entry>(&dialog).remove(0);
+        let typing = descendants::<gtk::Text>(&label).remove(0);
+        label.set_text("");
+        for key in "my: photos".chars() {
+            typing.emit_insert_at_cursor(key.to_string());
+            settle();
+        }
+        assert_eq!(label.text(), "MY PHOTOS", "FAT32 refuses ':' and keeps capitals");
+        assert_eq!(label.position(), 9, "the cursor stays after the text typed");
+        label.set_text("my ");
+        settle();
+        dialog.press("Start");
+        settle();
+        choice.set_selected(3);
+        label.set_text("ÄÄÄÄÄÄÄÄÄÄ");
+        settle();
+        assert_eq!(label.text(), "ÄÄÄÄÄÄÄÄ", "ext4 keeps 16 bytes");
+        dialog.press("Start");
+        settle();
+
+        assert_eq!(*requests.borrow(), ["MY", "ÄÄÄÄÄÄÄÄ"]);
         dialog.close();
         parent.close();
     }
