@@ -298,37 +298,39 @@ impl BrowserWindow {
             let app = holder.application();
             let running = app.as_ref().map(gio::prelude::ApplicationExtManual::hold);
             drop(holder);
-            let (sender, receiver) = async_channel::bounded::<Result<Formatted, FormatError>>(1);
-            let shown = (window.clone(), form.clone(), name.clone());
-            dialog.run(ox_core::i18n::gettext_static(FORMATTING), async move {
-                let Ok(formatted) = receiver.recv().await else {
-                    return;
-                };
-                let (window, form, name) = shown;
-                let (Some(window), Some(dialog)) = (window.upgrade(), form.upgrade()) else {
-                    return;
-                };
-                dialog.set_busy(None);
-                match formatted {
-                    Ok(formatted) => {
-                        dialog.finish();
-                        window.show_message(&formatted_message(&name, &formatted));
-                    }
-                    Err(error) => dialog.show_error(&error.to_string()),
-                }
-            });
+            // The dialog reads "Formatting…", but the format runs here
+            // rather than as the dialog's work, so closing the dialog does
+            // not stop it or lose its result.
+            dialog.run(ox_core::i18n::gettext_static(FORMATTING), async {});
             dialog.set_busy(Some(&Cancellation::new()));
             drop(dialog);
             let formatted = format_drive(&connection, UDISKS_NAME, &facts, &request).await;
             drop(hold);
-            // The dialog was closed: the window reports the result, or
-            // another one if that window was closed too.
-            if let Err(unheard) = sender.try_send(formatted) {
-                let message = match unheard.into_inner() {
-                    Ok(formatted) => formatted_message(&name, &formatted),
-                    Err(error) => error.to_string(),
-                };
-                report_format_result(&window, app.as_ref(), &message);
+            // Nothing awaits from here on, so the dialog cannot close
+            // between being found open and showing the result.
+            let open = form.upgrade().filter(WidgetExt::is_visible);
+            match (open, window.upgrade(), formatted) {
+                (Some(dialog), Some(window), Ok(formatted)) => {
+                    dialog.set_busy(None);
+                    dialog.finish();
+                    window.show_message(&formatted_message(&name, &formatted));
+                }
+                (Some(dialog), _, Err(error)) => {
+                    dialog.set_busy(None);
+                    dialog.show_error(&error.to_string());
+                }
+                // The dialog or its window was closed: the window reports
+                // the result, or another one if that window was closed.
+                (open, _, formatted) => {
+                    if let Some(dialog) = open {
+                        dialog.finish();
+                    }
+                    let message = match formatted {
+                        Ok(formatted) => formatted_message(&name, &formatted),
+                        Err(error) => error.to_string(),
+                    };
+                    report_format_result(&window, app.as_ref(), &message);
+                }
             }
             drop(running);
         });
