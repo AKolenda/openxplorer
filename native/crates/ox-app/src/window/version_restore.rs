@@ -53,7 +53,7 @@ impl BrowserWindow {
             self.show_message(ox_core::i18n::gettext_static(OPERATION_RUNNING));
             return;
         }
-        if self.refuses_writes_during_update() {
+        if self.refuses_writes() {
             return;
         }
         let request = TransferRequest {

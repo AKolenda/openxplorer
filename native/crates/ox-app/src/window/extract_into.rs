@@ -120,11 +120,16 @@ impl BrowserWindow {
         if !self.may_start_archive_operation() {
             return;
         }
+        // Folders are made before the panel shows and items moved in and
+        // the private folder removed after: no drive is formatted until
+        // all of it is done (DEV-012).
+        let writing = self.context().hold_write();
         let archive = archive.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
+                let _writing = writing;
                 let result = match target_of(&choice.target_uri).await {
                     Ok(Target::Missing) => window.extract_into_new_folder(&archive, &choice).await,
                     Ok(Target::Folder) => window.extract_into_existing_folder(&archive, &choice).await,

@@ -559,6 +559,43 @@ msgstr ""
 msgid "OK"
 msgstr ""
 
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Capacity"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/properties/general_panel.rs
+msgid "File system"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/window/compress_dialog.rs
+msgid "Format"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Format this drive?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Format {drive}"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Formatting erases all data on this drive. Copy anything you want to keep to another drive first."
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Quick format"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Start"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Volume label"
+msgstr ""
+
 #: crates/ox-app/src/dialogs/network_map.rs
 msgid "Add a network folder to your sidebar: a Windows share, or a folder on an SSH, FTP, WebDAV or NFS server."
 msgstr ""
@@ -1317,10 +1354,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
 msgid "Executable"
-msgstr ""
-
-#: crates/ox-app/src/properties/general_panel.rs
-msgid "File system"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
@@ -3547,6 +3580,10 @@ msgstr ""
 msgid "Wait for the update to finish before closing OpenXplorer."
 msgstr ""
 
+#: crates/ox-app/src/window/closing.rs
+msgid "Wait until the drive is formatted before closing OpenXplorer."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/closing.rs
 msgid "{len} windows have {tabs} tabs open. Close them all and quit?"
@@ -3785,10 +3822,6 @@ msgstr ""
 msgid "Compress"
 msgstr ""
 
-#: crates/ox-app/src/window/compress_dialog.rs
-msgid "Format"
-msgstr ""
-
 #: crates/ox-app/src/window/context_menu.rs
 msgid "Open as administrator…"
 msgstr ""
@@ -4006,11 +4039,41 @@ msgid "Disks cannot open this drive."
 msgstr ""
 
 #: crates/ox-app/src/window/disk_tools.rs
+msgid "Finish the current operation before formatting."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "Formatting…"
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "No program to make a file system is installed on this computer."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
 msgid "The tool is not installed."
 msgstr ""
 
 #: crates/ox-app/src/window/disk_tools.rs
+msgid "This drive cannot be formatted."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
 msgid "This tool needs a location on this computer."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs crates/ox-app/src/window/file_ops/running.rs
+msgid "Wait until the drive is formatted, then try again."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "{drive} is formatted, but could not be mounted again: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "{drive} is formatted."
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
@@ -6325,6 +6388,40 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/integration/default_apps/error.rs
 msgid "xdg-mime could not be run: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "Could not format the drive: {error}"
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "Formatting needs the UDisks service, which is not available."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "Formatting was cancelled."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "The drive is in use. Close the files and programs using it, then try again."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "The drive is no longer connected."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "The drive is write-protected."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "You are not allowed to format this drive."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "{error} (It could not be mounted again: {reason})"
 msgstr ""
 
 #: crates/ox-core/src/integration/file_manager_bus.rs

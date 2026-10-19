@@ -16,7 +16,9 @@
 //! and the undo journal of the file operations ([`file_operations`]). It
 //! also holds the search cache the windows share ([`search_cache`]), and
 //! the application's [`Updates`] and [`DesktopIntegration`], so every
-//! window shows the same update and integration state.
+//! window shows the same update and integration state, and the drives
+//! being formatted and the quick writes, which wait for each other in
+//! every window ([`write_holds`]).
 
 mod default_open;
 mod desktop_bookmarks;
@@ -28,9 +30,11 @@ mod previous_versions;
 mod recent_privacy;
 mod saved_searches;
 mod search_cache;
+mod write_holds;
 
 pub(crate) use default_open::add_to_desktop_history;
 pub(crate) use recent_privacy::desktop_recent_policy;
+pub(crate) use write_holds::WriteHold;
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -129,6 +133,12 @@ mod imp {
         pub(super) folder_relocation: RefCell<Option<Arc<FolderRelocation>>>,
         /// The application's updates, made on first use.
         pub(super) updates: OnceCell<Updates>,
+        /// The number of drives being formatted, which file writes wait
+        /// for.
+        pub(super) drives_formatting: Rc<Cell<u32>>,
+        /// The number of writes running outside the operation panel,
+        /// which formatting waits for.
+        pub(super) held_writes: Rc<Cell<u32>>,
         /// The desktop integration, made on first use.
         pub(super) desktop_integration: OnceCell<DesktopIntegration>,
         /// The worker mirroring the pins into the desktop's places list,

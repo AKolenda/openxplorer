@@ -20,6 +20,8 @@ use ox_core::ops::{
 };
 use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
+use crate::app_context::WriteHold;
+
 use super::unfinished::mark_unfinished;
 use crate::dialog;
 use crate::search::changed_folders;
@@ -31,6 +33,10 @@ use crate::window::BrowserWindow;
 
 /// The label of the toast's button that reverses the operation it reports.
 const UNDO_BUTTON: &str = "Undo";
+
+/// Why files are not written while a drive is formatted.
+const FORMATTING_A_DRIVE: &str =
+    crate::i18n::message_id("Wait until the drive is formatted, then try again.");
 
 /// What a finished operation leaves behind.
 #[derive(Debug)]
@@ -74,16 +80,43 @@ impl BrowserWindow {
     }
 
     /// True, after saying why, once an application update installed files
-    /// and waits for its restart (UPD-006). Every writer asks before it
-    /// starts: file operations, extraction, compression, a restored
-    /// version, rename and new items, as the Python app refused every
-    /// file request in that state.
-    pub(in crate::window) fn refuses_writes_during_update(&self) -> bool {
-        let Some(refusal) = self.context().updates().file_refusal() else {
+    /// and waits for its restart (UPD-006), or while a drive is formatted
+    /// (DEV-012). Every writer asks before it starts: file operations,
+    /// extraction, compression, a restored version, rename and new items,
+    /// as the Python app refused every file request during an update.
+    pub(in crate::window) fn refuses_writes(&self) -> bool {
+        let Some(refusal) = self.write_refusal() else {
             return false;
         };
         self.show_message(&refusal);
         true
+    }
+
+    /// Why no write may start now (see [`Self::refuses_writes`]), or
+    /// `None` when one may.
+    pub(in crate::window) fn write_refusal(&self) -> Option<String> {
+        if self.context().formats_a_drive() {
+            return Some(ox_core::i18n::gettext_static(FORMATTING_A_DRIVE).to_owned());
+        }
+        self.context().updates().file_refusal()
+    }
+
+    /// Admits a write outside the operation panel (a new folder, file or
+    /// link, a rename or a permission change) right before it starts,
+    /// after its questions: a hold that counts it as writing until
+    /// dropped, so no drive is formatted meanwhile (DEV-012). The error
+    /// says why it may not start.
+    pub(crate) fn hold_write(&self) -> Result<WriteHold, String> {
+        match self.write_refusal() {
+            Some(refusal) => Err(refusal),
+            None => Ok(self.context().hold_write()),
+        }
+    }
+
+    /// [`Self::hold_write`], with the context the write runs with.
+    pub(in crate::window) fn admit_write(&self) -> Result<(OperationContext, WriteHold), String> {
+        let hold = self.hold_write()?;
+        Ok((OperationContext::new(self.context().write_protection()), hold))
     }
 
     /// Starts an exclusive operation whose panel reads `label` until the first
@@ -95,7 +128,7 @@ impl BrowserWindow {
         if self.is_writing_files() {
             return None;
         }
-        if self.refuses_writes_during_update() {
+        if self.refuses_writes() {
             return None;
         }
         let mut context = OperationContext::new(self.context().write_protection());

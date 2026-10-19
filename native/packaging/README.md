@@ -292,6 +292,7 @@ flatpak run io.winspace.Development.Native
 | `--talk-name=org.gnome.NautilusPreviewer` | Quick Look: Space asks GNOME Sushi on the host to preview the selected file, and the app follows its window. |
 | `--own-name=org.freedesktop.FileManager1` | "Show in folder" (opt-in): after the user turns it on in Settings, the running app answers browsers' and other apps' requests to show a downloaded file in its folder. Flatpak only permits owning the name; the app claims it only while the integration is on. |
 | `--talk-name=org.freedesktop.Flatpak` | `flatpak-spawn --host`: Open in Terminal starts the host's terminal, and making OpenXplorer the default file manager (opt-in) runs the host's `xdg-mime`. |
+| `--system-talk-name=org.freedesktop.UDisks2` | Format… on a removable drive: the app's Format dialog asks the host's UDisks to unmount, format and mount the drive again. UDisks checks with polkit, which may ask for the user's password. |
 | `--share=network` | "Check for updates" asks GitHub whether a newer release exists. SMB and phone traffic goes through GVfs on the host. |
 
 The desktop portals, which every Flatpak may use, cover opening files with other
@@ -412,6 +413,11 @@ Only the owner can:
   explicit user actions: Open in Terminal starts the host's terminal in the
   current folder, and "Make OpenXplorer the default file manager" (opt-in)
   runs the host's `xdg-mime`, since the default applications are the host's.
+- `--system-talk-name=org.freedesktop.UDisks2`: Format… on a removable
+  drive. The app's own Format dialog asks the host's UDisks service to
+  unmount the drive, make the new file system and mount it again, as GNOME
+  Disks does; UDisks checks every request with polkit, which may ask for the
+  user's password.
 - `--share=network`: "Check for updates" reads GitHub's public release list to
   say whether a newer version exists; Flatpak installs it. SMB and phones
   go through the host's GVfs, not this permission. If Flathub asks to drop
