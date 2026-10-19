@@ -18,7 +18,7 @@ use crate::test_support::harness::{descendants, wait_until};
 
 /// Every setting row before the settings were rearranged, by its title
 /// then, and the row that offers it now.
-const MOVED_ROWS: [(&str, &str); 63] = [
+const MOVED_ROWS: [(&str, &str); 64] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -61,6 +61,10 @@ const MOVED_ROWS: [(&str, &str); 63] = [
     ("Calculate folder sizes", "Calculate folder sizes"),
     ("How sizes are counted", "How sizes are counted"),
     ("Include Show in folder", "Also handle “Show in folder”"),
+    (
+        "Also handle Open and Save dialogs",
+        "Also handle Open and Save dialogs",
+    ),
     ("Also open ZIP files", "Also open ZIP files"),
     ("Folders", "Folders"),
     ("SMB links", "Network (SMB) links"),

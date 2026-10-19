@@ -978,6 +978,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/integration/changes.rs
+msgid "File handlers updated, but Open and Save dialogs setup failed: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/changes.rs
 msgid "File handlers updated, but Show in folder setup failed: {error}"
 msgstr ""
 
@@ -996,6 +1001,18 @@ msgstr ""
 
 #: crates/ox-app/src/integration/changes.rs
 msgid "Previous recorded handlers restored."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
+msgid "Previous recorded handlers restored. For other apps' Open and Save dialogs to return to the desktop's, click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
+msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
+msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in; KDE apps follow after you log out and back in."
 msgstr ""
 
 #: crates/ox-app/src/integration/changes.rs
@@ -2165,6 +2182,10 @@ msgid "\"Show in folder\" opens OpenXplorer. Runs for your user at login."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Also handle Open and Save dialogs"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Also handle “Show in folder”"
 msgstr ""
 
@@ -2257,6 +2278,10 @@ msgid "Other apps' Open and Save dialogs"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Other apps, such as Brave, choose and save files in an OpenXplorer window. Applies after Apply now or the next login."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Refresh status"
 msgstr ""
 
@@ -2277,7 +2302,7 @@ msgid "Restore the previous file handlers"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
-msgid "Restores the recorded file handlers and removes OpenXplorer's Show in folder files."
+msgid "Restores the recorded file handlers, removes OpenXplorer's Show in folder files and gives Open and Save dialogs back to the desktop."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -2318,6 +2343,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Zorin and Brave setup steps, and how to undo each change."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "also open and save dialogs file picker file chooser upload save as portal brave chrome firefox make default option everything"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -2381,7 +2410,19 @@ msgid "“Show in folder” from browsers and apps"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps/view.rs
+msgid "Open local folders and SMB links in OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps/view.rs
+msgid "Open local folders, SMB links and other apps' Open and Save dialogs in OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps/view.rs
 msgid "OpenXplorer is your default file explorer"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps/view.rs
+msgid "OpenXplorer is your default file explorer, except for Open and Save dialogs"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps/view.rs
