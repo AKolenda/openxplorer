@@ -170,13 +170,17 @@ impl BrowserWindow {
         false
     }
 
-    /// Whether no other window of the application is open, so closing
-    /// this one ends it.
+    /// Whether no other browsing window of the application is open, so
+    /// closing this one ends it. A picker does not count: it closes on its
+    /// own once its file is chosen.
     fn is_last_window(&self) -> bool {
         self.application().is_none_or(|app| {
-            !app.windows()
-                .iter()
-                .any(|window| window != self.upcast_ref::<gtk::Window>() && window.is::<BrowserWindow>())
+            !app.windows().iter().any(|window| {
+                window != self.upcast_ref::<gtk::Window>()
+                    && window
+                        .downcast_ref::<BrowserWindow>()
+                        .is_some_and(|other| !other.is_picking())
+            })
         })
     }
 

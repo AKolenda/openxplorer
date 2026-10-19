@@ -3027,6 +3027,47 @@ mod tests {
         assert!(uris.is_empty());
     }
 
+    /// A dialog does not stand in for the last browsing window while a
+    /// drive is formatted: that window still waits, as the dialog closes on
+    /// its own once answered, which would end the application mid-format.
+    ///
+    /// parity: DEV-012, INT-032
+    #[gtk::test]
+    fn a_dialog_does_not_let_the_last_window_close_during_a_format() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = portal.call(
+            "OpenFile",
+            &[(
+                "current_folder",
+                path_variant(&fixture.root().display().to_string()),
+            )],
+        );
+        let browsing = portal.test.open_beside(&fixture.uri());
+        let formatting = portal.test.context.hold_writes_for_formatting();
+
+        browsing.window.close();
+        settle();
+        let stayed = browsing.window.is_visible();
+        let refusal = browsing.window.shown_message_text();
+        portal.test.window.close();
+        let (response, _) = Portal::finish(&answer);
+        drop(formatting);
+        browsing.window.close();
+        settle();
+
+        assert!(stayed, "the last browsing window stays open");
+        assert_eq!(
+            refusal,
+            "Wait until the drive is formatted before closing OpenXplorer."
+        );
+        assert_eq!(response, RESPONSE_CANCELLED, "the dialog still closes");
+        assert!(
+            !browsing.window.is_visible(),
+            "it closes once the drive is formatted"
+        );
+    }
+
     /// F3 opens no second pane in a dialog, and a pane split off anyway
     /// lists only the type chosen, as the first one does.
     ///

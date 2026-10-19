@@ -290,8 +290,11 @@ impl BrowserWindow {
             // From here until the drive is mounted again no window starts
             // writing or formatting, so no transfer goes on onto the
             // formatted drive. Nothing awaits between the check and the
-            // hold, so two confirmed formats cannot both pass.
+            // hold, so two confirmed formats cannot both pass. The
+            // application stays running too, even if its last window is a
+            // picker that closes.
             let hold = holder.context().hold_writes_for_formatting();
+            let running = holder.application().map(|app| app.hold());
             drop(holder);
             let (sender, receiver) = async_channel::bounded::<Result<Formatted, FormatError>>(1);
             let shown = (window.clone(), form.clone(), name.clone());
@@ -315,7 +318,7 @@ impl BrowserWindow {
             dialog.set_busy(Some(&Cancellation::new()));
             drop(dialog);
             let formatted = format_drive(&connection, UDISKS_NAME, &facts, &request).await;
-            drop(hold);
+            drop((hold, running));
             // The dialog was closed: the window reports the result.
             if let Err(unheard) = sender.try_send(formatted) {
                 let Some(window) = window.upgrade() else {
