@@ -61,6 +61,11 @@ struct Answers {
     unknown_device: bool,
     /// The file systems `CanFormat` refuses.
     cannot_format: Vec<&'static str>,
+    /// The file systems `CanFormat` answers an error for, as UDisks does
+    /// for one it does not know.
+    unknown_file_systems: Vec<&'static str>,
+    /// `CanFormat` is missing, as in an old UDisks.
+    no_can_format: bool,
     /// The UDisks error `Unmount` answers.
     unmount_error: Option<&'static str>,
     /// The UDisks error `Format` answers.
@@ -105,8 +110,14 @@ impl FakeUdisks {
                     invocation.return_value(Some(&(objects,).to_variant()));
                 } else {
                     let system = parameters.get::<(String,)>().unwrap_or_default().0;
-                    let can = !answering.cannot_format.contains(&system.as_str());
-                    invocation.return_value(Some(&((can, String::new()),).to_variant()));
+                    if answering.no_can_format {
+                        invocation.return_dbus_error(UNKNOWN_METHOD_ERROR, "no CanFormat");
+                    } else if answering.unknown_file_systems.contains(&system.as_str()) {
+                        invocation.return_dbus_error(&format!("{UDISKS_ERROR}NotSupported"), "unknown");
+                    } else {
+                        let can = !answering.cannot_format.contains(&system.as_str());
+                        invocation.return_value(Some(&((can, String::new()),).to_variant()));
+                    }
                 }
             })
             .build()
@@ -398,6 +409,32 @@ fn only_the_file_systems_udisks_can_make_are_offered() {
     });
 
     assert_eq!(available, [FileSystem::Fat32, FileSystem::Ext4]);
+}
+
+/// A file system UDisks answers an error for is not offered, so it is not
+/// found out only after the drive was unmounted; a UDisks without
+/// `CanFormat` offers them all.
+///
+/// parity: DEV-012
+#[test]
+fn a_file_system_udisks_does_not_know_is_not_offered() {
+    let unknown = Answers {
+        unknown_file_systems: vec!["exfat"],
+        ..Answers::default()
+    };
+    let available = with_udisks(unknown, |connection, fake| async move {
+        available_file_systems(&connection, &fake.name(), 16_000_000_000).await
+    });
+    let old = Answers {
+        no_can_format: true,
+        ..Answers::default()
+    };
+    let all = with_udisks(old, |connection, fake| async move {
+        available_file_systems(&connection, &fake.name(), 16_000_000_000).await
+    });
+
+    assert_eq!(available, [FileSystem::Fat32, FileSystem::Ntfs, FileSystem::Ext4]);
+    assert_eq!(all, FileSystem::ALL);
 }
 
 /// A drive too small for a FAT32 within its specification is not offered

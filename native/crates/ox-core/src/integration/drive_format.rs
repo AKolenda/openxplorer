@@ -56,6 +56,9 @@ const FAT32_MIN_SIZE: u64 = 64 * 1024 * 1024;
 /// unmounted.
 const FAT_LABEL_FORBIDDEN: &str = "*?.,;:/\\|+=<>[]\"";
 
+/// The D-Bus error of a call to a method the service lacks.
+const UNKNOWN_METHOD_ERROR: &str = "org.freedesktop.DBus.Error.UnknownMethod";
+
 /// The prefix of the D-Bus errors UDisks answers with.
 const UDISKS_ERROR: &str = "org.freedesktop.UDisks2.Error.";
 
@@ -340,7 +343,9 @@ async fn facts_of(
 
 /// The file systems UDisks `service` can make on a drive of `size` bytes:
 /// those that fit it whose formatting program is installed. A UDisks too
-/// old to say offers them all, and `Format` reports one it cannot make.
+/// old to have `CanFormat` offers them all, and `Format` reports one it
+/// cannot make; any other error, such as UDisks not knowing the file
+/// system, leaves it out.
 pub async fn available_file_systems(
     connection: &gio::DBusConnection,
     service: &str,
@@ -362,7 +367,7 @@ pub async fn available_file_systems(
             .await;
         let can_format = match answer {
             Ok(reply) => reply.get::<((bool, String),)>().is_some_and(|((can, _),)| can),
-            Err(_) => true,
+            Err(error) => gio::DBusError::remote_error(&error).as_deref() == Some(UNKNOWN_METHOD_ERROR),
         };
         if can_format {
             available.push(system);
