@@ -388,7 +388,7 @@ impl BrowserWindow {
                 // Searches keep a separate result store. A cache refresh
                 // may have merged the old listing while this reload was
                 // running; show the completed listing's matches now.
-                self.run_search_again();
+                self.refresh_search_after_listing();
             }
         } else {
             self.finish_beside_listing(id);

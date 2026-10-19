@@ -167,6 +167,23 @@ impl BrowserWindow {
         }
     }
 
+    /// Brings a shown search up to date with the active tab's new
+    /// listing. The cache is asked again, which is quick; a finished walk
+    /// updates the folder's own matches in place rather than walking the
+    /// tree again and dropping the selection; a running walk is left to
+    /// finish.
+    pub(super) fn refresh_search_after_listing(&self) {
+        let search = self.imp().search.borrow();
+        let (uses_cache, is_walk_shown) = (search.uses_cache(), search.is_walk_shown());
+        drop(search);
+        if uses_cache {
+            self.run_search_again();
+        } else if is_walk_shown {
+            self.update_walked_listing();
+            self.show_search_state();
+        }
+    }
+
     /// The folder the search box searches: the active tab's folder, not a
     /// landing page.
     fn searched_folder(&self) -> Option<String> {

@@ -641,10 +641,13 @@ fn a_directory_reload_updates_an_active_search_after_a_rename() {
     test.search_for("notes");
     assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt"]);
     fs::rename(fixture.path("Notes 10.txt"), fixture.path("Renamed.txt")).unwrap();
+    fs::write(fixture.path("More notes.txt"), "").unwrap();
 
     test.window.folder_changed(test.active_tab().unwrap());
 
     wait_until("the search to reflect the completed directory listing", || {
-        test.names() == ["Notes 2.txt"]
+        let mut names = test.names();
+        names.sort();
+        names == ["More notes.txt", "Notes 2.txt"]
     });
 }
