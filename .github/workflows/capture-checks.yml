@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Capture sandbox checks
+on:
+  pull_request:
+    paths: &capture-paths
+      - '.github/workflows/capture-checks.yml'
+      - 'tools/native_capture.py'
+      - 'tools/capture-screenshots.py'
+      - 'tools/capture-native-tour.py'
+      - 'tests/test_native_capture.py'
+  push:
+    branches: [main]
+    paths: *capture-paths
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: capture-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  sandbox:
+    # Only fictional shell executables: no native build, GTK session or capture.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the sandbox fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap python3
+      - name: Allow nested user namespaces on this disposable hosted runner
+        # Ubuntu's AppArmor default can block the nested Bubblewrap fixture.
+        # This prerequisite applies only to this ephemeral test VM; it does
+        # not change the capture sandbox or any production/user machine.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Run every capture sandbox regression without skips
+        run: |
+          python3 - <<'PY'
+          import unittest
+
+          suite = unittest.defaultTestLoader.discover('tests', pattern='test_native_capture.py')
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if result.skipped or result.testsRun == 0:
+              raise SystemExit('Capture sandbox regressions must run without skips in CI')
+          raise SystemExit(0 if result.wasSuccessful() else 1)
+          PY

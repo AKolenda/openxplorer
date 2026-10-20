@@ -3,21 +3,21 @@
 /** Offline PRESENTATIONAL renderer. Not React, Next.js, a dependency resolver,
  * or a production-build substitute. Transpiles the same pure TSX components
  * to standalone HTML so design review works without registry access. */
-const fs=require('fs'),path=require('path'),vm=require('vm'),cp=require('child_process');
-let ts;try{ts=require(path.resolve(__dirname,'../apps/web/node_modules/typescript'));}catch{try{ts=require('typescript');}catch{try{ts=require(path.join(cp.execSync('npm root -g',{encoding:'utf8'}).trim(),'typescript'));}catch{throw Error('Install TypeScript, or run pnpm install before pnpm designs.');}}}
+const fs=require('fs'),path=require('path'),vm=require('vm');
+const {withTranspiledWeb}=require('./transpile-web.cjs');
 require('./prepare-web.cjs');
 const root=path.resolve(__dirname,'..'),web=path.join(root,'apps/web'),out=path.join(root,'designs');fs.mkdirSync(out,{recursive:true});fs.mkdirSync(path.join(root,'test-results'),{recursive:true});
+withTranspiledWeb([path.join(web,'components/site.tsx')],compiled=>{
 const Fragment=Symbol('Fragment'),runtime={Fragment,jsx:(type,props)=>({type,props:props||{}}),jsxs:(type,props)=>({type,props:props||{}})};
 const cache={};let checked=0;
 function load(filename){
  if(filename.endsWith('.json'))return JSON.parse(fs.readFileSync(filename,'utf8'));
  if(cache[filename])return cache[filename].exports;
  const module={exports:{}};cache[filename]=module;
- const source=fs.readFileSync(filename,'utf8');
- const result=ts.transpileModule(source,{fileName:filename,reportDiagnostics:true,compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true,resolveJsonModule:true}});
- const errors=(result.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);if(errors.length)throw Error(errors.map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n')).join('\n'));checked++;
+ const emitted=path.join(compiled,path.relative(web,filename)).replace(/\.tsx?$/,'.js');
+ const source=fs.readFileSync(emitted,'utf8');checked++;
  const req=id=>{if(id==='react/jsx-runtime')return runtime;if(id==='react')return{Fragment};if(!id.startsWith('.'))throw Error('Unsupported render-time dependency: '+id);let p=path.resolve(path.dirname(filename),id);if(!fs.existsSync(p))p=['.tsx','.ts','.json'].map(ext=>p+ext).find(fs.existsSync);if(!p)throw Error('Missing '+id);return load(p);};
- new vm.Script('(function(require,module,exports){'+result.outputText+'\n})',{filename}).runInThisContext()(req,module,module.exports);return module.exports;
+ new vm.Script('(function(require,module,exports){'+source+'\n})',{filename}).runInThisContext()(req,module,module.exports);return module.exports;
 }
 const escape=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const voids=new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
@@ -50,5 +50,6 @@ page('index.html',runtime.jsx(C.Home,{}),'Familiar by design. Built for Linux.')
 for(const d of docs)page('docs-'+d.slug+'.html',runtime.jsx(C.DocPage,{slug:d.slug}),d.title);
 page('source.html',runtime.jsx(C.SourcePage,{}),'Source code');
 fs.copyFileSync(path.join(root,'LICENSE'),path.join(out,'LICENSE.txt'));
-fs.writeFileSync(path.join(root,'test-results/presentation-transpile.json'),JSON.stringify({checkedComponentModules:checked,standalonePages:fs.readdirSync(out).filter(p=>p.endsWith('.html')).length,nextBuild:false,scope:'TypeScript transpileModule syntax checks and offline presentational rendering; not React or Next runtime validation'},null,2));
+fs.writeFileSync(path.join(root,'test-results/presentation-transpile.json'),JSON.stringify({checkedComponentModules:checked,standalonePages:fs.readdirSync(out).filter(p=>p.endsWith('.html')).length,nextBuild:false,scope:'TypeScript CLI syntax checks with noCheck and offline presentational rendering; not React or Next runtime validation'},null,2));
 console.log('Rendered standalone designs + documentation to designs/ (not a Next.js production build).');
+});

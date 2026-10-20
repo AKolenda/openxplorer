@@ -4,7 +4,8 @@
   "Use this Downloads folder in Brave": `braveDialog` of v2.0.0:desktop/ui/app.js
   in the app's modal dialog frame (native/docs/ui-spec.md §4.11): the
   folder, a status line, one check box per native Brave profile, Recheck
-  profiles, the consent check box and the privacy note, then Cancel,
+  profiles, the option to ask where to save each download (INT-034) and
+  its note, the consent check box and the privacy note, then Cancel,
   Restore previous and Apply to Brave. src/integration/brave_dialog.rs
   lists the profiles.
 -->
@@ -105,6 +106,29 @@
                         <property name="margin-top">12</property>
                         <style>
                           <class name="bordered"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- Brave's own label for download.prompt_for_download. -->
+                      <object class="GtkCheckButton" id="prompt_check">
+                        <property name="label" translatable="yes">Ask where to save each file before downloading</property>
+                        <accessibility>
+                          <relation name="described-by">prompt_note</relation>
+                        </accessibility>
+                        <style>
+                          <class name="dialog-check"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="prompt_note">
+                        <property name="label" translatable="yes">Brave then opens a Save dialog for each download: OpenXplorer’s when “Other apps' Open and Save dialogs” is on in Settings > Default apps.</property>
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="max-width-chars">60</property>
+                        <style>
+                          <class name="dialog-hint"/>
                         </style>
                       </object>
                     </child>

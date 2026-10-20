@@ -13,7 +13,7 @@
 //! ([`super::template_dialog`]) with its template chosen.
 
 use gtk::subclass::prelude::*;
-use ox_core::ops::{create_numbered_folder, BuiltinTemplate, CreatedItem, OperationContext, TemplateId};
+use ox_core::ops::{create_numbered_folder, BuiltinTemplate, CreatedItem, TemplateId};
 
 use super::FileCommand;
 use crate::window::BrowserWindow;
@@ -43,13 +43,19 @@ impl BrowserWindow {
     /// that is not writable. A folder that cannot be made says why in the
     /// toast.
     pub(crate) async fn create_folder(&self) {
-        if !self.allows(FileCommand::New) || self.refuses_writes_during_update() {
+        if !self.allows(FileCommand::New) {
             return;
         }
         let Some(folder) = self.current_uri() else {
             return;
         };
-        let context = OperationContext::new(self.context().write_protection());
+        let (context, _writing) = match self.admit_write() {
+            Ok(admitted) => admitted,
+            Err(refusal) => {
+                self.show_message(&refusal);
+                return;
+            }
+        };
         let name = ox_core::i18n::gettext_static(NEW_FOLDER_NAME);
         match create_numbered_folder(&folder, name, &context).await {
             Ok(created) => {

@@ -90,7 +90,7 @@ impl BrowserWindow {
         self.update_archive_actions();
         let compressor = ZipCompressor::new()
             .with_write_guard(self.context().previous_versions().write_guard())
-            .with_progress(self.operation_progress_sender());
+            .with_progress(self.progress_reporter(&cancel));
         let folder = request.destination_uri.clone();
         let frame = frame.downgrade();
         glib::spawn_future_local(glib::clone!(

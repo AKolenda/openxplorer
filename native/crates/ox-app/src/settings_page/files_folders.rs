@@ -40,6 +40,13 @@ const ITEM_CHECK_BOXES: RowText = RowText {
         "check box checkbox select multiple toggle hover selection marker plus minus item windows explorer",
 };
 
+const CHECKS_ON_CTRL: RowText = RowText {
+    title: "Show check boxes only while Ctrl is held",
+    description: "Item check boxes stay out of the way until you hold Ctrl to pick several items. \
+                  Turn this off to show them whenever you point at an item.",
+    keywords: "check box checkbox ctrl control key hold hover show hide select multiple",
+};
+
 const EXPANDABLE_FOLDERS: RowText = RowText {
     title: "Expandable folders in Details",
     description: "In the details view, a folder's arrow lists its contents beneath it.",
@@ -206,6 +213,16 @@ fn details_group(page: &SettingsPage) -> SettingsGroup {
                 read: |preferences| preferences.selection_marker,
                 write: |on| PreferencesUpdate {
                     selection_marker: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            CHECKS_ON_CTRL,
+            PreferenceBinding {
+                read: |preferences| preferences.item_checks_on_ctrl,
+                write: |on| PreferencesUpdate {
+                    item_checks_on_ctrl: Some(on),
                     ..PreferencesUpdate::default()
                 },
             },

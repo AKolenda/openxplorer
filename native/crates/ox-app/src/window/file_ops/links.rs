@@ -12,9 +12,7 @@
 use glib::clone;
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::ops::{
-    create_link, create_links, starting_label, summarize_links, LinkRequest, NewLink, OperationContext,
-};
+use ox_core::ops::{create_link, create_links, starting_label, summarize_links, LinkRequest, NewLink};
 use ox_core::transfer::TransferMode;
 
 use super::running::FinishedOperation;
@@ -63,7 +61,7 @@ impl BrowserWindow {
     /// New ▸ Link to file or folder: asks for the path and the name,
     /// makes the link, then selects it.
     pub(crate) async fn create_link(&self) {
-        if !self.allows(FileCommand::New) {
+        if !self.allows(FileCommand::New) || self.refuses_writes() {
             return;
         }
         let Some(folder) = self.current_uri() else {
@@ -80,7 +78,6 @@ impl BrowserWindow {
         dialog.add_cancel_button();
         dialog.add_button(ox_core::i18n::gettext_static("Create"), ButtonStyle::Accent);
         dialog.open();
-        let protection = self.context().write_protection();
         loop {
             if dialog.next_response().await.is_none() {
                 return;
@@ -90,7 +87,14 @@ impl BrowserWindow {
                 name: name.text().to_string(),
                 target: target.text().to_string(),
             };
-            let context = OperationContext::new(protection.clone());
+            // A drive may have started formatting while the dialog was open.
+            let (context, _writing) = match self.admit_write() {
+                Ok(admitted) => admitted,
+                Err(refusal) => {
+                    dialog.show_error(&refusal);
+                    continue;
+                }
+            };
             dialog.set_busy(Some(&context.cancel));
             let outcome = create_link(&request, &context).await;
             dialog.set_busy(None);

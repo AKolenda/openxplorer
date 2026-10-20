@@ -920,6 +920,40 @@ mod tests {
         assert!(browser_windows().is_empty());
     }
 
+    /// While a drive is formatted, Quit and closing the last window wait,
+    /// since the format cannot be cancelled and would be cut off with the
+    /// application; another window still closes.
+    ///
+    /// parity: DEV-012
+    #[gtk::test]
+    fn quit_and_the_last_window_wait_for_a_format() {
+        let app = TestApp::new();
+        let other = app.state.open_window(&application(), None);
+        let last = app.state.open_window(&application(), None);
+        let formatting = app.state.context.hold_writes_for_formatting();
+
+        let quit = app.state.quit_safely(&application());
+        let quit_refusal = last.shown_message_text();
+        other.close();
+        let after_other = browser_windows().len();
+        last.close();
+        let after_last = browser_windows().len();
+        let close_refusal = last.shown_message_text();
+        drop(formatting);
+        close_all_windows();
+
+        let waiting = "Wait until the drive is formatted before closing OpenXplorer.";
+        assert!(!quit);
+        assert_eq!(quit_refusal, waiting);
+        assert_eq!(after_other, 1, "another window closes");
+        assert_eq!(after_last, 1, "the last window stays open");
+        assert_eq!(close_refusal, waiting);
+        assert!(
+            browser_windows().is_empty(),
+            "it closes once the drive is formatted"
+        );
+    }
+
     /// With "Ask before closing a window with several tabs" on, Quit asks
     /// one question for every window with several tabs, however often it
     /// is asked, and Cancel keeps every window open.

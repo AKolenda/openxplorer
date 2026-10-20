@@ -141,6 +141,21 @@ fn only_shared_folders_can_be_planned() {
 }
 
 #[test]
+fn other_network_protocols_cannot_be_converted_to_cifs_plans() {
+    for scheme in ["sftp", "ftp", "ftps", "dav", "davs", "nfs"] {
+        let address = format!("{scheme}://nas/Projects");
+        assert_eq!(
+            mount_plan(&address, DESKTOP_USER),
+            Err(MountPlanError::UnsupportedProtocol),
+            "{address}"
+        );
+    }
+    for address in ["smb://nas/Projects", r"\\nas\Projects", "//nas/Projects"] {
+        assert_eq!(plan(address).share, "//nas/Projects");
+    }
+}
+
+#[test]
 fn shell_quoting_matches_python_shlex() {
     assert_eq!(shell_quote("//nas/Downloads"), "//nas/Downloads");
     assert_eq!(shell_quote(""), "''");

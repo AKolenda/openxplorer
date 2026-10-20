@@ -139,7 +139,48 @@ pub async fn empty_recycle_bin(cancel: &Cancellation) -> Result<TransferResult, 
 /// [`list_recycle_bin`] on the calling thread. The listing is closed on
 /// success, cancellation and error alike.
 fn list_recycle_bin_blocking(cancel: &Cancellation) -> Result<Vec<RecycledItem>, OpsError> {
+    cancel.check()?;
     let bin = gio::File::for_uri(TRASH_URI);
+    // Without a watcher, GVfs skips rescanning when the Trash folder's
+    // modification time is unchanged. A rapid delete and new Trash can
+    // share even a nanosecond timestamp, leaving the new item invisible.
+    // Requesting a monitor enables its backend's filesystem notifications.
+    // The private context releases the monitor's asynchronous subscription
+    // reference too; worker threads otherwise have no running main loop.
+    let context = glib::MainContext::new();
+    context
+        .with_thread_default(|| {
+            let monitor = bin
+                .monitor_directory(gio::FileMonitorFlags::NONE, Some(cancel.cancellable()))
+                .ok();
+            let result = enumerate_recycle_bin(&bin, cancel);
+            release_trash_monitor(monitor, &context);
+            result
+        })
+        .map_err(|error| OpsError::failed(error.to_string()))?
+}
+
+/// Cancels the monitor and dispatches its subscription cleanup on this worker.
+fn release_trash_monitor(monitor: Option<gio::FileMonitor>, context: &glib::MainContext) {
+    if let Some(monitor) = monitor {
+        let released = monitor.downgrade();
+        monitor.cancel();
+        drop(monitor);
+        // GVfs holds a reference until its asynchronous Subscribe callback.
+        // Cancellation can beat that reply, so pending() alone is insufficient.
+        // Dispatch until the callback releases the monitor; its D-Bus request
+        // has the normal finite timeout, including when the backend disappears.
+        while released.upgrade().is_some() {
+            context.iteration(true);
+        }
+    }
+    while context.pending() {
+        context.iteration(false);
+    }
+}
+
+/// Reads a listing while its caller holds the Trash monitor.
+fn enumerate_recycle_bin(bin: &gio::File, cancel: &Cancellation) -> Result<Vec<RecycledItem>, OpsError> {
     let listing = bin.enumerate_children(
         ATTRIBUTES,
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
@@ -435,6 +476,40 @@ fn path_name(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cancellation_before_enumeration_releases_the_trash_monitor() {
+        assert_eq!(std::env::var("OX_ISOLATED_SESSION").as_deref(), Ok("1"));
+        let data = PathBuf::from(std::env::var_os("XDG_DATA_HOME").expect("private data directory"));
+        assert!(data.starts_with(std::env::temp_dir()));
+        assert_eq!(glib::user_data_dir(), data);
+
+        // Exercise the real GVfs subscription, which completes asynchronously
+        // after monitor_directory returns. No files are trashed or removed.
+        for _ in 0..64 {
+            let context = glib::MainContext::new();
+            context
+                .with_thread_default(|| {
+                    let bin = gio::File::for_uri(TRASH_URI);
+                    let cancel = Cancellation::new();
+                    let monitor = bin
+                        .monitor_directory(gio::FileMonitorFlags::NONE, Some(cancel.cancellable()))
+                        .expect("the isolated GVfs Trash backend supports monitoring");
+                    let released = monitor.downgrade();
+                    cancel.cancel();
+
+                    let result = enumerate_recycle_bin(&bin, &cancel);
+                    release_trash_monitor(Some(monitor), &context);
+
+                    assert_eq!(result, Err(OpsError::Cancelled));
+                    assert!(
+                        released.upgrade().is_none(),
+                        "the subscription retained its monitor"
+                    );
+                })
+                .unwrap();
+        }
+    }
 
     fn recycled(uri: &str, original: &str, deleted_at: u64) -> RecycledItem {
         RecycledItem {

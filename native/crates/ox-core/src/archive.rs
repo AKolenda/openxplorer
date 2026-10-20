@@ -54,6 +54,11 @@ mod tar;
 mod worker;
 mod zip;
 
+/// Maximum requested decoder memory or history window in KiB. Allows the 64 MiB dictionary
+/// of XZ's highest ordinary preset, including its decoder overhead, but
+/// prevents a tiny compressed header from requesting gigabytes.
+const MAX_DECODER_MEMORY_KIB: u32 = 128 * 1024;
+
 pub use browse::{
     default_preview_root, ArchiveBrowser, ArchiveEntry, ArchiveEntryKind, ArchiveListing, MAX_LISTED_ENTRIES,
 };

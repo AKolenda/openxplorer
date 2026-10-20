@@ -129,3 +129,18 @@ fn the_status_can_be_read_on_a_worker_thread() {
     assert_eq!(status.profiles.len(), 1);
     assert!(!status.is_running);
 }
+
+/// A profile says whether Brave already asks where to save each download.
+///
+/// parity: INT-034
+#[test]
+fn a_profile_says_whether_brave_asks_where_to_save() {
+    let fixture = Fixture::new();
+    assert!(fixture.brave().profiles()[0].asks_where_to_save);
+
+    fixture.set_download_prompt(Some(false));
+    assert!(!fixture.brave().profiles()[0].asks_where_to_save);
+
+    fixture.set_download_prompt(None);
+    assert!(!fixture.brave().profiles()[0].asks_where_to_save);
+}

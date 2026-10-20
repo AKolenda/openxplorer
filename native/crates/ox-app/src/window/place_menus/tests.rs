@@ -131,11 +131,22 @@ fn a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts() {
         can_eject: true,
         can_stop: true,
         can_open_in_disks: true,
+        can_format: true,
     };
     let drive = PlaceMenu::Drive {
         uri: "file:///media/demo/USB".into(),
         kind: VolumeKind::Drive,
         controls: usb_disk,
+    };
+    // Without GNOME Disks the drive is still formatted in the app's own
+    // dialog.
+    let without_disks = PlaceMenu::Drive {
+        uri: "file:///media/demo/USB".into(),
+        kind: VolumeKind::Drive,
+        controls: MountControls {
+            can_open_in_disks: false,
+            ..usb_disk
+        },
     };
     let local_disk = PlaceMenu::Drive {
         uri: "file:///".into(),
@@ -157,6 +168,17 @@ fn a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts() {
             "Eject",
             "Safely remove",
             "Open in Disks",
+            "Format…",
+            "-",
+            "Properties"
+        ]
+    );
+    assert_eq!(
+        labels(&without_disks)[5..],
+        [
+            "Disconnect mount",
+            "Eject",
+            "Safely remove",
             "Format…",
             "-",
             "Properties"

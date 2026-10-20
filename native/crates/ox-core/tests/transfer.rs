@@ -55,6 +55,8 @@ mod operations;
 mod replace;
 #[path = "transfer_cases/same_device.rs"]
 mod same_device;
+#[path = "transfer_cases/skipped_moves.rs"]
+mod skipped_moves;
 #[path = "transfer_cases/snapshots.rs"]
 mod snapshots;
 #[path = "transfer_cases/staging_cleanup.rs"]

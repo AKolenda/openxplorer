@@ -26,7 +26,7 @@ use ox_core::gio_node::GioNode;
 use ox_core::integration::Activation;
 use ox_core::location::{is_archive_location, is_smb_server, parent_location};
 use ox_core::ops::OperationSummary;
-use ox_core::transfer::{Cancellation, Node, NodeFactory, Progress};
+use ox_core::transfer::{Cancellation, Node, NodeFactory};
 use ox_core::versions::snapshot_location;
 
 use crate::archive_view::{
@@ -194,9 +194,10 @@ impl BrowserWindow {
         ));
     }
 
-    /// True when no write runs in this window and no update waits for its
-    /// restart; otherwise says why, as one operation runs at a time
-    /// (OPS-024) and writes wait for the restart (UPD-006).
+    /// True when no write runs in this window, no update waits for its
+    /// restart and no drive is formatted; otherwise says why, as one
+    /// operation runs at a time (OPS-024) and writes wait for the restart
+    /// (UPD-006) and the format (DEV-012).
     pub(super) fn may_start_archive_operation(&self) -> bool {
         match self.archive_operation_refusal() {
             Some(refusal) => {
@@ -213,7 +214,7 @@ impl BrowserWindow {
         if self.is_writing_files() {
             return Some(ox_core::i18n::gettext_static(OPERATION_RUNNING).to_owned());
         }
-        self.context().updates().file_refusal()
+        self.write_refusal()
     }
 
     /// Asks where to extract `archive` (Extract all…).
@@ -328,9 +329,7 @@ impl BrowserWindow {
                 destination_uri: folder.to_owned(),
                 folder_name: name,
             };
-            let extractor = self
-                .zip_extractor()
-                .with_progress(self.operation_progress_sender());
+            let extractor = self.zip_extractor().with_progress(self.progress_reporter(cancel));
             match extractor.extract_in_background(request, cancel.clone()).await {
                 Err(ArchiveError::DestinationExists) => {}
                 Ok(extracted) => {
@@ -399,7 +398,7 @@ impl BrowserWindow {
             };
             let compressor = ZipCompressor::new()
                 .with_write_guard(self.context().previous_versions().write_guard())
-                .with_progress(self.operation_progress_sender());
+                .with_progress(self.progress_reporter(cancel));
             match compressor.compress_in_background(request, cancel.clone()).await {
                 Err(ArchiveError::ArchiveExists) => {}
                 Ok(created) => return Ok(compression_success_text(&created)),
@@ -407,20 +406,6 @@ impl BrowserWindow {
             }
         }
         Err(ArchiveError::ArchiveExists)
-    }
-
-    /// Where the worker thread sends progress: to this window's operation
-    /// panel, on the main thread.
-    pub(super) fn operation_progress_sender(&self) -> impl FnMut(Progress) + Send + 'static {
-        let window = glib::SendWeakRef::from(self.downgrade());
-        move |progress: Progress| {
-            let window = window.clone();
-            glib::MainContext::default().invoke(move || {
-                if let Some(window) = window.upgrade() {
-                    window.transfer_panel().show_progress(&progress);
-                }
-            });
-        }
     }
 
     /// Lists `folder` again, then says how an operation ended: `outcome`'s

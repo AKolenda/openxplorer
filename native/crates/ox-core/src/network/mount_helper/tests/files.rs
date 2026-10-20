@@ -68,6 +68,44 @@ fn a_symlink_is_never_followed() {
     assert_eq!(fs::read_to_string(&target).expect("readable"), "unchanged");
 }
 
+/// Failed writes and syncs cannot leave an untracked credential file
+/// behind. Only the exclusively created file is cleaned up.
+#[test]
+fn failed_writes_and_syncs_remove_the_new_file_and_allow_retry() {
+    for fail_after_write in [false, true] {
+        let root = tempfile::tempdir().expect("temporary folder");
+        let path = root.path().join("credential");
+        let refused = write_new_file_with(&path, 0o600, |file| {
+            // Inject a write failure after a partial write, or a sync
+            // failure after all contents have reached the file.
+            file.write_all(if fail_after_write { b"complete" } else { b"partial" })?;
+            Err(io::Error::other(if fail_after_write {
+                "sync failed"
+            } else {
+                "write failed"
+            }))
+        });
+
+        assert!(matches!(refused, Err(MountHelperError::Io { .. })));
+        assert!(!path.exists());
+        write_new_file(&path, "retry", 0o600).expect("failed file did not block retry");
+        assert_eq!(fs::read_to_string(&path).expect("readable"), "retry");
+        assert_eq!(mode(&path), 0o600);
+    }
+}
+
+#[test]
+fn failed_exclusive_creation_never_cleans_up_the_existing_file() {
+    let root = tempfile::tempdir().expect("temporary folder");
+    let path = root.path().join("credential");
+    fs::write(&path, "existing").expect("existing credential");
+
+    let refused = write_new_file_with(&path, 0o600, |_| panic!("must not write an existing file"));
+
+    assert!(matches!(refused, Err(MountHelperError::Io { .. })));
+    assert_eq!(fs::read_to_string(&path).expect("readable"), "existing");
+}
+
 /// parity: NET-028
 #[test]
 fn the_credential_file_names_user_password_and_optional_domain() {

@@ -5,7 +5,9 @@
 //! Both apps open the same `search.sqlite3`, so the tables, columns and
 //! stored words are Python's. The additions for pinned folders (SRCH-040),
 //! the `roots.pin_added` column with a default and the `index_migrations`
-//! table, are ones the Python app reads past.
+//! table, and for frequently opened folders, the `roots.frequent_added`
+//! column and the `folder_visits` and `frequent_skipped` tables, are ones
+//! the Python app reads past.
 
 use rusqlite::{Connection, ErrorCode, Transaction, TransactionBehavior};
 
@@ -30,17 +32,50 @@ const TABLES: &str = "
     CREATE TABLE IF NOT EXISTS index_requests (key TEXT PRIMARY KEY, kind TEXT, uri TEXT, created REAL);
     CREATE TABLE IF NOT EXISTS index_migrations(name TEXT PRIMARY KEY, applied REAL NOT NULL);
     CREATE TABLE IF NOT EXISTS index_options(name TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS folder_visits(uri TEXT PRIMARY KEY, score REAL NOT NULL, updated REAL NOT NULL);
+    CREATE TABLE IF NOT EXISTS frequent_skipped(uri TEXT PRIMARY KEY, skipped REAL NOT NULL);
+";
+
+/// A durable revision shared by independent processes. Triggers also
+/// observe writers from older releases, which know nothing of this table.
+/// Metadata changes count even when names, counts and timestamps stay the
+/// same. Bookkeeping-only writes do not invalidate searches.
+const CONTENT_REVISION: &str = "
+    CREATE TABLE IF NOT EXISTS cache_revision(
+        singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER NOT NULL);
+    INSERT OR IGNORE INTO cache_revision(singleton, revision) VALUES(1, 0);
+    CREATE TRIGGER IF NOT EXISTS cache_entry_insert AFTER INSERT ON entries BEGIN
+        UPDATE cache_revision SET revision=revision+1 WHERE singleton=1; END;
+    CREATE TRIGGER IF NOT EXISTS cache_entry_delete AFTER DELETE ON entries BEGIN
+        UPDATE cache_revision SET revision=revision+1 WHERE singleton=1; END;
+    CREATE TRIGGER IF NOT EXISTS cache_entry_update AFTER UPDATE ON entries
+        WHEN old.root IS NOT new.root OR old.uri IS NOT new.uri OR old.parent IS NOT new.parent
+          OR old.name IS NOT new.name OR old.search_text IS NOT new.search_text
+          OR old.is_dir IS NOT new.is_dir OR old.hidden IS NOT new.hidden OR old.size IS NOT new.size
+          OR old.modified IS NOT new.modified OR old.kind IS NOT new.kind OR old.type IS NOT new.type BEGIN
+        UPDATE cache_revision SET revision=revision+1 WHERE singleton=1; END;
+    CREATE TRIGGER IF NOT EXISTS cache_root_insert AFTER INSERT ON roots BEGIN
+        UPDATE cache_revision SET revision=revision+1 WHERE singleton=1; END;
+    CREATE TRIGGER IF NOT EXISTS cache_root_delete AFTER DELETE ON roots BEGIN
+        UPDATE cache_revision SET revision=revision+1 WHERE singleton=1; END;
+    CREATE TRIGGER IF NOT EXISTS cache_root_update AFTER UPDATE ON roots
+        WHEN old.uri IS NOT new.uri OR old.enabled IS NOT new.enabled
+          OR old.generation IS NOT new.generation OR old.include_hidden IS NOT new.include_hidden
+          OR old.status IS NOT new.status OR old.updated IS NOT new.updated BEGIN
+        UPDATE cache_revision SET revision=revision+1 WHERE singleton=1; END;
 ";
 
 /// Columns added to `roots` after the first release, with their
 /// declarations (SRCH-034). `pin_added` marks roots added because their
-/// folder is pinned (SRCH-040).
-const ADDED_ROOT_COLUMNS: [(&str, &str); 5] = [
+/// folder is pinned (SRCH-040), `frequent_added` roots added because their
+/// folder is opened often.
+const ADDED_ROOT_COLUMNS: [(&str, &str); 6] = [
     ("update_mode", "TEXT NOT NULL DEFAULT 'Not watching'"),
     ("watch_count", "INTEGER NOT NULL DEFAULT 0"),
     ("watch_error", "TEXT NOT NULL DEFAULT ''"),
     ("last_event", "REAL NOT NULL DEFAULT 0"),
     ("pin_added", "INTEGER NOT NULL DEFAULT 0"),
+    ("frequent_added", "INTEGER NOT NULL DEFAULT 0"),
 ];
 
 /// The trigram full-text index over `entries.search_text`.
@@ -82,6 +117,7 @@ pub(super) fn prepare(connection: &mut Connection) -> rusqlite::Result<SearchEng
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     transaction.execute_batch(TABLES)?;
     add_missing_root_columns(&transaction)?;
+    transaction.execute_batch(CONTENT_REVISION)?;
     let engine = create_full_text_index(&transaction)?;
     transaction.commit()?;
     Ok(engine)
@@ -238,6 +274,52 @@ mod tests {
 
         assert_eq!(found_names(&index, "bank"), ["bank.pdf"]);
         assert_eq!(found_names(&index, "ba"), ["bank.pdf"]);
+    }
+
+    /// The revision works after upgrading an old cache, across independent
+    /// handles, even if a writer preserves counts and every timestamp.
+    #[test]
+    fn content_revisions_notice_same_count_same_time_external_changes() {
+        let directory = first_release_cache();
+        let owner = SearchIndex::open(directory.path()).unwrap();
+        let follower = SearchIndex::open(directory.path()).unwrap();
+        let before = follower.status().unwrap();
+        let connection = owner.connect().unwrap();
+
+        connection
+            .execute(
+                "UPDATE entries SET name='plan.pdf', search_text='plan.pdf' WHERE name='bank.pdf'",
+                (),
+            )
+            .unwrap();
+
+        let after = follower.status().unwrap();
+        assert_eq!(
+            before.roots, after.roots,
+            "counts, times and generations are unchanged"
+        );
+        assert!(after.contents_revision > before.contents_revision);
+        assert_eq!(found_names(&follower, "plan"), ["plan.pdf"]);
+        assert_eq!(
+            follower.status().unwrap().contents_revision,
+            after.contents_revision
+        );
+        connection
+            .execute("UPDATE roots SET watch_count=watch_count+1", ())
+            .unwrap();
+        assert_eq!(
+            follower.status().unwrap().contents_revision,
+            after.contents_revision,
+            "monitoring alone does not rerun searches"
+        );
+        drop(connection);
+        drop(owner);
+        drop(follower);
+        let reopened = SearchIndex::open(directory.path()).unwrap();
+        assert_eq!(
+            reopened.status().unwrap().contents_revision,
+            after.contents_revision
+        );
     }
 
     /// Opening an upgraded database again changes nothing.

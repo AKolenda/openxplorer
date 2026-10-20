@@ -13,6 +13,8 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("brave-dialog.ui", "i18n_1", "label", false, "Use this Downloads folder in Brave"),
     ("brave-dialog.ui", "i18n_2", "label", false, "One-time sync. Quit Brave before applying. Your browser’s other settings are left alone."),
     ("brave-dialog.ui", "i18n_3", "label", false, "Only detected native profiles are changed. Passwords and account data are not shown here. Backups remain private in your OpenXplorer configuration directory."),
+    ("brave-dialog.ui", "prompt_check", "label", false, "Ask where to save each file before downloading"),
+    ("brave-dialog.ui", "prompt_note", "label", false, "Brave then opens a Save dialog for each download: OpenXplorer’s when “Other apps' Open and Save dialogs” is on in Settings > Default apps."),
     ("brave-dialog.ui", "recheck_button", "label", false, "Recheck profiles"),
     ("brave-dialog.ui", "restore_button", "label", false, "Restore previous"),
     ("brave-dialog.ui", "status_label", "label", false, "Checking native Brave profiles…"),

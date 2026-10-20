@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -190,6 +191,81 @@ class PublicDataAuditTests(unittest.TestCase):
         self.assertEqual(result['issues'], [
             'outer.zip!/inner.zip!/Fictional%20Private%20Customer.txt: '
             'rejected filename fingerprint'])
+
+    def test_binary_alias_cannot_hide_text_or_nested_archive_contents(self) -> None:
+        """Identical bytes with an unhandled suffix cannot suppress later inspection."""
+        self.audit.deny_terms(['Fictional Private Customer'])
+        text = self.put('inputs/example.txt', 'Fictional Private Customer')
+        archive_path = self.root / 'example.zip'
+        with zipfile.ZipFile(archive_path, 'w') as archive:
+            archive.write(text, 'example.txt')
+        for path in (text, archive_path):
+            with self.subTest(suffix=path.suffix):
+                alias = self.put('inputs/first.bin', path.read_bytes())
+                result = self.audit.audit([alias, path])
+                self.assertFalse(result['passed'], result)
+                self.assertTrue(any('private-data fingerprint' in issue
+                                    for issue in result['issues']))
+
+    def test_image_provenance_depends_on_each_publication_path(self) -> None:
+        """A duplicate outside the public image folders cannot whitelist an image."""
+        ordinary = self.put('inputs/example.webp', b'Unregistered fictional image')
+        public = self.put('docs/assets/example.webp', ordinary.read_bytes())
+        result = self.audit.audit([ordinary, public])
+        self.assertFalse(result['passed'])
+        self.assertEqual(result['issues'], [
+            'docs/assets/example.webp: unregistered image inside publication/archive'])
+
+    def test_duplicate_archives_keep_their_publication_image_context(self) -> None:
+        """Archive image checks apply again when a copy enters a public image folder."""
+        ordinary = self.root / 'example.zip'
+        with zipfile.ZipFile(ordinary, 'w') as archive:
+            archive.writestr('example.webp', b'Unregistered fictional image')
+        public = self.put('docs/assets/example.zip', ordinary.read_bytes())
+        result = self.audit.audit([ordinary, public])
+        self.assertFalse(result['passed'])
+        self.assertEqual(result['issues'], [
+            'docs/assets/example.zip!/example.webp: '
+            'unregistered image inside publication/archive'])
+
+    def test_shallow_archive_copy_cannot_bypass_the_nested_depth_limit(self) -> None:
+        """An archive inspected at the root still consumes its nested depth budget."""
+        inner = self.root / 'inner.zip'
+        with zipfile.ZipFile(inner, 'w') as archive:
+            archive.writestr('example.txt', 'Fictional public text')
+        nested = inner
+        for depth in range(8):
+            wrapper = self.root / f'wrapper-{depth}.zip'
+            with zipfile.ZipFile(wrapper, 'w') as archive:
+                archive.write(nested, nested.name)
+            nested = wrapper
+        result = self.audit.audit([inner, nested])
+        self.assertFalse(result['passed'])
+        self.assertTrue(any('nested archive depth exceeded' in issue
+                            for issue in result['issues']))
+
+    @unittest.skipUnless(shutil.which('dpkg-deb'), 'Debian fixture needs dpkg-deb')
+    def test_debian_control_metadata_and_scripts_are_audited_without_execution(self) -> None:
+        """The public package metadata and maintainer scripts also carry private text."""
+        self.audit.deny_terms(['Fictional Private Customer'])
+        self.put('package/DEBIAN/control',
+                 'Package: openxplorer-privacy-fixture\nVersion: 0.0.0\n'
+                 'Architecture: all\nMaintainer: Example <example@example.invalid>\n'
+                 'Description: Fictional Private Customer\n')
+        self.put('package/DEBIAN/postinst',
+                 '#!/bin/sh\n# Fictional Private Customer\n').chmod(0o755)
+        (self.root / 'package/DEBIAN').chmod(0o755)
+        self.put('package/usr/share/openxplorer-fixture/public.txt', 'Public fixture')
+        package = self.root / 'fixture.deb'
+        built = subprocess.run(['dpkg-deb', '--build', str(self.root / 'package'), str(package)],
+                               capture_output=True, text=True, check=False)
+        self.assertEqual(built.returncode, 0, built.stderr)
+        result = self.audit.audit([package])
+        self.assertFalse(result['passed'])
+        self.assertEqual(sorted(result['issues']), [
+            'fixture.deb!/DEBIAN/./control: rejected private-data fingerprint',
+            'fixture.deb!/DEBIAN/./postinst: rejected private-data fingerprint',
+        ])
 
     def test_environment_rules_include_multiword_identifiers(self) -> None:
         """OX_PRIVATE_TERMS is split on commas only, so names keep their spaces."""

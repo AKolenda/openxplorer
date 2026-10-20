@@ -30,13 +30,17 @@ mod zip_writer;
 
 use std::ffi::OsStr;
 use std::fmt;
+use std::fs::OpenOptions;
+use std::io::Read;
 
 use gio::prelude::*;
+use rustix::fs::OFlags;
 
 use super::worker::on_worker;
 use super::ArchiveError;
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name};
+use crate::private_storage::KernelOpenFlags;
 use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{Cancellation, Node, NodeKind, Progress, ProgressScope, TransferError, WriteGuard};
 use tar_writer::TarXzWriter;
@@ -270,8 +274,7 @@ impl ZipCompressor {
                 writer.add_folder(entry)?;
                 continue;
             };
-            let stream = source.read(Some(cancel.cancellable()))?;
-            let mut content = stream.upcast::<gio::InputStream>().into_read();
+            let mut content = open_source(source, cancel)?;
             writer.add_file(entry, &mut content, cancel)?;
             done_bytes += entry.size;
         }
@@ -298,6 +301,38 @@ impl ZipCompressor {
             bytes: None,
         });
     }
+}
+
+/// Opens a planned source, which may have changed since the tree was read.
+fn open_source(source: &gio::File, cancel: &Cancellation) -> Result<Box<dyn Read>, ArchiveError> {
+    cancel.check()?;
+    if source.uri_scheme().as_deref() == Some("file") {
+        if let Some(path) = source.path() {
+            // Check the opened file itself: a replacement link must not be
+            // followed, and a replacement FIFO must not wait for a writer.
+            let file = OpenOptions::new()
+                .read(true)
+                .kernel_flags(OFlags::NOFOLLOW | OFlags::NONBLOCK)
+                .open(path)?;
+            if !file.metadata()?.is_file() {
+                return Err(ArchiveError::SourceChanged);
+            }
+            return Ok(Box::new(file));
+        }
+    }
+    // GIO has no atomic no-follow read for remote backends. Refresh its
+    // metadata before opening, without claiming protection against a
+    // server changing the item between these calls.
+    let info = source.query_info(
+        "standard::type",
+        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+        Some(cancel.cancellable()),
+    )?;
+    if info.file_type() != gio::FileType::Regular {
+        return Err(ArchiveError::SourceChanged);
+    }
+    let stream = source.read(Some(cancel.cancellable()))?;
+    Ok(Box::new(stream.upcast::<gio::InputStream>().into_read()))
 }
 
 /// `done` of `total`, between 0 and 1.

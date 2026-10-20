@@ -117,12 +117,7 @@ impl SearchIndex {
     /// As [`SearchIndex::open`].
     pub fn roots(&self) -> Result<Vec<IndexRoot>, SearchError> {
         let connection = self.connect()?;
-        let mut statement = connection.prepare(
-            "SELECT r.*, (SELECT count(*) FROM entries e WHERE e.root=r.uri) AS entry_count
-             FROM roots r ORDER BY r.label COLLATE NOCASE",
-        )?;
-        let roots = statement.query_map((), IndexRoot::from_row)?;
-        Ok(roots.collect::<rusqlite::Result<_>>()?)
+        Ok(read_roots(&connection)?)
     }
 
     /// The root `uri` if it is enabled.
@@ -144,13 +139,25 @@ impl SearchIndex {
     ///
     /// As [`SearchIndex::open`].
     pub fn status(&self) -> Result<CacheStatus, SearchError> {
-        let roots = self.roots()?;
+        // Counts and the revision must describe one snapshot: reading them
+        // through separate connections could acknowledge a write whose
+        // changed roots this status has not seen yet.
+        let mut connection = self.connect()?;
+        let transaction = connection.transaction()?;
+        let roots = read_roots(&transaction)?;
+        let revision: i64 = transaction.query_row(
+            "SELECT revision FROM cache_revision WHERE singleton=1",
+            (),
+            |row| row.get(0),
+        )?;
+        let contents_revision = u64::try_from(revision).unwrap_or_default();
         let entry_count = roots
             .iter()
             .filter(|root| root.is_enabled())
             .map(|root| root.entry_count)
             .sum();
         Ok(CacheStatus {
+            contents_revision,
             roots,
             entry_count,
             engine: self.engine,
@@ -185,7 +192,7 @@ impl SearchIndex {
         transaction.execute(
             "INSERT INTO roots(uri, label, enabled, include_hidden, pin_added) VALUES(?1, ?2, ?3, ?4, 0)
              ON CONFLICT(uri) DO UPDATE SET enabled=excluded.enabled, label=excluded.label,
-                 include_hidden=excluded.include_hidden, pin_added=0",
+                 include_hidden=excluded.include_hidden, pin_added=0, frequent_added=0",
             (
                 &uri,
                 &label,
@@ -287,6 +294,16 @@ impl SearchIndex {
         connection.busy_timeout(BUSY_TIMEOUT)?;
         Ok(connection)
     }
+}
+
+/// Roots and their counts through the caller's connection or snapshot.
+fn read_roots(connection: &Connection) -> rusqlite::Result<Vec<IndexRoot>> {
+    let mut statement = connection.prepare(
+        "SELECT r.*, (SELECT count(*) FROM entries e WHERE e.root=r.uri) AS entry_count
+         FROM roots r ORDER BY r.label COLLATE NOCASE",
+    )?;
+    let roots = statement.query_map((), IndexRoot::from_row)?;
+    roots.collect()
 }
 
 /// Starts a transaction that takes the write lock at once, so its reads

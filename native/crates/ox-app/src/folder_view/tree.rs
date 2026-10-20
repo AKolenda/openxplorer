@@ -33,7 +33,7 @@ struct TreeState {
     /// Whether folders may expand now, which the tree's callback reads.
     expandable: Rc<Cell<bool>>,
     /// The running listings of expanded folders, by location.
-    listings: RefCell<HashMap<String, Listing>>,
+    listings: RefCell<HashMap<String, ChildListing>>,
     /// Folders to expand again once they are listed, by location (Back and
     /// Forward return to them expanded).
     pending: RefCell<HashSet<String>>,
@@ -43,6 +43,28 @@ struct TreeState {
     /// The lists that show the tree, which carry [`ARROWS_CLASS`] while
     /// folders may expand.
     views: RefCell<Vec<glib::WeakRef<gtk::Widget>>>,
+}
+
+/// A listing belongs to one child store, not just to its folder's URI.
+/// Reloading metadata can replace the folder row and its child store.
+#[derive(Debug)]
+struct ChildListing {
+    store: glib::WeakRef<gio::ListStore>,
+    /// Kept until collapse or replacement; dropping cancels pending I/O.
+    _listing: Listing,
+}
+
+impl ChildListing {
+    fn new(store: &gio::ListStore, listing: Listing) -> Self {
+        Self {
+            store: store.downgrade(),
+            _listing: listing,
+        }
+    }
+
+    fn belongs_to(&self, store: &gio::ListStore) -> bool {
+        self.store.upgrade().as_ref() == Some(store)
+    }
 }
 
 /// The class of a list whose folders show arrows; its rows reach further
@@ -244,7 +266,10 @@ impl FolderTree {
                     }
                 },
             );
-            self.0.listings.borrow_mut().insert(uri, listing);
+            self.0
+                .listings
+                .borrow_mut()
+                .insert(uri, ChildListing::new(&store, listing));
         }
     }
 
@@ -254,7 +279,13 @@ impl FolderTree {
         let Some(store) = child_store(children) else {
             return;
         };
-        if store.n_items() > 0 || self.0.listings.borrow().contains_key(uri) {
+        let already_listing = self
+            .0
+            .listings
+            .borrow()
+            .get(uri)
+            .is_some_and(|listing| listing.belongs_to(&store));
+        if store.n_items() > 0 || already_listing {
             return;
         }
         let weak_store = store.downgrade();
@@ -272,7 +303,10 @@ impl FolderTree {
             },
             |_| {},
         );
-        self.0.listings.borrow_mut().insert(uri.to_owned(), listing);
+        self.0
+            .listings
+            .borrow_mut()
+            .insert(uri.to_owned(), ChildListing::new(&store, listing));
     }
 }
 
@@ -295,6 +329,46 @@ fn child_store(children: &gio::ListModel) -> Option<gio::ListStore> {
 mod tests {
     use super::*;
     use crate::test_support::harness::{wait_until, Fixture};
+
+    /// A metadata refresh replaces the parent row, so its previous
+    /// completed listing cannot stand in for the new row's empty store.
+    #[gtk::test]
+    fn replacing_an_expanded_folder_reloads_its_new_child_store() {
+        let fixture = Fixture::standard();
+        std::fs::write(fixture.path("Documents/inside.txt"), b"Synthetic data").unwrap();
+        let mut entry = crate::test_support::folder_entry("Documents");
+        entry.uri = fixture.uri_of("Documents");
+        let store = gio::ListStore::new::<FileItem>();
+        store.append(&FileItem::new(entry.clone()));
+        let sorted = gtk::SortListModel::new(Some(store.clone()), None::<gtk::Sorter>);
+        let tree = FolderTree::new(&sorted, &gtk::CustomFilter::new(|_| true));
+        tree.set_expandable(true);
+        let old_row = tree.row(0).unwrap();
+        tree.set_expanded(&old_row, true);
+        wait_until("the original child listing", || tree.model().n_items() == 2);
+        let expanded = tree.expanded_uris();
+
+        entry.modified = Some(entry.modified.unwrap_or_default() + 1);
+        reconcile::update_in_place(&store, vec![entry]);
+        let new_row = tree.row(0).unwrap();
+        assert_ne!(new_row, old_row);
+        tree.expand_when_listed(expanded);
+
+        wait_until("children below the replacement row", || {
+            tree.model().n_items() == 2
+        });
+        assert!(new_row.is_expanded());
+        assert_eq!(
+            tree.model()
+                .item(1)
+                .and_downcast::<FileItem>()
+                .unwrap()
+                .entry()
+                .name,
+            "inside.txt"
+        );
+        tree.collapse_all();
+    }
 
     /// Collapsing a branch stops its descendants and reopening lists fresh
     /// contents, including files created while it was closed.

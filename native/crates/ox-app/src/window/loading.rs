@@ -362,6 +362,13 @@ impl BrowserWindow {
             if run.mode == LoadMode::Navigate && is_folder && remembers {
                 add_to_desktop_history(&run.uri, FOLDER_CONTENT_TYPE);
             }
+            // SRCH-041: a folder the user went to and that listed counts
+            // towards indexing frequently opened folders; a refresh, or a
+            // listing that failed or was superseded, does not. The cache
+            // ignores it while that switch is off.
+            if run.mode == LoadMode::Navigate && self.imp().session.borrow().is_active(id) {
+                self.context().search_cache().folder_opened(&run.uri);
+            }
         }
         let end = self.imp().session.borrow_mut().end_listing(id);
         if end == ListingEnd::TabClosed {
@@ -377,6 +384,12 @@ impl BrowserWindow {
             self.restore_scroll_after_listing(id);
             self.restore_expanded_after_listing(id);
             self.reveal_located_item(id);
+            if is_listed {
+                // Searches keep a separate result store. A cache refresh
+                // may have merged the old listing while this reload was
+                // running; show the completed listing's matches now.
+                self.refresh_search_after_listing();
+            }
         } else {
             self.finish_beside_listing(id);
         }

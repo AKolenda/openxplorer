@@ -13,9 +13,9 @@ use std::collections::{BTreeMap, HashMap};
 
 use rusqlite::{OptionalExtension, Transaction};
 
-use super::error::SearchError;
+use super::error::{check_cancelled, SearchError};
 use super::index::{begin_immediate, SearchIndex, MAX_ERROR_CHARS};
-use super::root::{RootStatus, ScanGeneration};
+use super::root::{HiddenItems, IndexRoot, RootStatus, ScanGeneration};
 use super::text::{
     display_path, fold, folder_prefix, is_at_or_below, is_same_folder, parent_uri, truncate_chars, unix_now,
 };
@@ -262,7 +262,8 @@ impl SearchIndex {
     /// only a complete listing. A deleted or renamed folder, or one that
     /// became a file, loses its cached descendants; the files themselves
     /// are never touched. Items outside `root` or not directly in `folder`
-    /// are ignored.
+    /// are ignored. A listing whose root was cleared, reconfigured or
+    /// rescanned while it was read is discarded inside the transaction.
     ///
     /// # Errors
     ///
@@ -270,16 +271,35 @@ impl SearchIndex {
     /// and database errors.
     pub(crate) fn replace_folder_contents(
         &self,
-        root: &str,
+        root: &IndexRoot,
         folder: &str,
         items: &[ListedItem],
+        cancellable: &gio::Cancellable,
     ) -> Result<Vec<String>, SearchError> {
-        let children = children_of(root, folder, items)?;
-        let mut connection = self.connect()?;
-        let transaction = begin_immediate(&mut connection)?;
-        let Some(generation) = current_generation(&transaction, root)? else {
+        let Some(generation) = &root.generation else {
             return Ok(Vec::new());
         };
+        let children = children_of(&root.uri, folder, items)?;
+        let mut connection = self.connect()?;
+        let transaction = begin_immediate(&mut connection)?;
+        check_cancelled(cancellable)?;
+        // A clear, reconfiguration or new scan may have happened during the
+        // listing, or while this writer waited for SQLite. Check the state
+        // the listing belongs to under the same lock as its replacement.
+        let is_current: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM roots
+             WHERE uri=?1 AND enabled=1 AND generation=?2 AND include_hidden=?3)",
+            (
+                &root.uri,
+                generation.as_str(),
+                root.hidden_items == HiddenItems::Include,
+            ),
+            |row| row.get(0),
+        )?;
+        if !is_current {
+            return Ok(Vec::new());
+        }
+        let root = root.uri.as_str();
         let cached = cached_children(&transaction, root, folder)?;
         for (uri, was_folder) in &cached {
             let still_a_folder = children.get(uri).is_some_and(|item| item.is_dir);
@@ -290,9 +310,10 @@ impl SearchIndex {
         let seen = unix_now();
         for (uri, item) in &children {
             let entry = StoredEntry::new(uri.clone(), folder.to_owned(), item);
-            entry.upsert(&transaction, root, &generation, seen)?;
+            entry.upsert(&transaction, root, generation.as_str(), seen)?;
         }
         transaction.execute("UPDATE roots SET last_event=?1 WHERE uri=?2", (seen, root))?;
+        check_cancelled(cancellable)?;
         transaction.commit()?;
         let new_folders = children
             .into_iter()
@@ -382,10 +403,56 @@ fn cached_children(
 /// Deletes the cached entry `uri` and everything cached below it.
 fn delete_subtree(transaction: &Transaction<'_>, root: &str, uri: &str) -> rusqlite::Result<()> {
     let prefix = folder_prefix(uri);
-    let prefix_chars = i64::try_from(prefix.chars().count()).unwrap_or(i64::MAX);
+    // '/' is followed by '0' in SQLite's binary text order. This half-open
+    // range therefore contains exactly the descendants, including encoded
+    // and Unicode names, while using the existing (root, uri) index. A
+    // substr predicate scanned the whole root for every removed child.
+    let end = format!("{}0", uri.trim_end_matches('/'));
+    transaction.execute("DELETE FROM entries WHERE root=?1 AND uri=?2", (root, uri))?;
     transaction.execute(
-        "DELETE FROM entries WHERE root=?1 AND (uri=?2 OR substr(uri, 1, ?3)=?4)",
-        (root, uri, prefix_chars, &prefix),
+        "DELETE FROM entries WHERE root=?1 AND uri>=?2 AND uri<?3",
+        (root, &prefix, &end),
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::search::fixtures::{listed_file, ScannedShare, SHARE};
+
+    /// Removing one child must not visit every other cached item. Count
+    /// SQLite work instead of elapsed time so slow CI machines can verify
+    /// that the URI index bounds the deletion.
+    #[test]
+    fn pruning_a_small_subtree_does_not_scan_unrelated_entries() {
+        let share = ScannedShare::new();
+        let items: Vec<_> = (0..4096)
+            .map(|number| listed_file(SHARE, &format!("report-{number}.txt")))
+            .collect();
+        share.store(&items);
+        let mut connection = share.index.connect().unwrap();
+        let steps = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&steps);
+        connection
+            .progress_handler(
+                1000,
+                Some(move || {
+                    observed.fetch_add(1000, Ordering::Relaxed);
+                    false
+                }),
+            )
+            .unwrap();
+        let transaction = begin_immediate(&mut connection).unwrap();
+
+        delete_subtree(&transaction, SHARE, &items[0].uri).unwrap();
+
+        let used = steps.load(Ordering::Relaxed);
+        assert!(used < 10_000, "deleting one cached file took {used} SQLite steps");
+        transaction.commit().unwrap();
+        assert!(share.found_names("report-0.txt").is_empty());
+    }
 }

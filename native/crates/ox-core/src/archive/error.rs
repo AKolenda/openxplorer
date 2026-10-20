@@ -43,6 +43,14 @@ pub enum ArchiveError {
     )]
     DamagedArchive,
 
+    /// The compressed stream requests more decoder memory than the
+    /// built-in reader allows, before any dictionary is allocated.
+    #[error(
+        "{}",
+        crate::i18n::gettext("This archive requires too much decoder memory. Use an archive manager.")
+    )]
+    DecoderMemoryLimit,
+
     // Reading: v2.0.0:desktop/archives.py and v2.0.0:desktop/native_opening.py.
     /// ARC-005: the central directory is over 32 MiB.
     #[error(
@@ -279,8 +287,8 @@ pub enum ArchiveError {
         crate::i18n::gettext("An item with this name already exists. Nothing was replaced.")
     )]
     ArchiveExists,
-    /// ARC-023: a file held more or fewer bytes when it was written into
-    /// a `.tar.xz` than when it was measured.
+    /// ARC-023: a source became a link or special file, or held more or
+    /// fewer bytes when written into a `.tar.xz` than when measured.
     #[error(
         "{}",
         crate::i18n::gettext("An item changed while it was compressed. Nothing was created.")
