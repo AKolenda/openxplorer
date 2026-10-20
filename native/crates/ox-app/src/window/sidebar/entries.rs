@@ -535,6 +535,7 @@ mod tests {
                     can_eject: true,
                     can_stop: true,
                     can_open_in_disks: false,
+                    can_format: false,
                 },
             },
         };

@@ -48,6 +48,10 @@ finish-args:
   # runs the host's xdg-mime. Files open in host applications through the
   # OpenURI portal instead.
   - --talk-name=org.freedesktop.Flatpak
+  # Format… on a removable drive asks the host's UDisks to unmount, format
+  # and mount it again; UDisks checks with polkit, which may ask for the
+  # user's password.
+  - --system-talk-name=org.freedesktop.UDisks2
   # "Check for updates" asks GitHub whether a newer release exists; Flatpak
   # installs it. SMB and phone traffic goes through GVfs on the host.
   - --share=network

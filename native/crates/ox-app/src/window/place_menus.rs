@@ -14,8 +14,8 @@
 //! cameras and a server's share list), "Cache this folder for search"
 //! where the folder can be indexed (`cacheMenuItems`) and Properties. The
 //! Python app had the Terminal item on network places only, and the cache
-//! item on drives only. A removable drive also offers Open in Disks and
-//! Format… where GNOME Disks is installed.
+//! item on drives only. A removable drive also offers Format…, the app's
+//! own Format dialog, and Open in Disks where GNOME Disks is installed.
 
 use gtk::prelude::*;
 use gtk::{gdk, glib, graphene};
@@ -114,23 +114,27 @@ fn removal_items(uri: &str, kind: VolumeKind, controls: MountControls) -> Vec<Me
     items.collect()
 }
 
-/// Open in Disks and Format… for the removable drive at `uri`, which
-/// GNOME Disks handles (DEV-012), as Dolphin offers its partition manager.
-fn disks_items(uri: &str) -> [MenuEntry; 2] {
-    [
+/// Open in Disks, where GNOME Disks is installed, and Format…, the app's
+/// own dialog, for the removable drive at `uri` (DEV-012), as Dolphin
+/// offers its partition manager.
+fn disks_items(uri: &str, controls: MountControls) -> Vec<MenuEntry> {
+    let open = controls.can_open_in_disks.then(|| {
         item(
             ox_core::i18n::gettext_static("Open in Disks"),
             Icon::Settings,
             WindowAction::OpenInDisks,
             uri,
-        ),
+        )
+    });
+    let format = controls.can_format.then(|| {
         item(
             ox_core::i18n::gettext_static("Format…"),
             Icon::HardDrive,
             WindowAction::FormatDrive,
             uri,
-        ),
-    ]
+        )
+    });
+    open.into_iter().chain(format).collect()
 }
 
 /// Open in Terminal for the place at `uri`, disabled where no terminal
@@ -184,9 +188,7 @@ fn drive_entries(
         entries.extend(cache_entries(uri, caching));
     }
     let mut drive_tools = removal_items(uri, kind, controls);
-    if controls.can_open_in_disks {
-        drive_tools.extend(disks_items(uri));
-    }
+    drive_tools.extend(disks_items(uri, controls));
     if !drive_tools.is_empty() {
         entries.push(MenuEntry::Divider);
         entries.extend(drive_tools);

@@ -70,6 +70,8 @@ impl BrowserWindow {
         if let Some(refusal) = self.archive_operation_refusal() {
             return Err(refusal);
         }
+        // The copies' folder is prepared before the panel shows (DEV-012).
+        let _writing = self.context().hold_write();
         let archive_uri = first.archive_uri.clone();
         let root = copies_root();
         let prepared_root = root.clone();

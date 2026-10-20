@@ -16,7 +16,9 @@ Isolation follows docs/PRIVACY.md and native/README.md:
   it has seen on the LAN), so the Network page discovers nothing, and its own
   process namespace,
   so no helper outlives the picture. The fictional demo tree is mounted as
-  /home/demo, the home folder the published examples use.
+  /home/demo, the home folder the published examples use. Only the selected
+  executable is bound read-only into the disposable runtime directory, so a
+  checkout under /home remains runnable without exposing the checkout.
 - The app runs on its own X display (xvfb-run) and D-Bus session
   (dbus-run-session), never on the live desktop. DISPLAY, WAYLAND_DISPLAY and
   DBUS_SESSION_BUS_ADDRESS are not passed on; the environment is built from
@@ -212,13 +214,23 @@ def build_app() -> Path:
         if shutil.which(tool) is None:
             raise CaptureError(f'{tool} is required to capture the native app.')
     environment = dict(os.environ, OX_APP_ID=STABLE_APP_ID)
-    subprocess.run(['cargo', 'build', '--locked', '--release', '--bin', 'openxplorer-native'],
-                   cwd=NATIVE, env=environment, check=True)
-    target = Path(os.environ.get('CARGO_TARGET_DIR', NATIVE / 'target'))
-    program = target / 'release' / 'openxplorer-native'
-    if not program.is_file():
-        raise CaptureError(f'Cargo did not build {program}.')
-    return program
+    result = subprocess.run(
+        ['cargo', 'build', '--locked', '--release', '--bin', 'openxplorer-native',
+         '--message-format=json-render-diagnostics'],
+        cwd=NATIVE, env=environment, check=True, stdout=subprocess.PIPE, text=True)
+    # Cargo resolves configured target folders relative to its own working
+    # directory and may include a target triple. Its artifact names the binary
+    # actually built, even when an old one remains in the default target folder.
+    for line in result.stdout.splitlines():
+        message = json.loads(line)
+        if (message.get('reason') == 'compiler-artifact'
+                and message.get('target', {}).get('name') == 'openxplorer-native'
+                and message.get('executable')):
+            program = Path(message['executable'])
+            if not program.is_file():
+                raise CaptureError(f'Cargo did not build {program}.')
+            return program
+    raise CaptureError('Cargo did not report the openxplorer-native executable.')
 
 
 def locale_name() -> str:
@@ -280,10 +292,14 @@ def isolated_command(program: Path, home: Path, runtime: Path,
                      variables: Mapping[str, str]) -> list[str]:
     """Return the command that runs program isolated, as the module docstring says."""
     runtime_directory = f'/run/user/{os.getuid()}'
+    capture_program = f'{runtime_directory}/openxplorer-capture-app'
     command = ['bwrap', '--dev-bind', '/', '/',
                '--tmpfs', '/home', '--tmpfs', '/media', '--tmpfs', '/mnt', '--tmpfs', '/run/user',
                '--bind', str(home), DEMO_HOME,
                '--bind', str(runtime), runtime_directory,
+               # /home is hidden above, including typical developer checkouts.
+               # Bind just the chosen executable, never its surrounding files.
+               '--ro-bind', str(program.resolve()), capture_program,
                # No network, so nothing is discovered or reached on the LAN, and
                # a process namespace, so every helper the app starts ends with it.
                '--unshare-net', '--unshare-pid', '--die-with-parent']
@@ -312,4 +328,4 @@ def isolated_command(program: Path, home: Path, runtime: Path,
     return command + ['dbus-run-session', '--', 'xvfb-run', '--auto-servernum',
                       # Taller than the window, so a menu that opens near its
                       # bottom fits on the screen, as on a real desktop.
-                      '--server-args=-screen 0 1600x1400x24', str(program)]
+                      '--server-args=-screen 0 1600x1400x24', capture_program]

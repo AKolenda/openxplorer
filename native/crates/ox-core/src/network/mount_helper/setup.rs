@@ -119,6 +119,9 @@ pub(super) fn run(
         .secure_directory(credential_folder, CREDENTIAL_FOLDER_MODE)?;
     host.tree
         .secure_directory(&host.tree.path(Path::new(MOUNT_ROOT)), FOLDER_MODE)?;
+    // Setup and removal both validate before prompting. Keep that view
+    // current until completion; never remove this shared lock directory.
+    let _lock = host.tree.lock_directory(credential_folder)?;
     if arguments.remove {
         remove(&plan, &files, host, terminal)
     } else {
@@ -212,7 +215,7 @@ fn set_up(
     };
     let credential = credential_file_text(&username, &password)?;
     drop(password);
-    let mut created = Vec::new();
+    let mut created = SetupChanges::default();
     let result = create_and_start(plan, files, credential, host, &mut created);
     if let Err(error) = result {
         roll_back(plan, files, &created, host, terminal)?;
@@ -233,20 +236,30 @@ fn set_up(
     Ok(Outcome::Done)
 }
 
-/// Creates the mount point and the files, recording each created file in
-/// `created`, then enables the automount and mounts once to check the
-/// account now rather than at the first download.
+/// Only changes owned by this setup may be undone. A failed exclusive
+/// create is not evidence that the existing mount belongs to this run.
+#[derive(Default)]
+struct SetupChanges {
+    mountpoint_created: bool,
+    files: Vec<PathBuf>,
+    units_may_be_loaded: bool,
+}
+
+/// Creates and records the mount point and files, then enables the
+/// automount and mounts once to check the account now rather than at the
+/// first download.
 fn create_and_start(
     plan: &MountPlan,
     files: &ManagedFiles,
     credential: String,
     host: &mut Host<'_>,
-    created: &mut Vec<PathBuf>,
+    created: &mut SetupChanges,
 ) -> Result<(), MountHelperError> {
     DirBuilder::new()
         .mode(MOUNTPOINT_MODE)
         .create(&files.mountpoint)
         .map_err(|error| MountHelperError::io(&files.mountpoint, error))?;
+    created.mountpoint_created = true;
     let contents = [
         (&files.credentials, credential, CREDENTIAL_MODE),
         (&files.mount_unit, plan.mount_unit.clone(), UNIT_MODE),
@@ -254,9 +267,11 @@ fn create_and_start(
     ];
     for (path, text, mode) in contents {
         write_new_file(path, &text, mode)?;
-        created.push(path.clone());
+        created.files.push(path.clone());
     }
     let (mount, automount) = unit_names(plan);
+    // Even a failed reload might have exposed our units to systemd.
+    created.units_may_be_loaded = true;
     host.systemd.systemctl(&["daemon-reload"], SYSTEMCTL_LIMIT)?;
     host.systemd
         .systemctl(&["enable", "--now", &automount], SYSTEMCTL_LIMIT)?;
@@ -272,31 +287,39 @@ fn create_and_start(
 fn roll_back(
     plan: &MountPlan,
     files: &ManagedFiles,
-    created: &[PathBuf],
+    created: &SetupChanges,
     host: &mut Host<'_>,
     terminal: &mut dyn Terminal,
 ) -> Result<(), MountHelperError> {
-    terminal.warn("Setup failed. Trying to stop and roll back the new mount configuration.");
-    let (mount, automount) = unit_names(plan);
-    if let Err(error) = host
-        .systemd
-        .systemctl(&["stop", &mount, &automount], SYSTEMCTL_LIMIT)
-    {
-        terminal.warn(&format!(
-            "Could not stop safely. Configuration retained for manual recovery: {}",
-            plan.remove_command
-        ));
-        return Err(error);
+    if !created.mountpoint_created {
+        return Ok(());
     }
-    // Disabling may fail when enabling never happened; that is fine.
-    let _ = host
-        .systemd
-        .systemctl(&["disable", &automount], ROLLBACK_DISABLE_LIMIT);
-    for path in created.iter().rev() {
+    terminal.warn("Setup failed. Trying to stop and roll back the new mount configuration.");
+    if created.units_may_be_loaded {
+        let (mount, automount) = unit_names(plan);
+        if let Err(error) = host
+            .systemd
+            .systemctl(&["stop", &mount, &automount], SYSTEMCTL_LIMIT)
+        {
+            terminal.warn(&format!(
+                "Could not stop safely. Configuration retained for manual recovery: {}",
+                plan.remove_command
+            ));
+            return Err(error);
+        }
+        // Disabling may fail when enabling never happened; that is fine.
+        let _ = host
+            .systemd
+            .systemctl(&["disable", &automount], ROLLBACK_DISABLE_LIMIT);
+    }
+    for path in created.files.iter().rev() {
         let _ = fs::remove_file(path);
     }
     let _ = fs::remove_dir(&files.mountpoint);
-    host.systemd.systemctl(&["daemon-reload"], SYSTEMCTL_LIMIT)
+    if created.units_may_be_loaded {
+        host.systemd.systemctl(&["daemon-reload"], SYSTEMCTL_LIMIT)?;
+    }
+    Ok(())
 }
 
 /// The `.mount` and `.automount` unit names of the plan.

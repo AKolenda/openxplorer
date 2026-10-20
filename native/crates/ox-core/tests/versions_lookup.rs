@@ -42,9 +42,14 @@ fn share_with_snapshots() -> Value {
             "smb://nas/share/.snapshots": {"entries": [{"name": "5", "isDir": true}]},
         },
         "items": {
+            "smb://nas/share/.snapshot/2026-09-01_1200/work": {"name": "work", "isDir": true},
             "smb://nas/share/.snapshot/2026-09-01_1200/work/a.txt": {"name": "a.txt"},
+            "smb://nas/share/.snapshot/2026-09-05_1800/work": {"name": "work", "isDir": true},
             "smb://nas/share/.snapshot/2026-09-05_1800/work/a.txt": {"name": "a.txt"},
+            "smb://nas/share/.snapshot/2026-09-04_0900/work": {"name": "work", "isDir": true},
             "smb://nas/share/.snapshot/2026-09-04_0900/work/a.txt": {"name": "a.txt", "symlink": true},
+            "smb://nas/share/.snapshots/5/snapshot": {"name": "snapshot", "isDir": true},
+            "smb://nas/share/.snapshots/5/snapshot/work": {"name": "work", "isDir": true},
             "smb://nas/share/.snapshots/5/snapshot/work/a.txt": {"error": "Input/output error"},
         },
     })

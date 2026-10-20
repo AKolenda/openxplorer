@@ -98,7 +98,15 @@ msgid "Apply to Brave"
 msgstr ""
 
 #: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Ask where to save each file before downloading"
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
 msgid "Back up and update the selected Brave profiles."
+msgstr ""
+
+#: crates/ox-app/resources/ui/brave-dialog.ui
+msgid "Brave then opens a Save dialog for each download: OpenXplorer’s when “Other apps' Open and Save dialogs” is on in Settings > Default apps."
 msgstr ""
 
 #: crates/ox-app/resources/ui/brave-dialog.ui
@@ -551,6 +559,43 @@ msgstr ""
 msgid "OK"
 msgstr ""
 
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Capacity"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/properties/general_panel.rs
+msgid "File system"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/window/compress_dialog.rs
+msgid "Format"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Format this drive?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Format {drive}"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Formatting erases all data on this drive. Copy anything you want to keep to another drive first."
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Quick format"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Start"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Volume label"
+msgstr ""
+
 #: crates/ox-app/src/dialogs/network_map.rs
 msgid "Add a network folder to your sidebar: a Windows share, or a folder on an SSH, FTP, WebDAV or NFS server."
 msgstr ""
@@ -909,6 +954,10 @@ msgstr ""
 msgid "The selected application could not be started."
 msgstr ""
 
+#: crates/ox-app/src/integration/brave_dialog.rs
+msgid "Asks where to save each file"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/integration/brave_dialog.rs
 msgid "Brave Downloads updated for {len} profile(s)."
@@ -966,6 +1015,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/integration/changes.rs
+msgid "File handlers updated, but Open and Save dialogs setup failed: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/changes.rs
 msgid "File handlers updated, but Show in folder setup failed: {error}"
 msgstr ""
 
@@ -984,6 +1038,18 @@ msgstr ""
 
 #: crates/ox-app/src/integration/changes.rs
 msgid "Previous recorded handlers restored."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
+msgid "Previous recorded handlers restored. For other apps' Open and Save dialogs to return to the desktop's, click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
+msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
+msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in; KDE apps follow after you log out and back in."
 msgstr ""
 
 #: crates/ox-app/src/integration/changes.rs
@@ -1288,10 +1354,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
 msgid "Executable"
-msgstr ""
-
-#: crates/ox-app/src/properties/general_panel.rs
-msgid "File system"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
@@ -2069,7 +2131,7 @@ msgid "Flatpak/Snap, custom profiles, or managed browsers: open brave://settings
 msgstr ""
 
 #: crates/ox-app/src/settings_page/brave.rs
-msgid "Fully quit Brave first, including background processes. OpenXplorer backs up Preferences and changes only the download and Save as directories. This is a one-time sync, not a managed browser policy."
+msgid "Fully quit Brave first, including background processes. OpenXplorer backs up Preferences and changes only the download and Save as directories and, if you choose, whether Brave asks where to save each file. This is a one-time sync, not a managed browser policy."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/brave.rs
@@ -2081,7 +2143,7 @@ msgid "Use Linux Downloads in Brave…"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/brave.rs
-msgid "use linux downloads in brave brave download location downloads sync save as browser profile. Use the Linux Downloads location in selected native Brave profiles."
+msgid "use linux downloads in brave brave download location downloads sync save as browser profile. Use the Linux Downloads location in selected native Brave profiles. ask where to save each file before downloading prompt save dialog"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/confirmations.rs
@@ -2150,6 +2212,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
 msgid "\"Show in folder\" opens OpenXplorer. Runs for your user at login."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Also handle Open and Save dialogs"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -2245,6 +2311,10 @@ msgid "Other apps' Open and Save dialogs"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Other apps, such as Brave, choose and save files in an OpenXplorer window. Applies after Apply now or the next login."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Refresh status"
 msgstr ""
 
@@ -2265,7 +2335,7 @@ msgid "Restore the previous file handlers"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
-msgid "Restores the recorded file handlers and removes OpenXplorer's Show in folder files."
+msgid "Restores the recorded file handlers, removes OpenXplorer's Show in folder files and gives Open and Save dialogs back to the desktop."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -2306,6 +2376,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Zorin and Brave setup steps, and how to undo each change."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "also open and save dialogs file picker file chooser upload save as portal brave chrome firefox make default option everything"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -2369,7 +2443,19 @@ msgid "“Show in folder” from browsers and apps"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps/view.rs
+msgid "Open local folders and SMB links in OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps/view.rs
+msgid "Open local folders, SMB links and other apps' Open and Save dialogs in OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps/view.rs
 msgid "OpenXplorer is your default file explorer"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps/view.rs
+msgid "OpenXplorer is your default file explorer, except for Open and Save dialogs"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps/view.rs
@@ -2437,6 +2523,10 @@ msgid "Item check boxes"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Item check boxes stay out of the way until you hold Ctrl to pick several items. Turn this off to show them whenever you point at an item."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Logical file bytes, the space on disk, what a scan skips, and its limits."
 msgstr ""
 
@@ -2480,6 +2570,10 @@ msgstr ""
 msgid "Rows in the file list and the navigation pane stand closer, so more items fit."
 msgstr ""
 
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Show check boxes only while Ctrl is held"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Show previews"
 msgstr ""
@@ -2502,6 +2596,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-core/src/places/known_folders.rs crates/ox-core/src/search/facets.rs
 msgid "Videos"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "check box checkbox ctrl control key hold hover show hide select multiple"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -2825,6 +2923,10 @@ msgstr ""
 msgid "Clear cached names only"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
+msgid "Frequent"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
 msgid "Last full refresh: {value1}"
@@ -2903,6 +3005,14 @@ msgid "Check network and unwatched folders every"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
+msgid "Folders you open often are added to instant search, and removed again once you stop opening them. While this is on, OpenXplorer remembers which local folders you open; hidden and network folders never count, and a folder too large to index is skipped for 30 days. Turning this off forgets them."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "Index frequently opened folders (experimental)"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
 msgid "Index pinned folders automatically"
 msgstr ""
 
@@ -2961,6 +3071,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
 msgid "quick access pin search cache"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexing.rs
+msgid "smart cache frequent recent often used folders automatic instant indexing experimental"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexing.rs
@@ -3466,6 +3580,10 @@ msgstr ""
 msgid "Wait for the update to finish before closing OpenXplorer."
 msgstr ""
 
+#: crates/ox-app/src/window/closing.rs
+msgid "Wait until the drive is formatted before closing OpenXplorer."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/closing.rs
 msgid "{len} windows have {tabs} tabs open. Close them all and quit?"
@@ -3704,10 +3822,6 @@ msgstr ""
 msgid "Compress"
 msgstr ""
 
-#: crates/ox-app/src/window/compress_dialog.rs
-msgid "Format"
-msgstr ""
-
 #: crates/ox-app/src/window/context_menu.rs
 msgid "Open as administrator…"
 msgstr ""
@@ -3925,11 +4039,41 @@ msgid "Disks cannot open this drive."
 msgstr ""
 
 #: crates/ox-app/src/window/disk_tools.rs
+msgid "Finish the current operation before formatting."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "Formatting…"
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "No program to make a file system is installed on this computer."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
 msgid "The tool is not installed."
 msgstr ""
 
 #: crates/ox-app/src/window/disk_tools.rs
+msgid "This drive cannot be formatted."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
 msgid "This tool needs a location on this computer."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs crates/ox-app/src/window/file_ops/running.rs
+msgid "Wait until the drive is formatted, then try again."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "{drive} is formatted, but could not be mounted again: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "{drive} is formatted."
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
@@ -4343,12 +4487,12 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/journal.rs
-msgid "{len} copies, such as “{first}”, were changed after they were copied. Undo moves them to the Recycle Bin anyway?"
+msgid "{len} copies, such as “{first}”, may have changed after they were copied. Undo moves them to the Recycle Bin anyway?"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/journal.rs
-msgid "“{first}” was changed after it was copied. Undo moves it to the Recycle Bin anyway?"
+msgid "“{first}” may have changed after it was copied. Undo moves it to the Recycle Bin anyway?"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/links.rs
@@ -5718,6 +5862,10 @@ msgid "This archive member is missing or duplicated. Use an archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
+msgid "This archive requires too much decoder memory. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
 msgid "This file type cannot be previewed safely. Use an archive manager to extract it intentionally."
 msgstr ""
 
@@ -6242,6 +6390,40 @@ msgstr ""
 msgid "xdg-mime could not be run: {error}"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "Could not format the drive: {error}"
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "Formatting needs the UDisks service, which is not available."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "Formatting was cancelled."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "The drive is in use. Close the files and programs using it, then try again."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "The drive is no longer connected."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "The drive is write-protected."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "You are not allowed to format this drive."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "{error} (It could not be mounted again: {reason})"
+msgstr ""
+
 #: crates/ox-core/src/integration/file_manager_bus.rs
 msgid "OpenXplorer could not open the requested location."
 msgstr ""
@@ -6603,6 +6785,10 @@ msgid "Administrative paths must be absolute, without parent traversal."
 msgstr ""
 
 #: crates/ox-core/src/network/mount_helper.rs
+msgid "Another mount setup or removal is in progress. Finish it before trying again."
+msgstr ""
+
+#: crates/ox-core/src/network/mount_helper.rs
 msgid "Enter a username after the domain."
 msgstr ""
 
@@ -6672,11 +6858,19 @@ msgid "Invalid mount destination or user identity."
 msgstr ""
 
 #: crates/ox-core/src/network/mount_plan.rs
+msgid "The persistent mount assistant supports SMB shares only."
+msgstr ""
+
+#: crates/ox-core/src/network/mount_plan.rs
 msgid "The persistent mount assistant supports a hostname or IPv4 address without a port."
 msgstr ""
 
 #: crates/ox-core/src/network/mount_plan.rs
 msgid "This share name needs manual mounting. The assistant allows letters, numbers, spaces, dots, _, $, and hyphens."
+msgstr ""
+
+#: crates/ox-core/src/network/mount_table.rs
+msgid "Enter an SMB shared folder."
 msgstr ""
 
 #: crates/ox-core/src/network/prompts/challenge.rs
@@ -7187,6 +7381,10 @@ msgstr ""
 
 #: crates/ox-core/src/search/error.rs
 msgid "This folder is not enabled for caching."
+msgstr ""
+
+#: crates/ox-core/src/search/error.rs
+msgid "This folder is too large to index automatically. Add it yourself to index it."
 msgstr ""
 
 #: crates/ox-core/src/search/error.rs
@@ -7821,6 +8019,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Adds item check boxes as in Windows 11 and a redesigned Settings page with eight pages, a search across all of them and details in ⓘ bubbles. Open and Save dialogs no longer wait on network shares and say why Save cannot save, and a folder's expand arrow stays inside its row's highlight. Dropping files onto a file on a Windows drive or share no longer runs it unless it really is a program, and asks first."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Brave's downloads, its Save page as and Save as PDF, and its upload dialogs can open OpenXplorer's own Open and Save dialogs, also when the desktop portal reads its settings from a different folder, and the Brave sync can make Brave ask where to save each download. A Save dialog names the file for the type chosen in it. By default, an unselected item's check box shows on hover only while Ctrl is held, as in Windows Explorer, and an experimental, off-by-default option indexes frequently opened folders for instant search. Compressed archives, launcher previews during a drag and search results now have memory limits, and the share mount helper only rolls back what its own setup changed. Large cached folders, fast file operations and custom folder icons take less time."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

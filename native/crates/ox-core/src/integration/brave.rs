@@ -10,8 +10,9 @@
 //! - Nothing changes while Brave runs, and the app never stops it.
 //! - Every profile is checked before any is written; each write is backed
 //!   up first, private (0600) and atomic, and changes only the two
-//!   download folders.
-//! - Restore puts back only a folder that still holds what the sync set.
+//!   download folders, and Brave's "Ask where to save each file before
+//!   downloading" when the user asks for it (INT-034).
+//! - Restore puts back only a setting that still holds what the sync set.
 //! - No browser policy, credential, extension or `sudo` is involved.
 //!
 //! Inside a Flatpak sandbox the host's Brave profiles and processes are
@@ -56,6 +57,16 @@ pub enum Confirmation {
     Confirmed,
     /// The user did not confirm; nothing is changed.
     NotConfirmed,
+}
+
+/// Whether a sync also makes Brave ask where to save each download
+/// (INT-034), so that every download opens a Save dialog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DownloadPrompt {
+    /// `download.prompt_for_download` is left as it is.
+    Unchanged,
+    /// `download.prompt_for_download` is set to `true`.
+    Ask,
 }
 
 /// The folders the Brave integration uses.
@@ -138,6 +149,15 @@ pub struct SyncOutcome {
     pub path: PathBuf,
     /// The folder the backups are kept in.
     pub backups: PathBuf,
+}
+
+/// What a restore put back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestoredSettings {
+    /// The groups whose folder was put back.
+    pub folders: Vec<DownloadPreference>,
+    /// Whether Brave's "Ask where to save each file" was put back.
+    pub download_prompt: bool,
 }
 
 /// The Brave download-folder integration of one user.

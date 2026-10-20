@@ -115,7 +115,7 @@ impl SessionCredentials {
         let Some(key) = ServerKey::for_location(uri) else {
             return Ok(());
         };
-        let server_lock = self.store.server_lock(&key);
+        let server_lock = self.store.host_lock(key.host());
         let _serialised = locked(&server_lock);
         // Safety rule (NET-021): a save that started before Sign out is
         // discarded, so signing out cannot be undone by a late write.
@@ -150,11 +150,26 @@ impl SessionCredentials {
         let Some(key) = ServerKey::for_location(uri) else {
             return Ok(false);
         };
-        let server_lock = self.store.server_lock(&key);
+        let server_lock = self.store.host_lock(key.host());
         // Safety rule (SAFE-012): wait for a save in flight for this
         // server, so the clear below also deletes what it wrote.
         let _serialised = locked(&server_lock);
         self.store.clear(&key, scope)
+    }
+
+    /// Sign out invalidates all ports of the canonical host in every
+    /// window, including keyring reads and saves still in flight.
+    pub(super) fn forget_host_memory(&self, host: &str) {
+        self.store.advance_host_generation(host);
+        locked(&self.memory).retain(|key, _| key.host() != host);
+    }
+
+    /// Forgets every endpoint of a host after any in-flight saves finish.
+    pub(super) fn forget_host(&self, host: &str, scope: ForgetScope) -> Result<bool, KeyringError> {
+        self.forget_host_memory(host);
+        let host_lock = self.store.host_lock(host);
+        let _serialised = locked(&host_lock);
+        self.store.clear_host(host, scope)
     }
 
     /// Forgets every credential in this window's memory, when the window

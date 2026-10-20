@@ -5,7 +5,7 @@
 //! Ports the enabled rows of `renderSettingsCache` in `v2.0.0:desktop/ui/app.js`
 //! (SET-006, SRCH-022, SRCH-023) in the look of the settings mockup: the
 //! folder's picture, its name with a "Pinned" tag for a folder pinning
-//! added (SRCH-040), its path, how many names it holds and how it keeps
+//! added (SRCH-040) or a "Frequent" tag for one opened often, its path, how many names it holds and how it keeps
 //! current, a status chip, and buttons to refresh it (or stop a running
 //! scan), clear its cached names, and stop indexing it.
 
@@ -22,7 +22,7 @@ use crate::settings_page::{parts, SettingsPage};
 const FOLDER_ART: i32 = 28;
 /// The glyphs of the row's buttons and tag.
 const BUTTON_GLYPH: i32 = 16;
-/// The pin in the "Pinned" tag.
+/// The glyph in the "Pinned" and "Frequent" tags.
 const TAG_GLYPH: i32 = 12;
 
 /// How a status chip is drawn (`.chip.ok`, `.run`, `.warn`, `.off` in the
@@ -134,8 +134,12 @@ fn folder_texts(root: &IndexRoot, path: &str) -> gtk::Box {
         .css_classes(["setting-title"])
         .build();
     title.append(&label);
-    if root.origin == RootOrigin::Pin {
-        title.append(&pinned_tag());
+    match root.origin {
+        RootOrigin::Pin => title.append(&origin_tag(Icon::Pin, &ox_core::i18n::gettext("Pinned"))),
+        RootOrigin::Frequent => {
+            title.append(&origin_tag(Icon::History, &ox_core::i18n::gettext("Frequent")));
+        }
+        RootOrigin::User => {}
     }
     let texts = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -147,15 +151,16 @@ fn folder_texts(root: &IndexRoot, path: &str) -> gtk::Box {
     texts
 }
 
-/// The "Pinned" tag of a folder pinning added (SRCH-040).
-fn pinned_tag() -> gtk::Box {
+/// The "Pinned" tag of a folder pinning added (SRCH-040), or the
+/// "Frequent" tag of one indexed because it is opened often.
+fn origin_tag(glyph: Icon, name: &str) -> gtk::Box {
     let tag = gtk::Box::builder()
         .spacing(4)
         .valign(gtk::Align::Center)
         .css_classes(["pinned-tag"])
         .build();
-    tag.append(&icons::image(Icon::Pin, TAG_GLYPH));
-    tag.append(&gtk::Label::new(Some(&ox_core::i18n::gettext("Pinned"))));
+    tag.append(&icons::image(glyph, TAG_GLYPH));
+    tag.append(&gtk::Label::new(Some(name)));
     tag
 }
 

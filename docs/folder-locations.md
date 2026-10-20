@@ -14,7 +14,7 @@ Use a persistent Linux mount path such as /mnt/nas/downloads. Temporary per-logi
 
 ## Optionally sync native Brave profiles
 
-Also update Brave’s download directory opens a separate profile-selection and confirmation step. Fully quit Brave, including background processes, first. Only download and Save As directory fields are changed, with private backups and field-level restoration.
+Also update Brave’s download directory opens a separate profile-selection and confirmation step. Fully quit Brave, including background processes, first. Only download and Save As directory fields are changed, with private backups and field-level restoration. Optionally, Ask where to save each file before downloading also turns on Brave’s own setting of that name, so each download opens a Save dialog first: OpenXplorer’s when Other apps’ Open and Save dialogs is enabled in Settings → Default apps. Restore previous puts that setting back too, unless you changed it since.
 
 ## Sandboxed or custom browser profiles
 
@@ -30,4 +30,4 @@ The optional helper prepares persistent systemd mount/automount configuration. I
 
 ---
 
-OpenXplorer 2.0.5. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.6. Project-authored documentation: AGPL-3.0-only.

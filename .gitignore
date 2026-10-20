@@ -51,6 +51,9 @@ apps/web/public/tour/scenes.js
 # Built packages and archives, in any directory.
 *.deb
 *.zip
+*.rpm
+*.pkg.tar.zst
+*.flatpak
 
 # Virtual environments, tool caches and coverage data.
 .venv/

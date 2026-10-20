@@ -57,6 +57,7 @@
 //! | `mime_type` | The handled MIME types | `desktop_integration.py`, `activation.py` |
 //! | `sandbox`, `host_command` | Flatpak detection; running host programs | (new) |
 //! | `disk_tools` | Disks, the Disk Image Mounter and a disk-usage analyser | (new) |
+//! | `drive_format` | Formatting a removable drive through UDisks | (new) |
 //! | `program` | Starting a program the user chose: drops, custom commands | (new) |
 //! | `private_file`, `worker` | Atomic private writes; worker threads | the Python modules' helpers |
 
@@ -67,6 +68,7 @@ mod background_portal;
 mod brave;
 mod default_apps;
 mod disk_tools;
+mod drive_format;
 mod file_chooser_bus;
 mod file_chooser_request;
 mod file_dialogs;
@@ -91,14 +93,18 @@ pub use background_portal::{
 };
 pub use brave::{
     BraveActivity, BraveChannel, BraveError, BraveIntegration, BravePaths, BraveProfile, BraveReach,
-    BraveStatus, Confirmation, DownloadPreference, ProcessTable, ProfileFailure, SandboxedBrave, SyncOutcome,
-    MANUAL_SETTINGS_URL,
+    BraveStatus, Confirmation, DownloadPreference, DownloadPrompt, ProcessTable, ProfileFailure,
+    RestoredSettings, SandboxedBrave, SyncOutcome, MANUAL_SETTINGS_URL,
 };
 pub use default_apps::{
     DefaultApps, DefaultAppsError, DefaultsStatus, DesktopId, MimeDefaults, RestoreScope, XdgMime,
     ZipAssociation, APP_ID, RESTORE_NOTE,
 };
 pub use disk_tools::{is_disk_image, DiskTool};
+pub use drive_format::{
+    available_file_systems, default_file_system, drive_facts, format_drive, DriveFacts, FileSystem,
+    FormatError, FormatRequest, Formatted, UDISKS_NAME,
+};
 pub use file_chooser_bus::{
     ChooserCall, ChooserNotShown, ChooserRegistrationFailed, ChooserReply, FileChooserBus,
     PORTAL_BACKEND_PATH,
@@ -110,8 +116,8 @@ pub use file_chooser_request::{
 };
 pub use file_dialogs::{
     desktops_from, preferred_value, with_preference, without_preference, DisabledFileDialogs,
-    FileDialogError, FileDialogPaths, FileDialogRegistration, PortalRestart, FILE_CHOOSER_KEY,
-    KDE_PORTAL_VARIABLE, PORTAL_SERVICE,
+    FileDialogError, FileDialogPaths, FileDialogRegistration, PortalDir, PortalRestart, FILE_CHOOSER_KEY,
+    KDE_PORTAL_VARIABLE, PORTAL_DIR_VARIABLE, PORTAL_SERVICE,
 };
 pub use file_manager_bus::{
     BusStatus, FileManagerBus, RegistrationFailed, RequestNotOpened, BUS_NAME, OBJECT_PATH,

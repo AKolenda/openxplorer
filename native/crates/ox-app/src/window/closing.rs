@@ -36,6 +36,12 @@ use crate::dialog::Dialog;
 const WAIT_FOR_UPDATE: &str =
     crate::i18n::message_id("Wait for the update to finish before closing OpenXplorer.");
 
+/// The refusal of Quit, and of closing the last window, while a drive
+/// is formatted (DEV-012): the drive would be left unmounted, or
+/// half-formatted, once the application ends.
+pub(crate) const WAIT_FOR_FORMAT: &str =
+    crate::i18n::message_id("Wait until the drive is formatted before closing OpenXplorer.");
+
 /// The refusal of Quit while any window writes (`quit_safely`).
 pub(crate) const QUIT_WHILE_WRITING: &str =
     crate::i18n::message_id("Finish or cancel active file operations before quitting OpenXplorer.");
@@ -130,7 +136,14 @@ impl BrowserWindow {
 
     /// Whether a close may go ahead now; otherwise asks whether to cancel
     /// the running write and close afterwards, and the close waits.
+    ///
+    /// The last window does not close while a drive is formatted: the
+    /// application ends with it, and a format cannot be cancelled.
     pub(super) fn may_close_now(&self) -> bool {
+        if self.context().formats_a_drive() && self.is_last_window() {
+            self.show_message(ox_core::i18n::gettext_static(WAIT_FOR_FORMAT));
+            return false;
+        }
         if self.asks_before_closing_tabs() {
             // One question at a time, however often the shell asks.
             if self.imp().closing.get() == ClosingState::Open {
@@ -155,6 +168,20 @@ impl BrowserWindow {
             ));
         }
         false
+    }
+
+    /// Whether no other browsing window of the application is open, so
+    /// closing this one ends it. A picker does not count: it closes on its
+    /// own once its file is chosen.
+    fn is_last_window(&self) -> bool {
+        self.application().is_none_or(|app| {
+            !app.windows().iter().any(|window| {
+                window != self.upcast_ref::<gtk::Window>()
+                    && window
+                        .downcast_ref::<BrowserWindow>()
+                        .is_some_and(|other| !other.is_picking())
+            })
+        })
     }
 
     /// Whether closing must first ask about the window's tabs: the

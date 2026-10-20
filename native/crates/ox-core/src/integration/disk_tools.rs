@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The desktop's disk tools: GNOME Disks for a drive (Open in Disks and
-//! Format…, DEV-012), the Disk Image Mounter for `.iso` and `.img` files
-//! (DEV-011) and a disk-usage analyser for a folder (PROP-015).
+//! The desktop's disk tools: GNOME Disks for a drive (Open in Disks,
+//! DEV-012; Format… is the app's own, [`super::drive_format`]), the Disk
+//! Image Mounter for `.iso` and `.img` files (DEV-011) and a disk-usage
+//! analyser for a folder (PROP-015).
 //!
 //! Dolphin offers the same through KDE Partition Manager, its own image
 //! mounting and Filelight. Each tool gets its program path and one
@@ -38,8 +39,6 @@ const DISK_IMAGE_SUFFIXES: [&str; 2] = [".iso", ".img"];
 pub enum DiskTool {
     /// GNOME Disks showing a drive's block device.
     OpenInDisks,
-    /// GNOME Disks' Format dialog for a drive's block device.
-    FormatDrive,
     /// Attaching a disk image read-only, so it shows among the drives.
     MountImage,
     /// A disk-usage analyser at a folder.
@@ -50,7 +49,7 @@ impl DiskTool {
     /// The programs that can do it, in the order they are preferred.
     fn programs(self) -> &'static [&'static str] {
         match self {
-            Self::OpenInDisks | Self::FormatDrive => &[DISKS],
+            Self::OpenInDisks => &[DISKS],
             Self::MountImage => &[IMAGE_MOUNTER],
             Self::AnalyseUsage => &USAGE_ANALYSERS,
         }
@@ -77,13 +76,10 @@ impl DiskTool {
             ));
         }
         let mut arguments = vec![executable.as_os_str().to_owned()];
-        if matches!(self, Self::OpenInDisks | Self::FormatDrive) {
+        if self == Self::OpenInDisks {
             arguments.push("--block-device".into());
         }
         arguments.push(target.as_os_str().to_owned());
-        if self == Self::FormatDrive {
-            arguments.push("--format-device".into());
-        }
         Ok(arguments)
     }
 
@@ -144,23 +140,13 @@ mod tests {
 
     /// parity: DEV-012
     #[test]
-    fn disks_opens_or_formats_the_block_device() {
+    fn disks_opens_the_block_device() {
         let disks = Path::new("/usr/bin/gnome-disks");
         let device = Path::new("/dev/sdb1");
 
         let open = DiskTool::OpenInDisks.arguments(disks, device).expect("arguments");
-        let format = DiskTool::FormatDrive.arguments(disks, device).expect("arguments");
 
         assert_eq!(open, ["/usr/bin/gnome-disks", "--block-device", "/dev/sdb1"]);
-        assert_eq!(
-            format,
-            [
-                "/usr/bin/gnome-disks",
-                "--block-device",
-                "/dev/sdb1",
-                "--format-device"
-            ]
-        );
         assert!(DiskTool::OpenInDisks
             .arguments(disks, Path::new("--help"))
             .is_err());
@@ -203,7 +189,7 @@ mod tests {
             Some(PathBuf::from("/usr/bin/baobab"))
         );
         assert_eq!(
-            found(DiskTool::FormatDrive, &both),
+            found(DiskTool::OpenInDisks, &both),
             Some(PathBuf::from("/usr/bin/gnome-disks"))
         );
     }

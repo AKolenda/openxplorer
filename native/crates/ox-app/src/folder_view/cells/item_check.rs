@@ -14,6 +14,10 @@
 //! Whether a check box shows is the stylesheet's (`.item-check` in
 //! folder-views.css: on a hovered or selected row or tile, else
 //! transparent), so a Details row shows it when hovered in any column.
+//! With "Show check boxes only while Ctrl is held" on, the default, a
+//! hovered row's box stays transparent and lets clicks through to the row
+//! until Ctrl is held (`window/item_check_boxes.rs`); a checked box still
+//! shows, and a click on it still deselects its item alone.
 //! It replaces Dolphin's plus/minus selection toggle, which showed only
 //! on the icon of the item under the pointer.
 
@@ -37,6 +41,20 @@ impl FileCell {
         self.imp().check.set_visible(shown);
     }
 
+    /// Lets the check box take clicks, or, while it waits for Ctrl, lets
+    /// them through to the row or tile unless it is checked and so shown.
+    pub(crate) fn item_check_takes_clicks(&self, take: bool) {
+        self.imp().check_takes_clicks.set(take);
+        self.update_check_target();
+    }
+
+    /// Lets the check box take clicks when it may, or when it is checked.
+    fn update_check_target(&self) {
+        let imp = self.imp();
+        imp.check
+            .set_can_target(imp.check_takes_clicks.get() || imp.check.is_active());
+    }
+
     /// Checks the box while `list_item`'s item is selected and makes a
     /// click on it select or deselect that item alone; follows `owners`
     /// for whether check boxes show at all.
@@ -47,6 +65,9 @@ impl FileCell {
         check.set_tooltip_text(Some(check_name()));
         check.update_property(&[gtk::accessible::Property::Label(check_name())]);
         check.set_visible(owners.shows_item_checks());
+        self.imp()
+            .check_takes_clicks
+            .set(owners.item_checks_take_clicks());
         own_clicks(check);
         let handler = check.connect_toggled(glib::clone!(
             #[weak]
@@ -73,6 +94,7 @@ impl FileCell {
         check.block_signal(handler);
         check.set_active(selected);
         check.unblock_signal(handler);
+        self.update_check_target();
     }
 
     /// The item's check box, for tests.

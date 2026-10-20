@@ -158,7 +158,7 @@ impl IndexService {
         let is_owner = {
             let mut state = self.shared.state();
             state.paused_hosts.insert(host.clone());
-            state.cancel_scans_on_host(&host);
+            state.cancel_jobs_on_host(&host);
             state.ownership.is_owner()
         };
         if !is_owner {

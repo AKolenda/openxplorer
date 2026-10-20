@@ -37,14 +37,15 @@ fn arguments(remove: bool, plan_only: bool) -> Arguments {
 
 /// A terminal that answers from a script and records what was printed.
 #[derive(Default)]
-struct ScriptedTerminal {
+struct ScriptedTerminal<'a> {
     answers: VecDeque<&'static str>,
     printed: String,
     warnings: String,
     not_a_terminal: bool,
+    on_ask: Option<Box<dyn FnOnce() + 'a>>,
 }
 
-impl ScriptedTerminal {
+impl ScriptedTerminal<'_> {
     fn answering(answers: &[&'static str]) -> Self {
         Self {
             answers: answers.iter().copied().collect(),
@@ -53,7 +54,7 @@ impl ScriptedTerminal {
     }
 }
 
-impl Terminal for ScriptedTerminal {
+impl Terminal for ScriptedTerminal<'_> {
     fn is_interactive(&self) -> bool {
         !self.not_a_terminal
     }
@@ -70,6 +71,9 @@ impl Terminal for ScriptedTerminal {
 
     fn ask(&mut self, prompt: &str) -> io::Result<String> {
         self.printed.push_str(prompt);
+        if let Some(on_ask) = self.on_ask.take() {
+            on_ask();
+        }
         Ok(self.answers.pop_front().unwrap_or_default().to_owned())
     }
 
@@ -167,6 +171,7 @@ fn mode(path: &Path) -> u32 {
     fs::symlink_metadata(path).expect("exists").permissions().mode() & 0o777
 }
 
+mod concurrency;
 mod files;
 mod removal;
 mod setup;

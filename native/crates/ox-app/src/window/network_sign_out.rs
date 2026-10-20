@@ -116,13 +116,15 @@ impl BrowserWindow {
         });
     }
 
-    /// Whether any window of the app writes files, which Sign out waits
-    /// for.
-    fn writes_in_any_window(&self) -> WriteActivity {
+    /// Whether any window of the app writes files, a write outside the
+    /// operation panel such as a rename included, which Sign out and
+    /// Format… wait for.
+    pub(super) fn writes_in_any_window(&self) -> WriteActivity {
         let windows = self.browser_windows();
-        let writing = windows
-            .iter()
-            .any(|window| window.write_activity() == WriteActivity::Writing);
+        let writing = self.context().holds_writes()
+            || windows
+                .iter()
+                .any(|window| window.write_activity() == WriteActivity::Writing);
         if writing {
             WriteActivity::Writing
         } else {

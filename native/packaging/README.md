@@ -121,6 +121,10 @@ never takes over the Python app's name. Every package build sets it.
   portal never picks it by itself: it is used only after the user enables
   "Apps' Open and Save dialogs" in Settings, which writes the preference into
   their own `~/.config/xdg-desktop-portal/<desktop>-portals.conf` (INT-032).
+  When the user's portal service sets `XDG_DESKTOP_PORTAL_DIR`, the portal
+  reads `.portal` files and its configuration only from that folder, so the
+  opt-in writes the preference there and links this packaged file into it,
+  recording the link so Restore removes only what it made.
   The existing D-Bus service file starts the app for the first call. The
   Flatpak installs none, since the host's portal reads only the host's data
   folders.
@@ -288,6 +292,7 @@ flatpak run io.winspace.Development.Native
 | `--talk-name=org.gnome.NautilusPreviewer` | Quick Look: Space asks GNOME Sushi on the host to preview the selected file, and the app follows its window. |
 | `--own-name=org.freedesktop.FileManager1` | "Show in folder" (opt-in): after the user turns it on in Settings, the running app answers browsers' and other apps' requests to show a downloaded file in its folder. Flatpak only permits owning the name; the app claims it only while the integration is on. |
 | `--talk-name=org.freedesktop.Flatpak` | `flatpak-spawn --host`: Open in Terminal starts the host's terminal, and making OpenXplorer the default file manager (opt-in) runs the host's `xdg-mime`. |
+| `--system-talk-name=org.freedesktop.UDisks2` | Format… on a removable drive: the app's Format dialog asks the host's UDisks to unmount, format and mount the drive again. UDisks checks with polkit, which may ask for the user's password. |
 | `--share=network` | "Check for updates" asks GitHub whether a newer release exists. SMB and phone traffic goes through GVfs on the host. |
 
 The desktop portals, which every Flatpak may use, cover opening files with other
@@ -408,6 +413,11 @@ Only the owner can:
   explicit user actions: Open in Terminal starts the host's terminal in the
   current folder, and "Make OpenXplorer the default file manager" (opt-in)
   runs the host's `xdg-mime`, since the default applications are the host's.
+- `--system-talk-name=org.freedesktop.UDisks2`: Format… on a removable
+  drive. The app's own Format dialog asks the host's UDisks service to
+  unmount the drive, make the new file system and mount it again, as GNOME
+  Disks does; UDisks checks every request with polkit, which may ask for the
+  user's password.
 - `--share=network`: "Check for updates" reads GitHub's public release list to
   say whether a newer version exists; Flatpak installs it. SMB and phones
   go through the host's GVfs, not this permission. If Flathub asks to drop

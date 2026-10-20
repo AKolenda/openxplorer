@@ -6,9 +6,12 @@
 //! The portal names the caller's window `wayland:<handle>`, a handle the
 //! caller exported with xdg-foreign, or `x11:<id>`, or nothing. On Wayland
 //! the dialog imports the handle and becomes a child of that window
-//! (`gdk_wayland_toplevel_set_transient_for_exported`), then modal, which
-//! GTK tells the compositor with xdg-dialog (GTK 4.22 does, 4.14 does not
-//! yet): `KWin` keeps a modal child above its parent and sends a click on
+//! (`gdk_wayland_toplevel_set_transient_for_exported`), then modal. GTK,
+//! 4.14 included (`gdk_wayland_toplevel_set_modal_hint`), tells the
+//! compositor with xdg-dialog when the compositor offers it, and otherwise
+//! with gtk-shell's `gtk_surface1.set_modal`, which Mutter 46 turns into a
+//! modal dialog (`META_WINDOW_MODAL_DIALOG`) of the window it is a child
+//! of. `KWin` keeps a modal child above its parent and sends a click on
 //! the parent to the child. GTK has no way to make an X11 window a child of another
 //! process's window, and a modal window without a parent could lock the
 //! other `OpenXplorer` windows instead, so such a dialog stays a window of

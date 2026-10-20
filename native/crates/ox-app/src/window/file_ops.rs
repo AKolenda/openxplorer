@@ -24,6 +24,7 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `running` | Exclusive operations, transfer progress, cancellation and completion reports |
+//! | `progress` | Bounded, coalesced progress updates from worker threads |
 //! | `jobs` | Bounded concurrent transfers, independent panels and overlapping-path refusal |
 //! | `unfinished` | Marks of running copies, and what a crashed run left behind |
 //! | `availability` | When each file command is enabled (`updateToolbar`) |
@@ -71,6 +72,7 @@ mod move_by_copying_dialog;
 mod name_dialog;
 mod names;
 mod new_items;
+mod progress;
 mod recycle_bin;
 mod rename;
 mod running;

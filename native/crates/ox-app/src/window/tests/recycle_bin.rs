@@ -369,7 +369,7 @@ fn undoing_a_copy_that_changed_since_asks_and_cancel_keeps_it() {
     assert_eq!(question.title_text(), "Undo copy?");
     assert_eq!(
         question.message_text(),
-        "“Notes 2.txt” was changed after it was copied. Undo moves it to the Recycle Bin anyway?"
+        "“Notes 2.txt” may have changed after it was copied. Undo moves it to the Recycle Bin anyway?"
     );
     question.press("Cancel");
     wait_for_no_dialog(&test);

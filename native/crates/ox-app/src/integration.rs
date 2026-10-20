@@ -56,7 +56,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{
     BraveIntegration, BravePaths, DefaultApps, FileDialogPaths, FileDialogRegistration, LaunchShortcut,
-    RevealPaths, RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
+    PortalDir, RevealPaths, RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
 };
 
 #[cfg(test)]
@@ -102,18 +102,23 @@ pub(crate) struct IntegrationFolders {
     pub(crate) portal_system_dirs: Vec<PathBuf>,
     /// The current desktops, lowercase.
     pub(crate) desktops: Vec<String>,
+    /// Where the one folder the desktop portal may be told to read comes
+    /// from: its service's environment, or none in tests.
+    pub(crate) portal_dir: PortalDir,
 }
 
 impl IntegrationFolders {
     /// The current user's folders, with the records in `settings`.
     pub(crate) fn for_user(settings: &Path) -> Self {
+        let portal = FileDialogPaths::for_user(settings);
         Self {
             settings: settings.to_owned(),
             config_home: glib::user_config_dir(),
             data_home: glib::user_data_dir(),
             home: glib::home_dir(),
-            portal_system_dirs: FileDialogPaths::for_user(settings).system_dirs,
-            desktops: FileDialogPaths::for_user(settings).desktops,
+            portal_system_dirs: portal.system_dirs,
+            desktops: portal.desktops,
+            portal_dir: portal.portal_dir,
         }
     }
 
@@ -128,6 +133,7 @@ impl IntegrationFolders {
             home: root.to_owned(),
             portal_system_dirs: vec![root.join("system")],
             desktops: vec!["kde".to_owned()],
+            portal_dir: PortalDir::Fixed(None),
         }
     }
 }
@@ -272,6 +278,7 @@ impl DesktopIntegration {
                     config_home: folders.config_home.clone(),
                     system_dirs: folders.portal_system_dirs.clone(),
                     desktops: folders.desktops.clone(),
+                    portal_dir: folders.portal_dir.clone(),
                 },
                 crate::config::APP_ID,
                 sandbox,
