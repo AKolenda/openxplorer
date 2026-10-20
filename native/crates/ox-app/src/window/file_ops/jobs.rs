@@ -33,7 +33,7 @@ impl BrowserWindow {
         uris: &[String],
         destination: Option<&str>,
     ) -> Option<OperationContext> {
-        if self.refuses_writes_during_update() {
+        if self.refuses_writes() {
             return None;
         }
         let mut operations = self.imp().file_operations.borrow_mut();

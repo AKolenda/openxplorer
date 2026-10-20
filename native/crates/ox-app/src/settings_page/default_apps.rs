@@ -56,6 +56,14 @@ const INCLUDE_SHOW_IN_FOLDER: RowText = RowText {
                default option",
 };
 
+const ALSO_FILE_DIALOGS: RowText = RowText {
+    title: "Also handle Open and Save dialogs",
+    description: "Other apps, such as Brave, choose and save files in an OpenXplorer window. Applies \
+                  after Apply now or the next login.",
+    keywords: "also open and save dialogs file picker file chooser upload save as portal brave chrome \
+               firefox make default option everything",
+};
+
 const ALSO_ZIP_FILES: RowText = RowText {
     title: "Also open ZIP files",
     description: "Make default also opens ZIP archives in OpenXplorer (changes the archive association).",
@@ -117,8 +125,8 @@ const TROUBLESHOOTING: RowText = RowText {
 
 const RESTORE_PREVIOUS: RowText = RowText {
     title: "Restore the previous file handlers",
-    description: "Restores the recorded file handlers and removes OpenXplorer's Show in folder \
-                  files.",
+    description: "Restores the recorded file handlers, removes OpenXplorer's Show in folder files \
+                  and gives Open and Save dialogs back to the desktop.",
     keywords: "restore previous undo default file explorer",
 };
 
@@ -147,6 +155,7 @@ struct Controls {
     card: StatusCard,
     make_default: gtk::Button,
     include_show_in_folder: gtk::Switch,
+    include_file_dialogs: gtk::Switch,
     include_zip: gtk::Switch,
     folders: gtk::Label,
     smb_links: gtk::Label,
@@ -176,8 +185,8 @@ impl Controls {
         let status = StatusText {
             glyph: Icon::Apps,
             title: ox_core::i18n::gettext_static(CHECKING_TITLE),
-            text: "Open local folders and SMB links in OpenXplorer. System file-picker dialogs are \
-                   unchanged.",
+            // The status says whether the dialogs can be sent here.
+            text: view::card_text(true),
             notice: None,
         };
         let card = StatusCard::new(status, &[make_default.clone().upcast()]);
@@ -187,8 +196,10 @@ impl Controls {
             card,
             make_default,
             // Show in folder on and ZIP files off, as the Python check
-            // boxes started (INT-009).
+            // boxes started (INT-009); Open and Save dialogs on, so Make
+            // default covers every route a browser takes (INT-032).
             include_show_in_folder: switch_starting(true),
+            include_file_dialogs: switch_starting(true),
             include_zip: switch_starting(false),
             folders: parts::value_label(ox_core::i18n::gettext_static(CHECKING)),
             smb_links: parts::value_label(ox_core::i18n::gettext_static(CHECKING)),
@@ -279,6 +290,7 @@ fn options_group(controls: &Controls) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("When making OpenXplorer default"));
     for (text, switch) in [
         (INCLUDE_SHOW_IN_FOLDER, &controls.include_show_in_folder),
+        (ALSO_FILE_DIALOGS, &controls.include_file_dialogs),
         (ALSO_ZIP_FILES, &controls.include_zip),
     ] {
         let row = SettingRow::new(text);

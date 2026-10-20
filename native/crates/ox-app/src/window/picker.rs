@@ -25,10 +25,12 @@
 //!   first, as every desktop's dialog does.
 //! - **As Windows' dialog.** The File name box takes a name, a path from
 //!   the folder shown, `~/…` or a full path: a folder opens, a file is
-//!   the choice. Save adds the chosen type's extension to a name without
-//!   one. A file typed in the address bar is the choice too, a dialog
-//!   for one file keeps one selected, Escape and Ctrl+Q cancel, and
-//!   nothing opens another window, tab or pane from the dialog.
+//!   the choice. Save adds the chosen type's extension to a name that
+//!   has neither it nor a known type's, and choosing another type swaps
+//!   the old type's extension for the new one's. A file typed in the
+//!   address bar is the choice too, a dialog for one file keeps one
+//!   selected, Escape and Ctrl+Q cancel, and nothing opens another
+//!   window, tab or pane from the dialog.
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -39,7 +41,8 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
 use ox_core::integration::{
-    checked_name, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest, FilterPattern,
+    checked_name, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest, FileFilter,
+    FilterPattern,
 };
 
 use super::actions::QUIT_ACCELERATORS;
@@ -57,8 +60,9 @@ mod probe;
 const DEFAULT_SIZE: (i32, i32) = (980, 640);
 
 /// The window commands that make no sense while choosing a file: more tabs,
-/// windows or panes, and Settings.
-const DISABLED_ACTIONS: [WindowAction; 14] = [
+/// windows or panes, Settings, and Format…, as a dialog closes on its own
+/// once answered, leaving no window to report the format in.
+const DISABLED_ACTIONS: [WindowAction; 15] = [
     WindowAction::NewTab,
     WindowAction::OpenTab,
     WindowAction::OpenTabBackground,
@@ -73,6 +77,7 @@ const DISABLED_ACTIONS: [WindowAction; 14] = [
     WindowAction::OpenFileLocationInTab,
     WindowAction::OpenFileLocationInWindow,
     WindowAction::SplitView,
+    WindowAction::FormatDrive,
 ];
 
 /// Shown when the File name box names nothing that exists.
@@ -115,6 +120,9 @@ pub(crate) struct Picker {
     name: Option<gtk::Entry>,
     /// The type list, when the caller gave filters.
     types: Option<gtk::DropDown>,
+    /// The type chosen before the list last changed, an index into the
+    /// request's filters, so a Save dialog can swap its extension.
+    last_type: Cell<usize>,
     /// The local paths found so far, asked off the main thread.
     local_paths: LocalPaths,
     choices: Vec<ChoiceControl>,
@@ -152,15 +160,9 @@ impl Picker {
         }
     }
 
-    /// The extension of the type chosen in the list: that of its first
-    /// pattern that is a plain extension, as Windows adds it to a name
-    /// saved without one.
-    fn chosen_extension(&self) -> Option<String> {
-        let filter = self.request.filters.get(self.chosen_filter()?)?;
-        filter.patterns.iter().find_map(|pattern| match pattern {
-            FilterPattern::Glob(glob) => glob_extension(glob),
-            FilterPattern::MimeType(_) => None,
-        })
+    /// The type chosen in the list.
+    fn chosen_type(&self) -> Option<&FileFilter> {
+        self.request.filters.get(self.chosen_filter()?)
     }
 
     /// The type chosen in the list, an index into the request's filters.
@@ -225,18 +227,82 @@ fn glob_extension(glob: &str) -> Option<String> {
     plain.then_some(extension)
 }
 
-/// The name a Save dialog saves `written` as. As in Windows, a name
-/// without a dot gets the chosen type's `extension`, and a name that ends
-/// in a dot is saved without that dot and without an extension. A hidden
-/// file's name (`.bashrc`) is kept as written.
-fn saved_name(written: &str, extension: Option<String>) -> String {
+/// The extension of a type: that of its first pattern that is a plain
+/// extension ([`glob_extension`]), as Windows adds it to a name saved
+/// without one. All Files (`*`, `*.*`) has none.
+fn type_extension(filter: &FileFilter) -> Option<String> {
+    filter.patterns.iter().find_map(|pattern| match pattern {
+        FilterPattern::Glob(glob) => glob_extension(glob),
+        FilterPattern::MimeType(_) => None,
+    })
+}
+
+/// The name a Save dialog saves `written` as, with `chosen` the type
+/// chosen. As in Windows, a name that ends in a dot is saved without that
+/// dot and without an extension, and any other name gets the type's
+/// extension unless it fits the type already or ends in the extension
+/// of a file type the desktop knows ([`has_known_extension`]): in a PDF
+/// dialog "Notes v2.1" is saved as "Notes v2.1.pdf", while "notes.md" in
+/// a text one stays as it is. A hidden file's name (`.bashrc`) is kept
+/// as written, as Linux users expect.
+fn saved_name(written: &str, chosen: Option<&FileFilter>) -> String {
     if let Some(name) = written.strip_suffix('.') {
         return name.to_owned();
     }
-    match extension {
-        Some(extension) if !written.contains('.') => format!("{written}.{extension}"),
-        _ => written.to_owned(),
+    let Some((chosen, extension)) = chosen.and_then(|chosen| Some((chosen, type_extension(chosen)?))) else {
+        return written.to_owned();
+    };
+    if written.starts_with('.') || chosen.matches(written, None) || has_known_extension(written) {
+        written.to_owned()
+    } else {
+        format!("{written}.{extension}")
     }
+}
+
+/// Whether `name` ends in the extension of a file type the desktop knows,
+/// as Windows keeps a name typed with a registered extension: GIO's guess
+/// from the name alone is not `application/octet-stream`, its answer for
+/// an extension it does not know. GIO also calls a guess uncertain when
+/// several types share an extension (`.png`, `.html`, `.json`), so that
+/// alone does not make it unknown. An extension of digits only ("v2.1",
+/// "Q3.2025") is taken for part of the name, as people number versions
+/// that way, though the desktop knows `.1` as a manual page.
+fn has_known_extension(name: &str) -> bool {
+    let Some((stem, extension)) = name.rsplit_once('.') else {
+        return false;
+    };
+    if stem.is_empty() || extension.is_empty() || extension.chars().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    let (guessed, _) = gio::content_type_guess(Some(name), None);
+    !gio::content_type_is_unknown(&guessed)
+}
+
+/// The name File name takes when a Save dialog's type changes from
+/// `from` to `to`, as GTK's and Windows' dialogs do: a name that ends in
+/// one of the old type's extensions gets the new type's instead
+/// ("Title.html" becomes "Title.mhtml"). `None` leaves the name alone: it
+/// has none of those extensions, fits the new type already, or the new
+/// type has no extension of its own (All Files).
+fn renamed_for_type(name: &str, from: &FileFilter, to: &FileFilter) -> Option<String> {
+    let extension = type_extension(to)?;
+    if to.matches(name, None) {
+        return None;
+    }
+    let old = from
+        .patterns
+        .iter()
+        .filter_map(|pattern| match pattern {
+            FilterPattern::Glob(glob) => glob_extension(glob),
+            FilterPattern::MimeType(_) => None,
+        })
+        .map(|old| format!(".{old}"))
+        .filter(|old| {
+            let start = name.len().saturating_sub(old.len());
+            start > 0 && name.is_char_boundary(start) && name[start..].to_lowercase() == old.to_lowercase()
+        })
+        .max_by_key(String::len)?;
+    Some(format!("{}.{extension}", &name[..name.len() - old.len()]))
 }
 
 impl BrowserWindow {
@@ -451,6 +517,30 @@ impl BrowserWindow {
         self.imp().picker.borrow().clone()
     }
 
+    /// Gives the name in a Save dialog's File name the extension of the
+    /// type just chosen when it had the previous type's
+    /// ([`renamed_for_type`]), and selects the name without it again.
+    fn rename_for_chosen_type(&self) {
+        let Some(picker) = self.picker() else {
+            return;
+        };
+        let Some(chosen) = picker.chosen_filter() else {
+            return;
+        };
+        let previous = picker.last_type.replace(chosen);
+        let (ChooserMode::Save { .. }, Some(name)) = (&picker.request.mode, &picker.name) else {
+            return;
+        };
+        let filters = &picker.request.filters;
+        let (Some(from), Some(to)) = (filters.get(previous), filters.get(chosen)) else {
+            return;
+        };
+        if let Some(renamed) = renamed_for_type(&name.text(), from, to) {
+            name.set_text(&renamed);
+            select_stem(name);
+        }
+    }
+
     /// The entries selected in the folder.
     fn selected_entries(&self) -> Vec<Entry> {
         self.folder_pane()
@@ -600,9 +690,10 @@ impl BrowserWindow {
                 Some(typed) => typed,
                 None => self.chosen_files(&selected, *multiple).await,
             },
-            ChooserMode::Open { directory: true, .. } => {
-                self.chosen_folder(&selected).await.map(|folder| vec![folder])
-            }
+            ChooserMode::Open {
+                directory: true,
+                multiple,
+            } => self.chosen_folders(&selected, *multiple).await,
             ChooserMode::Save { .. } => self.chosen_save(picker).await,
             ChooserMode::SaveFiles { names } => {
                 let folder = self.chosen_folder(&selected).await?;
@@ -610,7 +701,7 @@ impl BrowserWindow {
                 for name in names {
                     match probe(&folder.join(name)).await {
                         Probe::NoAnswer => return Err(not_answering(&folder)),
-                        found if found.exists() => existing.push(name.clone()),
+                        found if found.exists() => existing.push(name.to_string_lossy().into_owned()),
                         _ => {}
                     }
                 }
@@ -645,7 +736,30 @@ impl BrowserWindow {
         Ok(paths)
     }
 
-    /// The folder of a folder dialog or `SaveFiles`: the one selected
+    /// All selected folders for an Open dialog; the current folder only
+    /// when no items were selected.
+    async fn chosen_folders(&self, selected: &[Entry], multiple: bool) -> Result<Vec<PathBuf>, String> {
+        if selected.is_empty() {
+            return self.chosen_folder(selected).await.map(|folder| vec![folder]);
+        }
+        if selected.len() > 1 && !multiple {
+            return Err(ox_core::i18n::gettext(CHOOSE_ONE));
+        }
+        let mut paths = Vec::with_capacity(selected.len());
+        for entry in selected {
+            if !entry.is_dir {
+                return Ok(Vec::new());
+            }
+            paths.push(
+                self.local_path_now(entry.navigation_uri())
+                    .await
+                    .ok_or_else(not_local)?,
+            );
+        }
+        Ok(paths)
+    }
+
+    /// The folder of `SaveFiles`: the one selected
     /// folder, else the current folder.
     async fn chosen_folder(&self, selected: &[Entry]) -> Result<PathBuf, String> {
         if let [entry] = selected {
@@ -704,7 +818,7 @@ impl BrowserWindow {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let name = checked_name(&saved_name(&written, picker.chosen_extension())).map_err(|_| bad_name())?;
+        let name = checked_name(&saved_name(&written, picker.chosen_type())).map_err(|_| bad_name())?;
         let target = folder.join(&name);
         let found = probe(&target).await;
         if found == Probe::NoAnswer {
@@ -1013,6 +1127,7 @@ impl BrowserWindow {
             request,
             reply,
             name,
+            last_type: Cell::new(types.as_ref().map_or(0, |types| types.selected() as usize)),
             types,
             local_paths: LocalPaths::default(),
             choices,
@@ -1061,6 +1176,7 @@ impl BrowserWindow {
                 self,
                 move |_| {
                     if window.is_picking() {
+                        window.rename_for_chosen_type();
                         window.apply_chooser_listing();
                         window.update_status();
                     }
@@ -1200,8 +1316,8 @@ mod tests {
     use gtk::prelude::*;
     use gtk::{gdk, gio, glib};
     use ox_core::integration::{
-        options_from_entries, path_variant, FileChooserBus, FILE_CHOOSER_INTERFACE, PORTAL_BACKEND_PATH,
-        RESPONSE_CANCELLED, RESPONSE_SUCCESS,
+        options_from_entries, path_variant, FileChooserBus, FileFilter, FilterPattern,
+        FILE_CHOOSER_INTERFACE, PORTAL_BACKEND_PATH, RESPONSE_CANCELLED, RESPONSE_SUCCESS,
     };
 
     use crate::test_support::harness::{capture, settle, wait_until, Fixture, TestWindow};
@@ -1987,6 +2103,51 @@ mod tests {
         assert_eq!(uris, [fixture.uri_of("Exports")]);
     }
 
+    /// Multiple directory selection grants exactly the selected folders;
+    /// selecting nothing still chooses the currently displayed folder.
+    #[gtk::test]
+    fn a_multiple_folder_dialog_never_substitutes_the_parent_for_selected_children() {
+        let fixture = Fixture::empty();
+        for name in ["First", "Second", "Unselected"] {
+            std::fs::create_dir(fixture.path(name)).unwrap();
+        }
+        for choose_children in [true, false] {
+            let portal = Portal::new();
+            let answer = portal.call(
+                "OpenFile",
+                &[
+                    ("directory", true.to_variant()),
+                    ("multiple", true.to_variant()),
+                    (
+                        "current_folder",
+                        path_variant(&fixture.root().display().to_string()),
+                    ),
+                ],
+            );
+            let window = &portal.test.window;
+            if choose_children {
+                for name in ["First", "Second"] {
+                    window
+                        .folder_model()
+                        .selection()
+                        .select_item(portal.test.position_of(name), false);
+                }
+                settle();
+                assert_eq!(window.selected_entries().len(), 2);
+            }
+            window.picker().unwrap().accept.emit_clicked();
+            let (response, mut uris) = Portal::finish(&answer);
+            assert_eq!(response, RESPONSE_SUCCESS);
+            uris.sort();
+            let expected = if choose_children {
+                vec![fixture.uri_of("First"), fixture.uri_of("Second")]
+            } else {
+                vec![gio::File::for_path(fixture.root()).uri().to_string()]
+            };
+            assert_eq!(uris, expected);
+        }
+    }
+
     /// Escape in the file list cancels the dialog, as in Windows, even
     /// with a file selected (where it would otherwise clear the
     /// selection).
@@ -2349,6 +2510,72 @@ mod tests {
         );
     }
 
+    /// Chromium's Save page as: choosing "Webpage, Single File" turns
+    /// "Title.html" into "Title.mhtml", so Chromium does not write MHTML
+    /// into a .html file, and the name stays selected without its
+    /// extension; All Files keeps the name, and so does a name typed
+    /// without the type's extension. The saved file has the name shown.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn choosing_another_type_in_a_save_dialog_changes_the_extension() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let types: Vec<glib::Variant> = [
+            (
+                "Webpage, HTML Only",
+                &["*.[hH][tT][mM][lL]", "*.[hH][tT][mM]"][..],
+            ),
+            ("Webpage, Single File", &["*.[mM][hH][tT][mM][lL]"][..]),
+            ("All Files", &["*.*"][..]),
+        ]
+        .iter()
+        .map(|(name, globs)| {
+            let patterns: Vec<(u32, String)> = globs.iter().map(|glob| (0, (*glob).to_owned())).collect();
+            ((*name).to_owned(), patterns).to_variant()
+        })
+        .collect();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "Title.html".to_variant()),
+                (
+                    "filters",
+                    glib::Variant::array_from_iter_with_type(types[0].type_(), types.clone()),
+                ),
+            ],
+        );
+        let picker = portal.test.window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let list = picker.types.clone().expect("a type list");
+
+        list.set_selected(1);
+        assert_eq!(name.text(), "Title.mhtml");
+        assert_eq!(
+            name.selection_bounds(),
+            Some((0, 5)),
+            "the name without its extension"
+        );
+        list.set_selected(2);
+        assert_eq!(name.text(), "Title.mhtml", "All Files keeps the name");
+        list.set_selected(0);
+        assert_eq!(name.text(), "Title.mhtml", "not the extension of All Files");
+        name.set_text("Title.mhtml");
+        list.set_selected(1);
+        list.set_selected(0);
+        assert_eq!(name.text(), "Title.html");
+        name.set_text("Title");
+        list.set_selected(1);
+        assert_eq!(name.text(), "Title");
+
+        enter(&name);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("Title.mhtml")]);
+    }
+
     /// The filter list of one type, "Text", with `patterns`.
     fn text_type(patterns: &[&str]) -> glib::Variant {
         let patterns: Vec<(u32, String)> = patterns.iter().map(|glob| (0, (*glob).to_owned())).collect();
@@ -2421,16 +2648,108 @@ mod tests {
         }
     }
 
-    /// A Save dialog adds the type's extension to a name without a dot;
-    /// a trailing dot is dropped instead, and a hidden file's name kept.
+    /// A type of `globs` named `name`.
+    fn file_type(name: &str, globs: &[&str]) -> FileFilter {
+        FileFilter {
+            name: name.to_owned(),
+            patterns: globs
+                .iter()
+                .map(|glob| FilterPattern::Glob((*glob).to_owned()))
+                .collect(),
+        }
+    }
+
+    /// A Save dialog adds the type's extension to a name without one; a
+    /// trailing dot is dropped instead, and a hidden file's name kept.
+    /// As in Windows, a name with a dot gets it too unless it fits the type
+    /// or ends in a known type's extension: Chromium's Print > Save as PDF
+    /// leaves the name to the dialog, so "Notes v2.1" must not be saved
+    /// without ".pdf". Before, only a name without a dot got an extension.
+    ///
+    /// parity: INT-032
     #[test]
     fn a_saved_name_gets_the_types_extension_as_in_windows() {
-        let saved = |written: &str| super::saved_name(written, Some("txt".to_owned()));
+        let text = file_type("Text", &["*.txt"]);
+        let saved = |written: &str| super::saved_name(written, Some(&text));
         assert_eq!(saved("report"), "report.txt");
         assert_eq!(saved("report."), "report");
         assert_eq!(saved("notes.md"), "notes.md");
+        assert_eq!(saved("Notes.TXT"), "Notes.TXT");
+        assert_eq!(
+            saved("photo.png"),
+            "photo.png",
+            "GIO calls .png uncertain, yet knows it"
+        );
         assert_eq!(saved(".bashrc"), ".bashrc");
+        assert_eq!(saved("Mr. Smith"), "Mr. Smith.txt");
+        assert_eq!(saved("draft.qqqzzz"), "draft.qqqzzz.txt");
         assert_eq!(super::saved_name("report", None), "report");
+        let pdf = file_type("PDF", &["*.[pP][dD][fF]"]);
+        let as_pdf = |written: &str| super::saved_name(written, Some(&pdf));
+        assert_eq!(
+            as_pdf("Notes v2.1"),
+            "Notes v2.1.pdf",
+            "a version, not a manual page"
+        );
+        assert_eq!(as_pdf("Q3.2025"), "Q3.2025.pdf");
+        assert_eq!(as_pdf("Notes.PDF"), "Notes.PDF");
+        let all_files = file_type("All Files", &["*.*"]);
+        assert_eq!(super::saved_name("Notes v2.1", Some(&all_files)), "Notes v2.1");
+        assert_eq!(super::saved_name("report", Some(&all_files)), "report");
+    }
+
+    /// Changing a Save dialog's type swaps the extension of the old type
+    /// for the new one's, as GTK's and Windows' dialogs do, with Chromium's
+    /// Save page as types; a name with no extension of the old type, one
+    /// that fits the new type, and All Files leave the name alone.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn a_new_type_swaps_the_extension_of_the_old_one() {
+        let html = file_type("Webpage, HTML Only", &["*.[hH][tT][mM][lL]", "*.[hH][tT][mM]"]);
+        let single = file_type("Webpage, Single File", &["*.[mM][hH][tT][mM][lL]"]);
+        let complete = file_type("Webpage, Complete", &["*.[hH][tT][mM]", "*.[hH][tT][mM][lL]"]);
+        let all_files = file_type("All Files", &["*.*"]);
+        let renamed = super::renamed_for_type;
+        assert_eq!(
+            renamed("Title.html", &html, &single).as_deref(),
+            Some("Title.mhtml")
+        );
+        assert_eq!(
+            renamed("Title.HTM", &html, &single).as_deref(),
+            Some("Title.mhtml")
+        );
+        assert_eq!(
+            renamed("Title.mhtml", &single, &complete).as_deref(),
+            Some("Title.htm")
+        );
+        assert_eq!(renamed("Title.html", &html, &complete), None, "it fits already");
+        assert_eq!(renamed("Title.html", &html, &all_files), None);
+        assert_eq!(renamed("Title", &html, &single), None);
+        assert_eq!(renamed("notes.txt", &html, &single), None);
+        assert_eq!(renamed(".html", &html, &single), None, "a hidden file's name");
+        let archives = file_type("Archive", &["*.gz", "*.tar.gz"]);
+        let zip = file_type("ZIP", &["*.zip"]);
+        assert_eq!(
+            renamed("backup.tar.gz", &archives, &zip).as_deref(),
+            Some("backup.zip")
+        );
+        let upper = file_type("HTML", &["*.HTML"]);
+        let lower = file_type("MHTML", &["*.mhtml"]);
+        assert_eq!(
+            renamed("Title.HTML", &upper, &lower).as_deref(),
+            Some("Title.mhtml"),
+            "a plain glob in capitals"
+        );
+        assert_eq!(
+            renamed("Title.html", &upper, &lower).as_deref(),
+            Some("Title.mhtml")
+        );
+        let pages = file_type("Seiten", &["*.[äÄ]"]);
+        assert_eq!(
+            renamed("Brief.Ä", &pages, &single).as_deref(),
+            Some("Brief.mhtml")
+        );
     }
 
     /// A selected name with spaces at either end is chosen as it is.
@@ -2708,6 +3027,51 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_CANCELLED);
         assert!(uris.is_empty());
+    }
+
+    /// A dialog does not stand in for the last browsing window while a
+    /// drive is formatted: that window still waits, as the dialog closes on
+    /// its own once answered, which would end the application mid-format.
+    /// For the same reason a dialog formats no drive itself.
+    ///
+    /// parity: DEV-012, INT-032
+    #[gtk::test]
+    fn a_dialog_does_not_let_the_last_window_close_during_a_format() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = portal.call(
+            "OpenFile",
+            &[(
+                "current_folder",
+                path_variant(&fixture.root().display().to_string()),
+            )],
+        );
+        let browsing = portal.test.open_beside(&fixture.uri());
+        let dialog_formats = portal.test.window.is_action_enabled("format-drive");
+        let formatting = portal.test.context.hold_writes_for_formatting();
+
+        browsing.window.close();
+        settle();
+        let stayed = browsing.window.is_visible();
+        let refusal = browsing.window.shown_message_text();
+        portal.test.window.close();
+        let (response, _) = Portal::finish(&answer);
+        drop(formatting);
+        browsing.window.close();
+        settle();
+
+        assert!(!dialog_formats, "a dialog offers no Format…");
+        assert!(browsing.window.is_action_enabled("format-drive"));
+        assert!(stayed, "the last browsing window stays open");
+        assert_eq!(
+            refusal,
+            "Wait until the drive is formatted before closing OpenXplorer."
+        );
+        assert_eq!(response, RESPONSE_CANCELLED, "the dialog still closes");
+        assert!(
+            !browsing.window.is_visible(),
+            "it closes once the drive is formatted"
+        );
     }
 
     /// F3 opens no second pane in a dialog, and a pane split off anyway

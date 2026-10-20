@@ -5,12 +5,13 @@
 //! Ports `read_object` and `atomic_bytes` of
 //! `v2.0.0:desktop/brave_integration.py` and the record format of
 //! `BraveIntegration.sync`. Only `download.default_directory` and
-//! `savefile.default_directory` are ever changed; every other preference
-//! is written back with the value it was read with. Numbers are parsed
-//! exactly (`serde_json`'s `float_roundtrip`, as Python's `json` parses
-//! them), so a 17-digit zoom level survives a sync and a restore. Keys
-//! come back in sorted order, which Brave reads the same, since JSON
-//! objects are unordered.
+//! `savefile.default_directory` are changed, and
+//! `download.prompt_for_download` when the user asks for it (INT-034);
+//! every other preference is written back with the value it was read
+//! with. Numbers are parsed exactly (`serde_json`'s `float_roundtrip`, as
+//! Python's `json` parses them), so a 17-digit zoom level survives a sync
+//! and a restore. Keys come back in sorted order, which Brave reads the
+//! same, since JSON objects are unordered.
 
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
@@ -33,6 +34,10 @@ const MAX_PREFERENCES_BYTES: u64 = 32_000_000;
 
 /// The preference inside each [`DownloadPreference`] that holds a folder.
 const DEFAULT_DIRECTORY: &str = "default_directory";
+
+/// The preference inside `download` that makes Brave ask where to save
+/// each file ("Ask where to save each file before downloading").
+const PROMPT_FOR_DOWNLOAD: &str = "prompt_for_download";
 
 /// A preference group whose `default_directory` a sync changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -69,21 +74,46 @@ pub(super) struct Preferences {
     pub(super) data: Map<String, Value>,
 }
 
-/// One group's folder before a sync: whether it was set, and to what.
+/// One preference before a sync: whether it was set, and to what.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(super) struct PreviousFolder {
+pub(super) struct PreviousValue {
     present: bool,
     value: Value,
 }
 
+impl PreviousValue {
+    /// The value `preference` holds now, if any.
+    fn of(preference: Option<&Value>) -> Self {
+        Self {
+            present: preference.is_some(),
+            value: preference.cloned().unwrap_or(Value::Null),
+        }
+    }
+
+    /// Puts the value back as `key` of `preferences`, or removes `key` if
+    /// it was not set.
+    fn put_back(&self, preferences: &mut Map<String, Value>, key: &str) {
+        if self.present {
+            preferences.insert(key.to_owned(), self.value.clone());
+        } else {
+            preferences.remove(key);
+        }
+    }
+}
+
 /// What a sync changed in one profile, so that restore can undo exactly
-/// that: `{"profile", "previous", "applied", "backup"}` as in Python.
+/// that: `{"profile", "previous", "applied", "backup"}` as in Python, and
+/// `prompt_for_download` when the sync also set that (INT-034). A record
+/// without it, as the Python app and earlier versions wrote, restores the
+/// folders only.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(super) struct UndoRecord {
     pub(super) profile: String,
-    pub(super) previous: BTreeMap<String, PreviousFolder>,
+    pub(super) previous: BTreeMap<String, PreviousValue>,
     pub(super) applied: String,
     pub(super) backup: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) prompt_for_download: Option<PreviousValue>,
 }
 
 /// Reads a preference file or undo record.
@@ -149,15 +179,22 @@ pub(super) fn compact_json(data: &Map<String, Value>) -> Vec<u8> {
 }
 
 /// The folder a group holds now, for the undo record.
-pub(super) fn previous_folder(data: &Map<String, Value>, group: DownloadPreference) -> PreviousFolder {
+pub(super) fn previous_folder(data: &Map<String, Value>, group: DownloadPreference) -> PreviousValue {
     let folder = data
         .get(group.as_str())
         .and_then(Value::as_object)
         .and_then(|preferences| preferences.get(DEFAULT_DIRECTORY));
-    PreviousFolder {
-        present: folder.is_some(),
-        value: folder.cloned().unwrap_or(Value::Null),
-    }
+    PreviousValue::of(folder)
+}
+
+/// Whether Brave asks where to save each download now, for the undo
+/// record.
+pub(super) fn previous_download_prompt(data: &Map<String, Value>) -> PreviousValue {
+    let prompt = data
+        .get(DownloadPreference::Download.as_str())
+        .and_then(Value::as_object)
+        .and_then(|preferences| preferences.get(PROMPT_FOR_DOWNLOAD));
+    PreviousValue::of(prompt)
 }
 
 /// True if a group that exists is not an object, which no sync touches.
@@ -177,6 +214,17 @@ pub(super) fn set_download_folders(data: &mut Map<String, Value>, folder: &str) 
         if let Value::Object(preferences) = preferences {
             preferences.insert(DEFAULT_DIRECTORY.to_owned(), Value::String(folder.to_owned()));
         }
+    }
+}
+
+/// Makes Brave ask where to save each download, creating a missing
+/// `download` group.
+pub(super) fn set_download_prompt(data: &mut Map<String, Value>) {
+    let preferences = data
+        .entry(DownloadPreference::Download.as_str())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if let Value::Object(preferences) = preferences {
+        preferences.insert(PROMPT_FOR_DOWNLOAD.to_owned(), Value::Bool(true));
     }
 }
 
@@ -202,14 +250,33 @@ pub(super) fn restore_download_folders(
         if preferences.get(DEFAULT_DIRECTORY) != Some(&applied) {
             continue;
         }
-        if previous.present {
-            preferences.insert(DEFAULT_DIRECTORY.to_owned(), previous.value.clone());
-        } else {
-            preferences.remove(DEFAULT_DIRECTORY);
-        }
+        previous.put_back(preferences, DEFAULT_DIRECTORY);
         restored.push(group);
     }
     restored
+}
+
+/// Puts back whether Brave asked where to save each download, if the
+/// sync of `record` set it and it is still `true`, and returns whether it
+/// was put back.
+///
+/// Safety rule "never overwrite a later choice", as for the folders: a
+/// prompt the user turned off since the sync is left alone.
+pub(super) fn restore_download_prompt(data: &mut Map<String, Value>, record: &UndoRecord) -> bool {
+    let Some(previous) = &record.prompt_for_download else {
+        return false;
+    };
+    let Some(preferences) = data
+        .get_mut(DownloadPreference::Download.as_str())
+        .and_then(Value::as_object_mut)
+    else {
+        return false;
+    };
+    if preferences.get(PROMPT_FOR_DOWNLOAD) != Some(&Value::Bool(true)) {
+        return false;
+    }
+    previous.put_back(preferences, PROMPT_FOR_DOWNLOAD);
+    true
 }
 
 /// Opens `path` for reading if it is a regular file of this user of at

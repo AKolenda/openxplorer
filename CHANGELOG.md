@@ -5,6 +5,36 @@
   it asked "Items already exist". In a move of several items, the ones
   already in the folder stay and the others move.
 
+# 2.0.6 — 2026-10-13
+
+## What's Changed
+* ci(checks): validate website and dependency changes before merge by @AKolenda in https://github.com/AKolenda/openxplorer/pull/108
+* fix(web): render standalone designs with the pinned compiler by @AKolenda in https://github.com/AKolenda/openxplorer/pull/110
+* fix(release): preserve package inputs and check publication data by @AKolenda in https://github.com/AKolenda/openxplorer/pull/109
+* fix(capture): run native builds from home-directory checkouts by @AKolenda in https://github.com/AKolenda/openxplorer/pull/111
+* fix(archives): bound decoder memory for compressed files by @AKolenda in https://github.com/AKolenda/openxplorer/pull/112
+* fix(launchers): bound metadata reads during file dragging by @AKolenda in https://github.com/AKolenda/openxplorer/pull/114
+* fix(mounts): scope rollback to owned setup changes by @AKolenda in https://github.com/AKolenda/openxplorer/pull/115
+* fix(search): cap listed matches before showing results by @AKolenda in https://github.com/AKolenda/openxplorer/pull/116
+* perf(native): reduce cache, sorting and progress overhead by @AKolenda in https://github.com/AKolenda/openxplorer/pull/113
+* feat(dialogs): make Brave's downloads, Save as PDF and uploads reach OpenXplorer's dialogs by @AKolenda in https://github.com/AKolenda/openxplorer/pull/107
+* feat(views,search): Ctrl-only item check boxes and experimental frequent-folder indexing by @AKolenda in https://github.com/AKolenda/openxplorer/pull/106
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.6_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.6-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.6-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.6-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.6-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.5...v2.0.6
+
 # 2.0.5 — 2026-10-12
 
 ## What's Changed

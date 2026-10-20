@@ -386,6 +386,11 @@ pub struct Preferences {
     /// takes it out (Dolphin's `ShowSelectionToggle`). Stored only when off.
     #[serde(skip_serializing_if = "is_true")]
     pub selection_marker: bool,
+    /// The item check boxes show only while Ctrl is held, as a selection
+    /// aid for Ctrl+click, rather than on every hovered item. On by
+    /// default. Stored as `itemChecksOnCtrl`, only when off.
+    #[serde(rename = "itemChecksOnCtrl", skip_serializing_if = "is_true")]
+    pub item_checks_on_ctrl: bool,
     /// Folders in the details view expand in place (Dolphin's
     /// `ExpandableFolders`). Stored only when off.
     #[serde(skip_serializing_if = "is_true")]
@@ -473,6 +478,7 @@ impl Default for Preferences {
             absolute_dates: false,
             per_folder_views: false,
             selection_marker: true,
+            item_checks_on_ctrl: true,
             expandable_folders: true,
             compact_density: false,
             view_defaults: None,
@@ -596,6 +602,7 @@ impl Preferences {
         replace_if_some(&mut self.absolute_dates, update.absolute_dates);
         replace_if_some(&mut self.per_folder_views, update.per_folder_views);
         replace_if_some(&mut self.selection_marker, update.selection_marker);
+        replace_if_some(&mut self.item_checks_on_ctrl, update.item_checks_on_ctrl);
         replace_if_some(&mut self.expandable_folders, update.expandable_folders);
         replace_if_some(&mut self.compact_density, update.compact_density);
         if let Some(defaults) = &update.view_defaults {
@@ -756,6 +763,8 @@ pub struct PreferencesUpdate {
     pub per_folder_views: Option<bool>,
     /// Show the hover selection marker.
     pub selection_marker: Option<bool>,
+    /// Show the item check boxes only while Ctrl is held.
+    pub item_checks_on_ctrl: Option<bool>,
     /// Let folders expand in place in the details view.
     pub expandable_folders: Option<bool>,
     /// Turn Compact view on or off.
@@ -833,6 +842,7 @@ impl PreferencesUpdate {
             absolute_dates: flag("absoluteDates"),
             per_folder_views: flag("perFolderViews"),
             selection_marker: flag("selectionMarker"),
+            item_checks_on_ctrl: flag("itemChecksOnCtrl"),
             expandable_folders: flag("expandableFolders"),
             compact_density: flag("compactView"),
             view_defaults: values.get("viewDefaults").and_then(ViewProperties::from_json),
@@ -1205,6 +1215,26 @@ mod tests {
         });
         let stored = serde_json::to_value(&preferences).expect("serializable preferences");
         assert!(stored.get("compactView").is_none(), "off again, not stored");
+    }
+
+    /// The item check boxes wait for Ctrl by default and the choice is not
+    /// stored then; showing them on hover is saved as `itemChecksOnCtrl`
+    /// off and read back.
+    #[test]
+    fn item_checks_wait_for_ctrl_by_default_and_are_stored_only_when_not() {
+        let mut preferences = Preferences::default();
+        assert!(preferences.item_checks_on_ctrl);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("itemChecksOnCtrl").is_none(), "not stored while on");
+
+        let off =
+            PreferencesUpdate::from_json(&json!({ "itemChecksOnCtrl": false })).expect("a valid preference");
+        preferences.apply(&off);
+        assert!(!preferences.item_checks_on_ctrl);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert_eq!(stored["itemChecksOnCtrl"], json!(false));
+        let read = PreferencesUpdate::from_json(&stored).expect("read back");
+        assert_eq!(read.item_checks_on_ctrl, Some(false));
     }
 
     /// The expand arrows are shown by default and the choice is not

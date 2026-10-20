@@ -543,6 +543,65 @@ fn the_brave_dialogs_restore_needs_consent_and_a_record() {
     dialog.close();
 }
 
+/// "Ask where to save each file before downloading" starts unticked, is
+/// described by its note, and when ticked makes the synced profile ask
+/// where to save each download.
+///
+/// parity: INT-034
+#[gtk::test]
+fn the_brave_dialog_can_make_brave_ask_where_to_save() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let root = tempfile::tempdir().expect("a temporary folder");
+    let folders = IntegrationFolders::inside(root.path());
+    let profile = folders.config_home.join("BraveSoftware/Brave-Browser/Default");
+    std::fs::create_dir_all(&profile).expect("the temporary folder is writable");
+    let preferences = r#"{"download": {"default_directory": "/tmp/old", "prompt_for_download": false}}"#;
+    std::fs::write(profile.join("Preferences"), preferences).expect("the profile is writable");
+    let downloads = root.path().join("Downloads");
+    std::fs::create_dir(&downloads).expect("the temporary folder is writable");
+    // An empty process table: Brave does not run, whatever the machine runs.
+    let processes = root.path().join("proc");
+    std::fs::create_dir(&processes).expect("the temporary folder is writable");
+    let paths = BravePaths {
+        settings: folders.settings.clone(),
+        home: folders.home.clone(),
+        config_home: folders.config_home.clone(),
+    };
+    let brave = BraveIntegration::with_activity(&paths, Sandbox::Host, ProcessTable::at(&processes));
+    let reports: Rc<RefCell<Vec<String>>> = Rc::default();
+    let recorder = Rc::clone(&reports);
+    let destination = downloads.to_str().expect("a UTF-8 temporary path");
+    let dialog = BraveDialog::present_for(&test.window, brave, destination, move |message| {
+        recorder.borrow_mut().push(message.to_owned());
+    });
+    wait_until("the profiles", || !dialog.profile_labels().is_empty());
+
+    let prompt_check = dialog.prompt_check();
+    assert!(!prompt_check.is_active(), "the option starts unticked");
+    assert_eq!(
+        prompt_check.label().as_deref(),
+        Some("Ask where to save each file before downloading")
+    );
+    assert!(gtk::test_accessible_has_relation(
+        &prompt_check,
+        gtk::AccessibleRelation::DescribedBy
+    ));
+    prompt_check.set_active(true);
+    dialog.set_consent(true);
+    dialog.click_apply();
+    wait_until("the report", || !reports.borrow().is_empty());
+
+    assert_eq!(*reports.borrow(), ["Brave Downloads updated for 1 profile(s)."]);
+    // Brave's compact JSON, as the sync writes it.
+    let written = std::fs::read_to_string(profile.join("Preferences")).expect("the profile is readable");
+    assert!(written.contains(r#""prompt_for_download":true"#), "{written}");
+    assert!(
+        written.contains(&format!(r#""default_directory":"{destination}""#)),
+        "{written}"
+    );
+}
+
 /// Enabling Open and Save dialogs writes the user's portal configuration
 /// and the status says so; restoring removes it again.
 ///

@@ -74,7 +74,7 @@ impl BrowserWindow {
                 #[weak]
                 pane,
                 move |_, _, _, _| {
-                    if window.is_active_pane(&pane) {
+                    if window.is_active_pane(&pane) && !window.imp().changing_model.get() {
                         window.update_status();
                     }
                 }
@@ -83,9 +83,15 @@ impl BrowserWindow {
     }
 
     fn selection_changed(&self) {
-        if !self.imp().changing_model.get() {
-            self.save_selection();
+        if self.imp().changing_model.get() {
+            return;
         }
+        self.save_selection();
+        self.update_selection_state();
+    }
+
+    /// Refreshes derived UI once the complete model change is visible.
+    fn update_selection_state(&self) {
         self.update_status();
         self.update_details_pane();
         self.follow_quick_look();
@@ -108,6 +114,13 @@ impl BrowserWindow {
         // the window leaves a folder.
         let was_changing = self.imp().changing_model.replace(true);
         change();
+        if !was_changing {
+            // Reconciliation can emit thousands of intermediate item and
+            // selection changes. Recompute totals and commands once. Keep
+            // the guard set so a picker does not replace a typed filename
+            // with the programmatically restored selection.
+            self.update_selection_state();
+        }
         self.imp().changing_model.set(was_changing);
     }
 
@@ -185,6 +198,51 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A reload changes every file's metadata. Its intermediate splices
+    /// must not each scan the entire folder for the status bar's total.
+    #[gtk::test]
+    fn a_large_metadata_reload_computes_totals_once_after_reconciliation() {
+        use crate::folder_view::{item::FileItem, reconcile};
+        use crate::test_support::harness::{Fixture, TestWindow};
+
+        let fixture = Fixture::with_files(1024);
+        let test = TestWindow::open(&fixture.uri());
+        let model = test.window.folder_model();
+        model.select_only(0);
+        let selected = model.selected_uris();
+        let active = test.window.imp().session.borrow().active_id().unwrap();
+        let store = test.window.tab_store(active).unwrap();
+        let entries: Vec<_> = store
+            .iter::<FileItem>()
+            .map(|item| {
+                let mut entry = item.unwrap().entry().clone();
+                entry.size = Some(entry.size.unwrap_or_default() + 1);
+                entry
+            })
+            .collect();
+        let expected: u64 = entries.iter().filter_map(|entry| entry.size).sum();
+        model.take_total_visits();
+
+        test.window.change_model(|| {
+            reconcile::update_in_place(&store, entries);
+            test.window.change_model(|| model.select_uris(&selected));
+        });
+
+        assert_eq!(model.shown_file_bytes(), expected);
+        let visited = model.take_total_visits();
+        assert!(
+            visited <= 2048,
+            "a 1024-row refresh visited {visited} rows for totals"
+        );
+        assert_eq!(model.selected_uris(), selected);
+        model.select_only(1);
+        assert_eq!(
+            test.window.imp().session.borrow().active().unwrap().selected,
+            model.selected_uris(),
+            "an explicit selection still saves immediately"
+        );
+    }
 
     /// parity: SEL-017
     #[test]

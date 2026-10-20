@@ -227,6 +227,7 @@ impl<'a> Copier<'a> {
         depth: usize,
     ) -> Result<(), TransferError> {
         loop {
+            let copied_before = self.copied.as_deref().map_or(0, Vec::len);
             let mut made = None;
             let error = match self.try_entry(child.as_ref(), target, depth, &mut made) {
                 Ok(Some(info)) => {
@@ -238,6 +239,12 @@ impl<'a> Copier<'a> {
                 Ok(None) => return Ok(()),
                 Err(error) => error,
             };
+            // A failed directory attempt may have recorded completed
+            // descendants. Its staging can now be discarded, so none of
+            // those records may authorize deleting originals during a move.
+            if let Some(copied) = self.copied.as_deref_mut() {
+                copied.truncate(copied_before);
+            }
             let decision = match self.failures.as_deref_mut() {
                 // The user's cancellation explains any error, and a safety
                 // stop is never one entry's problem.

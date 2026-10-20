@@ -49,13 +49,19 @@ pub enum RootOrigin {
     /// It was added because the folder is pinned to Quick access
     /// (SRCH-040); the folder list shows it with a "Pinned" tag.
     Pin,
+    /// It was added because the folder is opened often, while the
+    /// experimental "Index frequently opened folders" is on; the folder
+    /// list shows it with a "Frequent" tag.
+    Frequent,
 }
 
 impl RootOrigin {
-    /// The origin the `pin_added` column records.
-    pub(crate) fn from_stored(pin_added: bool) -> Self {
+    /// The origin the `pin_added` and `frequent_added` columns record.
+    pub(crate) fn from_stored(pin_added: bool, frequent_added: bool) -> Self {
         if pin_added {
             Self::Pin
+        } else if frequent_added {
+            Self::Frequent
         } else {
             Self::User
         }
@@ -259,7 +265,7 @@ impl IndexRoot {
             watch_error: non_empty(row.get("watch_error")?),
             last_event: whole_seconds(row.get("last_event")?),
             entry_count: stored_count(row, "entry_count")?,
-            origin: RootOrigin::from_stored(row.get("pin_added")?),
+            origin: RootOrigin::from_stored(row.get("pin_added")?, row.get("frequent_added")?),
         })
     }
 }
@@ -289,6 +295,8 @@ impl SearchEngine {
 /// never file contents.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CacheStatus {
+    /// Durable content revision, including changes made by other processes.
+    pub contents_revision: u64,
     /// Every root, enabled or not, by label.
     pub roots: Vec<IndexRoot>,
     /// Entries cached for the enabled roots.

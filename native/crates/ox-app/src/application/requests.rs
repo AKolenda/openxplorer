@@ -16,7 +16,7 @@ use super::state::{active_window, browser_windows_of, open_window, AppState};
 use super::AppAction;
 use crate::app_context::AppContext;
 use crate::settings_page::SettingsView;
-use crate::window::{BrowserWindow, QUIT_WHILE_WRITING};
+use crate::window::{BrowserWindow, QUIT_WHILE_WRITING, WAIT_FOR_FORMAT};
 
 impl AppState {
     /// Does what `request` asks.
@@ -121,6 +121,11 @@ impl AppState {
     pub(super) fn quit_safely(&self, app: &gtk::Application) -> bool {
         if let Some(refusal) = self.context().updates().quit_refusal() {
             report_in_every_window(app, &refusal);
+            return false;
+        }
+        // Nor a format, which cannot be cancelled (DEV-012).
+        if self.context().formats_a_drive() {
+            report_in_every_window(app, ox_core::i18n::gettext_static(WAIT_FOR_FORMAT));
             return false;
         }
         // Data safety: Quit never cuts off a write, in any window.

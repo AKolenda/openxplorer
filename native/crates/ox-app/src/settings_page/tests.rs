@@ -317,6 +317,7 @@ fn the_search_filters_rows_across_every_category() {
             categories: &[Category::DefaultApps],
             shown: &[
                 "Also handle “Show in folder”",
+                "Also handle Open and Save dialogs",
                 "“Show in folder” from browsers and apps",
                 "Brave saves to my Linux Downloads folder",
                 "Turn off Show in folder",
@@ -333,7 +334,7 @@ fn the_search_filters_rows_across_every_category() {
     }
     let count = settings.page.imp().match_count();
     assert!(count.is_visible());
-    assert_eq!(count.text(), "5 matching settings");
+    assert_eq!(count.text(), "6 matching settings");
 }
 
 /// A search for what a setting shows, and the category, status card and
@@ -365,7 +366,11 @@ fn the_search_finds_what_buttons_options_and_headings_show() {
             typed: "make openxplorer default",
             category: Category::DefaultApps,
             shows_status_card: true,
-            shown: &["Also handle “Show in folder”", "Also open ZIP files"],
+            shown: &[
+                "Also handle “Show in folder”",
+                "Also handle Open and Save dialogs",
+                "Also open ZIP files",
+            ],
         },
         ShownTextCase {
             typed: "refresh status",

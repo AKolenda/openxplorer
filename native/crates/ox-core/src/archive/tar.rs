@@ -11,6 +11,7 @@
 //! members in order, so it decompresses the archive once more.
 
 mod header;
+mod zstd;
 
 use std::cell::RefCell;
 use std::io::{self, Read, Seek, SeekFrom};
@@ -98,8 +99,12 @@ impl SharedStream {
 /// `.zst` files joined together make it; skippable frames are passed over.
 struct ZstdFrames {
     source: SharedStream,
-    frame: Option<ruzstd::decoding::StreamingDecoder<SharedStream, ruzstd::decoding::FrameDecoder>>,
+    frame: Option<ruzstd::decoding::StreamingDecoder<ZstdSource, ruzstd::decoding::FrameDecoder>>,
 }
+
+/// Replays the checked header so a mutable source cannot substitute an
+/// unchecked window descriptor when the decoder initializes.
+type ZstdSource = io::Chain<io::Cursor<Vec<u8>>, SharedStream>;
 
 impl Read for ZstdFrames {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
@@ -116,7 +121,11 @@ impl Read for ZstdFrames {
             if self.source.is_at_end()? {
                 return Ok(0);
             }
-            match ruzstd::decoding::StreamingDecoder::new(self.source.clone()) {
+            // Check before constructing a fresh decoder for every frame:
+            // the dependency's first-frame path does not bound its window.
+            let header = zstd::checked_header(self.source.0.borrow_mut().as_mut())?;
+            let source = io::Cursor::new(header).chain(self.source.clone());
+            match ruzstd::decoding::StreamingDecoder::new(source) {
                 Ok(frame) => self.frame = Some(frame),
                 Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
                     length,
@@ -163,6 +172,7 @@ impl TarArchive {
     ///
     /// [`ArchiveError::DamagedArchive`] for a stream that is not a TAR,
     /// [`ArchiveError::TooManyMembers`], [`ArchiveError::TarNamesTooLarge`],
+    /// [`ArchiveError::DecoderMemoryLimit`],
     /// the source's read error or [`ArchiveError::Cancelled`].
     pub(crate) fn open(
         source: Box<dyn ArchiveStream>,
@@ -374,7 +384,11 @@ fn decoder(source: &SharedStream, compression: TarCompression) -> Box<dyn Read> 
         TarCompression::None => Box::new(source),
         TarCompression::Gzip => Box::new(flate2::read::MultiGzDecoder::new(source)),
         TarCompression::Bzip2 => Box::new(bzip2::read::MultiBzDecoder::new(source)),
-        TarCompression::Xz => Box::new(lzma_rust2::XzReader::new(source, true)),
+        TarCompression::Xz => Box::new(lzma_rust2::XzReader::new_mem_limit(
+            source,
+            true,
+            super::MAX_DECODER_MEMORY_KIB,
+        )),
         TarCompression::Zstd => Box::new(ZstdFrames { source, frame: None }),
     }
 }
@@ -424,12 +438,12 @@ fn padded(size: u64) -> Result<u64, ArchiveError> {
         .ok_or(ArchiveError::DamagedArchive)
 }
 
-/// A decompression failure is damaged data.
+/// Distinguishes damaged data from a decoder's memory limit.
 fn damaged(error: io::Error) -> ArchiveError {
-    if error.kind() == io::ErrorKind::UnexpectedEof || error.kind() == io::ErrorKind::InvalidData {
-        ArchiveError::DamagedArchive
-    } else {
-        error.into()
+    match error.kind() {
+        io::ErrorKind::UnexpectedEof | io::ErrorKind::InvalidData => ArchiveError::DamagedArchive,
+        io::ErrorKind::OutOfMemory => ArchiveError::DecoderMemoryLimit,
+        _ => error.into(),
     }
 }
 

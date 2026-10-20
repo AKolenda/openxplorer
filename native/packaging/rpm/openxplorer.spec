@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.5
+Version:        2.0.6
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -116,6 +116,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Tue Oct 13 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.6-1
+- OpenXplorer 2.0.6: Brave's downloads, Save as PDF and uploads through
+  OpenXplorer's Open and Save dialogs, an option for Brave to ask where to
+  save each download, item check boxes shown on hover only while Ctrl is
+  held (by default), and memory limits for archives, drags and search.
+
 * Mon Oct 12 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.5-1
 - OpenXplorer 2.0.5: copies, drags and new folders that work as in Windows
   Explorer, Size on disk in Properties, a warning before a rename changes an

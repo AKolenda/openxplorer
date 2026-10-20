@@ -9,8 +9,6 @@
 //! locale-independent. Ties fall back to ascending raw names.
 
 use std::cmp::Ordering;
-use std::iter::Peekable;
-use std::str::Chars;
 
 /// A sortable column of the details view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -249,24 +247,22 @@ fn is_combining_mark(character: char) -> bool {
 
 /// Natural order of two folded texts, character by character, with each
 /// run of ASCII digits compared as one number.
-fn natural_cmp(left: &str, right: &str) -> Ordering {
-    let mut left = left.chars().peekable();
-    let mut right = right.chars().peekable();
+fn natural_cmp(mut left: &str, mut right: &str) -> Ordering {
     loop {
-        let (left_char, right_char) = match (left.peek(), right.peek()) {
+        let (left_char, right_char) = match (left.chars().next(), right.chars().next()) {
             (None, None) => return Ordering::Equal,
             // A text that is the start of the other sorts first.
             (None, Some(_)) => return Ordering::Less,
             (Some(_), None) => return Ordering::Greater,
-            (Some(&left_char), Some(&right_char)) => (left_char, right_char),
+            (Some(left_char), Some(right_char)) => (left_char, right_char),
         };
         let order = if left_char.is_ascii_digit() && right_char.is_ascii_digit() {
             let left_number = take_digits(&mut left);
             let right_number = take_digits(&mut right);
-            compare_numbers(&left_number, &right_number)
+            compare_numbers(left_number, right_number)
         } else {
-            left.next();
-            right.next();
+            left = &left[left_char.len_utf8()..];
+            right = &right[right_char.len_utf8()..];
             compare_chars(left_char, right_char)
         };
         if order != Ordering::Equal {
@@ -275,12 +271,12 @@ fn natural_cmp(left: &str, right: &str) -> Ordering {
     }
 }
 
-/// Takes the run of ASCII digits at the front of `chars`.
-fn take_digits(chars: &mut Peekable<Chars<'_>>) -> String {
-    let mut digits = String::new();
-    while let Some(digit) = chars.next_if(char::is_ascii_digit) {
-        digits.push(digit);
-    }
+/// Borrows the leading ASCII digit run and advances `text` past it. A
+/// comparison never allocates, even for names with several digit runs.
+fn take_digits<'a>(text: &mut &'a str) -> &'a str {
+    let end = text.bytes().take_while(u8::is_ascii_digit).count();
+    let (digits, remaining) = text.split_at(end);
+    *text = remaining;
     digits
 }
 
@@ -388,6 +384,19 @@ mod tests {
     fn equal_keys_fall_back_to_the_raw_name() {
         assert_eq!(sorted(&["a1", "a01"]), ["a01", "a1"]);
         assert_eq!(sorted(&["Report", "report"]), ["Report", "report"]);
+    }
+
+    #[test]
+    fn numeric_runs_preserve_unicode_boundaries_and_following_text() {
+        assert_eq!(
+            sorted(&["a1β10", "a2β1", "a1β02", "a10β1", "a01β2", "a1β3"]),
+            ["a01β2", "a1β02", "a1β3", "a1β10", "a2β1", "a10β1"]
+        );
+        assert_eq!(
+            sorted(&["a00β", "a0", "a000", "a00"]),
+            ["a0", "a00", "a000", "a00β"]
+        );
+        assert_eq!(sorted(&["é2", "é10", "é", "é1"]), ["é", "é1", "é2", "é10"]);
     }
 
     #[test]

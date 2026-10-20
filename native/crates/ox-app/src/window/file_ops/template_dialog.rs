@@ -14,8 +14,8 @@ use std::path::PathBuf;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::ops::{
-    create_from_template, list_templates, BuiltinTemplate, CreatedItem, NewFromTemplate, OperationContext,
-    Template, TemplateId, TemplateList,
+    create_from_template, list_templates, BuiltinTemplate, CreatedItem, NewFromTemplate, Template,
+    TemplateId, TemplateList,
 };
 use ox_core::places::{FolderLocations, KnownFolder};
 use ox_core::transfer::Cancellation;
@@ -95,7 +95,7 @@ impl BrowserWindow {
     /// A New menu item: lists the templates, then asks for the file's
     /// name and template and creates it.
     pub(crate) async fn create_file(&self, kind: NewFileKind) {
-        if !self.allows(FileCommand::New) || self.refuses_writes_during_update() {
+        if !self.allows(FileCommand::New) || self.refuses_writes() {
             return;
         }
         let Some(folder_uri) = self.current_uri() else {
@@ -135,7 +135,14 @@ impl BrowserWindow {
             let Some(request) = template_request(&dialog, &fields, list, folder_uri) else {
                 continue;
             };
-            let context = OperationContext::new(self.context().write_protection());
+            // A drive may have started formatting while the dialog was open.
+            let (context, _writing) = match self.admit_write() {
+                Ok(admitted) => admitted,
+                Err(refusal) => {
+                    dialog.show_error(&refusal);
+                    continue;
+                }
+            };
             dialog.set_busy(Some(&context.cancel));
             let outcome = create_from_template(&request, &context).await;
             dialog.set_busy(None);

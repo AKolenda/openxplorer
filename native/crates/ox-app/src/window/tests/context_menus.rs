@@ -10,7 +10,7 @@ use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
 use super::file_ops_support::{is_enabled, select_names};
-use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{settle, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuStyle;
 
 /// The position of the item called `name` in `test`'s view.
@@ -457,4 +457,108 @@ fn the_disk_tools_run_on_the_items_local_path() {
             format!("AnalyseUsage {}", fixture.path("Documents").display()),
         ]
     );
+}
+
+/// Format… waits for the window's file operation, as Disconnect does, for
+/// a rename or a new item, so no write goes on onto the drive once it is
+/// formatted, and for another format, so two never overlap.
+///
+/// parity: DEV-012
+#[gtk::test]
+fn format_waits_for_a_running_file_operation() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let operation = test.window.begin_operation("Preparing copy…");
+    assert!(operation.is_some(), "no other operation runs");
+
+    test.activate("format-drive", Some("file:///media/demo/USB"));
+    let refusal = test.window.shown_message().to_string();
+    test.window.end_operation();
+    test.window.show_message("");
+    let renaming = test.context.hold_write();
+    test.activate("format-drive", Some("file:///media/demo/USB"));
+    let quick_refusal = test.window.shown_message().to_string();
+    drop(renaming);
+    let formatting = test.context.hold_writes_for_formatting();
+    test.activate("format-drive", Some("file:///media/demo/USB"));
+    let second_format = test.window.shown_message().to_string();
+    let confirmed_second = test.window.format_refusal();
+    drop(formatting);
+    let free = test.window.format_refusal();
+
+    assert_eq!(refusal, "Finish the current operation before formatting.");
+    assert_eq!(
+        quick_refusal, "Finish the current operation before formatting.",
+        "a rename or a new item running counts too"
+    );
+    let waiting = "Wait until the drive is formatted, then try again.";
+    assert_eq!(
+        second_format, waiting,
+        "another format, perhaps of the same drive, runs"
+    );
+    assert_eq!(
+        confirmed_second,
+        Some(waiting),
+        "checked again once the erase is confirmed"
+    );
+    assert_eq!(free, None, "a drive may be formatted once nothing else runs");
+}
+
+/// While a drive is formatted, no window starts writing files, so a
+/// transfer, an extraction, a rename or a new item cannot go on onto the
+/// formatted drive.
+///
+/// parity: DEV-012
+#[gtk::test]
+fn writes_wait_while_a_drive_is_formatted() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let hold = test.context.hold_writes_for_formatting();
+
+    let refused = test.window.begin_operation("Preparing copy…").is_none();
+    let refusal = test.window.shown_message().to_string();
+    let archive = test.window.archive_operation_refusal();
+    let quick = test.window.admit_write().err();
+    let update = crate::window::integration_actions::work_in_windows(test.window.application().as_ref());
+    drop(hold);
+    let operation = test.window.begin_operation("Preparing copy…");
+    test.window.end_operation();
+    let admitted = test.window.admit_write().is_ok();
+
+    let waiting = "Wait until the drive is formatted, then try again.";
+    assert!(refused, "no copy starts while a drive is formatted");
+    assert_eq!(refusal, waiting);
+    assert_eq!(archive.as_deref(), Some(waiting), "nor an extraction");
+    assert_eq!(quick.as_deref(), Some(waiting), "nor a rename or a new item");
+    assert_eq!(update, ox_core::update::Activity::Busy, "nor an update's restart");
+    assert!(operation.is_some(), "writes go on once it is formatted");
+    assert!(admitted, "quick writes too");
+}
+
+/// A format's result is shown in the window it was started from, or, once
+/// that window is closed, in another one, so a failure is never lost.
+///
+/// parity: DEV-012
+#[gtk::test]
+fn a_formats_result_outlives_its_window() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let other = test.open_beside(&fixture.uri());
+    let (started, app) = (test.window.downgrade(), test.window.application());
+    let report = crate::window::disk_tools::report_format_result;
+
+    report(&started, app.as_ref(), "Formatted while open.");
+    let while_open = test.window.shown_message_text();
+    let elsewhere_before = other.window.shown_message_text();
+    test.window.close();
+    settle();
+    report(&started, app.as_ref(), "Formatted after closing.");
+
+    assert_eq!(while_open, "Formatted while open.");
+    assert_ne!(
+        elsewhere_before, "Formatted while open.",
+        "only its own window says so"
+    );
+    assert!(!test.window.is_visible());
+    assert_eq!(other.window.shown_message_text(), "Formatted after closing.");
 }

@@ -25,6 +25,7 @@ impl BrowserWindow {
     pub(super) fn walk_folder(&self, run: SearchRun) {
         let rows = gio::ListStore::new::<FileItem>();
         let mut shown = HashSet::new();
+        let mut is_truncated = false;
         let active = self.imp().session.borrow().active_id();
         if let Some(store) = active.and_then(|id| self.tab_store(id)) {
             let listing = Listing {
@@ -33,8 +34,9 @@ impl BrowserWindow {
                 shows_hidden: self.hidden_files_shown(),
             };
             let listed = listed_name_matches(listing, &run.text);
-            shown.extend(listed.iter().map(|item| item.entry().uri.clone()));
-            rows.extend_from_slice(&listed);
+            is_truncated = listed.is_truncated;
+            shown.extend(listed.items.iter().map(|item| item.entry().uri.clone()));
+            rows.extend_from_slice(&listed.items);
         }
         self.imp().search.borrow_mut().show_found(&run, rows.clone());
         self.show_searched_items();
@@ -55,13 +57,14 @@ impl BrowserWindow {
         });
         let window = self.downgrade();
         glib::spawn_future_local(async move {
-            let mut is_truncated = false;
             while let Ok(batch) = batches.recv().await {
                 let new = batch.into_iter().filter(|entry| shown.insert(entry.uri.clone()));
                 let room = RESULT_LIMIT.saturating_sub(rows.n_items() as usize);
-                let found: Vec<FileItem> = new.map(FileItem::new).collect();
+                let mut found: Vec<Entry> = new.take(room + 1).collect();
                 is_truncated |= found.len() > room;
-                rows.extend_from_slice(&found[..found.len().min(room)]);
+                found.truncate(room);
+                let items: Vec<FileItem> = found.into_iter().map(FileItem::new).collect();
+                rows.extend_from_slice(&items);
             }
             let outcome = walk.await.unwrap_or(Err(SearchError::Cancelled));
             if let Some(window) = window.upgrade() {
@@ -69,6 +72,55 @@ impl BrowserWindow {
                 window.finish_walk(&run, rows, outcome);
             }
         });
+    }
+
+    /// Updates the rows of a finished walk after the folder was listed
+    /// again: its own matches that went away are removed and new ones
+    /// added, in place, so the rows the walk found below it stay.
+    pub(super) fn update_walked_listing(&self) {
+        let Some(rows) = self.imp().search.borrow().results().cloned() else {
+            return;
+        };
+        let text = self.imp().search.borrow().query().trim().to_owned();
+        let Some(folder) = self.current_uri() else {
+            return;
+        };
+        let active = self.imp().session.borrow().active_id();
+        let Some(store) = active.and_then(|id| self.tab_store(id)) else {
+            return;
+        };
+        let listing = Listing {
+            items: &store,
+            folder: &folder,
+            shows_hidden: self.hidden_files_shown(),
+        };
+        let listed = listed_name_matches(listing, &text).items;
+        let listed_uris: HashSet<String> = listed.iter().map(|item| item.entry().uri.clone()).collect();
+        let parent = gio::File::for_uri(&folder);
+        for position in (0..rows.n_items()).rev() {
+            let Some(item) = rows.item(position).and_downcast::<FileItem>() else {
+                continue;
+            };
+            let uri = &item.entry().uri;
+            let in_folder = gio::File::for_uri(uri)
+                .parent()
+                .is_some_and(|file| file.equal(&parent));
+            if in_folder && !listed_uris.contains(uri) {
+                rows.remove(position);
+            }
+        }
+        let shown: HashSet<String> = rows
+            .iter::<FileItem>()
+            .filter_map(Result::ok)
+            .map(|item| item.entry().uri.clone())
+            .collect();
+        let room = RESULT_LIMIT.saturating_sub(rows.n_items() as usize);
+        let new: Vec<FileItem> = listed
+            .into_iter()
+            .filter(|item| !shown.contains(&item.entry().uri))
+            .take(room)
+            .collect();
+        rows.extend_from_slice(&new);
     }
 
     /// Shows the rows the walk of `run` found, or why it failed; a late

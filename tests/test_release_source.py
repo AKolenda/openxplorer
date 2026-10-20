@@ -14,11 +14,13 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 import contextlib
+import hashlib
 import io
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tracemalloc
 from typing import Any
 import unittest
 from unittest.mock import patch
@@ -85,6 +87,7 @@ EXCLUDED_FILE_NAMES = [
     '.private-demo-terms', '.private-demo-terms.json', 'private-terms.json',
     '.DS_Store', '.coverage', '.coverage.worker', 'module.pyc', 'module.pyo',
     'module.pyd', 'web.tsbuildinfo', 'package.deb', 'source.zip',
+    'package.rpm', 'package.pkg.tar.zst', 'package.flatpak',
     'server.log', 'server.log.1', 'local.sqlite', 'local.sqlite-wal',
     'local.sqlite3', 'local.sqlite3-shm', 'local.db', 'local.db-journal',
     'private.pem', 'private.key', 'private.p12', 'private.pfx', 'account.credentials',
@@ -107,6 +110,8 @@ GIT_IGNORED = {
     # The native Rust workspace.
     'native/target/debug/openxplorer-native': True,
     'native/Cargo.toml': False, 'native/Cargo.lock': False,
+    'packages/release.rpm': True, 'packages/release.pkg.tar.zst': True,
+    'packages/io.winspace.Development.flatpak': True,
 }
 
 
@@ -315,6 +320,62 @@ class ReleasePackageTests(unittest.TestCase):
         """The 1.1.x updater needs the .deb, so a release without it is refused."""
         with self.assertRaises(FileNotFoundError):
             self.build(self.STABLE_PACKAGES[1:])
+
+    def test_output_directory_input_is_refused_before_deleting_any_artifact(self) -> None:
+        """--packages dist, including aliases, preserves previously built packages."""
+        self.dist.mkdir()
+        package = self.dist / self.STABLE_PACKAGES[0]
+        original = b'Fictional previously built package'
+        alias = self.packages / 'output-link'
+        alias.symlink_to(self.dist, target_is_directory=True)
+        for packages in (self.dist, alias):
+            with self.subTest(packages=packages.name):
+                package.write_bytes(original)
+                errors = io.StringIO()
+                with contextlib.redirect_stderr(errors):
+                    status = release.main(['--packages', str(packages)])
+                self.assertEqual(status, 1)
+                self.assertTrue(package.exists(), 'The supplied package was deleted')
+                self.assertEqual(package.read_bytes(), original)
+                self.assertIn('outside the release output directory', errors.getvalue())
+
+    def test_large_artifact_checksums_use_bounded_memory(self) -> None:
+        """Hashing a large package produces the correct digest without buffering it."""
+        package = self.packages / 'fixture.flatpak'
+        chunk = b'Fictional package contents.\n' * 40_000
+        expected = hashlib.sha256()
+        with package.open('wb') as output:
+            for _ in range(16):
+                output.write(chunk)
+                expected.update(chunk)
+        tracemalloc.start()
+        try:
+            actual = release.sha256_hex(package)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertEqual(actual, expected.hexdigest())
+        self.assertLess(peak, 2 * 1024 * 1024)
+
+    def test_package_links_into_output_are_refused_before_cleanup(self) -> None:
+        """A separate input folder cannot hide a package that output cleanup would delete."""
+        self.dist.mkdir()
+        required = self.packages / self.STABLE_PACKAGES[0]
+        for name in (self.STABLE_PACKAGES[0], self.STABLE_PACKAGES[-1]):
+            with self.subTest(package=name):
+                required.unlink(missing_ok=True)
+                required.write_bytes(b'Fictional Debian package')
+                target = self.dist / name
+                target.write_bytes(b'Fictional package to preserve')
+                link = self.packages / name
+                link.unlink(missing_ok=True)
+                link.symlink_to(target)
+                with contextlib.redirect_stderr(io.StringIO()):
+                    status = release.main(['--packages', str(self.packages)])
+                self.assertEqual(status, 1)
+                self.assertTrue(target.exists(), 'The linked package was deleted')
+                self.assertEqual(target.read_bytes(), b'Fictional package to preserve')
+                link.unlink()
 
 
 class ReleaseFailureTests(unittest.TestCase):

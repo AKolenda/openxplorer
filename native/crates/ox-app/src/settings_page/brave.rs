@@ -5,7 +5,8 @@
 //! `v2.0.0:desktop/ui/app.js` (INT-020, SET-009). "Use Linux Downloads in
 //! Brave…" opens the Brave dialog (`braveDialog`) on the user's Downloads
 //! folder, as `user-dirs.dirs` names it; the Python section's advice is
-//! in the row's ⓘ.
+//! in the row's ⓘ. The dialog can also make Brave ask where to save each
+//! file (INT-034).
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
@@ -22,14 +23,17 @@ const USE_LINUX_DOWNLOADS: RowText = RowText {
     title: "Brave saves to my Linux Downloads folder",
     description: "Selected native Brave profiles save to your Linux Downloads folder.",
     keywords: "use linux downloads in brave brave download location downloads sync save as browser profile. Use the Linux \
-               Downloads location in selected native Brave profiles.",
+               Downloads location in selected native Brave profiles. ask where to save each file before \
+               downloading prompt save dialog",
 };
 
-/// What to do first and what the sync changes, from the Python section.
+/// What to do first and what the sync changes, from the Python section,
+/// with the optional prompt (INT-034).
 const SYNC_NOTE: &str = crate::i18n::message_id(
     "Fully quit Brave first, including background processes. OpenXplorer \
                          backs up Preferences and changes only the download and Save as \
-                         directories. This is a one-time sync, not a managed browser policy.",
+                         directories and, if you choose, whether Brave asks where to save \
+                         each file. This is a one-time sync, not a managed browser policy.",
 );
 
 /// What to do where the sync cannot reach, from the Python section.

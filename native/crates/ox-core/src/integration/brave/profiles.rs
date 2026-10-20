@@ -64,6 +64,9 @@ pub struct BraveProfile {
     pub directory: PathBuf,
     /// The download folder the profile uses; empty for Brave's default.
     pub download_path: String,
+    /// Brave asks where to save each download ("Ask where to save each
+    /// file before downloading", INT-034).
+    pub asks_where_to_save: bool,
 }
 
 impl BraveProfile {
@@ -150,12 +153,15 @@ fn read_profile(channel: BraveChannel, folder: &Path) -> Option<BraveProfile> {
     let download_path = optional_setting(&preferences.data, "download", "default_directory")
         .ok()?
         .map_or_else(String::new, text_of);
+    let prompt = optional_setting(&preferences.data, "download", "prompt_for_download").ok()?;
+    let asks_where_to_save = prompt.and_then(Value::as_bool) == Some(true);
     Some(BraveProfile {
         id: format!("{}:{folder_name}", channel.folder_name()),
         name: name.chars().take(MAX_PROFILE_NAME_CHARS).collect(),
         channel,
         directory: folder.to_owned(),
         download_path: download_path.chars().take(MAX_DOWNLOAD_PATH_CHARS).collect(),
+        asks_where_to_save,
     })
 }
 
