@@ -12,7 +12,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::file_ops_support::{
-    dialog_over, name_editor, open_dialog, press_shortcut, press_shortcut_where_focused,
+    dialog_over, is_enabled, name_editor, open_dialog, press_shortcut, press_shortcut_where_focused,
     require_private_trash, select_names,
 };
 use crate::test_support::harness::{application, settle, wait_until, Fixture, TestWindow};
@@ -74,7 +74,7 @@ fn ctrl_e_moves_to_the_search_box_and_selects_its_text() {
 }
 
 /// Ctrl+D asks and moves the selection to the Recycle Bin exactly as
-/// Delete does, and the toast's Undo brings it back.
+/// Delete does, and Ctrl+Z brings it back: the same Undo step.
 ///
 /// parity: CMD-036, OPS-015
 #[gtk::test]
@@ -93,12 +93,8 @@ fn ctrl_d_moves_the_selection_to_the_recycle_bin_as_delete_does() {
     wait_until("the file to leave the folder", || {
         !fixture.path("Résumé.txt").exists()
     });
-    wait_until("the toast", || {
-        test.window.shown_message() == "1 item(s) sent to Trash."
-    });
-    let toast = test.window.imp().toast.get();
-    assert_eq!(toast.action_label().as_deref(), Some("Undo"));
-    toast.press_action();
+    wait_until("Undo to be offered", || is_enabled(&test, "undo"));
+    press_shortcut(&test, gdk::Key::z, gdk::ModifierType::CONTROL_MASK);
     wait_until("the file to come back", || fixture.path("Résumé.txt").is_file());
 }
 
