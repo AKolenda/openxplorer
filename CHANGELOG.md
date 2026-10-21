@@ -1,3 +1,12 @@
+# Unreleased
+
+- A drive mounted read-only is treated as Windows Explorer treats it,
+  undoing what #71 added: New, Paste, Cut, Rename, Duplicate and Delete
+  stay on, the status bar no longer shows "Read-only drive", no message
+  says Windows is hibernated or used Fast startup, and a write that fails
+  there shows the system's own error. A folder you may not write to still
+  turns off New and Paste.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed
