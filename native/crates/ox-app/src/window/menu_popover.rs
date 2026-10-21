@@ -18,6 +18,7 @@
 //! closes only the submenu. Choosing an item in a submenu closes every
 //! menu of the chain, then runs it.
 
+mod height;
 #[cfg(test)]
 mod inspection;
 mod items;
@@ -127,12 +128,13 @@ mod imp {
             let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
             content.append(&strip);
             // A service catalogue can make a menu taller than the monitor.
-            // Keep every command reachable by scrolling and keyboard focus.
+            // Keep every command reachable by scrolling and keyboard focus;
+            // a menu that fits on its monitor shows in full (height.rs).
             let rows = gtk::ScrolledWindow::builder()
                 .hscrollbar_policy(gtk::PolicyType::Never)
                 .vscrollbar_policy(gtk::PolicyType::Automatic)
                 .propagate_natural_height(true)
-                .max_content_height(560)
+                .max_content_height(super::height::UNKNOWN_MONITOR_LIMIT)
                 .child(&list)
                 .build();
             content.append(&rows);
@@ -158,7 +160,17 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for MenuPopover {}
+    impl WidgetImpl for MenuPopover {
+        fn show(&self) {
+            // Before GTK places the menu, so it is placed at its full size.
+            self.obj().fit_to_monitor();
+            #[expect(
+                deprecated,
+                reason = "gtk-rs names the show vfunc after gtk_widget_show; the vfunc stays"
+            )]
+            self.parent_show();
+        }
+    }
 
     impl PopoverImpl for MenuPopover {}
 }

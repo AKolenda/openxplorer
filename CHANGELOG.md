@@ -1,3 +1,11 @@
+# Unreleased
+
+- Menus no longer scroll once they are 560 pixels tall: like Windows, a
+  menu shows in full whenever it fits on the monitor it opens on, and
+  scrolls only when it is taller than that monitor. A right-click menu
+  too tall to fit below or above the pointer opens beside it and moves
+  up to fit, instead of being cut short.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed
