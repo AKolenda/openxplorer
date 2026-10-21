@@ -1,3 +1,11 @@
+# Unreleased
+
+- While a dialog is in front, such as Properties, Compress or a
+  confirmation, Delete, Shift+Delete, F2, Ctrl+X, Ctrl+C, Ctrl+V, Ctrl+A,
+  Ctrl+Z, Ctrl+Y, Ctrl+Shift+N and Alt+Enter no longer act on the files
+  behind it, as in Windows Explorer. A text field in the dialog keeps its
+  own Delete, and Escape still closes the dialog.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed
