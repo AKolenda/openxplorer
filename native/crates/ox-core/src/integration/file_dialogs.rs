@@ -59,7 +59,11 @@
 //! writes `$XDG_CONFIG_HOME/environment.d/60-openxplorer-file-dialogs.conf`,
 //! which the systemd user manager reads at login and passes to the
 //! session; disabling removes it if it still holds what the app wrote. It
-//! applies from the next login. Applications that draw a dialog of their
+//! applies from the next login. Only a session the user manager starts
+//! (GNOME, KDE Plasma by default) passes that environment to its apps; on
+//! others (Xfce, MATE) the file would change nothing, so it is written
+//! only while [`GRAPHICAL_SESSION_TARGET`] is active, which such a session
+//! starts. Applications that draw a dialog of their
 //! own (GTK's dialog widget used directly, or another toolkit's) keep it.
 
 use std::fs;
@@ -125,6 +129,10 @@ const KDE_ENV_SCRIPT: &str = "# Open and Save dialogs of KDE apps go to the desk
                               # OpenXplorer. Set by OpenXplorer (Settings > Default apps); Restore removes it.\n\
                               export PLASMA_INTEGRATION_USE_PORTAL=1\n";
 
+/// The systemd user unit a desktop session started by the user manager
+/// activates; only such a session passes `environment.d` to its apps.
+pub const GRAPHICAL_SESSION_TARGET: &str = "graphical-session.target";
+
 /// The variable that makes GTK 3 applications ask the portal for file
 /// dialogs instead of showing GTK's own. GTK 4 asks the portal anyway,
 /// and GIO does not read it.
@@ -188,6 +196,21 @@ pub struct FileDialogPaths {
     /// The one folder the portal reads, when its service's environment
     /// sets [`PORTAL_DIR_VARIABLE`].
     pub portal_dir: PortalDir,
+    /// Whether the desktop session is started by the systemd user
+    /// manager, and so gives its apps what `environment.d` sets.
+    pub systemd_session: SystemdSession,
+}
+
+/// Whether the desktop session takes its environment from the systemd
+/// user manager.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemdSession {
+    /// Asked of the user manager: [`GRAPHICAL_SESSION_TARGET`] is active.
+    /// It is asked once per [`FileDialogRegistration::run_in_background`]
+    /// operation, on its worker thread.
+    FromManager,
+    /// Known, as in tests.
+    Known(bool),
 }
 
 impl FileDialogPaths {
@@ -205,6 +228,7 @@ impl FileDialogPaths {
             system_dirs,
             desktops: desktops_from(std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref()),
             portal_dir: PortalDir::FromService,
+            systemd_session: SystemdSession::FromManager,
         }
     }
 }
@@ -646,10 +670,22 @@ impl FileDialogRegistration {
         })
     }
 
-    /// The login files this session needs: GTK's everywhere, and KDE's
-    /// on a KDE session.
+    /// Whether this session reads GTK 3 apps' environment file at login:
+    /// the systemd user manager starts it.
+    pub fn reads_gtk_env_file(&self) -> bool {
+        match self.paths.systemd_session {
+            SystemdSession::Known(known) => known,
+            SystemdSession::FromManager => graphical_session_is_active(),
+        }
+    }
+
+    /// The login files this session needs: GTK's where the systemd user
+    /// manager starts the session, and KDE's on a KDE session.
     fn login_files(&self) -> Vec<LoginFile> {
-        let mut files = vec![LoginFile::Gtk];
+        let mut files = Vec::new();
+        if self.reads_gtk_env_file() {
+            files.push(LoginFile::Gtk);
+        }
         if self.is_kde_session() {
             files.push(LoginFile::Kde);
         }
@@ -830,6 +866,9 @@ impl FileDialogRegistration {
                         Err(reason) => PortalDir::Unknown(reason),
                     };
                 }
+                if registration.paths.systemd_session == SystemdSession::FromManager {
+                    registration.paths.systemd_session = SystemdSession::Known(graphical_session_is_active());
+                }
                 operation(&registration)
             })
         })
@@ -902,6 +941,48 @@ impl FileDialogRegistration {
 /// Why the folder cannot be told: an environment file the fallback cannot
 /// read as systemd does ([`environment_file_assignments`]), or a folder
 /// or environment file that is not UTF-8.
+/// Whether [`GRAPHICAL_SESSION_TARGET`] is active in the systemd user
+/// manager, asked over D-Bus without starting anything; `false` when no
+/// manager answers or the unit is not loaded.
+fn graphical_session_is_active() -> bool {
+    let Ok(connection) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE) else {
+        return false;
+    };
+    let call = |path: &str, interface: &str, method: &str, parameters: &glib::Variant| {
+        connection
+            .call_sync(
+                Some(SYSTEMD_NAME),
+                path,
+                interface,
+                method,
+                Some(parameters),
+                None,
+                gio::DBusCallFlags::NO_AUTO_START,
+                SYSTEMD_TIMEOUT_MS,
+                gio::Cancellable::NONE,
+            )
+            .ok()
+    };
+    let Some((unit,)) = call(
+        SYSTEMD_PATH,
+        SYSTEMD_MANAGER,
+        "GetUnit",
+        &(GRAPHICAL_SESSION_TARGET,).to_variant(),
+    )
+    .and_then(|reply| reply.get::<(glib::variant::ObjectPath,)>()) else {
+        return false;
+    };
+    call(
+        unit.as_str(),
+        "org.freedesktop.DBus.Properties",
+        "Get",
+        &("org.freedesktop.systemd1.Unit", "ActiveState").to_variant(),
+    )
+    .and_then(|reply| reply.get::<(glib::Variant,)>())
+    .and_then(|(state,)| state.get::<String>())
+    .is_some_and(|state| state == "active")
+}
+
 fn service_portal_dir() -> Result<Option<String>, String> {
     let Ok(connection) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE) else {
         return Ok(None);

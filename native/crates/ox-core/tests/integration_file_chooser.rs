@@ -22,9 +22,9 @@ use ox_core::integration::{
     glob_matches, options_from_entries, path_variant, preferred_value, with_preference, without_preference,
     ChooserAnswer, ChooserCall, ChooserMode, ChooserNotShown, ChooserRequest, ChooserRequestError,
     DisabledFileDialogs, FileChooserBus, FileDialogError, FileDialogPaths, FileDialogRegistration,
-    FilterPattern, PortalDir, Sandbox, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY, GTK_PORTAL_VARIABLE,
-    KDE_PORTAL_VARIABLE, MAX_LIST_ITEMS, PORTAL_BACKEND_PATH, RESPONSE_CANCELLED, RESPONSE_OTHER,
-    RESPONSE_SUCCESS,
+    FilterPattern, PortalDir, Sandbox, SystemdSession, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY,
+    GTK_PORTAL_VARIABLE, KDE_PORTAL_VARIABLE, MAX_LIST_ITEMS, PORTAL_BACKEND_PATH, RESPONSE_CANCELLED,
+    RESPONSE_OTHER, RESPONSE_SUCCESS,
 };
 use tempfile::TempDir;
 
@@ -388,6 +388,7 @@ impl OptInFixture {
             system_dirs: vec![self.root.path().join("etc"), self.system()],
             desktops: vec!["kde".to_owned()],
             portal_dir: PortalDir::Fixed(None),
+            systemd_session: SystemdSession::Known(true),
         }
     }
 
@@ -940,6 +941,54 @@ fn an_unreadable_environment_folder_leaves_gtk_apps_out() {
     assert!(!registration.gtk_env_is_someone_elses());
     assert!(registration.leaves_apps_out(), "Enable has something to report");
     assert!(registration.enable().is_err(), "the file cannot be written there");
+}
+
+/// A session the systemd user manager does not start (Xfce, MATE) never
+/// reads `environment.d`, so Enable writes no file there and does not
+/// count GTK 3 apps as left out; KDE's script is unaffected.
+///
+/// parity: INT-032
+#[test]
+fn sessions_not_started_by_systemd_get_no_gtk_environment_file() {
+    let fixture = OptInFixture::new();
+    let xfce = FileDialogRegistration::new(
+        FileDialogPaths {
+            desktops: vec!["xfce".to_owned()],
+            systemd_session: SystemdSession::Known(false),
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    );
+    assert!(!xfce.reads_gtk_env_file());
+    xfce.enable().expect("enable");
+    assert!(xfce.is_enabled());
+    assert!(!xfce.gtk_env_file().exists());
+    assert!(!xfce.leaves_apps_out());
+    xfce.disable().expect("disable");
+
+    let kde = FileDialogRegistration::new(
+        FileDialogPaths {
+            systemd_session: SystemdSession::Known(false),
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    );
+    kde.enable().expect("enable");
+    assert!(kde.covers_kde_apps(), "Plasma runs its login script either way");
+    assert!(!kde.gtk_env_file().exists());
+    assert!(!kde.leaves_apps_out());
+    // A file written while the session was started by systemd still goes
+    // with Restore.
+    fs::create_dir_all(kde.gtk_env_file().parent().expect("its folder")).expect("the folder");
+    fixture
+        .registration()
+        .enable()
+        .expect("enable where systemd starts the session");
+    assert!(kde.gtk_env_file().is_file());
+    kde.disable().expect("disable");
+    assert!(!kde.gtk_env_file().exists());
 }
 
 /// An Enable that cannot write the environment file for GTK 3 apps changes

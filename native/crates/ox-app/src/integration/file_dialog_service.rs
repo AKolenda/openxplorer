@@ -111,32 +111,65 @@ fn session_has(variable: &str) -> bool {
     std::env::var(variable).is_ok_and(|value| value == "1")
 }
 
+/// What is at a login file's path, for the status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LoginFileAt {
+    /// The app's file.
+    Ours,
+    /// Nothing, or what cannot be read.
+    Nothing,
+    /// A file of the user's, or a symlink, left alone.
+    Theirs,
+}
+
+impl LoginFileAt {
+    fn of(covered: bool, someone_elses: bool) -> Self {
+        if covered {
+            Self::Ours
+        } else if someone_elses {
+            Self::Theirs
+        } else {
+            Self::Nothing
+        }
+    }
+}
+
+/// Where apps that need a login file stand: whether this session needs
+/// it, what is at its path, and whether this session started with its
+/// variable. A file of the user's there is left alone, but a session that
+/// has the variable all the same follows.
+fn login_apps(needed: bool, file: LoginFileAt, following: bool) -> LoginApps {
+    match (needed, file, following) {
+        (false, _, _) => LoginApps::NotNeeded,
+        (true, LoginFileAt::Theirs, false) => LoginApps::LeftAlone,
+        (true, LoginFileAt::Nothing, _) => LoginApps::NotCovered,
+        (true, LoginFileAt::Ours, false) => LoginApps::NextLogin,
+        (true, LoginFileAt::Ours | LoginFileAt::Theirs, true) => LoginApps::Following,
+    }
+}
+
 /// Where GTK 3 apps stand for `registration`, in this session.
 fn gtk_apps(registration: &FileDialogRegistration) -> LoginApps {
-    if registration.gtk_env_is_someone_elses() {
-        LoginApps::LeftAlone
-    } else if !registration.covers_gtk_apps() {
-        LoginApps::NotCovered
-    } else if session_has(GTK_PORTAL_VARIABLE) {
-        LoginApps::Following
-    } else {
-        LoginApps::NextLogin
-    }
+    login_apps(
+        registration.reads_gtk_env_file(),
+        LoginFileAt::of(
+            registration.covers_gtk_apps(),
+            registration.gtk_env_is_someone_elses(),
+        ),
+        session_has(GTK_PORTAL_VARIABLE),
+    )
 }
 
 /// Where KDE's own apps stand for `registration`, in this session.
 fn kde_apps(registration: &FileDialogRegistration) -> LoginApps {
-    if !registration.is_kde_session() {
-        LoginApps::NotNeeded
-    } else if registration.kde_script_is_someone_elses() {
-        LoginApps::LeftAlone
-    } else if !registration.covers_kde_apps() {
-        LoginApps::NotCovered
-    } else if session_has(KDE_PORTAL_VARIABLE) {
-        LoginApps::Following
-    } else {
-        LoginApps::NextLogin
-    }
+    login_apps(
+        registration.is_kde_session(),
+        LoginFileAt::of(
+            registration.covers_kde_apps(),
+            registration.kde_script_is_someone_elses(),
+        ),
+        session_has(KDE_PORTAL_VARIABLE),
+    )
 }
 
 /// Which apps follow an Enable only after a new login, for its toast.
@@ -307,6 +340,22 @@ mod tests {
         assert!(!enabled(LoginApps::LeftAlone).can_enable());
         let off = FileDialogsStatus::default();
         assert!(off.can_enable());
+    }
+
+    /// A session that needs no login file says nothing about it; a file
+    /// of the user's in its place reads as left alone unless the session
+    /// has the variable all the same.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn login_apps_follow_the_session_before_the_file() {
+        use LoginFileAt::{Nothing, Ours, Theirs};
+        assert_eq!(login_apps(false, Ours, true), LoginApps::NotNeeded);
+        assert_eq!(login_apps(true, Theirs, false), LoginApps::LeftAlone);
+        assert_eq!(login_apps(true, Theirs, true), LoginApps::Following);
+        assert_eq!(login_apps(true, Nothing, true), LoginApps::NotCovered);
+        assert_eq!(login_apps(true, Ours, false), LoginApps::NextLogin);
+        assert_eq!(login_apps(true, Ours, true), LoginApps::Following);
     }
 
     /// The status says when GTK 3 apps follow, and Enable stays available
