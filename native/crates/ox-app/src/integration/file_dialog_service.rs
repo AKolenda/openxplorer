@@ -63,30 +63,31 @@ impl FileDialogsStatus {
 
     /// The row's status line, translated sentence by sentence.
     pub(crate) fn text(&self) -> String {
-        use ox_core::i18n::gettext_static as tr;
         if !self.is_available {
-            return tr("Open and Save dialogs: available in the installed package, not the Flatpak.")
-                .to_owned();
+            return ox_core::i18n::gettext_static(
+                "Open and Save dialogs: available in the installed package, not the Flatpak.",
+            )
+            .to_owned();
         }
         if self.is_enabled {
-            let mut sentences = vec![tr(
+            let mut sentences = vec![ox_core::i18n::gettext_static(
                 "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their file dialogs \
                  here after Apply now or the next login.",
             )];
             sentences.extend(match self.gtk_apps {
-                LoginApps::Following => Some(tr("GTK 3 apps do too.")),
-                LoginApps::NextLogin => Some(tr("GTK 3 apps follow after you log out and back in.")),
-                LoginApps::LeftAlone => Some(tr(
+                LoginApps::Following => Some(ox_core::i18n::gettext_static("GTK 3 apps do too.")),
+                LoginApps::NextLogin => Some(ox_core::i18n::gettext_static("GTK 3 apps follow after you log out and back in.")),
+                LoginApps::LeftAlone => Some(ox_core::i18n::gettext_static(
                     "GTK 3 apps keep GTK's dialog: ~/.config/environment.d/60-openxplorer-file-dialogs.conf is \
                      not OpenXplorer's, so it was left alone.",
                 )),
-                LoginApps::NotCovered => Some(tr("Click Enable for GTK 3 apps too.")),
+                LoginApps::NotCovered => Some(ox_core::i18n::gettext_static("Click Enable for GTK 3 apps too.")),
                 LoginApps::NotNeeded => None,
             });
             sentences.extend(match self.kde_apps {
-                LoginApps::Following => Some(tr("KDE apps do too.")),
-                LoginApps::NextLogin => Some(tr("KDE apps follow after you log out and back in.")),
-                LoginApps::LeftAlone => Some(tr(
+                LoginApps::Following => Some(ox_core::i18n::gettext_static("KDE apps do too.")),
+                LoginApps::NextLogin => Some(ox_core::i18n::gettext_static("KDE apps follow after you log out and back in.")),
+                LoginApps::LeftAlone => Some(ox_core::i18n::gettext_static(
                     "KDE apps keep KDE's dialog: ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh is \
                      not OpenXplorer's, so it was left alone.",
                 )),
@@ -99,7 +100,7 @@ impl FileDialogsStatus {
                 "Open and Save dialogs: the desktop's ({backend}).",
                 &[("backend", backend)],
             ),
-            None => tr("Open and Save dialogs: the desktop's.").to_owned(),
+            None => ox_core::i18n::gettext_static("Open and Save dialogs: the desktop's.").to_owned(),
         }
     }
 }

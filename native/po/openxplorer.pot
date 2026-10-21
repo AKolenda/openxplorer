@@ -1095,6 +1095,34 @@ msgid "Type a command to run."
 msgstr ""
 
 #: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Click Enable for GTK 3 apps too."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "GTK 3 apps do too."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "GTK 3 apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "GTK 3 apps keep GTK's dialog: ~/.config/environment.d/60-openxplorer-file-dialogs.conf is not OpenXplorer's, so it was left alone."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "KDE apps do too."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "KDE apps keep KDE's dialog: ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh is not OpenXplorer's, so it was left alone."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
 msgid "Open and Save dialogs are back to the desktop's. Click Apply now, or log out and back in."
 msgstr ""
 
@@ -1118,9 +1146,21 @@ msgstr ""
 msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; KDE apps follow after you log out and back in."
 msgstr ""
 
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their file dialogs here after Apply now or the next login."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: available in the installed package, not the Flatpak."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/integration/file_dialog_service.rs
 msgid "Open and Save dialogs: the desktop's ({backend})."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: the desktop's."
 msgstr ""
 
 #: crates/ox-app/src/integration/file_dialog_service.rs
