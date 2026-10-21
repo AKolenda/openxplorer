@@ -1,7 +1,7 @@
 # Unreleased
 
 ## What's Changed
-* revert(ops): stop showing a message and an Undo button after a file operation succeeds, as Windows Explorer does; Undo stays on Ctrl+Z / Ctrl+Y and the empty-space right-click menu, which now names the step as Explorer does ("Undo Delete", "Undo Rename", "Undo New")
+* revert(ops): stop showing a message and an Undo button after a file operation succeeds, as Windows Explorer does; Undo and Redo stay on Ctrl+Z and Ctrl+Y and in the empty-space right-click menu, which now names the step as Explorer does ("Undo Delete", "Undo Rename", "Undo New")
 
 # 2.0.6 — 2026-10-13
 
