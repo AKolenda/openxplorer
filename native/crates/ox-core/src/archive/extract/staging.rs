@@ -16,9 +16,12 @@
 //! - Any failure removes it; a folder that cannot be removed is reported
 //!   with its location.
 //! - Every other error names the new folder, never the staging folder.
+//!   An extraction into an existing folder goes through a private folder
+//!   inside it, which errors leave out too: they name the existing folder.
 
 use std::ffi::OsStr;
 
+use super::lift::is_private_extraction_name;
 use crate::archive::ArchiveError;
 use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{secure_local_staging, Cancellation, ItemIdentity, Node, StagedName, TransferError};
@@ -52,7 +55,11 @@ impl ExtractionStaging {
         cancel: &Cancellation,
     ) -> Result<Self, ArchiveError> {
         let stage = staging_name()?;
-        let name = StagedName::new(&stage, &[], new_folder);
+        let name = if is_private_extraction_name(new_folder) {
+            StagedName::inside(&stage, new_folder, &destination.display_name())
+        } else {
+            StagedName::new(&stage, &[], new_folder)
+        };
         let folder = destination.child(OsStr::new(&stage));
         // Only a successful, exclusive creation grants cleanup ownership:
         // a name that was taken is never removed.

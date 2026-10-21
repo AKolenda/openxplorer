@@ -10,7 +10,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use ox_core::archive::{CompressionRequest, ZipCompressor};
+use ox_core::archive::{private_extraction_name, CompressionRequest, ExtractionRequest, ZipCompressor};
 use ox_core::location::file_uri;
 use ox_core::transfer::Cancellation;
 
@@ -56,6 +56,35 @@ fn an_extraction_into_a_read_only_folder_names_the_new_folder() {
 
     unlock(&fixture.destination);
     assert_names(&error, &fixture.destination.join("Unpacked"));
+    fixture.assert_no_output();
+}
+
+/// "Extract all" into an existing folder unpacks into a private folder
+/// inside it first (`private_extraction_name`). Its errors name the folder
+/// the user chose, never that private name either.
+///
+/// parity: ARC-013
+#[test]
+fn an_extraction_into_a_read_only_existing_folder_names_that_folder() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_sample_zip();
+    if !lock(&fixture.destination) {
+        return;
+    }
+    let request = ExtractionRequest {
+        archive_uri: fixture.archive_uri(),
+        destination_uri: fixture.destination_uri(),
+        folder_name: private_extraction_name().expect("random"),
+    };
+
+    let error = fixture
+        .extractor()
+        .extract(&request, &fixture.cancel)
+        .unwrap_err()
+        .to_string();
+
+    unlock(&fixture.destination);
+    assert_names(&error, &fixture.destination);
     fixture.assert_no_output();
 }
 

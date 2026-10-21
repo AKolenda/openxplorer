@@ -14,7 +14,9 @@
 //! final name in place of the staging name, and of the item inside a
 //! staging folder, turns every spelling of a staged path into the real
 //! one: a local path, a FUSE path or a URI. A staging name is random, so it
-//! appears nowhere else in a message.
+//! appears nowhere else in a message. Staging whose items end up directly
+//! in an existing folder is left out of the path instead, so the message
+//! names that folder.
 
 use std::ffi::OsStr;
 
@@ -26,11 +28,9 @@ use super::error::TransferError;
 pub(crate) struct StagedName {
     /// The staging's own name in its folder.
     stage: String,
-    /// What a staged path starts with, longest first: the items inside a
-    /// staging folder, then the staging itself.
-    staged: Vec<String>,
-    /// The final item's name.
-    real: String,
+    /// Each staged spelling and what replaces it, in the order they are
+    /// replaced.
+    replacements: Vec<(String, String)>,
 }
 
 impl StagedName {
@@ -45,8 +45,29 @@ impl StagedName {
         staged.push(stage.to_owned());
         Self {
             stage: stage.to_owned(),
-            staged,
-            real: real.to_owned(),
+            replacements: staged
+                .into_iter()
+                .map(|staged| (staged, real.to_owned()))
+                .collect(),
+        }
+    }
+
+    /// Private folders `stage` and then `private` inside it, whose items
+    /// end up directly in the existing folder called `folder` that holds
+    /// them: both are left out of a path, and a bare name becomes `folder`.
+    pub(crate) fn inside(stage: &str, private: &str, folder: &str) -> Self {
+        let replacements = [stage, private]
+            .into_iter()
+            .flat_map(|name| {
+                [
+                    (format!("/{name}"), String::new()),
+                    (name.to_owned(), folder.to_owned()),
+                ]
+            })
+            .collect();
+        Self {
+            stage: stage.to_owned(),
+            replacements,
         }
     }
 
@@ -57,9 +78,11 @@ impl StagedName {
 
     /// `message` with the real name in place of the staging.
     pub(crate) fn reword(&self, message: &str) -> String {
-        self.staged.iter().fold(message.to_owned(), |message, staged| {
-            message.replace(staged, &self.real)
-        })
+        self.replacements
+            .iter()
+            .fold(message.to_owned(), |message, (staged, real)| {
+                message.replace(staged, real)
+            })
     }
 
     /// `error` naming the real item. A location the user must recover by
@@ -108,6 +131,31 @@ mod tests {
                 "Error opening file smb://nas.example/Share/one.txt/sub/b.txt: No space",
             ),
             (format!("{stage} is busy"), "one.txt is busy"),
+        ];
+        for (staged, real) in cases {
+            assert_eq!(name.reword(&staged), real);
+        }
+    }
+
+    /// parity: ARC-013
+    #[test]
+    fn private_folders_inside_an_existing_folder_are_left_out_of_paths() {
+        let stage = format!(".openxplorer-extract-{}.part", "b".repeat(32));
+        let private = format!(".openxplorer-extract-{}", "c".repeat(32));
+        let name = StagedName::inside(&stage, &private, "Target");
+        let cases = [
+            (
+                format!("Error creating directory /home/user/Target/{stage}: Permission denied"),
+                "Error creating directory /home/user/Target: Permission denied".to_owned(),
+            ),
+            (
+                format!("Error opening file smb://nas.example/Share/Target/{stage}/Docs/a.txt: No space"),
+                "Error opening file smb://nas.example/Share/Target/Docs/a.txt: No space".to_owned(),
+            ),
+            (
+                format!("Error moving {stage} to /home/user/Target/{private}: Busy"),
+                "Error moving Target to /home/user/Target: Busy".to_owned(),
+            ),
         ];
         for (staged, real) in cases {
             assert_eq!(name.reword(&staged), real);
