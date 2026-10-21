@@ -800,6 +800,52 @@ fn an_operation_ending_in_the_background_sends_no_desktop_notification() {
     assert_eq!(calls.get(), 0, "no call reached the notification server");
 }
 
+/// No code of the app sends a desktop notification, and the desktop
+/// entries do not declare that it does. Unlike the test above, this also
+/// catches a notifier whose test build records instead of sending.
+#[test]
+fn the_app_has_no_desktop_notification() {
+    fn sources(folder: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
+        for entry in fs::read_dir(folder).expect("a source folder") {
+            let path = entry.expect("a source entry").path();
+            if path.is_dir() {
+                // Tests may name what they check for.
+                if path.file_name().is_some_and(|name| name != "tests") {
+                    sources(&path, found);
+                }
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                found.push(path);
+            }
+        }
+    }
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::new();
+    sources(&manifest.join("src"), &mut files);
+    let data = manifest.join("../../packaging/data");
+    let entries = fs::read_dir(&data)
+        .expect("the packaging data folder")
+        .map(|entry| entry.expect("a data entry").path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "desktop"));
+    files.extend(entries);
+
+    let mut found = Vec::new();
+    for file in &files {
+        let text = fs::read_to_string(file).expect("a readable file");
+        for needle in [
+            "send_notification",
+            "gio::Notification",
+            "\"show-destination\"",
+            "X-GNOME-UsesNotifications",
+        ] {
+            if text.contains(needle) {
+                found.push(format!("{}: {needle}", file.display()));
+            }
+        }
+    }
+    assert!(files.len() > 100, "the sources were read: {}", files.len());
+    assert!(found.is_empty(), "{found:#?}");
+}
+
 /// While a file operation or an archive operation runs, the transfer
 /// panel tells the dock: an `Update` with the bar shown when it starts and with the bar
 /// hidden when it ends.
