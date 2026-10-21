@@ -24,6 +24,7 @@ pub(crate) fn merge_results(total: &mut TransferResult, part: TransferResult) {
     total.done.extend(part.done);
     total.skipped.extend(part.skipped);
     total.errors.extend(part.errors);
+    total.recovery.extend(part.recovery);
     total.cancelled |= part.cancelled;
     total.landed.extend(part.landed);
 }
@@ -52,7 +53,8 @@ mod tests {
         };
         let second = TransferResult {
             skipped: vec!["file:///b".into()],
-            errors: vec!["c: failed".into()],
+            errors: vec!["c: failed".into(), "d: backup kept".into()],
+            recovery: vec!["d: backup kept".into()],
             cancelled: true,
             ..TransferResult::default()
         };
@@ -62,7 +64,8 @@ mod tests {
 
         assert_eq!(total.done, ["file:///a"]);
         assert_eq!(total.skipped, ["file:///b"]);
-        assert_eq!(total.errors, ["c: failed"]);
+        assert_eq!(total.errors, ["c: failed", "d: backup kept"]);
+        assert_eq!(total.recovery, ["d: backup kept"]);
         assert!(total.cancelled);
     }
 }

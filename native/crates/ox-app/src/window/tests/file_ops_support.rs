@@ -22,7 +22,7 @@ pub(in crate::window) fn open_dialog(test: &TestWindow) -> Dialog {
 }
 
 /// The dialog over `test`'s window, if one shows.
-pub(super) fn dialog_over(test: &TestWindow) -> Option<Dialog> {
+pub(in crate::window) fn dialog_over(test: &TestWindow) -> Option<Dialog> {
     gtk::Window::list_toplevels()
         .into_iter()
         .filter_map(|window| window.downcast::<Dialog>().ok())

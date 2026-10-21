@@ -166,6 +166,43 @@ fn copied_items_paste_as_real_files() {
     assert_eq!(fs::read(&pasted).expect("pasted"), b"read me");
 }
 
+/// Cancel while Copy extracts the selection out of a ZIP just stops, as in
+/// Windows Explorer: no message follows.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn cancelling_a_copy_out_of_a_zip_says_nothing() {
+    let fixture = Fixture::standard();
+    // Random bytes, stored: large enough that Cancel comes long before
+    // the extraction could end, and never refused as a ZIP bomb.
+    let script = "import os, sys, zipfile\n\
+                  with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_STORED) as archive:\n\
+                  \x20   archive.writestr('large.bin', os.urandom(64 << 20))\n";
+    let status = std::process::Command::new("python3")
+        .args(["-c", script])
+        .arg(fixture.path("Large.zip"))
+        .status()
+        .expect("Python 3 writes the fixture archive");
+    assert!(status.success());
+    let test = opening_zips_as_folders(&fixture);
+    let root = ArchiveLocation::root(&fixture.uri_of("Large.zip"));
+    test.window.navigate(&root.uri()).expect("the ZIP");
+    test.wait_for_listing("the ZIP's listing");
+    test.select_named("large.bin");
+
+    test.activate("copy", None);
+    wait_until("the extraction to start", || {
+        test.window.transfer_panel().is_busy()
+    });
+    test.window.transfer_panel().cancel();
+    wait_until("the extraction to stop", || {
+        !test.window.transfer_panel().is_busy()
+    });
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+
+    assert_eq!(test.window.shown_message(), "", "nothing is said after Cancel");
+}
+
 /// A drag of items inside a ZIP offers a file list that is made only when
 /// the drop asks for it, and names real copies.
 ///

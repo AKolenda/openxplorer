@@ -5,7 +5,8 @@
 //! is a short toast; errors or skipped items open the "Operation result"
 //! dialog listing each; a request refused before it started opens
 //! "Operation stopped" with the refusal. Unlike `app.js`, a cancelled
-//! operation says nothing, as in Windows Explorer.
+//! operation says nothing, as in Windows Explorer, unless something needs
+//! recovery by hand.
 
 use super::journal::JournalDirection;
 use super::undo::UndoRecord;
@@ -27,7 +28,8 @@ pub enum OperationSummary {
     /// with one line per fact.
     Report(String),
     /// The user cancelled: nothing is said, as in Windows Explorer, also
-    /// when items failed or were skipped before.
+    /// when items failed or were skipped before. A problem the user must
+    /// sort out by hand is still a [`Self::Report`].
     Cancelled,
 }
 
@@ -102,13 +104,16 @@ fn summarize_items(message: &str, result: &TransferResult) -> OperationSummary {
     problems(result)
 }
 
-/// What is said about a run that did not fully succeed: nothing once the
-/// user cancelled, otherwise the report.
+/// What is said about a run that did not fully succeed: once the user
+/// cancelled, only what needs recovery by hand, otherwise the report.
 fn problems(result: &TransferResult) -> OperationSummary {
-    if result.cancelled {
+    if !result.cancelled {
+        return OperationSummary::Report(report_lines(result));
+    }
+    if result.recovery.is_empty() {
         return OperationSummary::Cancelled;
     }
-    OperationSummary::Report(report_lines(result))
+    OperationSummary::Report(result.recovery.join("\n"))
 }
 
 /// True when nothing failed, nothing was skipped and nobody cancelled.
@@ -142,7 +147,7 @@ mod tests {
             skipped: vec![String::from("file:///tmp/skipped"); skipped],
             errors: errors.iter().map(ToString::to_string).collect(),
             cancelled,
-            landed: Vec::new(),
+            ..TransferResult::default()
         }
     }
 
@@ -212,6 +217,23 @@ mod tests {
             assert_eq!(summarize_duplicate(outcome), OperationSummary::Cancelled);
             assert_eq!(summarize_undo(&record, outcome), OperationSummary::Cancelled);
         }
+    }
+
+    /// Cancel never hides a problem the user must sort out by hand, such
+    /// as a kept backup; only those lines are reported.
+    ///
+    /// parity: OPS-023, XFER-003
+    #[test]
+    fn a_cancelled_run_still_reports_what_needs_recovery() {
+        let backup = "document: Replacement completed, but the prior file remains at file:///tmp/b.";
+        let outcome = TransferResult {
+            recovery: vec![backup.to_owned()],
+            ..result(1, 1, &["a.txt: Permission denied", backup], true)
+        };
+
+        let summary = summarize(TransferMode::Copy, &outcome);
+
+        assert_eq!(summary, OperationSummary::Report(backup.into()));
     }
 
     #[test]

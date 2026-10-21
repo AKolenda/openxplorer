@@ -83,6 +83,7 @@ impl BrowserWindow {
                         &summarize(TransferMode::Copy, &outcome.result),
                         Destination::items(outcome.created),
                     ),
+                    Err(error) if error.is_cancelled() => {}
                     Err(error) => window
                         .show_result_dialog(ox_core::i18n::gettext_static(STOPPED_TITLE), &error.to_string()),
                 }

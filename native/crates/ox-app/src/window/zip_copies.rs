@@ -53,11 +53,12 @@ impl BrowserWindow {
     /// # Errors
     ///
     /// The message to show: another operation runs, the folder of copies
-    /// cannot be made, or the extraction refused or failed.
+    /// cannot be made, or the extraction refused or failed. `None` when
+    /// the user cancelled.
     pub(super) async fn copy_out_of_zip(
         &self,
         locations: Vec<ArchiveLocation>,
-    ) -> Result<(Vec<String>, Option<String>), String> {
+    ) -> Result<Option<(Vec<String>, Option<String>)>, String> {
         let first = locations
             .first()
             .ok_or_else(|| ox_core::i18n::gettext_static("Select the items to copy.").to_owned())?;
@@ -94,10 +95,10 @@ impl BrowserWindow {
             destination_uri: file_uri(&root),
             folder_name: folder_name.clone(),
         };
-        let extracted = self
-            .run_extraction(request, Some(&members))
-            .await
-            .map_err(|error| crate::archive_view::extraction_failure_text(&error))?;
+        let extracted = match self.run_extraction(request, Some(&members)).await {
+            Err(error) if error.is_cancelled() => return Ok(None),
+            extracted => extracted.map_err(|error| crate::archive_view::extraction_failure_text(&error))?,
+        };
         let folder: PathBuf = gio::File::for_uri(&extracted.uri)
             .path()
             .unwrap_or_else(|| root.join(folder_name));
@@ -105,7 +106,7 @@ impl BrowserWindow {
             .iter()
             .map(|member| file_uri(&copied_member(&folder, member)))
             .collect();
-        Ok((copies, left_out_note(extracted.summary.left_out)))
+        Ok(Some((copies, left_out_note(extracted.summary.left_out))))
     }
 
     /// Copy inside a ZIP: extracts the selection, then puts the copies on
@@ -121,7 +122,9 @@ impl BrowserWindow {
             self,
             async move {
                 let (copies, note) = match window.copy_out_of_zip(locations).await {
-                    Ok(copied) => copied,
+                    Ok(Some(copied)) => copied,
+                    // Windows Explorer says nothing after Cancel.
+                    Ok(None) => return,
                     Err(message) => {
                         window.show_message(&message);
                         return;
@@ -151,7 +154,10 @@ impl BrowserWindow {
                 let Some(window) = window.upgrade() else {
                     return Err(ox_core::i18n::gettext_static("The window closed.").to_owned());
                 };
-                let (copies, note) = window.copy_out_of_zip(locations).await?;
+                // A drop needs an answer, so a cancelled copy refuses it.
+                let (copies, note) = window.copy_out_of_zip(locations).await?.ok_or_else(|| {
+                    crate::archive_view::extraction_failure_text(&ox_core::archive::ArchiveError::Cancelled)
+                })?;
                 if let Some(note) = note {
                     window.show_message(&note);
                 }

@@ -628,8 +628,13 @@ impl TransferEngine {
         // XFER-003 and XFER-010: cancellation must not hide the location of
         // a retained backup or another problem that requires manual
         // recovery.
-        if !cancelled || matches!(error, TransferError::RecoveryRequired(_)) {
-            result.errors.push(format!("{}: {error}", self.display_name(uri)));
+        let needs_recovery = matches!(error, TransferError::RecoveryRequired(_));
+        if !cancelled || needs_recovery {
+            let message = format!("{}: {error}", self.display_name(uri));
+            if needs_recovery {
+                result.recovery.push(message.clone());
+            }
+            result.errors.push(message);
         }
     }
 
@@ -641,7 +646,9 @@ impl TransferEngine {
         };
         let root = stage.root();
         if let Err(problem) = discard_stage(root, staging.created, staging.place, &*self.sleep) {
-            result.errors.push(leftover_report(root, staging.place, &problem));
+            let message = leftover_report(root, staging.place, &problem);
+            result.recovery.push(message.clone());
+            result.errors.push(message);
         }
     }
 
