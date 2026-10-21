@@ -89,7 +89,7 @@ fn the_command_bar_has_the_current_controls_in_order() {
             "Paste files (Ctrl+V)",
             "Rename (F2)",
             "Copy path (does not change sharing permissions)",
-            "Move to Trash (Delete)",
+            "Delete (Delete)",
             "|",
             "Sort",
             "View",
@@ -118,7 +118,7 @@ fn the_edit_commands_follow_the_selection_with_their_python_tooltips() {
         ("win.cut", "Cut (Ctrl+X)"),
         ("win.copy", "Copy (Ctrl+C)"),
         ("win.rename", "Rename (F2)"),
-        ("win.trash", "Move to Trash (Delete)"),
+        ("win.trash", "Delete (Delete)"),
     ];
     for (action, tooltip) in edit_commands {
         let button = command_button(&test, action);

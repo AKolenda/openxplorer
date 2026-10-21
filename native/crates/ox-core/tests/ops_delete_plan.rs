@@ -13,7 +13,7 @@ use std::path::Path;
 
 use gio::prelude::*;
 
-use ox_core::ops::{plan_delete, trash_support, DeleteItem, OpsError};
+use ox_core::ops::{plan_delete, DeleteItem, OpsError};
 use ox_core::transfer::Cancellation;
 
 use ops_support::{block_on, file_uri};
@@ -44,10 +44,8 @@ fn an_item_whose_folder_cannot_be_queried_is_planned_for_permanent_delete_like_p
     ];
     let cancel = Cancellation::new();
 
-    let local_trash = block_on(trash_support(&file_uri(temp.path()), &cancel));
     let plan = block_on(plan_delete(&items, &cancel)).unwrap();
 
-    assert_eq!(local_trash, Ok(Some(true)));
     assert_eq!(plan.to_trash, [file_uri(&local)]);
     assert_eq!(plan.to_delete, [file_uri(&vanished)]);
     assert_eq!(plan.confirmation().title, "Delete items?");
@@ -71,11 +69,9 @@ fn an_item_in_a_folder_inside_a_read_only_folder_goes_to_the_trash() {
     let cancel = Cancellation::new();
 
     set_folder_mode(&locked, 0o555);
-    let support = block_on(trash_support(&file_uri(&home), &cancel));
     let plan = block_on(plan_delete(std::slice::from_ref(&item), &cancel));
     set_folder_mode(&locked, 0o755);
 
-    assert_eq!(support, Ok(Some(true)));
     let plan = plan.unwrap();
     assert_eq!(plan.to_trash, [item.uri]);
     assert!(plan.to_delete.is_empty());
@@ -97,11 +93,9 @@ fn an_item_gio_reports_without_a_trash_is_planned_for_permanent_delete() {
     let cancel = Cancellation::new();
 
     set_folder_mode(&folder, 0o555);
-    let support = block_on(trash_support(&file_uri(&folder), &cancel));
     let plan = block_on(plan_delete(std::slice::from_ref(&item), &cancel));
     set_folder_mode(&folder, 0o755);
 
-    assert_eq!(support, Ok(Some(false)));
     let plan = plan.unwrap();
     assert!(plan.to_trash.is_empty());
     assert_eq!(plan.to_delete, [item.uri]);
@@ -148,11 +142,8 @@ fn a_share_that_cannot_answer_counts_as_having_a_trash() {
     };
     let cancel = Cancellation::new();
 
-    let support = block_on(trash_support("smb://example.invalid/share", &cancel));
     let plan = block_on(plan_delete(std::slice::from_ref(&item), &cancel)).unwrap();
 
-    assert!(matches!(support, Err(OpsError::NotMounted(_))), "{support:?}");
-    assert!(support.unwrap_err().needs_mount());
     assert_eq!(plan.to_trash, [item.uri]);
     assert!(plan.to_delete.is_empty());
     assert_eq!(plan.confirmation().title, "Move to Trash?");
@@ -169,21 +160,8 @@ fn a_cancelled_trash_check_reports_the_cancellation_and_plans_nothing() {
     let cancelled = Cancellation::new();
     cancelled.cancel();
 
-    let support = block_on(trash_support(&file_uri(temp.path()), &cancelled));
     let plan = block_on(plan_delete(std::slice::from_ref(&item), &cancelled));
 
-    assert_eq!(support, Err(OpsError::Cancelled));
     assert_eq!(plan, Err(OpsError::Cancelled));
     assert!(temp.path().join("a.txt").exists());
-}
-
-/// An empty folder has no item for GIO to answer about, so its Trash
-/// support stays unknown and is asked again once it holds items.
-#[test]
-fn an_empty_folder_leaves_its_trash_support_unknown() {
-    let temp = tempfile::tempdir().unwrap();
-
-    let support = block_on(trash_support(&file_uri(temp.path()), &Cancellation::new()));
-
-    assert_eq!(support, Ok(None));
 }

@@ -603,16 +603,16 @@
     },
     "trashSupport": {
       "status": "native-tested",
-      "note": "ox_core::ops::trash_support asks access::can-trash as trash_support in v2.0.0:desktop/gio_backend.py does, but of an item in the folder rather than the folder itself, whose answer is about its own parent (a folder directly in the home folder would otherwise count as having no Trash because only root may change /home); it is tested on a local folder, a folder inside a read-only folder, a folder GIO reports without a Trash, an empty folder and a share that is not mounted, which reaches the caller as not-mounted so it can mount and ask again. ox_core::ops::plan_delete asks GIO about each item and reuses an answer for the rest of its folder. Native: The window asks each folder it shows once and labels Delete from the answer; each Delete decides every item with plan_delete.",
+      "note": "trash_support in v2.0.0:desktop/gio_backend.py asked access::can-trash of a folder; ox_core::ops::plan_delete asks it of each selected item instead, because a folder's own answer is about its parent (a folder directly in the home folder would otherwise count as having no Trash because only root may change /home). An item that can go to the Trash answers for the rest of its folder; one that cannot answers only for itself. It is tested on a local folder, a folder inside a read-only folder, a folder GIO reports without a Trash, a vanished item beside one that is kept, and a share that is not mounted, which counts as having a Trash. Native: the window no longer asks folders in advance; Delete is named plainly and each Delete decides every item with plan_delete.",
       "evidence": [
         "native/crates/ox-core/tests/ops_delete_plan.rs::an_item_whose_folder_cannot_be_queried_is_planned_for_permanent_delete_like_python",
         "native/crates/ox-core/tests/ops_delete_plan.rs::an_item_in_a_folder_inside_a_read_only_folder_goes_to_the_trash",
         "native/crates/ox-core/tests/ops_delete_plan.rs::an_item_gio_reports_without_a_trash_is_planned_for_permanent_delete",
         "native/crates/ox-core/tests/ops_delete_plan.rs::an_item_gio_cannot_answer_for_does_not_decide_for_its_folder",
-        "native/crates/ox-core/tests/ops_delete_plan.rs::an_empty_folder_leaves_its_trash_support_unknown",
         "native/crates/ox-core/tests/ops_delete_plan.rs::a_share_that_cannot_answer_counts_as_having_a_trash",
         "native/crates/ox-core/tests/ops_delete_plan.rs::a_cancelled_trash_check_reports_the_cancellation_and_plans_nothing",
-        "native/crates/ox-app/src/window/file_ops/trash_support.rs::delete_reads_delete_permanently_only_where_no_trash_is_known",
+        "native/crates/ox-core/src/ops/delete_plan.rs::a_remote_item_without_a_trash_does_not_decide_for_its_folder",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::delete_reads_delete_and_asks_only_for_items_without_a_trash",
         "native/crates/ox-app/src/window/tests/file_operations.rs::delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores",
         "native/crates/ox-app/src/window/tests/file_operations.rs::delete_trashes_an_item_in_a_folder_whose_own_folder_is_read_only"
       ]

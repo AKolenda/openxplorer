@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Deciding what Delete does with each item, and the confirmation that
-//! says so (OPS-015, OPS-017, OPS-018, CMD-003).
+//! says so (OPS-015, OPS-017, OPS-018).
 //!
 //! Ports `trash_support` in `v2.0.0:desktop/gio_backend.py` and `trashScope`,
-//! `trashSupported`, `deleteLabel` and the confirmation of `trash` in
+//! `trashSupported` and the confirmation of `trash` in
 //! `v2.0.0:desktop/ui/app.js`. Each item is decided by what GIO reports for the
 //! item itself (`access::can-trash`): where it can go to the Trash it goes
 //! there, elsewhere (SMB shares, most remote backends, tmpfs) it is deleted
@@ -13,75 +13,13 @@
 //! directly in the home folder, whose parent `/home` only root may change,
 //! would wrongly count as having no Trash.
 
-use std::collections::HashMap;
-
-use gio::prelude::*;
+use std::collections::HashSet;
 
 use super::context::{on_worker, unless_cancelled};
 use super::error::OpsError;
 use crate::gio_node::GioNode;
-use crate::location::{normalise, parent_location};
-use crate::transfer::{Cancellation, Node, TransferError};
-
-/// Whether items in the folder at `folder_uri` go to the Trash: what GIO
-/// reports for the first item listed in it (`access::can-trash`). An
-/// empty folder has nothing to ask about and answers `None`, so the
-/// question is asked again once it holds items.
-///
-/// # Errors
-///
-/// An address that is not a supported location, [`OpsError::NotMounted`]
-/// when the share must be mounted first (mount it and ask again), or
-/// [`OpsError::Cancelled`]. Every other failure answers `false`, as
-/// `trash_support` in `v2.0.0:desktop/gio_backend.py` does.
-pub async fn trash_support(folder_uri: &str, cancel: &Cancellation) -> Result<Option<bool>, OpsError> {
-    let folder = GioNode::new(&normalise(folder_uri)?);
-    let cancel = cancel.clone();
-    on_worker(move || {
-        let first_item = unless_cancelled(&cancel, || first_item_in(&folder.uri(), &cancel))?;
-        let Some(item) = first_item? else {
-            return Ok(None);
-        };
-        let can_trash = unless_cancelled(&cancel, || item.can_trash(Some(&cancel)))?;
-        Ok(Some(can_trash?))
-    })
-    .await
-}
-
-/// The first item listed in the folder at `folder_uri`, `None` when it is
-/// empty or cannot be listed.
-///
-/// # Errors
-///
-/// [`TransferError::NotMounted`] when the share must be mounted first.
-fn first_item_in(folder_uri: &str, cancel: &Cancellation) -> Result<Option<GioNode>, TransferError> {
-    let folder = gio::File::for_uri(folder_uri);
-    let cancellable = Some(cancel.cancellable());
-    let listed = folder.enumerate_children(
-        "standard::name",
-        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-        cancellable,
-    );
-    let children = match listed {
-        Ok(children) => children,
-        Err(error) if error.matches(gio::IOErrorEnum::NotMounted) => return Err(error.into()),
-        Err(_) => return Ok(None),
-    };
-    let first = children.next_file(cancellable).ok().flatten();
-    // Closing only releases the listing; nothing is lost when it fails.
-    let _ = children.close(cancellable);
-    Ok(first.map(|info| GioNode::from_file(folder.child(info.name()))))
-}
-
-/// The Delete command's label for an item in a folder whose Trash support
-/// is `trash_support` (`None` while unknown): "Delete permanently" only
-/// where the folder is known to have no Trash.
-pub fn delete_command_label(trash_support: Option<bool>) -> &'static str {
-    match trash_support {
-        Some(false) => crate::i18n::gettext_static("Delete permanently"),
-        Some(true) | None => crate::i18n::gettext_static("Move to Trash"),
-    }
-}
+use crate::location::parent_location;
+use crate::transfer::{Cancellation, Node};
 
 /// One selected item, as the confirmation names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,11 +60,11 @@ pub struct DeleteConfirmation {
 ///
 /// GIO's answer comes from the folder that holds the item, so an item
 /// that can go to the Trash answers for the rest of its folder, which is
-/// then not asked again. An item that cannot answers only for itself in
-/// a local folder: it may be one that vanished since the listing, or
-/// another user's file in a shared folder such as `/tmp`. On a remote
-/// location the first answer stands for the folder either way, so a large
-/// selection on a share costs one query, as before.
+/// then not asked again. An item that cannot answers only for itself,
+/// locally or on a remote location: it may be one that vanished since the
+/// listing, or another user's file in a shared folder such as `/tmp`, and
+/// its siblings may still go to the Trash. A selection on a share without
+/// a Trash is therefore asked about item by item.
 ///
 /// OPS-017: an item on a share that is not mounted, which GIO cannot be
 /// asked about, counts as going to the Trash, so that failure never turns
@@ -147,7 +85,18 @@ pub async fn plan_delete(items: &[DeleteItem], cancel: &Cancellation) -> Result<
 
 /// [`plan_delete`] on the calling thread.
 fn plan_delete_blocking(items: &[DeleteItem], cancel: &Cancellation) -> Result<DeletePlan, OpsError> {
-    let mut trash_by_folder: HashMap<String, bool> = HashMap::new();
+    plan_with(items, cancel, |uri| item_has_trash(uri, cancel))
+}
+
+/// [`plan_delete`] with `has_trash` answering for each item it asks
+/// about.
+fn plan_with(
+    items: &[DeleteItem],
+    cancel: &Cancellation,
+    mut has_trash: impl FnMut(&str) -> Result<bool, OpsError>,
+) -> Result<DeletePlan, OpsError> {
+    // Folders where an item answered that it goes to the Trash.
+    let mut folders_with_trash: HashSet<String> = HashSet::new();
     let mut plan = DeletePlan {
         to_trash: Vec::new(),
         to_delete: Vec::new(),
@@ -156,16 +105,9 @@ fn plan_delete_blocking(items: &[DeleteItem], cancel: &Cancellation) -> Result<D
     for item in items {
         cancel.check()?;
         let folder = trash_scope(&item.uri);
-        let has_trash = if let Some(&known) = trash_by_folder.get(&folder) {
-            known
-        } else {
-            let answer = item_has_trash(&item.uri, cancel)?;
-            if answer || !is_local(&folder) {
-                trash_by_folder.insert(folder, answer);
-            }
-            answer
-        };
-        if has_trash {
+        let goes_to_trash = folders_with_trash.contains(&folder) || has_trash(&item.uri)?;
+        if goes_to_trash {
+            folders_with_trash.insert(folder);
             plan.to_trash.push(item.uri.clone());
         } else {
             plan.to_delete.push(item.uri.clone());
@@ -178,11 +120,6 @@ fn plan_delete_blocking(items: &[DeleteItem], cancel: &Cancellation) -> Result<D
 /// when it has none (`trashScope` in `app.js`).
 fn trash_scope(uri: &str) -> String {
     parent_location(uri).unwrap_or_else(|| uri.to_owned())
-}
-
-/// True for a `file:` location.
-fn is_local(uri: &str) -> bool {
-    gio::File::for_uri(uri).has_uri_scheme("file")
 }
 
 /// Whether the item at `item_uri` goes to the Trash, by the rules of
@@ -340,13 +277,6 @@ mod tests {
     }
 
     #[test]
-    fn delete_says_permanently_only_where_no_trash_is_known() {
-        assert_eq!(delete_command_label(Some(false)), "Delete permanently");
-        assert_eq!(delete_command_label(Some(true)), "Move to Trash");
-        assert_eq!(delete_command_label(None), "Move to Trash");
-    }
-
-    #[test]
     fn a_cancelled_trash_query_is_a_cancellation_not_a_permanent_delete() {
         let temp = tempfile::tempdir().expect("a temporary folder");
         let item_uri = gio::File::for_path(temp.path()).uri().to_string();
@@ -356,6 +286,56 @@ mod tests {
         let answer = item_has_trash(&item_uri, &cancelled);
 
         assert_eq!(answer, Err(OpsError::Cancelled));
+    }
+
+    fn items(uris: &[&str]) -> Vec<DeleteItem> {
+        uris.iter()
+            .map(|uri| DeleteItem {
+                uri: (*uri).to_owned(),
+                name: (*uri).to_owned(),
+            })
+            .collect()
+    }
+
+    /// A remote item that cannot go to the Trash, such as one that vanished
+    /// since the listing, does not decide for its siblings: each of them is
+    /// asked, and the one that can goes to the Trash.
+    #[test]
+    fn a_remote_item_without_a_trash_does_not_decide_for_its_folder() {
+        let selection = items(&["sftp://host/dir/gone.txt", "sftp://host/dir/kept.txt"]);
+        let mut asked = Vec::new();
+
+        let plan = plan_with(&selection, &Cancellation::new(), |uri| {
+            asked.push(uri.to_owned());
+            Ok(uri.ends_with("kept.txt"))
+        })
+        .unwrap();
+
+        assert_eq!(asked, ["sftp://host/dir/gone.txt", "sftp://host/dir/kept.txt"]);
+        assert_eq!(plan.to_trash, ["sftp://host/dir/kept.txt"]);
+        assert_eq!(plan.to_delete, ["sftp://host/dir/gone.txt"]);
+    }
+
+    /// An item that can go to the Trash answers for the rest of its
+    /// folder, so a large selection asks once per folder.
+    #[test]
+    fn an_item_with_a_trash_answers_for_its_folder() {
+        let selection = items(&[
+            "sftp://host/dir/a",
+            "sftp://host/dir/b",
+            "file:///tmp/c",
+            "file:///tmp/d",
+        ]);
+        let mut asked = Vec::new();
+
+        let plan = plan_with(&selection, &Cancellation::new(), |uri| {
+            asked.push(uri.to_owned());
+            Ok(true)
+        })
+        .unwrap();
+
+        assert_eq!(asked, ["sftp://host/dir/a", "file:///tmp/c"]);
+        assert_eq!(plan.to_trash.len(), 4);
     }
 
     #[test]

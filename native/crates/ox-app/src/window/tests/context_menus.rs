@@ -69,7 +69,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Paste",
             "-",
             "Rename",
-            "Move to Trash",
+            "Delete",
             "Duplicate",
             "Copy path",
             "Compress to ZIP file",
@@ -149,7 +149,7 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         "Cut",
         "Copy",
         "Rename",
-        "Move to Trash",
+        "Delete",
         "Duplicate",
         "Copy path",
         "Properties",
@@ -171,7 +171,7 @@ fn the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one() 
     assert_eq!(menu.style(), MenuStyle::Compact);
     assert_eq!(
         menu.strip_labels(),
-        ["Cut", "Copy", "Paste into folder", "Rename", "Move to Trash"]
+        ["Cut", "Copy", "Paste into folder", "Rename", "Delete"]
     );
     assert!(!menu.row_labels().contains(&"Cut".to_owned()));
     menu.row("Show more options").emit_activate();

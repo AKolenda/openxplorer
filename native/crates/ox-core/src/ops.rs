@@ -103,8 +103,7 @@ pub use conflicts::find_conflicts;
 pub use context::{FailureAsker, MoveByCopyingAsker, OperationContext, UnstorableAsker, WriteProtection};
 pub use create::{create_folder_path, create_item, create_numbered_folder, CreatedFolderPath, CreatedItem};
 pub use delete_plan::{
-    delete_command_label, permanent_delete_confirmation, plan_delete, trash_support, DeleteConfirmation,
-    DeleteItem, DeletePlan,
+    permanent_delete_confirmation, plan_delete, DeleteConfirmation, DeleteItem, DeletePlan,
 };
 pub use duplicate::duplicate_items;
 pub use error::OpsError;

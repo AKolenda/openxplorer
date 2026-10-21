@@ -28,7 +28,7 @@
 //! | `jobs` | Bounded concurrent transfers, independent panels and overlapping-path refusal |
 //! | `unfinished` | Marks of running copies, and what a crashed run left behind |
 //! | `availability` | When each file command is enabled (`updateToolbar`) |
-//! | `trash_support` | Whether each folder has a Trash, which labels Delete |
+//! | `delete_label` | The name of Delete: "Delete", or "Delete permanently" in the Recycle Bin |
 //! | `names` | The name check of the name dialogs (`validateName`) |
 //! | `name_dialog` | The dialog that asks for a name (`nameDialog`) |
 //! | `new_items` | New folder, and New file from a template |
@@ -60,6 +60,7 @@ mod conflict_compare;
 mod conflict_dialog;
 mod conflict_rename;
 mod delete;
+mod delete_label;
 mod duplicate;
 mod extension_confirm;
 mod failure_dialog;
@@ -80,7 +81,6 @@ mod shortcuts;
 mod template_dialog;
 mod template_menu;
 mod transfer;
-mod trash_support;
 mod unfinished;
 mod unstorable_dialog;
 mod worker_question;
@@ -92,7 +92,6 @@ use ox_core::transfer::Cancellation;
 pub(super) use availability::FileCommand;
 pub(super) use shortcuts::file_key_bindings;
 pub(super) use transfer::IncomingItems;
-pub(super) use trash_support::TrashSupport;
 
 /// What the window's file operations remember between commands.
 #[derive(Debug, Default)]
@@ -106,8 +105,6 @@ pub(crate) struct FileOperations {
     /// conflicts (`state.transferPlanning`), so a second paste cannot
     /// start meanwhile.
     planning: bool,
-    /// Whether each folder has a Trash, as far as known (CMD-003).
-    trash_support: TrashSupport,
     /// The file list on the desktop's clipboard, as last read; `None`
     /// when it holds no files (`state.clipboard`, CLIP-009).
     clipboard: Option<ClipboardFiles>,

@@ -6,6 +6,11 @@
   app asked whether their folder could be trashed instead of the items.
   Only a place with really no Recycle Bin (a network share, a read-only
   drive, `/tmp`) still asks before deleting permanently.
+- The Delete command is named plainly "Delete" in the command bar and the
+  right-click menu, as in Windows Explorer, instead of "Move to Trash" or
+  "Delete permanently" guessed from one item of the folder; only the
+  question Delete asks says when items are deleted permanently. In the
+  Recycle Bin it still reads "Delete permanently".
 
 # 2.0.6 — 2026-10-13
 

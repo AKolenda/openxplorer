@@ -442,6 +442,39 @@ fn delete_trashes_an_item_in_a_folder_whose_own_folder_is_read_only() {
     });
 }
 
+/// Delete is named plainly "Delete", as in Windows Explorer, also where
+/// GIO reports that the items cannot go to the Trash: only the question
+/// Delete then asks says that they are deleted permanently.
+///
+/// parity: CMD-003, OPS-015
+#[gtk::test]
+fn delete_reads_delete_and_asks_only_for_items_without_a_trash() {
+    let fixture = Fixture::standard();
+    let set_folder_mode = |mode| {
+        fs::set_permissions(fixture.root(), fs::Permissions::from_mode(mode)).expect("chmod the fixture");
+    };
+    set_folder_mode(0o555);
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Résumé.txt"]);
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(500));
+
+    let tooltip = delete_button(&test).tooltip_text();
+    test.activate("trash", None);
+    let dialog = open_dialog(&test);
+    let (title, message) = (dialog.title_text(), dialog.message_text());
+    dialog.press("Cancel");
+    wait_for_no_dialog(&test);
+    set_folder_mode(0o755);
+
+    assert_eq!(tooltip.as_deref(), Some("Delete (Delete)"));
+    assert_eq!(title, "Delete permanently?");
+    assert_eq!(
+        message,
+        "Résumé.txt\n\nThis location has no Trash. The items are deleted permanently and cannot be recovered."
+    );
+    assert!(fixture.path("Résumé.txt").is_file());
+}
+
 /// With "Ask before moving items to the Recycle Bin" off, Delete trashes
 /// at once, and with "Ask before deleting permanently" off Shift+Delete
 /// deletes at once; with "Ask before closing a window with several tabs"
@@ -591,7 +624,7 @@ fn shift_choosing_delete_in_the_right_click_menu_asks_to_delete_permanently() {
     wait_until("the menu", || menu.is_visible());
 
     test.window.hold_shift_for_tests(true);
-    menu.row("Move to Trash").emit_activate();
+    menu.row("Delete").emit_activate();
     test.window.hold_shift_for_tests(false);
     let dialog = open_dialog(&test);
 
