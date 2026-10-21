@@ -431,10 +431,18 @@ fn the_owner_changes_a_files_permissions() {
 
     let mode = || fs::metadata(&path).expect("metadata").permissions().mode() & 0o7777;
     wait_until("the new mode", || mode() == 0o600);
-    // The mode can change on disk before the result reaches the window.
-    wait_until("the confirmation", || {
-        test.window.shown_message() == "Permissions changed."
-    });
+    // The mode can change on disk before the result reaches the window,
+    // which turns Apply on again.
+    let apply = descendants::<gtk::Button>(&permissions)
+        .into_iter()
+        .find(|button| button_label(button).as_deref() == Some("Apply permissions"))
+        .expect("the Apply permissions button");
+    wait_until("the change to finish", || apply.is_sensitive());
+    assert_eq!(
+        test.window.shown_message(),
+        "",
+        "a change shows no message, as Windows Explorer"
+    );
 
     // Advanced Permissions set single bits, such as Others Exec and
     // Set GID, which the three accesses cannot say.

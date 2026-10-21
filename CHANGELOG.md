@@ -1,3 +1,11 @@
+# Unreleased
+
+- Copy, Cut, Copy path, Pin to Quick access, Remove saved location,
+  Sign out of a server, the text size keys and the Properties buttons
+  (Apply permissions, Change icon, Restore default icon, copying a
+  checksum, the setup command or the full path) no longer show a message
+  when they work, as in Windows Explorer. Errors and refusals still show.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed

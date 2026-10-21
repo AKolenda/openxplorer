@@ -29,8 +29,6 @@ pub(super) const MISMATCH: &str = crate::i18n::message_id("Checksums do not matc
 const NOT_A_CHECKSUM: &str = crate::i18n::message_id("Enter an MD5, SHA1, SHA256 or SHA512 checksum.");
 /// Above the field for the expected checksum.
 const VERIFY_NOTE: &str = crate::i18n::message_id("Paste the checksum the file should have to check it.");
-/// The toast after a checksum was copied.
-const COPIED: &str = crate::i18n::message_id("Checksum copied.");
 
 /// One algorithm's line: its value and its Calculate or Copy button.
 #[derive(Debug)]
@@ -144,9 +142,6 @@ impl Checksums {
         match computed {
             Some(value) => {
                 button.clipboard().set_text(&value);
-                if let Some(window) = button.root().and_downcast::<crate::window::BrowserWindow>() {
-                    window.show_message(ox_core::i18n::gettext_static(COPIED));
-                }
             }
             None => self.calculate(kind),
         }

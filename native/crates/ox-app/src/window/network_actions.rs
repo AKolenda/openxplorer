@@ -157,27 +157,27 @@ impl BrowserWindow {
         let network = self.network_locations();
         let label = network_row(&network, uri).map(|row| row.label.clone());
         let change = share_change(BookmarkAction::Add, uri.to_owned(), label.unwrap_or_default());
-        self.change_network_settings(change, None);
+        self.change_network_settings(change);
     }
 
     /// Remove saved location: deletes the saved entry only; the share stays
     /// mounted and its credentials stay saved (NET-017).
     fn remove_saved_location(&self, uri: &str) {
         let change = share_change(BookmarkAction::Remove, uri.to_owned(), String::new());
-        self.change_network_settings(change, Some("Saved location removed."));
+        self.change_network_settings(change);
     }
 
-    /// Saves `change`, then shows `done`, or why it failed.
-    fn change_network_settings(&self, change: Change, done: Option<&'static str>) {
+    /// Saves `change`; only a failure is shown.
+    fn change_network_settings(&self, change: Change) {
         self.context().change_settings(
             change,
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |result: Result<(), SettingsError>| match (result, done) {
-                    (Ok(()), Some(message)) => window.show_message(message),
-                    (Ok(()), None) => {}
-                    (Err(error), _) => window.show_message(&error.to_string()),
+                move |result: Result<(), SettingsError>| {
+                    if let Err(error) = result {
+                        window.show_message(&error.to_string());
+                    }
                 }
             ),
         );

@@ -445,7 +445,8 @@ fn copy_path_copies_the_selected_items_address_or_the_folders() {
     let message = test.window.shown_message();
     assert_eq!(
         message.as_str(),
-        "Path copied. Sharing permissions are unchanged."
+        "",
+        "copying shows no message, as Windows Explorer"
     );
     test.window.folder_model().select_only(1);
     test.activate("copy-path", None);
@@ -493,8 +494,5 @@ fn copy_path_runs_on_explorers_and_dolphins_keys() {
     let second = fixture.path("Notes 10.txt").display().to_string();
     assert_eq!(explorer_copy, Some(first));
     assert_eq!(clipboard_text(&test), Some(second));
-    assert_eq!(
-        test.window.shown_message().as_str(),
-        "Path copied. Sharing permissions are unchanged."
-    );
+    assert_eq!(test.window.shown_message().as_str(), "", "and says nothing");
 }

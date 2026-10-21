@@ -18,9 +18,6 @@ use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow}
 /// The modifier of Ctrl+C, Ctrl+X and Ctrl+V.
 const CONTROL: gdk::ModifierType = gdk::ModifierType::CONTROL_MASK;
 
-/// The toast after copying one item.
-const ONE_ITEM_COPIED: &str = "1 item(s) copied — ready to paste in another window.";
-
 /// Whether the views show the item called `name` dimmed as cut.
 fn is_shown_cut(test: &TestWindow, name: &str) -> bool {
     let index = test
@@ -81,7 +78,7 @@ fn copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy() {
     show_documents(&test, &fixture);
     test.activate("paste", None);
 
-    assert_eq!(copied, "1 item(s) copied — ready to paste in another window.");
+    assert_eq!(copied, "", "copying shows no message, as Windows Explorer");
     wait_until("the copy to be selected", || {
         test.selected_names() == ["Notes 2.txt"]
     });
@@ -552,7 +549,9 @@ fn ctrl_x_in_a_previous_version_is_refused_and_ctrl_c_copies() {
         cut_message,
         "Previous versions are read-only. Use Restore a copy."
     );
-    assert_eq!(test.window.shown_message(), ONE_ITEM_COPIED);
+    let copied = String::from_utf8(clipboard_bytes(&test, URI_LIST)).expect("a URI list");
+    assert!(copied.contains("Plan.txt"), "Ctrl+C copies: {copied}");
+    assert_eq!(test.window.shown_message(), cut_message, "and adds no message");
 }
 
 /// `onKey` copies even while an operation runs, where the Copy button is
@@ -573,7 +572,9 @@ fn ctrl_c_copies_while_an_operation_runs() {
 
     let message = test.window.shown_message();
     test.window.end_operation();
-    assert_eq!(message, ONE_ITEM_COPIED);
+    let copied = String::from_utf8(clipboard_bytes(&test, URI_LIST)).expect("a URI list");
+    assert!(copied.contains("Notes%202.txt"), "Ctrl+C copies: {copied}");
+    assert_eq!(message, "", "copying shows no message");
 }
 
 /// GTK stores a local clipboard's storable formats with the clipboard
