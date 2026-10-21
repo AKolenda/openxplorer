@@ -42,7 +42,9 @@ use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name};
 use crate::private_storage::KernelOpenFlags;
 use crate::random::{random_hex, NAME_BYTES};
-use crate::transfer::{Cancellation, Node, NodeKind, Progress, ProgressScope, TransferError, WriteGuard};
+use crate::transfer::{
+    Cancellation, Node, NodeKind, Progress, ProgressScope, StagedName, TransferError, WriteGuard,
+};
 use tar_writer::TarXzWriter;
 use zip_writer::{DosTime, ZipWriter, MAX_ENTRIES};
 
@@ -182,10 +184,13 @@ impl ZipCompressor {
         let destination = self.prepare_destination(&destination_uri, &name, cancel)?;
         self.report(format!("Preparing {name}…"), 0.0);
         let plan = plan(&request.uris, cancel)?;
-        let staging = destination.folder.child(OsStr::new(&staging_name()?));
+        let stage_name = staging_name()?;
+        // An error names the new archive, never its staging.
+        let staged = StagedName::new(&stage_name, &[], &name);
+        let staging = destination.folder.child(OsStr::new(&stage_name));
         if let Err(error) = self.write_archive(&plan, staging.as_ref(), is_tar_xz(&name), cancel) {
             remove_staging(staging.as_ref());
-            return Err(error.unless_cancelled(cancel));
+            return Err(error.naming(&staged).unless_cancelled(cancel));
         }
         // Safety rule ARC-023: the rename never replaces an item another
         // program created under the name meanwhile.
@@ -193,7 +198,7 @@ impl ZipCompressor {
             remove_staging(staging.as_ref());
             return Err(match error {
                 TransferError::Exists(_) => ArchiveError::ArchiveExists,
-                other => ArchiveError::from(other).unless_cancelled(cancel),
+                other => ArchiveError::from(other).naming(&staged).unless_cancelled(cancel),
             });
         }
         self.report(format!("Compressed {name}"), 1.0);

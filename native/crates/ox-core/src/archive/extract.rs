@@ -250,7 +250,7 @@ impl ZipExtractor {
         };
         self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)?;
         cancel.check()?;
-        let mut staging = ExtractionStaging::create(destination.folder.as_ref(), cancel)?;
+        let mut staging = ExtractionStaging::create(destination.folder.as_ref(), &name, cancel)?;
         let mut unpacking = Unpacking::new(self, plan.summary, cancel);
         if let Err(error) = unpacking.run(&mut archive, &plan, &mut staging, destination.new_folder.as_ref())
         {

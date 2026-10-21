@@ -7,7 +7,7 @@
 //! branches of `dispatch` in `v2.0.0:desktop/winspace.py`.
 
 use crate::location::LocationError;
-use crate::transfer::{Cancellation, TransferError};
+use crate::transfer::{Cancellation, StagedName, TransferError};
 
 use super::zip::ZipFormatError;
 
@@ -338,6 +338,15 @@ impl ArchiveError {
             ArchiveError::Cancelled
         } else {
             self
+        }
+    }
+
+    /// This error naming the new folder or archive rather than the
+    /// private staging `name` it was built under.
+    pub(crate) fn naming(self, name: &StagedName) -> Self {
+        match self {
+            ArchiveError::Backend(error) => ArchiveError::Backend(name.apply(error)),
+            other => other,
         }
     }
 }

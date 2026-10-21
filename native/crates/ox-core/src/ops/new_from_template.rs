@@ -35,7 +35,7 @@ use super::templates::{list_templates_blocking, TemplateId, MAX_TEMPLATE_BYTES, 
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name, ItemKind};
 use crate::random::{random_hex, NAME_BYTES};
-use crate::transfer::{Cancellation, Node};
+use crate::transfer::{Cancellation, Node, StagedName};
 
 /// Templates are read in blocks of this many bytes, with a cancellation
 /// check before each.
@@ -224,8 +224,11 @@ fn publish_new_file(
             &[("error", &(error).to_string())],
         ))
     })?;
-    let stage = folder.child(format!("{STAGE_PREFIX}{digits}"));
-    write_private_stage(&stage, contents, context)?;
+    let stage_name = format!("{STAGE_PREFIX}{digits}");
+    // An error names the new file, never its stage.
+    let staged = StagedName::new(&stage_name, &[], &target.display_name());
+    let stage = folder.child(&stage_name);
+    write_private_stage(&stage, contents, context).map_err(|error| naming(error, &staged))?;
     // Same folder, never overwriting: the kernel's no-replace rename
     // locally, `set_display_name` on a phone (XFER-007, XFER-024).
     let published = GioNode::from_file(stage.clone()).publish(target, Some(&context.cancel));
@@ -233,10 +236,24 @@ fn publish_new_file(
     if published.is_err() {
         discard_stage(&stage);
     }
-    published.map_err(|error| match OpsError::from(error) {
+    published.map_err(|error| match OpsError::from(staged.apply(error)) {
         OpsError::Exists(_) => OpsError::Exists(crate::i18n::gettext(NAME_TAKEN)),
         other => other,
     })
+}
+
+/// `error` naming the new file rather than its stage file `staged`.
+fn naming(error: OpsError, staged: &StagedName) -> OpsError {
+    match error {
+        OpsError::Cancelled => OpsError::Cancelled,
+        OpsError::NotMounted(message) => OpsError::NotMounted(staged.reword(&message)),
+        OpsError::NotFound(message) => OpsError::NotFound(staged.reword(&message)),
+        OpsError::PermissionDenied(message) => OpsError::PermissionDenied(staged.reword(&message)),
+        OpsError::Exists(message) => OpsError::Exists(staged.reword(&message)),
+        OpsError::NotSupported(message) => OpsError::NotSupported(staged.reword(&message)),
+        OpsError::NotDirectory(message) => OpsError::NotDirectory(staged.reword(&message)),
+        OpsError::Failed(message) => OpsError::Failed(staged.reword(&message)),
+    }
 }
 
 /// Creates `stage` exclusively as a private (0600) file and writes
@@ -337,5 +354,36 @@ mod tests {
             .map(|entry| entry.expect("a folder entry").file_name())
             .collect();
         assert_eq!(names, ["New document.txt"], "no {STAGE_PREFIX} file is left");
+    }
+
+    /// A folder that cannot be written is reported with the new file's
+    /// name and the system's reason, never the stage file's name.
+    ///
+    /// parity: OPS-048
+    #[test]
+    fn a_read_only_folder_is_reported_with_the_new_files_name() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let locked = temp.path().join("Locked");
+        fs::create_dir(&locked).expect("a folder");
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).expect("chmod");
+        // As root, which writes anywhere, there is nothing to report.
+        if fs::write(locked.join("probe"), b"").is_ok() {
+            return;
+        }
+        let folder = gio::File::for_path(&locked);
+        let target = GioNode::from_file(folder.child("New document.txt"));
+
+        let published = publish_new_file(&folder, &target, b"template", &OperationContext::default());
+
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+        let error = published.expect_err("the folder is read-only").to_string();
+        assert!(!error.contains(STAGE_PREFIX), "{error}");
+        assert!(
+            error.contains(&locked.join("New document.txt").display().to_string()),
+            "{error}"
+        );
+        assert!(error.contains("Permission denied"), "{error}");
     }
 }

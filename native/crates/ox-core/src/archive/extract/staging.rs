@@ -15,12 +15,13 @@
 //! - It is published by a rename that never replaces an existing item.
 //! - Any failure removes it; a folder that cannot be removed is reported
 //!   with its location.
+//! - Every other error names the new folder, never the staging folder.
 
 use std::ffi::OsStr;
 
 use crate::archive::ArchiveError;
 use crate::random::{random_hex, NAME_BYTES};
-use crate::transfer::{secure_local_staging, Cancellation, ItemIdentity, Node, TransferError};
+use crate::transfer::{secure_local_staging, Cancellation, ItemIdentity, Node, StagedName, TransferError};
 
 /// Staging folders are `.openxplorer-extract-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-extract-";
@@ -29,25 +30,38 @@ const STAGING_SUFFIX: &str = ".part";
 /// A staging folder this extraction created, which it alone may remove.
 pub(super) struct ExtractionStaging {
     folder: Box<dyn Node>,
+    /// The staging folder's name, and the new folder's name errors use
+    /// for it.
+    name: StagedName,
     /// The local folder's identity, recorded when it was made private, so
     /// cleanup never empties another folder moved in under its name.
     created: Option<ItemIdentity>,
 }
 
 impl ExtractionStaging {
-    /// Creates a new staging folder in `destination`.
+    /// Creates a new staging folder in `destination` for the new folder
+    /// `new_folder`.
     ///
     /// # Errors
     ///
     /// When no random name can be generated or the folder cannot be
     /// created; nothing needs cleaning up then.
-    pub(super) fn create(destination: &dyn Node, cancel: &Cancellation) -> Result<Self, ArchiveError> {
-        let folder = destination.child(OsStr::new(&staging_name()?));
+    pub(super) fn create(
+        destination: &dyn Node,
+        new_folder: &str,
+        cancel: &Cancellation,
+    ) -> Result<Self, ArchiveError> {
+        let stage = staging_name()?;
+        let name = StagedName::new(&stage, &[], new_folder);
+        let folder = destination.child(OsStr::new(&stage));
         // Only a successful, exclusive creation grants cleanup ownership:
         // a name that was taken is never removed.
-        folder.create_directory(Some(cancel))?;
+        folder
+            .create_directory(Some(cancel))
+            .map_err(|error| name.apply(error))?;
         Ok(Self {
             folder,
+            name,
             created: None,
         })
     }
@@ -94,6 +108,7 @@ impl ExtractionStaging {
     /// [`ArchiveError::StagingLeftBehind`] with the folder's location when
     /// it could not be removed. Removal never follows links inside it.
     pub(super) fn discard(self, cause: ArchiveError) -> ArchiveError {
+        let cause = cause.naming(&self.name);
         match self.folder.delete_staging(self.created) {
             Ok(()) => cause,
             Err(cleanup) => ArchiveError::StagingLeftBehind {

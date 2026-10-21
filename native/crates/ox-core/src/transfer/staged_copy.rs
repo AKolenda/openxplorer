@@ -24,8 +24,10 @@
 //! - XFER-002: only staging this item created is recorded for cleanup: a
 //!   failed exclusive `create_directory`, or an upload refused because its
 //!   name exists, grants no right to delete anything.
+//! - XFER-001: the staging stays private in messages too. An error names
+//!   the final item, never the staging it was built in.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 
 use super::cancellation::Cancellation;
 use super::commit::{commit_replace, publish_staged, verify_installation};
@@ -36,6 +38,7 @@ use super::modes::{secure_local_staging, DirectoryModes};
 use super::names::{child_node, staging_name, PAYLOAD_NAME};
 use super::node::{ItemIdentity, Node, NodeKind, WriteGuard};
 use super::source_removal::CopiedItem;
+use super::staged_name::StagedName;
 use super::staging::StagingPlace;
 use super::types::{ConflictPolicy, Progress};
 use super::unstorable::Unstorable;
@@ -156,13 +159,30 @@ impl StagedCopy<'_> {
     /// visible under the final name unless publishing succeeded.
     pub(crate) fn run(mut self, staging: &mut ItemStaging) -> Result<(), TransferError> {
         let stage_name = staging_name()?;
+        let source_name = self.source.name();
+        let final_name = self.destination.name();
+        let name = StagedName::new(
+            &stage_name,
+            &[OsStr::new(PAYLOAD_NAME), &source_name, &final_name],
+            &self.destination.display_name(),
+        );
+        self.build_and_publish(&name, staging)
+            .map_err(|error| name.apply(error))
+    }
+
+    /// [`Self::run`] with the staging named `name`.
+    fn build_and_publish(
+        &mut self,
+        name: &StagedName,
+        staging: &mut ItemStaging,
+    ) -> Result<(), TransferError> {
         let mut modes = DirectoryModes::default();
         staging.place = StagingPlace::of(self.destination_folder);
         let layout = self.layout();
         match layout {
-            Layout::Sibling => self.build_sibling(&stage_name, &mut modes, staging)?,
+            Layout::Sibling => self.build_sibling(name, &mut modes, staging)?,
             Layout::Payload | Layout::SameDeviceCopy => {
-                self.build_in_folder(&stage_name, layout, &mut modes, staging)?;
+                self.build_in_folder(name, layout, &mut modes, staging)?;
             }
         }
         self.cancel.check()?;
@@ -201,15 +221,15 @@ impl StagedCopy<'_> {
         }
     }
 
-    /// XFER-021: builds the item itself under the hidden name `stage_name`
+    /// XFER-021: builds the item itself under the hidden name `name`
     /// beside its final name.
     fn build_sibling(
         &mut self,
-        stage_name: &str,
+        name: &StagedName,
         modes: &mut DirectoryModes,
         staging: &mut ItemStaging,
     ) -> Result<(), TransferError> {
-        let staged_item = child_node(self.destination_folder, stage_name)?;
+        let staged_item = child_node(self.destination_folder, name.stage())?;
         // Nothing can exist under a fresh random name unless another program
         // created it, and then it is not ours to use or remove.
         if staged_item.exists(Some(self.cancel)) {
@@ -217,15 +237,9 @@ impl StagedCopy<'_> {
                 "Could not reserve a private staging name. Nothing was changed.",
             )));
         }
-        let mut copier = Copier::new(
-            self.cancel,
-            stage_name,
-            modes,
-            &mut *self.unstorable,
-            &mut *self.emit,
-        )
-        .recording(self.copied.as_deref_mut())
-        .asking(&mut *self.failures);
+        let mut copier = Copier::new(self.cancel, name, modes, &mut *self.unstorable, &mut *self.emit)
+            .recording(self.copied.as_deref_mut())
+            .asking(&mut *self.failures);
         if self.source_kind == NodeKind::Directory {
             // XFER-002: a failed exclusive folder creation grants no right to
             // clean up this path.
@@ -245,15 +259,15 @@ impl StagedCopy<'_> {
         uploaded
     }
 
-    /// Builds the item inside a new private folder named `stage_name`.
+    /// Builds the item inside a new private folder named `name`.
     fn build_in_folder(
         &mut self,
-        stage_name: &str,
+        name: &StagedName,
         layout: Layout,
         modes: &mut DirectoryModes,
         staging: &mut ItemStaging,
     ) -> Result<(), TransferError> {
-        let folder = child_node(self.destination_folder, stage_name)?;
+        let folder = child_node(self.destination_folder, name.stage())?;
         // XFER-023: a copy within one MTP device runs as CopyObject, which
         // keeps the SOURCE name whatever target is requested: copy under
         // that name.
@@ -270,15 +284,9 @@ impl StagedCopy<'_> {
         // XFER-004: the folder that was made private is the only one cleanup
         // may empty.
         staging.created = secure_local_staging(stage.root())?;
-        let mut copier = Copier::new(
-            self.cancel,
-            stage_name,
-            modes,
-            &mut *self.unstorable,
-            &mut *self.emit,
-        )
-        .recording(self.copied.as_deref_mut())
-        .asking(&mut *self.failures);
+        let mut copier = Copier::new(self.cancel, name, modes, &mut *self.unstorable, &mut *self.emit)
+            .recording(self.copied.as_deref_mut())
+            .asking(&mut *self.failures);
         copier.copy(self.source, stage.item(), 0)?;
         if layout == Layout::SameDeviceCopy {
             self.rename_device_copy(stage)?;
