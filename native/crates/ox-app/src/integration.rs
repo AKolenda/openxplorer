@@ -68,7 +68,7 @@ pub(crate) use applications::{
 pub(crate) use brave_dialog::BraveDialog;
 pub(crate) use changes::{IntegrationError, MakeDefaultChoice};
 pub(crate) use editors::{editor_shortcuts_in_background, EditorShortcut};
-pub(crate) use file_dialog_service::FileDialogsStatus;
+pub(crate) use file_dialog_service::{AfterLogin, FileDialogsStatus};
 pub(crate) use launch_shortcut_service::ShortcutStatus;
 pub(crate) use mime_backend::MimeBackend;
 pub(crate) use open_with_dialog::{Launcher, OpenWithDialog, OpenWithSubject};
