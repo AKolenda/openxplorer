@@ -876,7 +876,10 @@ fn gtk_apps_are_covered_by_an_environment_file() {
     assert!(registration.covers_gtk_apps());
     assert!(!registration.leaves_apps_out());
     if let Some(environment) = environment_from(&fixture.root.path().join("config")) {
-        assert!(environment.contains("\nGTK_USE_PORTAL=1\n"), "{environment}");
+        assert!(
+            environment.lines().any(|line| line == "GTK_USE_PORTAL=1"),
+            "{environment}"
+        );
     }
     registration.disable().expect("disable");
     assert!(!file.exists());
@@ -912,6 +915,31 @@ fn gtk_apps_are_covered_by_an_environment_file() {
         .expect("kept")
         .file_type()
         .is_symlink());
+}
+
+/// Dialogs enabled by an earlier version whose environment file's folder
+/// cannot be read still count as leaving GTK 3 apps out, so Make default
+/// tries Enable and reports the error instead of finding nothing to do.
+///
+/// parity: INT-032
+#[test]
+fn an_unreadable_environment_folder_leaves_gtk_apps_out() {
+    let fixture = OptInFixture::new();
+    let registration = gnome_registration(&fixture);
+    registration.enable().expect("enable");
+    let folder = registration
+        .gtk_env_file()
+        .parent()
+        .expect("the file's folder")
+        .to_path_buf();
+    fs::remove_dir_all(&folder).expect("the folder");
+    fs::write(&folder, "not a folder\n").expect("a file in the folder's place");
+
+    assert!(registration.is_enabled());
+    assert!(!registration.covers_gtk_apps());
+    assert!(!registration.gtk_env_is_someone_elses());
+    assert!(registration.leaves_apps_out(), "Enable has something to report");
+    assert!(registration.enable().is_err(), "the file cannot be written there");
 }
 
 /// An Enable that cannot write the environment file for GTK 3 apps changes

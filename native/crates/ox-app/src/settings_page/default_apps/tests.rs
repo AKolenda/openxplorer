@@ -427,6 +427,39 @@ fn make_default_adds_the_gtk_environment_file_to_dialogs_enabled_before() {
     );
 }
 
+/// Make default says so when GTK 3 apps' environment file cannot be
+/// written for dialogs enabled before, instead of reporting success.
+///
+/// parity: INT-032
+#[gtk::test]
+fn make_default_reports_a_gtk_environment_file_it_cannot_write() {
+    let default_apps = DefaultAppsTest::open();
+    default_apps
+        .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+        .set_active(false);
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the card to say so", || {
+        default_apps.card_title() == "OpenXplorer is your default file explorer"
+    });
+    default_apps.wait_for_status("the status after the change");
+    let folder = default_apps
+        .gtk_env_file()
+        .parent()
+        .expect("the file's folder")
+        .to_path_buf();
+    std::fs::remove_dir_all(&folder).expect("the folder");
+    std::fs::write(&folder, "not a folder\n").expect("a file in the folder's place");
+
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the failure to be told", || {
+        default_apps
+            .test
+            .window
+            .shown_message_text()
+            .starts_with("File handlers updated, but Open and Save dialogs setup failed:")
+    });
+}
+
 /// Restore previous undoes a recorded Enable of the dialogs even when the
 /// portal's configuration cannot be read, and says it failed instead of
 /// reporting everything restored.

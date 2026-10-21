@@ -60,7 +60,7 @@
 //! which the systemd user manager reads at login and passes to the
 //! session; disabling removes it if it still holds what the app wrote. It
 //! applies from the next login. Applications that draw a dialog of their
-//! own (GTK's dialog widget used directly, LibreOffice's, Java's) keep it.
+//! own (GTK's dialog widget used directly, or another toolkit's) keep it.
 
 use std::fs;
 use std::future::Future;
@@ -632,14 +632,18 @@ impl FileDialogRegistration {
         matches!(self.login_file(LoginFile::Gtk), Ok(LoginFileState::Other))
     }
 
-    /// Whether a login file this session needs is missing: with the
+    /// Whether a login file this session needs is not in place: with the
     /// dialogs already using the app (enabled by an earlier version),
-    /// Enable then still has something to do. A file of the user's in its
-    /// place does not count, as Enable leaves it alone.
+    /// Enable then still has something to do, or an error to report when
+    /// its path cannot be read. A file of the user's in its place does not
+    /// count, as Enable leaves it alone.
     pub fn leaves_apps_out(&self) -> bool {
-        self.login_files()
-            .into_iter()
-            .any(|file| matches!(self.login_file(file), Ok(LoginFileState::Missing)))
+        self.login_files().into_iter().any(|file| {
+            !matches!(
+                self.login_file(file),
+                Ok(LoginFileState::Ours | LoginFileState::Other)
+            )
+        })
     }
 
     /// The login files this session needs: GTK's everywhere, and KDE's

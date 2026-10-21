@@ -1094,6 +1094,47 @@ msgstr ""
 msgid "Type a command to run."
 msgstr ""
 
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs are back to the desktop's. Click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs were not using OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 and KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; KDE apps follow after you log out and back in."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: the desktop's ({backend})."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Removed OpenXplorer's line from your portal settings and kept your other edits. Click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "The desktop portal is not running as a service that can be restarted. The choice applies the next time you log in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "The desktop portal restarted. Open and Save dialogs follow the new choice."
+msgstr ""
+
 #: crates/ox-app/src/integration/launch_shortcut_service.rs
 msgid "Available on KDE Plasma with the installed package."
 msgstr ""

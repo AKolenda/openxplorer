@@ -61,39 +61,45 @@ impl FileDialogsStatus {
         !self.is_enabled || self.gtk_apps == LoginApps::NotCovered || self.kde_apps == LoginApps::NotCovered
     }
 
-    /// The row's status line.
+    /// The row's status line, translated sentence by sentence.
     pub(crate) fn text(&self) -> String {
+        use ox_core::i18n::gettext_static as tr;
         if !self.is_available {
-            return "Open and Save dialogs: available in the installed package, not the Flatpak.".to_owned();
+            return tr("Open and Save dialogs: available in the installed package, not the Flatpak.")
+                .to_owned();
         }
         if self.is_enabled {
-            let mut text = "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their \
-                            file dialogs here after Apply now or the next login."
-                .to_owned();
-            match self.gtk_apps {
-                LoginApps::Following => text.push_str(" GTK 3 apps do too."),
-                LoginApps::NextLogin => text.push_str(" GTK 3 apps follow after you log out and back in."),
-                LoginApps::LeftAlone => text.push_str(
-                    " GTK 3 apps keep GTK's dialog: ~/.config/environment.d/60-openxplorer-file-dialogs.conf is \
+            let mut sentences = vec![tr(
+                "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their file dialogs \
+                 here after Apply now or the next login.",
+            )];
+            sentences.extend(match self.gtk_apps {
+                LoginApps::Following => Some(tr("GTK 3 apps do too.")),
+                LoginApps::NextLogin => Some(tr("GTK 3 apps follow after you log out and back in.")),
+                LoginApps::LeftAlone => Some(tr(
+                    "GTK 3 apps keep GTK's dialog: ~/.config/environment.d/60-openxplorer-file-dialogs.conf is \
                      not OpenXplorer's, so it was left alone.",
-                ),
-                LoginApps::NotCovered => text.push_str(" Click Enable for GTK 3 apps too."),
-                LoginApps::NotNeeded => {}
-            }
-            match self.kde_apps {
-                LoginApps::Following => text.push_str(" KDE apps do too."),
-                LoginApps::NextLogin => text.push_str(" KDE apps follow after you log out and back in."),
-                LoginApps::LeftAlone => text.push_str(
-                    " KDE apps keep KDE's dialog: ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh \
-                     is not OpenXplorer's, so it was left alone.",
-                ),
-                LoginApps::NotNeeded | LoginApps::NotCovered => {}
-            }
-            return text;
+                )),
+                LoginApps::NotCovered => Some(tr("Click Enable for GTK 3 apps too.")),
+                LoginApps::NotNeeded => None,
+            });
+            sentences.extend(match self.kde_apps {
+                LoginApps::Following => Some(tr("KDE apps do too.")),
+                LoginApps::NextLogin => Some(tr("KDE apps follow after you log out and back in.")),
+                LoginApps::LeftAlone => Some(tr(
+                    "KDE apps keep KDE's dialog: ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh is \
+                     not OpenXplorer's, so it was left alone.",
+                )),
+                LoginApps::NotNeeded | LoginApps::NotCovered => None,
+            });
+            return sentences.join(" ");
         }
         match self.backend.as_deref() {
-            Some(backend) => format!("Open and Save dialogs: the desktop's ({backend})."),
-            None => "Open and Save dialogs: the desktop's.".to_owned(),
+            Some(backend) => ox_core::i18n::format_message(
+                "Open and Save dialogs: the desktop's ({backend}).",
+                &[("backend", backend)],
+            ),
+            None => tr("Open and Save dialogs: the desktop's.").to_owned(),
         }
     }
 }
@@ -171,21 +177,21 @@ impl DesktopIntegration {
             .run_in_background(|registration| registration.enable().map(|()| AfterLogin::of(registration)))
             .await?;
         self.notify_changed();
-        Ok(match after_login {
-            AfterLogin::Nothing => "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in.",
+        Ok(ox_core::i18n::gettext_static(match after_login {
+            AfterLogin::Nothing => crate::i18n::message_id("Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in."),
             AfterLogin::Gtk => {
-                "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 apps \
-                 follow after you log out and back in."
+                crate::i18n::message_id("Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 apps \
+                 follow after you log out and back in.")
             }
             AfterLogin::Kde => {
-                "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; KDE apps \
-                 follow after you log out and back in."
+                crate::i18n::message_id("Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; KDE apps \
+                 follow after you log out and back in.")
             }
             AfterLogin::GtkAndKde => {
-                "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 and \
-                 KDE apps follow after you log out and back in."
+                crate::i18n::message_id("Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 and \
+                 KDE apps follow after you log out and back in.")
             }
-        }
+        })
         .to_owned())
     }
 
@@ -201,16 +207,18 @@ impl DesktopIntegration {
             .run_in_background(FileDialogRegistration::disable)
             .await?;
         self.notify_changed();
-        Ok(match outcome {
-            DisabledFileDialogs::Restored => {
-                "Open and Save dialogs are back to the desktop's. Click Apply now, or log out and back in."
-            }
-            DisabledFileDialogs::LineRemoved => {
+        Ok(ox_core::i18n::gettext_static(match outcome {
+            DisabledFileDialogs::Restored => crate::i18n::message_id(
+                "Open and Save dialogs are back to the desktop's. Click Apply now, or log out and back in.",
+            ),
+            DisabledFileDialogs::LineRemoved => crate::i18n::message_id(
                 "Removed OpenXplorer's line from your portal settings and kept your other edits. Click \
-                 Apply now, or log out and back in."
+                 Apply now, or log out and back in.",
+            ),
+            DisabledFileDialogs::NotEnabled => {
+                crate::i18n::message_id("Open and Save dialogs were not using OpenXplorer.")
             }
-            DisabledFileDialogs::NotEnabled => "Open and Save dialogs were not using OpenXplorer.",
-        }
+        })
         .to_owned())
     }
 
@@ -226,15 +234,15 @@ impl DesktopIntegration {
             .run_in_background(FileDialogRegistration::restart_portal)
             .await?;
         self.notify_changed();
-        Ok(match restart {
-            PortalRestart::Restarted => {
-                "The desktop portal restarted. Open and Save dialogs follow the new choice."
-            }
-            PortalRestart::NotRunning => {
+        Ok(ox_core::i18n::gettext_static(match restart {
+            PortalRestart::Restarted => crate::i18n::message_id(
+                "The desktop portal restarted. Open and Save dialogs follow the new choice.",
+            ),
+            PortalRestart::NotRunning => crate::i18n::message_id(
                 "The desktop portal is not running as a service that can be restarted. The choice applies \
-                 the next time you log in."
-            }
-        }
+                 the next time you log in.",
+            ),
+        })
         .to_owned())
     }
 
