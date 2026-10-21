@@ -284,6 +284,8 @@ fn a_double_click_on_the_handle_resets_the_sidebar_to_210_and_saves_it() {
 fn changed_view_preferences_are_saved_for_new_windows() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The Python app's view key is saved while every folder shares one.
+    test.share_one_view();
     test.activate("view", Some("large"));
     test.activate("hidden", None);
     wait_until("the preferences to be saved", || {
@@ -437,6 +439,8 @@ fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
 fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     let fixture = Fixture::with_files(12);
     let test = TestWindow::without_tabs();
+    // The window keeps the view it shows while every folder shares one.
+    test.share_one_view();
     test.window.show_view(FolderView::Icons(IconSize::LARGE));
     test.show(&fixture.uri());
     wait_for_frames(&test.window, 4);
@@ -470,6 +474,8 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
 fn a_chosen_view_starts_at_the_top_and_has_explorers_keys() {
     let fixture = Fixture::with_files(300);
     let test = TestWindow::open(&fixture.uri());
+    // The Python app's view key is saved while every folder shares one.
+    test.share_one_view();
     let pane = test.window.folder_pane();
     let last = pane.model().n_items() - 1;
     pane.reveal(last);
@@ -600,6 +606,8 @@ fn text_size_keys_work_inside_dialogs() {
 fn zooming_changes_and_saves_the_view() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The Python app's view key is saved while every folder shares one.
+    test.share_one_view();
     test.window.folder_pane().model().select_only(3);
     test.window.zoom_view(6);
     assert_eq!(

@@ -27,22 +27,6 @@ use crate::window::menu_popover::MenuEntry;
 
 use super::view_styles::{ask_from_folder_options, close_folder_options, open_folder_options};
 
-/// Turns Folder Options' "Remember each folder's view settings" off, so
-/// every folder shares one view and Downloads keeps its Group by apart
-/// from it.
-fn share_one_view(test: &TestWindow) {
-    ox_core::settings::Settings::open(test.settings_directory())
-        .update_preferences(&PreferencesUpdate {
-            per_folder_views: Some(false),
-            ..PreferencesUpdate::default()
-        })
-        .expect("the settings file takes the change");
-    test.context.reload_settings();
-    wait_until("one view for every folder", || {
-        !test.context.settings_data().preferences.per_folder_views
-    });
-}
-
 /// The headings the details view draws, top to bottom.
 fn headings(test: &TestWindow) -> Vec<String> {
     wait_for_frames(&test.window, 3);
@@ -269,7 +253,7 @@ fn downloads_is_grouped_by_date_until_the_user_chooses_otherwise() {
     let home = TestHome::new();
     let downloads = home.downloads();
     let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
-    share_one_view(&test);
+    test.share_one_view();
     assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
     assert_eq!(
         test.names(),
@@ -356,7 +340,7 @@ fn apply_to_all_and_reset_folders_cover_the_group_by_of_downloads() {
     let home = TestHome::new();
     let downloads = home.downloads();
     let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
-    share_one_view(&test);
+    test.share_one_view();
     test.activate("group-by", Some("type"));
     wait_until("the choice to be saved", || {
         test.context.settings_data().preferences.downloads_group_by == Some(GroupBy::Type)

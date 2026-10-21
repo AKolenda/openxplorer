@@ -262,10 +262,21 @@ impl OptionsForm {
     }
 }
 
-/// A tab's Restore Defaults, at its end.
+/// A push button in a tab, drawn as the dialog's own bordered buttons
+/// (Cancel, Apply), as Windows draws Apply to Folders and Reset Folders.
+fn tab_button(label: &str) -> gtk::Button {
+    let button = gtk::Button::with_label(label);
+    button.add_css_class(ButtonStyle::Bordered.css_class());
+    button.add_css_class("dialog-button");
+    button
+}
+
+/// A tab's Restore Defaults, at its bottom right as in Windows.
 fn restore_defaults_button() -> gtk::Button {
-    let button = gtk::Button::with_label(&gettext("Restore Defaults"));
+    let button = tab_button(&gettext("Restore Defaults"));
     button.set_halign(gtk::Align::End);
+    button.set_valign(gtk::Align::End);
+    button.set_vexpand(true);
     button
 }
 
@@ -342,9 +353,9 @@ impl BrowserWindow {
             .build();
         folder_views.append(&text);
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let apply = gtk::Button::with_label(&gettext("Apply to Folders"));
+        let apply = tab_button(&gettext("Apply to Folders"));
         apply.set_sensitive(source);
-        let reset = gtk::Button::with_label(&gettext("Reset Folders"));
+        let reset = tab_button(&gettext("Reset Folders"));
         buttons.append(&apply);
         buttons.append(&reset);
         folder_views.append(&buttons);

@@ -507,7 +507,23 @@ fn folder_options_has_the_general_and_view_tabs_of_windows() {
             "Use check boxes to select items",
         ]
     );
-    tab_button(&options, "View", "Apply to Folders");
+    // Push buttons drawn as the dialog's own Cancel and Apply, not links.
+    for (tab, label) in [
+        ("View", "Apply to Folders"),
+        ("View", "Reset Folders"),
+        ("View", "Restore Defaults"),
+        ("General", "Restore Defaults"),
+    ] {
+        let button = tab_button(&options, tab, label);
+        assert!(
+            button.has_css_class("bordered") && button.has_css_class("dialog-button"),
+            "{label} is a bordered push button"
+        );
+        assert!(
+            !button.has_css_class("accent"),
+            "{label} is not the default button"
+        );
+    }
     close_folder_options(&test, &options, "Cancel");
 }
 
