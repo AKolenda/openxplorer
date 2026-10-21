@@ -1,3 +1,12 @@
+# Unreleased
+
+- A slow click on the name of the selected item no longer renames another
+  item: as in Windows Explorer, Delete, Shift+Delete, Ctrl+D, a refresh,
+  a navigation or any other command run before the rename starts cancels
+  it, and so does the selection changing or the clicked item going.
+  Before, deleting the clicked item could open the rename on the item
+  that moved up into its place.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed

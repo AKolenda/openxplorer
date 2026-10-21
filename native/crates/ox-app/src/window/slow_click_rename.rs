@@ -5,16 +5,19 @@
 //! As in Windows File Explorer and Dolphin's "two-clicks renaming": a
 //! plain click on the name of the item that is already the only one
 //! selected starts the rename once a double-click interval has passed
-//! with no second click. A double-click, a drag, a click elsewhere, the
-//! selection changing and the window losing focus cancel it, and nothing
-//! starts while renaming is not allowed there.
+//! with no second click. A double-click, a drag, a click elsewhere, any
+//! command (Delete, Ctrl+D, a refresh, a navigation), the selection
+//! changing, the clicked item going and the window losing focus cancel
+//! it, and nothing starts while renaming is not allowed there. The rename
+//! is for the item clicked: it never starts on another item that comes to
+//! stand at its position.
 
 use std::cell::{Cell, RefCell};
 use std::time::{Duration, Instant};
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
+use gtk::{gdk, gio, glib};
 
 use super::file_ops::FileCommand;
 use super::BrowserWindow;
@@ -27,7 +30,8 @@ const DEFAULT_DOUBLE_CLICK: u32 = 400;
 /// last press was.
 #[derive(Debug, Default)]
 pub(super) struct SlowClickRename {
-    pending: RefCell<Option<glib::SourceId>>,
+    /// The scheduled rename and the URI of the item clicked.
+    pending: RefCell<Option<(glib::SourceId, String)>>,
     /// The list's own click handling can reset GTK's click count, so a
     /// double-click is also told by the time since the press before.
     last_press: Cell<Option<Instant>>,
@@ -63,13 +67,44 @@ fn double_click_interval() -> Duration {
 }
 
 impl BrowserWindow {
-    /// Cancels a scheduled rename when the window loses focus.
+    /// Cancels a scheduled rename when the window loses focus, when a
+    /// window command runs, and when the clicked item stops being the
+    /// only one selected or goes.
     pub(super) fn install_slow_click_rename(&self) {
         self.connect_is_active_notify(|window| {
             if !window.is_active() {
                 window.cancel_slow_click_rename();
             }
         });
+        for name in self.list_actions() {
+            let Some(action) = self.lookup_action(&name).and_downcast::<gio::SimpleAction>() else {
+                continue;
+            };
+            // A handler on a stateful action's activate replaces its
+            // default change of state; those commands (view, sorting)
+            // keep the clicked item, which the checks below follow.
+            if action.state().is_some() {
+                continue;
+            }
+            action.connect_activate(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_, _| window.cancel_slow_click_rename()
+            ));
+        }
+        for pane in self.folder_panes() {
+            let selection = pane.model().selection().clone();
+            selection.connect_selection_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_, _, _| window.drop_stale_slow_click_rename()
+            ));
+            selection.connect_items_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_, _, _, _| window.drop_stale_slow_click_rename()
+            ));
+        }
     }
 
     /// Watches primary presses on `view` for a slow second click on a
@@ -122,35 +157,69 @@ impl BrowserWindow {
         if earlier.is_some_and(|earlier| now.duration_since(earlier) < double_click_interval()) {
             return;
         }
-        let selected = self.folder_pane().model().selected_positions();
+        let model = self.folder_pane().model();
+        let selected = model.selected_positions();
         let Some(position) = asks_for_rename(press, &selected) else {
+            return;
+        };
+        let Some(item) = model.item(position) else {
             return;
         };
         if !self.allows(FileCommand::Rename) || self.are_item_clicks_paused() {
             return;
         }
+        let uri = item.entry().uri.clone();
         let rename = glib::timeout_add_local_once(
             double_click_interval(),
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
                 move || {
-                    window.imp().slow_click_rename.pending.take();
-                    // Losing focus cancelled it already; a changed
-                    // selection cancels it here.
-                    let still_selected = window.folder_pane().model().selected_positions() == [position];
-                    if still_selected {
+                    let Some((_, uri)) = window.imp().slow_click_rename.pending.take() else {
+                        return;
+                    };
+                    // Losing focus, a command and a changed selection
+                    // cancelled it already; this checks once more, as
+                    // the rename is for the clicked item alone.
+                    let wanted = window.is_only_selected(&uri)
+                        && window.allows(FileCommand::Rename)
+                        && !window.are_item_clicks_paused();
+                    if wanted {
                         glib::spawn_future_local(async move { window.rename_selection().await });
                     }
                 }
             ),
         );
-        self.imp().slow_click_rename.pending.replace(Some(rename));
+        self.imp().slow_click_rename.pending.replace(Some((rename, uri)));
+    }
+
+    /// Whether the item at `uri` is the only one selected in the active
+    /// folder view.
+    fn is_only_selected(&self, uri: &str) -> bool {
+        // The count first: a selection of thousands is not listed on
+        // every change.
+        let model = self.folder_pane().model();
+        model.selection().selection().size() == 1 && model.selected_uris() == [uri]
+    }
+
+    /// Drops the scheduled rename once its item is no longer the only
+    /// one selected, or no longer listed.
+    fn drop_stale_slow_click_rename(&self) {
+        let stale = self
+            .imp()
+            .slow_click_rename
+            .pending
+            .borrow()
+            .as_ref()
+            .is_some_and(|(_, uri)| !self.is_only_selected(uri));
+        if stale {
+            self.cancel_slow_click_rename();
+        }
     }
 
     /// Drops the rename a slow second click scheduled, if any.
     pub(super) fn cancel_slow_click_rename(&self) {
-        if let Some(pending) = self.imp().slow_click_rename.pending.take() {
+        if let Some((pending, _)) = self.imp().slow_click_rename.pending.take() {
             pending.remove();
         }
     }

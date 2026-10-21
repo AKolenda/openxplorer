@@ -105,7 +105,10 @@ fn a_slow_click_rename_never_starts_on_another_item() {
     let now_there = model.name_at(position).expect("an item at the position");
 
     assert_ne!(now_there, "Notes 2.txt", "another item stands there now");
-    assert_eq!(names_edited_during(&test, Duration::from_millis(1200)), Vec::<String>::new());
+    assert_eq!(
+        names_edited_during(&test, Duration::from_millis(1200)),
+        Vec::<String>::new()
+    );
 }
 
 /// A command run before the rename starts cancels it, as Delete, Ctrl+D
