@@ -25,14 +25,12 @@ use ox_core::archive::{
 };
 use ox_core::gio_node::GioNode;
 use ox_core::location::{parent_location, validate_name};
-use ox_core::ops::OperationSummary;
 use ox_core::transfer::{Cancellation, Node, TransferMode};
 
 use crate::archive_view::{
     extraction_failure_text, extraction_success_text, ArchiveTarget, ExtractionChoice, EXTRACTION_STOPPED,
 };
 
-use super::background_notice::Destination;
 use super::file_ops::IncomingItems;
 use super::session::TabId;
 use super::transfer_panel::TransferKind;
@@ -140,10 +138,6 @@ impl BrowserWindow {
                     Ok(Some((shown, text))) => window.conclude_extraction(&shown, &choice, &text, origin),
                     Ok(None) => window.show_message(ox_core::i18n::gettext_static(NOTHING_ADDED)),
                     Err(text) => {
-                        window.notify_if_in_background(
-                            &OperationSummary::Report(text.clone()),
-                            Destination::default(),
-                        );
                         window.show_result_dialog(ox_core::i18n::gettext_static(EXTRACTION_STOPPED), &text);
                     }
                 }
@@ -302,8 +296,6 @@ impl BrowserWindow {
             self.reload_tabs_showing(&listed);
             self.reload_tabs_showing(shown);
         }
-        let destination = Destination::items(vec![shown.to_owned()]);
-        self.notify_if_in_background(&OperationSummary::Toast(text.to_owned()), destination);
         // Listing a folder hides the toast, so it comes last.
         self.show_message(text);
     }

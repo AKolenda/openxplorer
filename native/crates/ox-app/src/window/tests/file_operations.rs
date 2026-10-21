@@ -21,7 +21,7 @@ use super::file_ops_support::{
 };
 use crate::dialog::Dialog;
 use crate::locations::Page;
-use crate::test_support::harness::{application, descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{application, descendants, wait_for, wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
 use crate::window::transfer_panel::TransferKind;
 
@@ -712,8 +712,7 @@ fn closing_during_an_operation_asks_and_closes_only_once_it_stopped() {
 
 /// While an operation runs its panel holds the session's logout and
 /// suspend inhibitor. When it ends in the window that has focus, the
-/// toast is enough; a window in the background would also notify the
-/// desktop (`background_notice.rs`).
+/// toast is enough.
 ///
 /// parity: INT-028
 #[gtk::test]
@@ -721,7 +720,6 @@ fn a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast() 
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let panel = test.window.imp().transfer_panel.get();
-    crate::window::background_notice::take_sent();
 
     let context = test.window.begin_operation("Preparing copy…");
     assert!(context.is_some() && panel.inhibits_logout());
@@ -734,7 +732,72 @@ fn a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast() 
         test.window.shown_message() == "1 item(s) duplicated."
     });
     assert!(test.window.is_active(), "the test window has focus");
-    assert!(crate::window::background_notice::take_sent().is_empty());
+}
+
+/// The desktop's notification server on the private session bus,
+/// counting every call made to it.
+const NOTIFICATIONS_XML: &str = "<node><interface name='org.freedesktop.Notifications'>\
+    <method name='GetCapabilities'><arg type='as' direction='out'/></method>\
+    <method name='Notify'><arg type='s' direction='in'/><arg type='u' direction='in'/>\
+    <arg type='s' direction='in'/><arg type='s' direction='in'/><arg type='s' direction='in'/>\
+    <arg type='as' direction='in'/><arg type='a{sv}' direction='in'/><arg type='i' direction='in'/>\
+    <arg type='u' direction='out'/></method></interface></node>";
+
+/// A copy that ends while another application has focus sends no desktop
+/// notification, as Windows Explorer sends none.
+#[gtk::test]
+fn an_operation_ending_in_the_background_sends_no_desktop_notification() {
+    let connection = application().dbus_connection().expect("the test bus");
+    let node = gio::DBusNodeInfo::for_xml(NOTIFICATIONS_XML).expect("the interface XML is valid");
+    let interface = node
+        .lookup_interface("org.freedesktop.Notifications")
+        .expect("the XML declares the interface");
+    let calls = Rc::new(std::cell::Cell::new(0));
+    let counted = Rc::clone(&calls);
+    let registration = connection
+        .register_object("/org/freedesktop/Notifications", &interface)
+        .method_call(move |_, _, _, _, _, _, invocation| {
+            counted.set(counted.get() + 1);
+            invocation.return_dbus_error("org.freedesktop.DBus.Error.Failed", "a test server");
+        })
+        .build()
+        .expect("the object path is free");
+    let owned = Rc::new(std::cell::Cell::new(false));
+    let is_owned = Rc::clone(&owned);
+    let owner = gio::bus_own_name_on_connection(
+        &connection,
+        "org.freedesktop.Notifications",
+        gio::BusNameOwnerFlags::REPLACE,
+        move |_, _| is_owned.set(true),
+        |_, _| {},
+    );
+    wait_until("the bus name", || owned.get());
+    let source = Fixture::standard();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    // Not added to the application: it stands in for another app's window.
+    let other = gtk::Window::new();
+    other.present();
+    wait_until("the other window has focus", || {
+        other.is_active() && !test.window.is_active()
+    });
+
+    let taken = test.window.drop_files(
+        &[source.uri_of("Notes 2.txt")],
+        Some(test.position_of("Documents")),
+        DropAction::Copy,
+    );
+    assert!(taken);
+    wait_until("the copy to end", || {
+        fixture.path("Documents/Notes 2.txt").exists() && test.window.imp().file_operations.borrow().is_idle()
+    });
+    // The completion is reported after the job ends.
+    wait_for(std::time::Duration::from_millis(500));
+    other.destroy();
+    let _ = connection.unregister_object(registration);
+    gio::bus_unown_name(owner);
+
+    assert_eq!(calls.get(), 0, "no call reached the notification server");
 }
 
 /// While a file operation or an archive operation runs, the transfer
@@ -782,185 +845,4 @@ fn running_operations_show_their_progress_on_the_dock_icon() {
     wait_until("the bar hidden again", || {
         *updates.borrow() == [true, false, true, false]
     });
-}
-
-/// A drop into a subfolder that ends while a window outside the
-/// application has focus, as another app's would, sends one notification
-/// with the toast's words. Clicking it brings back the window that ran
-/// it; its Show button opens the subfolder there with the copy selected.
-///
-/// parity: INT-026
-#[gtk::test]
-fn an_operation_ending_in_the_background_notifies_the_desktop() {
-    let source = Fixture::standard();
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    crate::window::background_notice::take_sent();
-    // Not added to the application: it stands in for another app's window.
-    let other = gtk::Window::new();
-    other.present();
-    wait_until("the other window has focus", || {
-        other.is_active() && !test.window.is_active()
-    });
-
-    let taken = test.window.drop_files(
-        &[source.uri_of("Notes 2.txt")],
-        Some(test.position_of("Documents")),
-        DropAction::Copy,
-    );
-    assert!(taken);
-    wait_until("the notice", || {
-        crate::window::background_notice::SENT.with(|sent| !sent.borrow().is_empty())
-    });
-
-    let sent = crate::window::background_notice::take_sent();
-    other.destroy();
-    assert_eq!(sent.len(), 1);
-    assert_eq!(sent[0].body, None);
-    assert_eq!(sent[0].window, test.window.id());
-    let copy = fixture.uri_of("Documents/Notes 2.txt");
-    assert_eq!(sent[0].destination.items, std::slice::from_ref(&copy));
-    let (action, target) = sent[0].show_action();
-    assert_eq!(action, "app.show-destination");
-    let (id, folder, items) = target
-        .get::<(u32, String, Vec<String>)>()
-        .expect("the Show target");
-    assert_eq!(id, test.window.id());
-    assert_eq!(folder, "");
-    assert_eq!(items, [copy]);
-
-    test.window.show_destination(None, &items);
-    wait_until("the subfolder with the copy selected", || {
-        test.window.current_uri() == Some(fixture.uri_of("Documents"))
-            && test.selected_names() == ["Notes 2.txt"]
-    });
-}
-
-/// A deletion that ends while another application has focus notifies the
-/// desktop, and Show never selects the item that followed the removed
-/// ones: after a Move to Trash it opens the Recycle Bin with the trashed
-/// item selected, and after a permanent delete, which leaves nothing to
-/// show, it only brings the window back.
-///
-/// parity: INT-026, OPS-040
-#[gtk::test]
-fn show_on_a_deletions_notice_opens_the_recycle_bin_or_only_the_window() {
-    require_private_trash();
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    let update = PreferencesUpdate {
-        confirm_trash: Some(false),
-        confirm_delete: Some(false),
-        ..PreferencesUpdate::default()
-    };
-    Settings::open(test.settings_directory())
-        .update_preferences(&update)
-        .expect("the settings file takes the choices");
-    test.context.reload_settings();
-    wait_until("the window to read the choices", || {
-        !test.context.settings_data().preferences.confirm_trash
-    });
-    crate::window::background_notice::take_sent();
-    // Not added to the application: it stands in for another app's window.
-    let other = gtk::Window::new();
-    other.present();
-    wait_until("the other window has focus", || {
-        other.is_active() && !test.window.is_active()
-    });
-    let next = fixture.uri_of("Notes 10.txt");
-
-    select_names(&test, &["Notes 2.txt"]);
-    test.activate("trash", None);
-    wait_until("the trash notice", || {
-        crate::window::background_notice::SENT.with(|sent| !sent.borrow().is_empty())
-    });
-    let trashed = crate::window::background_notice::take_sent().remove(0);
-    assert!(!trashed.destination.items.contains(&next), "not the next item");
-    assert_eq!(
-        trashed.destination.folder.as_deref(),
-        Some(ox_core::location::TRASH_URI)
-    );
-    assert_eq!(trashed.destination.items.len(), 1, "{:?}", trashed.destination);
-    assert!(trashed.destination.items[0].starts_with("trash:///"));
-    let (action, target) = trashed.show_action();
-    assert_eq!(action, "app.show-destination");
-    let (_, _, items) = target
-        .get::<(u32, String, Vec<String>)>()
-        .expect("the Show target");
-
-    wait_until("the next item selected", || {
-        test.selected_names() == ["Notes 10.txt"]
-    });
-    select_names(&test, &["Documents"]);
-    test.activate("delete-permanently", None);
-    wait_until("the delete notice", || {
-        crate::window::background_notice::SENT.with(|sent| !sent.borrow().is_empty())
-    });
-    let deleted = crate::window::background_notice::take_sent().remove(0);
-    other.destroy();
-    assert_eq!(
-        deleted.show_action().0,
-        "app.focus-window",
-        "{:?}",
-        deleted.destination
-    );
-
-    test.window
-        .show_destination(Some(ox_core::location::TRASH_URI), &items);
-    wait_until("the Recycle Bin with the trashed item selected", || {
-        test.window.current_uri().as_deref() == Some(ox_core::location::TRASH_URI)
-            && test.selected_names() == ["Notes 2.txt"]
-    });
-}
-
-/// While a Move to Trash that ended in the background looks up the
-/// trashed items for its notice, Ctrl+Z must undo that Move to Trash:
-/// once its job has ended and until the notice is sent, Undo already has
-/// its step. Undo would otherwise take back the action before.
-///
-/// parity: INT-026, OPS-029
-#[gtk::test]
-fn undo_reverses_a_background_trash_while_its_notice_is_prepared() {
-    require_private_trash();
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    let update = PreferencesUpdate {
-        confirm_trash: Some(false),
-        ..PreferencesUpdate::default()
-    };
-    Settings::open(test.settings_directory())
-        .update_preferences(&update)
-        .expect("the settings file takes the choices");
-    test.context.reload_settings();
-    wait_until("the window to read the choices", || {
-        !test.context.settings_data().preferences.confirm_trash
-    });
-    crate::window::background_notice::take_sent();
-    let other = gtk::Window::new();
-    other.present();
-    wait_until("the other window has focus", || {
-        other.is_active() && !test.window.is_active()
-    });
-
-    select_names(&test, &["Notes 2.txt"]);
-    test.activate("trash", None);
-    let context = glib::MainContext::default();
-    let started = std::time::Instant::now();
-    let mut gaps = 0;
-    while crate::window::background_notice::SENT.with(|sent| sent.borrow().is_empty()) {
-        assert!(started.elapsed().as_secs() < 30, "the trash notice");
-        context.iteration(true);
-        let gone = !fixture.path("Notes 2.txt").exists();
-        let ended = test.window.imp().file_operations.borrow().is_idle();
-        let recorded = test
-            .context
-            .journal_label(ox_core::ops::JournalDirection::Undo)
-            .is_some();
-        if gone && ended && !recorded {
-            gaps += 1;
-        }
-    }
-    other.destroy();
-
-    assert_eq!(gaps, 0, "Ctrl+Z had nothing of this trash to undo meanwhile");
 }

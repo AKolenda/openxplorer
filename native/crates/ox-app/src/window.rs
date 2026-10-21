@@ -52,7 +52,6 @@ mod address_protocols;
 mod administrator;
 mod appearance;
 mod archive_actions;
-mod background_notice;
 mod breakpoints;
 mod button_style;
 mod cache_folder;
