@@ -1209,7 +1209,7 @@ msgstr ""
 msgid "Checksums"
 msgstr ""
 
-#: crates/ox-app/src/properties.rs crates/ox-app/src/settings_page/pages.rs
+#: crates/ox-app/src/properties.rs crates/ox-app/src/settings_page/pages.rs crates/ox-app/src/window/folder_options.rs
 msgid "General"
 msgstr ""
 
@@ -3171,7 +3171,7 @@ msgid_plural "{count} matching settings"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/history_menu.rs crates/ox-core/src/location/virtual_place.rs
+#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/history_menu.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Home"
 msgstr ""
 
@@ -3661,7 +3661,7 @@ msgstr ""
 msgid "Sort"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "View"
 msgstr ""
 
@@ -4659,7 +4659,11 @@ msgid "“{name}” is a symbolic link, which the destination file system cannot
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Advanced settings"
+msgid "Advanced settings:"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Always show icons, never thumbnails"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
@@ -4687,6 +4691,14 @@ msgid "Folder Views"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
+msgid "Open File Explorer to:"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Remember each folder's view settings"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
 msgid "Reset Folders"
 msgstr ""
 
@@ -4696,6 +4708,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
 msgid "Restore previous folder windows at logon"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Show hidden files, folders, and drives"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs

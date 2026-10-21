@@ -216,6 +216,12 @@ impl Dialog {
         self.append_field(control);
     }
 
+    /// Adds `widget`, such as a dialog's tabs, under the fields added so
+    /// far.
+    pub(crate) fn add_field(&self, widget: &impl IsA<gtk::Widget>) {
+        self.append_field(widget);
+    }
+
     /// Adds a boxed note in muted text (`.modal-note`).
     pub(crate) fn add_note(&self, text: &str) {
         self.add_text_line(text, "dialog-note");

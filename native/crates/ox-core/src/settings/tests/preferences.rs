@@ -328,10 +328,12 @@ fn views_saved_by_the_old_display_style_dialog_still_load() {
     let saved = json!({"preferences": {
         "view": "grid",
         "perFolderViews": true,
-        "viewDefaults": {"mode": "icons", "sort": "type", "hiddenLast": true},
+        "showHidden": false,
+        "viewDefaults": {"mode": "icons", "sort": "type", "hiddenLast": true, "showHidden": true,
+                         "showPreviews": false},
         "folderViews": [
             {"uri": "file:///home/someone/Projects", "mode": "details", "sort": "size",
-             "hiddenLast": true, "subfolders": true},
+             "hiddenLast": true, "subfolders": true, "showHidden": true, "showPreviews": false},
             {"uri": "file:///home/someone/Music", "mode": "compact", "sort": "modified"}
         ]
     }});
@@ -350,6 +352,13 @@ fn views_saved_by_the_old_display_style_dialog_still_load() {
         preferences.view_for("file:///home/someone/Pictures").mode,
         "icons"
     );
+    assert!(
+        !preferences.show_hidden,
+        "hidden files are one setting, not a folder's"
+    );
+    assert!(preferences.view_options.show_previews, "and so are thumbnails");
+    let style = serde_json::to_value(preferences.view_for("file:///home/someone/Projects")).unwrap();
+    assert!(style.get("showHidden").is_none() && style.get("showPreviews").is_none());
 
     save_preferences(&mut store, &json!({"theme": "dark"}));
     let reread = Settings::open(root.path()).snapshot().preferences;
@@ -376,7 +385,6 @@ fn reset_folders_shows_details_by_name_again() {
             ViewProperties {
                 mode: "icons".to_owned(),
                 sort: "size".to_owned(),
-                show_hidden: true,
                 ..ViewProperties::default()
             },
             ViewScope::AllFolders,
@@ -388,7 +396,49 @@ fn reset_folders_shows_details_by_name_again() {
     let style = reset.view_for("file:///home/someone/Pictures");
     assert_eq!(style.mode, "details");
     assert_eq!(style.sort, "name");
-    assert!(style.show_hidden, "hidden files stay as they were");
+    assert!(reset.show_hidden, "hidden files stay as they were");
     let reread = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(reread.view_for("file:///home/someone/Pictures").mode, "details");
+}
+
+/// "Remember each folder's view settings" is on unless the user turned it
+/// off, as in Windows 11: a settings file without the choice gets it on,
+/// and turning it off is saved and kept.
+/// parity: VIEW-020
+#[test]
+fn each_folder_remembers_its_view_unless_turned_off() {
+    let root = temporary_folder();
+    std::fs::write(
+        root.path().join("settings.json"),
+        r#"{"preferences": {"theme": "dark"}}"#,
+    )
+    .unwrap();
+    let mut store = Settings::open(root.path());
+    assert!(store.snapshot().preferences.per_folder_views);
+    assert!(Preferences::default().per_folder_views);
+
+    save_preferences(&mut store, &json!({"perFolderViews": false}));
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(root.path().join("settings.json")).unwrap()).unwrap();
+    assert_eq!(saved["preferences"]["perFolderViews"], json!(false));
+    assert!(
+        !Settings::open(root.path())
+            .snapshot()
+            .preferences
+            .per_folder_views
+    );
+
+    save_preferences(&mut store, &json!({"perFolderViews": true}));
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(root.path().join("settings.json")).unwrap()).unwrap();
+    assert!(
+        saved["preferences"].get("perFolderViews").is_none(),
+        "on is the default"
+    );
+    assert!(
+        Settings::open(root.path())
+            .snapshot()
+            .preferences
+            .per_folder_views
+    );
 }

@@ -1,20 +1,34 @@
 # Unreleased
 
 - View > "Adjust view display style…" is replaced by Folder Options, as in
-  Windows 11 File Explorer: "…" > Options opens it. Its Folder views box
-  has Apply to Folders, which after a Yes/No question gives every folder
-  this folder's view (layout, icon size, columns, sort and grouping), and
-  Reset Folders, which after a Yes/No question gives every folder the
-  default view (Details, by name) again. Both act at once in every window,
-  split pane and Open/Save dialog. OpenXplorer has no folder types, so they
-  cover all folders. Apply to Folders cannot be pressed from This PC,
-  Network, Recent files, search results or the Recycle Bin. Folder Options also lists
-  three of Windows' advanced settings the app already had: "Display the
-  full path in the title bar", "Restore previous folder windows at logon"
-  and "Use check boxes to select items". Dropped with the old dialog, as
-  Windows has none of them: "This folder and its subfolders", "Use these
-  settings as the default for all folders" and "Show hidden items last".
-  Views it saved still load.
+  Windows 11 File Explorer: "…" > Options opens it, with Windows' General
+  and View tabs.
+  - General: "Open File Explorer to" chooses Home or This PC (or keeps the
+    folder chosen in Settings).
+  - View > Folder views: Apply to Folders, after a Yes/No question, gives
+    every folder this folder's view (layout, icon size, columns, sort and
+    grouping); Reset Folders, after a Yes/No question, gives every folder
+    the default view (Details, by name) again. Both act at once in every
+    window, split pane and Open/Save dialog. OpenXplorer has no folder
+    types, so they cover all folders. Apply to Folders cannot be pressed
+    from This PC, Network, Recent, search results or the Recycle Bin.
+  - View > Advanced settings: "Always show icons, never thumbnails",
+    "Display the full path in the title bar", "Remember each folder's view
+    settings", "Restore previous folder windows at logon", "Show hidden
+    files, folders, and drives" and "Use check boxes to select items".
+- Hidden files are now one setting for every folder, as in Windows: Ctrl+H,
+  View or "…" > Show hidden files and Folder Options all change it, and
+  every window follows. Thumbnails too: "Always show icons, never
+  thumbnails" is the opposite of Settings' "Show previews". Hidden files
+  and previews saved in a folder's view before are ignored.
+- Changed default: "Remember each folder's view settings" is now on, as in
+  Windows 11, so each folder keeps the view you give it. Before, one view
+  was shared by all folders. Anyone who had turned it on keeps it on; the
+  old off setting was never saved, so everyone else gets the new default
+  and can turn it off in Folder Options.
+- Dropped with the old dialog, as Windows has none of them: "This folder
+  and its subfolders", "Use these settings as the default for all
+  folders" and "Show hidden items last". Views it saved still load.
 
 # 2.0.6 — 2026-10-13
 

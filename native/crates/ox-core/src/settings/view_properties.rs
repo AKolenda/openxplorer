@@ -2,9 +2,13 @@
 //! How a folder is displayed, saved for all folders or for each folder.
 //!
 //! Ports Dolphin's `ViewProperties` (`src/views/viewproperties.cpp`) and its
-//! `GlobalViewProps` setting: by default one style is shared by every folder
-//! (`viewDefaults`); with "Remember display style for each folder" on, each
-//! folder the user restyles keeps its own (`folderViews`). A style saved for
+//! `GlobalViewProps` setting, as Windows' "Remember each folder's view
+//! settings": with it on, the default as in Windows 11, each folder the
+//! user restyles keeps its own (`folderViews`) and the others show the
+//! default (`viewDefaults`); off, one style is shared by every folder.
+//! Hidden files and thumbnails are not part of a style: they are one
+//! setting for every folder, as in Windows, and the `showHidden` and
+//! `showPreviews` keys of styles saved before are ignored. A style saved for
 //! a folder "and its sub-folders" by Dolphin's View Display Style dialog,
 //! which Folder Options replaced, still applies below it, as Dolphin's
 //! `ApplyViewPropsJob` does; none is saved any more. The Python app reads
@@ -32,10 +36,6 @@ const MAX_SORT_KEY: usize = 32;
 const ICON_SIZES: std::ops::RangeInclusive<u32> = 16..=256;
 
 /// How one folder is displayed: Dolphin's view properties.
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "each flag is one of Dolphin's view properties"
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewProperties {
@@ -57,11 +57,6 @@ pub struct ViewProperties {
     pub group_by: Option<GroupBy>,
     /// Folders listed before files.
     pub folders_first: bool,
-    /// Hidden items shown.
-    pub show_hidden: bool,
-    /// Previews, inheriting the shared option for older saved styles.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub show_previews: Option<bool>,
     /// Visible details columns after Name, in their display order.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details_columns: Option<Vec<String>>,
@@ -81,8 +76,6 @@ impl Default for ViewProperties {
             groups: false,
             group_by: None,
             folders_first: true,
-            show_hidden: false,
-            show_previews: None,
             details_columns: None,
             column_widths: None,
         }
@@ -120,8 +113,6 @@ impl ViewProperties {
                 .and_then(GroupBy::from_key)
                 .filter(|key| own_group_key(*key)),
             folders_first: flag("foldersFirst", defaults.folders_first),
-            show_hidden: flag("showHidden", defaults.show_hidden),
-            show_previews: values.get("showPreviews").and_then(Value::as_bool),
             details_columns: values.get("detailsColumns").and_then(read_column_keys),
             column_widths: values
                 .get("columnWidths")
