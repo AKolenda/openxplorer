@@ -304,6 +304,10 @@ impl BrowserWindow {
                     .extract_into_free_name(&archive, &folder, &base_name, &cancel)
                     .await;
                 window.finish_archive_operation();
+                // Windows Explorer says nothing after Cancel.
+                if extracted.as_ref().is_err_and(ArchiveError::is_cancelled) {
+                    return;
+                }
                 let outcome = extracted.map_err(|error| extraction_failure_text(&error));
                 window.report_in_folder(
                     &folder,
@@ -371,6 +375,9 @@ impl BrowserWindow {
                     .compress_into_free_name(uris, &folder, &first_name, &cancel)
                     .await;
                 window.finish_archive_operation();
+                if created.as_ref().is_err_and(ArchiveError::is_cancelled) {
+                    return;
+                }
                 let outcome = created.map_err(|error| compression_failure_text(&error));
                 window.report_in_folder(
                     &folder,

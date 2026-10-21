@@ -108,6 +108,10 @@ impl BrowserWindow {
                         if let Some(frame) = frame {
                             frame.close();
                         }
+                        // Windows Explorer says nothing after Cancel.
+                        if outcome.as_ref().is_err_and(ArchiveError::is_cancelled) {
+                            return;
+                        }
                         let outcome = outcome
                             .map(|created| compression_success_text(&created))
                             .map_err(|error| crate::archive_view::compression_failure_text(&error));

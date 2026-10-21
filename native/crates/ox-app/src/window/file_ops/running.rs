@@ -366,6 +366,8 @@ impl BrowserWindow {
             OperationSummary::Report(text) => {
                 dialog::show_message(self, ox_core::i18n::gettext_static(RESULT_TITLE), &text).await;
             }
+            // Windows Explorer says nothing after Cancel.
+            OperationSummary::Cancelled => {}
         }
     }
 

@@ -15,7 +15,8 @@
 //!
 //! Either way the extraction shows in the transfer panel, and the result
 //! is shown in the tab it started from if that is still in front, else
-//! in a new tab, or its folder is listed again.
+//! in a new tab, or its folder is listed again. Cancel just stops, with
+//! no message, as in Windows Explorer.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -44,9 +45,6 @@ const PREPARING: &str = crate::i18n::message_id("Preparing extraction…");
 /// The folder field names a file.
 const NOT_A_FOLDER: &str =
     crate::i18n::message_id("A file with that name is already there. Choose a folder to extract to.");
-
-/// The user cancelled the name-conflict question.
-const NOTHING_ADDED: &str = crate::i18n::message_id("Extraction cancelled. Nothing was added to the folder.");
 
 /// What the dialog's folder is now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,7 +136,8 @@ impl BrowserWindow {
                 };
                 match result {
                     Ok(Some((shown, text))) => window.conclude_extraction(&shown, &choice, &text, origin),
-                    Ok(None) => window.show_message(ox_core::i18n::gettext_static(NOTHING_ADDED)),
+                    // Windows Explorer says nothing after Cancel.
+                    Ok(None) => {}
                     Err(text) => {
                         window.notify_if_in_background(
                             &OperationSummary::Report(text.clone()),
@@ -152,7 +151,7 @@ impl BrowserWindow {
     }
 
     /// Creates the chosen folder and extracts into it. Returns the folder
-    /// to show and the message.
+    /// to show and the message, or `None` when the user cancelled.
     async fn extract_into_new_folder(
         &self,
         archive: &ArchiveTarget,
@@ -175,10 +174,10 @@ impl BrowserWindow {
             destination_uri: parent,
             folder_name: name,
         };
-        let extracted = self
-            .run_extraction(request, None)
-            .await
-            .map_err(|error| extraction_failure_text(&error))?;
+        let extracted = match self.run_extraction(request, None).await {
+            Err(error) if error.is_cancelled() => return Ok(None),
+            extracted => extracted.map_err(|error| extraction_failure_text(&error))?,
+        };
         let lifted = gio::spawn_blocking(move || lift_same_named_folder(extracted))
             .await
             .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
@@ -202,10 +201,10 @@ impl BrowserWindow {
             destination_uri: target.clone(),
             folder_name: private,
         };
-        let extracted = self
-            .run_extraction(request, None)
-            .await
-            .map_err(|error| extraction_failure_text(&error))?;
+        let extracted = match self.run_extraction(request, None).await {
+            Err(error) if error.is_cancelled() => return Ok(None),
+            extracted => extracted.map_err(|error| extraction_failure_text(&error))?,
+        };
         let staging = extracted.uri.clone();
         let listed = staging.clone();
         let items = gio::spawn_blocking(move || children_of(&listed))
@@ -228,6 +227,7 @@ impl BrowserWindow {
                 destination_folder: target.clone(),
             })
             .await
+            .filter(|outcome| !outcome.result.cancelled)
             .map(|outcome| outcome.result.done.len())
         };
         self.discard_private_folder(staging).await;

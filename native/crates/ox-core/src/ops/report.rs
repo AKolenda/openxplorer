@@ -2,9 +2,10 @@
 //! What the user is told when an operation ends (OPS-023).
 //!
 //! Ports the end of `runOperation` in `v2.0.0:desktop/ui/app.js`: complete success
-//! is a short toast; errors, skipped items or a cancellation open the
-//! "Operation result" dialog listing each; a request refused before it
-//! started opens "Operation stopped" with the refusal.
+//! is a short toast; errors or skipped items open the "Operation result"
+//! dialog listing each; a request refused before it started opens
+//! "Operation stopped" with the refusal. Unlike `app.js`, a cancelled
+//! operation says nothing, as in Windows Explorer.
 
 use super::journal::JournalDirection;
 use super::undo::UndoRecord;
@@ -22,9 +23,12 @@ pub const STOPPED_TITLE: &str = crate::i18n::message_id("Operation stopped");
 pub enum OperationSummary {
     /// Every item succeeded: a toast such as `3 item(s) copied.`
     Toast(String),
-    /// Something went wrong, was skipped or was cancelled: the
-    /// [`RESULT_TITLE`] dialog with one line per fact.
+    /// Something went wrong or was skipped: the [`RESULT_TITLE`] dialog
+    /// with one line per fact.
     Report(String),
+    /// The user cancelled: nothing is said, as in Windows Explorer, also
+    /// when items failed or were skipped before.
+    Cancelled,
 }
 
 /// The summary of a finished `mode` run, word for word as `app.js`
@@ -69,14 +73,15 @@ pub fn summarize_undo(record: &UndoRecord, result: &TransferResult) -> Operation
 
 /// The summary of an Undo or Redo of the operation titled `title`:
 /// `Rename undone.` or `Rename redone.` when every step succeeded,
-/// otherwise the [`RESULT_TITLE`] report of what happened.
+/// otherwise the [`RESULT_TITLE`] report of what happened, or nothing
+/// once cancelled.
 pub fn summarize_journal_step(
     direction: JournalDirection,
     title: &str,
     result: &TransferResult,
 ) -> OperationSummary {
     if !is_complete_success(result) {
-        return OperationSummary::Report(report_lines(result));
+        return problems(result);
     }
     let message = match direction {
         JournalDirection::Undo => crate::i18n::message_id("{title} undone."),
@@ -85,13 +90,23 @@ pub fn summarize_journal_step(
     OperationSummary::Toast(crate::i18n::format_message(message, &[("title", title)]))
 }
 
-/// `N item(s) <verb>.` when every item succeeded, otherwise the report.
+/// `N item(s) <verb>.` when every item succeeded, otherwise the report,
+/// or nothing once cancelled.
 fn summarize_items(message: &str, result: &TransferResult) -> OperationSummary {
     if is_complete_success(result) {
         return OperationSummary::Toast(crate::i18n::format_message(
             message,
             &[("count", &result.done.len().to_string())],
         ));
+    }
+    problems(result)
+}
+
+/// What is said about a run that did not fully succeed: nothing once the
+/// user cancelled, otherwise the report.
+fn problems(result: &TransferResult) -> OperationSummary {
+    if result.cancelled {
+        return OperationSummary::Cancelled;
     }
     OperationSummary::Report(report_lines(result))
 }
@@ -101,8 +116,7 @@ fn is_complete_success(result: &TransferResult) -> bool {
     result.errors.is_empty() && result.skipped.is_empty() && !result.cancelled
 }
 
-/// `N completed.`, then the skipped count, the cancellation and each
-/// error, one per line.
+/// `N completed.`, then the skipped count and each error, one per line.
 fn report_lines(result: &TransferResult) -> String {
     let mut lines = vec![crate::i18n::format_message(
         "{count} completed.",
@@ -112,11 +126,6 @@ fn report_lines(result: &TransferResult) -> String {
         lines.push(crate::i18n::format_message(
             "{count} skipped (name already exists).",
             &[("count", &(result.skipped.len()).to_string())],
-        ));
-    }
-    if result.cancelled {
-        lines.push(crate::i18n::gettext(
-            "Cancelled. Completed items remain in place.",
         ));
     }
     lines.extend(result.errors.iter().cloned());
@@ -171,14 +180,38 @@ mod tests {
     }
 
     #[test]
-    fn skips_cancellation_and_errors_are_listed_line_by_line() {
-        let outcome = result(1, 2, &["b.txt: Permission denied"], true);
+    fn skips_and_errors_are_listed_line_by_line() {
+        let outcome = result(1, 2, &["b.txt: Permission denied"], false);
 
         let summary = summarize(TransferMode::Copy, &outcome);
 
-        let expected = "1 completed.\n2 skipped (name already exists).\n\
-                        Cancelled. Completed items remain in place.\nb.txt: Permission denied";
+        let expected = "1 completed.\n2 skipped (name already exists).\nb.txt: Permission denied";
         assert_eq!(summary, OperationSummary::Report(expected.into()));
+    }
+
+    /// Windows Explorer says nothing after Cancel, also when items failed
+    /// or were skipped before it.
+    ///
+    /// parity: OPS-023
+    #[test]
+    fn a_cancelled_run_says_nothing() {
+        let record = UndoRecord::Rename {
+            original_uri: "file:///tmp/a".into(),
+            renamed_uri: "file:///tmp/b".into(),
+        };
+        let cancelled = [
+            result(0, 0, &[], true),
+            result(1, 2, &["b.txt: Permission denied"], true),
+        ];
+
+        for outcome in &cancelled {
+            assert_eq!(
+                summarize(TransferMode::Copy, outcome),
+                OperationSummary::Cancelled
+            );
+            assert_eq!(summarize_duplicate(outcome), OperationSummary::Cancelled);
+            assert_eq!(summarize_undo(&record, outcome), OperationSummary::Cancelled);
+        }
     }
 
     #[test]

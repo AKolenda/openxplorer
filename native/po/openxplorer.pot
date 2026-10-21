@@ -4122,10 +4122,6 @@ msgstr ""
 msgid "Could not remove the extraction's temporary folder: {error}"
 msgstr ""
 
-#: crates/ox-app/src/window/extract_into.rs
-msgid "Extraction cancelled. Nothing was added to the folder."
-msgstr ""
-
 #: crates/ox-app/src/window/file_drag.rs
 msgid "Drag ended"
 msgstr ""
@@ -7094,10 +7090,6 @@ msgstr ""
 
 #: crates/ox-core/src/ops/rename.rs
 msgid "Undo can only rename an item back within its own folder."
-msgstr ""
-
-#: crates/ox-core/src/ops/report.rs
-msgid "Cancelled. Completed items remain in place."
 msgstr ""
 
 #: crates/ox-core/src/ops/report.rs

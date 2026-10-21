@@ -69,21 +69,22 @@ impl Destination {
 
 impl Notice {
     /// What the notification says about `summary`, leading back to the
-    /// window whose ID is `window` and to `destination`.
-    pub(super) fn of(summary: &OperationSummary, window: u32, destination: Destination) -> Self {
+    /// window whose ID is `window` and to `destination`; none after Cancel.
+    pub(super) fn of(summary: &OperationSummary, window: u32, destination: Destination) -> Option<Self> {
         let (title, body) = match summary {
             OperationSummary::Toast(text) => (text.clone(), None),
             OperationSummary::Report(text) => (
                 ox_core::i18n::gettext_static(RESULT_TITLE).to_owned(),
                 Some(text.clone()),
             ),
+            OperationSummary::Cancelled => return None,
         };
-        Self {
+        Some(Self {
             title,
             body,
             window,
             destination,
-        }
+        })
     }
 
     /// The action and target of the Show button: `app.show-destination`
@@ -118,7 +119,9 @@ impl BrowserWindow {
         if !self.is_in_background() {
             return;
         }
-        let notice = Notice::of(summary, self.id(), destination);
+        let Some(notice) = Notice::of(summary, self.id(), destination) else {
+            return;
+        };
         let notification = gio::Notification::new(&notice.title);
         if let Some(body) = &notice.body {
             notification.set_body(Some(body));
@@ -171,14 +174,16 @@ mod tests {
             &OperationSummary::Toast("12 item(s) copied.".to_owned()),
             3,
             Destination::default(),
-        );
+        )
+        .expect("a notice");
         assert_eq!(toast.title, "12 item(s) copied.");
         assert_eq!(toast.body, None);
         let report = Notice::of(
             &OperationSummary::Report("1 item could not be copied.".to_owned()),
             3,
             Destination::default(),
-        );
+        )
+        .expect("a notice");
         assert_eq!(report.title, RESULT_TITLE);
         assert_eq!(report.body.as_deref(), Some("1 item could not be copied."));
         assert_eq!(report.show_action().0, "app.focus-window", "nothing to open");
@@ -186,12 +191,18 @@ mod tests {
             &OperationSummary::Toast("Done.".to_owned()),
             3,
             Destination::folder("file:///tmp/demo"),
-        );
+        )
+        .expect("a notice");
         let (action, target) = folder.show_action();
         assert_eq!(action, "app.show-destination");
         assert_eq!(
             target.get::<(u32, String, Vec<String>)>(),
             Some((3, "file:///tmp/demo".to_owned(), Vec::new()))
+        );
+        assert_eq!(
+            Notice::of(&OperationSummary::Cancelled, 3, Destination::default()),
+            None,
+            "nothing is said after Cancel"
         );
     }
 }

@@ -1,3 +1,8 @@
+# Unreleased
+
+## What's Changed
+* fix(ops): show nothing after the user cancels a copy, move, delete, extraction or compression, as Windows Explorer does; the "Operation result" dialog, "Extraction stopped" and "Compression stopped" no longer follow a Cancel, and Ctrl+Z still undoes the items that completed
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed

@@ -345,6 +345,48 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
     );
 }
 
+/// Cancel in the name-conflict question of an extraction into an existing
+/// folder just stops, as in Windows Explorer: no message follows, nothing
+/// is added and the private folder is removed.
+///
+/// parity: ARC-011, ARC-012
+#[gtk::test]
+fn cancelling_an_extractions_conflict_question_says_nothing() {
+    let fixture = fixture_with_zip();
+    fs::write(fixture.path("readme.txt"), b"mine").expect("a file the archive also has");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.wait_for_dialog("the Extract dialog");
+    wait_until("the check", || {
+        texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+    });
+    descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
+    press(&frame, "Extract");
+    wait_until("the name-conflict question", || {
+        super::file_ops_support::dialog_over(&test).is_some()
+    });
+
+    super::file_ops_support::open_dialog(&test).press("Cancel");
+    wait_until("the private folder to be removed", || {
+        fs::read_dir(fixture.root())
+            .expect("the folder")
+            .filter_map(Result::ok)
+            .all(|entry| {
+                !entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".openxplorer-extract-")
+            })
+    });
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+
+    assert!(super::file_ops_support::dialog_over(&test).is_none());
+    assert_eq!(test.window.shown_message(), "", "nothing is said after Cancel");
+    assert!(!fixture.path("Docs").exists(), "nothing is added");
+    assert_eq!(fs::read(fixture.path("readme.txt")).expect("kept"), b"mine");
+}
+
 /// An extraction into an existing folder that takes in every item counts
 /// the extracted files, as one into a new folder does.
 ///

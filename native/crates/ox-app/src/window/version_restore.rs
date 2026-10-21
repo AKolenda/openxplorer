@@ -99,6 +99,7 @@ impl BrowserWindow {
             OperationSummary::Report(text) => {
                 self.show_result_dialog(ox_core::i18n::gettext_static(RESULT_TITLE), text);
             }
+            OperationSummary::Cancelled => {}
         }
     }
 }
