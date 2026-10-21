@@ -69,13 +69,26 @@ pub(super) fn build_entry(
 }
 
 /// The file the Recently used files row at `uri` stands for, when `info`
-/// names one that normalises to a real location.
+/// names one: a local `file:` address kept as GIO gave it, so a name that
+/// is not UTF-8 keeps its bytes, or another address that normalises to a
+/// real location.
 fn recent_target(uri: &str, info: &gio::FileInfo) -> Option<String> {
     if scheme(uri).as_deref() != Some("recent") {
         return None;
     }
-    let target = normalise(&string_attribute(info, "standard::target-uri")?).ok()?;
+    let target = string_attribute(info, "standard::target-uri")?;
+    if scheme(&target).as_deref() == Some("file") {
+        return is_local_file_uri(&target).then_some(target);
+    }
+    let target = normalise(&target).ok()?;
     (!is_virtual_location(&target)).then_some(target)
+}
+
+/// Whether `target` is a `file:` address with no host that GIO maps to a
+/// local path; GIO reads only the text.
+fn is_local_file_uri(target: &str) -> bool {
+    let after_scheme = &target["file:".len()..];
+    after_scheme.starts_with("///") && gio::File::for_uri(target).path().is_some()
 }
 
 /// Classifies the item at `uri` from its kind, content type and the
@@ -336,6 +349,20 @@ mod tests {
         assert_eq!(
             shortcut_row.meta.recent_target.as_deref(),
             Some("smb://studio-nas/projects/plan.txt")
+        );
+
+        let not_utf8 = file_info(gio::FileType::Regular, "bad", None);
+        let not_utf8_row = entry_for_uri(row_uri, &with_target(not_utf8, "file:///tmp/bad%FF"));
+        assert_eq!(
+            not_utf8_row.meta.recent_target.as_deref(),
+            Some("file:///tmp/bad%FF"),
+            "a file: target is kept as GIO gave it, a name that is not UTF-8 included"
+        );
+        let remote_file = file_info(gio::FileType::Regular, "x", None);
+        let remote_row = entry_for_uri(row_uri, &with_target(remote_file, "file://nas/srv/x"));
+        assert_eq!(
+            remote_row.meta.recent_target, None,
+            "a file: address names no local file"
         );
 
         let script = file_info(gio::FileType::Regular, "x", None);

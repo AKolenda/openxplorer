@@ -300,6 +300,8 @@ mod tests {
             ]))
         );
         assert_eq!(sources(&[unnamed]), None, "GVfs named no file");
+        let not_utf8 = (row, Some("file:///tmp/bad%FF"), EntryKind::File);
+        assert_eq!(sources(&[not_utf8]), Some(owned(&["file:///tmp/bad%FF"])));
     }
 
     /// A listed local file maps to its exact path, a name that is not
