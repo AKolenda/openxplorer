@@ -25,16 +25,18 @@
 //! subscription starts before the call, so an answer that comes at once
 //! is not missed.
 
-use std::fs::File;
-use std::path::PathBuf;
+use std::fs::{File, OpenOptions};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 use gio::prelude::*;
+use rustix::fs::OFlags;
 
 use super::background_portal::DESKTOP_PORTAL_PATH;
+use crate::private_storage::KernelOpenFlags;
 
 /// The portal interface that opens a new email.
 pub const EMAIL_INTERFACE: &str = "org.freedesktop.portal.Email";
@@ -105,16 +107,30 @@ pub async fn email_portal_version(connection: &gio::DBusConnection, portal: &str
 }
 
 /// Opens each of `paths` read-only, to attach it; blocks, so it runs on a
-/// worker thread.
+/// worker thread. Only a regular file is attached: the check runs on the
+/// opened file, which `O_NONBLOCK` opens without waiting for a pipe's
+/// writer.
 ///
 /// # Errors
 ///
-/// [`EmailError::Unreadable`] when a file cannot be opened.
+/// [`EmailError::Unreadable`] when a file cannot be opened or is not a
+/// regular file.
 pub fn open_attachments(paths: &[PathBuf]) -> Result<Vec<File>, EmailError> {
-    paths
-        .iter()
-        .map(|path| File::open(path).map_err(EmailError::Unreadable))
-        .collect()
+    paths.iter().map(|path| open_attachment(path)).collect()
+}
+
+/// Opens the regular file at `path` read-only.
+fn open_attachment(path: &Path) -> Result<File, EmailError> {
+    let file = OpenOptions::new()
+        .read(true)
+        .kernel_flags(OFlags::NONBLOCK)
+        .open(path)
+        .map_err(EmailError::Unreadable)?;
+    let is_file = file.metadata().map_err(EmailError::Unreadable)?.is_file();
+    if !is_file {
+        return Err(EmailError::Unreadable(std::io::ErrorKind::InvalidInput.into()));
+    }
+    Ok(file)
 }
 
 /// Asks `portal` on `connection` to open a new email in the desktop's
@@ -253,5 +269,28 @@ mod tests {
         );
         let missing = open_attachments(&[present, folder.path().join("gone.txt")]);
         assert!(matches!(missing, Err(EmailError::Unreadable(_))));
+    }
+
+    /// A folder, or a pipe put where a Recent file was, is refused, and
+    /// opening the pipe does not wait for a writer.
+    #[test]
+    fn only_regular_files_are_attached_and_a_pipe_does_not_block() {
+        let folder = tempfile::tempdir().expect("a folder");
+        let pipe = folder.path().join("queue");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&pipe)
+            .status()
+            .expect("mkfifo runs");
+        assert!(made.success(), "a pipe");
+
+        let folder_path = folder.path().to_owned();
+        assert!(matches!(
+            open_attachments(&[folder_path]),
+            Err(EmailError::Unreadable(_))
+        ));
+        assert!(matches!(
+            open_attachments(&[pipe]),
+            Err(EmailError::Unreadable(_))
+        ));
     }
 }
