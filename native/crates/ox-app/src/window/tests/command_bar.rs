@@ -40,7 +40,7 @@ fn control_name(control: &gtk::Widget) -> Option<String> {
 
 /// The command bar's shown controls in order, the scrolling file commands
 /// included.
-fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
+pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
     let bar = test.window.command_bar();
     let mut controls = Vec::new();
     for child in children(bar) {

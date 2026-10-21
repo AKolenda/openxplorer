@@ -149,7 +149,7 @@ class RecipeBuildTests(unittest.TestCase):
         self.assertNotRegex(spec, r'(?m)^(Requires|Recommends):\s+python')
         self.assertNotRegex(pkgbuild, r"optdepends\+?=\([^)]*'python")
 
-    # parity: CMD-036
+    # parity: CMD-037
     def test_the_email_portal_backend_for_share_is_only_recommended(self) -> None:
         spec = SPEC.read_text(encoding='utf-8')
         pkgbuild = PKGBUILD.read_text(encoding='utf-8')

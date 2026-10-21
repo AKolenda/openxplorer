@@ -9,7 +9,7 @@
 //! action. New is disabled where nothing can be created, and Delete is named after what
 //! it does in the folder: "Move to Trash" or "Delete permanently"
 //! (CMD-003). Share, which was Copy path in the Python app, shows only
-//! where the desktop can share by email (CMD-036, `super::share`).
+//! where the desktop can share by email (CMD-037, `super::share`).
 //!
 //! [`CommandBar`] is a `GtkBox` subclass. The template
 //! `resources/ui/command-bar.ui` lays out the bar and the three controls at

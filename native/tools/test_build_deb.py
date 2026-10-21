@@ -118,7 +118,7 @@ class ControlFieldTests(unittest.TestCase):
                 self.assertNotIn(name, preview)
         self.assertNotIn('python', stable + preview)
 
-    # parity: CMD-036
+    # parity: CMD-037
     def test_both_packages_recommend_the_email_portal_backend_for_share(self) -> None:
         for channel in (Channel.STABLE, Channel.PREVIEW):
             with self.subTest(channel=channel):

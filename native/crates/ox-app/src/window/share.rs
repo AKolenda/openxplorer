@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Share: the command bar button that Windows 11 has between Rename and
-//! Delete (CMD-036). It emails the selected files through the desktop's
+//! Delete (CMD-037). It emails the selected files through the desktop's
 //! Email portal ([`ox_core::integration::compose_email`]), which opens the
 //! user's own email app with the files attached; nothing is sent until the
 //! user sends the message there.
@@ -180,7 +180,7 @@ async fn email_files(portal: &str, uris: Vec<String>) -> Result<(), EmailError> 
 mod tests {
     use super::*;
 
-    /// parity: CMD-036
+    /// parity: CMD-037
     #[test]
     fn share_needs_files_outside_the_recycle_bin_and_zips() {
         let file = ("file:///srv/plan.txt", EntryKind::File);

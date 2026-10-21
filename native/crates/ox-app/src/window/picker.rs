@@ -1611,7 +1611,7 @@ mod tests {
     /// An Open or Save dialog has no Share, even where the desktop can
     /// share, as Windows' file dialogs have none.
     ///
-    /// parity: INT-032, CMD-036
+    /// parity: INT-032, CMD-037
     #[gtk::test]
     fn the_dialog_has_no_share() {
         let fixture = Fixture::empty();

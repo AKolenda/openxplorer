@@ -8,7 +8,7 @@
 
 use gtk::prelude::*;
 
-use super::command_bar::command_bar_names;
+use super::command_bar::command_bar_controls;
 use super::file_ops_support::select_names;
 use super::geometry::{button_for, laid_out};
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
@@ -29,7 +29,7 @@ fn share_button(test: &TestWindow) -> gtk::Button {
     button_for(test, "win.share")
 }
 
-/// parity: CMD-036
+/// parity: CMD-037
 #[gtk::test]
 fn the_share_button_is_named_share_and_hidden_without_an_email_portal() {
     let fixture = Fixture::standard();
@@ -44,7 +44,7 @@ fn the_share_button_is_named_share_and_hidden_without_an_email_portal() {
     assert!(!button.is_visible(), "nobody answers under that name");
 }
 
-/// parity: CMD-036
+/// parity: CMD-037
 #[gtk::test]
 fn with_an_email_portal_share_attaches_the_selected_files() {
     let fixture = Fixture::standard();
@@ -54,13 +54,26 @@ fn with_an_email_portal_share_attaches_the_selected_files() {
     let button = share_button(&test);
     assert!(button.is_visible(), "the desktop can share by email");
     assert!(!button.is_sensitive(), "nothing is selected");
-    let names = command_bar_names(&test);
-    let share = names
+    // The neighbours by their actions, whatever Delete is labelled.
+    let actions: Vec<Option<String>> = command_bar_controls(&test)
         .iter()
-        .position(|name| name == "Share")
+        .map(|control| {
+            control
+                .downcast_ref::<gtk::Button>()
+                .and_then(ActionableExt::action_name)
+                .map(|name| name.to_string())
+        })
+        .collect();
+    let share = actions
+        .iter()
+        .position(|action| action.as_deref() == Some("win.share"))
         .expect("Share is shown");
-    assert_eq!(names[share - 1], "Rename (F2)", "after Rename, as in Windows 11");
-    assert_eq!(names[share + 1], "Move to Trash (Delete)");
+    assert_eq!(
+        actions[share - 1].as_deref(),
+        Some("win.rename"),
+        "after Rename, as in Windows 11"
+    );
+    assert_eq!(actions[share + 1].as_deref(), Some("win.trash"), "before Delete");
 
     select_names(&test, &["Notes 2.txt", "Résumé.txt"]);
     assert!(button.is_sensitive(), "files can be shared");
@@ -86,7 +99,7 @@ fn with_an_email_portal_share_attaches_the_selected_files() {
 /// Windows cannot share a folder; nor can Share send an item of the
 /// Recycle Bin or of a ZIP, which have no file for the email app.
 ///
-/// parity: CMD-036
+/// parity: CMD-037
 #[gtk::test]
 fn share_needs_files_and_skips_folders() {
     let fixture = Fixture::standard();
@@ -103,7 +116,7 @@ fn share_needs_files_and_skips_folders() {
     assert!(button.is_sensitive(), "one file");
 }
 
-/// parity: CMD-036
+/// parity: CMD-037
 #[gtk::test]
 fn a_failed_email_shows_the_error_and_cancelling_shows_nothing() {
     let fixture = Fixture::standard();
@@ -133,7 +146,7 @@ fn a_failed_email_shows_the_error_and_cancelling_shows_nothing() {
 /// One email takes at most 16 files, as one D-Bus message carries at
 /// most 16 file descriptors; more are refused before the portal is asked.
 ///
-/// parity: CMD-036
+/// parity: CMD-037
 #[gtk::test]
 fn more_files_than_an_email_takes_are_refused_with_a_reason() {
     let fixture = Fixture::with_files(17);
@@ -154,7 +167,7 @@ fn more_files_than_an_email_takes_are_refused_with_a_reason() {
 /// A compact window hides Share with Cut and Rename, and a wider one
 /// shows it again.
 ///
-/// parity: CMD-036, LOOK-022
+/// parity: CMD-037, LOOK-022
 #[gtk::test]
 fn a_compact_window_hides_share() {
     let fixture = Fixture::standard();
