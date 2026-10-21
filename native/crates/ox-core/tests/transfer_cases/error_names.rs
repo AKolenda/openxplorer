@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use ox_core::transfer::{Cancellation, ConflictPolicy, FailedItem, FailureAnswer, Node, TransferError};
 
+use crate::transfer_support::device::Device;
 use crate::transfer_support::local::{local_path_of, LocalNode, Provider};
 use crate::transfer_support::*;
 
@@ -147,4 +148,62 @@ fn an_entry_inside_a_folder_is_asked_about_by_its_real_path() {
     assert_names(&result.errors[0], &real);
     assert_eq!(list(&fixture.destination_folder.join("tree")), ["a.txt", "sub"]);
     fixture.assert_no_staging();
+}
+
+/// A copy within one phone (MTP `CopyObject` keeps the source's name) that
+/// fails, reporting the URI it was given, as `GVfs` does.
+#[derive(Default)]
+struct RefusesSameDeviceCopy {
+    device: Device,
+}
+
+impl Provider for RefusesSameDeviceCopy {
+    fn base(&self) -> Option<&dyn Provider> {
+        Some(&self.device)
+    }
+
+    fn native_copy_keeps_name(&self, _node: &LocalNode, _target_folder: &dyn Node) -> bool {
+        true
+    }
+
+    fn copy_file(
+        &self,
+        _node: &LocalNode,
+        target: &dyn Node,
+        _cancel: &Cancellation,
+        _progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<(), TransferError> {
+        Err(TransferError::failed(format!(
+            "Error copying to {}: Device busy",
+            target.uri()
+        )))
+    }
+}
+
+/// A name a URI must escape (`a b.txt` is `a%20b.txt` there) still becomes
+/// the final name, here the "Keep both" copy name, never a path below it.
+///
+/// parity: XFER-001, XFER-023
+#[test]
+fn a_copy_within_one_device_names_the_final_name_in_an_escaped_uri() {
+    let fixture = Fixture::with_destination("phone");
+    let source = fixture.source_folder.join("a b.txt");
+    write(&source, "new");
+    write(&fixture.destination_folder.join("a b.txt"), "old");
+
+    let result = fixture.copy(
+        Arc::new(RefusesSameDeviceCopy::default()),
+        &[&source],
+        ConflictPolicy::KeepBoth,
+    );
+
+    assert_eq!(result.errors.len(), 1, "{result:?}");
+    let error = &result.errors[0];
+    let real = format!(
+        "{}/a b - Copy.txt: Device busy",
+        file_uri(&fixture.destination_folder)
+    );
+    assert!(error.ends_with(&real), "{error}");
+    assert!(!error.contains(".winspace-transfer"), "{error}");
+    assert_eq!(list(&fixture.destination_folder), ["a b.txt"]);
 }

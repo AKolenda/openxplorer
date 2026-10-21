@@ -18,8 +18,6 @@
 //! in an existing folder is left out of the path instead, so the message
 //! names that folder.
 
-use std::ffi::OsStr;
-
 use super::error::TransferError;
 
 /// The private name an item is built under, and the real name messages
@@ -34,13 +32,11 @@ pub(crate) struct StagedName {
 }
 
 impl StagedName {
-    /// An item built as `stage`, or as one of `inner` in a staging folder
-    /// called `stage`, and published as `real` beside it.
-    pub(crate) fn new(stage: &str, inner: &[&OsStr], real: &str) -> Self {
-        let mut staged: Vec<String> = inner
-            .iter()
-            .map(|inner| format!("{stage}/{}", inner.to_string_lossy()))
-            .collect();
+    /// An item built as `stage`, or in a staging folder called `stage` as
+    /// the item that `inner` spells (each name as itself and as a URI
+    /// spells it), and published as `real` beside it.
+    pub(crate) fn new(stage: &str, inner: &[String], real: &str) -> Self {
+        let mut staged: Vec<String> = inner.iter().map(|inner| format!("{stage}/{inner}")).collect();
         staged.sort_by_key(|path| std::cmp::Reverse(path.len()));
         staged.push(stage.to_owned());
         Self {
@@ -109,7 +105,7 @@ mod tests {
     /// The stage of one copy, named like the engine's.
     fn copy_of_one() -> StagedName {
         let stage = format!(".winspace-transfer-{}.part", "a".repeat(32));
-        StagedName::new(&stage, &[OsStr::new("payload")], "one.txt")
+        StagedName::new(&stage, &["payload".to_owned()], "one.txt")
     }
 
     /// parity: XFER-001

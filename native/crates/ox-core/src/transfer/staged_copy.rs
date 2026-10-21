@@ -161,11 +161,12 @@ impl StagedCopy<'_> {
         let stage_name = staging_name()?;
         let source_name = self.source.name();
         let final_name = self.destination.name();
-        let name = StagedName::new(
-            &stage_name,
-            &[OsStr::new(PAYLOAD_NAME), &source_name, &final_name],
-            &self.destination.display_name(),
-        );
+        let folder = self.destination_folder.child(OsStr::new(&stage_name));
+        let inner: Vec<String> = [OsStr::new(PAYLOAD_NAME), &source_name, &final_name]
+            .into_iter()
+            .flat_map(|inner| spellings(folder.as_ref(), inner))
+            .collect();
+        let name = StagedName::new(&stage_name, &inner, &self.destination.display_name());
         self.build_and_publish(&name, staging)
             .map_err(|error| name.apply(error))
     }
@@ -334,6 +335,14 @@ impl StagedCopy<'_> {
             publish_staged(stage.item(), self.destination, modes, self.cancel)
         }
     }
+}
+
+/// How a message may spell the item `name` in `folder`: as the name
+/// itself, and as the end of its URI, where a space is `%20`.
+fn spellings(folder: &dyn Node, name: &OsStr) -> [String; 2] {
+    let uri = folder.child(name).uri();
+    let escaped = uri.rsplit('/').next().unwrap_or_default().to_owned();
+    [name.to_string_lossy().into_owned(), escaped]
 }
 
 /// A copy within one device ends with a move out of its private folder
