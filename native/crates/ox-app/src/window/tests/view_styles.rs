@@ -580,6 +580,35 @@ fn hidden_files_are_one_setting_for_every_folder_and_window() {
     assert_eq!(hidden_state(&test), Some(false));
 }
 
+/// Hidden files shown or hidden again redraw the pane beside the active
+/// one too: a folder of hidden items only loses its "This folder is
+/// empty" note when they show, and gets it back when they hide.
+///
+/// parity: VIEW-023
+#[gtk::test]
+fn hidden_files_redraw_the_inactive_pane_of_a_split_tab() {
+    use crate::window::session::PaneSide;
+
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents").join(".draft"), b"Synthetic test data\n").expect("a file");
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .split_tab(Some(&fixture.uri_of("Documents")))
+        .expect("split");
+    test.wait_for_listing("the right pane");
+    test.window.activate_pane(PaneSide::Start);
+    let beside = test.window.pane_on(PaneSide::End);
+    wait_until("the empty note beside", || beside.shows_empty_note());
+
+    test.activate("hidden", None);
+    wait_until("the hidden file beside", || beside.model().n_items() == 1);
+    assert!(!beside.shows_empty_note(), "no empty note over the hidden file");
+
+    test.activate("hidden", None);
+    wait_until("the hidden file gone beside", || beside.model().n_items() == 0);
+    assert!(beside.shows_empty_note(), "the empty note is back");
+}
+
 /// "Always show icons, never thumbnails" turns previews off in every
 /// folder and window, and is the opposite of Settings' "Show previews".
 ///

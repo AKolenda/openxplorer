@@ -442,3 +442,46 @@ fn each_folder_remembers_its_view_unless_turned_off() {
             .per_folder_views
     );
 }
+
+/// Turning thumbnails off or on, as Folder Options' "Always show icons,
+/// never thumbnails" does with the whole view options, keeps the columns
+/// Apply to Folders gave every folder: only a change of the columns
+/// themselves reaches the shared view.
+/// parity: VIEW-020, VIEW-058
+#[test]
+fn a_thumbnail_toggle_keeps_the_applied_columns() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    let applied = ViewProperties {
+        details_columns: Some(vec!["size".to_owned(), "owner".to_owned()]),
+        ..ViewProperties::default()
+    };
+    store.remember_view("", applied, ViewScope::AllFolders).unwrap();
+    let mut options = store.snapshot().preferences.view_options;
+    options.show_previews = false;
+
+    let saved = store
+        .update_preferences(&PreferencesUpdate {
+            view_options: Some(options.clone()),
+            ..PreferencesUpdate::default()
+        })
+        .unwrap();
+
+    let columns = vec!["size".to_owned(), "owner".to_owned()];
+    assert_eq!(
+        saved.view_for("file:///home/someone/Pictures").details_columns,
+        Some(columns)
+    );
+    options.details_columns = vec!["type".to_owned()];
+    let saved = store
+        .update_preferences(&PreferencesUpdate {
+            view_options: Some(options),
+            ..PreferencesUpdate::default()
+        })
+        .unwrap();
+    assert_eq!(
+        saved.view_for("file:///home/someone/Pictures").details_columns,
+        Some(vec!["type".to_owned()]),
+        "choosing the columns in Settings still reaches the shared view"
+    );
+}

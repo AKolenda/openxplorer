@@ -584,9 +584,7 @@ impl Preferences {
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
-        if let Some(options) = &update.view_options {
-            self.view_options = options.clone();
-        }
+        let columns_changed = self.apply_view_options(update);
         replace_if_some(&mut self.open_tabs_at_end, update.open_tabs_at_end);
         replace_if_some(&mut self.restore_session, update.restore_session);
         replace_if_some(&mut self.begin_in_split_view, update.begin_in_split_view);
@@ -615,19 +613,32 @@ impl Preferences {
             self.folder_views.clone_from(folder_views);
         }
         self.downloads_group_by = update.downloads_group_by.or(self.downloads_group_by);
-        self.sync_style_defaults(update);
+        self.sync_style_defaults(update, columns_changed);
     }
 
-    /// Global Settings changes also update the shared display style.
-    fn sync_style_defaults(&mut self, update: &PreferencesUpdate) {
+    /// Takes the view options of `update`; true when their details columns
+    /// changed. Only such a change reaches the shared style: a thumbnail
+    /// toggle sends the whole view options too.
+    fn apply_view_options(&mut self, update: &PreferencesUpdate) -> bool {
+        let Some(options) = &update.view_options else {
+            return false;
+        };
+        let columns_changed = options.details_columns != self.view_options.details_columns;
+        self.view_options = options.clone();
+        columns_changed
+    }
+
+    /// Global Settings changes also update the shared display style: the
+    /// column widths, and the details columns when `columns_changed`.
+    fn sync_style_defaults(&mut self, update: &PreferencesUpdate, columns_changed: bool) {
         let Some(defaults) = self.view_defaults.as_mut() else {
             return;
         };
         if update.column_widths.is_some() {
             defaults.column_widths.clone_from(&self.column_widths);
         }
-        if let Some(options) = &update.view_options {
-            defaults.details_columns = Some(options.details_columns.clone());
+        if columns_changed {
+            defaults.details_columns = Some(self.view_options.details_columns.clone());
         }
     }
 

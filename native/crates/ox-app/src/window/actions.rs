@@ -331,6 +331,8 @@ impl BrowserWindow {
         self.set_action_state(WindowAction::Hidden, &shown.to_variant());
         if changed {
             self.update_content();
+            // The pane beside the active one shows or loses its items too.
+            self.update_beside_pane();
             // The folder's item count changes with it.
             self.update_details_pane();
         }
