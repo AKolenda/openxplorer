@@ -4,8 +4,9 @@
 //!
 //! Ports `trashKnown`, `refreshTrashSupport` and `deleteLabel` of
 //! `v2.0.0:desktop/ui/app.js`. When the window shows a folder it has not asked
-//! about, it asks GIO once, off the main thread, and remembers the answer
-//! for the window's life. Delete reads "Delete permanently" only where the
+//! about, it asks GIO once, off the main thread, about an item in it (the
+//! folder's own answer is about its parent), and remembers the answer for
+//! the window's life. Delete reads "Delete permanently" only where the
 //! folder is known to have no Trash (SMB shares, most remote backends);
 //! while the answer is unknown it reads "Move to Trash". What Delete then
 //! does is decided again per item when it runs (`plan_delete`), so a
@@ -83,13 +84,13 @@ impl BrowserWindow {
             self,
             async move {
                 let answer = trash_support(&folder, &Cancellation::new()).await;
-                window.remember_trash_support(folder, answer.ok());
+                window.remember_trash_support(folder, answer.ok().flatten());
             }
         ));
     }
 
-    /// Records the answer about `folder`; a failed question is asked again
-    /// the next time the folder is shown.
+    /// Records the answer about `folder`; a failed question, or one about an
+    /// empty folder, is asked again the next time the folder is shown.
     fn remember_trash_support(&self, folder: String, answer: Option<bool>) {
         {
             let mut operations = self.imp().file_operations.borrow_mut();

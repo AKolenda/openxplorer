@@ -7,6 +7,7 @@
 
 use std::cell::RefCell;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -402,6 +403,43 @@ fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
     toast.press_action();
     wait_until("the file to come back", || fixture.path("Résumé.txt").is_file());
     assert_eq!(toast.action_label(), None, "the step is undone");
+}
+
+/// Delete moves an item to the Trash wherever GIO says the item can go
+/// there, also when the folder shown could not itself be trashed, as for
+/// a file directly in the home folder, whose own folder `/home` only root
+/// may change: it asks "Move to Trash?", never "Delete permanently?".
+///
+/// parity: OPS-015, OPS-018
+#[gtk::test]
+fn delete_trashes_an_item_in_a_folder_whose_own_folder_is_read_only() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let holder = fixture
+        .root()
+        .parent()
+        .expect("the fixture's temporary folder")
+        .to_owned();
+    let set_holder_mode = |mode| {
+        fs::set_permissions(&holder, fs::Permissions::from_mode(mode)).expect("chmod the fixture's folder");
+    };
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Résumé.txt"]);
+
+    set_holder_mode(0o555);
+    test.activate("trash", None);
+    let dialog = open_dialog(&test);
+    set_holder_mode(0o755);
+
+    assert_eq!(dialog.title_text(), "Move to Trash?");
+    assert_eq!(
+        dialog.message_text(),
+        "Résumé.txt\n\nItems go to the Trash and can be restored from there."
+    );
+    dialog.press("Move to Trash");
+    wait_until("the file to go to the Trash", || {
+        !fixture.path("Résumé.txt").exists()
+    });
 }
 
 /// With "Ask before moving items to the Recycle Bin" off, Delete trashes

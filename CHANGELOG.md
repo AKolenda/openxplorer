@@ -1,3 +1,12 @@
+# Unreleased
+
+- Delete moves items to the Recycle Bin wherever it works, as Windows
+  Explorer does. Items directly in the home folder, or at the top of a USB
+  drive, were deleted permanently after "Delete permanently?", because the
+  app asked whether their folder could be trashed instead of the items.
+  Only a place with really no Recycle Bin (a network share, a read-only
+  drive, `/tmp`) still asks before deleting permanently.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed

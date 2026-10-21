@@ -4,21 +4,29 @@
 //!
 //! Ports `trash_support` in `v2.0.0:desktop/gio_backend.py` and `trashScope`,
 //! `trashSupported`, `deleteLabel` and the confirmation of `trash` in
-//! `v2.0.0:desktop/ui/app.js`. Each item is decided by its own folder: where GIO
-//! reports a Trash the item goes there, elsewhere (SMB shares, most remote
-//! backends) it is deleted permanently, and the confirmation says which.
+//! `v2.0.0:desktop/ui/app.js`. Each item is decided by what GIO reports for the
+//! item itself (`access::can-trash`): where it can go to the Trash it goes
+//! there, elsewhere (SMB shares, most remote backends, tmpfs) it is deleted
+//! permanently, and the confirmation says which. GIO answers for an item
+//! from the folder that holds it, so the folder is never asked about
+//! itself: that answer is about the folder's own parent, and a folder
+//! directly in the home folder, whose parent `/home` only root may change,
+//! would wrongly count as having no Trash.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+
+use gio::prelude::*;
 
 use super::context::{on_worker, unless_cancelled};
 use super::error::OpsError;
 use crate::gio_node::GioNode;
 use crate::location::{normalise, parent_location};
-use crate::transfer::{Cancellation, Node};
+use crate::transfer::{Cancellation, Node, TransferError};
 
-/// Whether the folder at `folder_uri` has a usable Trash
-/// (`access::can-trash`).
+/// Whether items in the folder at `folder_uri` go to the Trash: what GIO
+/// reports for the first item listed in it (`access::can-trash`). An
+/// empty folder has nothing to ask about and answers `None`, so the
+/// question is asked again once it holds items.
 ///
 /// # Errors
 ///
@@ -26,14 +34,43 @@ use crate::transfer::{Cancellation, Node};
 /// when the share must be mounted first (mount it and ask again), or
 /// [`OpsError::Cancelled`]. Every other failure answers `false`, as
 /// `trash_support` in `v2.0.0:desktop/gio_backend.py` does.
-pub async fn trash_support(folder_uri: &str, cancel: &Cancellation) -> Result<bool, OpsError> {
+pub async fn trash_support(folder_uri: &str, cancel: &Cancellation) -> Result<Option<bool>, OpsError> {
     let folder = GioNode::new(&normalise(folder_uri)?);
     let cancel = cancel.clone();
     on_worker(move || {
-        let can_trash = unless_cancelled(&cancel, || folder.can_trash(Some(&cancel)))?;
-        Ok(can_trash?)
+        let first_item = unless_cancelled(&cancel, || first_item_in(&folder.uri(), &cancel))?;
+        let Some(item) = first_item? else {
+            return Ok(None);
+        };
+        let can_trash = unless_cancelled(&cancel, || item.can_trash(Some(&cancel)))?;
+        Ok(Some(can_trash?))
     })
     .await
+}
+
+/// The first item listed in the folder at `folder_uri`, `None` when it is
+/// empty or cannot be listed.
+///
+/// # Errors
+///
+/// [`TransferError::NotMounted`] when the share must be mounted first.
+fn first_item_in(folder_uri: &str, cancel: &Cancellation) -> Result<Option<GioNode>, TransferError> {
+    let folder = gio::File::for_uri(folder_uri);
+    let cancellable = Some(cancel.cancellable());
+    let listed = folder.enumerate_children(
+        "standard::name",
+        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+        cancellable,
+    );
+    let children = match listed {
+        Ok(children) => children,
+        Err(error) if error.matches(gio::IOErrorEnum::NotMounted) => return Err(error.into()),
+        Err(_) => return Ok(None),
+    };
+    let first = children.next_file(cancellable).ok().flatten();
+    // Closing only releases the listing; nothing is lost when it fails.
+    let _ = children.close(cancellable);
+    Ok(first.map(|info| GioNode::from_file(folder.child(info.name()))))
 }
 
 /// The Delete command's label for an item in a folder whose Trash support
@@ -80,15 +117,23 @@ pub struct DeleteConfirmation {
     pub confirm_label: &'static str,
 }
 
-/// Decides what Delete does with each of `items`, asking each folder about
-/// its Trash once.
+/// Decides what Delete does with each of `items`, asking GIO about each
+/// item (`access::can-trash`).
 ///
-/// OPS-017: a folder on a share that is not mounted, which GIO cannot be
-/// asked about, counts as having a Trash, so that failure never turns into
-/// a permanent delete; the Trash attempt then fails visibly instead. Any
-/// other failed query answers "no Trash", as `trash_support` in
+/// GIO's answer comes from the folder that holds the item, so an item
+/// that can go to the Trash answers for the rest of its folder, which is
+/// then not asked again. An item that cannot answers only for itself in
+/// a local folder: it may be one that vanished since the listing, or
+/// another user's file in a shared folder such as `/tmp`. On a remote
+/// location the first answer stands for the folder either way, so a large
+/// selection on a share costs one query, as before.
+///
+/// OPS-017: an item on a share that is not mounted, which GIO cannot be
+/// asked about, counts as going to the Trash, so that failure never turns
+/// into a permanent delete; the Trash attempt then fails visibly instead.
+/// Any other failed query answers "no Trash", as `trash_support` in
 /// `v2.0.0:desktop/gio_backend.py` does, and the confirmation then says that the
-/// items are deleted permanently.
+/// item is deleted permanently.
 ///
 /// # Errors
 ///
@@ -110,12 +155,15 @@ fn plan_delete_blocking(items: &[DeleteItem], cancel: &Cancellation) -> Result<D
     };
     for item in items {
         cancel.check()?;
-        let has_trash = match trash_by_folder.entry(trash_scope(&item.uri)) {
-            Entry::Occupied(known) => *known.get(),
-            Entry::Vacant(unknown) => {
-                let answer = folder_has_trash(unknown.key(), cancel)?;
-                *unknown.insert(answer)
+        let folder = trash_scope(&item.uri);
+        let has_trash = if let Some(&known) = trash_by_folder.get(&folder) {
+            known
+        } else {
+            let answer = item_has_trash(&item.uri, cancel)?;
+            if answer || !is_local(&folder) {
+                trash_by_folder.insert(folder, answer);
             }
+            answer
         };
         if has_trash {
             plan.to_trash.push(item.uri.clone());
@@ -132,15 +180,20 @@ fn trash_scope(uri: &str) -> String {
     parent_location(uri).unwrap_or_else(|| uri.to_owned())
 }
 
-/// Whether items in the folder at `folder_uri` go to the Trash, by the
-/// rules of [`plan_delete`].
+/// True for a `file:` location.
+fn is_local(uri: &str) -> bool {
+    gio::File::for_uri(uri).has_uri_scheme("file")
+}
+
+/// Whether the item at `item_uri` goes to the Trash, by the rules of
+/// [`plan_delete`].
 ///
 /// # Errors
 ///
 /// [`OpsError::Cancelled`]: a query the user cancelled answers "no Trash",
 /// which must never plan a permanent delete.
-fn folder_has_trash(folder_uri: &str, cancel: &Cancellation) -> Result<bool, OpsError> {
-    let can_trash = unless_cancelled(cancel, || GioNode::new(folder_uri).can_trash(Some(cancel)))?;
+fn item_has_trash(item_uri: &str, cancel: &Cancellation) -> Result<bool, OpsError> {
+    let can_trash = unless_cancelled(cancel, || GioNode::new(item_uri).can_trash(Some(cancel)))?;
     // OPS-017: the only failure `can_trash` reports is a share that is not
     // mounted, and it counts as having a Trash.
     Ok(can_trash.unwrap_or(true))
@@ -296,11 +349,11 @@ mod tests {
     #[test]
     fn a_cancelled_trash_query_is_a_cancellation_not_a_permanent_delete() {
         let temp = tempfile::tempdir().expect("a temporary folder");
-        let folder_uri = gio::File::for_path(temp.path()).uri().to_string();
+        let item_uri = gio::File::for_path(temp.path()).uri().to_string();
         let cancelled = Cancellation::new();
         cancelled.cancel();
 
-        let answer = folder_has_trash(&folder_uri, &cancelled);
+        let answer = item_has_trash(&item_uri, &cancelled);
 
         assert_eq!(answer, Err(OpsError::Cancelled));
     }
