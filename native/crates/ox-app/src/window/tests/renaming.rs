@@ -66,6 +66,77 @@ fn a_slow_second_click_on_the_selected_name_renames_it_in_place() {
     assert_eq!(edited_name(&test).as_deref(), Some("Notes 2.txt"));
 }
 
+/// The names the in-place field showed while `test`'s window ran for
+/// `duration`.
+fn names_edited_during(test: &TestWindow, duration: Duration) -> Vec<String> {
+    let mut edited = Vec::new();
+    let deadline = std::time::Instant::now() + duration;
+    while std::time::Instant::now() < deadline {
+        wait_for(Duration::from_millis(20));
+        if let Some(name) = edited_name(test) {
+            edited.push(name);
+        }
+    }
+    edited
+}
+
+/// A slow second click schedules a rename of the item clicked, never of
+/// whatever item comes to stand at its position before the rename
+/// starts, as when the clicked item is deleted and the next one is
+/// selected in its place.
+///
+/// parity: OPS-011
+#[gtk::test]
+fn a_slow_click_rename_never_starts_on_another_item() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    select_names(&test, &["Notes 2.txt"]);
+    let model = test.window.folder_model();
+    let position = model.first_selected().expect("Notes 2.txt is selected");
+
+    test.window.name_pressed(NamePress {
+        on_name_of: Some(position),
+        clicks: 1,
+        modifiers: gdk::ModifierType::empty(),
+    });
+    test.activate("direction", Some("descending"));
+    model.select_only(position);
+    let now_there = model.name_at(position).expect("an item at the position");
+
+    assert_ne!(now_there, "Notes 2.txt", "another item stands there now");
+    assert_eq!(names_edited_during(&test, Duration::from_millis(1200)), Vec::<String>::new());
+}
+
+/// A command run before the rename starts cancels it, as Delete, Ctrl+D
+/// or a refresh does in Windows File Explorer: nothing is renamed in
+/// place, also when the item stays the only one selected.
+///
+/// parity: OPS-011
+#[gtk::test]
+fn a_command_cancels_a_pending_slow_click_rename() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    for command in ["refresh", "delete-permanently"] {
+        select_names(&test, &["Notes 2.txt"]);
+        test.window.name_pressed(NamePress {
+            on_name_of: test.window.folder_model().first_selected(),
+            clicks: 1,
+            modifiers: gdk::ModifierType::empty(),
+        });
+        test.activate(command, None);
+        let edited = names_edited_during(&test, Duration::from_millis(1200));
+        if let Some(question) = dialog_over(&test) {
+            question.press("Cancel");
+            wait_for_no_dialog(&test);
+        }
+
+        assert_eq!(edited, Vec::<String>::new(), "{command} cancels the rename");
+    }
+    assert!(fixture.path("Notes 2.txt").is_file());
+}
+
 /// parity: OPS-012
 #[gtk::test]
 fn tab_commits_the_name_and_goes_on_to_rename_the_next_item() {
