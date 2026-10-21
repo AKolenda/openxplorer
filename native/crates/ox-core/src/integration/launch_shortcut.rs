@@ -467,10 +467,14 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             // before the user cleared Super+E would give it to that action,
             // and the record earlier builds shared is nobody's now. A
             // record a failed turning on kept is the way back, so it stays.
+            // The record earlier builds shared is then a copy of it, unless
+            // the kept record leads to the other package: then the shared
+            // one is that package's way back, so it stays too.
             None => {
                 match self.read_record(false) {
                     Some(record) if record.stranded => {
-                        if let Some(earlier) = self.earlier_record_path(true) {
+                        let duplicate = self.earlier_record_path(!self.is_other_package(&record.previous));
+                        if let Some(earlier) = duplicate {
                             let _ = std::fs::remove_file(earlier);
                         }
                         kept = Some(record);

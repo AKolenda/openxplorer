@@ -1075,3 +1075,39 @@ fn a_failed_turning_off_whose_undo_fails_keeps_the_way_back_to_dolphin() {
         [CTRL_ALT_D, SUPER_E]
     );
 }
+
+/// The preview package has Super+E with only the record every package
+/// shared earlier, of Dolphin, and the stable package took it from the
+/// preview. Turning the stable package off fails, and so does putting
+/// Super+E back on it. The shared record is still the preview's way back
+/// to Dolphin: turning the stable package on and off again gives Super+E
+/// to the preview, and turning the preview off gives it to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn a_failed_turning_off_keeps_the_previews_earlier_record() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    preview.enable().unwrap();
+    make_it_an_earlier_record(settings.path(), &format!("{PREVIEW}.json"));
+    stable.enable().unwrap();
+    shortcuts
+        .fail_from_set_keys
+        .set(Some(shortcuts.set_keys_calls.get() + 1));
+
+    assert!(stable.restore().is_err());
+    assert_eq!(stable.status(), LaunchShortcutStatus::Free);
+
+    shortcuts.fail_from_set_keys.set(None);
+    stable.enable().unwrap();
+    assert!(
+        settings.path().join(EARLIER).exists(),
+        "the preview's record stays"
+    );
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+}
