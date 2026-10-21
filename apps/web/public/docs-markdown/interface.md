@@ -32,7 +32,7 @@ View → Folder tree (F7) shows a tree of folders below the navigation places. E
 
 Your Templates folder supplies entries directly in New, with its subfolders as submenus. Choose a template and a new name; creating from a template never overwrites an existing file.
 
-More options → Keyboard shortcuts (Ctrl+?) lists the available keys. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
+More options → Keyboard shortcuts (Ctrl+?) lists the available keys. Windows Explorer’s keys work too: Ctrl+E moves to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
 
 ## Follow file operations
 

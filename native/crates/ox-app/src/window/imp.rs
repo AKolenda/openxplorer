@@ -260,6 +260,9 @@ pub(crate) struct BrowserWindow {
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
     /// The timer that saves the window's size after a resize.
     pub(super) size_save: RefCell<Option<glib::SourceId>>,
+    /// Whether the window is full screen, as F11 last asked or the
+    /// desktop last said (CMD-036).
+    pub(super) wants_full_screen: Cell<bool>,
     /// The tabs closed in this window, most recent first.
     pub(super) closed_tabs: RefCell<Vec<ClosedTab>>,
     /// The in-window dialogs, Properties by tab, and the tabs that

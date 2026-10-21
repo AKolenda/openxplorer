@@ -6,7 +6,8 @@
 //! maximized state, and so does this. A window saves its size a moment
 //! after the user stops resizing it, or maximizes or restores it, and when
 //! it closes; the size saved is the one it has when not maximized, kept
-//! within the 670 × 470 minimum the settings accept. Every browser window
+//! within the 670 × 470 minimum the settings accept. Full screen (F11) is
+//! not saved: the size and state before it stay saved. Every browser window
 //! opens through [`BrowserWindow::present_as_new_window`]; snapshot
 //! windows set their own size and do not save it.
 
@@ -88,8 +89,14 @@ impl BrowserWindow {
         }
     }
 
-    /// Saves the window's size, unless it is the one saved already.
+    /// Saves the window's size, unless it is the one saved already or
+    /// the window is full screen.
     fn save_size(&self) {
+        // F11's full screen is not saved, and GTK calls a full-screen
+        // window not maximized, so the state before it stays saved.
+        if self.is_fullscreen() {
+            return;
+        }
         let (width, height) = self.default_size();
         let (Ok(width), Ok(height)) = (u32::try_from(width), u32::try_from(height)) else {
             return;

@@ -7,8 +7,9 @@
 //! focus is outside a text field, not only in the folder view. It adds
 //! Undo, Redo, Shift+Delete and Copy path's keys (Explorer's Ctrl+Shift+C
 //! for "Copy as path", and Dolphin's Ctrl+Alt+C for "Copy Location",
-//! CLIP-013). They are not application accelerators: a text field keeps
-//! its own Ctrl+C, Ctrl+V, Delete and F2, and on the Settings page or in
+//! CLIP-013), and Explorer's Ctrl+D for Delete (CMD-036). They are not
+//! application accelerators: a text field keeps its own Ctrl+C, Ctrl+V,
+//! Delete, Ctrl+D and F2, and on the Settings page or in
 //! the address bar they do nothing, as in app.js. The window handles them
 //! in the bubble phase, after the focused widget had its turn, and only
 //! when focus is elsewhere; menus and dialogs take their own Escape first.
@@ -33,7 +34,8 @@ const FILE_SHORTCUTS: [(WindowAction, &str); 11] = [
     (WindowAction::Paste, "<Primary>v"),
     (WindowAction::CopyPath, "<Primary><Shift>c|<Primary><Alt>c"),
     (WindowAction::Rename, "F2"),
-    (WindowAction::Trash, "Delete|KP_Delete"),
+    // Ctrl+D is Explorer's other Delete key (CMD-036).
+    (WindowAction::Trash, "Delete|KP_Delete|<Primary>d"),
     (WindowAction::DeletePermanently, "<Shift>Delete|<Shift>KP_Delete"),
     (WindowAction::NewFolder, "<Primary><Shift>n"),
     (WindowAction::Undo, "<Primary>z"),

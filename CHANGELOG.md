@@ -1,3 +1,13 @@
+# Unreleased
+
+- Windows Explorer's Ctrl+E, Ctrl+D, F11 and Alt+P work: Ctrl+E moves to
+  the search box as Ctrl+F does, Ctrl+D moves the selection to the
+  Recycle Bin exactly as Delete does (a text field keeps it), F11 shows
+  the window full screen and gives it back its size and maximized state
+  when pressed again, and Alt+P shows or hides the details pane, which is
+  also the preview pane, as Alt+Shift+P does. The keyboard shortcuts
+  window lists them.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed

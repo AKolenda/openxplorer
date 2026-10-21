@@ -88,6 +88,7 @@ mod folder_search;
 mod folder_size_scan;
 mod folder_tree;
 mod free_space;
+mod full_screen;
 mod gestures;
 mod grid_keys;
 mod group_day;
