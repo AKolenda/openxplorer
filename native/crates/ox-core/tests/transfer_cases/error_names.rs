@@ -94,7 +94,7 @@ fn folders_and_keep_both_name_the_item_they_would_have_become() {
 }
 
 /// A backend that cannot write `b.txt` and says so with the full path and
-/// URI it was given, as GIO and GVfs do.
+/// URI it was given, as GIO and `GVfs` do.
 struct RefusesB;
 
 impl Provider for RefusesB {
