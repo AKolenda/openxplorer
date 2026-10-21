@@ -1,9 +1,5 @@
 # Unreleased
 
-- New and Paste are now also off in a folder you may write to but not
-  enter (no execute permission), where nothing can be created either,
-  with "This folder is read-only." as the reason.
-
 # 2.0.6 — 2026-10-13
 
 ## What's Changed
