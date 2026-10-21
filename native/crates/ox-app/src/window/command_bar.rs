@@ -3,12 +3,13 @@
 //!
 //! Ports `section.commandbar` in `v2.0.0:desktop/ui/index.html` and its menus in
 //! `setup()` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`, in the same order:
-//! New ▾ │ Cut, Copy, Paste, Rename, Copy path, Move to Trash │ Sort ▾,
+//! New ▾ │ Cut, Copy, Paste, Rename, Share, Move to Trash │ Sort ▾,
 //! View ▾, More options, then at the right the appearance toggle, Settings
 //! and the Details toggle. Every control runs a window or application
 //! action. New is disabled where nothing can be created, and Delete is named after what
 //! it does in the folder: "Move to Trash" or "Delete permanently"
-//! (CMD-003).
+//! (CMD-003). Share, which was Copy path in the Python app, shows only
+//! where the desktop can share by email (CMD-036, `super::share`).
 //!
 //! [`CommandBar`] is a `GtkBox` subclass. The template
 //! `resources/ui/command-bar.ui` lays out the bar and the three controls at
@@ -92,9 +93,9 @@ const EDIT_COMMANDS: [IconCommand; 6] = [
     },
     IconCommand {
         glyph: Icon::Share,
-        action: WindowAction::CopyPath,
-        name: crate::i18n::message_id("Copy path"),
-        tooltip: crate::i18n::message_id("Copy path (does not change sharing permissions)"),
+        action: WindowAction::Share,
+        name: crate::i18n::message_id("Share"),
+        tooltip: crate::i18n::message_id("Share"),
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
@@ -110,7 +111,7 @@ const EDIT_COMMANDS: [IconCommand; 6] = [
 const SETTINGS_TOOLTIP: &str = crate::i18n::message_id("Settings (Ctrl+,)");
 
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::subclass::prelude::*;
@@ -140,9 +141,15 @@ mod imp {
         /// The glyph of [`Self::details_toggle`].
         #[template_child]
         pub(super) details_glyph: TemplateChild<gtk::Image>,
-        /// Cut, Rename, Copy path and Details, which a compact window
-        /// hides.
+        /// Cut, Rename and Details, which a compact window hides.
         pub(super) hidden_when_compact: RefCell<Vec<gtk::Widget>>,
+        /// Share, which a compact window hides too, and which shows only
+        /// where the desktop can share.
+        pub(super) share_button: OnceCell<gtk::Button>,
+        /// Whether the window offers Share.
+        pub(super) share_offered: Cell<bool>,
+        /// Whether the window is compact (680 pixels or less).
+        pub(super) compact: Cell<bool>,
         /// New ▾, disabled where nothing can be created.
         pub(super) new_button: OnceCell<gtk::MenuButton>,
         /// Delete, labelled for the folder.
@@ -206,7 +213,12 @@ impl CommandBar {
         group.append(&separator());
         for command in &EDIT_COMMANDS {
             let button = icon_button(command);
-            if command.compact == InCompactWindow::Hidden {
+            if command.action == WindowAction::Share {
+                button.set_visible(false);
+                imp.share_button
+                    .set(button.clone())
+                    .expect("the bar has one Share");
+            } else if command.compact == InCompactWindow::Hidden {
                 imp.hidden_when_compact.borrow_mut().push(button.clone().upcast());
             }
             if command.action == WindowAction::Trash {
@@ -316,13 +328,29 @@ impl CommandBar {
     }
 
     /// Hides what the web layout hides in a window of `band`'s width: the
-    /// appearance label from 1050 pixels, and Cut, Rename, Copy path and
+    /// appearance label from 1050 pixels, and Cut, Rename, Share and
     /// Details from 680.
     pub(super) fn fit_to_width(&self, band: WindowWidth) {
         let imp = self.imp();
         imp.appearance_label.set_visible(band.shows_appearance_label());
         for control in imp.hidden_when_compact.borrow().iter() {
             control.set_visible(!band.is_compact());
+        }
+        imp.compact.set(band.is_compact());
+        self.show_share();
+    }
+
+    /// Offers Share, or hides it where the desktop cannot share.
+    pub(super) fn offer_share(&self, offered: bool) {
+        self.imp().share_offered.set(offered);
+        self.show_share();
+    }
+
+    /// Shows Share when it is offered and the window is not compact.
+    fn show_share(&self) {
+        let imp = self.imp();
+        if let Some(button) = imp.share_button.get() {
+            button.set_visible(imp.share_offered.get() && !imp.compact.get());
         }
     }
 

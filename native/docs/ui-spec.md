@@ -497,7 +497,7 @@ where it differs; ✓ means the target equals the current app.
 | Separator | 1 × 20, `margin: 0 10`, `@ox_border` | AppBarSeparator 1 px, DividerStrokeColorDefault, margin `2,8,2,8` (ABS#L8, ABS#L14–16) | Keep. |
 | States | hover `@ox_hover`; pressed `@ox_pressed` with `@ox_muted` text; disabled `@ox_text_disabled`; toggled (Details open) `@ox_selected` | ABB#L77–79, ABB#L12 | safe |
 | Right group | Appearance (sun or moon glyph with a "Light" / "Dark" label, `@ox_muted`, text `@ox_text` on hover, label hidden at ≤ 1050), Settings (gear, `@ox_muted`), Details toggle ✓ | — | Keep. |
-| Responsive | ≤ 1190: gap 1, padding `0 10`, separator margin `0 6`; ≤ 960: commands padding `0 8`, min width 32; ≤ 680: hide Copy path, Cut, Rename and the Details toggle (they stay in More) ✓ | CommandBar overflow (CB#L5–8) | Keep. |
+| Responsive | ≤ 1190: gap 1, padding `0 10`, separator margin `0 6`; ≤ 960: commands padding `0 8`, min width 32; ≤ 680: hide Share, Cut, Rename and the Details toggle (they stay in More) ✓ | CommandBar overflow (CB#L5–8) | Keep. |
 
 ### 4.4 Sidebar
 

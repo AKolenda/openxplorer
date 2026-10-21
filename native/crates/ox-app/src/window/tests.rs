@@ -56,6 +56,7 @@ mod search;
 mod search_options;
 mod selection;
 mod settings;
+mod share;
 mod sidebar;
 mod sidebar_layout;
 mod sidebar_sections;

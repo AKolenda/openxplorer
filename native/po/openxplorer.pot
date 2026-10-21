@@ -3597,14 +3597,6 @@ msgstr ""
 msgid "Copy (Ctrl+C)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Copy path"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar.rs
-msgid "Copy path (does not change sharing permissions)"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Cut"
 msgstr ""
@@ -3655,6 +3647,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Settings (Ctrl+,)"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Share"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
@@ -3840,6 +3836,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Compress to…"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Copy as path"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/trash_support.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/delete_plan.rs
@@ -5188,6 +5188,11 @@ msgstr ""
 msgid "This service action changed or no longer matches the selection. Configure it again."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/share.rs
+msgid "Share can attach up to {count} files to one email."
+msgstr ""
+
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Address history"
 msgstr ""
@@ -6422,6 +6427,14 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/integration/drive_format.rs
 msgid "{error} (It could not be mounted again: {reason})"
+msgstr ""
+
+#: crates/ox-core/src/integration/email_portal.rs
+msgid "The email app could not be opened."
+msgstr ""
+
+#: crates/ox-core/src/integration/email_portal.rs
+msgid "The files could not be attached to an email."
 msgstr ""
 
 #: crates/ox-core/src/integration/file_manager_bus.rs

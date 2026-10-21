@@ -530,7 +530,7 @@ fn the_menus_inside_a_zip_are_short() {
     test.window.right_click(Some(position));
     assert_eq!(
         test.window.context_menu().row_labels(),
-        ["Open", "-", "Copy", "Copy path", "-", "Extract all…"]
+        ["Open", "-", "Copy", "Copy as path", "-", "Extract all…"]
     );
     test.window.context_menu().popdown();
     test.window.right_click(None);

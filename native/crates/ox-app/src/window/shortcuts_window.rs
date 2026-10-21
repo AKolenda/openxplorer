@@ -136,7 +136,7 @@ fn describe(name: &str) -> Option<(Group, String)> {
         "win.cut" => (Group::Files, ox_core::i18n::gettext_static("Cut")),
         "win.copy" => (Group::Files, ox_core::i18n::gettext_static("Copy")),
         "win.paste" => (Group::Files, ox_core::i18n::gettext_static("Paste")),
-        "win.copy-path" => (Group::Files, ox_core::i18n::gettext_static("Copy path")),
+        "win.copy-path" => (Group::Files, ox_core::i18n::gettext_static("Copy as path")),
         "win.rename" => (Group::Files, ox_core::i18n::gettext_static("Rename")),
         "win.trash" => (Group::Files, ox_core::i18n::gettext_static("Delete")),
         "win.delete-permanently" => (Group::Files, ox_core::i18n::gettext_static("Delete permanently")),

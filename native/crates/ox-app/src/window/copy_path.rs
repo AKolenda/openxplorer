@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Copy path: puts the address of each selected item, one per line, or of
-//! the folder, on the clipboard as text (CLIP-012, CLIP-014).
+//! Copy as path: puts the address of each selected item, one per line, or
+//! of the folder, on the clipboard as text (CLIP-012, CLIP-014). The
+//! context menus name it "Copy as path", as Windows does; the Python app
+//! called it Copy path and had it in the command bar too, where Share is
+//! now (`super::share`).
 //!
 //! Ports `copyPath` in `v2.0.0:desktop/ui/app.js` and the text it copies,
 //! `displayUri`: a plain path for local items, `\\server\share\…` for SMB

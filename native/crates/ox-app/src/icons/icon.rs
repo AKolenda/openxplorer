@@ -167,7 +167,7 @@ pub(crate) enum Icon {
     Info,
     /// `laptop_20_regular`: This PC.
     Laptop,
-    /// `link_20_regular`: Copy path in the context menus.
+    /// `link_20_regular`: Copy as path in the context menus.
     Link,
     /// `markdown_20_regular`: New Markdown document.
     Markdown,
@@ -204,7 +204,7 @@ pub(crate) enum Icon {
     Server,
     /// `settings_20_regular`: Settings.
     Settings,
-    /// `share_20_regular`: Copy path in the command bar.
+    /// `share_20_regular`: Share in the command bar.
     Share,
     /// `shield_lock_20_regular`: the search index's privacy note.
     ShieldLock,

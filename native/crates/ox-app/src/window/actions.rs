@@ -245,6 +245,7 @@ impl BrowserWindow {
             plain_action(WindowAction::PinSelected, BrowserWindow::pin_selected),
             plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
             plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),
+            plain_action(WindowAction::Share, BrowserWindow::share),
             plain_action(WindowAction::About, BrowserWindow::show_about),
             plain_action(WindowAction::Help, BrowserWindow::show_help),
             plain_action(
@@ -258,6 +259,7 @@ impl BrowserWindow {
             ),
         ]);
         self.set_action_enabled(WindowAction::Open, false);
+        self.set_action_enabled(WindowAction::Share, false);
     }
 
     fn install_view_actions(&self) {

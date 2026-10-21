@@ -1,3 +1,13 @@
+# Unreleased
+
+- The command bar button with the Share icon is Share now, as in Windows 11
+  File Explorer: it opens a new message in your email app with the selected
+  files attached, through the desktop's email portal (KDE Plasma, or GNOME
+  with the GTK portal). Before, it only copied the path. It is hidden where
+  the desktop has no email portal and in Open and Save dialogs. The context
+  menu's "Copy path" is renamed "Copy as path", as Windows names it, and
+  keeps Ctrl+Shift+C and Ctrl+Alt+C.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed

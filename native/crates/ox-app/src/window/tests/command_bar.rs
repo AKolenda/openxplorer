@@ -71,14 +71,21 @@ fn menu_of(test: &TestWindow, name: &str) -> MenuPopover {
         .unwrap_or_else(|| panic!("{name} opens an app menu"))
 }
 
+/// The names of `test`'s shown command bar controls, in order.
+pub(super) fn command_bar_names(test: &TestWindow) -> Vec<String> {
+    command_bar_controls(test)
+        .iter()
+        .filter_map(control_name)
+        .collect()
+}
+
+/// Share, between Rename and Move to Trash, shows only where the desktop
+/// can share (`tests::share`); the test session has no Email portal.
 #[gtk::test]
 fn the_command_bar_has_the_current_controls_in_order() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let names: Vec<String> = command_bar_controls(&test)
-        .iter()
-        .filter_map(control_name)
-        .collect();
+    let names = command_bar_names(&test);
     assert_eq!(
         names,
         [
@@ -88,7 +95,6 @@ fn the_command_bar_has_the_current_controls_in_order() {
             "Copy (Ctrl+C)",
             "Paste files (Ctrl+V)",
             "Rename (F2)",
-            "Copy path (does not change sharing permissions)",
             "Move to Trash (Delete)",
             "|",
             "Sort",
