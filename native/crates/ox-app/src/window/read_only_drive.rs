@@ -8,10 +8,6 @@
 //! off and say why, Copy stays, and the status bar shows "Read-only
 //! drive" with what to do about it as its tooltip. A reply for a folder
 //! the tab has left is dropped.
-//!
-//! The same query asks whether the user may write to the folder itself:
-//! a folder without write permission on a writable drive takes no new
-//! items, so New and Paste are off there too (CMD-011).
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -36,35 +32,13 @@ async fn read_only_drive_of_file(file: &gio::File) -> Option<ReadOnlyDrive> {
     ReadOnlyDrive::from_filesystem(read_only, kind.as_deref())
 }
 
-/// Whether GIO says the user may not write into the local folder `file`:
-/// false when it may, or when GIO cannot tell. Only a local folder is
-/// asked, where GIO answers with access(2); a remote backend may guess
-/// from permission bits that do not apply to the user.
-async fn is_unwritable_folder(file: &gio::File) -> bool {
-    if !file.is_native() {
-        return false;
-    }
-    let info = file
-        .query_info_future(
-            gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
-            gio::FileQueryInfoFlags::NONE,
-            glib::Priority::LOW,
-        )
-        .await;
-    info.is_ok_and(|info| {
-        info.has_attribute(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
-            && !info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
-    })
-}
-
 impl BrowserWindow {
     /// Asks whether the active tab's folder is on a drive mounted
-    /// read-only, or one the user may not write to, and shows the answer.
+    /// read-only, and shows the answer.
     pub(super) fn refresh_drive_access(&self) {
         let folder = self.current_uri().filter(|uri| Page::from_uri(uri).is_none());
         let Some(uri) = folder else {
             self.show_drive_access(None);
-            self.show_folder_access(None);
             return;
         };
         let file = gio::File::for_uri(&uri);
@@ -73,28 +47,11 @@ impl BrowserWindow {
             self,
             async move {
                 let drive = read_only_drive_of_file(&file).await;
-                let unwritable = is_unwritable_folder(&file).await;
                 if window.current_uri().as_deref() == Some(uri.as_str()) {
-                    window.show_folder_access(unwritable.then(|| uri.clone()));
                     window.show_drive_access(drive.map(|drive| (uri, drive)));
                 }
             }
         ));
-    }
-
-    /// Records that the user may not write to the folder `unwritable`, or
-    /// that nothing says so, and updates the commands when that changed.
-    fn show_folder_access(&self, unwritable: Option<String>) {
-        if *self.imp().unwritable_folder.borrow() == unwritable {
-            return;
-        }
-        self.imp().unwritable_folder.replace(unwritable);
-        self.update_file_commands();
-    }
-
-    /// Whether the user may not write to the folder `uri`, as last read.
-    pub(crate) fn is_unwritable_folder(&self, uri: &str) -> bool {
-        self.imp().unwritable_folder.borrow().as_deref() == Some(uri)
     }
 
     /// Records that the folder `shown.0` is on the read-only drive

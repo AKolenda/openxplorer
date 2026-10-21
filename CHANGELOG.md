@@ -1,3 +1,10 @@
+# Unreleased
+
+- In a folder you are not allowed to write to, New and Paste are on
+  again, as in Windows Explorer: when they fail, the system's error says
+  why (for example "Permission denied"). Since 2.0.5 they were off there,
+  with "This folder is read-only." as the reason.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed
