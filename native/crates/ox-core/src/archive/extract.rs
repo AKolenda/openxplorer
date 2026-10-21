@@ -54,7 +54,7 @@ use crate::transfer::{
 };
 use plan::{plan, plan_selected, ExtractionPlan};
 pub(super) use staging::is_staging_name;
-use staging::ExtractionStaging;
+use staging::{ExtractionStaging, Output};
 use unpack::Unpacking;
 
 /// Receives progress on the worker thread the extraction runs on.
@@ -101,6 +101,9 @@ pub struct ZipExtractor {
     /// The members to extract, as path segments, when only some are:
     /// files, and folders with everything in them.
     selection: Option<Vec<Vec<String>>>,
+    /// The new folder is a private step of an extraction into the existing
+    /// destination folder.
+    into_existing: bool,
 }
 
 impl fmt::Debug for ZipExtractor {
@@ -138,6 +141,7 @@ impl ZipExtractor {
             write_guard: None,
             limits: ExtractionLimits::default(),
             selection: None,
+            into_existing: false,
         }
     }
 
@@ -162,6 +166,16 @@ impl ZipExtractor {
             .filter(|segments| segments.iter().all(|segment| !segment.is_empty()))
             .collect();
         self.selection = Some(selected);
+        self
+    }
+
+    /// Marks the new folder as the private folder of an extraction into
+    /// the existing destination folder, whose items the caller then moves
+    /// in (see [`private_extraction_name`]). Errors then name the
+    /// destination folder rather than the private folder.
+    #[must_use]
+    pub fn into_existing_folder(mut self) -> Self {
+        self.into_existing = true;
         self
     }
 
@@ -250,7 +264,12 @@ impl ZipExtractor {
         };
         self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)?;
         cancel.check()?;
-        let mut staging = ExtractionStaging::create(destination.folder.as_ref(), &name, cancel)?;
+        let output = if self.into_existing {
+            Output::InsideExisting(&name)
+        } else {
+            Output::NewFolder(&name)
+        };
+        let mut staging = ExtractionStaging::create(destination.folder.as_ref(), output, cancel)?;
         let mut unpacking = Unpacking::new(self, plan.summary, cancel);
         if let Err(error) = unpacking.run(&mut archive, &plan, &mut staging, destination.new_folder.as_ref())
         {

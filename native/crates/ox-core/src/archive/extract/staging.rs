@@ -21,7 +21,6 @@
 
 use std::ffi::OsStr;
 
-use super::lift::is_private_extraction_name;
 use crate::archive::ArchiveError;
 use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{secure_local_staging, Cancellation, ItemIdentity, Node, StagedName, TransferError};
@@ -29,6 +28,16 @@ use crate::transfer::{secure_local_staging, Cancellation, ItemIdentity, Node, St
 /// Staging folders are `.openxplorer-extract-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-extract-";
 const STAGING_SUFFIX: &str = ".part";
+
+/// What the staging folder becomes, which decides what errors name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Output<'a> {
+    /// The new folder called this: errors name it.
+    NewFolder(&'a str),
+    /// The private folder called this, whose items are then moved into
+    /// the existing destination folder: errors name that folder.
+    InsideExisting(&'a str),
+}
 
 /// A staging folder this extraction created, which it alone may remove.
 pub(super) struct ExtractionStaging {
@@ -42,8 +51,7 @@ pub(super) struct ExtractionStaging {
 }
 
 impl ExtractionStaging {
-    /// Creates a new staging folder in `destination` for the new folder
-    /// `new_folder`.
+    /// Creates a new staging folder in `destination` for `output`.
     ///
     /// # Errors
     ///
@@ -51,14 +59,15 @@ impl ExtractionStaging {
     /// created; nothing needs cleaning up then.
     pub(super) fn create(
         destination: &dyn Node,
-        new_folder: &str,
+        output: Output<'_>,
         cancel: &Cancellation,
     ) -> Result<Self, ArchiveError> {
         let stage = staging_name()?;
-        let name = if is_private_extraction_name(new_folder) {
-            StagedName::inside(&stage, new_folder, &destination.display_name())
-        } else {
-            StagedName::new(&stage, &[], new_folder)
+        let name = match output {
+            Output::NewFolder(folder) => StagedName::new(&stage, &[], folder),
+            Output::InsideExisting(private) => {
+                StagedName::inside(&stage, private, &destination.display_name())
+            }
         };
         let folder = destination.child(OsStr::new(&stage));
         // Only a successful, exclusive creation grants cleanup ownership:

@@ -79,12 +79,34 @@ fn an_extraction_into_a_read_only_existing_folder_names_that_folder() {
 
     let error = fixture
         .extractor()
+        .into_existing_folder()
         .extract(&request, &fixture.cancel)
         .unwrap_err()
         .to_string();
 
     unlock(&fixture.destination);
     assert_names(&error, &fixture.destination);
+    fixture.assert_no_output();
+}
+
+/// A new folder the user names like a private one is still named as is.
+///
+/// parity: ARC-013
+#[test]
+fn a_new_folder_named_like_a_private_one_keeps_its_name_in_errors() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_sample_zip();
+    if !lock(&fixture.destination) {
+        return;
+    }
+    let name = format!(".openxplorer-extract-{}", "d".repeat(32));
+
+    let error = fixture.extract(&name).unwrap_err().to_string();
+
+    unlock(&fixture.destination);
+    let real = format!("{}: Permission denied", fixture.destination.join(&name).display());
+    assert!(error.ends_with(&real), "{error}");
+    assert!(!error.contains(".part"), "{error}");
     fixture.assert_no_output();
 }
 

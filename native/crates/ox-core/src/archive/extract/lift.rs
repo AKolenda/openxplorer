@@ -18,10 +18,6 @@ use crate::random::{random_hex, NAME_BYTES};
 /// How many names are tried for the lifted folder: `X`, `X (2)`, …
 const MAX_NAME_TRIES: u32 = 100;
 
-/// Private folders of extractions into existing folders are
-/// `.openxplorer-extract-<32 hex digits>`.
-const PRIVATE_PREFIX: &str = ".openxplorer-extract-";
-
 /// A rename in place: never replaces, never copies, never follows a link.
 const RENAME: gio::FileCopyFlags =
     gio::FileCopyFlags::NOFOLLOW_SYMLINKS.union(gio::FileCopyFlags::NO_FALLBACK_FOR_MOVE);
@@ -78,14 +74,7 @@ pub fn lift_same_named_folder(extracted: ExtractedFolder) -> ExtractedFolder {
 ///
 /// When the system's random source cannot be read.
 pub fn private_extraction_name() -> std::io::Result<String> {
-    Ok(format!("{PRIVATE_PREFIX}{}", random_hex(NAME_BYTES)?))
-}
-
-/// Whether `name` has the form [`private_extraction_name`] gives.
-pub(in crate::archive) fn is_private_extraction_name(name: &str) -> bool {
-    name.strip_prefix(PRIVATE_PREFIX).is_some_and(|digits| {
-        digits.len() == 2 * NAME_BYTES && digits.bytes().all(|digit| digit.is_ascii_hexdigit())
-    })
+    Ok(format!(".openxplorer-extract-{}", random_hex(NAME_BYTES)?))
 }
 
 /// Makes the lone folder inside `extracted` the output, beside the
