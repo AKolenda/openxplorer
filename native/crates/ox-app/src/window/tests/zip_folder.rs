@@ -153,7 +153,7 @@ fn copied_items_paste_as_real_files() {
     assert!(test.window.shown_message().contains("read-only"));
     test.activate("copy", None);
     wait_until("the copies on the clipboard", || {
-        test.window.shown_message().contains("copied")
+        copied_uris(&test).is_some_and(|uris| uris.ends_with("/readme.txt"))
     });
 
     test.window
