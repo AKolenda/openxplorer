@@ -149,6 +149,16 @@ class RecipeBuildTests(unittest.TestCase):
         self.assertNotRegex(spec, r'(?m)^(Requires|Recommends):\s+python')
         self.assertNotRegex(pkgbuild, r"optdepends\+?=\([^)]*'python")
 
+    # parity: CMD-036
+    def test_the_email_portal_backend_for_share_is_only_recommended(self) -> None:
+        spec = SPEC.read_text(encoding='utf-8')
+        pkgbuild = PKGBUILD.read_text(encoding='utf-8')
+
+        self.assertRegex(spec, r'(?m)^Recommends:\s+xdg-desktop-portal-gtk$')
+        self.assertNotRegex(spec, r'(?m)^Requires:\s+xdg-desktop-portal')
+        self.assertRegex(pkgbuild, r"optdepends=\([^)]*'xdg-desktop-portal-gtk: ")
+        self.assertNotRegex(pkgbuild, r"(?m)^depends=\([^)]*xdg-desktop-portal")
+
 
 class SourceArchiveTests(unittest.TestCase):
     """The vendored-crate archive is the same bytes on every build."""

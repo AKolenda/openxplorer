@@ -61,6 +61,9 @@ Recommends:     gnome-keyring
 Recommends:     xdg-utils
 # Open in archive manager.
 Recommends:     file-roller
+# The Email portal backend that Share uses on GNOME; KDE Plasma's own
+# portal backend has Email too.
+Recommends:     xdg-desktop-portal-gtk
 %if "%{app_id}" == "io.winspace.Development"
 # mount.cifs, which the persistent SMB mount helper's units run.
 Recommends:     cifs-utils

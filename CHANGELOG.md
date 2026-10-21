@@ -7,6 +7,9 @@
   the desktop has no email portal and in Open and Save dialogs. The context
   menu's "Copy path" is renamed "Copy as path", as Windows names it, and
   keeps Ctrl+Shift+C and Ctrl+Alt+C.
+- The packages recommend xdg-desktop-portal-gtk (deb and RPM Recommends,
+  an Arch optional dependency), the Email portal backend that Share uses
+  on GNOME.
 
 # 2.0.6 — 2026-10-13
 

@@ -118,6 +118,14 @@ class ControlFieldTests(unittest.TestCase):
                 self.assertNotIn(name, preview)
         self.assertNotIn('python', stable + preview)
 
+    # parity: CMD-036
+    def test_both_packages_recommend_the_email_portal_backend_for_share(self) -> None:
+        for channel in (Channel.STABLE, Channel.PREVIEW):
+            with self.subTest(channel=channel):
+                fields = control_of(channel)
+                self.assertIn('xdg-desktop-portal-gtk', fields['Recommends'])
+                self.assertNotIn('xdg-desktop-portal', fields['Depends'])
+
     def test_the_preview_installs_beside_the_python_package(self) -> None:
         fields = control_of(Channel.PREVIEW)
 
