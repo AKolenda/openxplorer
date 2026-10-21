@@ -96,7 +96,7 @@ fn undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources() {
     );
     undo_fully(&record);
 
-    assert_eq!(record.undo_label(), "Undo: Copy");
+    assert_eq!(record.undo_label(), "Undo Copy");
     assert!(!destination.join("a.txt").exists());
     assert_eq!(fs::read(source.join("a.txt")).unwrap(), b"a");
     assert_in_recycle_bin(&destination.join("a.txt"), true);
@@ -149,7 +149,7 @@ fn undoing_a_move_puts_items_back_but_never_over_a_new_item() {
 
     let result = block_on(undo(&record, &OperationContext::default(), |_| {})).unwrap();
 
-    assert_eq!(record.undo_label(), "Undo: Move");
+    assert_eq!(record.undo_label(), "Undo Move");
     assert_eq!(result.done, [file_uri(&destination.join("a.txt"))]);
     assert_eq!(result.skipped, [file_uri(&destination.join("b.txt"))]);
     assert_eq!(fs::read(source.join("a.txt")).unwrap(), b"a");
@@ -217,7 +217,7 @@ fn undoing_move_to_trash_restores_the_items_where_they_were() {
     undo_fully(&record);
 
     assert!(trashed);
-    assert_eq!(record.undo_label(), "Undo: Move to Trash");
+    assert_eq!(record.undo_label(), "Undo Delete");
     assert_eq!(fs::read(folder.join("report.txt")).unwrap(), b"report");
     assert_in_recycle_bin(&folder.join("report.txt"), false);
 }
@@ -273,7 +273,7 @@ fn undoing_new_folder_and_duplicate_moves_the_new_items_to_the_trash() {
         labels.push(record.undo_label());
     }
 
-    assert_eq!(labels, ["Undo: Duplicate", "Undo: New folder"]);
+    assert_eq!(labels, ["Undo Duplicate", "Undo New"]);
     assert!(!temp.path().join("New folder").exists());
     assert!(!temp.path().join("a - Copy.txt").exists());
     assert_eq!(fs::read(temp.path().join("a.txt")).unwrap(), b"a");
@@ -323,7 +323,7 @@ fn a_batch_rename_is_undone_and_redone_as_one_step() {
     let redo = reversal.inverse.expect("the undo can be redone");
     let redone = block_on(undo(&redo, &context, |_| {})).expect("a redo");
 
-    assert_eq!(record.undo_label(), "Undo: Batch rename");
+    assert_eq!(record.undo_label(), "Undo Rename");
     assert_eq!(names_after_undo, [true, true]);
     assert!(redone.errors.is_empty(), "{:?}", redone.errors);
     assert_eq!(fs::read(temp.path().join("Trip 1.txt")).unwrap(), b"b.txt");
@@ -348,7 +348,7 @@ fn undoing_links_moves_only_the_links_to_the_trash() {
     let record = outcome.undo.expect("undoable links");
     undo_fully(&record);
 
-    assert_eq!(record.undo_label(), "Undo: Link");
+    assert_eq!(record.undo_label(), "Undo Link");
     assert!(
         links.join("a.txt").symlink_metadata().is_err(),
         "the link is gone"

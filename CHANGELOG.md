@@ -1,3 +1,8 @@
+# Unreleased
+
+## What's Changed
+* revert(ops): stop showing a message and an Undo button after a file operation succeeds, as Windows Explorer does; Undo stays on Ctrl+Z, the command bar and the folder menu, which now names the step as Explorer does ("Undo Delete", "Undo Rename", "Undo New")
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed

@@ -9,8 +9,9 @@
 //! channel, and the panel shows them until the user cancels. When the
 //! operation ends, the panel hides, the folder is listed again with the
 //! items the operation created selected (the Python app cleared the
-//! selection), Undo remembers how to reverse it, and a toast or the
-//! "Operation result" dialog says what happened.
+//! selection) and Undo remembers how to reverse it. As in Windows
+//! Explorer, nothing more is said when every item succeeded; otherwise
+//! the "Operation result" dialog says what happened.
 
 use gtk::subclass::prelude::*;
 use ox_core::location::TRASH_URI;
@@ -28,11 +29,7 @@ use crate::search::changed_folders;
 use crate::window::background_notice::Destination;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::{TransferKind, TransferPanel};
-use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
-
-/// The label of the toast's button that reverses the operation it reports.
-const UNDO_BUTTON: &str = "Undo";
 
 /// Why files are not written while a drive is formatted.
 const FORMATTING_A_DRIVE: &str =
@@ -41,7 +38,7 @@ const FORMATTING_A_DRIVE: &str =
 /// What a finished operation leaves behind.
 #[derive(Debug)]
 pub(super) struct FinishedOperation {
-    /// The toast or report that says what happened.
+    /// What happened, for the report or the desktop notification.
     pub(super) summary: OperationSummary,
     /// How Undo reverses it, when it can.
     pub(super) undo: Option<UndoRecord>,
@@ -275,9 +272,8 @@ impl BrowserWindow {
 
     /// Concludes an ended operation: Undo remembers it, the folder is
     /// listed again with its items selected, and the user is told what
-    /// happened ("Operation stopped" for a request refused before it
-    /// started). The toast of an operation Undo can reverse has an Undo
-    /// button (OPS-032).
+    /// went wrong, if anything ("Operation stopped" for a request refused
+    /// before it started).
     pub(super) async fn conclude_operation(&self, outcome: Result<FinishedOperation, OpsError>) {
         let origin = self.current_uri();
         self.conclude_operation_in(outcome, origin.as_deref(), None).await;
@@ -308,7 +304,6 @@ impl BrowserWindow {
         let still_here = self.current_uri().as_deref() == origin;
         match outcome {
             Ok(finished) => {
-                let is_undoable = finished.undo.is_some();
                 if let Some(record) = finished.undo.filter(|_| !recorded) {
                     self.context().record_operation(record);
                 }
@@ -316,15 +311,7 @@ impl BrowserWindow {
                 if still_here {
                     self.reload_selecting(finished.select_after);
                 }
-                match finished.summary {
-                    OperationSummary::Toast(text) if is_undoable => {
-                        // The toast has Undo; the desktop hears it too while
-                        // no window has focus (INT-026).
-                        self.notify_if_in_background(&OperationSummary::Toast(text.clone()), destination);
-                        self.show_message_with_undo(&text);
-                    }
-                    summary => self.report(summary, destination).await,
-                }
+                self.report(finished.summary, destination).await;
             }
             Err(error) => {
                 if still_here {
@@ -340,29 +327,14 @@ impl BrowserWindow {
         }
     }
 
-    /// Shows `text` in the toast with an Undo button, which reverses the
-    /// newest operation while it still is the one the toast is about: a
-    /// later change to the undo journal takes the button away (OPS-032).
-    pub(in crate::window) fn show_message_with_undo(&self, text: &str) {
-        self.imp()
-            .toast
-            .show_with_action(text, UNDO_BUTTON, WindowAction::Undo);
-    }
-
-    /// Takes the toast's Undo button away once the operation it would
-    /// reverse is no longer the newest.
-    pub(super) fn withdraw_toast_undo(&self) {
-        self.imp().toast.withdraw_action();
-    }
-
-    /// Shows `summary`: a toast for complete success, otherwise the
-    /// "Operation result" dialog.
-    /// A desktop notification says it too while no window has focus
+    /// Shows the "Operation result" dialog unless every item succeeded,
+    /// which Windows Explorer does not mention.
+    /// A desktop notification says what happened while no window has focus
     /// (INT-026), whose Show button opens `destination`.
     pub(super) async fn report(&self, summary: OperationSummary, destination: Destination) {
         self.notify_if_in_background(&summary, destination);
         match summary {
-            OperationSummary::Toast(text) => self.show_message(&text),
+            OperationSummary::Toast(_) => {}
             OperationSummary::Report(text) => {
                 dialog::show_message(self, ox_core::i18n::gettext_static(RESULT_TITLE), &text).await;
             }

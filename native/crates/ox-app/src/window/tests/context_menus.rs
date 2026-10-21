@@ -9,7 +9,9 @@ use std::fs;
 use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
-use super::file_ops_support::{is_enabled, select_names};
+use super::file_ops_support::{
+    is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash, select_names,
+};
 use crate::test_support::harness::{settle, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuStyle;
 
@@ -180,6 +182,44 @@ fn the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one() 
     });
     assert!(menu.row_labels().contains(&"Cut".to_owned()));
     assert!(menu.strip_labels().is_empty());
+}
+
+/// With the toast's Undo button gone, the folder menu is where Undo is
+/// found besides Ctrl+Z: as in Windows Explorer it names the step, "Undo
+/// Delete" after a Move to Trash, and Redo follows once it is undone.
+///
+/// parity: CMD-011, OPS-029, OPS-031
+#[gtk::test]
+fn the_folder_menu_names_the_step_undo_and_redo_take_as_windows_does() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("trash", None);
+    open_dialog(&test).press("Move to Trash");
+    wait_until("the file to go", || {
+        !test.names().contains(&"Notes 2.txt".to_owned())
+    });
+
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    let undo = menu.row("Undo Delete");
+    assert!(undo.is_sensitive());
+    undo.emit_activate();
+    wait_until("the file to come back", || fixture.path("Notes 2.txt").is_file());
+    wait_until("the undo to end", || !test.window.is_writing_files());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+
+    assert!(menu.row("Redo Delete").is_sensitive());
+    assert!(!menu.row("Undo").is_sensitive(), "nothing left to undo");
+    menu.popdown();
+    test.activate("new-folder", None);
+    name_editor(&test).emit_activate();
+    wait_until("the name to be kept", || !is_renaming_in_place(&test));
+    assert!(fixture.path("New folder").is_dir());
+    test.window.right_click(None);
+    assert!(test.window.context_menu().row("Undo New").is_sensitive());
 }
 
 /// parity: CMD-011, CMD-004

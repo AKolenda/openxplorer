@@ -11,18 +11,20 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
+use gtk::{gdk, gio, glib};
 use ox_core::settings::{PreferencesUpdate, Settings};
 use ox_core::transfer::{Cancellation, Progress, ProgressScope};
 
 use super::file_ops_support::{
-    dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
-    select_names, text_field, wait_for_no_dialog,
+    assert_ended_without_a_message, dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog,
+    press_shortcut, press_shortcut_where_focused, require_private_trash, select_names, text_field,
+    wait_for_no_dialog,
 };
 use crate::dialog::Dialog;
 use crate::locations::Page;
-use crate::test_support::harness::{application, descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{application, descendants, settle, wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
+use crate::window::session::PaneSide;
 use crate::window::transfer_panel::TransferKind;
 
 /// parity: OPS-002
@@ -114,21 +116,18 @@ fn rename_edits_the_name_in_place_and_undo_and_redo_walk_it() {
     assert!(!is_renaming_in_place(&test));
     assert!(fixture.path("Plans.txt").is_file());
     assert!(!fixture.path("Notes 2.txt").exists());
+    assert_ended_without_a_message(&test);
 
     test.activate("undo", None);
     wait_until("the rename to be undone", || {
         fixture.path("Notes 2.txt").is_file()
     });
     assert!(!fixture.path("Plans.txt").exists());
-    wait_until("the undone toast", || {
-        test.window.shown_message() == "Rename undone."
-    });
+    assert_ended_without_a_message(&test);
     test.activate("redo", None);
     wait_until("the rename to be redone", || fixture.path("Plans.txt").is_file());
     assert!(!fixture.path("Notes 2.txt").exists());
-    wait_until("the redone toast", || {
-        test.window.shown_message() == "Rename redone."
-    });
+    assert_ended_without_a_message(&test);
 }
 
 /// The file keys work only in the file pane; the keys that act on the
@@ -178,6 +177,62 @@ fn the_file_keys_leave_text_fields_and_the_settings_page_alone() {
         app.accels_for_action("win.context-menu").is_empty(),
         "Menu and Shift+F10 belong to the file views; a text field keeps its own menu"
     );
+}
+
+/// Renames `from` to `to` in place in `test`'s active pane.
+fn rename_in_place(test: &TestWindow, from: &str, to: &str) {
+    select_names(test, &[from]);
+    test.activate("rename", None);
+    let field = name_editor(test);
+    field.set_text(to);
+    field.emit_activate();
+    wait_until("the renamed item to be selected", || {
+        test.selected_names() == [to]
+    });
+}
+
+/// With the toast's Undo button gone, Ctrl+Z is the quick way back. As in
+/// Windows Explorer it undoes from the folder tree and from either pane of
+/// a split tab, while a text field keeps Ctrl+Z for its own text.
+///
+/// parity: OPS-029, CMD-017
+#[gtk::test]
+fn ctrl_z_undoes_from_the_tree_and_a_split_pane_but_not_in_a_text_field() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let ctrl_z = || press_shortcut_where_focused(&test, gdk::Key::z, gdk::ModifierType::CONTROL_MASK);
+    rename_in_place(&test, "Notes 2.txt", "Plans.txt");
+
+    test.window.search_box().focus();
+    let taken_from_search = ctrl_z();
+    settle();
+    let kept = fixture.path("Plans.txt").is_file();
+    // The fixture's temporary folder plays the home folder, so the tree
+    // never lists the real disk.
+    test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
+    test.activate("folder-tree", None);
+    let tree = test.window.folder_tree();
+    wait_until("the tree to list the folder", || tree.selected_uri().is_some());
+    let tree_list = descendants::<gtk::ListView>(tree).remove(0);
+    assert!(tree_list.grab_focus(), "the tree takes focus");
+    let taken_from_tree = ctrl_z();
+    wait_until("the rename to be undone", || {
+        fixture.path("Notes 2.txt").is_file()
+    });
+    assert_ended_without_a_message(&test);
+
+    assert!(!taken_from_search, "the search box keeps Ctrl+Z");
+    assert!(kept, "nothing was undone from the search box");
+    assert!(taken_from_tree);
+    test.activate("split-view", None);
+    test.wait_for_listing("the new pane");
+    rename_in_place(&test, "Notes 10.txt", "Budget.txt");
+    test.window.pane_on(PaneSide::End).focus_view();
+    assert!(ctrl_z());
+    wait_until("the split pane's rename to be undone", || {
+        fixture.path("Notes 10.txt").is_file()
+    });
+    assert!(!fixture.path("Budget.txt").exists());
 }
 
 /// parity: OPS-006, OPS-008, OPS-010
@@ -261,7 +316,7 @@ fn the_rename_dialog_refuses_a_name_too_long_before_the_extension_question() {
     wait_for_no_dialog(&test);
 }
 
-/// parity: OPS-014, OPS-029, OPS-032
+/// parity: OPS-014, OPS-029
 #[gtk::test]
 fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together() {
     let fixture = Fixture::standard();
@@ -286,9 +341,9 @@ fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together
         test.selected_names() == ["Plan 1.txt", "Plan 2.txt"]
     });
     let first = fs::read_to_string(fixture.path("Plan 1.txt")).expect("renamed in view order");
-    assert_eq!(test.window.shown_message(), "2 item(s) renamed.");
+    assert_ended_without_a_message(&test);
 
-    test.window.imp().toast.get().press_action();
+    test.activate("undo", None);
     wait_until("the batch to be renamed back", || {
         fixture.path("Notes 2.txt").is_file() && fixture.path("Notes 10.txt").is_file()
     });
@@ -374,9 +429,12 @@ fn a_batch_name_that_adds_an_extension_asks_first() {
     );
 }
 
-/// parity: OPS-015, OPS-018, OPS-023, OPS-029, OPS-032
+/// Windows Explorer says nothing once the items are in the Recycle Bin;
+/// Ctrl+Z brings them back.
+///
+/// parity: OPS-015, OPS-018, OPS-023, OPS-029
 #[gtk::test]
-fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
+fn delete_asks_then_moves_to_the_trash_silently_and_ctrl_z_restores() {
     require_private_trash();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
@@ -395,13 +453,11 @@ fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
     wait_until("the file to leave the folder", || {
         !fixture.path("Résumé.txt").exists() && !test.names().contains(&"Résumé.txt".to_owned())
     });
-    assert_eq!(test.window.shown_message(), "1 item(s) sent to Trash.");
-    let toast = test.window.imp().toast.get();
-    assert_eq!(toast.action_label().as_deref(), Some("Undo"));
+    assert_ended_without_a_message(&test);
 
-    toast.press_action();
+    press_shortcut(&test, gdk::Key::z, gdk::ModifierType::CONTROL_MASK);
     wait_until("the file to come back", || fixture.path("Résumé.txt").is_file());
-    assert_eq!(toast.action_label(), None, "the step is undone");
+    assert_ended_without_a_message(&test);
 }
 
 /// With "Ask before moving items to the Recycle Bin" off, Delete trashes
@@ -499,12 +555,10 @@ fn shift_delete_deletes_permanently_after_its_own_confirmation() {
     assert_eq!(dialog.button_labels(), ["Cancel", "Delete permanently"]);
     dialog.press("Delete permanently");
     wait_until("the folder to be deleted", || !fixture.path("Documents").exists());
-    wait_until("the toast", || {
-        test.window.shown_message() == "1 item(s) permanently deleted."
-    });
     wait_until("the next item to be selected", || {
         test.selected_names() == ["Notes 2.txt"]
     });
+    assert_ended_without_a_message(&test);
 }
 
 /// The command bar's Delete button, the button that runs Delete.
@@ -534,9 +588,7 @@ fn shift_clicking_delete_in_the_bar_deletes_permanently_after_asking() {
     assert_eq!(dialog.button_labels(), ["Cancel", "Delete permanently"]);
     dialog.press("Delete permanently");
     wait_until("the file to be deleted", || !fixture.path("Notes 2.txt").exists());
-    wait_until("the toast", || {
-        test.window.shown_message() == "1 item(s) permanently deleted."
-    });
+    assert_ended_without_a_message(&test);
 }
 
 /// Choosing Delete in the right-click menu with Shift held asks to delete
@@ -619,7 +671,7 @@ fn duplicate_copies_next_to_the_item_and_selects_the_copy() {
     let copy = test.selected_names().remove(0);
     assert!(fixture.path(&copy).is_file());
     assert!(fixture.path("Notes 2.txt").is_file());
-    assert_eq!(test.window.shown_message(), "1 item(s) duplicated.");
+    assert_ended_without_a_message(&test);
 
     test.activate("undo", None);
     wait_until("the copy to go to the Trash", || !fixture.path(&copy).exists());
@@ -711,13 +763,13 @@ fn closing_during_an_operation_asks_and_closes_only_once_it_stopped() {
 }
 
 /// While an operation runs its panel holds the session's logout and
-/// suspend inhibitor. When it ends in the window that has focus, the
-/// toast is enough; a window in the background would also notify the
-/// desktop (`background_notice.rs`).
+/// suspend inhibitor. When it ends in the window that has focus, nothing
+/// is said; a window in the background would notify the desktop
+/// (`background_notice.rs`).
 ///
 /// parity: INT-028
 #[gtk::test]
-fn a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast() {
+fn a_running_operation_inhibits_logout_and_a_focused_one_notifies_nothing() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let panel = test.window.imp().transfer_panel.get();
@@ -730,9 +782,12 @@ fn a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast() 
 
     select_names(&test, &["Notes 2.txt"]);
     test.activate("duplicate", None);
-    wait_until("the toast", || {
-        test.window.shown_message() == "1 item(s) duplicated."
+    wait_until("the copy to be selected", || {
+        test.selected_names()
+            .first()
+            .is_some_and(|name| name.starts_with("Notes 2 - Copy"))
     });
+    assert_ended_without_a_message(&test);
     assert!(test.window.is_active(), "the test window has focus");
     assert!(crate::window::background_notice::take_sent().is_empty());
 }

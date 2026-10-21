@@ -7,8 +7,9 @@
 //! takes the newest operation, and once its reversal ran, the record that
 //! reverses the reversal ([`UndoRecord::inverse`]) goes onto the Redo stack;
 //! Redo does the same the other way round. Each entry keeps the title of
-//! the operation the user started, so both commands keep naming it ("Undo:
-//! New folder", "Redo: New folder") whatever record reverses it now. A new
+//! the operation the user started, so both commands keep naming it ("Undo
+//! New", "Redo New", as Windows Explorer words them) whatever record
+//! reverses it now. A new
 //! operation empties the Redo stack, as in every editor.
 
 use std::collections::VecDeque;
@@ -70,10 +71,10 @@ impl JournalEntry {
         }
     }
 
-    /// The command label for this step, such as `Undo: Rename`.
+    /// The command label for this step, such as `Undo Rename`.
     pub fn label(&self, direction: JournalDirection) -> String {
         crate::i18n::format_message(
-            "{command}: {title}",
+            "{command} {title}",
             &[("command", direction.command_name()), ("title", self.title)],
         )
     }
@@ -246,10 +247,7 @@ mod tests {
     fn undo_and_redo_keep_naming_the_operation_the_user_started() {
         let mut journal = UndoJournal::new();
         journal.record(new_folder());
-        assert_eq!(
-            journal.label(JournalDirection::Undo).as_deref(),
-            Some("Undo: New folder")
-        );
+        assert_eq!(journal.label(JournalDirection::Undo).as_deref(), Some("Undo New"));
         assert_eq!(journal.label(JournalDirection::Redo), None);
 
         let undone = journal
@@ -258,20 +256,14 @@ mod tests {
         journal.record_reversal(JournalDirection::Undo, undone.title, Some(restore_new_folder()));
 
         assert_eq!(journal.label(JournalDirection::Undo), None);
-        assert_eq!(
-            journal.label(JournalDirection::Redo).as_deref(),
-            Some("Redo: New folder")
-        );
+        assert_eq!(journal.label(JournalDirection::Redo).as_deref(), Some("Redo New"));
         let redone = journal.take(JournalDirection::Redo).expect("an undo to redo");
         assert_eq!(redone.record, restore_new_folder());
         let restored = UndoRecord::Restore {
             restored: vec!["file:///tmp/New%20folder".into()],
         };
         journal.record_reversal(JournalDirection::Redo, redone.title, Some(restored));
-        assert_eq!(
-            journal.label(JournalDirection::Undo).as_deref(),
-            Some("Undo: New folder")
-        );
+        assert_eq!(journal.label(JournalDirection::Undo).as_deref(), Some("Undo New"));
     }
 
     #[test]
@@ -288,7 +280,7 @@ mod tests {
         assert_eq!(journal.label(JournalDirection::Redo), None);
         assert_eq!(
             journal.label(JournalDirection::Undo).as_deref(),
-            Some("Undo: Rename")
+            Some("Undo Rename")
         );
     }
 

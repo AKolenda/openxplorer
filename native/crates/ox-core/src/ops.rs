@@ -29,10 +29,10 @@
 //! (the `cancel` request) have no counterpart here.
 //!
 //! Wording: the place `trash:///` is the Recycle Bin in every message, as
-//! [`crate::location`] names it. The Delete command, its confirmation and
-//! its completion toast keep the Python app's "Move to Trash" texts word
-//! for word (OPS-015, CMD-003, OPS-023), and Undo names that command as it
-//! is labelled ("Undo: Move to Trash").
+//! [`crate::location`] names it. The Delete command and its confirmation
+//! keep the Python app's "Move to Trash" texts word for word (OPS-015,
+//! CMD-003), and Undo names the step as Windows Explorer does ("Undo
+//! Delete").
 //!
 //! | Module | Responsibility |
 //! |---|---|

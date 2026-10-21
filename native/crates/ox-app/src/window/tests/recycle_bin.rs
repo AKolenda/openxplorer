@@ -70,9 +70,7 @@ fn the_recycle_bin_lists_trashed_items_and_restore_puts_them_back() {
 
     assert_eq!(labels, ["Restore", "Delete permanently", "-", "Properties"]);
     wait_until("the file to be back", || original.is_file());
-    wait_until("the toast", || {
-        test.window.shown_message() == "1 item(s) restored."
-    });
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
 /// The Recycle Bin row counts a file trashed while the window is open:
@@ -356,7 +354,8 @@ fn undoing_a_copy_that_changed_since_asks_and_cancel_keeps_it() {
     wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
     test.activate("paste", None);
     let copy = fixture.path("Documents/Notes 2.txt");
-    wait_until("the copy", || test.window.shown_message() == "1 item(s) copied.");
+    wait_until("the copy", || copy.is_file());
+    super::file_ops_support::assert_ended_without_a_message(&test);
     let edited = std::fs::File::options()
         .write(true)
         .open(&copy)
@@ -375,5 +374,5 @@ fn undoing_a_copy_that_changed_since_asks_and_cancel_keeps_it() {
     wait_for_no_dialog(&test);
 
     assert!(copy.is_file(), "the copy stays");
-    assert_eq!(test.window.journal_label(JournalDirection::Undo), "Undo: Copy");
+    assert_eq!(test.window.journal_label(JournalDirection::Undo), "Undo Copy");
 }

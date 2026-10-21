@@ -16,7 +16,7 @@ use ox_core::ops::{JournalDirection, JournalEntry, UndoRecord};
 use super::{AppContext, JOURNAL_CHANGED};
 
 impl AppContext {
-    /// The label of the Undo or Redo command, such as `Undo: Rename`;
+    /// The label of the Undo or Redo command, such as `Undo Rename`;
     /// `None` while it has nothing to do.
     pub(crate) fn journal_label(&self, direction: JournalDirection) -> Option<String> {
         self.imp().undo_journal.borrow().label(direction)

@@ -10,7 +10,7 @@
 //! window's one operation, with the transfer panel and Cancel, and reuses
 //! the safety rules of the operation that reverses it (see
 //! [`ox_core::ops::undo`]). The commands are labelled with the operation
-//! they reverse ("Undo: Rename"). Before Undo moves copies to the Trash
+//! they reverse ("Undo Rename"). Before Undo moves copies to the Trash
 //! that were changed after the copy, it asks, as Dolphin does (OPS-030).
 
 use ox_core::ops::{
@@ -104,7 +104,7 @@ impl BrowserWindow {
         confirmed
     }
 
-    /// The label of the Undo or Redo command now, such as "Undo: Rename",
+    /// The label of the Undo or Redo command now, such as "Undo Rename",
     /// or its plain name while it has nothing to do.
     pub(crate) fn journal_label(&self, direction: JournalDirection) -> String {
         self.context()

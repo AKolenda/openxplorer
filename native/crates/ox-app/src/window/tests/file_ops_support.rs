@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Helpers the file-operation tests share: finding the open dialog,
 //! answering it, selecting items by name, pressing the file keys, and the
-//! guard of every test that uses the Recycle Bin.
+//! guard of every test that uses the Recycle Bin, and the check that a
+//! finished operation says nothing.
 
 use std::path::PathBuf;
 
@@ -9,7 +10,7 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 
 use crate::dialog::Dialog;
-use crate::test_support::harness::{descendants, wait_until, TestWindow};
+use crate::test_support::harness::{descendants, settle, wait_until, TestWindow};
 
 /// The dialog open over `test`'s window, once it shows.
 ///
@@ -34,6 +35,19 @@ pub(super) fn dialog_over(test: &TestWindow) -> Option<Dialog> {
 /// Waits until no dialog shows over `test`'s window.
 pub(in crate::window) fn wait_for_no_dialog(test: &TestWindow) {
     wait_until("the dialog to close", || dialog_over(test).is_none());
+}
+
+/// Waits until `test`'s window writes no files, then checks that the
+/// toast shows nothing: as in Windows Explorer, an operation that
+/// succeeds ends without a message or an Undo button.
+///
+/// # Panics
+///
+/// When the operation does not end in time or a message shows.
+pub(in crate::window) fn assert_ended_without_a_message(test: &TestWindow) {
+    wait_until("the operation to end", || !test.window.is_writing_files());
+    settle();
+    assert_eq!(test.window.shown_message(), "", "no message after the operation");
 }
 
 /// The dialog's first text field.

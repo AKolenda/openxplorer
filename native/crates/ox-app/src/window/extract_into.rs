@@ -282,7 +282,8 @@ impl BrowserWindow {
     }
 
     /// Shows `shown` (the extracted folder), or lists the chosen folder's
-    /// parent again, then the message (ARC-011).
+    /// parent again (ARC-011). Only the desktop hears that it worked, and
+    /// only while no window has focus.
     fn conclude_extraction(&self, shown: &str, choice: &ExtractionChoice, text: &str, origin: Option<TabId>) {
         if choice.show_result && self.current_uri().as_deref() == Some(shown) {
             // Already in front: listing it again shows the new items.
@@ -304,8 +305,6 @@ impl BrowserWindow {
         }
         let destination = Destination::items(vec![shown.to_owned()]);
         self.notify_if_in_background(&OperationSummary::Toast(text.to_owned()), destination);
-        // Listing a folder hides the toast, so it comes last.
-        self.show_message(text);
     }
 }
 

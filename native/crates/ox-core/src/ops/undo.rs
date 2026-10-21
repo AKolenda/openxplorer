@@ -125,32 +125,29 @@ pub struct MovedItem {
 }
 
 impl UndoRecord {
-    /// The operation's name as the Undo command shows it (`Rename`, `Move
-    /// to Trash`, ...).
+    /// The operation's name as the Undo command shows it (`Rename`,
+    /// `Delete`, ...), in Windows Explorer's words: "Undo Delete" after a
+    /// Move to Trash, "Undo Rename" after any rename and "Undo New" after
+    /// a new folder or file.
     pub fn title(&self) -> &'static str {
         match self {
-            UndoRecord::Rename { .. } => crate::i18n::gettext_static("Rename"),
-            UndoRecord::BatchRename { .. } => crate::i18n::gettext_static("Batch rename"),
+            UndoRecord::Rename { .. } | UndoRecord::BatchRename { .. } => {
+                crate::i18n::gettext_static("Rename")
+            }
             UndoRecord::Link { .. } => crate::i18n::gettext_static("Link"),
-            UndoRecord::Create {
-                kind: ItemKind::Folder,
-                ..
-            } => crate::i18n::gettext_static("New folder"),
-            UndoRecord::Create {
-                kind: ItemKind::File, ..
-            } => crate::i18n::gettext_static("New file"),
+            UndoRecord::Create { .. } => crate::i18n::gettext_static("New"),
             UndoRecord::Copy { .. } => crate::i18n::gettext_static("Copy"),
             UndoRecord::Duplicate { .. } => crate::i18n::gettext_static("Duplicate"),
             UndoRecord::Move { .. } => crate::i18n::gettext_static("Move"),
-            UndoRecord::Trash { .. } => crate::i18n::gettext_static("Move to Trash"),
+            UndoRecord::Trash { .. } => crate::i18n::gettext_static("Delete"),
             UndoRecord::Restore { .. } => crate::i18n::gettext_static("Restore"),
         }
     }
 
     /// The label of the Undo command for this operation, for example
-    /// `Undo: Rename`.
+    /// `Undo Rename`.
     pub fn undo_label(&self) -> String {
-        crate::i18n::format_message("Undo: {title}", &[("title", self.title())])
+        crate::i18n::format_message("Undo {title}", &[("title", self.title())])
     }
 
     /// The record that reverses what reversing this record did, given the
@@ -264,32 +261,32 @@ mod tests {
         let cases = [
             LabelCase {
                 record: rename(1),
-                label: "Undo: Rename",
+                label: "Undo Rename",
             },
             LabelCase {
                 record: UndoRecord::Create {
                     uri: "file:///tmp/a".into(),
                     kind: ItemKind::Folder,
                 },
-                label: "Undo: New folder",
+                label: "Undo New",
             },
             LabelCase {
                 record: UndoRecord::Create {
                     uri: "file:///tmp/a.txt".into(),
                     kind: ItemKind::File,
                 },
-                label: "Undo: New file",
+                label: "Undo New",
             },
             LabelCase {
                 record: UndoRecord::Duplicate { copies: Vec::new() },
-                label: "Undo: Duplicate",
+                label: "Undo Duplicate",
             },
             LabelCase {
                 record: UndoRecord::Trash {
                     original_paths: Vec::new(),
                     trashed_since: 0,
                 },
-                label: "Undo: Move to Trash",
+                label: "Undo Delete",
             },
         ];
         for case in cases {
