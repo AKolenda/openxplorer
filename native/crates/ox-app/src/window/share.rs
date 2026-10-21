@@ -9,9 +9,11 @@
 //! portal for its Email interface when it opens, and keeps the button
 //! hidden, not disabled, when no portal backend of the desktop implements
 //! it (as on a desktop without KDE's or GTK's portal). An Open or Save
-//! dialog never shows it. Like Windows' Share it needs files: a folder,
-//! an item of the Recycle Bin or one inside a ZIP disables it, as nothing
-//! can attach them. One email takes at most
+//! dialog never shows it. Like Windows' Share it is offered only for what
+//! it can attach: local files, files on a share mounted by the kernel or
+//! by `GVfs` (by their mount path), and Recent rows (by the file they
+//! stand for). A folder, an item of the Recycle Bin or one inside a ZIP,
+//! and an item with no local file, disable it. One email takes at most
 //! [`MAX_ATTACHMENTS`] files; more are refused with the reason.
 //!
 //! Before, the button with the share glyph copied the path ("Copy path
@@ -30,6 +32,7 @@ use ox_core::integration::{
     compose_email, email_portal_version, open_attachments, EmailError, MAX_ATTACHMENTS,
 };
 use ox_core::location::ARCHIVE_SCHEME;
+use ox_core::network::local_path;
 
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -55,11 +58,20 @@ fn is_shareable(uri: &str, kind: EntryKind) -> bool {
     kind == EntryKind::File && !uri.starts_with("trash:") && !uri.starts_with(ARCHIVE_SCHEME)
 }
 
-/// Whether Share can send `items`, each `(uri, kind)`: at least one, and
-/// every one shareable.
-fn can_share<'a>(items: impl IntoIterator<Item = (&'a str, EntryKind)>) -> bool {
-    let mut items = items.into_iter().peekable();
-    items.peek().is_some() && items.all(|(uri, kind)| is_shareable(uri, kind))
+/// The local files Share attaches for `items`, each `(uri, target, kind)`
+/// where `target` is the file a row stands for (a Recent row's, else its
+/// own URI), as `local_path` finds them; `None` unless there is at least
+/// one and every one is shareable and has a local file, so Share is
+/// offered only for what it can attach.
+fn attachment_paths<'a>(
+    items: impl IntoIterator<Item = (&'a str, &'a str, EntryKind)>,
+    local_path: impl Fn(&str) -> Option<PathBuf>,
+) -> Option<Vec<PathBuf>> {
+    let paths = items
+        .into_iter()
+        .map(|(uri, target, kind)| is_shareable(uri, kind).then(|| local_path(target)).flatten())
+        .collect::<Option<Vec<PathBuf>>>()?;
+    (!paths.is_empty()).then_some(paths)
 }
 
 impl BrowserWindow {
@@ -110,18 +122,35 @@ impl BrowserWindow {
     }
 
     /// Shows Share where the desktop can share, and enables it for a
-    /// selection of files.
+    /// selection of files it can attach. More files than one email takes
+    /// keep it enabled without looking for them, so a click says why.
     pub(super) fn update_share_command(&self) {
         let offered = self.share_portal().is_some();
         self.command_bar().offer_share(offered);
         let items = self.folder_pane().model().selected_items();
         let enabled = offered
-            && can_share(
+            && if items.len() > MAX_ATTACHMENTS {
                 items
                     .iter()
-                    .map(|item| (item.entry().uri.as_str(), item.entry().kind)),
-            );
+                    .all(|item| is_shareable(&item.entry().uri, item.entry().kind))
+            } else {
+                self.selected_attachments().is_some()
+            };
         self.set_action_enabled(WindowAction::Share, enabled);
+    }
+
+    /// The local files of the selected items, when Share can attach every
+    /// one: files on a share mounted by the kernel or by `GVfs` by their
+    /// mount path, and Recent rows by the file they stand for.
+    fn selected_attachments(&self) -> Option<Vec<PathBuf>> {
+        let items = self.folder_pane().model().selected_items();
+        attachment_paths(
+            items.iter().map(|item| {
+                let entry = item.entry();
+                (entry.uri.as_str(), entry.navigation_uri(), entry.kind)
+            }),
+            local_path,
+        )
     }
 
     /// Opens a new email in the desktop's email app with the selected
@@ -130,17 +159,19 @@ impl BrowserWindow {
         let Some(portal) = self.share_portal() else {
             return;
         };
-        let uris = self.folder_pane().model().selected_uris();
-        if uris.len() > MAX_ATTACHMENTS {
+        if self.folder_pane().model().selected_uris().len() > MAX_ATTACHMENTS {
             self.show_message(&ox_core::i18n::format_message(
                 "Share can attach up to {count} files to one email.",
                 &[("count", &MAX_ATTACHMENTS.to_string())],
             ));
             return;
         }
+        let Some(paths) = self.selected_attachments() else {
+            return;
+        };
         let window = self.downgrade();
         glib::spawn_future_local(async move {
-            let result = email_files(&portal, uris).await;
+            let result = email_files(&portal, paths).await;
             if let (Err(error), Some(window)) = (result, window.upgrade()) {
                 window.show_message(&error.to_string());
             }
@@ -148,23 +179,10 @@ impl BrowserWindow {
     }
 }
 
-/// The local paths of the items at `uris`; shares and devices that `GVfs`
-/// mounts have one too. Asking `GVfs` can block, so it runs on a worker
-/// thread.
-fn local_paths(uris: &[String]) -> Result<Vec<PathBuf>, EmailError> {
-    uris.iter()
-        .map(|uri| {
-            gio::File::for_uri(uri)
-                .path()
-                .ok_or_else(|| EmailError::Unreadable(std::io::ErrorKind::NotFound.into()))
-        })
-        .collect()
-}
-
-/// Opens the items at `uris` on a worker thread and asks `portal` to
+/// Opens the files at `paths` on a worker thread and asks `portal` to
 /// email them.
-async fn email_files(portal: &str, uris: Vec<String>) -> Result<(), EmailError> {
-    let opening = gio::spawn_blocking(move || open_attachments(&local_paths(&uris)?));
+async fn email_files(portal: &str, paths: Vec<PathBuf>) -> Result<(), EmailError> {
+    let opening = gio::spawn_blocking(move || open_attachments(&paths));
     let timed_out = || EmailError::Unreadable(std::io::ErrorKind::TimedOut.into());
     let files = match glib::future_with_timeout(OPEN_TIMEOUT, opening).await {
         Ok(Ok(opened)) => opened?,
@@ -180,26 +198,72 @@ async fn email_files(portal: &str, uris: Vec<String>) -> Result<(), EmailError> 
 mod tests {
     use super::*;
 
+    /// A stand-in for `ox_core::network::local_path`: local files, and
+    /// the one share that a kernel CIFS mount serves at /mnt/projects.
+    fn resolve(uri: &str) -> Option<PathBuf> {
+        if let Some(path) = uri.strip_prefix("smb://studio-nas/projects/") {
+            return Some(PathBuf::from("/mnt/projects").join(path));
+        }
+        uri.strip_prefix("file://").map(PathBuf::from)
+    }
+
+    /// The paths Share would attach for `items`, each `(uri, target,
+    /// kind)`.
+    fn paths(items: &[(&str, &str, EntryKind)]) -> Option<Vec<PathBuf>> {
+        attachment_paths(items.iter().copied(), resolve)
+    }
+
     /// parity: CMD-037
     #[test]
     fn share_needs_files_outside_the_recycle_bin_and_zips() {
-        let file = ("file:///srv/plan.txt", EntryKind::File);
-        let folder = ("file:///srv/Drafts", EntryKind::Directory);
-        let pipe = ("file:///srv/queue", EntryKind::Special);
-        let on_a_share = ("smb://studio-nas/projects/plan.txt", EntryKind::File);
-        let in_the_bin = ("trash:///plan.txt", EntryKind::File);
+        let file = ("file:///srv/plan.txt", "file:///srv/plan.txt", EntryKind::File);
+        let folder = ("file:///srv/Drafts", "file:///srv/Drafts", EntryKind::Directory);
+        let pipe = ("file:///srv/queue", "file:///srv/queue", EntryKind::Special);
+        let in_the_bin = ("trash:///plan.txt", "file:///srv/plan.txt", EntryKind::File);
         let zip_member = ox_core::location::ArchiveLocation::root("file:///srv/bundle.zip")
             .member("plan.txt")
             .uri();
-        let in_a_zip = (zip_member.as_str(), EntryKind::File);
+        let in_a_zip = (zip_member.as_str(), zip_member.as_str(), EntryKind::File);
 
-        assert!(!can_share([]), "nothing selected");
-        assert!(can_share([file]));
-        assert!(can_share([file, on_a_share]), "files on a share too");
-        assert!(!can_share([folder]), "Windows cannot share a folder");
-        assert!(!can_share([file, folder]));
-        assert!(!can_share([pipe]), "opening a pipe would wait for a writer");
-        assert!(!can_share([in_the_bin]));
-        assert!(!can_share([file, in_a_zip]));
+        assert_eq!(paths(&[]), None, "nothing selected");
+        assert_eq!(paths(&[file]), Some(vec![PathBuf::from("/srv/plan.txt")]));
+        assert_eq!(paths(&[folder]), None, "Windows cannot share a folder");
+        assert_eq!(paths(&[file, folder]), None);
+        assert_eq!(paths(&[pipe]), None, "opening a pipe would wait for a writer");
+        assert_eq!(paths(&[in_the_bin]), None);
+        assert_eq!(paths(&[file, in_a_zip]), None);
+    }
+
+    /// A file on a share mounted by the kernel attaches by its mount
+    /// path, and a Recent row by the file it stands for; an item with no
+    /// local file leaves Share disabled rather than failing on click.
+    ///
+    /// parity: CMD-037
+    #[test]
+    fn shares_and_recent_rows_attach_their_real_files() {
+        let on_a_mounted_share = (
+            "smb://studio-nas/projects/plan.txt",
+            "smb://studio-nas/projects/plan.txt",
+            EntryKind::File,
+        );
+        let recent = (
+            "recent:///file%3A%2F%2F%2Fsrv%2Fnotes.txt",
+            "file:///srv/notes.txt",
+            EntryKind::File,
+        );
+        let unmounted = (
+            "smb://other-nas/media/song.ogg",
+            "smb://other-nas/media/song.ogg",
+            EntryKind::File,
+        );
+
+        assert_eq!(
+            paths(&[on_a_mounted_share, recent]),
+            Some(vec![
+                PathBuf::from("/mnt/projects/plan.txt"),
+                PathBuf::from("/srv/notes.txt")
+            ])
+        );
+        assert_eq!(paths(&[recent, unmounted]), None, "no local file");
     }
 }
