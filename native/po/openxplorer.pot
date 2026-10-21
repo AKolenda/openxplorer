@@ -5697,6 +5697,10 @@ msgstr ""
 msgid "Items in a ZIP are read-only. Use Copy, then Paste where you want them."
 msgstr ""
 
+#: crates/ox-app/src/window/zip_copies.rs crates/ox-core/src/archive/error.rs crates/ox-core/src/entry/error.rs crates/ox-core/src/integration/terminal/error.rs crates/ox-core/src/network/error.rs crates/ox-core/src/ops/error.rs crates/ox-core/src/search/error.rs crates/ox-core/src/transfer/error.rs crates/ox-core/src/versions/error.rs
+msgid "Operation cancelled."
+msgstr ""
+
 #: crates/ox-app/src/window/zip_copies.rs
 msgid "Select the items to copy."
 msgstr ""
@@ -5751,10 +5755,6 @@ msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
 msgid "Open a network share before choosing it as an extraction destination."
-msgstr ""
-
-#: crates/ox-core/src/archive/error.rs crates/ox-core/src/entry/error.rs crates/ox-core/src/integration/terminal/error.rs crates/ox-core/src/network/error.rs crates/ox-core/src/ops/error.rs crates/ox-core/src/search/error.rs crates/ox-core/src/transfer/error.rs crates/ox-core/src/versions/error.rs
-msgid "Operation cancelled."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs

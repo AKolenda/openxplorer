@@ -41,7 +41,17 @@ pub(super) const NO_CUT: &str =
     crate::i18n::message_id("Items in a ZIP are read-only. Use Copy, then Paste where you want them.");
 
 /// Extracts the copies of a drag when the drop asks for them.
-type Materialise = Rc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>>>;
+type Materialise = Rc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Vec<String>, CopiesFailure>>>>>;
+
+/// Why the copies of a drag were not made.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CopiesFailure {
+    /// The user cancelled the extraction: a drop in this app ends without
+    /// a word, as in Windows Explorer.
+    Cancelled,
+    /// The message to show.
+    Failed(String),
+}
 
 impl BrowserWindow {
     /// Extracts the items at `locations` (all inside one ZIP) into a new
@@ -152,12 +162,15 @@ impl BrowserWindow {
             let locations = locations.clone();
             Box::pin(async move {
                 let Some(window) = window.upgrade() else {
-                    return Err(ox_core::i18n::gettext_static("The window closed.").to_owned());
+                    return Err(CopiesFailure::Failed(
+                        ox_core::i18n::gettext_static("The window closed.").to_owned(),
+                    ));
                 };
-                // A drop needs an answer, so a cancelled copy refuses it.
-                let (copies, note) = window.copy_out_of_zip(locations).await?.ok_or_else(|| {
-                    crate::archive_view::extraction_failure_text(&ox_core::archive::ArchiveError::Cancelled)
-                })?;
+                let (copies, note) = window
+                    .copy_out_of_zip(locations)
+                    .await
+                    .map_err(CopiesFailure::Failed)?
+                    .ok_or(CopiesFailure::Cancelled)?;
                 if let Some(note) = note {
                     window.show_message(&note);
                 }
@@ -215,9 +228,9 @@ mod imp {
         #[default]
         Idle,
         /// Being extracted; these requests wait for the result.
-        Running(Vec<async_channel::Sender<Result<Vec<String>, String>>>),
+        Running(Vec<async_channel::Sender<Result<Vec<String>, super::CopiesFailure>>>),
         /// Extracted, or refused, for every later request.
-        Done(Result<Vec<String>, String>),
+        Done(Result<Vec<String>, super::CopiesFailure>),
     }
 
     /// Private state of [`super::ZipDragContent`].
@@ -265,10 +278,15 @@ mod imp {
                         "Only a file list is offered.",
                     ));
                 }
-                let uris = content
-                    .copies()
-                    .await
-                    .map_err(|message| glib::Error::new(gio::IOErrorEnum::Failed, &message))?;
+                let uris = content.copies().await.map_err(|failure| match failure {
+                    super::CopiesFailure::Cancelled => glib::Error::new(
+                        gio::IOErrorEnum::Cancelled,
+                        ox_core::i18n::gettext_static("Operation cancelled."),
+                    ),
+                    super::CopiesFailure::Failed(message) => {
+                        glib::Error::new(gio::IOErrorEnum::Failed, &message)
+                    }
+                })?;
                 let text = super::uri_list(&uris);
                 stream
                     .write_all_future(text.into_bytes(), io_priority)
@@ -301,14 +319,12 @@ impl ZipDragContent {
     ///
     /// # Errors
     ///
-    /// The message to show when the copies could not be made.
-    pub(crate) async fn copies(&self) -> Result<Vec<String>, String> {
-        let materialise = self
-            .imp()
-            .materialise
-            .borrow()
-            .clone()
-            .ok_or_else(|| ox_core::i18n::gettext_static("The copies could not be made.").to_owned())?;
+    /// The message to show when the copies could not be made, or
+    /// [`CopiesFailure::Cancelled`].
+    pub(crate) async fn copies(&self) -> Result<Vec<String>, CopiesFailure> {
+        let materialise = self.imp().materialise.borrow().clone().ok_or_else(|| {
+            CopiesFailure::Failed(ox_core::i18n::gettext_static("The copies could not be made.").to_owned())
+        })?;
         let copies = Rc::clone(&self.imp().copies);
         shared_copies(&copies, &materialise).await
     }
@@ -320,7 +336,7 @@ impl ZipDragContent {
 async fn shared_copies(
     copies: &Rc<std::cell::RefCell<imp::Copies>>,
     materialise: &Materialise,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, CopiesFailure> {
     let waiting = {
         let mut state = copies.borrow_mut();
         match &mut *state {
@@ -338,7 +354,9 @@ async fn shared_copies(
     };
     if let Some(receiver) = waiting {
         return receiver.recv().await.unwrap_or_else(|_| {
-            Err(ox_core::i18n::gettext_static("The copies could not be made.").to_owned())
+            Err(CopiesFailure::Failed(
+                ox_core::i18n::gettext_static("The copies could not be made.").to_owned(),
+            ))
         });
     }
     let result = materialise().await;
