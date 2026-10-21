@@ -173,8 +173,9 @@ pub(crate) enum WindowAction {
     GroupBy,
     /// Lists folders before files.
     FoldersFirst,
-    /// Opens the Adjust View Display Style dialog (VIEW-021).
-    ViewProperties,
+    /// Opens Folder Options, as "…" > Options does in Windows 11 File
+    /// Explorer (VIEW-021).
+    FolderOptions,
     /// The light, dark or system appearance.
     Theme,
     /// Makes text larger, smaller or its default size (Ctrl+plus, minus
@@ -504,7 +505,7 @@ impl WindowAction {
             WindowAction::Direction => "direction",
             WindowAction::GroupBy => "group-by",
             WindowAction::FoldersFirst => "folders-first",
-            WindowAction::ViewProperties => "view-properties",
+            WindowAction::FolderOptions => "folder-options",
             WindowAction::Theme => "theme",
             WindowAction::TextSize(step) => step.action_name(),
             WindowAction::ResetLayout => "reset-layout",

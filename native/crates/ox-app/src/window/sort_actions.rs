@@ -46,7 +46,7 @@ impl BrowserWindow {
                 window.show_folders_first(first);
                 window.remember_style();
             }),
-            plain_action(WindowAction::ViewProperties, BrowserWindow::show_view_properties),
+            plain_action(WindowAction::FolderOptions, BrowserWindow::show_folder_options),
         ]);
         self.follow_header_sorting();
     }

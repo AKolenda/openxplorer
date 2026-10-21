@@ -555,7 +555,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/src/dialog/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/src/dialog/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/item_dialogs.rs
 msgid "OK"
 msgstr ""
 
@@ -1392,7 +1392,7 @@ msgstr ""
 msgid "Mounted on"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_panel.rs
+#: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/window/folder_options.rs
 msgid "No"
 msgstr ""
 
@@ -1436,7 +1436,7 @@ msgstr ""
 msgid "Writable"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_panel.rs
+#: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/window/folder_options.rs
 msgid "Yes"
 msgstr ""
 
@@ -1685,7 +1685,7 @@ msgstr ""
 msgid "Allow guests (no account needed)"
 msgstr ""
 
-#: crates/ox-app/src/properties/sharing_panel.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/src/properties/sharing_panel.rs crates/ox-app/src/window/folder_options.rs
 msgid "Apply"
 msgstr ""
 
@@ -2000,7 +2000,7 @@ msgstr ""
 msgid "Light"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs
 msgid "Reset"
 msgstr ""
 
@@ -2478,7 +2478,7 @@ msgstr ""
 msgid "Compact view"
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Details"
 msgstr ""
 
@@ -2506,7 +2506,7 @@ msgstr ""
 msgid "Folder sizes"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs
+#: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/folder_options.rs
 msgid "Folder views"
 msgstr ""
 
@@ -2574,7 +2574,7 @@ msgstr ""
 msgid "Show check boxes only while Ctrl is held"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Show previews"
 msgstr ""
 
@@ -3671,10 +3671,6 @@ msgid "{label} (Delete)"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Adjust view display style…"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/view_properties_dialog.rs
 msgid "Ascending"
 msgstr ""
 
@@ -3690,7 +3686,7 @@ msgstr ""
 msgid "Default file explorer…"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Descending"
 msgstr ""
 
@@ -3714,7 +3710,7 @@ msgstr ""
 msgid "From template…"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Group by"
 msgstr ""
 
@@ -3754,7 +3750,7 @@ msgstr ""
 msgid "Link to file or folder…"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "List"
 msgstr ""
 
@@ -3768,6 +3764,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar.rs
 msgid "Navigation pane"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Options"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -3790,7 +3790,7 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Show hidden files"
 msgstr ""
 
@@ -3936,7 +3936,7 @@ msgstr ""
 msgid "Sign out of server…"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/view_properties_dialog.rs
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Sort by"
 msgstr ""
 
@@ -4656,6 +4656,54 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
 msgid "“{name}” is a symbolic link, which the destination file system cannot store."
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Advanced settings"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Apply to Folders"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Display the full path in the title bar"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Do you want all folders to match this folder's view settings?"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Do you want to reset all folders to their default view settings?"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Folder Options"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Folder Views"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Reset Folders"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Restore Defaults"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Restore previous folder windows at logon"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "Use check boxes to select items"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "You can apply this view (such as Details or Icons) to all folders."
 msgstr ""
 
 #: crates/ox-app/src/window/folder_pane/parts.rs
@@ -5586,90 +5634,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/version_restore.rs
 msgid "Another file operation is still running."
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Additional information"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Adjust view display style"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "All folders"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Apply this view to all folders?"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Apply to all folders"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Change"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Change the display style of other folders?"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Choose how the items of this folder are shown."
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Every folder will forget its layout, sorting, grouping and other view settings, and show the default view."
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Every folder will show this folder's layout, sorting, grouping and other view settings. Folders that kept a view of their own will lose it."
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Folders that kept a display style of their own will show this one instead."
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Icons"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Order"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Reset all folders to the default view?"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Reset folders"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Show folders first"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Show hidden items last"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "This folder"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "This folder and its subfolders"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "Use these settings as the default for all folders"
-msgstr ""
-
-#: crates/ox-app/src/window/view_properties_dialog.rs
-msgid "View mode"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

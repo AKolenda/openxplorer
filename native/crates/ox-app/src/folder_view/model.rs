@@ -146,16 +146,6 @@ impl FolderModel {
         self.sort_options.get().folders_first
     }
 
-    /// Keeps hidden items after visible ones within folders/files.
-    pub(crate) fn set_hidden_last(&self, last: bool) {
-        self.change_sort_options(&self.folders_first, |options| options.hidden_last = last);
-    }
-
-    /// Whether hidden items sort last.
-    pub(crate) fn hidden_last(&self) -> bool {
-        self.sort_options.get().hidden_last
-    }
-
     /// Sorts by a further key and direction, or by the details view's
     /// column again with `None`.
     pub(crate) fn set_sort_role(&self, role: Option<(SortRole, SortDirection)>) {

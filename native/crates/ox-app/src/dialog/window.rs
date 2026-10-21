@@ -310,6 +310,14 @@ impl Dialog {
         });
     }
 
+    /// Lets `button` be pressed, or greys it out, such as Apply while
+    /// nothing has changed.
+    pub(crate) fn set_button_sensitive(&self, button: DialogButton, sensitive: bool) {
+        if let Some(button) = self.imp().buttons.borrow().get(button.0) {
+            button.set_sensitive(sensitive);
+        }
+    }
+
     /// A button appended to the actions and remembered.
     fn new_button(&self, label: &str, style: ButtonStyle) -> gtk::Button {
         let button = self.imp().frame.add_button(label, style);

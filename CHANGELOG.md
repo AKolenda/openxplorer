@@ -1,3 +1,21 @@
+# Unreleased
+
+- View > "Adjust view display style…" is replaced by Folder Options, as in
+  Windows 11 File Explorer: "…" > Options opens it. Its Folder views box
+  has Apply to Folders, which after a Yes/No question gives every folder
+  this folder's view (layout, icon size, columns, sort and grouping), and
+  Reset Folders, which after a Yes/No question gives every folder the
+  default view (Details, by name) again. Both act at once in every window,
+  split pane and Open/Save dialog. OpenXplorer has no folder types, so they
+  cover all folders. Apply to Folders cannot be pressed from This PC,
+  Network, Recent files, search results or the Recycle Bin. Folder Options also lists
+  three of Windows' advanced settings the app already had: "Display the
+  full path in the title bar", "Restore previous folder windows at logon"
+  and "Use check boxes to select items". Dropped with the old dialog, as
+  Windows has none of them: "This folder and its subfolders", "Use these
+  settings as the default for all folders" and "Show hidden items last".
+  Views it saved still load.
+
 # 2.0.6 — 2026-10-13
 
 ## What's Changed

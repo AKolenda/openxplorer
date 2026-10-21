@@ -4,9 +4,11 @@
 //! Ports Dolphin's `ViewProperties` (`src/views/viewproperties.cpp`) and its
 //! `GlobalViewProps` setting: by default one style is shared by every folder
 //! (`viewDefaults`); with "Remember display style for each folder" on, each
-//! folder the user restyles keeps its own (`folderViews`), and a style saved
-//! for a folder "and its sub-folders" applies below it too, as Dolphin's
-//! `ApplyViewPropsJob` does. The Python app reads neither key.
+//! folder the user restyles keeps its own (`folderViews`). A style saved for
+//! a folder "and its sub-folders" by Dolphin's View Display Style dialog,
+//! which Folder Options replaced, still applies below it, as Dolphin's
+//! `ApplyViewPropsJob` does; none is saved any more. The Python app reads
+//! neither key.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -57,8 +59,6 @@ pub struct ViewProperties {
     pub folders_first: bool,
     /// Hidden items shown.
     pub show_hidden: bool,
-    /// Hidden items sort after visible ones within the folder/file groups.
-    pub hidden_last: bool,
     /// Previews, inheriting the shared option for older saved styles.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub show_previews: Option<bool>,
@@ -82,7 +82,6 @@ impl Default for ViewProperties {
             group_by: None,
             folders_first: true,
             show_hidden: false,
-            hidden_last: false,
             show_previews: None,
             details_columns: None,
             column_widths: None,
@@ -122,7 +121,6 @@ impl ViewProperties {
                 .filter(|key| own_group_key(*key)),
             folders_first: flag("foldersFirst", defaults.folders_first),
             show_hidden: flag("showHidden", defaults.show_hidden),
-            hidden_last: flag("hiddenLast", defaults.hidden_last),
             show_previews: values.get("showPreviews").and_then(Value::as_bool),
             details_columns: values.get("detailsColumns").and_then(read_column_keys),
             column_widths: values
@@ -172,7 +170,8 @@ pub struct FolderView {
     #[serde(flatten)]
     pub properties: ViewProperties,
     /// The style applies to the folder's sub-folders too, unless they have
-    /// their own.
+    /// their own: saved by the display style dialog before Folder Options
+    /// replaced it, and still read.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub subfolders: bool,
 }
@@ -222,8 +221,6 @@ pub(super) fn read_folder_views(value: &Value) -> Option<Vec<FolderView>> {
 pub enum ViewScope {
     /// The folder alone.
     Folder,
-    /// The folder and its sub-folders: their own styles are dropped.
-    FolderAndSubfolders,
     /// Every folder: the style becomes the default and every folder's own
     /// style is dropped.
     AllFolders,
@@ -273,14 +270,11 @@ pub(super) fn remember(
     if !may_remember(uri) {
         return;
     }
-    let subfolders = scope == ViewScope::FolderAndSubfolders;
-    let replaced =
-        |view: &FolderView| same_location(&view.uri, uri) || (subfolders && is_below(&view.uri, uri));
-    folder_views.retain(|view| !replaced(view));
+    folder_views.retain(|view| !same_location(&view.uri, uri));
     folder_views.push(FolderView {
         uri: uri.to_owned(),
         properties,
-        subfolders,
+        subfolders: false,
     });
     let excess = folder_views.len().saturating_sub(MAX_FOLDER_VIEWS);
     folder_views.drain(..excess);
@@ -294,18 +288,6 @@ pub(super) fn reset(folder_views: &mut Vec<FolderView>, defaults: &mut Option<Vi
     folder_views.clear();
     *defaults = None;
     had_any
-}
-
-/// Whether `uri` is inside `folder`, at any depth.
-fn is_below(uri: &str, folder: &str) -> bool {
-    let mut above = parent_location(uri);
-    while let Some(parent) = above {
-        if same_location(&parent, folder) {
-            return true;
-        }
-        above = parent_location(&parent);
-    }
-    false
 }
 
 #[cfg(test)]
@@ -363,9 +345,10 @@ mod tests {
         );
     }
 
-    /// A folder's own style wins, a style saved for sub-folders reaches
-    /// below its folder, and every other folder shows the default; saving
-    /// for all folders drops the folders' own styles.
+    /// A folder's own style wins, a style the old display style dialog
+    /// saved for sub-folders still reaches below its folder, and every
+    /// other folder shows the default; saving for all folders drops the
+    /// folders' own styles.
     ///
     /// parity: VIEW-020
     #[test]
@@ -379,13 +362,8 @@ mod tests {
             sorted_by("size"),
             ViewScope::Folder,
         );
-        remember(
-            &mut views,
-            &mut defaults,
-            "file:///b",
-            sorted_by("type"),
-            ViewScope::FolderAndSubfolders,
-        );
+        let old = json!([{"uri": "file:///b", "sort": "type", "subfolders": true}]);
+        views.extend(read_folder_views(&old).expect("a list"));
         remember(
             &mut views,
             &mut defaults,
@@ -429,13 +407,8 @@ mod tests {
             sorted_by("size"),
             ViewScope::Folder,
         );
-        remember(
-            &mut views,
-            &mut defaults,
-            "file:///b",
-            sorted_by("modified"),
-            ViewScope::FolderAndSubfolders,
-        );
+        let old = json!([{"uri": "file:///b", "sort": "modified", "subfolders": true}]);
+        views.extend(read_folder_views(&old).expect("a list"));
 
         let changed = reset(&mut views, &mut defaults);
         let again = reset(&mut views, &mut defaults);

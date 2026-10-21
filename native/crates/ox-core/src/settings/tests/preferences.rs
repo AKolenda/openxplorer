@@ -316,3 +316,79 @@ fn reset_folders_forgets_the_group_by_chosen_in_downloads() {
     let reread = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(reread.downloads_group_by, None, "saved to disk");
 }
+
+/// Views saved before Folder Options replaced the display style dialog
+/// still load: a folder saved "and its subfolders" still reaches below it,
+/// and the dropped "hidden items last" is ignored. Saving another change
+/// keeps them.
+/// parity: VIEW-020
+#[test]
+fn views_saved_by_the_old_display_style_dialog_still_load() {
+    let root = temporary_folder();
+    let saved = json!({"preferences": {
+        "view": "grid",
+        "perFolderViews": true,
+        "viewDefaults": {"mode": "icons", "sort": "type", "hiddenLast": true},
+        "folderViews": [
+            {"uri": "file:///home/someone/Projects", "mode": "details", "sort": "size",
+             "hiddenLast": true, "subfolders": true},
+            {"uri": "file:///home/someone/Music", "mode": "compact", "sort": "modified"}
+        ]
+    }});
+    std::fs::write(root.path().join("settings.json"), saved.to_string()).unwrap();
+
+    let mut store = Settings::open(root.path());
+    assert!(store.warning().is_none());
+    let preferences = store.snapshot().preferences;
+    assert_eq!(preferences.folder_views.len(), 2);
+    assert_eq!(
+        preferences.view_for("file:///home/someone/Projects/site").sort,
+        "size"
+    );
+    assert_eq!(preferences.view_for("file:///home/someone/Music").mode, "compact");
+    assert_eq!(
+        preferences.view_for("file:///home/someone/Pictures").mode,
+        "icons"
+    );
+
+    save_preferences(&mut store, &json!({"theme": "dark"}));
+    let reread = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(reread.folder_views, preferences.folder_views);
+    assert!(reread.folder_views[0].subfolders);
+    assert_eq!(reread.view_for("file:///home/someone/Projects/site").sort, "size");
+}
+
+/// Reset Folders shows every folder in the default view, Details by name,
+/// even when the view the Python app reads was saved as icons; whether
+/// hidden files show is not a view of a folder and stays, as in Windows.
+/// parity: VIEW-020
+#[test]
+fn reset_folders_shows_details_by_name_again() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    save_preferences(
+        &mut store,
+        &json!({"view": "grid", "showHidden": true, "perFolderViews": true}),
+    );
+    store
+        .remember_view(
+            "",
+            ViewProperties {
+                mode: "icons".to_owned(),
+                sort: "size".to_owned(),
+                show_hidden: true,
+                ..ViewProperties::default()
+            },
+            ViewScope::AllFolders,
+        )
+        .unwrap();
+
+    let reset = store.reset_folder_views().unwrap();
+
+    let style = reset.view_for("file:///home/someone/Pictures");
+    assert_eq!(style.mode, "details");
+    assert_eq!(style.sort, "name");
+    assert!(style.show_hidden, "hidden files stay as they were");
+    let reread = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(reread.view_for("file:///home/someone/Pictures").mode, "details");
+}

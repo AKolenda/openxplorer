@@ -140,7 +140,6 @@ impl BrowserWindow {
             group_by: None,
             folders_first: model.folders_first(),
             show_hidden: model.shows_hidden(),
-            hidden_last: model.hidden_last(),
             show_previews: Some(pane.previews_enabled()),
             details_columns: Some(
                 pane.details()
@@ -172,7 +171,6 @@ impl BrowserWindow {
         pane.show_view(view);
         let model = pane.model();
         model.set_folders_first(style.folders_first);
-        model.set_hidden_last(style.hidden_last);
         let state = SortState {
             by: SortBy::from_key(&style.sort).unwrap_or(SortBy::Column(SortColumn::Name)),
             direction: if style.descending {
