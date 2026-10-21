@@ -6,9 +6,10 @@
 //! without write permission takes no new items, so New and Paste are off
 //! there. A reply for a folder the tab has left is dropped.
 //!
-//! A drive mounted read-only is not singled out (DEV-015): as in Windows
-//! Explorer, the commands stay on and a write that fails shows the
-//! system's error.
+//! A drive mounted read-only is not singled out (DEV-015), but GIO
+//! answers that the user may not write to any folder on it, so New and
+//! Paste are off there too. Its other commands stay on, and a write that
+//! fails shows the system's error.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;

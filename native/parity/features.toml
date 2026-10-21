@@ -11542,8 +11542,8 @@ native_note = "native/crates/ox-app/src/window/loading/disconnected.rs: the volu
 [[feature]]
 id = "DEV-015"
 area = "DEV"
-title = "A drive mounted read-only behaves as in Windows Explorer"
-behaviour = "A drive mounted read-only is not singled out, as in Windows Explorer: New, Paste, Paste into folder, Cut, Rename, Duplicate and Delete stay on, the status bar shows no notice, and no message says why the drive is read-only (nothing names Windows, hibernation or Fast startup). A write that fails there shows the system's own error, as the Python app's error_payload did."
+title = "A drive mounted read-only does not explain itself"
+behaviour = "A drive mounted read-only is not singled out, as in Windows Explorer: the status bar shows no notice, no message says why the drive is read-only (nothing names Windows, hibernation or Fast startup), and Paste into folder, Cut, Rename, Duplicate and Delete stay on. A write that fails there shows the system's own error, as the Python app's error_payload did. New and Paste follow the folder's own write permission (CMD-011), which GIO reports as denied on a read-only drive, so they are off there with 'This folder is read-only.'"
 origin = ["gnome"]
 priority = "should"
 openxplorer = "missing"
@@ -11552,7 +11552,7 @@ python_tests = []
 bridge = []
 gnome = "g_file_query_filesystem_info with filesystem::readonly and filesystem::type; G_IO_ERROR_READ_ONLY"
 native = "done"
-native_note = "Removed on purpose what #71 added: the status bar's 'Read-only drive' notice and tooltip, the Windows/NTFS classification with its hibernation and Fast startup texts (ox-core read_only.rs), the plain-words replacement of the system's read-only error in ops/error.rs and transfer/error.rs, and the commands turned off on a read-only drive. Windows Explorer does none of this: it does not explain why a drive is read-only or grey out commands, it tries and shows the system's error, and the app cannot know the cause (a drive may be mounted read-only on purpose). The folder-permission check of CMD-011 (#101) stays in native/crates/ox-app/src/window/read_only_drive.rs. Tests: ops/error.rs and transfer/error.rs (a_read_only_file_system_shows_the_system_error), i18n.rs (no_message_explains_a_read_only_drive)."
+native_note = "Removed on purpose what #71 added: the status bar's 'Read-only drive' notice and tooltip, the Windows/NTFS classification with its hibernation and Fast startup texts (ox-core read_only.rs), the plain-words replacement of the system's read-only error in ops/error.rs and transfer/error.rs, and the commands turned off on a read-only drive. Windows Explorer does none of this: it does not explain why a drive is read-only or grey out commands, it tries and shows the system's error, and the app cannot know the cause (a drive may be mounted read-only on purpose). The folder-permission check of CMD-011 (#101) stays in native/crates/ox-app/src/window/read_only_drive.rs; GIO's access::can-write is false on a read-only mount, so it still turns New and Paste off there, until that check is removed on its own. Tests: ops/error.rs and transfer/error.rs (a_read_only_file_system_shows_the_system_error), i18n.rs (no_message_explains_a_read_only_drive)."
 
 [[feature]]
 id = "OPEN-001"
