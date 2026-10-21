@@ -6997,11 +6997,6 @@ msgstr ""
 msgid "Filesystem roots cannot be copied, moved or trashed as items."
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/journal.rs
-msgid "{command} {title}"
-msgstr ""
-
 #: crates/ox-core/src/ops/links.rs
 msgid "Enter a name for the link."
 msgstr ""
@@ -7228,9 +7223,68 @@ msgstr ""
 msgid "Move"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/undo.rs
-msgid "Undo {title}"
+msgid "Redo Copy"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Delete"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Duplicate"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Link"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Move"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo New"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Rename"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Restore"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Copy"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Delete"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Duplicate"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Link"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Move"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo New"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Rename"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Restore"
 msgstr ""
 
 #: crates/ox-core/src/ops/unfinished.rs

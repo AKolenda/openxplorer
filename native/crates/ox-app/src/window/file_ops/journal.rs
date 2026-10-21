@@ -59,10 +59,10 @@ impl BrowserWindow {
         match outcome {
             Ok(reversal) => {
                 self.context()
-                    .record_reversal(direction, step.title, reversal.inverse);
+                    .record_reversal(direction, step.operation, reversal.inverse);
                 let destination = Destination::items(reversal.result.done.clone());
                 self.reload_selecting(reversal.result.done.clone());
-                let summary = summarize_journal_step(direction, step.title, &reversal.result);
+                let summary = summarize_journal_step(direction, step.operation.title(), &reversal.result);
                 self.report(summary, destination).await;
             }
             Err(error) => {

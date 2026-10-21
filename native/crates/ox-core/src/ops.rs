@@ -131,6 +131,6 @@ pub use templates::{
     list_templates, BuiltinTemplate, Template, TemplateId, TemplateList, MAX_TEMPLATE_BYTES,
     MAX_USER_TEMPLATES,
 };
-pub use undo::{MovedItem, RenamedPair, UndoRecord};
+pub use undo::{MovedItem, Operation, RenamedPair, UndoRecord};
 pub use undo_apply::{reverse, undo, Reversal};
 pub use unfinished::{leftovers_message, UnfinishedMark, UnfinishedMarks, UNFINISHED_TITLE};
