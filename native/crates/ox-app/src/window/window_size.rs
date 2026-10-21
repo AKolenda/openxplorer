@@ -119,6 +119,7 @@ impl BrowserWindow {
 mod tests {
     use super::*;
     use crate::test_support::harness::{application, settle, wait_until, Fixture, TestWindow};
+    use crate::window::window_action::WindowAction;
 
     /// A new window opens maximized when the last one was.
     ///
@@ -147,5 +148,37 @@ mod tests {
 
         assert!(maximized);
         assert_eq!(size, (900, 640), "the size it restores to");
+    }
+
+    /// F11 saves a size still waiting for its moment first: full screen
+    /// saves nothing, so a window resized and then closed while full
+    /// screen would otherwise lose the size it had before F11.
+    ///
+    /// parity: TAB-054, CMD-036
+    #[gtk::test]
+    fn full_screen_first_saves_a_size_still_waiting() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let window = BrowserWindow::new(&application(), &test.context);
+        window.add_tab(&fixture.uri()).expect("valid folder");
+        window.present_as_new_window();
+        settle();
+
+        window.set_default_size(900, 640);
+        assert!(window.imp().size_save.borrow().is_some(), "a save waits");
+        WindowAction::FullScreen.activate_from(&window, None);
+        let still_waiting = window.imp().size_save.borrow().is_some();
+        wait_until("the size to be saved", || {
+            test.context
+                .settings_data()
+                .preferences
+                .window_size
+                .map(|size| (size.width, size.height))
+                == Some((900, 640))
+        });
+        window.close();
+        settle();
+
+        assert!(!still_waiting, "F11 saved the size at once");
     }
 }
