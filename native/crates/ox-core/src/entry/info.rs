@@ -12,6 +12,7 @@ use super::attributes::{optional_boolean, path_attribute, string_attribute, time
 use super::classify::{classify_entry, Classification, ItemMetadata};
 use super::type_label::type_label;
 use super::{Entry, EntryKind, EntryMeta};
+use crate::location::{is_virtual_location, normalise, scheme};
 
 /// Builds an entry for `file` from its queried `info`.
 ///
@@ -60,8 +61,21 @@ pub(super) fn build_entry(
         can_delete: optional_boolean(info, "access::can-delete"),
         can_write: optional_boolean(info, "access::can-write"),
         serialized_icon: serialized_icon(info),
-        meta: Box::new(EntryMeta::from_info(info)),
+        meta: Box::new(EntryMeta {
+            recent_target: recent_target(uri, info),
+            ..EntryMeta::from_info(info)
+        }),
     }
+}
+
+/// The file the Recently used files row at `uri` stands for, when `info`
+/// names one that normalises to a real location.
+fn recent_target(uri: &str, info: &gio::FileInfo) -> Option<String> {
+    if scheme(uri).as_deref() != Some("recent") {
+        return None;
+    }
+    let target = normalise(&string_attribute(info, "standard::target-uri")?).ok()?;
+    (!is_virtual_location(&target)).then_some(target)
 }
 
 /// Classifies the item at `uri` from its kind, content type and the
@@ -298,6 +312,42 @@ mod tests {
             "Read me.txt"
         );
         assert_eq!(entry_for_uri("smb://nas/", &bare).name, "smb://nas/");
+    }
+
+    /// A Recently used files row keeps the file it stands for, which `GVfs`
+    /// names only in `standard::target-uri` (the row's own name is a
+    /// hash of it). Only a real location is kept, and only for `recent:`
+    /// rows; opening the row is unchanged.
+    ///
+    /// parity: CMD-037
+    #[test]
+    fn a_recent_row_keeps_the_file_it_stands_for() {
+        let row_uri = "recent:///2c26b46b68ffc68ff99b453c1d304134";
+        let regular = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
+        let row = entry_for_uri(row_uri, &with_target(regular, "file:///srv/notes.txt"));
+        assert_eq!(row.meta.recent_target.as_deref(), Some("file:///srv/notes.txt"));
+        assert_eq!(row.navigation_uri(), row_uri, "opening is unchanged");
+
+        let shortcut = file_info(gio::FileType::Shortcut, "plan.txt", Some("text/plain"));
+        let shortcut_row = entry_for_uri(
+            row_uri,
+            &with_target(shortcut, "smb://studio-nas/projects/plan.txt"),
+        );
+        assert_eq!(
+            shortcut_row.meta.recent_target.as_deref(),
+            Some("smb://studio-nas/projects/plan.txt")
+        );
+
+        let script = file_info(gio::FileType::Regular, "x", None);
+        let unsafe_row = entry_for_uri(row_uri, &with_target(script, "javascript:alert(1)"));
+        assert_eq!(unsafe_row.meta.recent_target, None, "not a location");
+
+        let elsewhere = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
+        let plain = entry_for_uri(
+            "file:///srv/notes.txt",
+            &with_target(elsewhere, "file:///srv/other.txt"),
+        );
+        assert_eq!(plain.meta.recent_target, None, "only Recent rows");
     }
 
     #[test]

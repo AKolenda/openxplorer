@@ -24,6 +24,11 @@ pub struct EntryMeta {
     pub permissions: Option<u32>,
     /// Where a symbolic link points.
     pub link_target: Option<String>,
+    /// For a row of Recently used files (`recent:`), the file it stands
+    /// for: `GVfs` names it only in `standard::target-uri`, as the row's own
+    /// name is a hash of it. Kept only when it normalises to a real
+    /// location, never a virtual one.
+    pub recent_target: Option<String>,
 }
 
 impl EntryMeta {
@@ -44,6 +49,7 @@ impl EntryMeta {
                 .then(|| info.symlink_target())
                 .flatten()
                 .map(|target| target.display().to_string()),
+            recent_target: None,
         }
     }
 

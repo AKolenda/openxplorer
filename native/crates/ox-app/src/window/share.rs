@@ -21,7 +21,7 @@
 //! context menu and on Ctrl+Shift+C ([`super::copy_path`]).
 
 use std::cell::{Cell, RefCell};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use gtk::prelude::*;
@@ -58,18 +58,40 @@ fn is_shareable(uri: &str, kind: EntryKind) -> bool {
     kind == EntryKind::File && !uri.starts_with("trash:") && !uri.starts_with(ARCHIVE_SCHEME)
 }
 
-/// The local files Share attaches for `items`, each `(uri, target, kind)`
-/// where `target` is the file a row stands for (a Recent row's, else its
-/// own URI), as `local_path` finds them; `None` unless there is at least
-/// one and every one is shareable and has a local file, so Share is
-/// offered only for what it can attach.
-fn attachment_paths<'a>(
-    items: impl IntoIterator<Item = (&'a str, &'a str, EntryKind)>,
+/// Whether `uri` is a row of Recently used files, which stands for
+/// another file.
+fn is_recent_row(uri: &str) -> bool {
+    uri.starts_with("recent:")
+}
+
+/// The local file Share attaches for the row at `uri` of kind `kind`, as
+/// `local_path` finds it. A Recent row attaches the file it stands for,
+/// `recent_target`, whatever type `GVfs` gave the row, and only while that
+/// is a regular file, as `is_file` says; any other row must be
+/// shareable itself.
+fn attachment_path(
+    (uri, recent_target, kind): (&str, Option<&str>, EntryKind),
     local_path: impl Fn(&str) -> Option<PathBuf>,
+    is_file: impl Fn(&Path) -> bool,
+) -> Option<PathBuf> {
+    if is_recent_row(uri) {
+        return local_path(recent_target?).filter(|path| is_file(path));
+    }
+    is_shareable(uri, kind).then(|| local_path(uri)).flatten()
+}
+
+/// The local files Share attaches for `items`, each `(uri, Recent target,
+/// kind)` ([`attachment_path`]); `None` unless there is at least one and
+/// every one has a file to attach, so Share is offered only for what it
+/// can attach.
+fn attachment_paths<'a>(
+    items: impl IntoIterator<Item = (&'a str, Option<&'a str>, EntryKind)>,
+    local_path: impl Fn(&str) -> Option<PathBuf>,
+    is_file: impl Fn(&Path) -> bool,
 ) -> Option<Vec<PathBuf>> {
     let paths = items
         .into_iter()
-        .map(|(uri, target, kind)| is_shareable(uri, kind).then(|| local_path(target)).flatten())
+        .map(|item| attachment_path(item, &local_path, &is_file))
         .collect::<Option<Vec<PathBuf>>>()?;
     (!paths.is_empty()).then_some(paths)
 }
@@ -130,9 +152,10 @@ impl BrowserWindow {
         let items = self.folder_pane().model().selected_items();
         let enabled = offered
             && if items.len() > MAX_ATTACHMENTS {
-                items
-                    .iter()
-                    .all(|item| is_shareable(&item.entry().uri, item.entry().kind))
+                items.iter().all(|item| {
+                    let entry = item.entry();
+                    is_recent_row(&entry.uri) || is_shareable(&entry.uri, entry.kind)
+                })
             } else {
                 self.selected_attachments().is_some()
             };
@@ -147,9 +170,14 @@ impl BrowserWindow {
         attachment_paths(
             items.iter().map(|item| {
                 let entry = item.entry();
-                (entry.uri.as_str(), entry.navigation_uri(), entry.kind)
+                (
+                    entry.uri.as_str(),
+                    entry.meta.recent_target.as_deref(),
+                    entry.kind,
+                )
             }),
             local_path,
+            Path::is_file,
         )
     }
 
@@ -207,23 +235,29 @@ mod tests {
         uri.strip_prefix("file://").map(PathBuf::from)
     }
 
-    /// The paths Share would attach for `items`, each `(uri, target,
-    /// kind)`.
-    fn paths(items: &[(&str, &str, EntryKind)]) -> Option<Vec<PathBuf>> {
-        attachment_paths(items.iter().copied(), resolve)
+    /// A stand-in for the file system: every path is a regular file but
+    /// /srv/deleted.txt, which is gone.
+    fn is_file(path: &Path) -> bool {
+        path != Path::new("/srv/deleted.txt")
+    }
+
+    /// The paths Share would attach for `items`, each `(uri, Recent
+    /// target, kind)`.
+    fn paths(items: &[(&str, Option<&str>, EntryKind)]) -> Option<Vec<PathBuf>> {
+        attachment_paths(items.iter().copied(), resolve, is_file)
     }
 
     /// parity: CMD-037
     #[test]
     fn share_needs_files_outside_the_recycle_bin_and_zips() {
-        let file = ("file:///srv/plan.txt", "file:///srv/plan.txt", EntryKind::File);
-        let folder = ("file:///srv/Drafts", "file:///srv/Drafts", EntryKind::Directory);
-        let pipe = ("file:///srv/queue", "file:///srv/queue", EntryKind::Special);
-        let in_the_bin = ("trash:///plan.txt", "file:///srv/plan.txt", EntryKind::File);
+        let file = ("file:///srv/plan.txt", None, EntryKind::File);
+        let folder = ("file:///srv/Drafts", None, EntryKind::Directory);
+        let pipe = ("file:///srv/queue", None, EntryKind::Special);
+        let in_the_bin = ("trash:///plan.txt", None, EntryKind::File);
         let zip_member = ox_core::location::ArchiveLocation::root("file:///srv/bundle.zip")
             .member("plan.txt")
             .uri();
-        let in_a_zip = (zip_member.as_str(), zip_member.as_str(), EntryKind::File);
+        let in_a_zip = (zip_member.as_str(), None, EntryKind::File);
 
         assert_eq!(paths(&[]), None, "nothing selected");
         assert_eq!(paths(&[file]), Some(vec![PathBuf::from("/srv/plan.txt")]));
@@ -235,35 +269,48 @@ mod tests {
     }
 
     /// A file on a share mounted by the kernel attaches by its mount
-    /// path, and a Recent row by the file it stands for; an item with no
-    /// local file leaves Share disabled rather than failing on click.
+    /// path; an item with no local file leaves Share disabled rather than
+    /// failing on click.
     ///
     /// parity: CMD-037
     #[test]
-    fn shares_and_recent_rows_attach_their_real_files() {
-        let on_a_mounted_share = (
-            "smb://studio-nas/projects/plan.txt",
-            "smb://studio-nas/projects/plan.txt",
-            EntryKind::File,
-        );
-        let recent = (
-            "recent:///file%3A%2F%2F%2Fsrv%2Fnotes.txt",
-            "file:///srv/notes.txt",
-            EntryKind::File,
-        );
-        let unmounted = (
-            "smb://other-nas/media/song.ogg",
-            "smb://other-nas/media/song.ogg",
-            EntryKind::File,
-        );
+    fn a_file_on_a_mounted_share_attaches_by_its_mount_path() {
+        let mounted = ("smb://studio-nas/projects/plan.txt", None, EntryKind::File);
+        let unmounted = ("smb://other-nas/media/song.ogg", None, EntryKind::File);
 
         assert_eq!(
-            paths(&[on_a_mounted_share, recent]),
+            paths(&[mounted]),
+            Some(vec![PathBuf::from("/mnt/projects/plan.txt")])
+        );
+        assert_eq!(paths(&[mounted, unmounted]), None, "no local file");
+    }
+
+    /// A Recent row, whose own URI is a hash `GVfs` made, attaches the file
+    /// it stands for, whether `GVfs` types the row as a file or a shortcut;
+    /// a row whose file is gone, is a folder, or was not named leaves
+    /// Share disabled.
+    ///
+    /// parity: CMD-037
+    #[test]
+    fn a_recent_row_attaches_the_file_it_stands_for() {
+        let row = "recent:///2c26b46b68ffc68ff99b453c1d304134";
+        let recent = (row, Some("file:///srv/notes.txt"), EntryKind::File);
+        let shortcut = (
+            row,
+            Some("smb://studio-nas/projects/plan.txt"),
+            EntryKind::Shortcut,
+        );
+        let deleted = (row, Some("file:///srv/deleted.txt"), EntryKind::File);
+        let unnamed = (row, None, EntryKind::File);
+
+        assert_eq!(
+            paths(&[recent, shortcut]),
             Some(vec![
-                PathBuf::from("/mnt/projects/plan.txt"),
-                PathBuf::from("/srv/notes.txt")
+                PathBuf::from("/srv/notes.txt"),
+                PathBuf::from("/mnt/projects/plan.txt")
             ])
         );
-        assert_eq!(paths(&[recent, unmounted]), None, "no local file");
+        assert_eq!(paths(&[deleted]), None, "the file is gone");
+        assert_eq!(paths(&[unnamed]), None, "GVfs named no file");
     }
 }
