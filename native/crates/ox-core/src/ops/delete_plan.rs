@@ -13,7 +13,7 @@
 //! directly in the home folder, whose parent `/home` only root may change,
 //! would wrongly count as having no Trash.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::context::{on_worker, unless_cancelled};
 use super::error::OpsError;
@@ -28,6 +28,10 @@ pub struct DeleteItem {
     pub uri: String,
     /// The name the listing shows for it.
     pub name: String,
+    /// `access::can-trash` as the folder's listing reported it; `None`
+    /// when the item was not listed (a drop, the folder tree) or the
+    /// backend does not report it.
+    pub can_trash: Option<bool>,
 }
 
 /// What Delete does with a selection: the items that go to the Trash and
@@ -55,16 +59,18 @@ pub struct DeleteConfirmation {
     pub confirm_label: &'static str,
 }
 
-/// Decides what Delete does with each of `items`, asking GIO about each
-/// item (`access::can-trash`).
+/// Decides what Delete does with each of `items`, by `access::can-trash`
+/// of each item.
 ///
-/// GIO's answer comes from the folder that holds the item, so an item
-/// that can go to the Trash answers for the rest of its folder, which is
-/// then not asked again. An item that cannot answers only for itself,
-/// locally or on a remote location: it may be one that vanished since the
-/// listing, or another user's file in a shared folder such as `/tmp`, and
-/// its siblings may still go to the Trash. A selection on a share without
-/// a Trash is therefore asked about item by item.
+/// A listed item carries the answer its folder's listing reported
+/// ([`DeleteItem::can_trash`]), which decides for it alone with no query,
+/// so another user's file in `/tmp` or one whose query failed never
+/// decides for its siblings. An item without a listed answer (a drop, the
+/// folder tree, a backend that does not report it) is asked about once
+/// per folder: an item that can go to the Trash, listed or asked, answers
+/// for the folder's other unlisted items, and so does the first asked
+/// item's "no Trash", so a large selection on a share without a Trash
+/// costs at most one query per folder.
 ///
 /// OPS-017: an item on a share that is not mounted, which GIO cannot be
 /// asked about, counts as going to the Trash, so that failure never turns
@@ -95,7 +101,9 @@ fn plan_with(
     cancel: &Cancellation,
     mut has_trash: impl FnMut(&str) -> Result<bool, OpsError>,
 ) -> Result<DeletePlan, OpsError> {
-    // Folders where an item answered that it goes to the Trash.
+    // What GIO answered for the first unlisted item asked about in each
+    // folder, and the folders where a listed item can go to the Trash.
+    let mut asked_in_folder: HashMap<String, bool> = HashMap::new();
     let mut folders_with_trash: HashSet<String> = HashSet::new();
     let mut plan = DeletePlan {
         to_trash: Vec::new(),
@@ -105,7 +113,19 @@ fn plan_with(
     for item in items {
         cancel.check()?;
         let folder = trash_scope(&item.uri);
-        let goes_to_trash = folders_with_trash.contains(&folder) || has_trash(&item.uri)?;
+        let goes_to_trash = match item.can_trash {
+            Some(listed) => listed,
+            None if folders_with_trash.contains(&folder) => true,
+            None => {
+                if let Some(&answer) = asked_in_folder.get(&folder) {
+                    answer
+                } else {
+                    let answer = has_trash(&item.uri)?;
+                    asked_in_folder.insert(folder.clone(), answer);
+                    answer
+                }
+            }
+        };
         if goes_to_trash {
             folders_with_trash.insert(folder);
             plan.to_trash.push(item.uri.clone());
@@ -251,6 +271,7 @@ mod tests {
         let one = [DeleteItem {
             uri: "file:///tmp/report.pdf".into(),
             name: "report.pdf".into(),
+            can_trash: None,
         }];
         let two = [one[0].clone(), one[0].clone()];
 
@@ -264,6 +285,7 @@ mod tests {
         let one = [DeleteItem {
             uri: "file:///tmp/report.pdf".into(),
             name: "report.pdf".into(),
+            can_trash: None,
         }];
 
         let confirmation = permanent_delete_confirmation(&one);
@@ -293,27 +315,67 @@ mod tests {
             .map(|uri| DeleteItem {
                 uri: (*uri).to_owned(),
                 name: (*uri).to_owned(),
+                can_trash: None,
             })
             .collect()
     }
 
-    /// A remote item that cannot go to the Trash, such as one that vanished
-    /// since the listing, does not decide for its siblings: each of them is
-    /// asked, and the one that can goes to the Trash.
+    fn listed(uri: &str, can_trash: bool) -> DeleteItem {
+        DeleteItem {
+            uri: uri.to_owned(),
+            name: uri.to_owned(),
+            can_trash: Some(can_trash),
+        }
+    }
+
+    /// A listed item's own `access::can-trash` decides for it, with no
+    /// query: a remote item without a Trash, such as one whose query
+    /// failed, does not decide for its siblings, and the one that can goes
+    /// to the Trash.
     #[test]
     fn a_remote_item_without_a_trash_does_not_decide_for_its_folder() {
-        let selection = items(&["sftp://host/dir/gone.txt", "sftp://host/dir/kept.txt"]);
+        let selection = [
+            listed("sftp://host/dir/gone.txt", false),
+            listed("sftp://host/dir/kept.txt", true),
+            listed("sftp://host/dir/other.txt", false),
+        ];
         let mut asked = Vec::new();
 
         let plan = plan_with(&selection, &Cancellation::new(), |uri| {
             asked.push(uri.to_owned());
-            Ok(uri.ends_with("kept.txt"))
+            Ok(true)
         })
         .unwrap();
 
-        assert_eq!(asked, ["sftp://host/dir/gone.txt", "sftp://host/dir/kept.txt"]);
+        assert!(asked.is_empty(), "{asked:?}");
         assert_eq!(plan.to_trash, ["sftp://host/dir/kept.txt"]);
-        assert_eq!(plan.to_delete, ["sftp://host/dir/gone.txt"]);
+        assert_eq!(
+            plan.to_delete,
+            ["sftp://host/dir/gone.txt", "sftp://host/dir/other.txt"]
+        );
+    }
+
+    /// Items with no listed answer on a share without a Trash cost one
+    /// query per folder, not one per item.
+    #[test]
+    fn unlisted_items_without_a_trash_are_asked_about_once_per_folder() {
+        let selection = items(&[
+            "smb://nas/share/a",
+            "smb://nas/share/b",
+            "smb://nas/share/c",
+            "smb://nas/other/d",
+        ]);
+        let mut asked = Vec::new();
+
+        let plan = plan_with(&selection, &Cancellation::new(), |uri| {
+            asked.push(uri.to_owned());
+            Ok(false)
+        })
+        .unwrap();
+
+        assert_eq!(asked, ["smb://nas/share/a", "smb://nas/other/d"]);
+        assert!(plan.to_trash.is_empty());
+        assert_eq!(plan.to_delete.len(), 4);
     }
 
     /// An item that can go to the Trash answers for the rest of its

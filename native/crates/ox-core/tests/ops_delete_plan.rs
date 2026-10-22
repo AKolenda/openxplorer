@@ -36,10 +36,12 @@ fn an_item_whose_folder_cannot_be_queried_is_planned_for_permanent_delete_like_p
         DeleteItem {
             uri: file_uri(&local),
             name: "a.txt".into(),
+            can_trash: None,
         },
         DeleteItem {
             uri: file_uri(&vanished),
             name: "b.txt".into(),
+            can_trash: None,
         },
     ];
     let cancel = Cancellation::new();
@@ -65,6 +67,7 @@ fn an_item_in_a_folder_inside_a_read_only_folder_goes_to_the_trash() {
     let item = DeleteItem {
         uri: file_uri(&home.join("a.txt")),
         name: "a.txt".into(),
+        can_trash: None,
     };
     let cancel = Cancellation::new();
 
@@ -89,6 +92,7 @@ fn an_item_gio_reports_without_a_trash_is_planned_for_permanent_delete() {
     let item = DeleteItem {
         uri: file_uri(&folder.join("a.txt")),
         name: "a.txt".into(),
+        can_trash: None,
     };
     let cancel = Cancellation::new();
 
@@ -102,23 +106,25 @@ fn an_item_gio_reports_without_a_trash_is_planned_for_permanent_delete() {
     assert_eq!(plan.confirmation().title, "Delete permanently?");
 }
 
-/// One item that cannot go to the Trash does not decide for the others
-/// in its folder: a file that vanished after the listing is planned for
-/// permanent delete (which then reports it missing), the file beside it
-/// still goes to the Trash.
+/// A listed item that cannot go to the Trash decides only for itself: a
+/// file whose listing said "no Trash" is planned for permanent delete,
+/// and the file beside it that was not listed is asked about and still
+/// goes to the Trash.
 #[test]
-fn an_item_gio_cannot_answer_for_does_not_decide_for_its_folder() {
+fn an_item_listed_without_a_trash_does_not_decide_for_its_folder() {
     let temp = tempfile::tempdir().unwrap();
     let kept = temp.path().join("b.txt");
     fs::write(&kept, b"b").unwrap();
     let items = [
         DeleteItem {
-            uri: file_uri(&temp.path().join("vanished.txt")),
-            name: "vanished.txt".into(),
+            uri: file_uri(&temp.path().join("other-users.txt")),
+            name: "other-users.txt".into(),
+            can_trash: Some(false),
         },
         DeleteItem {
             uri: file_uri(&kept),
             name: "b.txt".into(),
+            can_trash: None,
         },
     ];
 
@@ -139,6 +145,7 @@ fn a_share_that_cannot_answer_counts_as_having_a_trash() {
     let item = DeleteItem {
         uri: "smb://example.invalid/share/report.pdf".into(),
         name: "report.pdf".into(),
+        can_trash: None,
     };
     let cancel = Cancellation::new();
 
@@ -156,6 +163,7 @@ fn a_cancelled_trash_check_reports_the_cancellation_and_plans_nothing() {
     let item = DeleteItem {
         uri: file_uri(&temp.path().join("a.txt")),
         name: "a.txt".into(),
+        can_trash: None,
     };
     let cancelled = Cancellation::new();
     cancelled.cancel();

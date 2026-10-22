@@ -38,7 +38,11 @@ fn named_items(uris: Vec<String>) -> Vec<DeleteItem> {
             let name = gio::File::for_uri(&uri)
                 .basename()
                 .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
-            DeleteItem { uri, name }
+            DeleteItem {
+                uri,
+                name,
+                can_trash: None,
+            }
         })
         .collect()
 }
@@ -62,6 +66,7 @@ impl BrowserWindow {
             .map(|item| DeleteItem {
                 uri: item.entry().uri.clone(),
                 name: item.entry().name.clone(),
+                can_trash: item.entry().can_trash,
             })
             .collect()
     }
