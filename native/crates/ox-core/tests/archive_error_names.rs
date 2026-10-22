@@ -171,7 +171,10 @@ fn a_compression_staging_left_behind_is_reported_where_it_is() {
         }
     });
 
-    let error = compressor.compress(&request, &Cancellation::new()).unwrap_err().to_string();
+    let error = compressor
+        .compress(&request, &Cancellation::new())
+        .unwrap_err()
+        .to_string();
 
     unlock(&destination);
     let left: Vec<_> = fs::read_dir(&destination)
