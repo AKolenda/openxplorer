@@ -23,7 +23,9 @@ use std::ffi::OsStr;
 
 use crate::archive::ArchiveError;
 use crate::random::{random_hex, NAME_BYTES};
-use crate::transfer::{secure_local_staging, Cancellation, ItemIdentity, Node, StagedName, TransferError};
+use crate::transfer::{
+    already_removed, secure_local_staging, Cancellation, ItemIdentity, Node, StagedName, TransferError,
+};
 
 /// Staging folders are `.openxplorer-extract-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-extract-";
@@ -127,6 +129,8 @@ impl ExtractionStaging {
         let cause = cause.naming(&self.name);
         match self.folder.delete_staging(self.created) {
             Ok(()) => cause,
+            // A device's "not found" counts only once confirmed (XFER-022).
+            Err(cleanup) if already_removed(self.folder.as_ref(), &cleanup) => cause,
             Err(cleanup) => ArchiveError::StagingLeftBehind {
                 cause: Box::new(cause),
                 staging_uri: self.folder.uri(),
@@ -164,6 +168,34 @@ pub(in crate::archive) fn is_staging_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A staging folder on a phone, for the cleanup tests.
+    fn phone_staging(listed: bool) -> ExtractionStaging {
+        let stage = ".openxplorer-extract-1.part";
+        ExtractionStaging {
+            folder: Box::new(crate::test_support::PhoneStage::item(stage, listed)),
+            name: StagedName::new(stage, &[], "Unpacked"),
+            created: None,
+        }
+    }
+
+    /// A phone's "not found" for the staging folder counts as cleaned up
+    /// only when the folder's listing confirms it; the cancellation then
+    /// stays a cancellation. Otherwise the folder is reported where it is.
+    ///
+    /// parity: ARC-013, XFER-022
+    #[test]
+    fn a_phones_not_found_counts_as_cleaned_up_only_once_confirmed() {
+        let gone = phone_staging(false).discard(ArchiveError::Cancelled);
+        let still_listed = phone_staging(true).discard(ArchiveError::Cancelled);
+
+        assert_eq!(gone, ArchiveError::Cancelled);
+        assert!(
+            matches!(&still_listed, ArchiveError::StagingLeftBehind { staging_uri, .. }
+                if staging_uri == "mtp://phone.example/Folder/.openxplorer-extract-1.part"),
+            "{still_listed:?}"
+        );
+    }
 
     /// parity: ARC-013
     #[test]

@@ -35,7 +35,7 @@ use super::templates::{list_templates_blocking, TemplateId, MAX_TEMPLATE_BYTES, 
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name, ItemKind};
 use crate::random::{random_hex, NAME_BYTES};
-use crate::transfer::{Cancellation, Node, StagedName};
+use crate::transfer::{already_removed, Cancellation, Node, StagedName};
 
 /// Templates are read in blocks of this many bytes, with a cancellation
 /// check before each.
@@ -238,7 +238,7 @@ fn publish_new_file(
             other => other,
         };
         // OPS-048: a stage that was not published is deleted.
-        discard_stage(&stage, cause)
+        discard_stage(&GioNode::from_file(stage.clone()), cause)
     })
 }
 
@@ -279,16 +279,18 @@ fn write_private_stage(
     // OPS-048: a stage that could not be written in full is deleted.
     written
         .and(closed)
-        .map_err(|error| discard_stage(stage, naming(error.into(), staged)))
+        .map_err(|error| discard_stage(&GioNode::from_file(stage.clone()), naming(error.into(), staged)))
 }
 
 /// Deletes a stage file this operation created after `cause` stopped it,
 /// and returns the error to report: `cause`, or, when the stage cannot be
 /// deleted, `cause` followed by the stage's exact location so the user can
 /// find what was left behind.
-fn discard_stage(stage: &gio::File, cause: OpsError) -> OpsError {
-    match stage.delete(gio::Cancellable::NONE) {
+fn discard_stage(stage: &dyn Node, cause: OpsError) -> OpsError {
+    match stage.delete() {
         Ok(()) => cause,
+        // A device's "not found" counts only once confirmed (XFER-022).
+        Err(cleanup) if already_removed(stage, &cleanup) => cause,
         Err(cleanup) => OpsError::failed(crate::i18n::format_message(
             "{cause}\nThe incomplete file remains at {uri}. Inspect it before removing it. {cleanup}",
             &[
@@ -388,7 +390,7 @@ mod tests {
         if fs::write(locked.join("probe"), b"").is_ok() {
             return;
         }
-        let stage = gio::File::for_path(&stage_path);
+        let stage = GioNode::new(&crate::location::file_uri(&stage_path));
 
         let error = discard_stage(&stage, OpsError::failed("Disk full")).to_string();
 
@@ -400,6 +402,27 @@ mod tests {
         );
         assert!(error.starts_with(&expected), "{error}");
         assert!(error.ends_with("Permission denied"), "{error}");
+    }
+
+    /// A phone that discarded a cancelled upload answers "not found" for
+    /// its stage file; once the folder's listing confirms it is gone,
+    /// nothing was left behind and the cancellation stays a cancellation.
+    /// A "not found" the listing does not confirm still reports the stage.
+    ///
+    /// parity: OPS-048, XFER-022
+    #[test]
+    fn a_stage_file_a_phone_discarded_is_not_reported_as_left_behind() {
+        use crate::test_support::PhoneStage;
+
+        let gone = PhoneStage::item(".winspace-new-1", false);
+        let still_listed = PhoneStage::item(".winspace-new-2", true);
+
+        assert_eq!(discard_stage(&gone, OpsError::Cancelled), OpsError::Cancelled);
+        let reported = discard_stage(&still_listed, OpsError::Cancelled).to_string();
+        assert!(
+            reported.contains("remains at mtp://phone.example/Folder/.winspace-new-2."),
+            "{reported}"
+        );
     }
 
     /// A folder that cannot be written is reported with the new file's

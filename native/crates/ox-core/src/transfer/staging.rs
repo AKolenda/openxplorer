@@ -170,7 +170,19 @@ fn remove_stage(
 /// upload): the query answered "not found" and a listing of its folder
 /// confirms it.
 fn is_discarded_device_stage(stage: &dyn Node, place: StagingPlace, query_error: &TransferError) -> bool {
-    place == StagingPlace::Device && query_error.is_not_found() && confirmed_absent(stage)
+    place == StagingPlace::Device && already_removed(stage, query_error)
+}
+
+/// True when removing `stage` failed with `error` but the stage is gone
+/// anyway, so nothing was left behind. A local or network "not found" is
+/// definite. On a device (XFER-022) it can be false, so a listing of the
+/// stage's folder must confirm it, as for the engine's own staging.
+pub(crate) fn already_removed(stage: &dyn Node, error: &TransferError) -> bool {
+    if !error.is_not_found() {
+        return false;
+    }
+    let on_device = stage.parent().is_some_and(|folder| folder.has_sibling_staging());
+    !on_device || confirmed_absent(stage)
 }
 
 /// XFER-022: `GVfs` MTP answers "not found" for an uncached path it failed

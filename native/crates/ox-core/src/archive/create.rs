@@ -43,7 +43,8 @@ use crate::location::{is_smb_server, normalise, validate_name};
 use crate::private_storage::KernelOpenFlags;
 use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{
-    Cancellation, Node, NodeKind, Progress, ProgressScope, StagedName, TransferError, WriteGuard,
+    already_removed, Cancellation, Node, NodeKind, Progress, ProgressScope, StagedName, TransferError,
+    WriteGuard,
 };
 use tar_writer::TarXzWriter;
 use zip_writer::{DosTime, ZipWriter, MAX_ENTRIES};
@@ -532,8 +533,10 @@ fn staging_name() -> Result<String, ArchiveError> {
 /// it could not be removed.
 fn discard(staging: &dyn Node, cause: ArchiveError) -> ArchiveError {
     match staging.delete() {
-        // A staging file that was never created leaves nothing behind.
-        Ok(()) | Err(TransferError::NotFound(_)) => cause,
+        Ok(()) => cause,
+        // A staging file that was never created, or that is confirmed gone,
+        // leaves nothing behind.
+        Err(cleanup) if already_removed(staging, &cleanup) => cause,
         Err(cleanup) => ArchiveError::ArchiveLeftBehind {
             cause: Box::new(cause),
             staging_uri: staging.uri(),
@@ -669,6 +672,26 @@ mod tests {
     }
 
     /// parity: ARC-023
+    /// A phone can answer "not found" for a staging file it still has, so
+    /// that answer only counts as cleaned up once the folder's listing
+    /// confirms it; until then the file is reported where it is.
+    ///
+    /// parity: ARC-023, XFER-022
+    #[test]
+    fn a_phones_unconfirmed_not_found_still_reports_the_staging_file() {
+        use crate::test_support::PhoneStage;
+
+        let still_listed = PhoneStage::item(".openxplorer-compress-1.part", true);
+        let gone = PhoneStage::item(".openxplorer-compress-2.part", false);
+
+        let reported = discard(&still_listed, ArchiveError::IncompleteWrite).to_string();
+        assert!(
+            reported.contains("remains at mtp://phone.example/Folder/.openxplorer-compress-1.part."),
+            "{reported}"
+        );
+        assert_eq!(discard(&gone, ArchiveError::Cancelled), ArchiveError::Cancelled);
+    }
+
     #[test]
     fn a_cancelled_compression_leaves_nothing_behind() {
         let root = tempfile::tempdir().unwrap();
