@@ -8,9 +8,10 @@
 //! with no second click. A double-click, a drag, a click elsewhere, any
 //! command (Delete, Ctrl+D, a refresh, a navigation), the selection
 //! changing, the clicked item going and the window losing focus cancel
-//! it, and nothing starts while renaming is not allowed there. The rename
-//! is for the item clicked: it never starts on another item that comes to
-//! stand at its position.
+//! it, and so does another tab or pane becoming active; nothing starts
+//! while renaming is not allowed there. The rename is for the item
+//! clicked, in the pane clicked: it never starts on another item that
+//! comes to stand at its position, nor in the other pane of a split tab.
 
 use std::cell::{Cell, RefCell};
 use std::time::{Duration, Instant};
@@ -20,6 +21,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 
 use super::file_ops::FileCommand;
+use super::session::{PaneSide, TabId};
 use super::BrowserWindow;
 use crate::folder_view::cells::FileCell;
 
@@ -30,11 +32,21 @@ const DEFAULT_DOUBLE_CLICK: u32 = 400;
 /// last press was.
 #[derive(Debug, Default)]
 pub(super) struct SlowClickRename {
-    /// The scheduled rename and the URI of the item clicked.
-    pending: RefCell<Option<(glib::SourceId, String)>>,
+    pending: RefCell<Option<PendingRename>>,
     /// The list's own click handling can reset GTK's click count, so a
     /// double-click is also told by the time since the press before.
     last_press: Cell<Option<Instant>>,
+}
+
+/// A rename a slow second click scheduled.
+#[derive(Debug)]
+struct PendingRename {
+    timer: glib::SourceId,
+    /// What was clicked: the item's URI, in the pane on `side` of the
+    /// tab `tab`.
+    uri: String,
+    tab: Option<TabId>,
+    side: PaneSide,
 }
 
 /// What a primary press on the folder view lands on.
@@ -175,13 +187,13 @@ impl BrowserWindow {
                 #[weak(rename_to = window)]
                 self,
                 move || {
-                    let Some((_, uri)) = window.imp().slow_click_rename.pending.take() else {
+                    let Some(pending) = window.imp().slow_click_rename.pending.take() else {
                         return;
                     };
-                    // Losing focus, a command and a changed selection
-                    // cancelled it already; this checks once more, as
-                    // the rename is for the clicked item alone.
-                    let wanted = window.is_only_selected(&uri)
+                    // Losing focus, a command, another pane and a changed
+                    // selection cancelled it already; this checks once
+                    // more, as the rename is for the clicked item alone.
+                    let wanted = window.is_still_clicked(&pending)
                         && window.allows(FileCommand::Rename)
                         && !window.are_item_clicks_paused();
                     if wanted {
@@ -190,7 +202,24 @@ impl BrowserWindow {
                 }
             ),
         );
-        self.imp().slow_click_rename.pending.replace(Some((rename, uri)));
+        let pending = PendingRename {
+            timer: rename,
+            uri,
+            tab: self.imp().session.borrow().active_id(),
+            side: self.active_side(),
+        };
+        self.imp().slow_click_rename.pending.replace(Some(pending));
+    }
+
+    /// Whether the pane clicked for `pending` is still the active one,
+    /// with the item clicked the only one selected.
+    fn is_still_clicked(&self, pending: &PendingRename) -> bool {
+        // A selection change can come while the session is changing; the
+        // pane is then not known to be the one clicked.
+        let tab = self.imp().session.try_borrow().map(|session| session.active_id());
+        tab.is_ok_and(|tab| tab == pending.tab)
+            && self.active_side() == pending.side
+            && self.is_only_selected(&pending.uri)
     }
 
     /// Whether the item at `uri` is the only one selected in the active
@@ -203,7 +232,7 @@ impl BrowserWindow {
     }
 
     /// Drops the scheduled rename once its item is no longer the only
-    /// one selected, or no longer listed.
+    /// one selected, or no longer listed, or its pane is no longer active.
     fn drop_stale_slow_click_rename(&self) {
         let stale = self
             .imp()
@@ -211,7 +240,7 @@ impl BrowserWindow {
             .pending
             .borrow()
             .as_ref()
-            .is_some_and(|(_, uri)| !self.is_only_selected(uri));
+            .is_some_and(|pending| !self.is_still_clicked(pending));
         if stale {
             self.cancel_slow_click_rename();
         }
@@ -219,8 +248,8 @@ impl BrowserWindow {
 
     /// Drops the rename a slow second click scheduled, if any.
     pub(super) fn cancel_slow_click_rename(&self) {
-        if let Some((pending, _)) = self.imp().slow_click_rename.pending.take() {
-            pending.remove();
+        if let Some(pending) = self.imp().slow_click_rename.pending.take() {
+            pending.timer.remove();
         }
     }
 }
