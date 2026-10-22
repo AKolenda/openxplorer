@@ -14,6 +14,7 @@ use super::file_ops_support::{
     dialog_over, is_renaming_in_place, name_editor, open_dialog, select_names, text_field, wait_for_no_dialog,
 };
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
+use crate::window::session::PaneSide;
 use crate::window::slow_click_rename::NamePress;
 
 /// The name the in-place field of `test`'s view shows, if one is open.
@@ -138,6 +139,45 @@ fn a_command_cancels_a_pending_slow_click_rename() {
         assert_eq!(edited, Vec::<String>::new(), "{command} cancels the rename");
     }
     assert!(fixture.path("Notes 2.txt").is_file());
+}
+
+/// A rename a slow click scheduled is for the pane clicked: making the
+/// other pane of a split tab active cancels it, also when that pane
+/// shows the same folder with the same item selected.
+///
+/// parity: OPS-011
+#[gtk::test]
+fn activating_the_other_pane_cancels_a_pending_slow_click_rename() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("split-view", None);
+    test.wait_for_listing("the folder in the new pane");
+    select_names(&test, &["Notes 2.txt"]);
+    test.window.activate_pane(PaneSide::Start);
+    select_names(&test, &["Notes 2.txt"]);
+
+    test.window.name_pressed(NamePress {
+        on_name_of: test.window.folder_model().first_selected(),
+        clicks: 1,
+        modifiers: gdk::ModifierType::empty(),
+    });
+    test.window.activate_pane(PaneSide::End);
+    let selected_beside = test.selected_names();
+
+    assert_eq!(
+        selected_beside,
+        ["Notes 2.txt"],
+        "the same item is selected there"
+    );
+    assert_eq!(
+        names_edited_during(&test, Duration::from_millis(1200)),
+        Vec::<String>::new()
+    );
+    assert!(
+        descendants::<gtk::Entry>(&test.window.pane_on(PaneSide::Start).view_widget())
+            .iter()
+            .all(|field| !field.has_css_class("rename-field"))
+    );
 }
 
 /// parity: OPS-012
