@@ -492,6 +492,7 @@ impl MenuPopover {
             }
             list.append(&row);
         }
+        self.refit_if_shown();
     }
 
     /// Fills the strip with a button per strip item, in the compact style

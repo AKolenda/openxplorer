@@ -70,6 +70,15 @@ impl MenuPopover {
         self.fit_to_monitor_height(height);
     }
 
+    /// Fits the menu again when its rows change while it shows: a menu
+    /// filled again and popped up without being hidden first, as "Show
+    /// more options" and "New…" do, gets no new show from GTK.
+    pub(super) fn refit_if_shown(&self) {
+        if self.is_visible() {
+            self.fit_to_monitor();
+        }
+    }
+
     /// Lets the menu grow as tall as a monitor `monitor_height` tall, or
     /// to [`UNKNOWN_MONITOR_LIMIT`] when that is not known.
     pub(super) fn fit_to_monitor_height(&self, monitor_height: Option<i32>) {
@@ -120,7 +129,7 @@ mod tests {
     use super::*;
     use crate::icons::Icon;
     use crate::test_support::harness::{settle, skin, wait_until};
-    use crate::window::menu_popover::{MenuEntry, MenuItem};
+    use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
     use crate::window::window_action::WindowAction;
 
     /// The height of the test display's only monitor (check.py's Xvfb).
@@ -303,6 +312,56 @@ mod tests {
         );
         wait_for_rows_height(&menu, "every row to show", |height| height >= natural);
         assert!(!scrolls(&menu), "a menu that fits on the monitor does not scroll");
+        close(&window, &menu);
+    }
+
+    /// `rows` menu entries.
+    fn entries(rows: usize) -> Vec<MenuEntry> {
+        (0..rows)
+            .map(|row| MenuItem::new(&format!("Item {row}"), Icon::Copy, WindowAction::CopyAddress).into())
+            .collect()
+    }
+
+    #[gtk::test]
+    fn a_menu_refilled_while_it_shows_fits_its_new_rows() {
+        // "Show more options" and "New…" fill the open menu again and pop
+        // it up without hiding it first, so GTK does not show it again.
+        let (window, menu) = open_menu_in(
+            5,
+            900,
+            Some(gdk::Rectangle::new(20, TEST_MONITOR_HEIGHT / 2, 1, 1)),
+        );
+        assert_eq!(menu.position(), gtk::PositionType::Bottom);
+        menu.fit_to_monitor_height(Some(700));
+        menu.set_entries(entries(26));
+        menu.popup();
+        let natural = all_rows_height(&menu);
+        assert_eq!(
+            menu.position(),
+            gtk::PositionType::Right,
+            "the taller menu opens beside the point"
+        );
+        wait_for_rows_height(&menu, "every row to show", |height| height >= natural);
+        assert!(!scrolls(&menu), "the refilled menu fits on the monitor");
+        close(&window, &menu);
+    }
+
+    #[gtk::test]
+    fn a_menu_restyled_while_it_shows_fits_again() {
+        let (window, menu) = open_menu_in(
+            26,
+            900,
+            Some(gdk::Rectangle::new(20, TEST_MONITOR_HEIGHT / 2, 1, 1)),
+        );
+        assert_eq!(menu.position(), gtk::PositionType::Right);
+        menu.set_entries(entries(5));
+        menu.set_style_and_strip(MenuStyle::Compact, Vec::new());
+        menu.popup();
+        assert_eq!(
+            menu.position(),
+            gtk::PositionType::Bottom,
+            "the short menu opens below the point again"
+        );
         close(&window, &menu);
     }
 
