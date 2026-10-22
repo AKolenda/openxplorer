@@ -138,6 +138,9 @@ mod imp {
                 .child(&list)
                 .build();
             content.append(&rows);
+            // Once shown, the menu fits the monitor its own popup is on.
+            popover.connect_realize(super::MenuPopover::follow_monitor_changes);
+            popover.connect_map(super::MenuPopover::refit_if_shown);
             popover.set_child(Some(&content));
             self.strip.set(strip).expect("constructed runs once per object");
             self.list.set(list).expect("constructed runs once per object");

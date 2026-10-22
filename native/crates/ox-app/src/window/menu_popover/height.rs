@@ -2,7 +2,9 @@
 //! How tall a menu may be: as on Windows, a menu shows in full whenever it
 //! fits on the monitor it opens on, and scrolls only when it is taller.
 //!
-//! A menu reads its monitor each time it opens, so it follows the window
+//! A menu reads its monitor each time it opens, and again once its popup
+//! shows or enters a monitor, so it fits the monitor it is on even in a
+//! window spanning monitors of different heights. It follows the window
 //! to another monitor, a monitor plugged in or out, and a change of scale.
 //! GDK gives the monitor's size in the same logical pixels as widgets, so
 //! the scale needs nothing more. On Wayland a menu cannot know where on
@@ -16,8 +18,8 @@
 //! fit on neither side opens beside it instead, its top at the pointer,
 //! where GTK slides it up.
 
-use gtk::gdk;
 use gtk::prelude::*;
+use gtk::{gdk, glib};
 
 use super::MenuPopover;
 
@@ -48,16 +50,12 @@ pub(super) fn fits_below_or_above(menu_height: i32, anchor_height: i32, monitor_
     2 * menu_height <= monitor_height - 2 * MONITOR_MARGIN - PANEL_ALLOWANCE - anchor_height.max(0)
 }
 
-/// The height of the monitor `widget`'s window is on, or `None` before it
-/// is on a display with a monitor.
-pub(super) fn monitor_height(widget: &impl IsA<gtk::Widget>) -> Option<i32> {
-    let display = widget.as_ref().display();
-    let window_monitor = widget
-        .as_ref()
-        .root()
-        .and_then(|root| root.surface())
-        .and_then(|surface| display.monitor_at_surface(&surface));
-    let monitor = window_monitor.or_else(|| display.monitors().item(0).and_downcast::<gdk::Monitor>())?;
+/// The height of the monitor `surface` is on, or of the first monitor
+/// without one, or `None` before `display` has a monitor.
+pub(super) fn monitor_height(display: &gdk::Display, surface: Option<&gdk::Surface>) -> Option<i32> {
+    let monitor = surface
+        .and_then(|surface| display.monitor_at_surface(surface))
+        .or_else(|| display.monitors().item(0).and_downcast::<gdk::Monitor>())?;
     let height = monitor.geometry().height();
     (height > 0).then_some(height)
 }
@@ -65,9 +63,32 @@ pub(super) fn monitor_height(widget: &impl IsA<gtk::Widget>) -> Option<i32> {
 impl MenuPopover {
     /// Lets the menu grow as tall as the monitor it opens on.
     pub(super) fn fit_to_monitor(&self) {
-        let parent = self.parent();
-        let height = parent.as_ref().and_then(monitor_height);
-        self.fit_to_monitor_height(height);
+        let surface = self.monitor_surface();
+        self.fit_to_monitor_height(monitor_height(&self.display(), surface.as_ref()));
+    }
+
+    /// The surface whose monitor the menu fits: its own popup once it
+    /// shows, which GTK placed on the monitor of its anchor, even when the
+    /// window spans monitors of different heights; before that, the
+    /// surface it opens from (the window, or the menu a submenu hangs from).
+    fn monitor_surface(&self) -> Option<gdk::Surface> {
+        if self.is_mapped() {
+            if let Some(surface) = self.surface() {
+                return Some(surface);
+            }
+        }
+        self.parent()?.native()?.surface()
+    }
+
+    /// Fits the menu again whenever its popup enters a monitor, as when
+    /// GTK first places it, or places it again on another monitor.
+    pub(super) fn follow_monitor_changes(&self) {
+        let Some(surface) = self.surface() else { return };
+        surface.connect_enter_monitor(glib::clone!(
+            #[weak(rename_to = menu)]
+            self,
+            move |_, _| menu.refit_if_shown()
+        ));
     }
 
     /// Fits the menu again when its rows change while it shows: a menu
@@ -203,10 +224,49 @@ mod tests {
     #[gtk::test]
     fn the_test_monitor_is_the_one_the_menu_reads() {
         let (window, menu) = open_menu(3);
-        assert_eq!(monitor_height(&window), Some(TEST_MONITOR_HEIGHT));
+        let display = WidgetExt::display(&window);
         assert_eq!(
-            menu.parent().as_ref().and_then(monitor_height),
+            monitor_height(&display, window.surface().as_ref()),
             Some(TEST_MONITOR_HEIGHT)
+        );
+        assert_eq!(monitor_height(&display, None), Some(TEST_MONITOR_HEIGHT));
+        close(&window, &menu);
+    }
+
+    #[gtk::test]
+    fn a_shown_menu_fits_the_monitor_its_own_popup_is_on() {
+        // A window can span monitors of different heights: the menu's own
+        // popup is where GTK placed it, on the monitor of its anchor.
+        let (window, menu) = open_menu(3);
+        assert!(menu.surface().is_some());
+        assert_eq!(menu.monitor_surface(), menu.surface());
+        close(&window, &menu);
+    }
+
+    #[gtk::test]
+    fn a_menu_opening_from_another_menu_fits_that_menus_monitor_until_it_shows() {
+        let (window, menu) = open_menu(3);
+        let row = menu.rows().into_iter().next().expect("the menu has rows");
+        let submenu = MenuPopover::new(entries(3));
+        submenu.set_parent(&row);
+        assert_eq!(submenu.monitor_surface(), menu.surface());
+        submenu.unparent();
+        close(&window, &menu);
+    }
+
+    #[gtk::test]
+    fn a_menu_fits_again_when_its_popup_enters_a_monitor() {
+        let (window, menu) = open_menu(80);
+        menu.fit_to_monitor_height(Some(700));
+        let short = rows_of(&menu).max_content_height();
+        let surface = menu.surface().expect("the menu shows");
+        let monitor = WidgetExt::display(&window)
+            .monitor_at_surface(&surface)
+            .expect("the menu is on a monitor");
+        surface.emit_by_name::<()>("enter-monitor", &[&monitor]);
+        assert!(
+            rows_of(&menu).max_content_height() > short,
+            "the menu fits the {TEST_MONITOR_HEIGHT} pixel monitor it entered"
         );
         close(&window, &menu);
     }
