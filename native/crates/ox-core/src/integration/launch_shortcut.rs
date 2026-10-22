@@ -468,13 +468,18 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             // and the record earlier builds shared is nobody's now. A
             // record a failed turning on kept is the way back, so it stays.
             // The record earlier builds shared is then a copy of it, unless
-            // the kept record leads to the other package: then the shared
-            // one is that package's way back, so it stays too.
+            // the kept record leads to the other package and the shared one
+            // leads elsewhere: then that is the other package's way back,
+            // so it stays too.
             None => {
                 match self.read_record(false) {
                     Some(record) if record.stranded => {
-                        let duplicate = self.earlier_record_path(!self.is_other_package(&record.previous));
-                        if let Some(earlier) = duplicate {
+                        let earlier = self.settings.join(EARLIER_RECORD);
+                        let siblings = std::fs::read_to_string(&earlier)
+                            .ok()
+                            .and_then(|text| serde_json::from_str::<Record>(&text).ok())
+                            .is_some_and(|shared| !shared.previous.is(&record.previous));
+                        if !(self.is_other_package(&record.previous) && siblings) {
                             let _ = std::fs::remove_file(earlier);
                         }
                         kept = Some(record);
