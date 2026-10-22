@@ -44,6 +44,25 @@ fn the_share_button_is_named_share_and_hidden_without_an_email_portal() {
     assert!(!button.is_visible(), "nobody answers under that name");
 }
 
+/// Version 1 of the Email portal has no `attachment_fds`, which version
+/// 2 brought, so it would open an email without the files: Share shows
+/// only from version 2.
+///
+/// parity: CMD-037
+#[gtk::test]
+fn share_needs_an_email_portal_that_takes_attachments() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let button = share_button(&test);
+    let first = EmailPortal::of_version(1, 0);
+    let second = EmailPortal::of_version(2, 0);
+
+    use_portal(&test, &first.name());
+    assert!(!button.is_visible(), "version 1 takes no attachments");
+    use_portal(&test, &second.name());
+    assert!(button.is_visible(), "version 2 does");
+}
+
 /// parity: CMD-037
 #[gtk::test]
 fn with_an_email_portal_share_attaches_the_selected_files() {

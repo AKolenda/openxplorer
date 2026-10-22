@@ -108,7 +108,8 @@ pub use drive_format::{
     FormatError, FormatRequest, Formatted, UDISKS_NAME,
 };
 pub use email_portal::{
-    compose_email, email_portal_version, open_attachments, EmailError, EMAIL_INTERFACE, MAX_ATTACHMENTS,
+    compose_email, email_portal_version, open_attachments, EmailError, ATTACHMENTS_VERSION, EMAIL_INTERFACE,
+    MAX_ATTACHMENTS,
 };
 pub use file_chooser_bus::{
     ChooserCall, ChooserNotShown, ChooserRegistrationFailed, ChooserReply, FileChooserBus,

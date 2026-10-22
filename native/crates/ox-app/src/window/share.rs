@@ -6,7 +6,8 @@
 //! user sends the message there.
 //!
 //! The button shows only where the desktop can share: the window asks the
-//! portal for its Email interface when it opens, and keeps the button
+//! portal for its Email interface when it opens (version 2 or later, which
+//! takes attachments), and keeps the button
 //! hidden, not disabled, when no portal backend of the desktop implements
 //! it (as on a desktop without KDE's or GTK's portal). An Open or Save
 //! dialog never shows it. Like Windows' Share it is offered only for what
@@ -32,7 +33,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::EntryKind;
 use ox_core::integration::{
-    compose_email, email_portal_version, open_attachments, EmailError, MAX_ATTACHMENTS,
+    compose_email, email_portal_version, open_attachments, EmailError, ATTACHMENTS_VERSION, MAX_ATTACHMENTS,
 };
 use ox_core::location::{is_virtual_location, scheme, ARCHIVE_SCHEME};
 use ox_core::network::local_path;
@@ -128,7 +129,9 @@ impl BrowserWindow {
             let available = match gio::bus_get_future(gio::BusType::Session).await {
                 Ok(connection) => {
                     crate::theme::system::portal_ready(&connection).await;
-                    email_portal_version(&connection, &portal).await.is_some()
+                    email_portal_version(&connection, &portal)
+                        .await
+                        .is_some_and(|version| version >= ATTACHMENTS_VERSION)
                 }
                 Err(_) => false,
             };

@@ -232,12 +232,18 @@ impl EmailPortal {
     /// A portal answering every request with `response`: 0 for an email
     /// app that opened, 1 for the user cancelling, 2 for a failure.
     pub(crate) fn answering(response: u32) -> Self {
+        Self::of_version(4, response)
+    }
+
+    /// A portal of interface version `version` answering every request
+    /// with `response`.
+    pub(crate) fn of_version(version: u32, response: u32) -> Self {
         let calls = Rc::new(RefCell::new(Vec::new()));
         let recorded = Rc::clone(&calls);
         let portal = ExportedPortal::export_with_version(
             EMAIL_XML,
             PORTAL_EMAIL,
-            Some(4),
+            Some(version),
             move |connection, _, _, _, _, parameters, invocation| {
                 let options = parameters.child_value(1);
                 let mut names: Vec<String> = options

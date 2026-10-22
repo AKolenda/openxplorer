@@ -18,7 +18,8 @@
 //!   for the email app.
 //! - **Only where it works.** The portal exports the interface only when
 //!   one of the desktop's portal backends implements it, so reading its
-//!   `version` property tells whether the desktop can share by email.
+//!   `version` property tells whether the desktop can share by email; it
+//!   must be at least [`ATTACHMENTS_VERSION`], which brought attachments.
 //!
 //! The portal answers with a `Response` signal on a request object, as
 //! the Background portal does ([`super::request_autostart`]); the
@@ -40,6 +41,11 @@ use crate::private_storage::KernelOpenFlags;
 
 /// The portal interface that opens a new email.
 pub const EMAIL_INTERFACE: &str = "org.freedesktop.portal.Email";
+
+/// The first version of the Email portal that takes `attachment_fds`
+/// (xdg-desktop-portal 0.9); version 1 has no attachments, so it would
+/// open an email without the files.
+pub const ATTACHMENTS_VERSION: u32 = 2;
 
 /// The most files one email takes: a D-Bus message carries at most 16
 /// file descriptors on `dbus-daemon`'s default limits.
