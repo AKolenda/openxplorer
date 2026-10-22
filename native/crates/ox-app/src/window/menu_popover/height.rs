@@ -41,10 +41,11 @@ pub(super) fn rows_limit(monitor_height: i32, chrome: i32) -> i32 {
     (monitor_height - 2 * MONITOR_MARGIN - chrome.max(0)).max(LEAST_ROWS_HEIGHT)
 }
 
-/// Whether a menu `menu_height` tall that opens at a point on a monitor
-/// `monitor_height` tall surely fits below or above it, wherever it is.
-pub(super) fn fits_below_or_above(menu_height: i32, monitor_height: i32) -> bool {
-    2 * menu_height <= monitor_height - 2 * MONITOR_MARGIN - PANEL_ALLOWANCE
+/// Whether a menu `menu_height` tall that opens at an anchor
+/// `anchor_height` tall on a monitor `monitor_height` tall surely fits
+/// below or above it, wherever it is.
+pub(super) fn fits_below_or_above(menu_height: i32, anchor_height: i32, monitor_height: i32) -> bool {
+    2 * menu_height <= monitor_height - 2 * MONITOR_MARGIN - PANEL_ALLOWANCE - anchor_height.max(0)
 }
 
 /// The height of the monitor `widget`'s window is on, or `None` before it
@@ -84,9 +85,9 @@ impl MenuPopover {
         let menu = frame.measure(gtk::Orientation::Vertical, -1).1;
         let chrome = menu - rows.measure(gtk::Orientation::Vertical, -1).1;
         rows.set_max_content_height(rows_limit(monitor_height, chrome));
-        if self.opens_at_point() {
+        if let Some(anchor_height) = self.point_anchor_height() {
             let full_menu = chrome + self.list().measure(gtk::Orientation::Vertical, -1).1;
-            self.set_position(if fits_below_or_above(full_menu, monitor_height) {
+            self.set_position(if fits_below_or_above(full_menu, anchor_height, monitor_height) {
                 gtk::PositionType::Bottom
             } else if self.direction() == gtk::TextDirection::Rtl {
                 gtk::PositionType::Left
@@ -97,11 +98,13 @@ impl MenuPopover {
         }
     }
 
-    /// Whether the menu opens at a point, as the right-click menus do,
-    /// not below a button or beside a row.
-    fn opens_at_point(&self) -> bool {
+    /// The height of the point the menu opens at, as a context menu does:
+    /// 1 at the pointer, or a row's height on the strip one pixel wide down
+    /// the selected row that the keyboard opens it on (`context_menu.rs`,
+    /// `keyboard_menu_anchor`). `None` below a button or beside a row.
+    fn point_anchor_height(&self) -> Option<i32> {
         let (set, area) = self.pointing_to();
-        set && area.width() <= 1 && area.height() <= 1
+        (set && area.width() <= 1).then(|| area.height())
     }
 
     /// The scrolled window around the rows.
@@ -130,11 +133,11 @@ mod tests {
     }
 
     /// A menu of `rows` items open in a shown window `window_height` tall,
-    /// below its button or, when there is one, at `point` in the button.
+    /// below its button or, when there is one, at `anchor` in the button.
     fn open_menu_in(
         rows: usize,
         window_height: i32,
-        point: Option<(i32, i32)>,
+        anchor: Option<gdk::Rectangle>,
     ) -> (gtk::Window, MenuPopover) {
         let _ = skin();
         let button = gtk::Button::with_label("Open");
@@ -150,8 +153,8 @@ mod tests {
             .collect();
         let menu = MenuPopover::new(entries);
         menu.set_parent(&button);
-        if let Some((x, y)) = point {
-            menu.set_pointing_to(Some(&gdk::Rectangle::new(x, y, 1, 1)));
+        if let Some(anchor) = anchor {
+            menu.set_pointing_to(Some(&anchor));
         }
         menu.popup();
         wait_until("the menu to open", || menu.is_mapped());
@@ -261,7 +264,11 @@ mod tests {
 
     #[gtk::test]
     fn a_tall_menu_at_a_point_in_the_middle_of_the_monitor_slides_to_show_in_full() {
-        let (window, menu) = open_menu_in(26, 900, Some((20, TEST_MONITOR_HEIGHT / 2)));
+        let (window, menu) = open_menu_in(
+            26,
+            900,
+            Some(gdk::Rectangle::new(20, TEST_MONITOR_HEIGHT / 2, 1, 1)),
+        );
         let natural = all_rows_height(&menu);
         assert!(
             natural + 40 > TEST_MONITOR_HEIGHT / 2,
@@ -283,8 +290,32 @@ mod tests {
     }
 
     #[gtk::test]
+    fn a_tall_menu_opened_from_the_keyboard_on_a_row_in_the_middle_slides_to_show_in_full() {
+        // The keyboard opens the context menu on a strip one pixel wide down
+        // the selected row (context_menu.rs, keyboard_menu_anchor).
+        let row = gdk::Rectangle::new(20, TEST_MONITOR_HEIGHT / 2 - 15, 1, 30);
+        let (window, menu) = open_menu_in(26, 900, Some(row));
+        let natural = all_rows_height(&menu);
+        assert_eq!(
+            menu.position(),
+            gtk::PositionType::Right,
+            "the menu opens beside the row"
+        );
+        wait_for_rows_height(&menu, "every row to show", |height| height >= natural);
+        assert!(!scrolls(&menu), "a menu that fits on the monitor does not scroll");
+        close(&window, &menu);
+    }
+
+    #[gtk::test]
+    fn a_short_menu_opened_from_the_keyboard_on_a_row_opens_below_it() {
+        let (window, menu) = open_menu_in(5, 900, Some(gdk::Rectangle::new(20, 100, 1, 30)));
+        assert_eq!(menu.position(), gtk::PositionType::Bottom);
+        close(&window, &menu);
+    }
+
+    #[gtk::test]
     fn a_short_menu_at_a_point_opens_below_it_and_flips_as_before() {
-        let (window, menu) = open_menu_in(5, 900, Some((20, 100)));
+        let (window, menu) = open_menu_in(5, 900, Some(gdk::Rectangle::new(20, 100, 1, 1)));
         assert_eq!(menu.position(), gtk::PositionType::Bottom);
         assert!(!scrolls(&menu));
         close(&window, &menu);
@@ -299,11 +330,14 @@ mod tests {
 
     #[test]
     fn a_menu_surely_fits_below_or_above_a_point_up_to_half_the_monitor() {
-        assert!(fits_below_or_above(400, 1080));
-        assert!(fits_below_or_above((1080 - 16 - 48) / 2, 1080));
-        assert!(!fits_below_or_above((1080 - 16 - 48) / 2 + 1, 1080));
-        assert!(!fits_below_or_above(774, 1080));
-        assert!(fits_below_or_above(600, 1440));
+        assert!(fits_below_or_above(400, 1, 1080));
+        assert!(fits_below_or_above((1080 - 16 - 48 - 1) / 2, 1, 1080));
+        assert!(!fits_below_or_above((1080 - 16 - 48 - 1) / 2 + 1, 1, 1080));
+        assert!(!fits_below_or_above(774, 1, 1080));
+        assert!(fits_below_or_above(600, 1, 1440));
+        // A row the keyboard opens the menu on leaves less room around it.
+        assert!(fits_below_or_above((1080 - 16 - 48 - 30) / 2, 30, 1080));
+        assert!(!fits_below_or_above((1080 - 16 - 48 - 30) / 2 + 1, 30, 1080));
     }
 
     #[test]
