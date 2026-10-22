@@ -6,7 +6,8 @@
 //! plain click on the name of the item that is already the only one
 //! selected starts the rename once a double-click interval has passed
 //! with no second click. A double-click, a drag, a click elsewhere, any
-//! command (Delete, Ctrl+D, a refresh, a navigation), the selection
+//! key but a modifier alone, any command (Delete, Ctrl+D, a refresh, a
+//! navigation), the selection
 //! changing, the clicked item going and the window losing focus cancel
 //! it, and so does another tab or pane becoming active; nothing starts
 //! while renaming is not allowed there. The rename is for the item
@@ -69,6 +70,30 @@ fn asks_for_rename(press: NamePress, selected: &[u32]) -> Option<u32> {
     (press.clicks == 1 && plain && selected == [position]).then_some(position)
 }
 
+/// Whether `key` is a modifier, which pressed alone does nothing.
+fn is_modifier(key: gdk::Key) -> bool {
+    matches!(
+        key,
+        gdk::Key::Shift_L
+            | gdk::Key::Shift_R
+            | gdk::Key::Control_L
+            | gdk::Key::Control_R
+            | gdk::Key::Alt_L
+            | gdk::Key::Alt_R
+            | gdk::Key::Meta_L
+            | gdk::Key::Meta_R
+            | gdk::Key::Super_L
+            | gdk::Key::Super_R
+            | gdk::Key::Hyper_L
+            | gdk::Key::Hyper_R
+            | gdk::Key::ISO_Level3_Shift
+            | gdk::Key::ISO_Level5_Shift
+            | gdk::Key::Caps_Lock
+            | gdk::Key::Num_Lock
+            | gdk::Key::Shift_Lock
+    )
+}
+
 /// The desktop's double-click interval.
 fn double_click_interval() -> Duration {
     let millis = gtk::Settings::default()
@@ -79,15 +104,37 @@ fn double_click_interval() -> Duration {
 }
 
 impl BrowserWindow {
-    /// Cancels a scheduled rename when the window loses focus, when a
-    /// window command runs, and when the clicked item stops being the
-    /// only one selected or goes.
+    /// Cancels a scheduled rename when the window loses focus, when a key
+    /// other than a modifier is pressed, when a window command runs, and
+    /// when the clicked item stops being the only one selected or goes.
     pub(super) fn install_slow_click_rename(&self) {
         self.connect_is_active_notify(|window| {
             if !window.is_active() {
                 window.cancel_slow_click_rename();
             }
         });
+        // Before any widget acts on the key, whatever it then does with
+        // it: commands, Space for the preview, type-to-select.
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |keys, key, _, _| {
+                let modifier_alone = is_modifier(key)
+                    || keys
+                        .current_event()
+                        .and_then(|event| event.downcast::<gdk::KeyEvent>().ok())
+                        .is_some_and(|event| event.is_modifier());
+                if !modifier_alone {
+                    window.cancel_slow_click_rename();
+                }
+                glib::Propagation::Proceed
+            }
+        ));
+        self.add_controller(keys);
         for name in self.list_actions() {
             let Some(action) = self.lookup_action(&name).and_downcast::<gio::SimpleAction>() else {
                 continue;
