@@ -11,7 +11,8 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{
-    dialog_over, is_renaming_in_place, name_editor, open_dialog, select_names, text_field, wait_for_no_dialog,
+    dialog_over, is_renaming_in_place, name_editor, open_dialog, press_shortcut, select_names, text_field,
+    wait_for_no_dialog,
 };
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
 use crate::window::session::PaneSide;
@@ -139,6 +140,35 @@ fn a_command_cancels_a_pending_slow_click_rename() {
         assert_eq!(edited, Vec::<String>::new(), "{command} cancels the rename");
     }
     assert!(fixture.path("Notes 2.txt").is_file());
+}
+
+/// Every file key pressed before the rename starts cancels it, as in
+/// Windows File Explorer, also Ctrl+C, Ctrl+X and Ctrl+V, which run their
+/// commands directly rather than as window actions.
+///
+/// parity: OPS-011
+#[gtk::test]
+fn a_file_key_cancels_a_pending_slow_click_rename() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    let control = gdk::ModifierType::CONTROL_MASK;
+    for key in [gdk::Key::c, gdk::Key::x, gdk::Key::v] {
+        select_names(&test, &["Notes 2.txt"]);
+        test.window.name_pressed(NamePress {
+            on_name_of: test.window.folder_model().first_selected(),
+            clicks: 1,
+            modifiers: gdk::ModifierType::empty(),
+        });
+        press_shortcut(&test, key, control);
+        let edited = names_edited_during(&test, Duration::from_millis(1200));
+        if let Some(question) = dialog_over(&test) {
+            question.press("Cancel");
+            wait_for_no_dialog(&test);
+        }
+
+        assert_eq!(edited, Vec::<String>::new(), "Ctrl+{key:?} cancels the rename");
+    }
 }
 
 /// A rename a slow click scheduled is for the pane clicked: making the
