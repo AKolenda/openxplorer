@@ -7058,6 +7058,11 @@ msgstr ""
 msgid "This template is unavailable, too large, or not a regular template file."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/new_from_template.rs
+msgid "{cause}\nThe incomplete file remains at {uri}. Inspect it before removing it. {cleanup}"
+msgstr ""
+
 #: crates/ox-core/src/ops/progress.rs
 msgid "Deleting items…"
 msgstr ""

@@ -228,17 +228,17 @@ fn publish_new_file(
     // An error names the new file, never its stage.
     let staged = StagedName::new(&stage_name, &[], &target.display_name());
     let stage = folder.child(&stage_name);
-    write_private_stage(&stage, contents, context).map_err(|error| naming(error, &staged))?;
+    write_private_stage(&stage, contents, context, &staged)?;
     // Same folder, never overwriting: the kernel's no-replace rename
     // locally, `set_display_name` on a phone (XFER-007, XFER-024).
     let published = GioNode::from_file(stage.clone()).publish(target, Some(&context.cancel));
-    // OPS-048: a stage that was not published is deleted.
-    if published.is_err() {
-        discard_stage(&stage);
-    }
-    published.map_err(|error| match OpsError::from(staged.apply(error)) {
-        OpsError::Exists(_) => OpsError::Exists(crate::i18n::gettext(NAME_TAKEN)),
-        other => other,
+    published.map_err(|error| {
+        let cause = match OpsError::from(staged.apply(error)) {
+            OpsError::Exists(_) => OpsError::Exists(crate::i18n::gettext(NAME_TAKEN)),
+            other => other,
+        };
+        // OPS-048: a stage that was not published is deleted.
+        discard_stage(&stage, cause)
     })
 }
 
@@ -258,33 +258,46 @@ fn naming(error: OpsError, staged: &StagedName) -> OpsError {
 
 /// Creates `stage` exclusively as a private (0600) file and writes
 /// `contents` to it. A stage this call created is deleted again when
-/// writing fails; a name it could not create is never touched.
+/// writing fails; a name it could not create is never touched. Errors name
+/// the new file that `staged` describes.
 fn write_private_stage(
     stage: &gio::File,
     contents: &[u8],
     context: &OperationContext,
+    staged: &StagedName,
 ) -> Result<(), OpsError> {
     let cancellable = Some(context.cancellable());
-    let stream = stage.create(gio::FileCreateFlags::PRIVATE, cancellable)?;
+    let stream = stage
+        .create(gio::FileCreateFlags::PRIVATE, cancellable)
+        .map_err(|error| naming(error.into(), staged))?;
     let written = match stream.write_all(contents, cancellable) {
         Ok((_, None)) => Ok(()),
         Ok((_, Some(error))) | Err(error) => Err(error),
     };
     // Close even after a failed write, as the Python `finally` does.
     let closed = stream.close(cancellable);
-    let outcome = written.and(closed).map_err(OpsError::from);
     // OPS-048: a stage that could not be written in full is deleted.
-    if outcome.is_err() {
-        discard_stage(stage);
-    }
-    outcome
+    written
+        .and(closed)
+        .map_err(|error| discard_stage(stage, naming(error.into(), staged)))
 }
 
-/// Deletes a stage file this operation created. A stage that cannot be
-/// deleted stays hidden under its `.winspace-new-` name; the operation's
-/// own error is the one to report.
-fn discard_stage(stage: &gio::File) {
-    let _ = stage.delete(gio::Cancellable::NONE);
+/// Deletes a stage file this operation created after `cause` stopped it,
+/// and returns the error to report: `cause`, or, when the stage cannot be
+/// deleted, `cause` followed by the stage's exact location so the user can
+/// find what was left behind.
+fn discard_stage(stage: &gio::File, cause: OpsError) -> OpsError {
+    match stage.delete(gio::Cancellable::NONE) {
+        Ok(()) => cause,
+        Err(cleanup) => OpsError::failed(crate::i18n::format_message(
+            "{cause}\nThe incomplete file remains at {uri}. Inspect it before removing it. {cleanup}",
+            &[
+                ("cause", &cause.to_string()),
+                ("uri", &stage.uri()),
+                ("cleanup", &cleanup.to_string()),
+            ],
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -354,6 +367,39 @@ mod tests {
             .map(|entry| entry.expect("a folder entry").file_name())
             .collect();
         assert_eq!(names, ["New document.txt"], "no {STAGE_PREFIX} file is left");
+    }
+
+    /// A stage file that cannot be deleted after a failure is reported at
+    /// its exact location, so the user can find what was left behind; the
+    /// failure itself is reported first.
+    ///
+    /// parity: OPS-048
+    #[test]
+    fn a_stage_file_left_behind_is_reported_where_it_is() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let locked = temp.path().join("Locked");
+        fs::create_dir(&locked).expect("a folder");
+        let stage_path = locked.join(format!("{STAGE_PREFIX}{}", "e".repeat(32)));
+        fs::write(&stage_path, b"partial").expect("a stage file");
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).expect("chmod");
+        // As root, which deletes anywhere, nothing is left behind.
+        if fs::write(locked.join("probe"), b"").is_ok() {
+            return;
+        }
+        let stage = gio::File::for_path(&stage_path);
+
+        let error = discard_stage(&stage, OpsError::failed("Disk full")).to_string();
+
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+        assert!(stage_path.exists());
+        let expected = format!(
+            "Disk full\nThe incomplete file remains at {}. Inspect it before removing it. ",
+            stage.uri()
+        );
+        assert!(error.starts_with(&expected), "{error}");
+        assert!(error.ends_with("Permission denied"), "{error}");
     }
 
     /// A folder that cannot be written is reported with the new file's
