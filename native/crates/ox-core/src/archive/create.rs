@@ -173,7 +173,9 @@ impl ZipCompressor {
     /// [`ArchiveError::DuplicateSelectedNames`],
     /// [`ArchiveError::TooLargeToCompress`], the write guard's refusal,
     /// the errors of reading the items or writing the ZIP, or
-    /// [`ArchiveError::Cancelled`]. Nothing is left behind on failure.
+    /// [`ArchiveError::Cancelled`]. Nothing is left behind on failure,
+    /// except a staging file that could not be removed, which
+    /// [`ArchiveError::ArchiveLeftBehind`] reports.
     pub fn compress(
         &mut self,
         request: &CompressionRequest,
@@ -189,17 +191,19 @@ impl ZipCompressor {
         let staged = StagedName::new(&stage_name, &[], &name);
         let staging = destination.folder.child(OsStr::new(&stage_name));
         if let Err(error) = self.write_archive(&plan, staging.as_ref(), is_tar_xz(&name), cancel) {
-            remove_staging(staging.as_ref());
-            return Err(error.naming(&staged).unless_cancelled(cancel));
+            return Err(discard(
+                staging.as_ref(),
+                error.naming(&staged).unless_cancelled(cancel),
+            ));
         }
         // Safety rule ARC-023: the rename never replaces an item another
         // program created under the name meanwhile.
         if let Err(error) = staging.publish(destination.archive.as_ref(), Some(cancel)) {
-            remove_staging(staging.as_ref());
-            return Err(match error {
+            let cause = match error {
                 TransferError::Exists(_) => ArchiveError::ArchiveExists,
                 other => ArchiveError::from(other).naming(&staged).unless_cancelled(cancel),
-            });
+            };
+            return Err(discard(staging.as_ref(), cause));
         }
         self.report(format!("Compressed {name}"), 1.0);
         Ok(CreatedArchive {
@@ -522,8 +526,20 @@ fn staging_name() -> Result<String, ArchiveError> {
 
 /// Removes a staging file this compression created. The first error is
 /// the one the user needs; the hidden leftover names itself.
-fn remove_staging(staging: &dyn Node) {
-    let _ = staging.delete();
+/// Removes the staging file after `cause` stopped the compression, and
+/// returns the error to report: `cause`, or
+/// [`ArchiveError::ArchiveLeftBehind`] with the file's exact location when
+/// it could not be removed.
+fn discard(staging: &dyn Node, cause: ArchiveError) -> ArchiveError {
+    match staging.delete() {
+        // A staging file that was never created leaves nothing behind.
+        Ok(()) | Err(TransferError::NotFound(_)) => cause,
+        Err(cleanup) => ArchiveError::ArchiveLeftBehind {
+            cause: Box::new(cause),
+            staging_uri: staging.uri(),
+            cleanup,
+        },
+    }
 }
 
 #[cfg(test)]

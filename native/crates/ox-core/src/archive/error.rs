@@ -316,6 +316,27 @@ pub enum ArchiveError {
         /// Why it could not be removed.
         cleanup: TransferError,
     },
+    /// ARC-023: the compression failed and its staging file could not be
+    /// removed either.
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "{cause}\nThe incomplete archive remains at {staging_uri}. Inspect it before removing it. {cleanup}",
+            &[
+                ("cause", &cause.to_string()),
+                ("staging_uri", staging_uri),
+                ("cleanup", &cleanup.to_string()),
+            ]
+        )
+    )]
+    ArchiveLeftBehind {
+        /// Why the compression stopped.
+        cause: Box<ArchiveError>,
+        /// Where the staging file is.
+        staging_uri: String,
+        /// Why it could not be removed.
+        cleanup: TransferError,
+    },
 }
 
 impl ArchiveError {

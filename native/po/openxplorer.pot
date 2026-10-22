@@ -5890,6 +5890,11 @@ msgstr ""
 msgid "{cause}\nIncomplete extraction remains at {staging_uri}. Inspect it before removing it. {cleanup}"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/archive/error.rs
+msgid "{cause}\nThe incomplete archive remains at {staging_uri}. Inspect it before removing it. {cleanup}"
+msgstr ""
+
 #: crates/ox-core/src/archive/zip/error.rs
 msgid "A file name in this ZIP is marked as UTF-8 but is not valid UTF-8."
 msgstr ""

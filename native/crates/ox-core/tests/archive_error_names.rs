@@ -136,3 +136,49 @@ fn a_compression_into_a_read_only_folder_names_the_new_archive() {
     assert_names(&error, &locked.join("one.zip"));
     assert_eq!(fs::read_dir(&locked).expect("list").count(), 0);
 }
+
+/// A compression whose staging cannot be removed after it failed names
+/// that staging exactly, so the user can find what was left behind.
+///
+/// parity: ARC-023
+#[test]
+fn a_compression_staging_left_behind_is_reported_where_it_is() {
+    let temporary = tempfile::tempdir().expect("create a temporary folder");
+    let sources = temporary.path().join("Sources");
+    fs::create_dir(&sources).expect("create the sources");
+    let first = sources.join("a.txt");
+    let second = sources.join("b.txt");
+    fs::write(&first, "a").expect("write a source");
+    fs::write(&second, "b").expect("write a source");
+    let destination = temporary.path().join("Destination");
+    fs::create_dir(&destination).expect("create the destination");
+    if !lock(&destination) {
+        return;
+    }
+    unlock(&destination);
+    let request = CompressionRequest {
+        uris: vec![file_uri(&first), file_uri(&second)],
+        destination_uri: file_uri(&destination),
+        archive_name: "both.zip".into(),
+    };
+    let (folder, unreadable) = (destination.clone(), second.clone());
+    // The share turns read-only while the second item is read, so neither
+    // its write nor the cleanup succeeds.
+    let mut compressor = ZipCompressor::new().with_progress(move |progress| {
+        if progress.label.ends_with("(2/2)") {
+            fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000)).expect("chmod");
+            fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).expect("chmod");
+        }
+    });
+
+    let error = compressor.compress(&request, &Cancellation::new()).unwrap_err().to_string();
+
+    unlock(&destination);
+    let left: Vec<_> = fs::read_dir(&destination)
+        .expect("list")
+        .map(|entry| entry.expect("entry").path())
+        .collect();
+    assert_eq!(left.len(), 1, "{left:?}");
+    assert!(error.contains(&file_uri(&left[0])), "{error}");
+    assert!(error.contains("Inspect it before removing it."), "{error}");
+}
