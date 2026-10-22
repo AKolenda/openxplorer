@@ -26,6 +26,8 @@ use super::error::TransferError;
 pub(crate) struct StagedName {
     /// The staging's own name in its folder.
     stage: String,
+    /// Private folders left out of every path, before the replacements.
+    left_out: Vec<String>,
     /// Each staged spelling and what replaces it, in the order they are
     /// replaced.
     replacements: Vec<(String, String)>,
@@ -41,6 +43,7 @@ impl StagedName {
         staged.push(stage.to_owned());
         Self {
             stage: stage.to_owned(),
+            left_out: Vec::new(),
             replacements: staged
                 .into_iter()
                 .map(|staged| (staged, real.to_owned()))
@@ -52,18 +55,13 @@ impl StagedName {
     /// end up directly in the existing folder called `folder` that holds
     /// them: both are left out of a path, and a bare name becomes `folder`.
     pub(crate) fn inside(stage: &str, private: &str, folder: &str) -> Self {
-        let replacements = [stage, private]
-            .into_iter()
-            .flat_map(|name| {
-                [
-                    (format!("/{name}"), String::new()),
-                    (name.to_owned(), folder.to_owned()),
-                ]
-            })
-            .collect();
         Self {
             stage: stage.to_owned(),
-            replacements,
+            left_out: vec![stage.to_owned(), private.to_owned()],
+            replacements: [stage, private]
+                .into_iter()
+                .map(|name| (name.to_owned(), folder.to_owned()))
+                .collect(),
         }
     }
 
@@ -74,11 +72,13 @@ impl StagedName {
 
     /// `message` with the real name in place of the staging.
     pub(crate) fn reword(&self, message: &str) -> String {
+        let message = self
+            .left_out
+            .iter()
+            .fold(message.to_owned(), |message, name| leave_out(&message, name));
         self.replacements
             .iter()
-            .fold(message.to_owned(), |message, (staged, real)| {
-                message.replace(staged, real)
-            })
+            .fold(message, |message, (staged, real)| message.replace(staged, real))
     }
 
     /// `error` naming the real item. A location the user must recover by
@@ -96,6 +96,28 @@ impl StagedName {
             TransferError::Cancelled | TransferError::RecoveryRequired(_) => error,
         }
     }
+}
+
+/// `message` with the path component `name` left out. In a root folder
+/// (`/` or a URI's `file:///`) nothing names a parent, so the separator
+/// stays and the path names the root.
+fn leave_out(message: &str, name: &str) -> String {
+    let component = format!("/{name}");
+    let mut reworded = String::with_capacity(message.len());
+    let mut rest = message;
+    while let Some(at) = rest.find(&component) {
+        reworded.push_str(&rest[..at]);
+        rest = &rest[at + component.len()..];
+        let in_root = reworded
+            .chars()
+            .next_back()
+            .is_none_or(|before| before == '/' || before.is_whitespace() || "'\"‘“".contains(before));
+        if in_root && !rest.starts_with('/') {
+            reworded.push('/');
+        }
+    }
+    reworded.push_str(rest);
+    reworded
 }
 
 #[cfg(test)]
@@ -151,6 +173,35 @@ mod tests {
             (
                 format!("Error moving {stage} to /home/user/Target/{private}: Busy"),
                 "Error moving Target to /home/user/Target: Busy".to_owned(),
+            ),
+        ];
+        for (staged, real) in cases {
+            assert_eq!(name.reword(&staged), real);
+        }
+    }
+
+    /// parity: ARC-013
+    #[test]
+    fn private_folders_in_a_root_folder_leave_the_root_named() {
+        let stage = format!(".openxplorer-extract-{}.part", "b".repeat(32));
+        let private = format!(".openxplorer-extract-{}", "c".repeat(32));
+        let name = StagedName::inside(&stage, &private, "/");
+        let cases = [
+            (
+                format!("Error creating directory /{stage}: Permission denied"),
+                "Error creating directory /: Permission denied",
+            ),
+            (
+                format!("Error creating directory file:///{stage}: Permission denied"),
+                "Error creating directory file:///: Permission denied",
+            ),
+            (
+                format!("Error opening file /{stage}/{private}/Docs/a.txt: No space"),
+                "Error opening file /Docs/a.txt: No space",
+            ),
+            (
+                format!("Error opening file '/{stage}': Busy"),
+                "Error opening file '/': Busy",
             ),
         ];
         for (staged, real) in cases {
