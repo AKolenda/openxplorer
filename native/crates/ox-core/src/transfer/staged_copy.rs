@@ -159,11 +159,17 @@ impl StagedCopy<'_> {
     /// visible under the final name unless publishing succeeded.
     pub(crate) fn run(mut self, staging: &mut ItemStaging) -> Result<(), TransferError> {
         let stage_name = staging_name()?;
-        let source_name = self.source.name();
-        let final_name = self.destination.name();
         let folder = self.destination_folder.child(OsStr::new(&stage_name));
-        let inner: Vec<String> = [OsStr::new(PAYLOAD_NAME), &source_name, &final_name]
-            .into_iter()
+        // Only a private folder holds the item under a name of its own; a
+        // device builds the item itself as the staging, so its first
+        // entries are real ones.
+        let inner_names = match self.layout() {
+            Layout::Payload => vec![OsString::from(PAYLOAD_NAME)],
+            Layout::SameDeviceCopy => vec![self.source.name(), self.destination.name()],
+            Layout::Sibling => Vec::new(),
+        };
+        let inner: Vec<String> = inner_names
+            .iter()
             .flat_map(|inner| spellings(folder.as_ref(), inner))
             .collect();
         let name = StagedName::new(&stage_name, &inner, &self.destination.display_name());

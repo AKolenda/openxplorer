@@ -207,3 +207,67 @@ fn a_copy_within_one_device_names_the_final_name_in_an_escaped_uri() {
     assert!(!error.contains(".winspace-transfer"), "{error}");
     assert_eq!(list(&fixture.destination_folder), ["a b.txt"]);
 }
+
+/// A phone that cannot write the entries called `payload` or `Folder`,
+/// and says so with the full path it was given.
+#[derive(Default)]
+struct RefusesEntriesNamedLikeStaging {
+    device: Device,
+}
+
+impl Provider for RefusesEntriesNamedLikeStaging {
+    fn base(&self) -> Option<&dyn Provider> {
+        Some(&self.device)
+    }
+
+    fn copy_file(
+        &self,
+        node: &LocalNode,
+        target: &dyn Node,
+        cancel: &Cancellation,
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<(), TransferError> {
+        if !["payload", "Folder"].contains(&node.display_name().as_str()) {
+            return node.local_copy_file(target, cancel, progress);
+        }
+        Err(TransferError::failed(format!(
+            "Error opening file {}: Permission denied",
+            local_path_of(target).display(),
+        )))
+    }
+}
+
+/// A phone builds a folder itself under its staging name, so a first
+/// entry called `payload`, or named like the folder, is a real entry and
+/// keeps its place in the path.
+///
+/// parity: XFER-001, XFER-021
+#[test]
+fn entries_of_a_folder_copied_to_a_device_keep_names_like_the_staging_ones() {
+    let fixture = Fixture::with_destination("phone");
+    let tree = fixture.source_folder.join("Folder");
+    fs::create_dir_all(&tree).expect("create the source folder");
+    write(&tree.join("payload"), "p");
+    write(&tree.join("Folder"), "f");
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&asked);
+    let mut engine = fixture
+        .engine(Arc::new(RefusesEntriesNamedLikeStaging::default()))
+        .with_failure_question(move |item: &FailedItem| {
+            log.lock().expect("question log").push(item.error.clone());
+            FailureAnswer::Skip
+        });
+
+    fixture.run(&mut engine, &[&tree], Request::Copy(ConflictPolicy::Skip));
+
+    let mut asked = asked.lock().expect("question log").clone();
+    asked.sort();
+    let real = fixture.destination_folder.join("Folder");
+    let expected = ["Folder", "payload"].map(|entry| {
+        format!(
+            "Error opening file {}: Permission denied",
+            real.join(entry).display()
+        )
+    });
+    assert_eq!(asked, expected);
+}
