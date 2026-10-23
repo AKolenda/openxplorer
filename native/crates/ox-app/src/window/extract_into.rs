@@ -22,6 +22,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::archive::{
     lift_same_named_folder, private_extraction_name, ArchiveError, ExtractedFolder, ExtractionRequest,
+    ZipExtractor,
 };
 use ox_core::gio_node::GioNode;
 use ox_core::location::{parent_location, validate_name};
@@ -170,7 +171,7 @@ impl BrowserWindow {
             folder_name: name,
         };
         let extracted = self
-            .run_extraction(request, None)
+            .run_extraction(request, |extractor| extractor)
             .await
             .map_err(|error| extraction_failure_text(&error))?;
         let lifted = gio::spawn_blocking(move || lift_same_named_folder(extracted))
@@ -196,8 +197,9 @@ impl BrowserWindow {
             destination_uri: target.clone(),
             folder_name: private,
         };
+        // Errors name the chosen folder, not the private one.
         let extracted = self
-            .run_extraction(request, None)
+            .run_extraction(request, ZipExtractor::into_existing_folder)
             .await
             .map_err(|error| extraction_failure_text(&error))?;
         let staging = extracted.uri.clone();
@@ -250,12 +252,13 @@ impl BrowserWindow {
         }
     }
 
-    /// Runs `request` with the transfer panel and the window's progress;
-    /// only the members `selection` names, when it names some.
+    /// Runs `request` with the transfer panel and the window's progress,
+    /// with the extractor that `adjust` makes of the window's, for example
+    /// one extracting only some members.
     pub(super) async fn run_extraction(
         &self,
         request: ExtractionRequest,
-        selection: Option<&[String]>,
+        adjust: impl FnOnce(ZipExtractor) -> ZipExtractor,
     ) -> Result<ExtractedFolder, ArchiveError> {
         let cancel = Cancellation::new();
         self.transfer_panel().start(
@@ -264,12 +267,10 @@ impl BrowserWindow {
             cancel.clone(),
         );
         self.update_archive_actions();
-        let mut extractor = self
-            .zip_extractor()
-            .with_progress(self.progress_reporter(&cancel));
-        if let Some(members) = selection {
-            extractor = extractor.with_selection(members);
-        }
+        let extractor = adjust(
+            self.zip_extractor()
+                .with_progress(self.progress_reporter(&cancel)),
+        );
         let extracted = extractor.extract_in_background(request, cancel).await;
         self.finish_archive_operation();
         extracted

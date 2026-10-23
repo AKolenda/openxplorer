@@ -95,7 +95,7 @@ impl BrowserWindow {
             folder_name: folder_name.clone(),
         };
         let extracted = self
-            .run_extraction(request, Some(&members))
+            .run_extraction(request, |extractor| extractor.with_selection(&members))
             .await
             .map_err(|error| crate::archive_view::extraction_failure_text(&error))?;
         let folder: PathBuf = gio::File::for_uri(&extracted.uri)
