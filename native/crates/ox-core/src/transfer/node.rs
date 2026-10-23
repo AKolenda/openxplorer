@@ -248,6 +248,36 @@ pub trait Node: Send + Sync {
     /// items not yet reached are left in place.
     fn delete_tree(&self, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError>;
 
+    /// [`Node::delete_tree`] for an item the caller found, without
+    /// following links, to be `kind`. A backend that pays a round trip per
+    /// question (SMB, phones) need not ask again.
+    ///
+    /// For any `kind` but a folder the item is deleted without looking
+    /// inside it, so the caller may skip checking its contents: a folder
+    /// that has taken its place since is removed only while it is empty.
+    /// A folder is inspected again before it is entered.
+    ///
+    /// # Errors
+    ///
+    /// As [`Node::delete_tree`], and the backend's error for a folder that
+    /// has taken the place of a non-folder and is not empty.
+    fn delete_tree_of_kind(
+        &self,
+        kind: NodeKind,
+        cancel: &Cancellation,
+        guard: Option<&WriteGuard>,
+    ) -> Result<(), TransferError> {
+        if kind == NodeKind::Directory {
+            return self.delete_tree(cancel, guard);
+        }
+        cancel.check()?;
+        if let Some(guard) = guard {
+            guard(&self.uri())?;
+            cancel.check()?;
+        }
+        self.delete()
+    }
+
     /// Removes this staging tree, which the engine created. `created` is
     /// the identity recorded right after the engine made it, when the
     /// backend has one.
