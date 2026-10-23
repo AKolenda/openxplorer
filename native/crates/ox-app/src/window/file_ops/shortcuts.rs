@@ -70,6 +70,9 @@ impl BrowserWindow {
         if !self.file_keys_apply() {
             return glib::Propagation::Proceed;
         }
+        // Any file key cancels a rename a slow click scheduled, also those
+        // that run their command directly rather than as an action.
+        self.cancel_slow_click_rename();
         match action {
             WindowAction::Cut => self.copy_selection(ClipboardMode::Cut),
             WindowAction::Copy => self.copy_selection(ClipboardMode::Copy),
