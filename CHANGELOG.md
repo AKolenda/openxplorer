@@ -1,10 +1,3 @@
-# Unreleased
-
-- Cutting a file and pasting it back into the same folder now does
-  nothing, as in Windows Explorer: the file stays where it is. Before,
-  it asked "Items already exist". In a move of several items, the ones
-  already in the folder stay and the others move.
-
 # 2.0.6 — 2026-10-13
 
 ## What's Changed
