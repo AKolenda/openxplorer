@@ -74,6 +74,7 @@ impl WriteProtection {
         check_write_tree(
             self.guard.as_deref(),
             source,
+            None,
             Some(destination),
             cancel,
             source_change,

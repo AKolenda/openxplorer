@@ -22,8 +22,9 @@ use ox_core::integration::{
     glob_matches, options_from_entries, path_variant, preferred_value, with_preference, without_preference,
     ChooserAnswer, ChooserCall, ChooserMode, ChooserNotShown, ChooserRequest, ChooserRequestError,
     DisabledFileDialogs, FileChooserBus, FileDialogError, FileDialogPaths, FileDialogRegistration,
-    FilterPattern, PortalDir, Sandbox, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY, KDE_PORTAL_VARIABLE,
-    MAX_LIST_ITEMS, PORTAL_BACKEND_PATH, RESPONSE_CANCELLED, RESPONSE_OTHER, RESPONSE_SUCCESS,
+    FilterPattern, PortalDir, Sandbox, SystemdSession, FILE_CHOOSER_INTERFACE, FILE_CHOOSER_KEY,
+    GTK_PORTAL_VARIABLE, KDE_PORTAL_VARIABLE, MAX_LIST_ITEMS, PORTAL_BACKEND_PATH, RESPONSE_CANCELLED,
+    RESPONSE_OTHER, RESPONSE_SUCCESS,
 };
 use tempfile::TempDir;
 
@@ -387,6 +388,7 @@ impl OptInFixture {
             system_dirs: vec![self.root.path().join("etc"), self.system()],
             desktops: vec!["kde".to_owned()],
             portal_dir: PortalDir::Fixed(None),
+            systemd_session: SystemdSession::Known(true),
         }
     }
 
@@ -810,7 +812,211 @@ fn kde_apps_are_covered_by_a_login_script() {
         Sandbox::Host,
     );
     gnome.enable().expect("enable on GNOME");
-    assert!(!script.exists(), "GNOME apps already ask the portal");
+    assert!(!script.exists(), "only KDE's own apps read the script");
+}
+
+/// The opt-in on GNOME, where the user's configuration is in a temporary
+/// folder.
+fn gnome_registration(fixture: &OptInFixture) -> FileDialogRegistration {
+    FileDialogRegistration::new(
+        FileDialogPaths {
+            desktops: vec!["gnome".to_owned()],
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    )
+}
+
+/// What systemd's environment.d generator makes of the user's
+/// environment files in `config_home`; `None` where the generator is not
+/// installed.
+fn environment_from(config_home: &Path) -> Option<String> {
+    let generator =
+        Path::new("/usr/lib/systemd/user-environment-generators/30-systemd-environment-d-generator");
+    if !generator.is_file() {
+        return None;
+    }
+    let output = Command::new(generator)
+        .env_clear()
+        .env("HOME", config_home)
+        .env("XDG_CONFIG_HOME", config_home)
+        .output()
+        .expect("the generator runs");
+    assert!(output.status.success(), "{output:?}");
+    Some(String::from_utf8(output.stdout).expect("text"))
+}
+
+/// Enabling also writes the environment file that makes GTK 3 apps ask
+/// the portal from the next login, on every desktop, as systemd reads it.
+/// Disabling removes it; a file of the user's with that name, or a
+/// symlink, is never replaced; one enabled by an earlier version gets it
+/// from Enable.
+///
+/// parity: INT-032
+#[test]
+fn gtk_apps_are_covered_by_an_environment_file() {
+    let fixture = OptInFixture::new();
+    let registration = gnome_registration(&fixture);
+    let file = registration.gtk_env_file();
+    assert_eq!(
+        file,
+        fixture
+            .root
+            .path()
+            .join("config/environment.d/60-openxplorer-file-dialogs.conf")
+    );
+    assert!(!registration.covers_gtk_apps());
+
+    registration.enable().expect("enable");
+    let written = fs::read_to_string(&file).expect("the environment file");
+    assert!(
+        written.contains(&format!("\n{GTK_PORTAL_VARIABLE}=1\n")),
+        "{written}"
+    );
+    assert!(registration.covers_gtk_apps());
+    assert!(!registration.leaves_apps_out());
+    if let Some(environment) = environment_from(&fixture.root.path().join("config")) {
+        assert!(
+            environment.lines().any(|line| line == "GTK_USE_PORTAL=1"),
+            "{environment}"
+        );
+    }
+    registration.disable().expect("disable");
+    assert!(!file.exists());
+    assert!(!registration.is_enabled());
+
+    // Enabled by an earlier version: the dialogs use the app but GTK 3 apps
+    // are left out, and enabling again adds the file.
+    registration.enable().expect("enable");
+    fs::remove_file(&file).expect("an older version wrote none");
+    assert!(registration.leaves_apps_out());
+    registration.enable().expect("enable again");
+    assert!(registration.covers_gtk_apps());
+    assert!(!registration.leaves_apps_out());
+    registration.disable().expect("disable");
+
+    fs::write(&file, "GTK_THEME=Adwaita\n").expect("the user's own file");
+    registration.enable().expect("enable");
+    assert!(registration.gtk_env_is_someone_elses());
+    assert!(
+        !registration.leaves_apps_out(),
+        "Enable leaves the user's file alone"
+    );
+    registration.disable().expect("disable");
+    assert_eq!(fs::read_to_string(&file).expect("kept"), "GTK_THEME=Adwaita\n");
+    fs::remove_file(&file).expect("cleared");
+
+    symlink(fixture.user_file(), &file).expect("a symlink");
+    registration.enable().expect("enable");
+    assert!(registration.is_enabled());
+    assert!(registration.gtk_env_is_someone_elses());
+    registration.disable().expect("disable");
+    assert!(fs::symlink_metadata(&file)
+        .expect("kept")
+        .file_type()
+        .is_symlink());
+}
+
+/// Dialogs enabled by an earlier version whose environment file's folder
+/// cannot be read still count as leaving GTK 3 apps out, so Make default
+/// tries Enable and reports the error instead of finding nothing to do.
+///
+/// parity: INT-032
+#[test]
+fn an_unreadable_environment_folder_leaves_gtk_apps_out() {
+    let fixture = OptInFixture::new();
+    let registration = gnome_registration(&fixture);
+    registration.enable().expect("enable");
+    let folder = registration
+        .gtk_env_file()
+        .parent()
+        .expect("the file's folder")
+        .to_path_buf();
+    fs::remove_dir_all(&folder).expect("the folder");
+    fs::write(&folder, "not a folder\n").expect("a file in the folder's place");
+
+    assert!(registration.is_enabled());
+    assert!(!registration.covers_gtk_apps());
+    assert!(!registration.gtk_env_is_someone_elses());
+    assert!(registration.leaves_apps_out(), "Enable has something to report");
+    assert!(registration.enable().is_err(), "the file cannot be written there");
+}
+
+/// A session the systemd user manager does not start (Xfce, MATE) never
+/// reads `environment.d`, so Enable writes no file there and does not
+/// count GTK 3 apps as left out; KDE's script is unaffected.
+///
+/// parity: INT-032
+#[test]
+fn sessions_not_started_by_systemd_get_no_gtk_environment_file() {
+    let fixture = OptInFixture::new();
+    let xfce = FileDialogRegistration::new(
+        FileDialogPaths {
+            desktops: vec!["xfce".to_owned()],
+            systemd_session: SystemdSession::Known(false),
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    );
+    assert!(!xfce.reads_gtk_env_file());
+    xfce.enable().expect("enable");
+    assert!(xfce.is_enabled());
+    assert!(!xfce.gtk_env_file().exists());
+    assert!(!xfce.leaves_apps_out());
+    xfce.disable().expect("disable");
+
+    let kde = FileDialogRegistration::new(
+        FileDialogPaths {
+            systemd_session: SystemdSession::Known(false),
+            ..fixture.paths()
+        },
+        "io.winspace.Development",
+        Sandbox::Host,
+    );
+    kde.enable().expect("enable");
+    assert!(kde.covers_kde_apps(), "Plasma runs its login script either way");
+    assert!(!kde.gtk_env_file().exists());
+    assert!(!kde.leaves_apps_out());
+    // A file written while the session was started by systemd still goes
+    // with Restore.
+    fs::create_dir_all(kde.gtk_env_file().parent().expect("its folder")).expect("the folder");
+    fixture
+        .registration()
+        .enable()
+        .expect("enable where systemd starts the session");
+    assert!(kde.gtk_env_file().is_file());
+    kde.disable().expect("disable");
+    assert!(!kde.gtk_env_file().exists());
+}
+
+/// An Enable that cannot write the environment file for GTK 3 apps changes
+/// nothing, as with KDE's script.
+///
+/// parity: INT-032
+#[test]
+fn a_gtk_environment_file_that_cannot_be_written_leaves_dialogs_off() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = OptInFixture::new();
+    let registration = gnome_registration(&fixture);
+    let folder = registration
+        .gtk_env_file()
+        .parent()
+        .expect("the file's folder")
+        .to_path_buf();
+    fs::create_dir_all(&folder).expect("the folder");
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).expect("read-only");
+
+    let refused = registration.enable();
+
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).expect("writable again");
+    assert!(refused.is_err(), "the file could not be written");
+    assert!(!registration.is_enabled(), "dialogs stay as they were");
+    assert!(!fixture.record().exists(), "nothing is recorded");
+    registration.enable().expect("enable once the folder is writable");
+    assert!(registration.covers_gtk_apps());
 }
 
 /// An Enable that cannot write KDE's login script changes nothing: the
@@ -838,6 +1044,10 @@ fn a_kde_script_that_cannot_be_written_leaves_dialogs_off() {
     assert!(refused.is_err(), "the script could not be written");
     assert!(!registration.is_enabled(), "dialogs stay as they were");
     assert!(!fixture.user_file().exists(), "the portal file is untouched");
+    assert!(
+        !registration.gtk_env_file().exists(),
+        "GTK's file, written first, is taken away again"
+    );
     registration.enable().expect("enable once the folder is writable");
     assert!(registration.covers_kde_apps());
 }

@@ -49,13 +49,18 @@ POLL_SECONDS = 0.05
 # One virtual screen of 1440x1000 pixels with 24-bit colour.
 XVFB_SERVER_ARGUMENTS = '-screen 0 1440x1000x24'
 
-# Variables that would connect a test to the user's live desktop session.
+# Variables that would connect a test to the user's live desktop session, or
+# carry its choices into the tests.
 LIVE_SESSION_VARIABLES = (
     'DISPLAY',
     'WAYLAND_DISPLAY',
     'DBUS_SESSION_BUS_ADDRESS',
     'DBUS_SESSION_BUS_PID',
     'SESSION_MANAGER',
+    # Set at login once Open and Save dialogs use OpenXplorer (INT-032):
+    # they would change what the Settings page reports.
+    'GTK_USE_PORTAL',
+    'PLASMA_INTEGRATION_USE_PORTAL',
 )
 
 # Set only inside check.py's private display and session bus.
