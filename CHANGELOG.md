@@ -1,16 +1,28 @@
-# Unreleased
+# 2.0.7 — 2026-10-23
 
-- Delete moves items to the Recycle Bin wherever it works, as Windows
-  Explorer does. Items directly in the home folder, or at the top of a USB
-  drive, were deleted permanently after "Delete permanently?", because the
-  app asked whether their folder could be trashed instead of the items.
-  Only a place with really no Recycle Bin (a network share, a read-only
-  drive, `/tmp`) still asks before deleting permanently.
-- The Delete command is named plainly "Delete" in the command bar and the
-  right-click menu, as in Windows Explorer, instead of "Move to Trash" or
-  "Delete permanently" guessed from one item of the folder; only the
-  question Delete asks says when items are deleted permanently. In the
-  Recycle Bin it still reads "Delete permanently".
+## What's Changed
+* feat(defaults): include other apps' Open and Save dialogs in Make OpenXplorer default by @AKolenda in https://github.com/AKolenda/openxplorer/pull/132
+* fix(native,web): resolve safety, correctness, and performance bugs by @AKolenda in https://github.com/AKolenda/openxplorer/pull/126
+* feat(devices): format drives in OpenXplorer's own Format dialog by @AKolenda in https://github.com/AKolenda/openxplorer/pull/133
+* feat(archives): press Enter in the Extract dialog to extract by @AKolenda in https://github.com/AKolenda/openxplorer/pull/142
+* chore(web): Upgrade Next.js to 16.4.2 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/152
+* perf(delete): Ask a share once per file instead of three times when deleting by @AKolenda in https://github.com/AKolenda/openxplorer/pull/154
+* feat(defaults): send GTK 3 apps' Open and Save dialogs to OpenXplorer by @AKolenda in https://github.com/AKolenda/openxplorer/pull/143
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.7_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.7-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.7-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.7-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.7-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.6...v2.0.7
 
 # 2.0.6 — 2026-10-13
 
