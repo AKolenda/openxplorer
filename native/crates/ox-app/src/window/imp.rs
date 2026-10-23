@@ -257,6 +257,19 @@ pub(crate) struct BrowserWindow {
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
     /// The timer that saves the window's size after a resize.
     pub(super) size_save: RefCell<Option<glib::SourceId>>,
+    /// The size and maximized state the timer saves, noted when they
+    /// change while the window is not full screen.
+    pub(super) size_to_save: Cell<Option<ox_core::settings::WindowSize>>,
+    /// Whether the window is full screen, as F11 last asked or the
+    /// desktop last said (CMD-036).
+    pub(super) wants_full_screen: Cell<bool>,
+    /// Whether the window is full screen, as tests play the desktop's
+    /// answer: the private test display has no window manager.
+    #[cfg(test)]
+    pub(super) full_screen_for_tests: Cell<Option<bool>>,
+    /// Whether the window is maximized, as tests play the desktop's answer.
+    #[cfg(test)]
+    pub(super) maximized_for_tests: Cell<Option<bool>>,
     /// The tabs closed in this window, most recent first.
     pub(super) closed_tabs: RefCell<Vec<ClosedTab>>,
     /// The in-window dialogs, Properties by tab, and the tabs that
