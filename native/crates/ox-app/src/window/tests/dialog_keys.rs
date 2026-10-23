@@ -89,12 +89,17 @@ fn focus_button(test: &TestWindow, frame: &DialogFrame, label: &str) {
     assert!(focus.is_ancestor(frame) || &focus == button.upcast_ref::<gtk::Widget>());
 }
 
-/// The first text field of `frame`, focused, with the cursor at its start.
-fn focused_field(frame: &DialogFrame) -> gtk::Entry {
-    let field = descendants::<gtk::Entry>(frame)
-        .into_iter()
-        .next()
-        .expect("the dialog has a text field");
+/// The text field of `frame` that holds `text`, once it shows, focused,
+/// with the cursor at its start. Properties fills its General tab, name
+/// field included, only once the item has been read off the main thread.
+fn focused_field(frame: &DialogFrame, text: &str) -> gtk::Entry {
+    let find = || {
+        descendants::<gtk::Entry>(frame)
+            .into_iter()
+            .find(|field| field.text() == text)
+    };
+    wait_until("the dialog's text field to be filled", || find().is_some());
+    let field = find().expect("wait_until returned only once the field showed");
     assert!(field.grab_focus(), "the field takes focus");
     field.select_region(0, 0);
     field.set_position(0);
@@ -178,8 +183,7 @@ fn delete_in_a_dialogs_text_field_edits_the_text() {
     select_names(&test, &["Résumé.txt"]);
     test.activate("properties", None);
     let frame = test.wait_for_dialog("Properties");
-    let field = focused_field(&frame);
-    assert_eq!(field.text(), "Résumé.txt");
+    let field = focused_field(&frame, "Résumé.txt");
 
     let taker = route_key(&test, gdk::Key::Delete, gdk::ModifierType::empty());
     assert!(
@@ -214,7 +218,7 @@ fn the_file_keys_leave_the_items_behind_another_in_window_dialog_alone() {
     focus_button(&test, &frame, "Cancel");
 
     assert_window_ignores_file_keys(&test, "Compress");
-    let field = focused_field(&frame);
+    let field = focused_field(&frame, "Notes 2");
     let taker = route_key(&test, gdk::Key::Delete, gdk::ModifierType::empty());
     assert!(
         taker.is_some_and(|taker| taker.is::<gtk::Text>()),
