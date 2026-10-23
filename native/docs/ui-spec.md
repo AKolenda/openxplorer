@@ -585,6 +585,7 @@ Both styles stay, because the preference is behaviour (rule 1).
 | Heading | 12 px (10) `@ox_muted`, padding `7 12 5` | same | L-TYPE minimum | visible, P2 |
 | Check and radio | 16 glyph in `@ox_accent`, in the icon column | same | — | Keep. |
 | Submenu arrow | chevron 12 `@ox_muted`, right end | same | chevron margin 24 (MF#L257) | Keep. |
+| Submenu | shown in the same popup, in place of the menu's items, under a back row (arrow-left 16 and the submenu's name) and a separator | same | GTK's sliding PopoverMenu submenus; Windows cascades a second flyout | deviation: one popup, so no nested Wayland popup grab |
 | Quick-action strip (Windows 11 style only) | — | five 34-high icon buttons at 20 % width each, 2 px gap and padding, above the list ✓ | Windows 11 context menu (observed, unverified) | Keep. |
 
 ### 4.10 Tooltips
