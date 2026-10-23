@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.7
+Version:        2.0.8
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -119,6 +119,13 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Fri Oct 23 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.8-1
+- OpenXplorer 2.0.8: Folder Options, Explorer's Ctrl+E, Ctrl+D, F11 and
+  Alt+P, a Share button that emails the selected files, Delete to the
+  Recycle Bin wherever it works, no message after a file operation that
+  succeeds or is cancelled, as in Windows Explorer (failures are still
+  reported), and fixes for menus, dialogs, rename and copy errors.
+
 * Fri Oct 23 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.7-1
 - OpenXplorer 2.0.7: other apps' Open and Save dialogs, GTK 3 apps'
   included, as part of Make OpenXplorer default, OpenXplorer's own Format

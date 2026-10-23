@@ -41,7 +41,7 @@ def markdown(doc: dict[str, Any], asset_prefix: str, demo_path: str) -> str:
                      'no access to your computer.\n')
         if section.get('callout'):
             text += '\n> ' + section['callout'].replace('\n', '\n> ') + '\n'
-    text += '\n---\n\nOpenXplorer 2.0.7. Project-authored documentation: AGPL-3.0-only.\n'
+    text += '\n---\n\nOpenXplorer 2.0.8. Project-authored documentation: AGPL-3.0-only.\n'
     return text
 
 

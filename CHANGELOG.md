@@ -1,3 +1,39 @@
+# 2.0.8 — 2026-10-23
+
+## What's Changed
+* fix(properties,shortcuts): follow up Codex review on Size on disk and Super+E records by @addition-official in https://github.com/AKolenda/openxplorer/pull/136
+* fix(menus): show submenus in the same popup as their menu by @addition-official in https://github.com/AKolenda/openxplorer/pull/135
+* fix(files): do nothing when a cut item is pasted into its own folder by @addition-official in https://github.com/AKolenda/openxplorer/pull/134
+* revert(devices): remove the read-only drive notice and greyed-out commands from #71 by @addition-official in https://github.com/AKolenda/openxplorer/pull/137
+* revert(notifications): stop sending a desktop notification when a file operation ends by @addition-official in https://github.com/AKolenda/openxplorer/pull/139
+* fix(keys): keep Delete away from files behind an open dialog by @addition-official in https://github.com/AKolenda/openxplorer/pull/151
+* revert(ui): stop showing confirmation messages Windows Explorer does not show by @addition-official in https://github.com/AKolenda/openxplorer/pull/141
+* fix(rename): cancel a pending slow-click rename on commands and keep it on the clicked item by @addition-official in https://github.com/AKolenda/openxplorer/pull/153
+* fix(transfers): name the real file when a copy fails by @addition-official in https://github.com/AKolenda/openxplorer/pull/146
+* feat(keys): add Explorer's Ctrl+E, Ctrl+D, F11 and Alt+P by @addition-official in https://github.com/AKolenda/openxplorer/pull/144
+* revert(menus): keep New and Paste on in folders you cannot write to by @addition-official in https://github.com/AKolenda/openxplorer/pull/138
+* fix(delete): move items to the Recycle Bin wherever it works by @addition-official in https://github.com/AKolenda/openxplorer/pull/145
+* fix(ops): show no result dialog after the user cancels by @addition-official in https://github.com/AKolenda/openxplorer/pull/147
+* fix(menus): show menus in full when they fit on the monitor by @addition-official in https://github.com/AKolenda/openxplorer/pull/148
+* feat(share): make the command bar Share button email the selected files by @addition-official in https://github.com/AKolenda/openxplorer/pull/149
+* feat(views): replace Adjust view display style with Windows Folder Options by @addition-official in https://github.com/AKolenda/openxplorer/pull/150
+* revert(ops): stop showing a message and Undo button after a file operation by @addition-official in https://github.com/AKolenda/openxplorer/pull/140
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.8_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.8-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.8-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.8-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.8-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.7...v2.0.8
+
 # 2.0.7 — 2026-10-23
 
 ## What's Changed
