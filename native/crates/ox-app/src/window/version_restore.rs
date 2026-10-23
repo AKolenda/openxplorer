@@ -18,7 +18,6 @@ use ox_core::transfer::{ConflictPolicy, TransferMode};
 
 use crate::properties::RestoreRequest;
 
-use super::background_notice::Destination;
 use super::transfer_panel::TransferKind;
 use super::BrowserWindow;
 
@@ -78,10 +77,8 @@ impl BrowserWindow {
                 window.finish_archive_operation();
                 window.reload_tabs_showing(&destination);
                 match outcome {
-                    Ok(outcome) => window.report_transfer(
-                        &summarize(TransferMode::Copy, &outcome.result),
-                        Destination::items(outcome.created),
-                    ),
+                    Ok(outcome) => window.report_transfer(&summarize(TransferMode::Copy, &outcome.result)),
+                    Err(error) if error.is_cancelled() => {}
                     Err(error) => window
                         .show_result_dialog(ox_core::i18n::gettext_static(STOPPED_TITLE), &error.to_string()),
                 }
@@ -89,15 +86,12 @@ impl BrowserWindow {
         ));
     }
 
-    /// Shows how a copy ended: nothing for complete success, as in
-    /// Windows Explorer, else the Operation result dialog.
-    fn report_transfer(&self, summary: &OperationSummary, destination: Destination) {
-        self.notify_if_in_background(summary, destination);
-        match summary {
-            OperationSummary::Toast(_) => {}
-            OperationSummary::Report(text) => {
-                self.show_result_dialog(ox_core::i18n::gettext_static(RESULT_TITLE), text);
-            }
+    /// Shows how a copy ended: nothing for complete success or a
+    /// cancellation, as in Windows Explorer, else the Operation result
+    /// dialog.
+    fn report_transfer(&self, summary: &OperationSummary) {
+        if let OperationSummary::Report(text) = summary {
+            self.show_result_dialog(ox_core::i18n::gettext_static(RESULT_TITLE), text);
         }
     }
 }

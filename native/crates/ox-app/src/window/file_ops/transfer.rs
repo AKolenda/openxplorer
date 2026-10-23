@@ -10,7 +10,9 @@
 //! dialog asks ([`super::conflict_dialog`]); items without a conflict
 //! keep the Skip policy whatever the answers. A copy of an item into its
 //! own folder is kept as "name - Copy" without asking, as Windows Explorer
-//! does: the only name it meets there is its own. The check and the dialog
+//! does: the only name it meets there is its own. An item moved (cut and
+//! pasted) into its own folder stays where it is, without asking, as in
+//! Windows Explorer; the other items move. The check and the dialog
 //! count as the running operation, so a second paste cannot start
 //! meanwhile. After a move, the moved items leave a cut clipboard.
 
@@ -44,6 +46,21 @@ pub(crate) struct IncomingItems {
     pub(crate) uris: Vec<String>,
     /// The folder they go into.
     pub(crate) destination_folder: String,
+}
+
+impl IncomingItems {
+    /// The items that a move would really move: an item moved into the
+    /// folder it is already in stays where it is, without asking, as in
+    /// Windows Explorer. `None` when nothing is left to move.
+    fn without_items_already_there(mut self) -> Option<Self> {
+        if self.mode == TransferMode::Move {
+            let destination = self.destination_folder.clone();
+            self.uris.retain(|uri| {
+                !parent_location(uri).is_some_and(|parent| same_location(&parent, &destination))
+            });
+        }
+        (!self.uris.is_empty()).then_some(self)
+    }
 }
 
 /// How the items of `incoming` run, given the answers about their
@@ -186,6 +203,7 @@ impl BrowserWindow {
     /// Checks, asks, runs and reports `incoming`; the journal records it
     /// when `undoable`.
     async fn transfer_checked(&self, incoming: IncomingItems, undoable: bool) -> Option<TransferOutcome> {
+        let incoming = incoming.without_items_already_there()?;
         let origin = self.current_uri();
         let answers = self.plan_transfer(&incoming).await?;
         let mode = incoming.mode;
@@ -202,8 +220,7 @@ impl BrowserWindow {
                 }
             }
         });
-        self.conclude_operation_in(finished, origin.as_deref(), None)
-            .await;
+        self.conclude_operation_in(finished, origin.as_deref()).await;
         outcome.ok()
     }
 
@@ -323,6 +340,36 @@ mod tests {
             policy,
             rename_to: None,
         }
+    }
+
+    /// A move leaves out the items already in the destination folder; a
+    /// copy keeps them, to make "name - Copy".
+    ///
+    /// parity: OPS-026
+    #[test]
+    fn a_move_leaves_out_the_items_already_in_the_folder() {
+        let items = |mode| IncomingItems {
+            mode,
+            uris: vec![
+                "file:///tmp/target/a.txt".to_owned(),
+                "file:///tmp/other/b.txt".to_owned(),
+            ],
+            destination_folder: "file:///tmp/target/".to_owned(),
+        };
+        let moved = items(TransferMode::Move).without_items_already_there();
+        assert_eq!(
+            moved.map(|moved| moved.uris),
+            Some(vec!["file:///tmp/other/b.txt".to_owned()])
+        );
+        assert_eq!(
+            items(TransferMode::Copy).without_items_already_there(),
+            Some(items(TransferMode::Copy))
+        );
+        let only_there = IncomingItems {
+            uris: vec!["file:///tmp/target/a.txt".to_owned()],
+            ..items(TransferMode::Move)
+        };
+        assert_eq!(only_there.without_items_already_there(), None);
     }
 
     /// parity: OPS-027

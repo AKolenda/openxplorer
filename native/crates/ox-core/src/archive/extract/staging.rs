@@ -15,39 +15,71 @@
 //! - It is published by a rename that never replaces an existing item.
 //! - Any failure removes it; a folder that cannot be removed is reported
 //!   with its location.
+//! - Every other error names the new folder, never the staging folder.
+//!   An extraction into an existing folder goes through a private folder
+//!   inside it, which errors leave out too: they name the existing folder.
 
 use std::ffi::OsStr;
 
 use crate::archive::ArchiveError;
 use crate::random::{random_hex, NAME_BYTES};
-use crate::transfer::{secure_local_staging, Cancellation, ItemIdentity, Node, TransferError};
+use crate::transfer::{
+    already_removed, secure_local_staging, Cancellation, ItemIdentity, Node, StagedName, TransferError,
+};
 
 /// Staging folders are `.openxplorer-extract-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-extract-";
 const STAGING_SUFFIX: &str = ".part";
 
+/// What the staging folder becomes, which decides what errors name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Output<'a> {
+    /// The new folder called this: errors name it.
+    NewFolder(&'a str),
+    /// The private folder called this, whose items are then moved into
+    /// the existing destination folder: errors name that folder.
+    InsideExisting(&'a str),
+}
+
 /// A staging folder this extraction created, which it alone may remove.
 pub(super) struct ExtractionStaging {
     folder: Box<dyn Node>,
+    /// The staging folder's name, and the new folder's name errors use
+    /// for it.
+    name: StagedName,
     /// The local folder's identity, recorded when it was made private, so
     /// cleanup never empties another folder moved in under its name.
     created: Option<ItemIdentity>,
 }
 
 impl ExtractionStaging {
-    /// Creates a new staging folder in `destination`.
+    /// Creates a new staging folder in `destination` for `output`.
     ///
     /// # Errors
     ///
     /// When no random name can be generated or the folder cannot be
     /// created; nothing needs cleaning up then.
-    pub(super) fn create(destination: &dyn Node, cancel: &Cancellation) -> Result<Self, ArchiveError> {
-        let folder = destination.child(OsStr::new(&staging_name()?));
+    pub(super) fn create(
+        destination: &dyn Node,
+        output: Output<'_>,
+        cancel: &Cancellation,
+    ) -> Result<Self, ArchiveError> {
+        let stage = staging_name()?;
+        let name = match output {
+            Output::NewFolder(folder) => StagedName::new(&stage, &[], folder),
+            Output::InsideExisting(private) => {
+                StagedName::inside(&stage, private, &destination.display_name())
+            }
+        };
+        let folder = destination.child(OsStr::new(&stage));
         // Only a successful, exclusive creation grants cleanup ownership:
         // a name that was taken is never removed.
-        folder.create_directory(Some(cancel))?;
+        folder
+            .create_directory(Some(cancel))
+            .map_err(|error| name.apply(error))?;
         Ok(Self {
             folder,
+            name,
             created: None,
         })
     }
@@ -94,8 +126,11 @@ impl ExtractionStaging {
     /// [`ArchiveError::StagingLeftBehind`] with the folder's location when
     /// it could not be removed. Removal never follows links inside it.
     pub(super) fn discard(self, cause: ArchiveError) -> ArchiveError {
+        let cause = cause.naming(&self.name);
         match self.folder.delete_staging(self.created) {
             Ok(()) => cause,
+            // A device's "not found" counts only once confirmed (XFER-022).
+            Err(cleanup) if already_removed(self.folder.as_ref(), &cleanup) => cause,
             Err(cleanup) => ArchiveError::StagingLeftBehind {
                 cause: Box::new(cause),
                 staging_uri: self.folder.uri(),
@@ -133,6 +168,60 @@ pub(in crate::archive) fn is_staging_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::RemoteStage;
+
+    /// A staging folder on a phone or share, for the cleanup tests.
+    fn remote_staging(folder: RemoteStage) -> ExtractionStaging {
+        let stage = ".openxplorer-extract-1.part";
+        ExtractionStaging {
+            folder: Box::new(folder),
+            name: StagedName::new(stage, &[], "Unpacked"),
+            created: None,
+        }
+    }
+
+    fn phone_staging(listed: bool) -> ExtractionStaging {
+        remote_staging(RemoteStage::on_phone(".openxplorer-extract-1.part", listed))
+    }
+
+    /// A phone's "not found" for the staging folder counts as cleaned up
+    /// only when the folder's listing confirms it; the cancellation then
+    /// stays a cancellation. Otherwise the folder is reported where it is.
+    ///
+    /// parity: ARC-013, XFER-022
+    #[test]
+    fn a_phones_not_found_counts_as_cleaned_up_only_once_confirmed() {
+        let gone = phone_staging(false).discard(ArchiveError::Cancelled);
+        let still_listed = phone_staging(true).discard(ArchiveError::Cancelled);
+
+        assert_eq!(gone, ArchiveError::Cancelled);
+        assert!(
+            matches!(&still_listed, ArchiveError::StagingLeftBehind { staging_uri, .. }
+                if staging_uri == "mtp://phone.example/Folder/.openxplorer-extract-1.part"),
+            "{still_listed:?}"
+        );
+    }
+
+    /// Another client can remove an item inside the staging folder on a
+    /// share while cleanup empties it; cleanup then stops at that item's
+    /// "not found" and the staging folder stays. That is reported with the
+    /// folder's location; only a staging folder that is itself gone counts
+    /// as cleaned up.
+    ///
+    /// parity: ARC-013, XFER-003
+    #[test]
+    fn a_not_found_inside_the_staging_folder_still_reports_the_folder() {
+        let stage = ".openxplorer-extract-1.part";
+        let remains = remote_staging(RemoteStage::on_share(stage, true)).discard(ArchiveError::Cancelled);
+        let gone = remote_staging(RemoteStage::on_share(stage, false)).discard(ArchiveError::Cancelled);
+
+        assert!(
+            matches!(&remains, ArchiveError::StagingLeftBehind { staging_uri, .. }
+                if staging_uri == "smb://server.example/Share/.openxplorer-extract-1.part"),
+            "{remains:?}"
+        );
+        assert_eq!(gone, ArchiveError::Cancelled);
+    }
 
     /// parity: ARC-013
     #[test]

@@ -193,7 +193,7 @@ fn measure(entries: &[Entry], rows: &SizeRows, cancel: &Cancellation) {
     glib::spawn_future_local(async move {
         let mut allocated = Some(0_u64);
         for uri in files {
-            allocated = add_allocated(allocated, size_on_disk(&uri).await);
+            allocated = add_allocated(allocated, size_on_disk(&uri, &cancel).await);
             if cancel.is_cancelled() {
                 return;
             }
@@ -239,16 +239,20 @@ fn add_allocated(total: Option<u64>, allocated: Option<u64>) -> Option<u64> {
 
 /// The bytes the file at `uri` takes on disk; for a link, the file it
 /// points to, as the Size row counts it (a listed link has its target's
-/// size). `None` when it cannot be read or its backend does not say.
-async fn size_on_disk(uri: &str) -> Option<u64> {
-    let info = gio::File::for_uri(uri)
-        .query_info_future(
-            "standard::allocated-size",
-            gio::FileQueryInfoFlags::NONE,
-            glib::Priority::DEFAULT,
-        )
-        .await
-        .ok()?;
+/// size). `None` when it cannot be read, its backend does not say, or
+/// `cancel` stops the reading, as closing the dialog does.
+async fn size_on_disk(uri: &str, cancel: &Cancellation) -> Option<u64> {
+    let (sender, receiver) = async_channel::bounded(1);
+    gio::File::for_uri(uri).query_info_async(
+        "standard::allocated-size",
+        gio::FileQueryInfoFlags::NONE,
+        glib::Priority::DEFAULT,
+        Some(cancel.cancellable()),
+        move |result| {
+            let _ = sender.try_send(result);
+        },
+    );
+    let info = receiver.recv().await.ok()?.ok()?;
     info.has_attribute("standard::allocated-size")
         .then(|| info.attribute_uint64("standard::allocated-size"))
 }
@@ -317,4 +321,30 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
             std::sync::Arc::clone(&context.versions),
         ));
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Closing Properties cancels the reading of each item's space on
+    /// disk too, so a slow backend is not left answering a closed dialog.
+    ///
+    /// parity: PROP-033
+    #[gtk::test]
+    fn a_cancelled_dialog_stops_reading_the_space_on_disk() {
+        let folder = tempfile::tempdir().expect("a folder");
+        let file = folder.path().join("notes.txt");
+        std::fs::write(&file, vec![1_u8; 10_000]).expect("the file is written");
+        let uri = gio::File::for_path(&file).uri().to_string();
+        let open = Cancellation::new();
+        let read = glib::MainContext::default().block_on(size_on_disk(&uri, &open));
+        assert!(read.is_some_and(|bytes| bytes > 0), "the space is read");
+
+        let closed = Cancellation::new();
+        closed.cancel();
+        let read = glib::MainContext::default().block_on(size_on_disk(&uri, &closed));
+
+        assert_eq!(read, None, "nothing is read once the dialog closed");
+    }
 }

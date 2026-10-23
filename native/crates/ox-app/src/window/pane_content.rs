@@ -112,6 +112,5 @@ impl BrowserWindow {
         self.apply_view_options();
         self.update_status();
         self.update_file_commands();
-        self.learn_trash_support();
     }
 }

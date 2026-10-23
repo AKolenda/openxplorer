@@ -84,7 +84,7 @@ pub(crate) struct ItemFacts {
     /// Whether a folder is cached for search; `None` for a file or a
     /// folder the search cache cannot take.
     pub(crate) caching: Option<Caching>,
-    /// Delete's label: "Move to Trash" or "Delete permanently".
+    /// Delete's label: "Delete", or "Delete permanently" in the Recycle Bin.
     pub(crate) delete_label: &'static str,
     /// The installed disk tool the item offers: Mount disk image for a
     /// local `.iso` or `.img` file (DEV-011), Analyse disk usage for a
@@ -701,7 +701,7 @@ mod tests {
             editors: Vec::new(),
             applications: Vec::new(),
             caching: None,
-            delete_label: "Move to Trash",
+            delete_label: "Delete",
             disk_tool: None,
         }
     }
@@ -760,7 +760,7 @@ mod tests {
                 "Paste into folder",
                 "-",
                 "Rename",
-                "Move to Trash",
+                "Delete",
                 "Duplicate",
                 "Copy path",
                 "Compress to ZIP file",
@@ -787,7 +787,7 @@ mod tests {
             ("Copy", "Ctrl+C"),
             // CMD-019: Paste on one folder pastes into it, without a key.
             ("Rename", "F2"),
-            ("Move to Trash", "Delete"),
+            ("Delete", "Delete"),
             // A gain: the Python app had no key for Copy path.
             ("Copy path", "Ctrl+Shift+C"),
             ("Properties", "Alt+Enter"),
@@ -1021,10 +1021,7 @@ mod tests {
         let menu = item_menu(&folder(), MenuStyle::Compact);
 
         let strip: Vec<&str> = menu.strip.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(
-            strip,
-            ["Cut", "Copy", "Paste into folder", "Rename", "Move to Trash"]
-        );
+        assert_eq!(strip, ["Cut", "Copy", "Paste into folder", "Rename", "Delete"]);
         assert_eq!(
             labels(&menu.entries),
             [

@@ -17,7 +17,7 @@ mod transfer_support;
 use std::fs;
 use std::sync::Arc;
 
-use ox_core::archive::{ArchiveError, ZipFormatError};
+use ox_core::archive::{ArchiveError, ArchiveStream, ZipExtractor, ZipFormatError};
 use ox_core::transfer::{Cancellation, Node, TransferError};
 
 use archive_support::{
@@ -98,6 +98,94 @@ fn cancelling_while_writing_removes_the_staging_folder() {
     assert_eq!(result.unwrap_err(), ArchiveError::Cancelled);
     fixture.assert_no_output();
     assert!(fixture.archive.is_file());
+}
+
+/// A destination where the user cancels while the staging folder is being
+/// made, and the backend then fails with an error of its own, as GIO's
+/// "Operation was cancelled".
+struct CancelledWhileStaging(Cancellation);
+
+impl Provider for CancelledWhileStaging {
+    fn create_directory(
+        &self,
+        _node: &LocalNode,
+        _cancel: Option<&Cancellation>,
+    ) -> Result<(), TransferError> {
+        self.0.cancel();
+        Err(TransferError::failed("Operation was cancelled"))
+    }
+}
+
+/// Cancel before the first member is written is a cancellation too, not
+/// the backend's error about the call it aborted, so the app says nothing.
+///
+/// parity: ARC-011, ARC-013
+#[test]
+fn cancelling_while_the_staging_folder_is_made_is_a_cancellation() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_sample_zip();
+    let factory = LocalNode::factory(Arc::new(CancelledWhileStaging(fixture.cancel.clone())));
+    let mut extractor = fixture.extractor_with(factory, Arc::new(LocalFileOutput::owner_only()));
+
+    let result = fixture.extract_with(&mut extractor, "Unpacked");
+
+    assert_eq!(result.unwrap_err(), ArchiveError::Cancelled);
+    fixture.assert_no_output();
+}
+
+/// Cancel while the archive is being opened, as on a share where GIO then
+/// aborts the read with an error of its own, is a cancellation too.
+///
+/// parity: ARC-011, ARC-013
+#[test]
+fn cancelling_while_the_archive_opens_is_a_cancellation() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_sample_zip();
+    let cancel = fixture.cancel.clone();
+    let opener = move |_uri: &str, _cancel: &Cancellation| -> Result<Box<dyn ArchiveStream>, ArchiveError> {
+        cancel.cancel();
+        Err(TransferError::failed("Operation was cancelled").into())
+    };
+    let mut extractor = ZipExtractor::new(
+        Arc::new(opener),
+        gio_factory(),
+        Arc::new(LocalFileOutput::owner_only()),
+    );
+
+    let result = fixture.extract_with(&mut extractor, "Unpacked");
+
+    assert_eq!(result.unwrap_err(), ArchiveError::Cancelled);
+    fixture.assert_no_output();
+}
+
+/// A destination where the user cancels while the staging folder of a
+/// failed extraction is removed, which still succeeds.
+struct CancelledWhileRollingBack(Cancellation);
+
+impl Provider for CancelledWhileRollingBack {
+    fn delete(&self, node: &LocalNode) -> Result<(), TransferError> {
+        self.0.cancel();
+        node.local_delete()
+    }
+}
+
+/// A failure that happened before Cancel is still the error when the user
+/// cancels during the rollback, so the app reports it.
+///
+/// parity: ARC-013
+#[test]
+fn cancelling_during_the_rollback_keeps_the_failure() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_sample_zip();
+    let output = LocalFileOutput::failing(WriteBehaviour::DiskFull);
+    let factory = LocalNode::factory(Arc::new(CancelledWhileRollingBack(fixture.cancel.clone())));
+    let mut extractor = fixture.extractor_with(factory, Arc::new(output));
+
+    let error = fixture.extract_with(&mut extractor, "Unpacked").unwrap_err();
+
+    assert!(fixture.cancel.is_cancelled(), "Cancel came during the rollback");
+    assert_eq!(error.to_string(), "Disk full");
+    fixture.assert_no_output();
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_crc_failure_rolls_back`.

@@ -13,7 +13,7 @@ use std::path::Path;
 
 use gio::prelude::*;
 
-use ox_core::ops::{plan_delete, trash_support, DeleteItem, OpsError};
+use ox_core::ops::{plan_delete, DeleteItem, OpsError};
 use ox_core::transfer::Cancellation;
 
 use ops_support::{block_on, file_uri};
@@ -36,48 +36,131 @@ fn an_item_whose_folder_cannot_be_queried_is_planned_for_permanent_delete_like_p
         DeleteItem {
             uri: file_uri(&local),
             name: "a.txt".into(),
+            can_trash: None,
         },
         DeleteItem {
             uri: file_uri(&vanished),
             name: "b.txt".into(),
+            can_trash: None,
         },
     ];
     let cancel = Cancellation::new();
 
-    let local_trash = block_on(trash_support(&file_uri(temp.path()), &cancel));
     let plan = block_on(plan_delete(&items, &cancel)).unwrap();
 
-    assert_eq!(local_trash, Ok(true));
     assert_eq!(plan.to_trash, [file_uri(&local)]);
     assert_eq!(plan.to_delete, [file_uri(&vanished)]);
     assert_eq!(plan.confirmation().title, "Delete items?");
 }
 
-/// GIO reports `access::can-trash` false for a folder in a folder the user
-/// may not change, like the Python app, which asks about the item's folder.
+/// An item goes to the Trash when GIO says the item itself can, even
+/// where its folder could not be trashed: a file directly in the home
+/// folder, whose own folder `/home` only root may change, is moved to the
+/// Recycle Bin, as `gio trash` and Windows Explorer do.
 #[test]
-fn a_folder_gio_reports_without_a_trash_is_planned_for_permanent_delete() {
+fn an_item_in_a_folder_inside_a_read_only_folder_goes_to_the_trash() {
     let temp = tempfile::tempdir().unwrap();
     let locked = temp.path().join("locked");
-    let folder = locked.join("folder");
+    let home = locked.join("home");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(home.join("a.txt"), b"a").unwrap();
+    let item = DeleteItem {
+        uri: file_uri(&home.join("a.txt")),
+        name: "a.txt".into(),
+        can_trash: None,
+    };
+    let cancel = Cancellation::new();
+
+    set_folder_mode(&locked, 0o555);
+    let plan = block_on(plan_delete(std::slice::from_ref(&item), &cancel));
+    set_folder_mode(&locked, 0o755);
+
+    let plan = plan.unwrap();
+    assert_eq!(plan.to_trash, [item.uri]);
+    assert!(plan.to_delete.is_empty());
+    assert_eq!(plan.confirmation().title, "Move to Trash?");
+}
+
+/// GIO reports `access::can-trash` false for an item in a folder the user
+/// may not change, so the confirmation says it is deleted permanently.
+#[test]
+fn an_item_gio_reports_without_a_trash_is_planned_for_permanent_delete() {
+    let temp = tempfile::tempdir().unwrap();
+    let folder = temp.path().join("locked");
     fs::create_dir_all(&folder).unwrap();
     fs::write(folder.join("a.txt"), b"a").unwrap();
     let item = DeleteItem {
         uri: file_uri(&folder.join("a.txt")),
         name: "a.txt".into(),
+        can_trash: None,
     };
     let cancel = Cancellation::new();
 
-    set_folder_mode(&locked, 0o555);
-    let support = block_on(trash_support(&file_uri(&folder), &cancel));
+    set_folder_mode(&folder, 0o555);
     let plan = block_on(plan_delete(std::slice::from_ref(&item), &cancel));
-    set_folder_mode(&locked, 0o755);
+    set_folder_mode(&folder, 0o755);
 
-    assert_eq!(support, Ok(false));
     let plan = plan.unwrap();
     assert!(plan.to_trash.is_empty());
     assert_eq!(plan.to_delete, [item.uri]);
     assert_eq!(plan.confirmation().title, "Delete permanently?");
+}
+
+/// A listed item that cannot go to the Trash decides only for itself: a
+/// file whose listing said "no Trash" is planned for permanent delete,
+/// and the file beside it that was not listed is asked about and still
+/// goes to the Trash.
+#[test]
+fn an_item_listed_without_a_trash_does_not_decide_for_its_folder() {
+    let temp = tempfile::tempdir().unwrap();
+    let kept = temp.path().join("b.txt");
+    fs::write(&kept, b"b").unwrap();
+    let items = [
+        DeleteItem {
+            uri: file_uri(&temp.path().join("other-users.txt")),
+            name: "other-users.txt".into(),
+            can_trash: Some(false),
+        },
+        DeleteItem {
+            uri: file_uri(&kept),
+            name: "b.txt".into(),
+            can_trash: None,
+        },
+    ];
+
+    let plan = block_on(plan_delete(&items, &Cancellation::new())).unwrap();
+
+    assert_eq!(plan.to_trash, [file_uri(&kept)]);
+    assert_eq!(plan.to_delete, [items[0].uri.clone()]);
+}
+
+/// An unlisted item that vanished before its query answers "no Trash"
+/// for itself alone: the file beside it, dropped or found with it, is
+/// asked about and still goes to the Trash instead of being deleted
+/// permanently.
+#[test]
+fn a_vanished_unlisted_item_does_not_decide_for_its_folder() {
+    let temp = tempfile::tempdir().unwrap();
+    let vanished = temp.path().join("gone.txt");
+    let kept = temp.path().join("kept.txt");
+    fs::write(&kept, b"b").unwrap();
+    let items = [
+        DeleteItem {
+            uri: file_uri(&vanished),
+            name: "gone.txt".into(),
+            can_trash: None,
+        },
+        DeleteItem {
+            uri: file_uri(&kept),
+            name: "kept.txt".into(),
+            can_trash: None,
+        },
+    ];
+
+    let plan = block_on(plan_delete(&items, &Cancellation::new())).unwrap();
+
+    assert_eq!(plan.to_trash, [file_uri(&kept)]);
+    assert_eq!(plan.to_delete, [file_uri(&vanished)]);
 }
 
 /// parity: OPS-037, OPS-017
@@ -91,14 +174,12 @@ fn a_share_that_cannot_answer_counts_as_having_a_trash() {
     let item = DeleteItem {
         uri: "smb://example.invalid/share/report.pdf".into(),
         name: "report.pdf".into(),
+        can_trash: None,
     };
     let cancel = Cancellation::new();
 
-    let support = block_on(trash_support("smb://example.invalid/share", &cancel));
     let plan = block_on(plan_delete(std::slice::from_ref(&item), &cancel)).unwrap();
 
-    assert!(matches!(support, Err(OpsError::NotMounted(_))), "{support:?}");
-    assert!(support.unwrap_err().needs_mount());
     assert_eq!(plan.to_trash, [item.uri]);
     assert!(plan.to_delete.is_empty());
     assert_eq!(plan.confirmation().title, "Move to Trash?");
@@ -111,14 +192,13 @@ fn a_cancelled_trash_check_reports_the_cancellation_and_plans_nothing() {
     let item = DeleteItem {
         uri: file_uri(&temp.path().join("a.txt")),
         name: "a.txt".into(),
+        can_trash: None,
     };
     let cancelled = Cancellation::new();
     cancelled.cancel();
 
-    let support = block_on(trash_support(&file_uri(temp.path()), &cancelled));
     let plan = block_on(plan_delete(std::slice::from_ref(&item), &cancelled));
 
-    assert_eq!(support, Err(OpsError::Cancelled));
     assert_eq!(plan, Err(OpsError::Cancelled));
     assert!(temp.path().join("a.txt").exists());
 }

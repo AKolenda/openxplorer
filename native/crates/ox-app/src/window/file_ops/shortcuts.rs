@@ -7,8 +7,9 @@
 //! focus is outside a text field, not only in the folder view. It adds
 //! Undo, Redo, Shift+Delete and Copy path's keys (Explorer's Ctrl+Shift+C
 //! for "Copy as path", and Dolphin's Ctrl+Alt+C for "Copy Location",
-//! CLIP-013). They are not application accelerators: a text field keeps
-//! its own Ctrl+C, Ctrl+V, Delete and F2, and on the Settings page or in
+//! CLIP-013), and Explorer's Ctrl+D for Delete (CMD-036). They are not
+//! application accelerators: a text field keeps its own Ctrl+C, Ctrl+V,
+//! Delete, Ctrl+D and F2, and on the Settings page or in
 //! the address bar they do nothing, as in app.js. The window handles them
 //! in the bubble phase, after the focused widget had its turn, and only
 //! when focus is elsewhere; menus and dialogs take their own Escape first.
@@ -16,6 +17,10 @@
 //! would otherwise take it for its own rows. A disabled command ignores its
 //! key, except Cut, Copy and Paste, which `onKey` runs directly so that
 //! they can say why nothing happens.
+//!
+//! While a dialog is in front, on the window's dialog layer (Properties)
+//! or in a window of its own, the keys do nothing to the items behind it,
+//! as in Windows Explorer; the dialog's own fields and buttons keep them.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -33,7 +38,8 @@ const FILE_SHORTCUTS: [(WindowAction, &str); 11] = [
     (WindowAction::Paste, "<Primary>v"),
     (WindowAction::CopyPath, "<Primary><Shift>c|<Primary><Alt>c"),
     (WindowAction::Rename, "F2"),
-    (WindowAction::Trash, "Delete|KP_Delete"),
+    // Ctrl+D is Explorer's other Delete key (CMD-036).
+    (WindowAction::Trash, "Delete|KP_Delete|<Primary>d"),
     (WindowAction::DeletePermanently, "<Shift>Delete|<Shift>KP_Delete"),
     (WindowAction::NewFolder, "<Primary><Shift>n"),
     (WindowAction::Undo, "<Primary>z"),
@@ -66,6 +72,9 @@ impl BrowserWindow {
         if !self.file_keys_apply() {
             return glib::Propagation::Proceed;
         }
+        // Any file key cancels a rename a slow click scheduled, also those
+        // that run their command directly rather than as an action.
+        self.cancel_slow_click_rename();
         match action {
             WindowAction::Cut => self.copy_selection(ClipboardMode::Cut),
             WindowAction::Copy => self.copy_selection(ClipboardMode::Copy),
@@ -88,10 +97,11 @@ impl BrowserWindow {
     }
 
     /// False on the Settings page, in a text field, in the address bar,
-    /// where the keys edit text or move between crumbs, and on the pane
-    /// splitter's handle, whose keys move it.
+    /// where the keys edit text or move between crumbs, on the pane
+    /// splitter's handle, whose keys move it, and while a dialog is in
+    /// front of the items.
     pub(in crate::window) fn file_keys_apply(&self) -> bool {
-        if self.shows_settings() || self.focus_is_in_text_field() {
+        if self.shows_settings() || self.focus_is_in_text_field() || self.dialog_in_front() {
             return false;
         }
         let Some(focus) = GtkWindowExt::focus(self) else {

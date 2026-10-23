@@ -103,8 +103,7 @@ pub use conflicts::find_conflicts;
 pub use context::{FailureAsker, MoveByCopyingAsker, OperationContext, UnstorableAsker, WriteProtection};
 pub use create::{create_folder_path, create_item, create_numbered_folder, CreatedFolderPath, CreatedItem};
 pub use delete_plan::{
-    delete_command_label, permanent_delete_confirmation, plan_delete, trash_support, DeleteConfirmation,
-    DeleteItem, DeletePlan,
+    permanent_delete_confirmation, plan_delete, DeleteConfirmation, DeleteItem, DeletePlan,
 };
 pub use duplicate::duplicate_items;
 pub use error::OpsError;
@@ -114,7 +113,7 @@ pub use new_from_template::{create_from_template, NewFromTemplate};
 pub use progress::{starting_label, PROGRESS_INTERVAL};
 pub use recycle_bin::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
-    restore_from_recycle_bin, trashed_items_since, RecycledItem,
+    restore_from_recycle_bin, RecycledItem,
 };
 pub use recycle_bin_drag::{is_recycle_bin_item, move_out_of_recycle_bin};
 pub use rename::{rename_item, RenamedItem};

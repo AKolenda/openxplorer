@@ -574,6 +574,7 @@ Both styles stay, because the preference is behaviour (rule 1).
 | Element | Classic target | Windows 11 style target | Windows reference | Tag |
 |---|---|---|---|---|
 | Surface | width `max(264, 235·s)`; padding 3; radius 2; 1 px `@ox_flyout_stroke`; background `@ox_flyout`; shadow `0 5px 16px alpha(black, .2)` | width `max(276, 235·s)`; padding `2 0`; radius 8; 1 px `@ox_flyout_stroke`; background `@ox_flyout`; shadow E03 | MF#L202–203, MF#L255; L-GEO; L-LAYER | safe |
+| Height and placement | as tall as the monitor it opens on, less 8 px above and below; scrolls only beyond that. At a point, a menu that may fit neither below nor above opens beside it, top at the point, and GTK slides it up to stay on the monitor; below a button, a menu GTK cuts short there opens beside the button the same way (`window/menu_popover/height.rs`) | same | a menu fits on its monitor and scrolls only when taller (observed, unverified) | Keep. |
 | Item | min height `ceil(22·s + 11)` (33); padding `0 9`; radius 0; gap 9; glyph 16 (15) | min height 29 plus a `2 4` margin (33 pitch); padding `0 11`; radius 4; icon column 16 + 12 | MF#L259–261, MF#L212, MF#L388 | safe |
 | Label | 12 px `@ox_text`, ellipsis | same | MenuFlyoutItemForeground (MF#L177) | Keep. |
 | Accelerator | 12 px (10) `@ox_muted`, right-aligned, at least 12 px after the label | 12 px `@ox_muted`, at least 24 px after the label | Caption style, margin 24 (MF#L392); TextFillColorSecondary (MF#L197) | visible, P2 |
@@ -584,6 +585,7 @@ Both styles stay, because the preference is behaviour (rule 1).
 | Heading | 12 px (10) `@ox_muted`, padding `7 12 5` | same | L-TYPE minimum | visible, P2 |
 | Check and radio | 16 glyph in `@ox_accent`, in the icon column | same | — | Keep. |
 | Submenu arrow | chevron 12 `@ox_muted`, right end | same | chevron margin 24 (MF#L257) | Keep. |
+| Submenu | shown in the same popup, in place of the menu's items, under a back row (arrow-left 16 and the submenu's name) and a separator | same | GTK's sliding PopoverMenu submenus; Windows cascades a second flyout | deviation: one popup, so no nested Wayland popup grab |
 | Quick-action strip (Windows 11 style only) | — | five 34-high icon buttons at 20 % width each, 2 px gap and padding, above the list ✓ | Windows 11 context menu (observed, unverified) | Keep. |
 
 ### 4.10 Tooltips

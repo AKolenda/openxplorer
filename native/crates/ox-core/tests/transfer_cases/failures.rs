@@ -186,6 +186,10 @@ fn a_local_stage_that_cannot_be_queried_is_still_reported() {
         result.errors.iter().any(|error| error.contains(&report)),
         "{result:?}"
     );
+    assert!(
+        result.recovery.iter().any(|error| error.contains(&report)),
+        "the staging left behind needs the user: {result:?}"
+    );
     assert!(fixture.sleeps().is_empty());
 }
 
@@ -319,6 +323,13 @@ fn cancellation_never_hides_a_backup_that_requires_manual_recovery() {
         let backup = backup_in(&fixture);
         assert_eq!(read(&backup), "original");
         assert!(result.errors[0].contains(&file_uri(&backup)), "{result:?}");
+        assert_eq!(result.recovery, result.errors, "the backup needs the user");
+        let ox_core::ops::OperationSummary::Report(report) =
+            ox_core::ops::summarize(ox_core::transfer::TransferMode::Copy, &result)
+        else {
+            panic!("Cancel must not hide the backup: {result:?}");
+        };
+        assert_eq!(report, result.errors[0]);
         assert_eq!(read(&source), "incoming");
         fixture.assert_no_staging();
     }

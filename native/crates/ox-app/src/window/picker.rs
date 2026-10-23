@@ -60,9 +60,10 @@ mod probe;
 const DEFAULT_SIZE: (i32, i32) = (980, 640);
 
 /// The window commands that make no sense while choosing a file: more tabs,
-/// windows or panes, Settings, and Format…, as a dialog closes on its own
-/// once answered, leaving no window to report the format in.
-const DISABLED_ACTIONS: [WindowAction; 15] = [
+/// windows or panes, Settings, Format…, as a dialog closes on its own
+/// once answered, leaving no window to report the format in, and Full
+/// screen, as a Windows Open or Save dialog keeps its size.
+const DISABLED_ACTIONS: [WindowAction; 16] = [
     WindowAction::NewTab,
     WindowAction::OpenTab,
     WindowAction::OpenTabBackground,
@@ -78,6 +79,7 @@ const DISABLED_ACTIONS: [WindowAction; 15] = [
     WindowAction::OpenFileLocationInWindow,
     WindowAction::SplitView,
     WindowAction::FormatDrive,
+    WindowAction::FullScreen,
 ];
 
 /// Shown when the File name box names nothing that exists.
@@ -1314,6 +1316,7 @@ mod tests {
 
     use gtk::glib::translate::IntoGlib;
     use gtk::prelude::*;
+    use gtk::subclass::prelude::*;
     use gtk::{gdk, gio, glib};
     use ox_core::integration::{
         options_from_entries, path_variant, FileChooserBus, FileFilter, FilterPattern,
@@ -2955,6 +2958,31 @@ mod tests {
         wait_until("the picker to close", || !window.is_visible());
     }
 
+    /// F11 leaves a dialog at its size, as a Windows Open or Save dialog
+    /// does, while Ctrl+E still moves to the search box.
+    ///
+    /// parity: INT-032, CMD-036
+    #[gtk::test]
+    fn a_dialog_does_not_go_full_screen() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        window.folder_pane().focus_view();
+
+        let full_screen = window.lookup_action("full-screen").expect("the action");
+        assert!(!full_screen.is_enabled(), "Full screen is off in a dialog");
+        assert!(
+            !press(test, gdk::Key::F11, gdk::ModifierType::empty()),
+            "F11 does nothing"
+        );
+        assert!(!window.imp().wants_full_screen.get());
+        assert!(press(test, gdk::Key::e, gdk::ModifierType::CONTROL_MASK));
+        assert!(window.focus_is_in_text_field(), "Ctrl+E moves to the search box");
+    }
+
     /// A dialog for one file keeps one selected: a second item selected
     /// with Ctrl takes the first one's place.
     ///
@@ -3341,5 +3369,81 @@ mod tests {
                 "type {shown} shows its first heading"
             );
         }
+    }
+
+    /// The command bar's Sort menu in a Save dialog, as Chrome opens one
+    /// through the portal: Group by shows its choices in the same popup,
+    /// so there is only ever one menu on screen, and a choice there groups
+    /// the dialog's list and closes the menu. More works the same way.
+    ///
+    /// parity: VIEW-022, INT-032
+    #[gtk::test]
+    fn the_sort_menu_of_a_save_dialog_keeps_one_popup() {
+        sort_menu_keeps_one_popup("SaveFile", vec![("current_name", "page.html".to_variant())]);
+    }
+
+    /// The same in an Open dialog.
+    ///
+    /// parity: VIEW-022, INT-032
+    #[gtk::test]
+    fn the_sort_menu_of_an_open_dialog_keeps_one_popup() {
+        sort_menu_keeps_one_popup("OpenFile", Vec::new());
+    }
+
+    /// Opens a `method` dialog with `entries` and goes through its Sort
+    /// menu's Group by and More, checking one popup shows at a time.
+    fn sort_menu_keeps_one_popup(method: &str, entries: Vec<(&str, glib::Variant)>) {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, method, entries);
+        let test = &portal.test;
+        let window = &test.window;
+        let sort = crate::window::widget_tree::descendants::<gtk::MenuButton>(window)
+            .into_iter()
+            .find(|button| button.has_css_class("sort-command"))
+            .expect("the dialog's command bar has Sort");
+        let menu = sort
+            .popover()
+            .and_downcast::<crate::window::menu_popover::MenuPopover>()
+            .expect("an app menu");
+        let shown_menus = || {
+            crate::window::widget_tree::descendants::<crate::window::menu_popover::MenuPopover>(window)
+                .into_iter()
+                .filter(|menu| menu.is_visible() || menu.is_mapped())
+                .count()
+        };
+
+        sort.popup();
+        wait_until("the Sort menu", || menu.is_visible());
+        menu.row("Group by").emit_activate();
+        wait_until("Group by's choices", || {
+            menu.row_labels().contains(&"Same as sort".to_owned())
+        });
+        settle();
+        assert_eq!(shown_menus(), 1, "Group by opens no second popup");
+        assert!(menu.is_visible(), "the Sort menu shows Group by");
+        menu.row("Type").emit_activate();
+        assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
+        wait_until("the menu to close", || !menu.is_visible());
+        settle();
+        assert_eq!(shown_menus(), 0, "no menu is left on screen");
+
+        sort.popup();
+        wait_until("the Sort menu again", || menu.is_visible());
+        assert!(
+            menu.row_labels().contains(&"Group by".to_owned())
+                && menu.row_labels().contains(&"Ascending".to_owned()),
+            "it opens at its top level: {:?}",
+            menu.row_labels()
+        );
+        menu.row("More").emit_activate();
+        wait_until("More's choices", || {
+            menu.row_labels().contains(&"Size".to_owned())
+        });
+        assert_eq!(shown_menus(), 1, "More opens no second popup");
+        menu.row("Size").emit_activate();
+        assert_eq!(test.action_state("sort").as_deref(), Some("size"));
+        wait_until("the menu to close", || !menu.is_visible());
     }
 }

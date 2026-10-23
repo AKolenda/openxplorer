@@ -26,7 +26,6 @@
 use gtk::subclass::prelude::*;
 use ox_core::location::{is_archive_location, is_smb_share_root, same_location, LocationContext, TRASH_URI};
 use ox_core::ops::JournalDirection;
-use ox_core::read_only::ReadOnlyDrive;
 
 use crate::folder_view::item::FileItem;
 use crate::window::window_action::WindowAction;
@@ -147,8 +146,6 @@ pub(crate) struct FolderFacts {
     pub(crate) has_items: bool,
     /// It is inside a ZIP opened like a folder, read-only (ARC-026).
     pub(crate) is_zip: bool,
-    /// Its drive is mounted read-only, and why (DEV-015).
-    pub(crate) read_only_drive: Option<ReadOnlyDrive>,
 }
 
 /// Everything the rules read.
@@ -181,25 +178,22 @@ impl CommandFacts {
         // operated on.
         let busy = self.is_busy || selection.has_inoperable;
         let can_copy = selection.count > 0 && !busy && !folder.is_recycle_bin;
-        // Nothing on a drive mounted read-only can be changed; its items
-        // can still be copied elsewhere.
-        let can_write = folder.read_only_drive.is_none();
-        let can_change = selection.count > 0 && !busy && !selection.has_read_only && can_write;
+        let can_change = selection.count > 0 && !busy && !selection.has_read_only;
         match command {
-            FileCommand::New => !folder.is_searching && !self.is_busy && folder.is_writable && can_write,
+            FileCommand::New => !folder.is_searching && !self.is_busy && folder.is_writable,
             FileCommand::Copy => can_copy,
             FileCommand::Cut | FileCommand::Duplicate | FileCommand::Rename => {
-                can_copy && !selection.has_read_only && can_write
+                can_copy && !selection.has_read_only
             }
             FileCommand::Delete | FileCommand::DeletePermanently => can_change,
             FileCommand::Paste => {
-                self.has_file_clipboard && !folder.is_searching && !busy && folder.is_writable && can_write
+                self.has_file_clipboard && !folder.is_searching && !busy && folder.is_writable
             }
             // The selected folder is the destination, so a search does not
             // matter; whether it takes items is checked when pasting.
             FileCommand::PasteInto => {
                 let is_one_item = selection.count == 1 && !selection.has_read_only;
-                self.has_file_clipboard && !busy && !folder.is_recycle_bin && is_one_item && can_write
+                self.has_file_clipboard && !busy && !folder.is_recycle_bin && is_one_item
             }
             FileCommand::Undo => self.can_undo && !self.is_busy,
             FileCommand::Redo => self.can_redo && !self.is_busy,
@@ -235,21 +229,6 @@ impl CommandFacts {
             }
             _ if self.is_busy => {
                 ox_core::i18n::gettext_static("Wait for the running file operation to finish.")
-            }
-            FileCommand::New | FileCommand::Paste
-                if folder.read_only_drive.is_some() && !folder.is_searching =>
-            {
-                folder.read_only_drive.map_or("", ReadOnlyDrive::reason)
-            }
-            FileCommand::Cut
-            | FileCommand::Duplicate
-            | FileCommand::Rename
-            | FileCommand::Delete
-            | FileCommand::DeletePermanently
-            | FileCommand::PasteInto
-                if selection.count > 0 && !selection.has_inoperable && folder.read_only_drive.is_some() =>
-            {
-                folder.read_only_drive.map_or("", ReadOnlyDrive::reason)
             }
             FileCommand::New | FileCommand::Paste if folder.is_searching => {
                 ox_core::i18n::gettext_static("Clear the search to add items to this folder.")
@@ -321,14 +300,11 @@ impl BrowserWindow {
         let folder_uri = self.current_uri().unwrap_or_default();
         let listing_failed = self.shown_folder_is_unreadable();
         let folder = FolderFacts {
-            is_writable: locations.is_writable_location(&folder_uri)
-                && !self.is_unwritable_folder(&folder_uri)
-                && !listing_failed,
+            is_writable: locations.is_writable_location(&folder_uri) && !listing_failed,
             is_searching: self.is_searching(),
             is_recycle_bin: same_location(&folder_uri, TRASH_URI),
             has_items: model.n_items() > 0,
             is_zip: is_archive_location(&folder_uri),
-            read_only_drive: self.read_only_drive_of(&folder_uri),
         };
         let operations = self.imp().file_operations.borrow();
         let context = self.context();
@@ -558,37 +534,5 @@ mod tests {
             ]
         );
         assert!(!empty.allows(FileCommand::EmptyRecycleBin));
-    }
-
-    /// On a drive mounted read-only only Copy stays, and every command it
-    /// turns off says why: Windows is hibernated, for an NTFS drive.
-    ///
-    /// parity: DEV-015
-    #[test]
-    fn a_read_only_drive_allows_only_copying() {
-        for drive in [ReadOnlyDrive::Windows, ReadOnlyDrive::Other] {
-            let mut facts = selected(1);
-            facts.folder.read_only_drive = Some(drive);
-
-            assert_eq!(enabled(&facts), [FileCommand::Copy]);
-            for command in [
-                FileCommand::New,
-                FileCommand::Cut,
-                FileCommand::Paste,
-                FileCommand::PasteInto,
-                FileCommand::Rename,
-                FileCommand::Delete,
-                FileCommand::DeletePermanently,
-                FileCommand::Duplicate,
-            ] {
-                assert_eq!(facts.refusal(command), Some(drive.reason()), "{command:?}");
-            }
-        }
-        let mut nothing_selected = selected(0);
-        nothing_selected.folder.read_only_drive = Some(ReadOnlyDrive::Windows);
-        assert_eq!(
-            nothing_selected.refusal(FileCommand::Rename),
-            Some("Select an item first.")
-        );
     }
 }

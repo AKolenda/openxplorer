@@ -22,7 +22,7 @@ msgid "- Ctrl+, opens Settings, which has its own search box.\n- OpenXplorer use
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Ctrl+F moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
+msgid "- Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.\n- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search. Only names and paths are stored, on this computer; no file contents are read.\n- Open file location (on a result's menu) opens the folder that holds it, with the result selected."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -30,7 +30,7 @@ msgid "- Deleted items go to the Recycle Bin of their drive. Restore puts them b
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together.\n- Delete moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
+msgid "- New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -50,7 +50,7 @@ msgid "- This PC lists drives, USB sticks and connected phones. Click one to ope
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H shows or hides hidden files. Alt+Shift+P shows the details pane, F9 the navigation pane.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
+msgid "- View switches between Details, Compact list and icon sizes; its slider and Ctrl+mouse wheel adjust the size.\n- F3 toggles two panes in one tab. Click the pane you want to work in; the address bar and commands follow it.\n- View can show a folder tree, enable previews and group items. Folder views can keep their own layout and sorting, or share the default selected in Settings.\n- Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.\n- In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.\n- Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.\n- Ctrl+H shows or hides hidden files. Alt+Shift+P or Alt+P shows the details pane, F9 the navigation pane.\n- F11 shows the window full screen; press it again to get the window back as it was.\n- Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -263,10 +263,6 @@ msgstr ""
 
 #: crates/ox-app/resources/ui/status-bar.ui
 msgid "Not updated live"
-msgstr ""
-
-#: crates/ox-app/resources/ui/status-bar.ui
-msgid "Read-only drive"
 msgstr ""
 
 #: crates/ox-app/resources/ui/tab-strip.ui
@@ -1049,6 +1045,14 @@ msgid "Requested associations updated. For other apps' Open and Save dialogs, cl
 msgstr ""
 
 #: crates/ox-app/src/integration/changes.rs
+msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in; GTK 3 and KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
+msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in; GTK 3 apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
 msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in; KDE apps follow after you log out and back in."
 msgstr ""
 
@@ -1084,6 +1088,87 @@ msgstr ""
 
 #: crates/ox-app/src/integration/custom_command.rs
 msgid "Type a command to run."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Click Enable for GTK 3 apps too."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "GTK 3 apps do too."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "GTK 3 apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "GTK 3 apps keep GTK's dialog: ~/.config/environment.d/60-openxplorer-file-dialogs.conf is not OpenXplorer's, so it was left alone."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "KDE apps do too."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "KDE apps keep KDE's dialog: ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh is not OpenXplorer's, so it was left alone."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs are back to the desktop's. Click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs were not using OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 and KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their file dialogs here after Apply now or the next login."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: available in the installed package, not the Flatpak."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: the desktop's ({backend})."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: the desktop's."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Removed OpenXplorer's line from your portal settings and kept your other edits. Click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "The desktop portal is not running as a service that can be restarted. The choice applies the next time you log in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "The desktop portal restarted. Open and Save dialogs follow the new choice."
 msgstr ""
 
 #: crates/ox-app/src/integration/launch_shortcut_service.rs
@@ -1236,10 +1321,6 @@ msgid "Calculate {label}"
 msgstr ""
 
 #: crates/ox-app/src/properties/checksums_panel.rs
-msgid "Checksum copied."
-msgstr ""
-
-#: crates/ox-app/src/properties/checksums_panel.rs
 msgid "Checksums do not match."
 msgstr ""
 
@@ -1274,14 +1355,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
 msgid "Choose an icon"
-msgstr ""
-
-#: crates/ox-app/src/properties/custom_icon.rs
-msgid "Default icon restored."
-msgstr ""
-
-#: crates/ox-app/src/properties/custom_icon.rs
-msgid "Icon changed."
 msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
@@ -1362,10 +1435,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
 msgid "Full path"
-msgstr ""
-
-#: crates/ox-app/src/properties/general_panel.rs
-msgid "Full path copied."
 msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/permissions_editor.rs crates/ox-app/src/properties/selection_view.rs
@@ -1582,10 +1651,6 @@ msgid "Set up network mount (SMB)"
 msgstr ""
 
 #: crates/ox-app/src/properties/mount_assistant.rs
-msgid "Setup command copied. Review it before running."
-msgstr ""
-
-#: crates/ox-app/src/properties/mount_assistant.rs
 msgid "The helper creates two systemd units and a root-only plaintext SMB credential file. It uses SMB 3.0, prompts before changes, does not edit fstab, and refuses to overwrite existing configuration. This system mount is separate from your GVfs/keyring session; “Sign out of server” does not remove it."
 msgstr ""
 
@@ -1615,10 +1680,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/permissions_editor.rs
 msgid "Others"
-msgstr ""
-
-#: crates/ox-app/src/properties/permissions_editor.rs
-msgid "Permissions changed."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -1782,7 +1843,7 @@ msgstr ""
 msgid "Read-only in OpenXplorer · Restore a copy to edit"
 msgstr ""
 
-#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs crates/ox-app/src/window/menu_popover.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Back"
 msgstr ""
 
@@ -3613,6 +3674,14 @@ msgstr ""
 msgid "Cut (Ctrl+X)"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+msgid "Delete"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Delete (Delete)"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Extract all"
 msgstr ""
@@ -3623,14 +3692,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
 msgid "More options"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-core/src/ops/delete_plan.rs
-msgid "Move to Trash"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar.rs
-msgid "Move to Trash (Delete)"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs crates/ox-core/src/ops/undo.rs
@@ -3842,7 +3903,7 @@ msgstr ""
 msgid "Compress to…"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/trash_support.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/delete_plan.rs
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/delete_plan.rs
 msgid "Delete permanently"
 msgstr ""
 
@@ -3942,10 +4003,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/copy_path.rs
 msgid "Open a folder first."
-msgstr ""
-
-#: crates/ox-app/src/window/copy_path.rs
-msgid "Path copied. Sharing permissions are unchanged."
 msgstr ""
 
 #: crates/ox-app/src/window/crumb_menus.rs
@@ -4114,16 +4171,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/extract_into.rs
-msgid "Added {added} of {offered} items to {name}."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/extract_into.rs
 msgid "Could not remove the extraction's temporary folder: {error}"
-msgstr ""
-
-#: crates/ox-app/src/window/extract_into.rs
-msgid "Extraction cancelled. Nothing was added to the folder."
 msgstr ""
 
 #: crates/ox-app/src/window/file_drag.rs
@@ -4338,11 +4386,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/clipboard.rs
 msgid "The desktop clipboard could not be claimed."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/clipboard.rs
-msgid "{count} item(s) {verb} — ready to paste in another window."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -4677,6 +4720,10 @@ msgstr ""
 msgid "Limit to home folder"
 msgstr ""
 
+#: crates/ox-app/src/window/folder_tree/menu.rs crates/ox-core/src/ops/delete_plan.rs
+msgid "Move to Trash"
+msgstr ""
+
 #: crates/ox-app/src/window/folder_tree/menu.rs
 msgid "Rename…"
 msgstr ""
@@ -4912,19 +4959,11 @@ msgid "{protocol_name} · Discovered"
 msgstr ""
 
 #: crates/ox-app/src/window/network_sign_out.rs
-msgid "Disconnected. Saved credentials are retained."
-msgstr ""
-
-#: crates/ox-app/src/window/network_sign_out.rs
 msgid "Finish the current file operation before signing out."
 msgstr ""
 
 #: crates/ox-app/src/window/network_sign_out.rs
 msgid "Sign-out did not fully finish"
-msgstr ""
-
-#: crates/ox-app/src/window/network_sign_out.rs
-msgid "Signed out. Matching saved credentials were cleared or none were present."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5060,15 +5099,6 @@ msgstr ""
 msgid "Text size changed for this window, but could not be saved: {error}"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/preferences.rs
-msgid "Text size: {percent}%"
-msgstr ""
-
-#: crates/ox-app/src/window/quick_access.rs
-msgid "Already pinned to Quick access."
-msgstr ""
-
 #: crates/ox-app/src/window/quick_access.rs
 msgid "Could not pin: the folders could not be checked."
 msgstr ""
@@ -5083,16 +5113,7 @@ msgid "Only folders and network shares can be pinned. Select folders only."
 msgstr ""
 
 #: crates/ox-app/src/window/quick_access.rs
-msgid "Pinned to Quick access. No files were moved."
-msgstr ""
-
-#: crates/ox-app/src/window/quick_access.rs
 msgid "Unpinned. The folder was not deleted."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/quick_access.rs
-msgid "{count} folders pinned. No files were moved."
 msgstr ""
 
 #: crates/ox-app/src/window/relocated_files.rs
@@ -5199,8 +5220,8 @@ msgstr ""
 msgid "Context menu"
 msgstr ""
 
-#: crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
-msgid "Delete"
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Full screen"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5696,6 +5717,10 @@ msgstr ""
 msgid "Items in a ZIP are read-only. Use Copy, then Paste where you want them."
 msgstr ""
 
+#: crates/ox-app/src/window/zip_copies.rs crates/ox-core/src/archive/error.rs crates/ox-core/src/entry/error.rs crates/ox-core/src/integration/terminal/error.rs crates/ox-core/src/network/error.rs crates/ox-core/src/ops/error.rs crates/ox-core/src/search/error.rs crates/ox-core/src/transfer/error.rs crates/ox-core/src/versions/error.rs
+msgid "Operation cancelled."
+msgstr ""
+
 #: crates/ox-app/src/window/zip_copies.rs
 msgid "Select the items to copy."
 msgstr ""
@@ -5750,10 +5775,6 @@ msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
 msgid "Open a network share before choosing it as an extraction destination."
-msgstr ""
-
-#: crates/ox-core/src/archive/error.rs crates/ox-core/src/entry/error.rs crates/ox-core/src/integration/terminal/error.rs crates/ox-core/src/network/error.rs crates/ox-core/src/ops/error.rs crates/ox-core/src/search/error.rs crates/ox-core/src/transfer/error.rs crates/ox-core/src/versions/error.rs
-msgid "Operation cancelled."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -5883,6 +5904,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/archive/error.rs
 msgid "{cause}\nIncomplete extraction remains at {staging_uri}. Inspect it before removing it. {cleanup}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/archive/error.rs
+msgid "{cause}\nThe incomplete archive remains at {staging_uri}. Inspect it before removing it. {cleanup}"
 msgstr ""
 
 #: crates/ox-core/src/archive/zip/error.rs
@@ -7043,6 +7069,11 @@ msgstr ""
 msgid "This template is unavailable, too large, or not a regular template file."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/new_from_template.rs
+msgid "{cause}\nThe incomplete file remains at {uri}. Inspect it before removing it. {cleanup}"
+msgstr ""
+
 #: crates/ox-core/src/ops/progress.rs
 msgid "Deleting items…"
 msgstr ""
@@ -7084,10 +7115,6 @@ msgstr ""
 
 #: crates/ox-core/src/ops/rename.rs
 msgid "Undo can only rename an item back within its own folder."
-msgstr ""
-
-#: crates/ox-core/src/ops/report.rs
-msgid "Cancelled. Completed items remain in place."
 msgstr ""
 
 #: crates/ox-core/src/ops/report.rs
@@ -7368,26 +7395,6 @@ msgstr ""
 
 #: crates/ox-core/src/private_storage.rs
 msgid "The settings file is not valid UTF-8 text."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "The drive is read-only, so nothing on it can be changed. If it is a Windows drive, Windows is hibernated or used Fast startup: shut Windows down fully, then mount the drive again."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "This drive is mounted read-only, so files on it cannot be created, changed or deleted."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "This drive is read-only."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "Windows is hibernated or used Fast startup, so this drive is read-only."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "Windows was hibernated or shut down with Fast startup, so Linux mounted this drive read-only to keep its files safe. Start Windows and shut it down fully (hold Shift while choosing Shut down, or turn off Fast startup), then mount the drive again."
 msgstr ""
 
 #: crates/ox-core/src/search/error.rs
@@ -8080,6 +8087,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "First packaged native preview of the GTK 4 interface, for trying it beside the current OpenXplorer."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Make OpenXplorer default also sends other apps' Open and Save dialogs to OpenXplorer, and GTK 3 apps use them too after the next login. Format on a removable drive opens OpenXplorer's own Format dialog instead of GNOME Disks, and Enter in Extract all extracts. Deleting many files on a share asks the server about each file once instead of three times. A move between drives keeps the source files of a folder it skipped partway, Undo asks first when it cannot check a whole copy, signing out of a server forgets its passwords on every port, and the Recycle Bin and search results no longer show stale items."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

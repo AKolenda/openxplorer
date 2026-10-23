@@ -137,7 +137,7 @@ impl BrowserWindow {
     /// window of its own: the history keys and the mouse's side buttons
     /// then do nothing (NAV-002, NAV-003).
     pub(super) fn takes_navigation_input(&self) -> bool {
-        self.dialog_layer().shown().is_none() && !self.shows_dialog()
+        !self.dialog_in_front()
     }
 }
 

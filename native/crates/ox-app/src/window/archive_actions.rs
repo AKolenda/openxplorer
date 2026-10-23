@@ -25,7 +25,6 @@ use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;
 use ox_core::integration::Activation;
 use ox_core::location::{is_archive_location, is_smb_server, parent_location};
-use ox_core::ops::OperationSummary;
 use ox_core::transfer::{Cancellation, Node, NodeFactory};
 use ox_core::versions::snapshot_location;
 
@@ -38,7 +37,6 @@ use crate::archive_view::{
 use crate::locations::Page;
 
 use super::actions::plain_action;
-use super::background_notice::Destination;
 use super::transfer_panel::TransferKind;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -304,6 +302,10 @@ impl BrowserWindow {
                     .extract_into_free_name(&archive, &folder, &base_name, &cancel)
                     .await;
                 window.finish_archive_operation();
+                // Windows Explorer says nothing after Cancel.
+                if extracted.as_ref().is_err_and(ArchiveError::is_cancelled) {
+                    return;
+                }
                 let outcome = extracted.map_err(|error| extraction_failure_text(&error));
                 window.report_in_folder(
                     &folder,
@@ -371,6 +373,9 @@ impl BrowserWindow {
                     .compress_into_free_name(uris, &folder, &first_name, &cancel)
                     .await;
                 window.finish_archive_operation();
+                if created.as_ref().is_err_and(ArchiveError::is_cancelled) {
+                    return;
+                }
                 let outcome = created.map_err(|error| compression_failure_text(&error));
                 window.report_in_folder(
                     &folder,
@@ -410,8 +415,7 @@ impl BrowserWindow {
 
     /// Lists `folder` again, then shows a failed operation's message in the
     /// dialog titled `stopped_title`; success is not mentioned, as in
-    /// Windows Explorer. A desktop notification says either while no
-    /// window has focus.
+    /// Windows Explorer.
     pub(super) fn report_in_folder(
         &self,
         folder: &str,
@@ -419,11 +423,6 @@ impl BrowserWindow {
         stopped_title: &str,
     ) {
         self.reload_tabs_showing(folder);
-        let summary = match &outcome {
-            Ok(message) => OperationSummary::Toast(message.clone()),
-            Err(failure) => OperationSummary::Report(failure.clone()),
-        };
-        self.notify_if_in_background(&summary, Destination::folder(folder));
         if let Err(failure) = outcome {
             self.show_result_dialog(stopped_title, &failure);
         }

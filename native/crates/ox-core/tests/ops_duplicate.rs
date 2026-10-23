@@ -96,7 +96,7 @@ fn duplicate_refuses_roots_shares_and_protected_folders() {
 }
 
 #[test]
-fn a_cancelled_duplicate_reports_one_cancellation_and_copies_nothing() {
+fn a_cancelled_duplicate_says_nothing_and_copies_nothing() {
     let folders = Folders::new();
     fs::write(folders.source().join("a.txt"), b"a").unwrap();
     fs::write(folders.destination().join("b.txt"), b"b").unwrap();
@@ -113,10 +113,9 @@ fn a_cancelled_duplicate_reports_one_cancellation_and_copies_nothing() {
     assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
     assert!(outcome.created.is_empty());
     assert_eq!(outcome.undo, None);
-    let report = "0 completed.\nCancelled. Completed items remain in place.";
     assert_eq!(
         summarize(TransferMode::Copy, &outcome.result),
-        OperationSummary::Report(report.into())
+        OperationSummary::Cancelled
     );
     assert_eq!(fs::read_dir(folders.source()).unwrap().count(), 1);
     assert_eq!(fs::read_dir(folders.destination()).unwrap().count(), 1);

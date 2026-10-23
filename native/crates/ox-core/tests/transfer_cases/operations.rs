@@ -8,7 +8,7 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, Operation, TransferError, MAX_DEPTH};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeInfo, Operation, TransferError, MAX_DEPTH};
 
 use crate::transfer_support::{
     local::{self, local_path_of, LocalNode, Provider},
@@ -172,6 +172,110 @@ fn permanent_delete_removes_folders_and_files_without_a_destination() {
     assert!(result.errors.is_empty(), "{result:?}");
     assert!(!exists_without_following_links(&tree));
     assert!(!exists_without_following_links(&loose));
+}
+
+/// Records every item whose kind is asked, like a share that pays a round
+/// trip for each question.
+#[derive(Default)]
+struct CountedQuestions {
+    asked: Mutex<Vec<PathBuf>>,
+}
+
+impl Provider for CountedQuestions {
+    fn info(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
+        self.asked.lock().expect("question log").push(local_path_of(node));
+        node.local_info(cancel)
+    }
+}
+
+/// Deleting many files on a share was slow because each file was asked
+/// what it is once to start it and again by the protected-location check.
+/// The kind found when the item started is reused.
+///
+/// parity: XFER-015, XFER-020
+#[test]
+fn a_protected_location_check_does_not_ask_again_what_a_deleted_file_is() {
+    let fixture = Fixture::new();
+    let first = fixture.source_folder.join("first.sql");
+    let second = fixture.source_folder.join("second.sql");
+    write(&first, "1");
+    write(&second, "2");
+    let counted = Arc::new(CountedQuestions::default());
+    let mut engine = fixture
+        .engine(counted.clone())
+        .with_write_guard(|_uri: &str| Ok(()));
+
+    let deleted = fixture.run(&mut engine, &[&first, &second], Request::Delete);
+
+    assert_eq!(deleted.done.len(), 2, "{deleted:?}");
+    assert!(!exists_without_following_links(&first));
+    assert!(!exists_without_following_links(&second));
+    assert_eq!(*counted.asked.lock().expect("question log"), [first, second]);
+}
+
+/// Turns `file` into a folder holding a protected `.snapshot` right after
+/// the engine first asks what it is, as another program could.
+struct BecomesAFolder {
+    file: PathBuf,
+    swapped: Mutex<bool>,
+}
+
+impl BecomesAFolder {
+    fn new(file: &Path) -> Arc<Self> {
+        Arc::new(Self {
+            file: file.to_owned(),
+            swapped: Mutex::new(false),
+        })
+    }
+}
+
+impl Provider for BecomesAFolder {
+    fn info(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
+        let info = node.local_info(cancel);
+        let mut swapped = self.swapped.lock().expect("swap flag");
+        if local_path_of(node) == self.file && !*swapped {
+            *swapped = true;
+            fs::remove_file(&self.file).unwrap();
+            fs::create_dir_all(self.file.join(".snapshot")).unwrap();
+            write(&self.file.join(".snapshot/version"), "backup");
+        }
+        info
+    }
+}
+
+/// Refuses anything inside a `.snapshot` folder.
+fn snapshot_guard(uri: &str) -> Result<(), TransferError> {
+    if uri.contains(".snapshot") {
+        Err(TransferError::failed("Protected snapshot."))
+    } else {
+        Ok(())
+    }
+}
+
+/// A file that became a folder with a protected item after it was
+/// selected is neither emptied by a permanent delete, which reuses the
+/// kind found at selection, nor trashed, which asks again.
+///
+/// parity: XFER-014, XFER-015, XFER-020
+#[test]
+fn a_file_that_becomes_a_folder_with_a_protected_item_is_kept() {
+    for request in [Request::Delete, Request::Trash] {
+        let fixture = Fixture::new();
+        let file = fixture.source_folder.join("report.sql");
+        write(&file, "data");
+        let mut engine = fixture
+            .engine(BecomesAFolder::new(&file))
+            .with_write_guard(snapshot_guard);
+
+        let result = fixture.run(&mut engine, &[&file], request);
+
+        assert!(result.done.is_empty(), "{result:?}");
+        assert_eq!(result.errors.len(), 1, "{result:?}");
+        assert_eq!(read(&file.join(".snapshot/version")), "backup");
+        if matches!(request, Request::Trash) {
+            assert!(result.errors[0].contains("Protected snapshot."), "{result:?}");
+        }
+    }
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_operations.py::TransferTests::test_special_file_rejected_cleanup`: a special file is never
