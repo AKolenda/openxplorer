@@ -23,6 +23,18 @@ use crate::gio_node::GioNode;
 use crate::location::parent_location;
 use crate::transfer::{Cancellation, Node};
 
+/// The unlisted items of one folder, still to be decided once the folder
+/// has answered "no Trash", from which the planner reads their answers
+/// from one listing of the folder instead of asking about each. Below it,
+/// asking each item costs a few queries, while the folder may hold many
+/// thousands of items.
+const LISTING_MIN_ITEMS: usize = 32;
+
+/// The children a listing reads per selected item before it stops, so a
+/// selection in a huge folder never reads all of it; the selected items it
+/// did not reach are asked about one by one.
+const CHILDREN_READ_PER_ITEM: usize = 64;
+
 /// One selected item, as the confirmation names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeleteItem {
@@ -72,9 +84,11 @@ pub struct DeleteConfirmation {
 /// decides for its item alone, so another user's file in `/tmp`, or one
 /// that vanished before its query, never sends a sibling that can go to
 /// the Trash to a permanent delete. Once a folder has answered "no Trash"
-/// for one unlisted item, its other unlisted items are read from one
-/// listing of the folder, so a large selection on a share without a Trash
-/// costs about two queries per folder rather than one per item.
+/// for one unlisted item, its other unlisted items are asked about one by
+/// one; when there are at least [`LISTING_MIN_ITEMS`] of them, they are
+/// first read from one listing of the folder, bounded by
+/// [`CHILDREN_READ_PER_ITEM`], so a large selection on a share without a
+/// Trash does not cost a query per item.
 ///
 /// OPS-017: an item on a share that is not mounted, which GIO cannot be
 /// asked about, counts as going to the Trash, so that failure never turns
@@ -99,48 +113,53 @@ fn plan_delete_blocking(items: &[DeleteItem], cancel: &Cancellation) -> Result<D
         items,
         cancel,
         |uri| item_has_trash(uri, cancel),
-        |folder| children_have_trash(folder, cancel),
+        |folder, wanted| children_have_trash(folder, wanted, cancel),
     )
 }
 
 /// [`plan_delete`] with `has_trash` answering for each item it asks
-/// about, and `children_have_trash` for every child of a folder at once.
+/// about, and `children_have_trash` for the wanted children of a folder
+/// at once.
 fn plan_with(
     items: &[DeleteItem],
     cancel: &Cancellation,
     mut has_trash: impl FnMut(&str) -> Result<bool, OpsError>,
-    mut children_have_trash: impl FnMut(&str) -> Result<Option<HashMap<String, bool>>, OpsError>,
+    mut children_have_trash: impl FnMut(&str, &HashSet<String>) -> Result<HashMap<String, bool>, OpsError>,
 ) -> Result<DeletePlan, OpsError> {
+    let folders: Vec<String> = items.iter().map(|item| trash_scope(&item.uri)).collect();
     // The folders where an item can go to the Trash, the folders where an
-    // unlisted item was asked about and answered "no Trash", and each such
-    // folder's listing.
+    // unlisted item was asked about and answered "no Trash", the folders
+    // considered for a listing, and the answers listings gave, by item.
     let mut folders_with_trash: HashSet<String> = HashSet::new();
     let mut asked_in_folder: HashSet<String> = HashSet::new();
-    let mut listed_children: HashMap<String, Option<HashMap<String, bool>>> = HashMap::new();
+    let mut listed_folders: HashSet<String> = HashSet::new();
+    let mut listed_answers: HashMap<String, bool> = HashMap::new();
     let mut plan = DeletePlan {
         to_trash: Vec::new(),
         to_delete: Vec::new(),
         selection_text: selection_text(items),
     };
-    for item in items {
+    for (index, (item, folder)) in items.iter().zip(&folders).enumerate() {
         cancel.check()?;
-        let folder = trash_scope(&item.uri);
         let goes_to_trash = match item.can_trash {
             Some(listed) => listed,
-            None if folders_with_trash.contains(&folder) => true,
+            None if folders_with_trash.contains(folder) => true,
             None => {
-                if asked_in_folder.contains(&folder) && !listed_children.contains_key(&folder) {
-                    let children = children_have_trash(&folder)?;
-                    listed_children.insert(folder.clone(), children);
+                if asked_in_folder.contains(folder) && listed_folders.insert(folder.clone()) {
+                    let wanted: HashSet<String> = items[index..]
+                        .iter()
+                        .zip(&folders[index..])
+                        .filter(|(other, other_folder)| other.can_trash.is_none() && *other_folder == folder)
+                        .map(|(other, _)| other.uri.clone())
+                        .collect();
+                    if wanted.len() >= LISTING_MIN_ITEMS {
+                        listed_answers.extend(children_have_trash(folder, &wanted)?);
+                    }
                 }
-                let listed = listed_children
-                    .get(&folder)
-                    .and_then(Option::as_ref)
-                    .and_then(|children| children.get(&item.uri).copied());
-                // An item missing from the listing, or one of a folder that
-                // could not be listed, is asked about itself.
-                let answer = match listed {
-                    Some(answer) => answer,
+                // An item the listing did not answer for, or one of a
+                // folder that was not listed, is asked about itself.
+                let answer = match listed_answers.get(&item.uri) {
+                    Some(&answer) => answer,
                     None => has_trash(&item.uri)?,
                 };
                 asked_in_folder.insert(folder.clone());
@@ -148,7 +167,7 @@ fn plan_with(
             }
         };
         if goes_to_trash {
-            folders_with_trash.insert(folder);
+            folders_with_trash.insert(folder.clone());
             plan.to_trash.push(item.uri.clone());
         } else {
             plan.to_delete.push(item.uri.clone());
@@ -177,17 +196,19 @@ fn item_has_trash(item_uri: &str, cancel: &Cancellation) -> Result<bool, OpsErro
     Ok(can_trash.unwrap_or(true))
 }
 
-/// `access::can-trash` of every child of the folder at `folder_uri` that
-/// reports it, by the child's URI, from one listing; `None` when the
-/// folder cannot be listed, so each item is asked about itself.
+/// `access::can-trash` of the `wanted` children of the folder at
+/// `folder_uri`, by URI, from one listing read by [`selected_answers`]. A
+/// folder that cannot be listed answers for none of them, so each is asked
+/// about itself.
 ///
 /// # Errors
 ///
 /// [`OpsError::Cancelled`], also when the user cancels during the listing.
 fn children_have_trash(
     folder_uri: &str,
+    wanted: &HashSet<String>,
     cancel: &Cancellation,
-) -> Result<Option<HashMap<String, bool>>, OpsError> {
+) -> Result<HashMap<String, bool>, OpsError> {
     let folder = gio::File::for_uri(folder_uri);
     let listing = unless_cancelled(cancel, || {
         folder.enumerate_children(
@@ -197,27 +218,54 @@ fn children_have_trash(
         )
     })?;
     let Ok(listing) = listing else {
-        return Ok(None);
+        return Ok(HashMap::new());
     };
-    let mut children = HashMap::new();
-    let read = loop {
-        if let Err(error) = cancel.check() {
-            break Err(error.into());
-        }
+    let answers = selected_answers(wanted, cancel, || {
         match listing.next_file(Some(cancel.cancellable())) {
-            // A child the backend reports no answer for is asked about.
-            Ok(Some(info)) if info.has_attribute("access::can-trash") => {
-                let child = listing.child(&info).uri().to_string();
-                children.insert(child, info.boolean("access::can-trash"));
+            Ok(Some(info)) => {
+                let answer = info
+                    .has_attribute("access::can-trash")
+                    .then(|| info.boolean("access::can-trash"));
+                Some((listing.child(&info).uri().to_string(), answer))
             }
-            Ok(Some(_)) => {}
-            Ok(None) => break Ok(Some(children)),
-            Err(_) => break Ok(None),
+            // What the listing read before it failed stays valid.
+            Ok(None) | Err(_) => None,
         }
-    };
+    });
     // Closing only releases the listing; what was read stays valid.
     let _ = listing.close(gio::Cancellable::NONE);
-    read
+    answers
+}
+
+/// The answers for the `wanted` children among those `next_child` reads,
+/// each a URI and its answer, `None` where the backend reports none. It
+/// stops once every wanted child has its answer, at the end of the listing,
+/// or after [`CHILDREN_READ_PER_ITEM`] children per wanted child, and keeps
+/// no answer for a child that was not wanted.
+///
+/// # Errors
+///
+/// [`OpsError::Cancelled`], also when the user cancels during the listing.
+fn selected_answers(
+    wanted: &HashSet<String>,
+    cancel: &Cancellation,
+    mut next_child: impl FnMut() -> Option<(String, Option<bool>)>,
+) -> Result<HashMap<String, bool>, OpsError> {
+    let mut answers = HashMap::new();
+    for _ in 0..wanted.len().saturating_mul(CHILDREN_READ_PER_ITEM) {
+        cancel.check()?;
+        let Some((child, answer)) = next_child() else {
+            break;
+        };
+        if let Some(answer) = answer.filter(|_| wanted.contains(&child)) {
+            answers.insert(child, answer);
+            if answers.len() == wanted.len() {
+                break;
+            }
+        }
+    }
+    cancel.check()?;
+    Ok(answers)
 }
 
 /// The confirmation of Shift+Delete, which deletes `items` permanently
@@ -410,7 +458,7 @@ mod tests {
                 asked.push(uri.to_owned());
                 Ok(true)
             },
-            |folder| panic!("{folder} was listed"),
+            |folder, _| panic!("{folder} was listed"),
         )
         .unwrap();
 
@@ -422,16 +470,40 @@ mod tests {
         );
     }
 
-    /// Items with no listed answer on a share without a Trash cost one
-    /// query and one listing per folder, not one query per item.
+    /// `count` unlisted items named `0`, `1`, … in `folder`.
+    fn numbered(folder: &str, count: usize) -> Vec<DeleteItem> {
+        let uris: Vec<String> = (0..count).map(|number| format!("{folder}/{number}")).collect();
+        items(&uris.iter().map(String::as_str).collect::<Vec<_>>())
+    }
+
+    /// A few unlisted items on a share without a Trash are asked about one
+    /// by one, so the folder, which may be huge, is never listed for them.
     #[test]
-    fn unlisted_items_without_a_trash_are_read_from_one_listing_per_folder() {
-        let selection = items(&[
-            "smb://nas/share/a",
-            "smb://nas/share/b",
-            "smb://nas/share/c",
-            "smb://nas/other/d",
-        ]);
+    fn a_few_unlisted_items_without_a_trash_are_asked_about_without_a_listing() {
+        let selection = numbered("smb://nas/share", LISTING_MIN_ITEMS);
+        let mut asked = Vec::new();
+
+        let plan = plan_with(
+            &selection,
+            &Cancellation::new(),
+            |uri| {
+                asked.push(uri.to_owned());
+                Ok(false)
+            },
+            |folder, _| panic!("{folder} was listed"),
+        )
+        .unwrap();
+
+        assert_eq!(asked.len(), LISTING_MIN_ITEMS);
+        assert_eq!(plan.to_delete.len(), LISTING_MIN_ITEMS);
+    }
+
+    /// Many unlisted items on a share without a Trash cost one query and
+    /// one listing for the items still to be decided, not a query each.
+    #[test]
+    fn many_unlisted_items_without_a_trash_are_read_from_one_listing() {
+        let mut selection = numbered("smb://nas/share", LISTING_MIN_ITEMS + 1);
+        selection.extend(items(&["smb://nas/other/d"]));
         let mut asked = Vec::new();
         let mut listed = Vec::new();
 
@@ -442,18 +514,21 @@ mod tests {
                 asked.push(uri.to_owned());
                 Ok(false)
             },
-            |folder| {
-                listed.push(folder.to_owned());
-                let children = ["a", "b", "c"].map(|name| (format!("{folder}/{name}"), false));
-                Ok(Some(children.into_iter().collect()))
+            |folder, wanted| {
+                listed.push((folder.to_owned(), wanted.clone()));
+                Ok(wanted.iter().map(|uri| (uri.clone(), false)).collect())
             },
         )
         .unwrap();
 
-        assert_eq!(asked, ["smb://nas/share/a", "smb://nas/other/d"]);
-        assert_eq!(listed, ["smb://nas/share"]);
+        assert_eq!(asked, ["smb://nas/share/0", "smb://nas/other/d"]);
+        let expected: HashSet<String> = selection[1..=LISTING_MIN_ITEMS]
+            .iter()
+            .map(|item| item.uri.clone())
+            .collect();
+        assert_eq!(listed, [("smb://nas/share".to_owned(), expected)]);
         assert!(plan.to_trash.is_empty());
-        assert_eq!(plan.to_delete.len(), 4);
+        assert_eq!(plan.to_delete.len(), LISTING_MIN_ITEMS + 2);
     }
 
     /// An unlisted item that vanished answers "no Trash" for itself alone:
@@ -470,28 +545,21 @@ mod tests {
                 asked.push(uri.to_owned());
                 Ok(uri != "sftp://host/dir/gone.txt")
             },
-            |folder| {
-                let children = [(format!("{folder}/kept.txt"), true)];
-                Ok(Some(children.into_iter().collect()))
-            },
+            |folder, _| panic!("{folder} was listed"),
         )
         .unwrap();
 
-        assert_eq!(asked, ["sftp://host/dir/gone.txt"]);
+        assert_eq!(asked, ["sftp://host/dir/gone.txt", "sftp://host/dir/kept.txt"]);
         assert_eq!(plan.to_trash, ["sftp://host/dir/kept.txt"]);
         assert_eq!(plan.to_delete, ["sftp://host/dir/gone.txt"]);
     }
 
-    /// An item missing from its folder's listing, or one of a folder that
-    /// cannot be listed, is asked about itself.
+    /// An item its folder's listing did not answer for is asked about
+    /// itself.
     #[test]
     fn an_item_the_listing_does_not_answer_for_is_asked_about() {
-        let selection = items(&[
-            "sftp://host/dir/gone.txt",
-            "sftp://host/dir/new.txt",
-            "smb://nas/share/gone.txt",
-            "smb://nas/share/kept.txt",
-        ]);
+        let selection = numbered("sftp://host/dir", LISTING_MIN_ITEMS + 1);
+        let unanswered = format!("sftp://host/dir/{LISTING_MIN_ITEMS}");
         let mut asked = Vec::new();
 
         let plan = plan_with(
@@ -499,17 +567,75 @@ mod tests {
             &Cancellation::new(),
             |uri| {
                 asked.push(uri.to_owned());
-                Ok(!uri.ends_with("gone.txt"))
+                Ok(uri == unanswered)
             },
-            |folder| Ok((folder == "sftp://host/dir").then(HashMap::new)),
+            |_, wanted| {
+                let answered = wanted.iter().filter(|uri| **uri != unanswered);
+                Ok(answered.map(|uri| (uri.clone(), false)).collect())
+            },
         )
         .unwrap();
 
-        assert_eq!(asked.len(), 4);
-        assert_eq!(
-            plan.to_trash,
-            ["sftp://host/dir/new.txt", "smb://nas/share/kept.txt"]
-        );
+        assert_eq!(asked, ["sftp://host/dir/0".to_owned(), unanswered.clone()]);
+        assert_eq!(plan.to_trash, [unanswered]);
+        assert_eq!(plan.to_delete.len(), LISTING_MIN_ITEMS);
+    }
+
+    /// A listing keeps the answers of the selected children only, and
+    /// stops reading once it has all of them.
+    #[test]
+    fn a_listing_keeps_only_the_selected_children_and_stops_once_it_has_them() {
+        let wanted: HashSet<String> = ["smb://nas/share/b", "smb://nas/share/d"]
+            .map(str::to_owned)
+            .into();
+        let mut children = ["a", "b", "c", "d", "e", "f"]
+            .map(|name| (format!("smb://nas/share/{name}"), Some(false)))
+            .into_iter();
+        let mut read = 0;
+
+        let answers = selected_answers(&wanted, &Cancellation::new(), || {
+            read += 1;
+            children.next()
+        })
+        .unwrap();
+
+        assert_eq!(answers.keys().cloned().collect::<HashSet<_>>(), wanted);
+        assert_eq!(read, 4);
+    }
+
+    /// A listing that never reaches a selected child stops after a bounded
+    /// number of children, so a huge folder is never read to its end.
+    #[test]
+    fn a_listing_stops_after_a_bounded_number_of_children() {
+        let wanted: HashSet<String> = ["smb://nas/share/gone"].map(str::to_owned).into();
+        let mut read = 0;
+
+        let answers = selected_answers(&wanted, &Cancellation::new(), || {
+            read += 1;
+            Some((format!("smb://nas/share/{read}"), Some(false)))
+        })
+        .unwrap();
+
+        assert!(answers.is_empty());
+        assert_eq!(read, CHILDREN_READ_PER_ITEM);
+    }
+
+    /// GIO's listing answers for the selected children it finds, by the
+    /// same URIs the selection names, and for no other child.
+    #[test]
+    fn the_listing_answers_only_for_the_selected_children() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        for name in ["a", "b", "c"] {
+            std::fs::write(temp.path().join(name), b"x").expect("a test file");
+        }
+        let uri = |name: &str| gio::File::for_path(temp.path().join(name)).uri().to_string();
+        let folder = gio::File::for_path(temp.path()).uri().to_string();
+        let wanted: HashSet<String> = [uri("a"), uri("c"), uri("gone")].into();
+
+        let answers = children_have_trash(&folder, &wanted, &Cancellation::new()).unwrap();
+
+        let answered: HashSet<String> = answers.keys().cloned().collect();
+        assert_eq!(answered, [uri("a"), uri("c")].into());
     }
 
     /// An item that can go to the Trash answers for the rest of its
@@ -531,7 +657,7 @@ mod tests {
                 asked.push(uri.to_owned());
                 Ok(true)
             },
-            |folder| panic!("{folder} was listed"),
+            |folder, _| panic!("{folder} was listed"),
         )
         .unwrap();
 
