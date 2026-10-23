@@ -409,7 +409,7 @@ impl TransferEngine {
         let selected = self.start_item(batch, index, uri)?;
         match &batch.action {
             ItemAction::Remove(removal) => {
-                self.remove(*removal, selected.node.as_ref(), batch.cancel)?;
+                self.remove(*removal, &selected, batch.cancel)?;
                 Ok(ItemOutcome::Done)
             }
             ItemAction::Transfer(placement) => self.transfer(batch, placement, &selected, state, staging),
@@ -447,19 +447,36 @@ impl TransferEngine {
     fn remove(
         &self,
         removal: Removal,
-        source: &dyn Node,
+        selected: &SelectedItem,
         cancel: &Cancellation,
     ) -> Result<(), TransferError> {
+        let source = selected.node.as_ref();
+        // A permanent delete of anything but a folder never looks inside
+        // the item (`delete_tree_of_kind`), so the kind found when it was
+        // selected is enough here: on a share every question is a queued
+        // round trip, which adds up over many files. The Trash takes the
+        // item whole, so it is asked again.
+        let known_kind = match removal {
+            Removal::PermanentDelete if selected.kind != NodeKind::Directory => Some(selected.kind),
+            _ => None,
+        };
         // XFER-020: a protected descendant anywhere in the tree stops the
         // whole item before anything is removed.
-        check_write_tree(self.guard(), source, None, cancel, SourceChange::Changed)?;
+        check_write_tree(
+            self.guard(),
+            source,
+            known_kind,
+            None,
+            cancel,
+            SourceChange::Changed,
+        )?;
         match removal {
             // XFER-014: the backend reports an error rather than falling
             // back to a permanent delete.
             Removal::Trash => source.trash(cancel),
             // XFER-015: reached only after the user confirmed a permanent
             // delete. The backend re-checks every item with the write guard.
-            Removal::PermanentDelete => source.delete_tree(cancel, self.guard()),
+            Removal::PermanentDelete => source.delete_tree_of_kind(selected.kind, cancel, self.guard()),
         }
     }
 
@@ -494,6 +511,7 @@ impl TransferEngine {
         check_write_tree(
             self.guard(),
             source,
+            None,
             Some(destination),
             batch.cancel,
             source_change,

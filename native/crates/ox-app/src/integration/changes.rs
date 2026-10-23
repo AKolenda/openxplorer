@@ -22,7 +22,7 @@ use ox_core::integration::{
 };
 use ox_core::location::file_uri;
 
-use super::DesktopIntegration;
+use super::{AfterLogin, DesktopIntegration};
 
 /// How long the Show in folder test waits for the answer, as in the
 /// Python app.
@@ -119,12 +119,9 @@ pub(crate) enum ChangeOutcome {
     /// app runs; the text says why.
     ShowInFolderWhileRunning(String),
     /// The handlers changed and Open and Save dialogs will use the app
-    /// once the desktop portal restarts; KDE's own apps, when their login
-    /// script is in place, from the next login.
-    FileDialogsPending {
-        /// KDE's own apps are covered, which only a new login applies.
-        kde_apps: bool,
-    },
+    /// once the desktop portal restarts; GTK 3 and KDE apps, when their
+    /// login files are in place, from the next login.
+    FileDialogsPending(AfterLogin),
     /// The handlers changed, but Open and Save dialogs could not be sent
     /// to the app.
     FileDialogsFailed(String),
@@ -142,14 +139,24 @@ impl ChangeOutcome {
             Self::ShowInFolderWhileRunning(note) => {
                 ox_core::i18n::format_message("File handlers updated. {note}", &[("note", note)])
             }
-            Self::FileDialogsPending { kde_apps: false } => ox_core::i18n::gettext_static(
+            Self::FileDialogsPending(AfterLogin::Nothing) => ox_core::i18n::gettext_static(
                 "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or \
                  log out and back in.",
             )
             .to_owned(),
-            Self::FileDialogsPending { kde_apps: true } => ox_core::i18n::gettext_static(
+            Self::FileDialogsPending(AfterLogin::Gtk) => ox_core::i18n::gettext_static(
+                "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or \
+                 log out and back in; GTK 3 apps follow after you log out and back in.",
+            )
+            .to_owned(),
+            Self::FileDialogsPending(AfterLogin::Kde) => ox_core::i18n::gettext_static(
                 "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or \
                  log out and back in; KDE apps follow after you log out and back in.",
+            )
+            .to_owned(),
+            Self::FileDialogsPending(AfterLogin::GtkAndKde) => ox_core::i18n::gettext_static(
+                "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or \
+                 log out and back in; GTK 3 and KDE apps follow after you log out and back in.",
             )
             .to_owned(),
             Self::FileDialogsFailed(error) => ox_core::i18n::format_message(
@@ -202,8 +209,8 @@ impl DesktopIntegration {
 
     /// Sends Open and Save dialogs to the app as part of Make default,
     /// where the opt-in can work and has something to do: the dialogs do
-    /// not use the app yet, or, enabled before KDE's own apps were
-    /// covered, those still lack their login script (as
+    /// not use the app yet, or, enabled before GTK or KDE apps were
+    /// covered, those still lack their login file (as
     /// [`crate::integration::FileDialogsStatus::can_enable`]). `None` when
     /// there was nothing to do.
     async fn enable_file_dialogs_with_default(&self) -> Option<ChangeOutcome> {
@@ -211,22 +218,19 @@ impl DesktopIntegration {
             .services()
             .file_dialogs
             .run_in_background(|registration| {
-                let kde_apps_left_out = registration.is_kde_session()
-                    && !registration.covers_kde_apps()
-                    && !registration.kde_script_is_someone_elses();
-                if !registration.is_available() || (registration.is_enabled() && !kde_apps_left_out) {
+                if !registration.is_available()
+                    || (registration.is_enabled() && !registration.leaves_apps_out())
+                {
                     return Ok(None);
                 }
-                registration
-                    .enable()
-                    .map(|()| Some(registration.covers_kde_apps()))
+                registration.enable().map(|()| Some(AfterLogin::of(registration)))
             })
             .await;
         match enabled {
             Ok(None) => None,
-            Ok(Some(kde_apps)) => {
+            Ok(Some(after_login)) => {
                 self.notify_changed();
-                Some(ChangeOutcome::FileDialogsPending { kde_apps })
+                Some(ChangeOutcome::FileDialogsPending(after_login))
             }
             Err(error) => Some(ChangeOutcome::FileDialogsFailed(error.to_string())),
         }

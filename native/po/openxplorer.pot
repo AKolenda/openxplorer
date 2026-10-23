@@ -1045,6 +1045,14 @@ msgid "Requested associations updated. For other apps' Open and Save dialogs, cl
 msgstr ""
 
 #: crates/ox-app/src/integration/changes.rs
+msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in; GTK 3 and KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
+msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in; GTK 3 apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/changes.rs
 msgid "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log out and back in; KDE apps follow after you log out and back in."
 msgstr ""
 
@@ -1080,6 +1088,87 @@ msgstr ""
 
 #: crates/ox-app/src/integration/custom_command.rs
 msgid "Type a command to run."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Click Enable for GTK 3 apps too."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "GTK 3 apps do too."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "GTK 3 apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "GTK 3 apps keep GTK's dialog: ~/.config/environment.d/60-openxplorer-file-dialogs.conf is not OpenXplorer's, so it was left alone."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "KDE apps do too."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "KDE apps keep KDE's dialog: ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh is not OpenXplorer's, so it was left alone."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs are back to the desktop's. Click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs were not using OpenXplorer."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 and KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; KDE apps follow after you log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their file dialogs here after Apply now or the next login."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: available in the installed package, not the Flatpak."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: the desktop's ({backend})."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Open and Save dialogs: the desktop's."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "Removed OpenXplorer's line from your portal settings and kept your other edits. Click Apply now, or log out and back in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "The desktop portal is not running as a service that can be restarted. The choice applies the next time you log in."
+msgstr ""
+
+#: crates/ox-app/src/integration/file_dialog_service.rs
+msgid "The desktop portal restarted. Open and Save dialogs follow the new choice."
 msgstr ""
 
 #: crates/ox-app/src/integration/launch_shortcut_service.rs
