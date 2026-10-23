@@ -1,5 +1,3 @@
-# Unreleased
-
 # 2.0.6 — 2026-10-13
 
 ## What's Changed
