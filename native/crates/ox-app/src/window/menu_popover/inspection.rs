@@ -10,25 +10,6 @@ use gtk::subclass::prelude::*;
 use super::{MenuPopover, MenuStyle};
 
 impl MenuPopover {
-    /// Rests the pointer on the row labelled `label`, or on no row with
-    /// `None`, as hovering does, for tests.
-    pub(crate) fn hover_row(&self, label: Option<&str>) {
-        let index = label.map(|label| self.row(label).index());
-        self.rest_on(index);
-    }
-
-    /// Rests the pointer on the middle of the row labelled `label` as an
-    /// open submenu that grabbed the pointer reports it: a position on this
-    /// menu's surface. For tests.
-    pub(crate) fn hover_row_through_submenu(&self, label: &str) {
-        let row = self.row(label);
-        let bounds = row.compute_bounds(self).expect("the row is in the menu");
-        let (left, top) = self.surface_transform();
-        let x = f64::from(bounds.x() + bounds.width() / 2.0) + left;
-        let y = f64::from(bounds.y() + bounds.height() / 2.0) + top;
-        self.rest_at_surface_point(x, y);
-    }
-
     /// The labels of the menu's items, drawn or not, for tests.
     pub(crate) fn items_labels(&self) -> Vec<String> {
         self.items().into_iter().map(|item| item.label).collect()
@@ -90,6 +71,31 @@ impl MenuPopover {
             .expect("the menu listens to the middle button");
         gesture.emit_by_name::<()>("pressed", &[&1_i32, &1.0_f64, &y]);
         gesture.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &y]);
+    }
+
+    /// Clicks the row labelled `label` with the primary button, through
+    /// the list's own click handling, for tests.
+    pub(crate) fn click_row(&self, label: &str) {
+        let row = self.row(label);
+        let list = self.list();
+        // Rows just put in place are laid out on the next frame.
+        crate::test_support::harness::wait_until("the row laid out", || {
+            let top = row.compute_point(list, &gtk::graphene::Point::new(0.0, 1.0));
+            #[expect(clippy::cast_possible_truncation, reason = "menu rows are small")]
+            let at = top.and_then(|top| list.row_at_y(top.y() as i32));
+            row.height() > 0 && at.as_ref() == Some(&row)
+        });
+        let point = row.compute_point(list, &gtk::graphene::Point::new(4.0, 4.0));
+        let (x, y) = point.map_or((0.0, 0.0), |point| (f64::from(point.x()), f64::from(point.y())));
+        let gesture = list
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+            .find(|gesture| gesture.button() == gtk::gdk::BUTTON_PRIMARY)
+            .expect("the list takes clicks");
+        gesture.emit_by_name::<()>("pressed", &[&1_i32, &x, &y]);
+        gesture.emit_by_name::<()>("released", &[&1_i32, &x, &y]);
     }
 
     /// The labels of the rows showing a check mark, for tests.
