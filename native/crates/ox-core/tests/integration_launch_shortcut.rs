@@ -41,6 +41,10 @@ struct Shortcuts {
     /// Runs before each `set_keys`, with its action, as another process
     /// could act at that moment.
     before_set_keys: RefCell<Option<Hook>>,
+    /// The `set_keys` calls made so far, and the first one that fails (with
+    /// every later one), as when KDE's service goes away partway.
+    set_keys_calls: std::cell::Cell<usize>,
+    fail_from_set_keys: std::cell::Cell<Option<usize>>,
 }
 
 /// What runs before a `set_keys`.
@@ -65,6 +69,8 @@ impl Shortcuts {
             ],
             failing: RefCell::new(Vec::new()),
             before_set_keys: RefCell::new(None),
+            set_keys_calls: std::cell::Cell::new(0),
+            fail_from_set_keys: std::cell::Cell::new(None),
         }
     }
 
@@ -135,6 +141,11 @@ impl GlobalShortcuts for Shortcuts {
     fn set_keys(&self, action: &ShortcutAction, keys: &[KeySequence]) -> Result<(), ShortcutError> {
         if let Some(Hook(hook)) = self.before_set_keys.borrow().as_ref() {
             hook(action);
+        }
+        let call = self.set_keys_calls.get();
+        self.set_keys_calls.set(call + 1);
+        if self.fail_from_set_keys.get().is_some_and(|first| call >= first) {
+            return Err(ShortcutError::Unreachable("the service went away".to_owned()));
         }
         if action.component == OURS {
             self.check("set_keys")?;
@@ -1008,4 +1019,134 @@ fn a_failed_give_back_to_the_earlier_launch_action_keeps_the_way_back_to_dolphin
     opt_in.enable().unwrap();
     assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
     assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+}
+
+/// The preview package has Super+E with only the record every package
+/// shared earlier, of Dolphin. The stable package takes Super+E and gives
+/// it back: that record is the preview's again, so it stays, and turning
+/// the preview off still gives Super+E to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn giving_super_e_back_to_the_preview_keeps_its_earlier_record() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    preview.enable().unwrap();
+    make_it_an_earlier_record(settings.path(), &format!("{PREVIEW}.json"));
+
+    stable.enable().unwrap();
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+
+    assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
+    assert!(
+        settings.path().join(EARLIER).exists(),
+        "the preview's record stays"
+    );
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+}
+
+/// Turning it off takes Super+E from `OpenXplorer`, then KDE's service
+/// goes away: giving it to Dolphin fails, and so does putting it back on
+/// `OpenXplorer`. Super+E is left free; the record of Dolphin is kept for
+/// the next turning on, so turning on and off again gives it to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn a_failed_turning_off_whose_undo_fails_keeps_the_way_back_to_dolphin() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let opt_in = launch_shortcut(&shortcuts, settings.path());
+    opt_in.enable().unwrap();
+    shortcuts
+        .fail_from_set_keys
+        .set(Some(shortcuts.set_keys_calls.get() + 1));
+
+    assert!(opt_in.restore().is_err());
+    assert_eq!(opt_in.status(), LaunchShortcutStatus::Free);
+
+    shortcuts.fail_from_set_keys.set(None);
+    opt_in.enable().unwrap();
+    assert_eq!(opt_in.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(
+        shortcuts.keys_of("org.kde.dolphin.desktop"),
+        [CTRL_ALT_D, SUPER_E]
+    );
+}
+
+/// The preview package has Super+E with only the record every package
+/// shared earlier, of Dolphin, and the stable package took it from the
+/// preview. Turning the stable package off fails, and so does putting
+/// Super+E back on it. The shared record is still the preview's way back
+/// to Dolphin: turning the stable package on and off again gives Super+E
+/// to the preview, and turning the preview off gives it to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn a_failed_turning_off_keeps_the_previews_earlier_record() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    preview.enable().unwrap();
+    make_it_an_earlier_record(settings.path(), &format!("{PREVIEW}.json"));
+    stable.enable().unwrap();
+    shortcuts
+        .fail_from_set_keys
+        .set(Some(shortcuts.set_keys_calls.get() + 1));
+
+    assert!(stable.restore().is_err());
+    assert_eq!(stable.status(), LaunchShortcutStatus::Free);
+
+    shortcuts.fail_from_set_keys.set(None);
+    stable.enable().unwrap();
+    assert!(
+        settings.path().join(EARLIER).exists(),
+        "the preview's record stays"
+    );
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of("org.kde.dolphin.desktop").contains(&SUPER_E));
+}
+
+/// The preview package took a free Super+E, and the stable package took
+/// it from the preview; the stable package's record, of the preview, is
+/// the one every package shared earlier. Turning the stable package off
+/// fails, and so does putting Super+E back on it, so the record is kept
+/// under the stable package's own name. The shared one is then only a
+/// copy: once the stable package gives Super+E to the preview, turning
+/// the preview off frees it instead of giving it back to the preview.
+///
+/// parity: INT-033
+#[test]
+fn a_failed_turning_off_forgets_the_shared_copy_of_its_record() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let dolphin = ShortcutAction::launch("org.kde.dolphin.desktop", "Dolphin");
+    shortcuts.set_keys(&dolphin, &[CTRL_ALT_D]).unwrap();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    preview.enable().unwrap();
+    stable.enable().unwrap();
+    make_it_an_earlier_record(settings.path(), &format!("{OURS}.json"));
+    shortcuts
+        .fail_from_set_keys
+        .set(Some(shortcuts.set_keys_calls.get() + 1));
+
+    assert!(stable.restore().is_err());
+    assert_eq!(stable.status(), LaunchShortcutStatus::Free);
+
+    shortcuts.fail_from_set_keys.set(None);
+    stable.enable().unwrap();
+    assert!(
+        !settings.path().join(EARLIER).exists(),
+        "the shared copy is forgotten"
+    );
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::Freed);
+    assert_eq!(preview.status(), LaunchShortcutStatus::Free);
 }
