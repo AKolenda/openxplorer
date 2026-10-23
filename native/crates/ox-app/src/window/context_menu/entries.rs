@@ -458,7 +458,7 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
 
 /// The menu of blank space in a folder, acting on the folder
 /// (`backgroundMenu`, CMD-011, CMD-012). `undo_label` and `redo_label` name what
-/// Undo and Redo would do, such as "Undo: Rename".
+/// Undo and Redo would do, such as "Undo Rename".
 pub(crate) fn background_menu(
     undo_label: &str,
     redo_label: &str,
@@ -1059,14 +1059,14 @@ mod tests {
             icon: None,
         };
         assert_eq!(
-            labels(&background_menu("Undo: Rename", "Redo", &[files])),
+            labels(&background_menu("Undo Rename", "Redo", &[files])),
             [
                 "View",
                 "Sort by",
                 "-",
                 "New…",
                 "Paste",
-                "Undo: Rename",
+                "Undo Rename",
                 "Redo",
                 "Refresh",
                 "Open in Terminal",

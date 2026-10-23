@@ -11,9 +11,9 @@
 //! ([`super::inline_rename`]); when the item's cell is not on screen, the
 //! Python app's Rename dialog asks instead. Either way the name is checked
 //! with the Python messages and the rename never overwrites. The renamed
-//! item is selected afterwards (the Python app cleared the selection), a
-//! toast with Undo says it is renamed (OPS-032), and Undo renames it back
-//! (OPS-029).
+//! item is selected afterwards (the Python app cleared the selection) and
+//! Undo renames it back (OPS-029); as in Windows Explorer, no message says
+//! it was renamed.
 
 use gtk::gio::prelude::*;
 use gtk::subclass::prelude::*;
@@ -192,8 +192,8 @@ impl BrowserWindow {
         Ok(())
     }
 
-    /// Remembers the rename for Undo, selects the item under its new
-    /// name, and says so in a toast with Undo (OPS-032).
+    /// Remembers the rename for Undo and selects the item under its new
+    /// name.
     pub(super) fn finish_rename(&self, renamed: RenamedItem) {
         self.remember_rename(&renamed);
         self.reload_selecting(vec![renamed.uri]);
@@ -209,14 +209,10 @@ impl BrowserWindow {
         self.reload_selecting(vec![next]);
     }
 
-    /// Records the rename for Undo and says so in a toast with Undo.
+    /// Records the rename for Undo.
     fn remember_rename(&self, renamed: &RenamedItem) {
         if let Some(record) = renamed.undo_record() {
             self.context().record_operation(record);
-            self.show_message_with_undo(&ox_core::i18n::format_message(
-                "Renamed to “{name}”.",
-                &[("name", &renamed.name)],
-            ));
         }
     }
 }

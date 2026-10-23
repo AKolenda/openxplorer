@@ -29,9 +29,7 @@ use ox_core::gio_node::GioNode;
 use ox_core::location::{parent_location, validate_name};
 use ox_core::transfer::{Cancellation, Node, TransferMode};
 
-use crate::archive_view::{
-    extraction_failure_text, extraction_success_text, ArchiveTarget, ExtractionChoice, EXTRACTION_STOPPED,
-};
+use crate::archive_view::{extraction_failure_text, ArchiveTarget, ExtractionChoice, EXTRACTION_STOPPED};
 
 use super::file_ops::IncomingItems;
 use super::session::TabId;
@@ -134,7 +132,7 @@ impl BrowserWindow {
                     Err(message) => Err(message),
                 };
                 match result {
-                    Ok(Some((shown, text))) => window.conclude_extraction(&shown, &choice, &text, origin),
+                    Ok(Some(shown)) => window.conclude_extraction(&shown, &choice, origin),
                     // Windows Explorer says nothing after Cancel.
                     Ok(None) => {}
                     Err(text) => {
@@ -146,12 +144,12 @@ impl BrowserWindow {
     }
 
     /// Creates the chosen folder and extracts into it. Returns the folder
-    /// to show and the message, or `None` when the user cancelled.
+    /// to show, or `None` when the user cancelled.
     async fn extract_into_new_folder(
         &self,
         archive: &ArchiveTarget,
         choice: &ExtractionChoice,
-    ) -> Result<Option<(String, String)>, String> {
+    ) -> Result<Option<String>, String> {
         let target = &choice.target_uri;
         let parent =
             parent_location(target).ok_or_else(|| ox_core::i18n::gettext_static(NOT_A_FOLDER).to_owned())?;
@@ -176,19 +174,17 @@ impl BrowserWindow {
         let lifted = gio::spawn_blocking(move || lift_same_named_folder(extracted))
             .await
             .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
-        Ok(Some((lifted.uri.clone(), extraction_success_text(&lifted))))
+        Ok(Some(lifted.uri))
     }
 
     /// Extracts into a private folder inside the chosen one, then moves
     /// the items in with the name-conflict question. Returns the folder
-    /// to show and the message, or `None` when the user cancelled. The
-    /// message counts the extracted files only when every top-level item
-    /// was moved in; otherwise it says how many were.
+    /// to show, or `None` when the user cancelled.
     async fn extract_into_existing_folder(
         &self,
         archive: &ArchiveTarget,
         choice: &ExtractionChoice,
-    ) -> Result<Option<(String, String)>, String> {
+    ) -> Result<Option<String>, String> {
         let target = choice.target_uri.clone();
         let private = private_extraction_name().map_err(|error| error.to_string())?;
         let request = ExtractionRequest {
@@ -216,29 +212,17 @@ impl BrowserWindow {
                 return Err(error.to_string());
             }
         };
-        let offered = uris.len();
-        let added = if uris.is_empty() {
-            Some(0)
-        } else {
-            self.transfer_without_undo(IncomingItems {
-                mode: TransferMode::Move,
-                uris,
-                destination_folder: target.clone(),
-            })
-            .await
-            .filter(|outcome| !outcome.result.cancelled)
-            .map(|outcome| outcome.result.done.len())
-        };
+        let moved = uris.is_empty()
+            || self
+                .transfer_without_undo(IncomingItems {
+                    mode: TransferMode::Move,
+                    uris,
+                    destination_folder: target.clone(),
+                })
+                .await
+                .is_some_and(|outcome| !outcome.result.cancelled);
         self.discard_private_folder(staging).await;
-        let name = last_name(&target).unwrap_or_else(|| target.clone());
-        Ok(added.map(|added| {
-            let text = if added == offered {
-                extraction_success_text(&ExtractedFolder { name, ..extracted })
-            } else {
-                partly_added_text(added, offered, &name)
-            };
-            (target, text)
-        }))
+        Ok(moved.then_some(target))
     }
 
     /// Removes the private folder of an extraction into an existing
@@ -280,8 +264,9 @@ impl BrowserWindow {
     }
 
     /// Shows `shown` (the extracted folder), or lists the chosen folder's
-    /// parent again, then the message (ARC-011).
-    fn conclude_extraction(&self, shown: &str, choice: &ExtractionChoice, text: &str, origin: Option<TabId>) {
+    /// parent again (ARC-011). Success is not mentioned, as in Windows
+    /// Explorer.
+    fn conclude_extraction(&self, shown: &str, choice: &ExtractionChoice, origin: Option<TabId>) {
         if choice.show_result && self.current_uri().as_deref() == Some(shown) {
             // Already in front: listing it again shows the new items.
             self.reload_tabs_showing(shown);
@@ -300,21 +285,5 @@ impl BrowserWindow {
             self.reload_tabs_showing(&listed);
             self.reload_tabs_showing(shown);
         }
-        // Listing a folder hides the toast, so it comes last.
-        self.show_message(text);
     }
-}
-
-/// "Added 40 of 63 items to Downloads.": an extraction into the existing
-/// folder `name` whose move skipped, failed or was stopped for some of the
-/// archive's top-level items.
-fn partly_added_text(added: usize, offered: usize, name: &str) -> String {
-    ox_core::i18n::format_message(
-        "Added {added} of {offered} items to {name}.",
-        &[
-            ("added", &added.to_string()),
-            ("offered", &offered.to_string()),
-            ("name", name),
-        ],
-    )
 }

@@ -413,9 +413,9 @@ impl BrowserWindow {
         Err(ArchiveError::ArchiveExists)
     }
 
-    /// Lists `folder` again, then says how an operation ended: `outcome`'s
-    /// message as a toast, or its failure in the dialog titled
-    /// `stopped_title`. Listing a folder hides the toast, so it comes last.
+    /// Lists `folder` again, then shows a failed operation's message in the
+    /// dialog titled `stopped_title`; success is not mentioned, as in
+    /// Windows Explorer.
     pub(super) fn report_in_folder(
         &self,
         folder: &str,
@@ -423,9 +423,8 @@ impl BrowserWindow {
         stopped_title: &str,
     ) {
         self.reload_tabs_showing(folder);
-        match outcome {
-            Ok(message) => self.show_message(&message),
-            Err(failure) => self.show_result_dialog(stopped_title, &failure),
+        if let Err(failure) = outcome {
+            self.show_result_dialog(stopped_title, &failure);
         }
     }
 

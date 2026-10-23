@@ -96,7 +96,7 @@ fn a_rename_moves_the_item_within_its_folder_and_can_be_undone() {
 
     assert_eq!(renamed.uri, file_uri(&temp.path().join("final.txt")));
     assert_eq!(renamed.original_uri, file_uri(&draft));
-    assert_eq!(record.undo_label(), "Undo: Rename");
+    assert_eq!(record.undo_label(), "Undo Rename");
     assert!(undone.errors.is_empty(), "{:?}", undone.errors);
     assert_eq!(fs::read(&draft).unwrap(), b"text");
     assert!(!temp.path().join("final.txt").exists());

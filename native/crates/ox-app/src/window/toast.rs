@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The toast: a short message at the bottom centre of the window, with an
-//! optional action button such as Undo (OPS-032).
+//! The toast: a short message at the bottom centre of the window.
 //!
 //! Ports `toast()` in `v2.0.0:desktop/ui/app.js` and `.toast` in
 //! `v2.0.0:desktop/ui/style.css`. A message stays four seconds; a new one replaces
 //! it and starts the time again. Screen readers announce it as a status.
-//! The time stops while the pointer rests on the toast or its button has
-//! keyboard focus, so the button can be reached (WCAG 2.2.1), and starts
-//! again when both leave.
+//! The time stops while the pointer rests on the toast or its message has
+//! keyboard focus, so a long message can be read and copied (WCAG 2.2.1),
+//! and starts again when both leave.
 //!
-//! [`Toast`] is a widget subclass around its message and button, so the
+//! [`Toast`] is a widget subclass around its message, so the
 //! timer that hides it lives in the widget and ends with it.
 
 use std::time::Duration;
@@ -17,8 +16,6 @@ use std::time::Duration;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-
-use crate::window::window_action::WindowAction;
 
 /// How long a toast stays (`setTimeout(..., 4000)` in `toast()`).
 const TOAST_DURATION: Duration = Duration::from_secs(4);
@@ -36,12 +33,10 @@ mod imp {
     /// Private state of [`super::Toast`].
     #[derive(Debug, Default)]
     pub(crate) struct Toast {
-        /// The rounded box of the message and the button.
+        /// The rounded box of the message.
         pub(super) surface: OnceCell<gtk::Box>,
         /// The message, built by `constructed`.
         pub(super) label: OnceCell<gtk::Label>,
-        /// The action button, hidden while the message has none.
-        pub(super) action: OnceCell<gtk::Button>,
         /// Tells whether the pointer rests on the toast.
         pub(super) motion: OnceCell<gtk::EventControllerMotion>,
         /// Tells whether the keyboard focus is inside the toast.
@@ -76,13 +71,7 @@ mod imp {
                 .css_classes(["toast"])
                 .build();
             let label = super::message_label();
-            let action = gtk::Button::builder()
-                .css_classes(["toast-action"])
-                .valign(gtk::Align::Center)
-                .visible(false)
-                .build();
             surface.append(&label);
-            surface.append(&action);
             surface.set_parent(&*toast);
             let motion = gtk::EventControllerMotion::new();
             motion.connect_enter(glib::clone!(
@@ -112,7 +101,6 @@ mod imp {
                 .set(surface)
                 .expect("constructed runs once per object");
             self.label.set(label).expect("constructed runs once per object");
-            self.action.set(action).expect("constructed runs once per object");
             self.motion.set(motion).expect("constructed runs once per object");
             self.focus.set(focus).expect("constructed runs once per object");
         }
@@ -147,40 +135,17 @@ impl Toast {
         self.imp().label.get().expect("constructed builds the label")
     }
 
-    fn action_button(&self) -> &gtk::Button {
-        self.imp().action.get().expect("constructed builds the button")
-    }
-
     /// Shows `message` for [`TOAST_DURATION`], replacing the message shown
     /// now and starting the time again.
     pub(crate) fn show(&self, message: &str) {
-        self.withdraw_action();
-        self.show_text(message);
-    }
-
-    /// Shows `message` with a button labelled `label` that runs `action`,
-    /// such as Undo after an operation (OPS-032). The button follows the
-    /// action: it is disabled while the action is.
-    pub(crate) fn show_with_action(&self, message: &str, label: &str, action: WindowAction) {
-        let button = self.action_button();
-        button.set_label(label);
-        action.assign_to(button);
-        button.set_visible(true);
-        self.show_text(message);
-    }
-
-    /// Takes the action button away and keeps the message, as when the
-    /// step it would undo is no longer the newest.
-    pub(crate) fn withdraw_action(&self) {
-        let button = self.action_button();
-        button.set_visible(false);
-        button.set_action_name(None);
+        self.label().set_text(message);
+        self.set_visible(true);
+        self.start_hide_timer();
     }
 
     /// Hides the toast at once, as moving to another folder or tab does.
     pub(crate) fn hide(&self) {
         self.cancel_hide_timer();
-        self.withdraw_action();
         self.label().set_text("");
         self.set_visible(false);
     }
@@ -189,26 +154,6 @@ impl Toast {
     #[cfg(test)]
     pub(crate) fn text(&self) -> glib::GString {
         self.label().text()
-    }
-
-    /// The action button's label while it shows, for tests.
-    #[cfg(test)]
-    pub(crate) fn action_label(&self) -> Option<glib::GString> {
-        let button = self.action_button();
-        button.is_visible().then(|| button.label()).flatten()
-    }
-
-    /// Clicks the action button, for tests.
-    #[cfg(test)]
-    pub(crate) fn press_action(&self) {
-        self.action_button().emit_clicked();
-    }
-
-    /// Shows `message` and starts the time.
-    fn show_text(&self, message: &str) {
-        self.label().set_text(message);
-        self.set_visible(true);
-        self.start_hide_timer();
     }
 
     /// Starts the time after which the toast hides, from the beginning.
@@ -223,7 +168,6 @@ impl Toast {
                     // The source ends with this call; nothing may remove it again.
                     toast.imp().hide_timer.take();
                     toast.set_visible(false);
-                    toast.withdraw_action();
                 }
             ),
         );
@@ -294,18 +238,5 @@ mod tests {
         toast.hide();
         assert!(!toast.is_visible());
         assert_eq!(toast.text(), "");
-    }
-
-    /// parity: OPS-032
-    #[gtk::test]
-    fn an_action_shows_with_its_message_and_a_plain_message_drops_it() {
-        let toast = Toast::new();
-
-        toast.show_with_action("1 item(s) sent to Trash.", "Undo", WindowAction::Undo);
-        let with_action = toast.action_label();
-        toast.show("Path copied. Sharing permissions are unchanged.");
-
-        assert_eq!(with_action.as_deref(), Some("Undo"));
-        assert_eq!(toast.action_label(), None);
     }
 }

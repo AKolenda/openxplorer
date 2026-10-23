@@ -2,7 +2,8 @@
 //! What the user is told when an operation ends (OPS-023).
 //!
 //! Ports the end of `runOperation` in `v2.0.0:desktop/ui/app.js`: complete success
-//! is a short toast; errors or skipped items open the "Operation result"
+//! is a short message, which the window does not show (Windows Explorer
+//! says nothing); errors or skipped items open the "Operation result"
 //! dialog listing each; a request refused before it started opens
 //! "Operation stopped" with the refusal. Unlike `app.js`, a cancelled
 //! operation says nothing, as in Windows Explorer, unless a failure was
@@ -22,7 +23,8 @@ pub const STOPPED_TITLE: &str = crate::i18n::message_id("Operation stopped");
 /// How the end of an operation is reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OperationSummary {
-    /// Every item succeeded: a toast such as `3 item(s) copied.`
+    /// Every item succeeded: a message such as `3 item(s) copied.`, which
+    /// the window does not show, as in Windows Explorer.
     Toast(String),
     /// Something went wrong or was skipped: the [`RESULT_TITLE`] dialog
     /// with one line per fact.

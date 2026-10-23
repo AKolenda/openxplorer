@@ -345,12 +345,10 @@ fn a_ctrl_shift_drop_creates_links_to_the_items() {
         std::fs::read_link(&link).expect("a symbolic link"),
         source.path("Notes 2.txt")
     );
-    wait_until("the report", || {
-        test.window.shown_message() == "1 item(s) linked."
-    });
     wait_until("the new link to be selected", || {
         test.selected_names() == ["Notes 2.txt"]
     });
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
 /// parity: DND-018
