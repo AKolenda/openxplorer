@@ -4131,7 +4131,7 @@ native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (the_recycle
 id = "VIEW-063"
 area = "VIEW"
 title = "Keyboard shortcut toggles the Details pane"
-behaviour = "Alt+Shift+P (Explorer's Details pane key) toggles the Details pane exactly like the command-bar 'Details' button and View › 'Details pane' (VIEW-027), saves the preference and leaves keyboard focus where it was."
+behaviour = "Alt+Shift+P (Explorer's Details pane key) toggles the Details pane exactly like the command-bar 'Details' button and View › 'Details pane' (VIEW-027), saves the preference and leaves keyboard focus where it was. Alt+P (Explorer's Preview pane key) does the same: there is no separate preview pane, as the Details pane previews the selection too."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -4144,7 +4144,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "show_information_panel: F11"
 native = "done"
-native_note = "Alt+Shift+P runs win.details-pane like the toggle and the menu item, which saves it and leaves focus where it was (native/crates/ox-app/src/window/actions.rs; native/crates/ox-app/src/window/tests/views.rs, a_chosen_view_starts_at_the_top_and_has_explorers_keys). The View menu shows the key."
+native_note = "Alt+Shift+P and Alt+P run win.details-pane like the toggle and the menu item, which saves it and leaves focus where it was (native/crates/ox-app/src/window/actions.rs; native/crates/ox-app/src/window/tests/views.rs, a_chosen_view_starts_at_the_top_and_has_explorers_keys; native/crates/ox-app/src/window/tests/explorer_keys.rs, alt_p_toggles_the_details_pane_as_alt_shift_p_does). The View menu shows Alt+Shift+P."
 
 [[feature]]
 id = "VIEW-064"
@@ -6552,6 +6552,22 @@ bridge = []
 gnome = "GtkShortcutController and gtk_application_set_accels_for_action match keyvals across keyboard layout groups"
 native = "done"
 native_note = "Every letter shortcut (Ctrl+A, C, X, V, F, H, L, N, R, T, W, Z, Ctrl+Shift+N, Alt+D) is a GtkShortcutTrigger or an application accelerator; no key handler compares typed letters. GTK matches those triggers with gdk_key_event_matches, which also accepts the same physical key in another layout group, so they fire with a Cyrillic, Greek, Hebrew or Arabic layout active; type-ahead reads the input method's committed text, so it still uses the typed character. Test: native/crates/ox-app/src/window/tests/input.rs (letter_shortcuts_are_layout_independent_gtk_triggers)."
+
+[[feature]]
+id = "CMD-036"
+area = "CMD"
+title = "Windows Explorer's Ctrl+E, Ctrl+D and F11"
+behaviour = "As in Windows 11 File Explorer: Ctrl+E moves keyboard focus to the search box and selects its text, exactly as Ctrl+F does, from any focus (the Settings tab's search on Settings). Ctrl+D moves the selection to the Recycle Bin exactly as Delete does: the same confirmation settings, the same permanent delete after asking where a location has no Recycle Bin, the same Undo step; like Delete it does nothing in a text field (the search box, the address being typed, a name being renamed), on a breadcrumb or on the Settings page, where the field keeps the key. F11 shows the window full screen and, pressed again, gives it back the size and maximized state it had; full screen is never saved as the next window's size, and a file dialog (picker) keeps its size. F3 stays Split view (VIEW-059). The keyboard shortcuts window (CMD-032) lists all three and Alt+P (VIEW-063)."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "docs/interface.md (Templates, shortcuts and help)",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "Ctrl+E is a second application accelerator of win.search and F11 the accelerator of win.full-screen (native/crates/ox-app/src/window/actions.rs, WINDOW_ACCELERATORS), so both work from text fields as Ctrl+F does; Ctrl+D is a second trigger of win.trash in the bubble-phase file keys (native/crates/ox-app/src/window/file_ops/shortcuts.rs), which a text field, a crumb, the splitter and the Settings page keep. native/crates/ox-app/src/window/full_screen.rs toggles gtk_window_fullscreen and follows the fullscreened property when the desktop ends full screen itself; window_size.rs saves nothing while full screen, as GTK calls a full-screen window not maximized. The picker turns win.full-screen off (DISABLED_ACTIONS). No GTK, KDE Plasma or app default binds Ctrl+E, Ctrl+D, F11 or Alt+P. Tests: native/crates/ox-app/src/window/tests/explorer_keys.rs; picker.rs (a_dialog_does_not_go_full_screen); shortcuts_window.rs (the_shortcuts_window_lists_explorers_further_keys). The private Xvfb display has no window manager, so the tests check what F11 asks for, not the desktop's full screen."
 
 [[feature]]
 id = "OPS-001"

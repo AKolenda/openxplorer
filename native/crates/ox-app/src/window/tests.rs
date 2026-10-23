@@ -28,6 +28,7 @@ pub(super) mod empty_folder;
 mod empty_folder_look;
 mod environment;
 mod expand_arrows;
+mod explorer_keys;
 mod file_operations;
 mod file_ops_captures;
 pub(super) mod file_ops_support;
