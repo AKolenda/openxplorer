@@ -61,15 +61,13 @@ impl BrowserWindow {
         copied_path(&selected, folder_uri.as_deref(), &locations)
     }
 
-    /// Copies the path and says so, as app.js does.
+    /// Copies the path without a message, as Windows Explorer's Copy as
+    /// path.
     pub(super) fn copy_path(&self) {
         match self.path_to_copy() {
             CopiedPath::NoFolder => self.show_message(&ox_core::i18n::gettext("Open a folder first.")),
             CopiedPath::Address(address) => {
                 self.clipboard().set_text(&address);
-                self.show_message(&ox_core::i18n::gettext(
-                    "Path copied. Sharing permissions are unchanged.",
-                ));
             }
         }
     }

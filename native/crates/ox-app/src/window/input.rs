@@ -493,7 +493,7 @@ impl BrowserWindow {
             view,
             move |gesture, x, y| {
                 // A sign-in or another dialog in front takes the clicks.
-                if window.shows_dialog() || window.dialog_layer().shown().is_some() {
+                if window.dialog_in_front() {
                     return;
                 }
                 let Some(uri) = window.folder_at(&view, x, y) else {

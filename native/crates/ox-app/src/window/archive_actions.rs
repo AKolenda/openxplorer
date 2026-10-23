@@ -25,7 +25,6 @@ use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;
 use ox_core::integration::Activation;
 use ox_core::location::{is_archive_location, is_smb_server, parent_location};
-use ox_core::ops::OperationSummary;
 use ox_core::transfer::{Cancellation, Node, NodeFactory};
 use ox_core::versions::snapshot_location;
 
@@ -38,7 +37,6 @@ use crate::archive_view::{
 use crate::locations::Page;
 
 use super::actions::plain_action;
-use super::background_notice::Destination;
 use super::transfer_panel::TransferKind;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -425,11 +423,6 @@ impl BrowserWindow {
         stopped_title: &str,
     ) {
         self.reload_tabs_showing(folder);
-        let summary = match &outcome {
-            Ok(message) => OperationSummary::Toast(message.clone()),
-            Err(failure) => OperationSummary::Report(failure.clone()),
-        };
-        self.notify_if_in_background(&summary, Destination::folder(folder));
         match outcome {
             Ok(message) => self.show_message(&message),
             Err(failure) => self.show_result_dialog(stopped_title, &failure),

@@ -105,7 +105,10 @@ impl BrowserWindow {
             destination_uri: file_uri(&root),
             folder_name: folder_name.clone(),
         };
-        let extracted = match self.run_extraction(request, Some(&members)).await {
+        let extracted = match self
+            .run_extraction(request, |extractor| extractor.with_selection(&members))
+            .await
+        {
             Err(error) if error.is_cancelled() => return Ok(None),
             extracted => extracted.map_err(|error| crate::archive_view::extraction_failure_text(&error))?,
         };

@@ -11,9 +11,11 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{
-    dialog_over, is_renaming_in_place, name_editor, open_dialog, select_names, text_field, wait_for_no_dialog,
+    dialog_over, is_renaming_in_place, name_editor, open_dialog, press_shortcut, select_names, text_field,
+    wait_for_no_dialog,
 };
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
+use crate::window::session::PaneSide;
 use crate::window::slow_click_rename::NamePress;
 
 /// The name the in-place field of `test`'s view shows, if one is open.
@@ -64,6 +66,148 @@ fn a_slow_second_click_on_the_selected_name_renames_it_in_place() {
 
     assert_eq!(after_double_click, None, "a double-click does not rename");
     assert_eq!(edited_name(&test).as_deref(), Some("Notes 2.txt"));
+}
+
+/// The names the in-place field showed while `test`'s window ran for
+/// `duration`.
+fn names_edited_during(test: &TestWindow, duration: Duration) -> Vec<String> {
+    let mut edited = Vec::new();
+    let deadline = std::time::Instant::now() + duration;
+    while std::time::Instant::now() < deadline {
+        wait_for(Duration::from_millis(20));
+        if let Some(name) = edited_name(test) {
+            edited.push(name);
+        }
+    }
+    edited
+}
+
+/// A slow second click schedules a rename of the item clicked, never of
+/// whatever item comes to stand at its position before the rename
+/// starts, as when the clicked item is deleted and the next one is
+/// selected in its place.
+///
+/// parity: OPS-011
+#[gtk::test]
+fn a_slow_click_rename_never_starts_on_another_item() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    select_names(&test, &["Notes 2.txt"]);
+    let model = test.window.folder_model();
+    let position = model.first_selected().expect("Notes 2.txt is selected");
+
+    test.window.name_pressed(NamePress {
+        on_name_of: Some(position),
+        clicks: 1,
+        modifiers: gdk::ModifierType::empty(),
+    });
+    test.activate("direction", Some("descending"));
+    model.select_only(position);
+    let now_there = model.name_at(position).expect("an item at the position");
+
+    assert_ne!(now_there, "Notes 2.txt", "another item stands there now");
+    assert_eq!(
+        names_edited_during(&test, Duration::from_millis(1200)),
+        Vec::<String>::new()
+    );
+}
+
+/// A command run before the rename starts cancels it, as Delete, Ctrl+D
+/// or a refresh does in Windows File Explorer: nothing is renamed in
+/// place, also when the item stays the only one selected.
+///
+/// parity: OPS-011
+#[gtk::test]
+fn a_command_cancels_a_pending_slow_click_rename() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    for command in ["refresh", "delete-permanently"] {
+        select_names(&test, &["Notes 2.txt"]);
+        test.window.name_pressed(NamePress {
+            on_name_of: test.window.folder_model().first_selected(),
+            clicks: 1,
+            modifiers: gdk::ModifierType::empty(),
+        });
+        test.activate(command, None);
+        let edited = names_edited_during(&test, Duration::from_millis(1200));
+        if let Some(question) = dialog_over(&test) {
+            question.press("Cancel");
+            wait_for_no_dialog(&test);
+        }
+
+        assert_eq!(edited, Vec::<String>::new(), "{command} cancels the rename");
+    }
+    assert!(fixture.path("Notes 2.txt").is_file());
+}
+
+/// Every file key pressed before the rename starts cancels it, as in
+/// Windows File Explorer, also Ctrl+C, Ctrl+X and Ctrl+V, which run their
+/// commands directly rather than as window actions.
+///
+/// parity: OPS-011
+#[gtk::test]
+fn a_file_key_cancels_a_pending_slow_click_rename() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    let control = gdk::ModifierType::CONTROL_MASK;
+    for key in [gdk::Key::c, gdk::Key::x, gdk::Key::v] {
+        select_names(&test, &["Notes 2.txt"]);
+        test.window.name_pressed(NamePress {
+            on_name_of: test.window.folder_model().first_selected(),
+            clicks: 1,
+            modifiers: gdk::ModifierType::empty(),
+        });
+        press_shortcut(&test, key, control);
+        let edited = names_edited_during(&test, Duration::from_millis(1200));
+        if let Some(question) = dialog_over(&test) {
+            question.press("Cancel");
+            wait_for_no_dialog(&test);
+        }
+
+        assert_eq!(edited, Vec::<String>::new(), "Ctrl+{key:?} cancels the rename");
+    }
+}
+
+/// A rename a slow click scheduled is for the pane clicked: making the
+/// other pane of a split tab active cancels it, also when that pane
+/// shows the same folder with the same item selected.
+///
+/// parity: OPS-011
+#[gtk::test]
+fn activating_the_other_pane_cancels_a_pending_slow_click_rename() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("split-view", None);
+    test.wait_for_listing("the folder in the new pane");
+    select_names(&test, &["Notes 2.txt"]);
+    test.window.activate_pane(PaneSide::Start);
+    select_names(&test, &["Notes 2.txt"]);
+
+    test.window.name_pressed(NamePress {
+        on_name_of: test.window.folder_model().first_selected(),
+        clicks: 1,
+        modifiers: gdk::ModifierType::empty(),
+    });
+    test.window.activate_pane(PaneSide::End);
+    let selected_beside = test.selected_names();
+
+    assert_eq!(
+        selected_beside,
+        ["Notes 2.txt"],
+        "the same item is selected there"
+    );
+    assert_eq!(
+        names_edited_during(&test, Duration::from_millis(1200)),
+        Vec::<String>::new()
+    );
+    assert!(
+        descendants::<gtk::Entry>(&test.window.pane_on(PaneSide::Start).view_widget())
+            .iter()
+            .all(|field| !field.has_css_class("rename-field"))
+    );
 }
 
 /// parity: OPS-012

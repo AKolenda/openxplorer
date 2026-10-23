@@ -265,10 +265,6 @@ msgstr ""
 msgid "Not updated live"
 msgstr ""
 
-#: crates/ox-app/resources/ui/status-bar.ui
-msgid "Read-only drive"
-msgstr ""
-
 #: crates/ox-app/resources/ui/tab-strip.ui
 msgid "Folder tabs"
 msgstr ""
@@ -1325,10 +1321,6 @@ msgid "Calculate {label}"
 msgstr ""
 
 #: crates/ox-app/src/properties/checksums_panel.rs
-msgid "Checksum copied."
-msgstr ""
-
-#: crates/ox-app/src/properties/checksums_panel.rs
 msgid "Checksums do not match."
 msgstr ""
 
@@ -1363,14 +1355,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
 msgid "Choose an icon"
-msgstr ""
-
-#: crates/ox-app/src/properties/custom_icon.rs
-msgid "Default icon restored."
-msgstr ""
-
-#: crates/ox-app/src/properties/custom_icon.rs
-msgid "Icon changed."
 msgstr ""
 
 #: crates/ox-app/src/properties/custom_icon.rs
@@ -1451,10 +1435,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs
 msgid "Full path"
-msgstr ""
-
-#: crates/ox-app/src/properties/general_panel.rs
-msgid "Full path copied."
 msgstr ""
 
 #: crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/properties/permissions_editor.rs crates/ox-app/src/properties/selection_view.rs
@@ -1671,10 +1651,6 @@ msgid "Set up network mount (SMB)"
 msgstr ""
 
 #: crates/ox-app/src/properties/mount_assistant.rs
-msgid "Setup command copied. Review it before running."
-msgstr ""
-
-#: crates/ox-app/src/properties/mount_assistant.rs
 msgid "The helper creates two systemd units and a root-only plaintext SMB credential file. It uses SMB 3.0, prompts before changes, does not edit fstab, and refuses to overwrite existing configuration. This system mount is separate from your GVfs/keyring session; “Sign out of server” does not remove it."
 msgstr ""
 
@@ -1704,10 +1680,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/permissions_editor.rs
 msgid "Others"
-msgstr ""
-
-#: crates/ox-app/src/properties/permissions_editor.rs
-msgid "Permissions changed."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -1871,7 +1843,7 @@ msgstr ""
 msgid "Read-only in OpenXplorer · Restore a copy to edit"
 msgstr ""
 
-#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/properties/snapshot_source.rs crates/ox-app/src/settings_page/section.rs crates/ox-app/src/window/menu_popover.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Back"
 msgstr ""
 
@@ -4033,10 +4005,6 @@ msgstr ""
 msgid "Open a folder first."
 msgstr ""
 
-#: crates/ox-app/src/window/copy_path.rs
-msgid "Path copied. Sharing permissions are unchanged."
-msgstr ""
-
 #: crates/ox-app/src/window/crumb_menus.rs
 msgid "Show subfolders"
 msgstr ""
@@ -4423,11 +4391,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/clipboard.rs
 msgid "The desktop clipboard could not be claimed."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/clipboard.rs
-msgid "{count} item(s) {verb} — ready to paste in another window."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5002,19 +4965,11 @@ msgid "{protocol_name} · Discovered"
 msgstr ""
 
 #: crates/ox-app/src/window/network_sign_out.rs
-msgid "Disconnected. Saved credentials are retained."
-msgstr ""
-
-#: crates/ox-app/src/window/network_sign_out.rs
 msgid "Finish the current file operation before signing out."
 msgstr ""
 
 #: crates/ox-app/src/window/network_sign_out.rs
 msgid "Sign-out did not fully finish"
-msgstr ""
-
-#: crates/ox-app/src/window/network_sign_out.rs
-msgid "Signed out. Matching saved credentials were cleared or none were present."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5150,15 +5105,6 @@ msgstr ""
 msgid "Text size changed for this window, but could not be saved: {error}"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/preferences.rs
-msgid "Text size: {percent}%"
-msgstr ""
-
-#: crates/ox-app/src/window/quick_access.rs
-msgid "Already pinned to Quick access."
-msgstr ""
-
 #: crates/ox-app/src/window/quick_access.rs
 msgid "Could not pin: the folders could not be checked."
 msgstr ""
@@ -5173,16 +5119,7 @@ msgid "Only folders and network shares can be pinned. Select folders only."
 msgstr ""
 
 #: crates/ox-app/src/window/quick_access.rs
-msgid "Pinned to Quick access. No files were moved."
-msgstr ""
-
-#: crates/ox-app/src/window/quick_access.rs
 msgid "Unpinned. The folder was not deleted."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/quick_access.rs
-msgid "{count} folders pinned. No files were moved."
 msgstr ""
 
 #: crates/ox-app/src/window/relocated_files.rs
@@ -5973,6 +5910,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/archive/error.rs
 msgid "{cause}\nIncomplete extraction remains at {staging_uri}. Inspect it before removing it. {cleanup}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/archive/error.rs
+msgid "{cause}\nThe incomplete archive remains at {staging_uri}. Inspect it before removing it. {cleanup}"
 msgstr ""
 
 #: crates/ox-core/src/archive/zip/error.rs
@@ -7138,6 +7080,11 @@ msgstr ""
 msgid "This template is unavailable, too large, or not a regular template file."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/new_from_template.rs
+msgid "{cause}\nThe incomplete file remains at {uri}. Inspect it before removing it. {cleanup}"
+msgstr ""
+
 #: crates/ox-core/src/ops/progress.rs
 msgid "Deleting items…"
 msgstr ""
@@ -7404,26 +7351,6 @@ msgstr ""
 
 #: crates/ox-core/src/private_storage.rs
 msgid "The settings file is not valid UTF-8 text."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "The drive is read-only, so nothing on it can be changed. If it is a Windows drive, Windows is hibernated or used Fast startup: shut Windows down fully, then mount the drive again."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "This drive is mounted read-only, so files on it cannot be created, changed or deleted."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "This drive is read-only."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "Windows is hibernated or used Fast startup, so this drive is read-only."
-msgstr ""
-
-#: crates/ox-core/src/read_only.rs
-msgid "Windows was hibernated or shut down with Fast startup, so Linux mounted this drive read-only to keep its files safe. Start Windows and shut it down fully (hold Shift while choosing Shut down, or turn off Fast startup), then mount the drive again."
 msgstr ""
 
 #: crates/ox-core/src/search/error.rs
@@ -8116,6 +8043,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "First packaged native preview of the GTK 4 interface, for trying it beside the current OpenXplorer."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Make OpenXplorer default also sends other apps' Open and Save dialogs to OpenXplorer, and GTK 3 apps use them too after the next login. Format on a removable drive opens OpenXplorer's own Format dialog instead of GNOME Disks, and Enter in Extract all extracts. Deleting many files on a share asks the server about each file once instead of three times. A move between drives keeps the source files of a folder it skipped partway, Undo asks first when it cannot check a whole copy, signing out of a server forgets its passwords on every port, and the Recycle Bin and search results no longer show stale items."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

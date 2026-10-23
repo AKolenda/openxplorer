@@ -179,9 +179,6 @@ pub(crate) struct BrowserWindow {
     pub(super) service_actions: RefCell<Vec<ox_core::service_actions::ServiceAction>>,
     /// The drives and devices the volume monitor reported last.
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
-    /// The folder shown last whose drive is mounted read-only, and why
-    /// (DEV-015); see [`super::read_only_drive`].
-    pub(super) read_only_drive: RefCell<Option<(String, ox_core::read_only::ReadOnlyDrive)>>,
     /// The folder shown last when the user may not write to it, on a
     /// writable drive (CMD-011); see [`super::read_only_drive`].
     pub(super) unwritable_folder: RefCell<Option<String>>,

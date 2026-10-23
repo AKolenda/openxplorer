@@ -71,18 +71,6 @@ fn verified_pin(uri: &str, shown: &[Place]) -> Result<BookmarkRequest, EntryErro
     Ok(BookmarkRequest::new(target.uri, target.label))
 }
 
-/// The toast after `count` folders were pinned.
-fn pinned_message(count: usize) -> String {
-    if count == 1 {
-        ox_core::i18n::gettext("Pinned to Quick access. No files were moved.")
-    } else {
-        ox_core::i18n::format_message(
-            "{count} folders pinned. No files were moved.",
-            &[("count", &count.to_string())],
-        )
-    }
-}
-
 impl BrowserWindow {
     /// Pins the one selected folder to Quick access (`pinEntry`).
     pub(super) fn pin_selected(&self) {
@@ -125,11 +113,11 @@ impl BrowserWindow {
         self.pin(uri, label);
     }
 
-    /// Adds a Quick access pin, with the Python app's messages.
+    /// Adds a Quick access pin; as in Windows Explorer, only a failure
+    /// is shown, and a folder pinned already stays as it is.
     fn pin(&self, uri: String, label: String) {
         let quick_access = self.places().quick_access;
         if quick_access.iter().any(|place| same_location(&place.uri, &uri)) {
-            self.show_message(&ox_core::i18n::gettext("Already pinned to Quick access."));
             return;
         }
         if !self.start_pinning() {
@@ -150,15 +138,12 @@ impl BrowserWindow {
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |result: Result<(), SettingsError>| {
-                    let message = match result {
-                        Ok(()) => ox_core::i18n::gettext("Pinned to Quick access. No files were moved."),
-                        Err(error) => ox_core::i18n::format_message(
-                            "Could not pin: {error}",
-                            &[("error", &error.to_string())],
-                        ),
-                    };
-                    window.finish_pinning(&message);
+                move |result: Result<(), SettingsError>| match result {
+                    Ok(()) => window.end_pinning(),
+                    Err(error) => window.finish_pinning(&ox_core::i18n::format_message(
+                        "Could not pin: {error}",
+                        &[("error", &error.to_string())],
+                    )),
                 }
             ),
         );
@@ -212,7 +197,6 @@ impl BrowserWindow {
                 return;
             }
         };
-        let count = requests.len();
         let change: Change = Box::new(move |settings| {
             settings
                 .pin_many(&requests, before.as_deref(), Some(&shown_order))
@@ -223,15 +207,12 @@ impl BrowserWindow {
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |result: Result<(), SettingsError>| {
-                    let message = match result {
-                        Ok(()) => pinned_message(count),
-                        Err(error) => ox_core::i18n::format_message(
-                            "Could not pin: {error}",
-                            &[("error", &error.to_string())],
-                        ),
-                    };
-                    window.finish_pinning(&message);
+                move |result: Result<(), SettingsError>| match result {
+                    Ok(()) => window.end_pinning(),
+                    Err(error) => window.finish_pinning(&ox_core::i18n::format_message(
+                        "Could not pin: {error}",
+                        &[("error", &error.to_string())],
+                    )),
                 }
             ),
         );

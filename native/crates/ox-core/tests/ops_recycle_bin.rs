@@ -23,8 +23,8 @@ use std::time::{Duration, Instant};
 
 use ox_core::ops::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
-    restore_from_recycle_bin, run_transfer, summarize_restore, trashed_items_since, undo, OperationContext,
-    OperationSummary, RecycledItem, TransferRequest, UndoRecord, WriteProtection,
+    restore_from_recycle_bin, run_transfer, summarize_restore, undo, OperationContext, OperationSummary,
+    RecycledItem, TransferRequest, UndoRecord, WriteProtection,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -374,69 +374,4 @@ fn undoing_a_restore_moves_the_items_to_the_trash_again() {
     assert_eq!(result.done, [file_uri(&draft)]);
     assert!(!draft.exists());
     assert_eq!(recycled_from(&draft).name, "draft.txt");
-}
-
-/// The items a Move to Trash put in the Recycle Bin are found as Undo
-/// finds them: the newest one from each place since the move began. An
-/// older item trashed from the same place is not one of them, and an item
-/// no longer there is left out.
-///
-/// parity: INT-026, OPS-040
-#[test]
-fn trashed_items_are_found_by_where_and_when_they_were_trashed() {
-    let _recycle_bin = use_recycle_bin();
-    let temp = tempfile::tempdir().unwrap();
-    let draft = temp.path().join("draft.txt");
-    let notes = temp.path().join("notes.txt");
-    fs::write(&draft, b"old").unwrap();
-    trash(&[&draft]);
-    let old = recycled_from(&draft);
-    // Deletion dates are whole seconds.
-    thread::sleep(Duration::from_millis(1100));
-    fs::write(&draft, b"new").unwrap();
-    fs::write(&notes, b"notes").unwrap();
-    let request = TransferRequest {
-        mode: TransferMode::Trash,
-        uris: vec![file_uri(&draft), file_uri(&notes)],
-        destination_folder: None,
-        policy: ConflictPolicy::Skip,
-    };
-    let outcome =
-        block_on(run_transfer(&request, &OperationContext::default(), |_| {})).expect("a Trash request");
-    let Some(UndoRecord::Trash {
-        original_paths,
-        trashed_since,
-    }) = outcome.undo
-    else {
-        panic!("a Move to Trash can be undone: {:?}", outcome.undo);
-    };
-
-    let found = block_on(trashed_items_since(
-        original_paths.clone(),
-        trashed_since,
-        &Cancellation::new(),
-    ))
-    .unwrap();
-
-    assert_eq!(found.len(), 2, "{found:?}");
-    assert!(!found.contains(&old.uri), "not the older draft.txt");
-    let items = recycle_bin();
-    let origin = |uri: &String| {
-        items
-            .iter()
-            .find(|item| &item.uri == uri)
-            .and_then(|item| item.original_path.clone())
-    };
-    assert_eq!(origin(&found[0]).as_deref(), Some(draft.as_path()));
-    assert_eq!(origin(&found[1]).as_deref(), Some(notes.as_path()));
-
-    let deleted = block_on(delete_from_recycle_bin(&found[1..], &Cancellation::new())).unwrap();
-    assert!(deleted.errors.is_empty(), "{:?}", deleted.errors);
-    let left = block_on(trashed_items_since(
-        original_paths,
-        trashed_since,
-        &Cancellation::new(),
-    ))
-    .unwrap();
-    assert_eq!(left, found[..1], "an item no longer there is left out");
 }

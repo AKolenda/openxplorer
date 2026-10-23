@@ -35,7 +35,7 @@ use super::templates::{list_templates_blocking, TemplateId, MAX_TEMPLATE_BYTES, 
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name, ItemKind};
 use crate::random::{random_hex, NAME_BYTES};
-use crate::transfer::{Cancellation, Node};
+use crate::transfer::{already_removed, Cancellation, Node, StagedName};
 
 /// Templates are read in blocks of this many bytes, with a cancellation
 /// check before each.
@@ -224,50 +224,82 @@ fn publish_new_file(
             &[("error", &(error).to_string())],
         ))
     })?;
-    let stage = folder.child(format!("{STAGE_PREFIX}{digits}"));
-    write_private_stage(&stage, contents, context)?;
+    let stage_name = format!("{STAGE_PREFIX}{digits}");
+    // An error names the new file, never its stage.
+    let staged = StagedName::new(&stage_name, &[], &target.display_name());
+    let stage = folder.child(&stage_name);
+    write_private_stage(&stage, contents, context, &staged)?;
     // Same folder, never overwriting: the kernel's no-replace rename
     // locally, `set_display_name` on a phone (XFER-007, XFER-024).
     let published = GioNode::from_file(stage.clone()).publish(target, Some(&context.cancel));
-    // OPS-048: a stage that was not published is deleted.
-    if published.is_err() {
-        discard_stage(&stage);
-    }
-    published.map_err(|error| match OpsError::from(error) {
-        OpsError::Exists(_) => OpsError::Exists(crate::i18n::gettext(NAME_TAKEN)),
-        other => other,
+    published.map_err(|error| {
+        let cause = match OpsError::from(staged.apply(error)) {
+            OpsError::Exists(_) => OpsError::Exists(crate::i18n::gettext(NAME_TAKEN)),
+            other => other,
+        };
+        // OPS-048: a stage that was not published is deleted.
+        discard_stage(&GioNode::from_file(stage.clone()), cause)
     })
+}
+
+/// `error` naming the new file rather than its stage file `staged`.
+fn naming(error: OpsError, staged: &StagedName) -> OpsError {
+    match error {
+        OpsError::Cancelled => OpsError::Cancelled,
+        OpsError::NotMounted(message) => OpsError::NotMounted(staged.reword(&message)),
+        OpsError::NotFound(message) => OpsError::NotFound(staged.reword(&message)),
+        OpsError::PermissionDenied(message) => OpsError::PermissionDenied(staged.reword(&message)),
+        OpsError::Exists(message) => OpsError::Exists(staged.reword(&message)),
+        OpsError::NotSupported(message) => OpsError::NotSupported(staged.reword(&message)),
+        OpsError::NotDirectory(message) => OpsError::NotDirectory(staged.reword(&message)),
+        OpsError::Failed(message) => OpsError::Failed(staged.reword(&message)),
+    }
 }
 
 /// Creates `stage` exclusively as a private (0600) file and writes
 /// `contents` to it. A stage this call created is deleted again when
-/// writing fails; a name it could not create is never touched.
+/// writing fails; a name it could not create is never touched. Errors name
+/// the new file that `staged` describes.
 fn write_private_stage(
     stage: &gio::File,
     contents: &[u8],
     context: &OperationContext,
+    staged: &StagedName,
 ) -> Result<(), OpsError> {
     let cancellable = Some(context.cancellable());
-    let stream = stage.create(gio::FileCreateFlags::PRIVATE, cancellable)?;
+    let stream = stage
+        .create(gio::FileCreateFlags::PRIVATE, cancellable)
+        .map_err(|error| naming(error.into(), staged))?;
     let written = match stream.write_all(contents, cancellable) {
         Ok((_, None)) => Ok(()),
         Ok((_, Some(error))) | Err(error) => Err(error),
     };
     // Close even after a failed write, as the Python `finally` does.
     let closed = stream.close(cancellable);
-    let outcome = written.and(closed).map_err(OpsError::from);
     // OPS-048: a stage that could not be written in full is deleted.
-    if outcome.is_err() {
-        discard_stage(stage);
-    }
-    outcome
+    written
+        .and(closed)
+        .map_err(|error| discard_stage(&GioNode::from_file(stage.clone()), naming(error.into(), staged)))
 }
 
-/// Deletes a stage file this operation created. A stage that cannot be
-/// deleted stays hidden under its `.winspace-new-` name; the operation's
-/// own error is the one to report.
-fn discard_stage(stage: &gio::File) {
-    let _ = stage.delete(gio::Cancellable::NONE);
+/// Deletes a stage file this operation created after `cause` stopped it,
+/// and returns the error to report: `cause`, or, when the stage cannot be
+/// deleted, `cause` followed by the stage's exact location so the user can
+/// find what was left behind.
+fn discard_stage(stage: &dyn Node, cause: OpsError) -> OpsError {
+    match stage.delete() {
+        Ok(()) => cause,
+        // A device's "not found" counts only once confirmed (XFER-022).
+        Err(cleanup) if already_removed(stage, &cleanup) => cause,
+        Err(cleanup) => OpsError::failed(crate::i18n::format_message(
+            "{cause}\nThe incomplete file remains at {uri}. Inspect it before removing it. {cleanup}",
+            &[
+                ("cause", &cause.to_string()),
+                ("uri", &stage.uri()),
+                ("cleanup", &cleanup.to_string()),
+            ],
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -337,5 +369,90 @@ mod tests {
             .map(|entry| entry.expect("a folder entry").file_name())
             .collect();
         assert_eq!(names, ["New document.txt"], "no {STAGE_PREFIX} file is left");
+    }
+
+    /// A stage file that cannot be deleted after a failure is reported at
+    /// its exact location, so the user can find what was left behind; the
+    /// failure itself is reported first.
+    ///
+    /// parity: OPS-048
+    #[test]
+    fn a_stage_file_left_behind_is_reported_where_it_is() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let locked = temp.path().join("Locked");
+        fs::create_dir(&locked).expect("a folder");
+        let stage_path = locked.join(format!("{STAGE_PREFIX}{}", "e".repeat(32)));
+        fs::write(&stage_path, b"partial").expect("a stage file");
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).expect("chmod");
+        // As root, which deletes anywhere, nothing is left behind.
+        if fs::write(locked.join("probe"), b"").is_ok() {
+            return;
+        }
+        let stage = GioNode::new(&crate::location::file_uri(&stage_path));
+
+        let error = discard_stage(&stage, OpsError::failed("Disk full")).to_string();
+
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+        assert!(stage_path.exists());
+        let expected = format!(
+            "Disk full\nThe incomplete file remains at {}. Inspect it before removing it. ",
+            stage.uri()
+        );
+        assert!(error.starts_with(&expected), "{error}");
+        assert!(error.ends_with("Permission denied"), "{error}");
+    }
+
+    /// A phone that discarded a cancelled upload answers "not found" for
+    /// its stage file; once the folder's listing confirms it is gone,
+    /// nothing was left behind and the cancellation stays a cancellation.
+    /// A "not found" the listing does not confirm still reports the stage.
+    ///
+    /// parity: OPS-048, XFER-022
+    #[test]
+    fn a_stage_file_a_phone_discarded_is_not_reported_as_left_behind() {
+        use crate::test_support::RemoteStage;
+
+        let gone = RemoteStage::on_phone(".winspace-new-1", false);
+        let still_listed = RemoteStage::on_phone(".winspace-new-2", true);
+
+        assert_eq!(discard_stage(&gone, OpsError::Cancelled), OpsError::Cancelled);
+        let reported = discard_stage(&still_listed, OpsError::Cancelled).to_string();
+        assert!(
+            reported.contains("remains at mtp://phone.example/Folder/.winspace-new-2."),
+            "{reported}"
+        );
+    }
+
+    /// A folder that cannot be written is reported with the new file's
+    /// name and the system's reason, never the stage file's name.
+    ///
+    /// parity: OPS-048
+    #[test]
+    fn a_read_only_folder_is_reported_with_the_new_files_name() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let locked = temp.path().join("Locked");
+        fs::create_dir(&locked).expect("a folder");
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).expect("chmod");
+        // As root, which writes anywhere, there is nothing to report.
+        if fs::write(locked.join("probe"), b"").is_ok() {
+            return;
+        }
+        let folder = gio::File::for_path(&locked);
+        let target = GioNode::from_file(folder.child("New document.txt"));
+
+        let published = publish_new_file(&folder, &target, b"template", &OperationContext::default());
+
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+        let error = published.expect_err("the folder is read-only").to_string();
+        assert!(!error.contains(STAGE_PREFIX), "{error}");
+        assert!(
+            error.contains(&locked.join("New document.txt").display().to_string()),
+            "{error}"
+        );
+        assert!(error.contains("Permission denied"), "{error}");
     }
 }

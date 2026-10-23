@@ -27,8 +27,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::network::{
-    begin_sign_out, finish_sign_out, ForgetScope, NetworkError, ServerKey, SignOutReport, SignOutRequest,
-    WriteActivity,
+    begin_sign_out, finish_sign_out, NetworkError, ServerKey, SignOutReport, SignOutRequest, WriteActivity,
 };
 
 use crate::dialogs::{sign_out_dialog, SignOutChoice};
@@ -43,18 +42,6 @@ const SIGN_OUT_FAILED: &str = crate::i18n::message_id("Sign-out did not fully fi
 /// (`new URL(uri).hostname`); `None` for any other location.
 fn smb_host_of(uri: &str) -> Option<String> {
     ServerKey::for_location(uri).map(|server| server.host().to_owned())
-}
-
-/// What the window says once the server is signed out.
-fn signed_out_message(report: &SignOutReport) -> &'static str {
-    match report.forget {
-        ForgetScope::AllScopes => ox_core::i18n::gettext_static(
-            "Signed out. Matching saved credentials were cleared or none were present.",
-        ),
-        ForgetScope::SessionOnly => {
-            ox_core::i18n::gettext_static("Disconnected. Saved credentials are retained.")
-        }
-    }
 }
 
 impl BrowserWindow {
@@ -180,7 +167,6 @@ impl BrowserWindow {
         self.render_places();
         self.context()
             .announce_server_signed_out(&report.host, choice.search_cache);
-        self.show_message(signed_out_message(&report));
     }
 
     /// Makes every tab on `host` list again when it is next shown.
@@ -206,25 +192,6 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// parity: NET-020
-    #[test]
-    fn the_message_says_whether_saved_credentials_were_kept() {
-        let report = |forget| SignOutReport {
-            host: "nas".into(),
-            disconnected: 1,
-            credentials_removed: true,
-            forget,
-        };
-        assert_eq!(
-            signed_out_message(&report(ForgetScope::AllScopes)),
-            "Signed out. Matching saved credentials were cleared or none were present."
-        );
-        assert_eq!(
-            signed_out_message(&report(ForgetScope::SessionOnly)),
-            "Disconnected. Saved credentials are retained."
-        );
-    }
 
     #[test]
     fn only_smb_locations_have_a_server_to_sign_out_of() {

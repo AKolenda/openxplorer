@@ -19,7 +19,6 @@ use ox_core::ops::{
 
 use super::FileCommand;
 use crate::dialog::{self, Dialog};
-use crate::window::background_notice::Destination;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
@@ -60,10 +59,9 @@ impl BrowserWindow {
             Ok(reversal) => {
                 self.context()
                     .record_reversal(direction, step.title, reversal.inverse);
-                let destination = Destination::items(reversal.result.done.clone());
                 self.reload_selecting(reversal.result.done.clone());
                 let summary = summarize_journal_step(direction, step.title, &reversal.result);
-                self.report(summary, destination).await;
+                self.report(summary).await;
             }
             Err(error) => {
                 self.context().put_back_journal_step(direction, step);

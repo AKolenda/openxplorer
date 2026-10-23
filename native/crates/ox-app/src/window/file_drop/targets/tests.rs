@@ -236,7 +236,7 @@ fn folders_dropped_on_quick_access_are_pinned_and_files_are_not() {
     });
 
     assert!(folder_taken && file_taken, "both are checked off the main thread");
-    assert_eq!(pinned_message, "Pinned to Quick access. No files were moved.");
+    assert_eq!(pinned_message, "", "pinning shows no message");
     assert!(!test.window.sidebar().labels().contains(&"Notes 2.txt".to_owned()));
 }
 

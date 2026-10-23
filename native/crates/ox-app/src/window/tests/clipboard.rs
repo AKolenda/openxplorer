@@ -18,9 +18,6 @@ use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow}
 /// The modifier of Ctrl+C, Ctrl+X and Ctrl+V.
 const CONTROL: gdk::ModifierType = gdk::ModifierType::CONTROL_MASK;
 
-/// The toast after copying one item.
-const ONE_ITEM_COPIED: &str = "1 item(s) copied — ready to paste in another window.";
-
 /// Whether the views show the item called `name` dimmed as cut.
 fn is_shown_cut(test: &TestWindow, name: &str) -> bool {
     let index = test
@@ -81,7 +78,7 @@ fn copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy() {
     show_documents(&test, &fixture);
     test.activate("paste", None);
 
-    assert_eq!(copied, "1 item(s) copied — ready to paste in another window.");
+    assert_eq!(copied, "", "copying shows no message, as Windows Explorer");
     wait_until("the copy to be selected", || {
         test.selected_names() == ["Notes 2.txt"]
     });
@@ -180,6 +177,95 @@ fn pasting_a_copy_into_its_own_folder_makes_a_copy_without_asking() {
         fs::read(fixture.path("Notes 2 - Copy.txt")).expect("copied"),
         fs::read(fixture.path("Notes 2.txt")).expect("kept")
     );
+}
+
+/// The names in `folder`, sorted.
+fn names_in(folder: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(folder)
+        .expect("the folder is readable")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Lets the main loop run for a while, long enough for a paste to have
+/// asked or moved something.
+fn wait_a_moment() {
+    let waited = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = std::rc::Rc::clone(&waited);
+    glib::timeout_add_local_once(std::time::Duration::from_millis(700), move || done.set(true));
+    wait_until("a moment", || waited.get());
+}
+
+/// Cutting a file and pasting it back into its own folder does nothing,
+/// as in Windows Explorer: no "Items already exist" question, and the
+/// file stays where it is, unchanged.
+///
+/// parity: OPS-026, CLIP-003
+#[gtk::test]
+fn pasting_a_cut_item_into_its_own_folder_does_nothing() {
+    let fixture = Fixture::standard();
+    let before = names_in(fixture.root());
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("cut", None);
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+
+    test.activate("paste", None);
+    wait_a_moment();
+
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing is asked"
+    );
+    assert_eq!(names_in(fixture.root()), before, "nothing moved or copied");
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).expect("kept"),
+        b"Synthetic test data\n"
+    );
+    wait_until("the window to be free again", || is_enabled(&test, "paste"));
+}
+
+/// Moving items into a folder some of them are already in, as a cut
+/// from another app may hold items of several folders, moves the others
+/// and leaves those where they are, without asking.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn a_move_into_the_folder_an_item_is_in_moves_only_the_others() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/Plan.txt"), b"Plan\n").expect("a file in Documents");
+    let test = TestWindow::open(&fixture.uri());
+
+    let incoming = crate::window::file_ops::IncomingItems {
+        mode: ox_core::transfer::TransferMode::Move,
+        uris: vec![
+            fixture.uri_of("Notes 2.txt"),
+            fixture.uri_of("Documents/Plan.txt"),
+        ],
+        destination_folder: fixture.uri(),
+    };
+    let window = test.window.clone();
+    glib::spawn_future_local(async move {
+        window.transfer_with_conflicts(incoming).await;
+    });
+
+    wait_until("Plan.txt to move in", || fixture.path("Plan.txt").is_file());
+    wait_a_moment();
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing is asked"
+    );
+    assert!(!fixture.path("Documents/Plan.txt").exists());
+    assert!(fixture.path("Notes 2.txt").is_file(), "Notes 2.txt stays");
+    assert!(!fixture.path("Notes 2 - Copy.txt").exists());
 }
 
 /// One drop brings a file into its own folder and another file of the
@@ -552,7 +638,9 @@ fn ctrl_x_in_a_previous_version_is_refused_and_ctrl_c_copies() {
         cut_message,
         "Previous versions are read-only. Use Restore a copy."
     );
-    assert_eq!(test.window.shown_message(), ONE_ITEM_COPIED);
+    let copied = String::from_utf8(clipboard_bytes(&test, URI_LIST)).expect("a URI list");
+    assert!(copied.contains("Plan.txt"), "Ctrl+C copies: {copied}");
+    assert_eq!(test.window.shown_message(), cut_message, "and adds no message");
 }
 
 /// `onKey` copies even while an operation runs, where the Copy button is
@@ -573,7 +661,9 @@ fn ctrl_c_copies_while_an_operation_runs() {
 
     let message = test.window.shown_message();
     test.window.end_operation();
-    assert_eq!(message, ONE_ITEM_COPIED);
+    let copied = String::from_utf8(clipboard_bytes(&test, URI_LIST)).expect("a URI list");
+    assert!(copied.contains("Notes%202.txt"), "Ctrl+C copies: {copied}");
+    assert_eq!(message, "", "copying shows no message");
 }
 
 /// GTK stores a local clipboard's storable formats with the clipboard
