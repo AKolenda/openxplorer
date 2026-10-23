@@ -1,7 +1,7 @@
 # Unreleased
 
 ## What's Changed
-* fix(ops): show nothing after the user cancels a copy, move, delete, extraction or compression, as Windows Explorer does; the "Operation result" dialog, "Extraction stopped" and "Compression stopped" no longer follow a Cancel (also one during the free-space check, an Undo or Redo, or a Copy or drag out of a ZIP), Ctrl+Z still undoes the items that completed, and only a problem that needs recovery by hand, such as a kept backup, is still reported
+* fix(ops): show nothing after the user cancels a copy, move, delete, extraction or compression, as Windows Explorer does; the "Operation result" dialog, "Extraction stopped" and "Compression stopped" no longer follow a Cancel (also one during the free-space check, an Undo or Redo, or a Copy or drag out of a ZIP), Ctrl+Z still undoes the items that completed, and only a failure no dialog showed, such as a Recycle Bin item that could not be restored, or a problem that needs recovery by hand, such as a kept backup, is still reported
 
 # 2.0.6 — 2026-10-13
 

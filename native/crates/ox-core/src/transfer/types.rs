@@ -208,8 +208,12 @@ pub struct TransferResult {
     pub cancelled: bool,
     /// The messages of `errors` the user must act on by hand, such as a
     /// kept backup or staging left behind (XFER-003, XFER-010). They are
-    /// reported even after a cancellation, which hides the rest.
+    /// reported even after a cancellation.
     pub recovery: Vec<String>,
+    /// The messages of `errors` the user saw in the question about a failed
+    /// item and answered (OPS-047). A cancellation leaves only these
+    /// unsaid; every other failure is still reported.
+    pub presented: Vec<String>,
     /// Where each copied or moved item of `done` is now, in the same
     /// order, under the name the engine gave it (a Keep both `- Copy`
     /// name or a name with unstorable characters replaced). Undo and the

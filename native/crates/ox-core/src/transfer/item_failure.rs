@@ -59,8 +59,9 @@ pub(crate) struct ItemFailures {
     /// The run's mode and the name of the top-level item running, for
     /// questions about the entries inside it.
     current: Option<(TransferMode, String)>,
-    /// The entries of the running item left out, "Folder/inner/name: why".
-    left_out: Vec<String>,
+    /// The entries of the running item left out, "Folder/inner/name: why",
+    /// each with whether the user saw it in the question.
+    left_out: Vec<(String, bool)>,
     /// The source URIs of those entries.
     left_out_sources: HashSet<String>,
 }
@@ -130,6 +131,7 @@ impl ItemFailures {
         } else {
             format!("{top}/{entry}")
         };
+        let mut answered = false;
         if !self.skip_all {
             let failed = FailedItem {
                 mode,
@@ -141,16 +143,18 @@ impl ItemFailures {
             match self.answer(&failed) {
                 Some(FailureAnswer::Retry) => return EntryDecision::Retry,
                 Some(FailureAnswer::Cancel) => return EntryDecision::Cancel,
-                Some(FailureAnswer::Skip | FailureAnswer::SkipAll) | None => {}
+                Some(FailureAnswer::Skip | FailureAnswer::SkipAll) => answered = true,
+                None => {}
             }
         }
-        self.left_out.push(format!("{name}: {error}"));
+        self.left_out.push((format!("{name}: {error}"), answered));
         self.left_out_sources.insert(source_uri.to_owned());
         EntryDecision::Skip
     }
 
-    /// The entries of the running item left out, for the report.
-    pub(crate) fn take_left_out(&mut self) -> Vec<String> {
+    /// The entries of the running item left out, for the report, each with
+    /// whether the user saw it in the question.
+    pub(crate) fn take_left_out(&mut self) -> Vec<(String, bool)> {
         std::mem::take(&mut self.left_out)
     }
 

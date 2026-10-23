@@ -23,8 +23,8 @@ use std::time::{Duration, Instant};
 
 use ox_core::ops::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
-    restore_from_recycle_bin, run_transfer, trashed_items_since, undo, OperationContext, RecycledItem,
-    TransferRequest, UndoRecord,
+    restore_from_recycle_bin, run_transfer, summarize_restore, trashed_items_since, undo, OperationContext,
+    OperationSummary, RecycledItem, TransferRequest, UndoRecord, WriteProtection,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -195,6 +195,51 @@ fn restoring_a_folder_that_holds_a_protected_backup_is_refused() {
     assert_eq!(outcome.undo, None);
     assert!(!project.exists());
     assert_eq!(recycled_from(&project).name, "project");
+}
+
+/// Cancel after a failed item still reports that failure: Restore shows no
+/// dialog per item, so the report is the only place the user learns it.
+///
+/// parity: OPS-023
+#[test]
+fn a_cancelled_restore_still_reports_an_earlier_failure() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let notes = temp.path().join("notes.txt");
+    let plan = temp.path().join("plan.txt");
+    fs::write(&notes, b"trashed").unwrap();
+    fs::write(&plan, b"plan").unwrap();
+
+    trash(&[&notes, &plan]);
+    fs::write(&notes, b"newer").unwrap();
+    let items = [recycled_from(&notes).uri, recycled_from(&plan).uri];
+    let cancel = Cancellation::new();
+    // The user cancels while the second item is restoring.
+    let cancel_at_plan = {
+        let cancel = cancel.clone();
+        let plan = file_uri(&plan);
+        move |uri: &str| {
+            if uri == plan {
+                cancel.cancel();
+            }
+            Ok(())
+        }
+    };
+    let context = OperationContext {
+        cancel,
+        ..OperationContext::new(WriteProtection::new(cancel_at_plan))
+    };
+    let outcome = block_on(restore_from_recycle_bin(&items, &context)).unwrap();
+
+    let refusal = "notes.txt: An item named “notes.txt” already exists in its original folder. \
+                   It was left in the Recycle Bin.";
+    assert!(outcome.result.cancelled);
+    assert_eq!(outcome.result.errors, [refusal]);
+    assert_eq!(
+        summarize_restore(&outcome.result),
+        OperationSummary::Report(refusal.into())
+    );
+    assert!(!plan.exists(), "the cancelled item stays in the Recycle Bin");
 }
 
 #[test]

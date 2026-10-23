@@ -5,8 +5,8 @@
 //! is a short toast; errors or skipped items open the "Operation result"
 //! dialog listing each; a request refused before it started opens
 //! "Operation stopped" with the refusal. Unlike `app.js`, a cancelled
-//! operation says nothing, as in Windows Explorer, unless something needs
-//! recovery by hand.
+//! operation says nothing, as in Windows Explorer, unless a failure was
+//! never shown or something needs recovery by hand.
 
 use super::journal::JournalDirection;
 use super::undo::UndoRecord;
@@ -28,8 +28,10 @@ pub enum OperationSummary {
     /// with one line per fact.
     Report(String),
     /// The user cancelled: nothing is said, as in Windows Explorer, also
-    /// when items failed or were skipped before. A problem the user must
-    /// sort out by hand is still a [`Self::Report`].
+    /// when items were skipped before or failed in the question the user
+    /// answered. A failure no question showed, such as a Recycle Bin item
+    /// that could not be restored, and a problem the user must sort out by
+    /// hand are still a [`Self::Report`].
     Cancelled,
 }
 
@@ -105,15 +107,22 @@ fn summarize_items(message: &str, result: &TransferResult) -> OperationSummary {
 }
 
 /// What is said about a run that did not fully succeed: once the user
-/// cancelled, only what needs recovery by hand, otherwise the report.
+/// cancelled, only the failures no question showed and what needs
+/// recovery by hand, otherwise the report.
 fn problems(result: &TransferResult) -> OperationSummary {
     if !result.cancelled {
         return OperationSummary::Report(report_lines(result));
     }
-    if result.recovery.is_empty() {
+    let unsaid: Vec<&str> = result
+        .errors
+        .iter()
+        .filter(|error| result.recovery.contains(error) || !result.presented.contains(error))
+        .map(String::as_str)
+        .collect();
+    if unsaid.is_empty() {
         return OperationSummary::Cancelled;
     }
-    OperationSummary::Report(result.recovery.join("\n"))
+    OperationSummary::Report(unsaid.join("\n"))
 }
 
 /// True when nothing failed, nothing was skipped and nobody cancelled.
@@ -194,8 +203,8 @@ mod tests {
         assert_eq!(summary, OperationSummary::Report(expected.into()));
     }
 
-    /// Windows Explorer says nothing after Cancel, also when items failed
-    /// or were skipped before it.
+    /// Windows Explorer says nothing after Cancel, also when items were
+    /// skipped before it or failed in the question the user answered.
     ///
     /// parity: OPS-023
     #[test]
@@ -204,9 +213,13 @@ mod tests {
             original_uri: "file:///tmp/a".into(),
             renamed_uri: "file:///tmp/b".into(),
         };
+        let denied = "b.txt: Permission denied";
         let cancelled = [
             result(0, 0, &[], true),
-            result(1, 2, &["b.txt: Permission denied"], true),
+            TransferResult {
+                presented: vec![denied.to_owned()],
+                ..result(1, 2, &[denied], true)
+            },
         ];
 
         for outcome in &cancelled {
@@ -225,15 +238,41 @@ mod tests {
     /// parity: OPS-023, XFER-003
     #[test]
     fn a_cancelled_run_still_reports_what_needs_recovery() {
+        let denied = "a.txt: Permission denied";
         let backup = "document: Replacement completed, but the prior file remains at file:///tmp/b.";
         let outcome = TransferResult {
             recovery: vec![backup.to_owned()],
-            ..result(1, 1, &["a.txt: Permission denied", backup], true)
+            presented: vec![denied.to_owned()],
+            ..result(1, 1, &[denied, backup], true)
         };
 
         let summary = summarize(TransferMode::Copy, &outcome);
 
         assert_eq!(summary, OperationSummary::Report(backup.into()));
+    }
+
+    /// Cancel never hides a failure no question showed, as Restore, a
+    /// batch rename and Undo only collect theirs; the failures the user
+    /// answered stay unsaid.
+    ///
+    /// parity: OPS-023
+    #[test]
+    fn a_cancelled_run_reports_the_failures_no_question_showed() {
+        let record = UndoRecord::Rename {
+            original_uri: "file:///tmp/a".into(),
+            renamed_uri: "file:///tmp/b".into(),
+        };
+        let answered = "a.txt: Permission denied";
+        let unseen = "b.txt: An item named “b.txt” already exists in its original folder.";
+        let outcome = TransferResult {
+            presented: vec![answered.to_owned()],
+            ..result(1, 0, &[answered, unseen], true)
+        };
+
+        let report = OperationSummary::Report(unseen.into());
+        assert_eq!(summarize_restore(&outcome), report);
+        assert_eq!(summarize_batch_rename(&outcome), report);
+        assert_eq!(summarize_undo(&record, &outcome), report);
     }
 
     #[test]
