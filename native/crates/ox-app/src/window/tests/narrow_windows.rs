@@ -44,7 +44,7 @@ fn a_compact_window_drops_the_search_box_some_commands_and_two_columns() {
     let test = laid_out(&fixture.uri());
     resize(&test, 672);
     assert!(!test.window.search_box().is_visible());
-    for action in ["win.cut", "win.rename", "win.copy-path"] {
+    for action in ["win.cut", "win.rename", "win.share"] {
         assert!(!button_for(&test, action).is_visible(), "{action} is hidden");
     }
     assert!(button_for(&test, "win.copy").is_visible(), "Copy stays");

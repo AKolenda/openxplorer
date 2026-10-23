@@ -58,6 +58,7 @@
 //! | `sandbox`, `host_command` | Flatpak detection; running host programs | (new) |
 //! | `disk_tools` | Disks, the Disk Image Mounter and a disk-usage analyser | (new) |
 //! | `drive_format` | Formatting a removable drive through UDisks | (new) |
+//! | `email_portal` | Share: emailing files through the desktop's Email portal | (new) |
 //! | `program` | Starting a program the user chose: drops, custom commands | (new) |
 //! | `private_file`, `worker` | Atomic private writes; worker threads | the Python modules' helpers |
 
@@ -69,6 +70,7 @@ mod brave;
 mod default_apps;
 mod disk_tools;
 mod drive_format;
+mod email_portal;
 mod file_chooser_bus;
 mod file_chooser_request;
 mod file_dialogs;
@@ -104,6 +106,10 @@ pub use disk_tools::{is_disk_image, DiskTool};
 pub use drive_format::{
     available_file_systems, default_file_system, drive_facts, format_drive, DriveFacts, FileSystem,
     FormatError, FormatRequest, Formatted, UDISKS_NAME,
+};
+pub use email_portal::{
+    compose_email, email_portal_version, open_attachments, EmailError, ATTACHMENTS_VERSION, EMAIL_INTERFACE,
+    MAX_ATTACHMENTS,
 };
 pub use file_chooser_bus::{
     ChooserCall, ChooserNotShown, ChooserRegistrationFailed, ChooserReply, FileChooserBus,

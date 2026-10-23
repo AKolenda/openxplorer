@@ -136,6 +136,7 @@ mod service_actions;
 mod session;
 mod session_restore;
 mod settings_tab;
+mod share;
 mod shortcuts_window;
 mod sidebar;
 mod sidebar_hiding;

@@ -56,6 +56,12 @@ Administrator access does not remove OpenXplorer’s protection of snapshot fold
 
 Windows 10-style classic menus are the default; Settings can switch to the Windows 11-style compact option. Open with uses registered applications; identical editor names are deduplicated.
 
+## Share files by email
+
+Share in the command bar, between Rename and Delete as in Windows 11, opens a new message in your email app with the selected files attached. It goes through your desktop’s email portal (KDE Plasma’s, or GTK’s on GNOME), and nothing is sent until you send the message there. Share takes files, up to 16 at a time; folders, items in the Recycle Bin and items inside a ZIP cannot be shared. Where the desktop has no email portal, and in Open and Save dialogs, the button is hidden. If no email app is set up, the message at the bottom of the window says the email app could not be opened. A file whose name or folder has &, #, ?, % or a control character cannot be shared, as GNOME’s email portal could misread it, for example as an extra recipient; the message names the file, and renaming or moving it lets you share it.
+
+To copy an item’s path instead, right-click it and choose Copy as path, or press Ctrl+Shift+C.
+
 ## Previous versions
 
 Properties → Previous versions can browse existing, exposed snapshot collections. Opening a snapshot in another tab retains the original dialog on its originating tab. Restore a copy writes to a separate destination, not over the live original.

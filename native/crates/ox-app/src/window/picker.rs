@@ -61,9 +61,10 @@ const DEFAULT_SIZE: (i32, i32) = (980, 640);
 
 /// The window commands that make no sense while choosing a file: more tabs,
 /// windows or panes, Settings, Format…, as a dialog closes on its own
-/// once answered, leaving no window to report the format in, and Full
-/// screen, as a Windows Open or Save dialog keeps its size.
-const DISABLED_ACTIONS: [WindowAction; 16] = [
+/// once answered, leaving no window to report the format in, Full
+/// screen, as a Windows Open or Save dialog keeps its size, and Share,
+/// which Windows' file dialogs do not have.
+const DISABLED_ACTIONS: [WindowAction; 17] = [
     WindowAction::NewTab,
     WindowAction::OpenTab,
     WindowAction::OpenTabBackground,
@@ -80,6 +81,7 @@ const DISABLED_ACTIONS: [WindowAction; 16] = [
     WindowAction::SplitView,
     WindowAction::FormatDrive,
     WindowAction::FullScreen,
+    WindowAction::Share,
 ];
 
 /// Shown when the File name box names nothing that exists.
@@ -342,6 +344,7 @@ impl BrowserWindow {
         for action in DISABLED_ACTIONS {
             self.set_action_enabled(action, false);
         }
+        self.update_share_command();
         self.set_default_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1);
         self.apply_chooser_listing();
         self.open_start_folder(wanted_folder);
@@ -1603,6 +1606,44 @@ mod tests {
             window.shown_message().contains("is not answering"),
             "{}",
             window.shown_message()
+        );
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// An Open or Save dialog has no Share, even where the desktop can
+    /// share, as Windows' file dialogs have none.
+    ///
+    /// parity: INT-032, CMD-037
+    #[gtk::test]
+    fn the_dialog_has_no_share() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let email = crate::test_support::portal::EmailPortal::answering(0);
+        let portal = Portal::new();
+        let answer = portal.call(
+            "OpenFile",
+            &[(
+                "current_folder",
+                path_variant(&fixture.root().display().to_string()),
+            )],
+        );
+        let window = &portal.test.window;
+        window.follow_share_service(&email.name());
+        wait_until("the window to ask the portal", || {
+            window.share_service_checked(&email.name())
+        });
+        window.folder_model().select_only(0);
+        settle();
+
+        let share = crate::test_support::harness::descendants::<gtk::Button>(window)
+            .into_iter()
+            .find(|button| button.action_name().as_deref() == Some("win.share"))
+            .expect("the command bar has Share");
+        assert!(!share.is_visible(), "hidden in a dialog");
+        assert!(
+            !window.lookup_action("share").expect("the action").is_enabled(),
+            "and disabled"
         );
         window.cancel_picking();
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);

@@ -6570,6 +6570,26 @@ native = "done"
 native_note = "Ctrl+E is a second application accelerator of win.search and F11 the accelerator of win.full-screen (native/crates/ox-app/src/window/actions.rs, WINDOW_ACCELERATORS), so both work from text fields as Ctrl+F does; Ctrl+D is a second trigger of win.trash in the bubble-phase file keys (native/crates/ox-app/src/window/file_ops/shortcuts.rs), which a text field, a crumb, the splitter and the Settings page keep. native/crates/ox-app/src/window/full_screen.rs toggles gtk_window_fullscreen and follows the fullscreened property when the desktop ends full screen itself; window_size.rs saves nothing while full screen, as GTK calls a full-screen window not maximized. The picker turns win.full-screen off (DISABLED_ACTIONS). No GTK, KDE Plasma or app default binds Ctrl+E, Ctrl+D, F11 or Alt+P. Tests: native/crates/ox-app/src/window/tests/explorer_keys.rs; picker.rs (a_dialog_does_not_go_full_screen); shortcuts_window.rs (the_shortcuts_window_lists_explorers_further_keys). The private Xvfb display has no window manager, so the tests check what F11 asks for, not the desktop's full screen."
 
 [[feature]]
+id = "CMD-037"
+area = "CMD"
+title = "Share emails the selected files through the desktop's Email portal"
+behaviour = "The command bar has Share (tooltip 'Share') between Rename and Delete, where Windows 11 has it. It opens a new message in the desktop's own email app with the selected files attached, through org.freedesktop.portal.Email.ComposeEmail with read-only file descriptors (attachment_fds); nothing is sent until the user sends it there. The button shows only when the session bus's desktop portal serves the Email interface at version 2 or later (version 1 has no attachment_fds), which it exports only when a portal backend of the desktop implements it (KDE Plasma's, or GTK's on GNOME); otherwise it is hidden, not disabled. It is disabled with no selection and for folders, pipes, items in the Recycle Bin and items inside a ZIP, and hidden in a compact window and in an Open or Save dialog. Files on shares mounted by the kernel (CIFS) or by GVfs are attached by their mount path, and Recent rows by the file they stand for (GVfs's standard::target-uri, as the row's own name is a hash), whether GVfs types the row as a file or a shortcut. Enabling Share reads only addresses, never the disk, so a stalled share cannot freeze the window: a Recent row that names no file disables it, while a share that is not mounted, a Recent file that is gone or is not a regular file, is found when the files are opened on a worker thread and shows 'The files could not be attached to an email.'. A local file whose name is not UTF-8 attaches by its exact path. One email takes at most 16 files, which a D-Bus message can carry; more are refused with 'Share can attach up to 16 files to one email.'. GTK's portal backend (xdg-desktop-portal-gtk, through 1.15.3) writes each attachment's path into a mailto: address unescaped, so a file whose path as the portal resolves it (its link in /proc/self/fd, with symbolic links followed) has &, #, ?, % or a control character is refused before the portal is asked, naming the file: '“<name>” cannot be attached to an email because its path has &, #, ?, % or a control character, which the email app could misread. Rename or move it, then share it again.'. A failure (no email app set up, no answer) shows 'The email app could not be opened.' in the toast; the user cancelling shows nothing. Before, this button copied the path (CLIP-012)."
+origin = ["dolphin"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "purpose:src/fileitemactionplugin/sharefileitemaction.cpp",
+  "xdg-desktop-portal:data/org.freedesktop.portal.Email.xml",
+  "xdg-desktop-portal-kde:src/email.cpp",
+  "xdg-desktop-portal-gtk:src/email.c",
+]
+python_tests = []
+bridge = []
+dolphin = "Share (Purpose share menu, which includes email)"
+native = "done"
+native_note = "The desktops have no portal for a share menu, and KDE's Purpose share menu has no D-Bus or command-line entry point a GTK app can call, so Share uses the Email portal, the one share target every portal-based desktop offers. Tests: native/crates/ox-app/src/window/tests/share.rs (a fake Email portal on the private session bus), native/crates/ox-app/src/window/share.rs (share_needs_files_outside_the_recycle_bin_and_zips), native/crates/ox-app/src/window/picker.rs (the_dialog_has_no_share) and native/crates/ox-core/src/integration/email_portal.rs."
+
+[[feature]]
 id = "OPS-001"
 area = "OPS"
 title = "New folder and Ctrl+Shift+N"
@@ -8635,7 +8655,7 @@ native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (paste_during_
 id = "CLIP-012"
 area = "CLIP"
 title = "Copy path"
-behaviour = "'Copy path' (button or context) copies the display path of the single selected item, or of the current folder when nothing is selected, as text: a POSIX path, a UNC \\\\server\\share\\… for SMB, or '<device> / path'. It shows no message. On pseudo-pages it reads 'Open a folder first.'. If the clipboard write fails, a dialog 'Location' shows the text."
+behaviour = "'Copy as path' in the context menu (Windows' name; the Python app's 'Copy path', which its command bar also had) copies the display path of the single selected item, or of the current folder when nothing is selected, as text: a POSIX path, a UNC \\\\server\\share\\… for SMB, or '<device> / path'. It shows no message. On pseudo-pages it reads 'Open a folder first.'. If the clipboard write fails, a dialog 'Location' shows the text. The command bar button with the share glyph is Share now (CMD-037), as in Windows 11; the command keeps its keys (CLIP-013)."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"

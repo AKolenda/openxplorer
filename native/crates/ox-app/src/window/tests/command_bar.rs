@@ -40,7 +40,7 @@ fn control_name(control: &gtk::Widget) -> Option<String> {
 
 /// The command bar's shown controls in order, the scrolling file commands
 /// included.
-fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
+pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
     let bar = test.window.command_bar();
     let mut controls = Vec::new();
     for child in children(bar) {
@@ -71,14 +71,27 @@ fn menu_of(test: &TestWindow, name: &str) -> MenuPopover {
         .unwrap_or_else(|| panic!("{name} opens an app menu"))
 }
 
+/// The names of `test`'s shown command bar controls, in order.
+pub(super) fn command_bar_names(test: &TestWindow) -> Vec<String> {
+    command_bar_controls(test)
+        .iter()
+        .filter_map(control_name)
+        .collect()
+}
+
+/// Share, between Rename and Delete, shows only where the desktop
+/// can share (`tests::share`); here no Email portal answers, whatever the
+/// machine has.
 #[gtk::test]
 fn the_command_bar_has_the_current_controls_in_order() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let names: Vec<String> = command_bar_controls(&test)
-        .iter()
-        .filter_map(control_name)
-        .collect();
+    test.window.follow_share_service(crate::window::share::NO_PORTAL);
+    wait_until("the window to ask no portal", || {
+        test.window.share_service_checked(crate::window::share::NO_PORTAL)
+    });
+    wait_for_frames(&test.window, 2);
+    let names = command_bar_names(&test);
     assert_eq!(
         names,
         [
@@ -88,7 +101,6 @@ fn the_command_bar_has_the_current_controls_in_order() {
             "Copy (Ctrl+C)",
             "Paste files (Ctrl+V)",
             "Rename (F2)",
-            "Copy path (does not change sharing permissions)",
             "Delete (Delete)",
             "|",
             "Sort",

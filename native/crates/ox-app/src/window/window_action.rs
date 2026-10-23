@@ -115,6 +115,8 @@ pub(crate) enum WindowAction {
     PinFolder,
     /// Copies the path of the selection, or of the folder.
     CopyPath,
+    /// Emails the selected files through the desktop's Email portal.
+    Share,
     /// Shows what this build is.
     /// Opens the offline user manual at the topic of what the window
     /// shows (F1, CMD-033).
@@ -482,6 +484,7 @@ impl WindowAction {
             WindowAction::PinSelected => "pin-selected",
             WindowAction::PinFolder => "pin-folder",
             WindowAction::CopyPath => "copy-path",
+            WindowAction::Share => "share",
             WindowAction::About => "about",
             WindowAction::Help => "help",
             WindowAction::KeyboardShortcuts => "keyboard-shortcuts",

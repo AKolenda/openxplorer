@@ -291,7 +291,7 @@ pub(crate) fn wait_for_portal_before_reading() {
 /// Returns once the desktop portal has an owner on `connection`, without
 /// starting it, when [`wait_for_portal_before_reading`] was called; at
 /// once otherwise.
-pub(super) async fn portal_ready(connection: &gio::DBusConnection) {
+pub(crate) async fn portal_ready(connection: &gio::DBusConnection) {
     if !WAIT_FOR_PORTAL.load(Ordering::Relaxed) {
         return;
     }

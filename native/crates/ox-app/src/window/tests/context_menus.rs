@@ -71,7 +71,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Rename",
             "Delete",
             "Duplicate",
-            "Copy path",
+            "Copy as path",
             "Compress to ZIP file",
             "Compress to…",
             "-",
@@ -151,7 +151,7 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         "Rename",
         "Delete",
         "Duplicate",
-        "Copy path",
+        "Copy as path",
         "Properties",
     ] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
@@ -592,4 +592,30 @@ fn a_formats_result_outlives_its_window() {
     );
     assert!(!test.window.is_visible());
     assert_eq!(other.window.shown_message_text(), "Formatted after closing.");
+}
+
+/// Windows' "Copy as path", with its Ctrl+Shift+C, copies the selected
+/// item's path; the command bar's Share no longer does.
+///
+/// parity: CLIP-012, CLIP-013
+#[gtk::test]
+fn copy_as_path_in_the_menu_copies_the_items_path() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    let row = menu.row("Copy as path");
+    let labels: Vec<String> = crate::test_support::harness::descendants::<gtk::Label>(&row)
+        .iter()
+        .map(|label| label.text().to_string())
+        .collect();
+    assert!(labels.iter().any(|label| label == "Ctrl+Shift+C"), "{labels:?}");
+
+    row.emit_activate();
+
+    let clipboard = test.window.clipboard();
+    let copied = gtk::glib::MainContext::default().block_on(clipboard.read_text_future());
+    let copied = copied.ok().flatten().map(|text| text.to_string());
+    let expected = fixture.path("Notes 2.txt").display().to_string();
+    assert_eq!(copied, Some(expected));
 }
