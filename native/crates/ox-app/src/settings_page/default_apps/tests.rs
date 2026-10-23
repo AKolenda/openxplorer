@@ -90,6 +90,28 @@ impl DefaultAppsTest {
             .unwrap_or_else(|| panic!("Default apps has a {label:?} button"))
     }
 
+    /// The button labelled `label` in the row titled `row`.
+    fn button_in(&self, row: &str, label: &str) -> gtk::Button {
+        descendants::<gtk::Button>(&self.row(row))
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some(label))
+            .unwrap_or_else(|| panic!("{row:?} has a {label:?} button"))
+    }
+
+    /// Clicks "Refresh status", whose label sits beside a glyph.
+    fn refresh_status(&self) {
+        self.sections()
+            .into_iter()
+            .flat_map(|section| descendants::<gtk::Button>(&section))
+            .find(|button| {
+                descendants::<gtk::Label>(button)
+                    .iter()
+                    .any(|label| label.text() == "Refresh status")
+            })
+            .expect("Default apps has Refresh status")
+            .emit_clicked();
+    }
+
     /// The value a route row shows.
     fn route(&self, title: &str) -> String {
         let control = self.row(title).controls().into_iter().next();
@@ -118,6 +140,13 @@ impl DefaultAppsTest {
         self.root
             .path()
             .join("config/xdg-desktop-portal/kde-portals.conf")
+    }
+
+    /// The environment file that makes GTK 3 apps ask the portal.
+    fn gtk_env_file(&self) -> std::path::PathBuf {
+        self.root
+            .path()
+            .join("config/environment.d/60-openxplorer-file-dialogs.conf")
     }
 
     fn wait_for_status(&self, what: &str) {
@@ -280,12 +309,14 @@ fn make_default_also_takes_open_and_save_dialogs() {
         )),
         "{written}"
     );
-    // The test's desktop is KDE Plasma, whose own apps need a new login.
+    // GTK 3 apps, and on the test's KDE Plasma KDE's own apps, need a new
+    // login.
     assert_eq!(
         default_apps.test.window.shown_message_text(),
         "Requested associations updated. For other apps' Open and Save dialogs, click Apply now, or log \
-         out and back in; KDE apps follow after you log out and back in."
+         out and back in; GTK 3 and KDE apps follow after you log out and back in."
     );
+    assert!(default_apps.gtk_env_file().is_file());
     assert!(default_apps
         .row(super::FILE_DIALOGS.title)
         .shown_description()
@@ -302,6 +333,10 @@ fn make_default_also_takes_open_and_save_dialogs() {
     assert!(
         !default_apps.portal_file().exists(),
         "the portal configuration the app created is removed"
+    );
+    assert!(
+        !default_apps.gtk_env_file().exists(),
+        "so is GTK 3 apps' environment file"
     );
     assert_eq!(
         default_apps.row(super::FILE_DIALOGS.title).shown_description(),
@@ -348,6 +383,81 @@ fn make_default_adds_the_kde_login_script_to_dialogs_enabled_before() {
             .ends_with("KDE apps follow after you log out and back in."),
         "Apply now does not reach KDE apps"
     );
+}
+
+/// Dialogs enabled by a version that left GTK 3 apps out: the status says
+/// so and offers Enable, and Make default adds their environment file.
+///
+/// parity: INT-032
+#[gtk::test]
+fn make_default_adds_the_gtk_environment_file_to_dialogs_enabled_before() {
+    let default_apps = DefaultAppsTest::open();
+    default_apps
+        .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+        .set_active(false);
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the card to say so", || {
+        default_apps.card_title() == "OpenXplorer is your default file explorer"
+    });
+    let file = default_apps.gtk_env_file();
+    assert!(file.is_file());
+    // As enabled by a version without the file.
+    std::fs::remove_file(&file).expect("the environment file");
+    default_apps.refresh_status();
+    wait_until("the status to offer Enable for GTK 3 apps", || {
+        default_apps
+            .row(super::FILE_DIALOGS.title)
+            .shown_description()
+            .contains("Click Enable for GTK 3 apps too.")
+    });
+    assert!(default_apps
+        .button_in(super::FILE_DIALOGS.title, "Enable")
+        .is_sensitive());
+
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the environment file again", || file.is_file());
+    default_apps.wait_for_status("the status after the change");
+    assert!(
+        default_apps
+            .test
+            .window
+            .shown_message_text()
+            .ends_with("GTK 3 and KDE apps follow after you log out and back in."),
+        "Apply now does not reach GTK 3 apps"
+    );
+}
+
+/// Make default says so when GTK 3 apps' environment file cannot be
+/// written for dialogs enabled before, instead of reporting success.
+///
+/// parity: INT-032
+#[gtk::test]
+fn make_default_reports_a_gtk_environment_file_it_cannot_write() {
+    let default_apps = DefaultAppsTest::open();
+    default_apps
+        .switch_of(super::INCLUDE_SHOW_IN_FOLDER.title)
+        .set_active(false);
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the card to say so", || {
+        default_apps.card_title() == "OpenXplorer is your default file explorer"
+    });
+    default_apps.wait_for_status("the status after the change");
+    let folder = default_apps
+        .gtk_env_file()
+        .parent()
+        .expect("the file's folder")
+        .to_path_buf();
+    std::fs::remove_dir_all(&folder).expect("the folder");
+    std::fs::write(&folder, "not a folder\n").expect("a file in the folder's place");
+
+    default_apps.button("Make OpenXplorer default").emit_clicked();
+    wait_until("the failure to be told", || {
+        default_apps
+            .test
+            .window
+            .shown_message_text()
+            .starts_with("File handlers updated, but Open and Save dialogs setup failed:")
+    });
 }
 
 /// Restore previous undoes a recorded Enable of the dialogs even when the

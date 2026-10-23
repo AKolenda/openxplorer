@@ -27,6 +27,7 @@ fn delete_by_walk_only(path: &Path) -> Result<(), TransferError> {
         guard: None,
         max_depth: MAX_DEPTH,
         folders: FolderAccess::AsFound,
+        enter_root: true,
         root_identity: None,
         drive: None,
     };
@@ -48,7 +49,7 @@ fn a_folder_where_a_drive_is_mounted_is_refused() {
     fs::create_dir(&mount_point).expect("the mount point is created");
     let _mounted = BindMount::new(&drive, &mount_point);
 
-    let result = delete_tree(&mount_point, &Cancellation::new(), None);
+    let result = delete_tree(&mount_point, None, &Cancellation::new(), None);
     let by_walk = delete_by_walk_only(&mount_point);
 
     assert_eq!(result, Err(mount_point_refusal(&mount_point)));
@@ -74,7 +75,7 @@ fn a_folder_with_a_drive_mounted_inside_is_refused_before_anything_is_deleted() 
     fs::write(selected.join("a.txt"), b"mine").expect("the selected folder's file is written");
     let _mounted = BindMount::new(&drive, &mount_point);
 
-    let result = delete_tree(&selected, &Cancellation::new(), None);
+    let result = delete_tree(&selected, None, &Cancellation::new(), None);
 
     let message = result.expect_err("the deletion is refused").to_string();
     assert!(message.contains(&mount_point.display().to_string()), "{message}");
@@ -121,7 +122,7 @@ fn a_file_mounted_on_another_file_is_refused() {
     fs::write(&target, b"covered").expect("the target file is written");
     let _mounted = BindMount::new(&file, &target);
 
-    let result = delete_tree(&target, &Cancellation::new(), None);
+    let result = delete_tree(&target, None, &Cancellation::new(), None);
 
     assert_eq!(result, Err(mount_point_refusal(&target)));
     assert_eq!(fs::read(&file).expect("the drive's file is kept"), b"keep me");
@@ -144,7 +145,7 @@ fn a_folder_reached_through_a_link_finds_the_mount_inside_it() {
     let _mounted = BindMount::new(&drive, &real.join("selected/mnt"));
     let selected = root.path().join("Music/selected");
 
-    let result = delete_tree(&selected, &Cancellation::new(), None);
+    let result = delete_tree(&selected, None, &Cancellation::new(), None);
 
     let message = result.expect_err("the deletion is refused").to_string();
     assert!(
@@ -162,7 +163,7 @@ fn a_folder_without_mounts_is_still_deleted() {
     fs::create_dir_all(selected.join("sub")).expect("the folders are created");
     fs::write(selected.join("sub/a.txt"), b"delete me").expect("the file is written");
 
-    let result = delete_tree(&selected, &Cancellation::new(), None);
+    let result = delete_tree(&selected, None, &Cancellation::new(), None);
 
     assert_eq!(result, Ok(()));
     assert!(!selected.exists());
