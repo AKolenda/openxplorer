@@ -133,6 +133,36 @@ fn cancelling_while_the_staging_folder_is_made_is_a_cancellation() {
     fixture.assert_no_output();
 }
 
+/// A destination where the user cancels while the staging folder of a
+/// failed extraction is removed, which still succeeds.
+struct CancelledWhileRollingBack(Cancellation);
+
+impl Provider for CancelledWhileRollingBack {
+    fn delete(&self, node: &LocalNode) -> Result<(), TransferError> {
+        self.0.cancel();
+        node.local_delete()
+    }
+}
+
+/// A failure that happened before Cancel is still the error when the user
+/// cancels during the rollback, so the app reports it.
+///
+/// parity: ARC-013
+#[test]
+fn cancelling_during_the_rollback_keeps_the_failure() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_sample_zip();
+    let output = LocalFileOutput::failing(WriteBehaviour::DiskFull);
+    let factory = LocalNode::factory(Arc::new(CancelledWhileRollingBack(fixture.cancel.clone())));
+    let mut extractor = fixture.extractor_with(factory, Arc::new(output));
+
+    let error = fixture.extract_with(&mut extractor, "Unpacked").unwrap_err();
+
+    assert!(fixture.cancel.is_cancelled(), "Cancel came during the rollback");
+    assert_eq!(error.to_string(), "Disk full");
+    fixture.assert_no_output();
+}
+
 /// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_crc_failure_rolls_back`.
 ///
 /// parity: ARC-013

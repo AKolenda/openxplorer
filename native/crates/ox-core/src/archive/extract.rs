@@ -237,25 +237,13 @@ impl ZipExtractor {
         request: &ExtractionRequest,
         cancel: &Cancellation,
     ) -> Result<ExtractedFolder, ArchiveError> {
-        // Once the user cancelled, GIO aborts the call in progress at any
-        // step with an error of its own. A staging folder left behind is
-        // still reported (XFER-003).
-        self.extract_steps(request, cancel).map_err(|error| match error {
-            ArchiveError::StagingLeftBehind { .. } => error,
-            other => other.unless_cancelled(cancel),
-        })
-    }
-
-    /// The steps of [`Self::extract`], whatever the cancellation did to
-    /// their errors.
-    fn extract_steps(
-        &mut self,
-        request: &ExtractionRequest,
-        cancel: &Cancellation,
-    ) -> Result<ExtractedFolder, ArchiveError> {
+        // Once the user cancelled, GIO aborts the call in progress with an
+        // error of its own; each step that asks GIO maps it to Cancelled.
         let archive_uri = normalise(&request.archive_uri)?;
         let destination_uri = normalise(&request.destination_uri)?;
-        let destination = self.prepare_destination(&destination_uri, &request.folder_name, cancel)?;
+        let destination = self
+            .prepare_destination(&destination_uri, &request.folder_name, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         let name = request.folder_name.clone();
         self.report("Checking ZIP contents…".to_owned(), 0.0);
         let mut archive = open_archive(self.opener.as_ref(), &archive_uri, cancel)?;
@@ -264,9 +252,11 @@ impl ZipExtractor {
             Some(selected) => plan_selected(archive.members(), selected, &self.limits, cancel)?,
             None => plan(archive.members(), &self.limits, cancel)?,
         };
-        self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)?;
+        self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         cancel.check()?;
-        let mut staging = ExtractionStaging::create(destination.folder.as_ref(), cancel)?;
+        let mut staging = ExtractionStaging::create(destination.folder.as_ref(), cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         let mut unpacking = Unpacking::new(self, plan.summary, cancel);
         if let Err(error) = unpacking.run(&mut archive, &plan, &mut staging, destination.new_folder.as_ref())
         {
