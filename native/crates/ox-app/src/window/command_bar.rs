@@ -3,13 +3,13 @@
 //!
 //! Ports `section.commandbar` in `v2.0.0:desktop/ui/index.html` and its menus in
 //! `setup()` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`, in the same order:
-//! New ▾ │ Cut, Copy, Paste, Rename, Share, Move to Trash │ Sort ▾,
+//! New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾,
 //! View ▾, More options, then at the right the appearance toggle, Settings
 //! and the Details toggle. Every control runs a window or application
-//! action. New is disabled where nothing can be created, and Delete is named after what
-//! it does in the folder: "Move to Trash" or "Delete permanently"
-//! (CMD-003). Share, which was Copy path in the Python app, shows only
-//! where the desktop can share by email (CMD-037, `super::share`).
+//! action. New is disabled where nothing can be created, and Delete is named
+//! plainly "Delete", as in Windows Explorer, or "Delete permanently" in the
+//! Recycle Bin (CMD-003). Share, which was Copy path in the Python app, shows
+//! only where the desktop can share by email (CMD-037, `super::share`).
 //!
 //! [`CommandBar`] is a `GtkBox` subclass. The template
 //! `resources/ui/command-bar.ui` lays out the bar and the three controls at
@@ -61,7 +61,7 @@ struct IconCommand {
     compact: InCompactWindow,
 }
 
-/// Cut to Move to Trash, as index.html lists them.
+/// Cut to Delete, as index.html lists them.
 const EDIT_COMMANDS: [IconCommand; 6] = [
     IconCommand {
         glyph: Icon::Cut,
@@ -101,8 +101,8 @@ const EDIT_COMMANDS: [IconCommand; 6] = [
     IconCommand {
         glyph: Icon::Delete,
         action: WindowAction::Trash,
-        name: crate::i18n::message_id("Move to Trash"),
-        tooltip: crate::i18n::message_id("Move to Trash (Delete)"),
+        name: crate::i18n::message_id("Delete"),
+        tooltip: crate::i18n::message_id("Delete (Delete)"),
         compact: InCompactWindow::Kept,
     },
 ];
@@ -195,7 +195,7 @@ glib::wrapper! {
 }
 
 impl CommandBar {
-    /// New ▾ │ Cut … Move to Trash │ Sort ▾, View ▾ and More options,
+    /// New ▾ │ Cut … Delete │ Sort ▾, View ▾ and More options,
     /// remembering the commands a compact window hides.
     fn add_file_commands(&self) {
         let imp = self.imp();
@@ -314,7 +314,7 @@ impl CommandBar {
         }
     }
 
-    /// Names Delete `label`, "Move to Trash" or "Delete permanently", in
+    /// Names Delete `label`, "Delete" or "Delete permanently", in
     /// its tooltip and for screen readers (`updateToolbar`).
     pub(super) fn show_delete_label(&self, label: &str) {
         let Some(button) = self.imp().delete_button.get() else {

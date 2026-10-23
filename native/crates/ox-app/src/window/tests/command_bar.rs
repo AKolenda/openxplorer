@@ -79,7 +79,7 @@ pub(super) fn command_bar_names(test: &TestWindow) -> Vec<String> {
         .collect()
 }
 
-/// Share, between Rename and Move to Trash, shows only where the desktop
+/// Share, between Rename and Delete, shows only where the desktop
 /// can share (`tests::share`); here no Email portal answers, whatever the
 /// machine has.
 #[gtk::test]
@@ -101,7 +101,7 @@ fn the_command_bar_has_the_current_controls_in_order() {
             "Copy (Ctrl+C)",
             "Paste files (Ctrl+V)",
             "Rename (F2)",
-            "Move to Trash (Delete)",
+            "Delete (Delete)",
             "|",
             "Sort",
             "View",
@@ -130,7 +130,7 @@ fn the_edit_commands_follow_the_selection_with_their_python_tooltips() {
         ("win.cut", "Cut (Ctrl+X)"),
         ("win.copy", "Copy (Ctrl+C)"),
         ("win.rename", "Rename (F2)"),
-        ("win.trash", "Move to Trash (Delete)"),
+        ("win.trash", "Delete (Delete)"),
     ];
     for (action, tooltip) in edit_commands {
         let button = command_button(&test, action);
