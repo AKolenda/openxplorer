@@ -16,6 +16,10 @@
 //!   descriptor (`attachment_fds`). This module opens the files and never
 //!   reads them: the portal turns each descriptor into the path it names
 //!   for the email app.
+//! - **Paths the email app reads as written.** GTK's portal backend puts
+//!   each path into a `mailto:` address unescaped, so a file whose path
+//!   has a character that address would read otherwise is refused (see
+//!   [`mailto_safe`]).
 //! - **Only where it works.** The portal exports the interface only when
 //!   one of the desktop's portal backends implements it, so reading its
 //!   `version` property tells whether the desktop can share by email; it
@@ -27,6 +31,8 @@
 //! is not missed.
 
 use std::fs::{File, OpenOptions};
+use std::os::fd::AsRawFd;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
@@ -79,6 +85,9 @@ pub enum EmailError {
     /// A file could not be opened to attach it.
     #[error("{}", crate::i18n::gettext("The files could not be attached to an email."))]
     Unreadable(#[source] std::io::Error),
+    /// The path of the file, named by its name, is not [`mailto_safe`].
+    #[error("{}", crate::i18n::format_message("“{name}” cannot be attached to an email because its path has &, #, ?, % or a control character, which the email app could misread. Rename or move it, then share it again.", &[("name", .0)]))]
+    UnsafePath(String),
     /// The portal could not be called; the D-Bus error is the source,
     /// kept out of the message.
     #[error("{}", crate::i18n::gettext("The email app could not be opened."))]
@@ -120,7 +129,8 @@ pub async fn email_portal_version(connection: &gio::DBusConnection, portal: &str
 /// # Errors
 ///
 /// [`EmailError::Unreadable`] when a file cannot be opened or is not a
-/// regular file.
+/// regular file, and [`EmailError::UnsafePath`] when its path is not
+/// [`mailto_safe`].
 pub fn open_attachments(paths: &[PathBuf]) -> Result<Vec<File>, EmailError> {
     paths.iter().map(|path| open_attachment(path)).collect()
 }
@@ -136,7 +146,29 @@ fn open_attachment(path: &Path) -> Result<File, EmailError> {
     if !is_file {
         return Err(EmailError::Unreadable(std::io::ErrorKind::InvalidInput.into()));
     }
+    // The path the portal names: it reads the descriptor's link in /proc,
+    // where symbolic links are already followed.
+    let resolved =
+        std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())).map_err(EmailError::Unreadable)?;
+    if !mailto_safe(&resolved) {
+        let name = path.file_name().unwrap_or(path.as_os_str());
+        return Err(EmailError::UnsafePath(name.to_string_lossy().into_owned()));
+    }
     Ok(file)
+}
+
+/// Whether `path` reads the same inside a `mailto:` address. GTK's portal
+/// backend (`xdg-desktop-portal-gtk`'s `src/email.c`, unchanged through
+/// 1.15.3) appends each path after `&attachment=` without escaping it, so
+/// `&` would start another field, such as `bcc=` adding a recipient, `#`
+/// or `?` would cut the path short, `%` would be decoded and a control
+/// character has no place in an address.
+fn mailto_safe(path: &Path) -> bool {
+    !path
+        .as_os_str()
+        .as_bytes()
+        .iter()
+        .any(|byte| matches!(byte, b'&' | b'#' | b'?' | b'%') || byte.is_ascii_control())
 }
 
 /// Asks `portal` on `connection` to open a new email in the desktop's
@@ -298,5 +330,42 @@ mod tests {
             open_attachments(&[pipe]),
             Err(EmailError::Unreadable(_))
         ));
+    }
+
+    /// The name, a folder or the target of a link with a character the
+    /// `mailto:` address would misread refuses the file by its name; a
+    /// link whose own name has one but whose target has none is fine, as
+    /// the portal names the target.
+    #[test]
+    fn a_path_the_email_address_would_misread_is_refused_by_name() {
+        let folder = tempfile::tempdir().expect("a folder");
+        let refused_as = |path: &Path| match open_attachments(&[path.to_owned()]) {
+            Err(EmailError::UnsafePath(name)) => Some(name),
+            _ => None,
+        };
+        for name in [
+            "report&bcc=someone@example.invalid",
+            "minutes#2.txt",
+            "why?.txt",
+            "100%.txt",
+            "two\nlines.txt",
+        ] {
+            let path = folder.path().join(name);
+            std::fs::write(&path, "plan").expect("a file");
+            assert_eq!(refused_as(&path).as_deref(), Some(name));
+        }
+        let team = folder.path().join("R&D");
+        std::fs::create_dir(&team).expect("a folder");
+        std::fs::write(team.join("plan.txt"), "plan").expect("a file");
+        assert_eq!(refused_as(&team.join("plan.txt")).as_deref(), Some("plan.txt"));
+
+        let link = folder.path().join("minutes.txt");
+        std::os::unix::fs::symlink(folder.path().join("minutes#2.txt"), &link).expect("a link");
+        assert_eq!(refused_as(&link).as_deref(), Some("minutes.txt"));
+        let plain = folder.path().join("plan.txt");
+        std::fs::write(&plain, "plan").expect("a file");
+        let odd_link = folder.path().join("plan&more.txt");
+        std::os::unix::fs::symlink(&plain, &odd_link).expect("a link");
+        assert!(open_attachments(&[plain, odd_link]).is_ok());
     }
 }

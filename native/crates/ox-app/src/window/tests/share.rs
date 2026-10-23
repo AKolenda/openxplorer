@@ -183,6 +183,33 @@ fn more_files_than_an_email_takes_are_refused_with_a_reason() {
     assert!(portal.calls().is_empty(), "the portal is not asked");
 }
 
+/// GTK's portal backend writes each attachment's path into a `mailto:`
+/// address unescaped, where a name like `report&bcc=…` would add a
+/// recipient: such a file is refused by name before the portal is asked.
+///
+/// parity: CMD-037
+#[gtk::test]
+fn a_file_the_email_address_would_misread_is_refused_by_name() {
+    let fixture = Fixture::standard();
+    let name = "report&bcc=someone@example.invalid";
+    std::fs::write(fixture.path(name), "report").expect("the file");
+    let test = laid_out(&fixture.uri());
+    let portal = EmailPortal::answering(0);
+    use_portal(&test, &portal.name());
+    select_names(&test, &[name]);
+
+    share_button(&test).emit_clicked();
+    wait_until("the reason", || !test.window.shown_message().is_empty());
+    assert_eq!(
+        test.window.shown_message().as_str(),
+        format!(
+            "“{name}” cannot be attached to an email because its path has &, #, ?, % or a \
+             control character, which the email app could misread. Rename or move it, then share it again."
+        )
+    );
+    assert!(portal.calls().is_empty(), "the portal is not asked");
+}
+
 /// A compact window hides Share with Cut and Rename, and a wider one
 /// shows it again.
 ///

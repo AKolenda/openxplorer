@@ -6526,6 +6526,11 @@ msgstr ""
 msgid "The files could not be attached to an email."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/integration/email_portal.rs
+msgid "“{name}” cannot be attached to an email because its path has &, #, ?, % or a control character, which the email app could misread. Rename or move it, then share it again."
+msgstr ""
+
 #: crates/ox-core/src/integration/file_manager_bus.rs
 msgid "OpenXplorer could not open the requested location."
 msgstr ""
