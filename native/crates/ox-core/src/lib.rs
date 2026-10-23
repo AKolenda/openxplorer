@@ -48,6 +48,7 @@ pub mod network;
 pub mod ops;
 pub mod permissions;
 pub mod places;
+pub(crate) mod safe_walk;
 pub mod search;
 pub mod service_actions;
 pub mod session;
