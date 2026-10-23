@@ -1,8 +1,3 @@
-# Unreleased
-
-## What's Changed
-* revert(notifications): stop sending a desktop notification when a file operation ends by @addition-official
-
 # 2.0.6 — 2026-10-13
 
 ## What's Changed
