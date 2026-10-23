@@ -21,6 +21,7 @@ mod compact_density;
 mod context_menus;
 mod details_preview;
 mod devices;
+mod dialog_keys;
 mod disconnected;
 mod drag_and_drop;
 pub(super) mod empty_folder;

@@ -16,6 +16,10 @@
 //! would otherwise take it for its own rows. A disabled command ignores its
 //! key, except Cut, Copy and Paste, which `onKey` runs directly so that
 //! they can say why nothing happens.
+//!
+//! While a dialog is in front, on the window's dialog layer (Properties)
+//! or in a window of its own, the keys do nothing to the items behind it,
+//! as in Windows Explorer; the dialog's own fields and buttons keep them.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -88,10 +92,11 @@ impl BrowserWindow {
     }
 
     /// False on the Settings page, in a text field, in the address bar,
-    /// where the keys edit text or move between crumbs, and on the pane
-    /// splitter's handle, whose keys move it.
+    /// where the keys edit text or move between crumbs, on the pane
+    /// splitter's handle, whose keys move it, and while a dialog is in
+    /// front of the items.
     pub(in crate::window) fn file_keys_apply(&self) -> bool {
-        if self.shows_settings() || self.focus_is_in_text_field() {
+        if self.shows_settings() || self.focus_is_in_text_field() || self.dialog_in_front() {
             return false;
         }
         let Some(focus) = GtkWindowExt::focus(self) else {
