@@ -154,6 +154,14 @@ pub(in crate::window) fn is_triggered_by(
     modifiers: gdk::ModifierType,
 ) -> bool {
     if let Some(alternatives) = trigger.downcast_ref::<gtk::AlternativeTrigger>() {
+        // GTK 4.24 parses "a|b|c" into one trigger that lists all three,
+        // whose first and second reach only two; older GTK nests pairs.
+        if let Some(list) = alternatives.dynamic_cast_ref::<gio::ListModel>() {
+            return list
+                .iter::<gtk::ShortcutTrigger>()
+                .filter_map(Result::ok)
+                .any(|alternative| is_triggered_by(&alternative, keyval, modifiers));
+        }
         return is_triggered_by(&alternatives.first(), keyval, modifiers)
             || is_triggered_by(&alternatives.second(), keyval, modifiers);
     }

@@ -35,6 +35,7 @@ use super::modes::{path_for_unix_modes, secure_local_staging, DirectoryModes, PR
 use super::names::child_node;
 use super::node::{Node, NodeInfo, NodeKind};
 use super::source_removal::CopiedItem;
+use super::staged_name::StagedName;
 use super::staging::clean_staging;
 use super::types::{progress_fraction, ByteProgress, Progress, ProgressScope};
 use super::unstorable::{Fix, Unstorable};
@@ -42,8 +43,9 @@ use super::unstorable::{Fix, Unstorable};
 /// Copies one source tree into staging, reporting byte progress.
 pub(crate) struct Copier<'a> {
     cancel: &'a Cancellation,
-    /// The name of the staging item this copy builds (see the alias rule).
-    own_stage_name: &'a str,
+    /// The staging this copy builds (see the alias rule), and the real
+    /// name an entry's error uses for it.
+    name: &'a StagedName,
     /// Final modes of the staged local folders, applied when publishing.
     modes: &'a mut DirectoryModes,
     /// What the destination cannot store, and the user's answers about it.
@@ -64,17 +66,17 @@ pub(crate) struct Copier<'a> {
 }
 
 impl<'a> Copier<'a> {
-    /// A copier building into the staging item named `own_stage_name`.
+    /// A copier building into the staging `name`.
     pub(crate) fn new(
         cancel: &'a Cancellation,
-        own_stage_name: &'a str,
+        name: &'a StagedName,
         modes: &'a mut DirectoryModes,
         unstorable: &'a mut Unstorable,
         emit: &'a mut dyn FnMut(Progress),
     ) -> Self {
         Self {
             cancel,
-            own_stage_name,
+            name,
             modes,
             unstorable,
             emit,
@@ -129,7 +131,7 @@ impl<'a> Copier<'a> {
         // XFER-016: the copy met its own staging, so the destination is an
         // alias of a folder inside the source that `guard_destination`
         // could not prove.
-        if source.name() == self.own_stage_name {
+        if source.name() == self.name.stage() {
             self.stopped = true;
             return Err(TransferError::failed(crate::i18n::gettext(
                 "The destination resolves inside the source through an alias. Copy stopped.",
@@ -237,7 +239,8 @@ impl<'a> Copier<'a> {
                     return Ok(());
                 }
                 Ok(None) => return Ok(()),
-                Err(error) => error,
+                // The question and the report name the entry's real path.
+                Err(error) => self.name.apply(error),
             };
             // A failed directory attempt may have recorded completed
             // descendants. Its staging can now be discarded, so none of

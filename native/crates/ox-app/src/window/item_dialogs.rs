@@ -98,7 +98,12 @@ impl BrowserWindow {
         dialogs.layer.set(layer).expect("installed once");
         self.add_action_entries([
             plain_action(WindowAction::Properties, |window| {
-                window.open_properties(PropertiesTab::General);
+                // Alt+Enter is an application accelerator, which reaches
+                // the window from a dialog in front too; only the items
+                // behind it have Properties.
+                if !window.dialog_in_front() {
+                    window.open_properties(PropertiesTab::General);
+                }
             }),
             plain_action(WindowAction::PreviousVersions, |window| {
                 window.open_properties(PropertiesTab::PreviousVersions);
@@ -397,6 +402,12 @@ impl BrowserWindow {
     pub(super) fn has_properties(&self, id: TabId) -> bool {
         let properties = self.item_dialogs().properties.borrow();
         properties.iter().any(|entry| entry.tab == id)
+    }
+
+    /// True while a dialog is in front of the items: one on the dialog
+    /// layer, or a dialog window of its own over this window.
+    pub(super) fn dialog_in_front(&self) -> bool {
+        self.dialog_layer().shown().is_some() || self.shows_dialog()
     }
 
     /// True while the dialog on screen is the active tab's Properties,

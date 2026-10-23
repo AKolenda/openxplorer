@@ -288,4 +288,21 @@ mod tests {
         let english = ["C".to_owned(), "pl".to_owned()];
         assert_eq!(Catalog::find(DOMAIN, &[dir.path().to_owned()], &english), None);
     }
+
+    /// No message says a drive is read-only or guesses why: like Windows
+    /// Explorer, the app tries and shows the system's error.
+    ///
+    /// parity: DEV-015
+    #[test]
+    fn no_message_explains_a_read_only_drive() {
+        let template = include_str!("../../../po/openxplorer.pot");
+        for text in [
+            "hibernat",
+            "Fast startup",
+            "Read-only drive",
+            "This drive is read-only.",
+        ] {
+            assert!(!template.contains(text), "{text}");
+        }
+    }
 }

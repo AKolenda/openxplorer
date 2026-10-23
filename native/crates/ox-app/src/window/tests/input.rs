@@ -20,6 +20,8 @@ use gtk::{gdk, gio, glib};
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::window::menu_popover::MenuPopover;
 use crate::window::quick_look::{PREVIEWER_INTERFACE, PREVIEWER_NAME, PREVIEWER_PATH};
+use crate::window::slow_click_rename::NamePress;
+use crate::window::tests::file_ops_support::is_renaming_in_place;
 
 /// Presses `key` in the details view, as far as the window's own key
 /// handling goes. Returns true when the window handled the key itself.
@@ -39,6 +41,49 @@ fn press_with(test: &TestWindow, key: gdk::Key, modifiers: gdk::ModifierType) ->
         .expect("the details view has a capture-phase key controller");
     let no_keycode = 0_u32;
     controller.emit_by_name::<bool>("key-pressed", &[&key.into_glib(), &no_keycode, &modifiers])
+}
+
+/// Presses `key` as GTK delivers it: to the window's capture-phase key
+/// controllers first, then, unless one of them takes it, as [`press`]
+/// does. Returns true when the window handled the key itself.
+fn press_through_window(test: &TestWindow, key: gdk::Key) -> bool {
+    let no_keycode = 0_u32;
+    let none = gdk::ModifierType::empty();
+    let window_keys: Vec<gtk::EventControllerKey> = test
+        .window
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+        .filter(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
+        .collect();
+    let taken = window_keys.iter().any(|controller| {
+        controller.emit_by_name::<bool>("key-pressed", &[&key.into_glib(), &no_keycode, &none])
+    });
+    taken || press(test, key)
+}
+
+/// Schedules the rename of a slow second click on the name of the only
+/// selected item.
+fn slow_click_selected_name(test: &TestWindow) {
+    test.window.name_pressed(NamePress {
+        on_name_of: test.window.folder_model().first_selected(),
+        clicks: 1,
+        modifiers: gdk::ModifierType::empty(),
+    });
+}
+
+/// Whether an in-place rename opened while `test`'s window ran for well
+/// over a double-click interval.
+fn renames_in_place_soon(test: &TestWindow) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_millis(1200);
+    while std::time::Instant::now() < deadline {
+        wait_for(Duration::from_millis(20));
+        if is_renaming_in_place(test) {
+            return true;
+        }
+    }
+    false
 }
 
 pub(super) fn hint(test: &TestWindow) -> String {
@@ -543,4 +588,42 @@ fn letter_shortcuts_are_layout_independent_gtk_triggers() {
         });
         assert!(is_accelerator || is_trigger, "{accelerator} is a GTK shortcut");
     }
+}
+
+/// Any key pressed before a slow click's rename starts cancels it, as in
+/// Windows File Explorer, also keys the folder view handles itself
+/// without a command: Space closing the preview, Backspace with no folder
+/// to go back to. A modifier pressed alone does not.
+///
+/// parity: OPS-011, PROP-012
+#[gtk::test]
+fn any_key_but_a_modifier_cancels_a_pending_slow_click_rename() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let previewer = FakePreviewer::start();
+    wait_until("the window sees the previewer", || {
+        test.window.quick_look_is_available()
+    });
+    test.select_named("Notes 10.txt");
+    assert!(press(&test, gdk::Key::space), "Space opens the preview");
+    wait_until("ShowFile", || previewer.calls().len() == 1);
+
+    slow_click_selected_name(&test);
+    assert!(
+        press_through_window(&test, gdk::Key::space),
+        "Space closes the preview"
+    );
+    let after_space = renames_in_place_soon(&test);
+    assert_eq!(previewer.calls().last().map(String::as_str), Some("Close"));
+    slow_click_selected_name(&test);
+    press_through_window(&test, gdk::Key::BackSpace);
+    let after_backspace = renames_in_place_soon(&test);
+    slow_click_selected_name(&test);
+    press_through_window(&test, gdk::Key::Control_L);
+    let after_control = renames_in_place_soon(&test);
+
+    assert!(!after_space, "Space cancels the rename");
+    assert!(!after_backspace, "Backspace cancels the rename");
+    assert!(after_control, "Ctrl alone keeps it");
+    assert_eq!(test.selected_names(), ["Notes 10.txt"]);
 }

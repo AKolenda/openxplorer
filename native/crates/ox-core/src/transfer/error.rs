@@ -81,7 +81,6 @@ impl From<glib::Error> for TransferError {
             Some(gio::IOErrorEnum::Exists) => Self::Exists(message),
             Some(gio::IOErrorEnum::NotMounted) => Self::NotMounted(message),
             Some(gio::IOErrorEnum::NotSupported) => Self::NotSupported(message),
-            Some(gio::IOErrorEnum::ReadOnly) => Self::Failed(crate::read_only::read_only_failure()),
             _ => Self::Failed(message),
         }
     }
@@ -95,7 +94,6 @@ impl From<std::io::Error> for TransferError {
         match error.kind() {
             std::io::ErrorKind::NotFound => Self::NotFound(message),
             std::io::ErrorKind::AlreadyExists => Self::Exists(message),
-            std::io::ErrorKind::ReadOnlyFilesystem => Self::Failed(crate::read_only::read_only_failure()),
             _ => Self::Failed(message),
         }
     }
@@ -181,19 +179,20 @@ mod tests {
         );
     }
 
-    /// A write to a drive mounted read-only says so in plain words, from
-    /// GIO and from local I/O alike.
+    /// A write to a drive mounted read-only shows the system's own error,
+    /// from GIO and from local I/O alike, as Windows Explorer does.
     ///
     /// parity: DEV-015
     #[test]
-    fn a_read_only_file_system_says_what_to_do() {
-        let expected = crate::read_only::read_only_failure();
+    fn a_read_only_file_system_shows_the_system_error() {
         let from_gio = TransferError::from(glib::Error::new(
             gio::IOErrorEnum::ReadOnly,
             "Read-only file system",
         ));
-        let from_io = TransferError::from(std::io::Error::from_raw_os_error(30));
-        assert_eq!(from_gio.to_string(), expected);
+        let read_only = std::io::Error::from_raw_os_error(30);
+        let expected = read_only.to_string();
+        let from_io = TransferError::from(read_only);
+        assert_eq!(from_gio.to_string(), "Read-only file system");
         assert_eq!(from_io.to_string(), expected);
     }
 }

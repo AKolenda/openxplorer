@@ -22,17 +22,16 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::archive::{
     lift_same_named_folder, private_extraction_name, ArchiveError, ExtractedFolder, ExtractionRequest,
+    ZipExtractor,
 };
 use ox_core::gio_node::GioNode;
 use ox_core::location::{parent_location, validate_name};
-use ox_core::ops::OperationSummary;
 use ox_core::transfer::{Cancellation, Node, TransferMode};
 
 use crate::archive_view::{
     extraction_failure_text, extraction_success_text, ArchiveTarget, ExtractionChoice, EXTRACTION_STOPPED,
 };
 
-use super::background_notice::Destination;
 use super::file_ops::IncomingItems;
 use super::session::TabId;
 use super::transfer_panel::TransferKind;
@@ -140,10 +139,6 @@ impl BrowserWindow {
                     Ok(Some((shown, text))) => window.conclude_extraction(&shown, &choice, &text, origin),
                     Ok(None) => window.show_message(ox_core::i18n::gettext_static(NOTHING_ADDED)),
                     Err(text) => {
-                        window.notify_if_in_background(
-                            &OperationSummary::Report(text.clone()),
-                            Destination::default(),
-                        );
                         window.show_result_dialog(ox_core::i18n::gettext_static(EXTRACTION_STOPPED), &text);
                     }
                 }
@@ -176,7 +171,7 @@ impl BrowserWindow {
             folder_name: name,
         };
         let extracted = self
-            .run_extraction(request, None)
+            .run_extraction(request, |extractor| extractor)
             .await
             .map_err(|error| extraction_failure_text(&error))?;
         let lifted = gio::spawn_blocking(move || lift_same_named_folder(extracted))
@@ -202,8 +197,9 @@ impl BrowserWindow {
             destination_uri: target.clone(),
             folder_name: private,
         };
+        // Errors name the chosen folder, not the private one.
         let extracted = self
-            .run_extraction(request, None)
+            .run_extraction(request, ZipExtractor::into_existing_folder)
             .await
             .map_err(|error| extraction_failure_text(&error))?;
         let staging = extracted.uri.clone();
@@ -256,12 +252,13 @@ impl BrowserWindow {
         }
     }
 
-    /// Runs `request` with the transfer panel and the window's progress;
-    /// only the members `selection` names, when it names some.
+    /// Runs `request` with the transfer panel and the window's progress,
+    /// with the extractor that `adjust` makes of the window's, for example
+    /// one extracting only some members.
     pub(super) async fn run_extraction(
         &self,
         request: ExtractionRequest,
-        selection: Option<&[String]>,
+        adjust: impl FnOnce(ZipExtractor) -> ZipExtractor,
     ) -> Result<ExtractedFolder, ArchiveError> {
         let cancel = Cancellation::new();
         self.transfer_panel().start(
@@ -270,12 +267,10 @@ impl BrowserWindow {
             cancel.clone(),
         );
         self.update_archive_actions();
-        let mut extractor = self
-            .zip_extractor()
-            .with_progress(self.progress_reporter(&cancel));
-        if let Some(members) = selection {
-            extractor = extractor.with_selection(members);
-        }
+        let extractor = adjust(
+            self.zip_extractor()
+                .with_progress(self.progress_reporter(&cancel)),
+        );
         let extracted = extractor.extract_in_background(request, cancel).await;
         self.finish_archive_operation();
         extracted
@@ -302,8 +297,6 @@ impl BrowserWindow {
             self.reload_tabs_showing(&listed);
             self.reload_tabs_showing(shown);
         }
-        let destination = Destination::items(vec![shown.to_owned()]);
-        self.notify_if_in_background(&OperationSummary::Toast(text.to_owned()), destination);
         // Listing a folder hides the toast, so it comes last.
         self.show_message(text);
     }
