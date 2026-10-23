@@ -96,6 +96,8 @@ def verify_tree(report: Report, tree: InstalledTree) -> None:
     helper = tree.paths.mount_helper
     if helper is not None:
         check_mount_helper(report, tree, helper)
+    if tree.paths.admin_delete is not None:
+        check_admin_delete(report, tree)
 
 
 def promised_files(tree: InstalledTree) -> list[PurePosixPath]:
@@ -117,6 +119,8 @@ def promised_files(tree: InstalledTree) -> list[PurePosixPath]:
                   package_data.LEGACY_MOUNT_HELPER_COMMAND)
         files += [paths.commands / name for name in legacy]
         files.append(paths.mount_helper)
+    if paths.admin_delete is not None:
+        files += [paths.admin_delete, paths.admin_delete_policy]
     return files
 
 
@@ -268,6 +272,38 @@ def check_mount_helper(report: Report, tree: InstalledTree, helper: PurePosixPat
         report.check('The mount helper is a compiled program', program.read(4) == ELF_MAGIC)
     subprocess.run([str(installed), '--help'], check=True, stdout=subprocess.DEVNULL)
     report.check('The mount helper starts', True)
+
+
+def check_admin_delete(report: Report, tree: InstalledTree) -> None:
+    """Check the permanent-delete helper and the polkit action that runs it.
+
+    The helper is the only program the app ever asks pkexec to run, so the
+    action must name that exact path, be the channel's own, and ask an
+    administrator rather than letting anyone through.
+    """
+    helper = tree.paths.admin_delete
+    installed = tree.path_of(helper)
+    with installed.open('rb') as program:
+        report.check('The permanent-delete helper is a compiled program',
+                     program.read(4) == ELF_MAGIC)
+    report.check('The permanent-delete helper is executable and not on PATH',
+                 installed.stat().st_mode & 0o111 != 0
+                 and not str(helper).startswith(str(tree.paths.commands) + '/'))
+    subprocess.run([str(installed), '--help'], check=True, stdout=subprocess.DEVNULL)
+    report.check('The permanent-delete helper starts', True)
+    action = ElementTree.parse(tree.path_of(tree.paths.admin_delete_policy)).getroot()
+    found = action.find('action')
+    if found is None:
+        raise VerificationError('The polkit policy declares no action')
+    report.check("The polkit action is the channel's own",
+                 found.get('id') == package_data.admin_delete_action(tree.channel))
+    annotations = {note.get('key'): (note.text or '') for note in found.findall('annotate')}
+    report.check('The polkit action runs exactly the installed helper',
+                 annotations.get('org.freedesktop.policykit.exec.path') == str(helper))
+    report.check('The polkit action asks an administrator every session',
+                 found.findtext('defaults/allow_any', '').startswith('auth_admin')
+                 and found.findtext('defaults/allow_inactive', '').startswith('auth_admin')
+                 and found.findtext('defaults/allow_active', '') == 'auth_admin_keep')
 
 
 def main(argv: list[str] | None = None) -> int:

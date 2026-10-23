@@ -64,6 +64,9 @@ Recommends:     file-roller
 # The Email portal backend that Share uses on GNOME; KDE Plasma's own
 # portal backend has Email too.
 Recommends:     xdg-desktop-portal-gtk
+# pkexec, which asks for the administrator before the permanent-delete
+# helper deletes a whole folder under admin://.
+Recommends:     polkit
 %if "%{app_id}" == "io.winspace.Development"
 # mount.cifs, which the persistent SMB mount helper's units run.
 Recommends:     cifs-utils
@@ -91,13 +94,15 @@ EOF
 export OX_APP_ID=%{app_id}
 cargo build --release --locked --offline --manifest-path native/Cargo.toml \
     --package ox-app --bin openxplorer-native \
-    --package ox-core --bin openxplorer-mount-share
+    --package ox-core --bin openxplorer-mount-share \
+    --package ox-core --bin openxplorer-admin-delete
 
 %install
 # The shared install layout of every package format (native/tools/package_data.py).
 python3 native/tools/package_data.py --app-id %{app_id} --layout fhs \
     --program native/target/release/openxplorer-native \
-    --mount-helper native/target/release/openxplorer-mount-share --destdir %{buildroot}
+    --mount-helper native/target/release/openxplorer-mount-share \
+    --admin-delete native/target/release/openxplorer-admin-delete --destdir %{buildroot}
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/%{app_id}.desktop
@@ -114,6 +119,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 # domain), so the preview and the stable app own one file each.
 %{_datadir}/locale/zh_CN/LC_MESSAGES/%{name}.mo
 %{_datadir}/licenses/%{name}/
+# The permanent-delete helper and the polkit action pkexec checks before
+# running it. The helper is not a command: it stays out of %{_bindir}.
+%{_libexecdir}/%{name}/
+%{_datadir}/polkit-1/actions/%{app_id}.policy
 %if "%{app_id}" == "io.winspace.Development"
 # The Python package's command names and the persistent SMB mount helper.
 %{_bindir}/winspace

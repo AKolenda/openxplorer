@@ -6,7 +6,8 @@
 
 use gio::prelude::*;
 
-use super::{admin_delete, local_delete, remote_delete, GioNode};
+use super::{local_delete, remote_delete, GioNode};
+use crate::admin_delete;
 use crate::transfer::{Cancellation, NodeKind, TransferError, WriteGuard};
 
 impl GioNode {
@@ -26,11 +27,11 @@ impl GioNode {
     }
 
     /// XFER-015: permanently deletes the item and everything inside it.
-    /// Local items are deleted relative to pinned folder descriptors; every
-    /// other location is deleted by path, as the Python app does. A folder
-    /// under `admin://` is deleted by path only when no other account can
-    /// change anything that walk resolves (see `admin_delete`). `kind` is
-    /// what the caller found the item to be, as for
+    /// Local items are deleted relative to pinned folder descriptors, and
+    /// so is a whole folder under `admin://`, through the privileged
+    /// helper of [`crate::admin_delete`]. Every other location, a single
+    /// `admin://` file or link included, is deleted by path, as the Python
+    /// app does. `kind` is what the caller found the item to be, as for
     /// [`Node::delete_tree_of_kind`](crate::transfer::Node::delete_tree_of_kind):
     /// anything but a folder is deleted without looking inside it.
     ///
@@ -46,13 +47,13 @@ impl GioNode {
         guard: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
         self.require_item()?;
-        match self.local_path() {
-            Some(path) => local_delete::delete_tree(&path, kind, cancel, guard),
-            None if self.file.has_uri_scheme("admin") => {
-                admin_delete::delete_tree(&self.file, kind, cancel, guard)
-            }
-            None => remote_delete::delete_tree(&self.file, kind, cancel, guard),
+        if let Some(path) = self.local_path() {
+            return local_delete::delete_tree(&path, kind, cancel, guard);
         }
+        if admin_delete::is_admin_folder(&self.file, kind, cancel)? {
+            return admin_delete::delete_tree(&self.file, cancel, guard);
+        }
+        remote_delete::delete_tree(&self.file, kind, cancel, guard)
     }
 }
 

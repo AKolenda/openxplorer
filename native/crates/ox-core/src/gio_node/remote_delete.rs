@@ -265,6 +265,47 @@ mod tests {
         assert_eq!(fs::read(protected.join("version")).expect("read"), b"backup");
     }
 
+    /// The walk by path can be redirected: a folder it has already
+    /// inspected and swapped for a symbolic link before the walk reaches
+    /// the items inside it sends the next step through that link, and the
+    /// item deleted is the link target’s, not the one that was there.
+    ///
+    /// This is the limit the module header describes. It is accepted for a
+    /// remote backend, which resolves its own paths on the server, and it
+    /// is why `admin://` folders are not deleted this way:
+    /// `admin_delete::tests::a_folder_swapped_for_a_link_during_the_walk_is_not_followed`
+    /// is the same race against the walk that replaced it.
+    ///
+    /// parity: XFER-015
+    #[test]
+    fn a_folder_swapped_for_a_link_during_the_walk_is_followed() {
+        let root = temporary_folder();
+        let outside = root.path().join("outside");
+        fs::create_dir(&outside).expect("create the tree outside");
+        fs::write(outside.join("bait"), b"not yours").expect("write its item");
+        let selected = root.path().join("selected");
+        let inner = selected.join("inner");
+        fs::create_dir_all(&inner).expect("create the selected tree");
+        fs::write(inner.join("bait"), b"mine").expect("write its item");
+        let (swapped, target) = (inner.clone(), outside.clone());
+        let swap = move |uri: &str| {
+            if uri.ends_with("/inner/bait") {
+                fs::remove_dir_all(&swapped).expect("the folder is removed");
+                symlink(&target, &swapped).expect("the link replaces it");
+            }
+            Ok(())
+        };
+
+        let result = delete(&selected, &Cancellation::new(), Some(&swap));
+
+        assert_eq!(result, Ok(()));
+        assert!(
+            !outside.join("bait").exists(),
+            "the walk by path no longer follows the swap; the comparison with \
+             admin_delete needs rewriting"
+        );
+    }
+
     /// parity: XFER-015
     #[test]
     fn nesting_deeper_than_the_limit_is_refused() {

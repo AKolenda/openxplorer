@@ -14,6 +14,14 @@ pub(crate) fn permission_bits(path: &Path) -> u32 {
     fs::symlink_metadata(path).expect("the path exists").mode() & 0o7777
 }
 
+/// Held by every test that replaces the step which elevates an
+/// `admin://` deletion ([`crate::admin_delete::set_elevation`]). That
+/// replacement is process-wide, so two tests must not hold it at once.
+pub(crate) fn elevation_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// A new temporary folder for one test, removed when dropped.
 pub(crate) fn temporary_folder() -> TempDir {
     tempfile::tempdir().expect("the test home has room for a temporary folder")
