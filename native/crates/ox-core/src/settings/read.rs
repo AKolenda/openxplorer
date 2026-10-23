@@ -17,7 +17,7 @@ use serde_json::{Map, Value};
 
 use super::labels::bookmark_fallback_label;
 use super::model::{Bookmark, RecentEntry, SettingsData, MAX_BOOKMARKS, MAX_HIDDEN, MAX_ORDER, MAX_RECENT};
-use super::preferences::PreferencesUpdate;
+use super::preferences::{Preferences, PreferencesUpdate};
 use super::python_conversions::{python_count, python_str};
 use super::stored_location::{normalise, require_share};
 use super::{FileState, Settings, SettingsError};
@@ -111,8 +111,22 @@ fn read_sections(source: &Value, settings: &mut SettingsData) -> Result<(), Sett
     if let Some(preferences) = sections.get("preferences") {
         let update = PreferencesUpdate::from_json(preferences)?;
         settings.preferences.apply(&update);
+        keep_shared_previews_off(preferences, &mut settings.preferences);
     }
     Ok(())
+}
+
+/// Thumbnails are one setting for every folder (VIEW-058), but the display
+/// style dialog Folder Options replaced could turn them off in the shared
+/// view alone (`viewDefaults.showPreviews`), which is no longer read; that
+/// choice turns the setting off, as off wins over `viewOptions`.
+fn keep_shared_previews_off(values: &Value, preferences: &mut Preferences) {
+    let shared = values
+        .get("viewDefaults")
+        .and_then(|style| style.get("showPreviews"));
+    if shared == Some(&Value::Bool(false)) {
+        preferences.view_options.show_previews = false;
+    }
 }
 
 /// The first `limit` items of a section of objects; a missing section is

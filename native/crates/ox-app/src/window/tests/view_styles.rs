@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Display styles: dates, per-folder styles, the display style dialog,
+//! Display styles: dates, per-folder styles, Folder Options,
 //! groups and folders that expand in place.
 
 use std::fs;
 
 use gtk::prelude::*;
-use ox_core::grouping::GroupBy;
 use ox_core::settings::{ColumnWidths, PreferencesUpdate, Settings};
 
 use super::file_ops_support::{open_dialog, wait_for_no_dialog};
 use crate::folder_view::sorting::SortColumn;
-use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, settle, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::folder_pane::FolderView;
 use crate::window::session::Direction;
 
@@ -73,7 +72,6 @@ fn each_folder_keeps_its_own_style_when_asked() {
     });
     test.activate("sort", Some("size"));
     let mut style = test.window.current_style();
-    style.show_previews = Some(false);
     style.details_columns = Some(vec!["size".to_owned(), "owner".to_owned()]);
     style.column_widths = Some(ColumnWidths {
         name: Some(320),
@@ -87,15 +85,14 @@ fn each_folder_keeps_its_own_style_when_asked() {
             .settings_data()
             .preferences
             .view_for(&fixture.uri())
-            .show_previews
-            == Some(false)
+            .sort
+            == "size"
     });
     test.window
         .navigate(&fixture.uri_of("Documents"))
         .expect("a folder");
     test.wait_for_listing("Documents");
     assert_eq!(test.action_state("sort").as_deref(), Some("name"));
-    assert!(test.window.folder_pane().previews_enabled());
     assert_eq!(
         test.window.folder_pane().details().chosen_columns(),
         [SortColumn::Modified, SortColumn::Type, SortColumn::Size]
@@ -104,8 +101,6 @@ fn each_folder_keeps_its_own_style_when_asked() {
     test.wait_for_listing("the folder again");
     assert_eq!(test.action_state("sort").as_deref(), Some("size"));
     let pane = test.window.folder_pane();
-    assert!(!pane.previews_enabled());
-    assert!(!pane.owners().previews().shown);
     assert_eq!(
         pane.details().chosen_columns(),
         [SortColumn::Size, SortColumn::Owner]
@@ -134,64 +129,10 @@ fn each_folder_keeps_its_own_style_when_asked() {
     );
 }
 
-/// The dialog shows the view, sorting and groups it chose, and saves them.
-///
-/// parity: VIEW-017, VIEW-021
-#[gtk::test]
-fn the_display_style_dialog_applies_its_choices() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    test.activate("view-properties", None);
-    let dialog = open_dialog(&test);
-    let choices = descendants::<gtk::DropDown>(&dialog);
-    let [mode, sort, order, group_by] = choices.as_slice() else {
-        panic!("four choices: view mode, sort key, order and Group by");
-    };
-    mode.set_selected(1);
-    sort.set_selected(3);
-    order.set_selected(1);
-    // Grouped by date modified while sorted by size: the two are apart.
-    group_by.set_selected(1);
-    let checks = descendants::<gtk::CheckButton>(&dialog);
-    checks
-        .iter()
-        .find(|check| check.label().as_deref() == Some("Show previews"))
-        .expect("previews")
-        .set_active(false);
-    checks
-        .iter()
-        .find(|check| check.label().as_deref() == Some("Show hidden items last"))
-        .expect("hidden last")
-        .set_active(true);
-    checks
-        .iter()
-        .find(|check| check.label().as_deref() == Some("Owner"))
-        .expect("owner column")
-        .set_active(true);
-    dialog.press("OK");
-    wait_until("the chosen style", || {
-        test.window.folder_pane().view() == FolderView::Compact
-    });
-    assert_eq!(test.action_state("sort").as_deref(), Some("size"));
-    assert_eq!(test.action_state("direction").as_deref(), Some("descending"));
-    wait_until("the style to be saved", || {
-        let saved = test.context.settings_data().preferences.view_defaults;
-        saved.is_some_and(|style| {
-            style.grouping() == GroupBy::Modified
-                && style.sort == "size"
-                && style.hidden_last
-                && style.show_previews == Some(false)
-                && style
-                    .details_columns
-                    .is_some_and(|columns| columns.contains(&"owner".to_owned()))
-        })
-    });
-}
-
 /// With each folder keeping its own view: the folder shown sorted by size,
-/// Documents by type and the shared view by date.
+/// Documents by type and the shared view by date, in Icons.
 fn three_saved_views(test: &TestWindow, fixture: &Fixture) {
-    use ox_core::settings::{ViewProperties, ViewScope};
+    use ox_core::settings::{View, ViewProperties, ViewScope};
     let sorted_by = |key: &str| ViewProperties {
         sort: key.to_owned(),
         ..ViewProperties::default()
@@ -200,7 +141,11 @@ fn three_saved_views(test: &TestWindow, fixture: &Fixture) {
     settings
         .update_preferences(&PreferencesUpdate {
             per_folder_views: Some(true),
-            view_defaults: Some(sorted_by("modified")),
+            view: Some(View::Grid),
+            view_defaults: Some(ViewProperties {
+                mode: "icons".to_owned(),
+                ..sorted_by("modified")
+            }),
             ..PreferencesUpdate::default()
         })
         .expect("the settings file takes the change");
@@ -218,51 +163,137 @@ fn three_saved_views(test: &TestWindow, fixture: &Fixture) {
     assert_eq!(test.action_state("sort").as_deref(), Some("size"));
 }
 
-/// Opens the display style dialog, presses `button` and returns the
-/// question it asks.
-pub(super) fn ask_from_the_display_style_dialog(test: &TestWindow, button: &str) -> crate::dialog::Dialog {
-    test.activate("view-properties", None);
-    let dialog = open_dialog(test);
-    dialog.press(button);
-    wait_until("the question", || {
-        open_dialog(test).title_text() != dialog.title_text()
-    });
-    open_dialog(test)
+/// The sort key `pane` shows.
+fn sort_of(pane: &crate::window::folder_pane::FolderPane) -> String {
+    crate::window::BrowserWindow::style_of_pane(pane).sort
 }
 
-/// Folder views > Apply to all folders, as in Windows' Folder Options:
-/// after asking, every folder shows this folder's view and keeps none of
-/// its own. Cancel changes nothing.
+/// Opens Folder Options from `test`'s window.
+pub(in crate::window) fn open_folder_options(test: &TestWindow) -> crate::dialog::Dialog {
+    test.activate("folder-options", None);
+    let options = open_dialog(test);
+    assert_eq!(options.title_text(), "Folder Options");
+    options
+}
+
+/// The button labelled `label` in the body of `options`, such as Apply to
+/// Folders.
+fn options_button(options: &crate::dialog::Dialog, label: &str) -> gtk::Button {
+    descendants::<gtk::Button>(options)
+        .into_iter()
+        .find(|button| button.label().as_deref() == Some(label))
+        .unwrap_or_else(|| panic!("Folder Options has a {label} button"))
+}
+
+/// The question shown over `options`, once it shows.
+fn question_over(options: &crate::dialog::Dialog) -> crate::dialog::Dialog {
+    let find = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<crate::dialog::Dialog>().ok())
+            .find(|dialog| {
+                dialog.is_visible() && dialog.transient_for().as_ref() == Some(options.upcast_ref())
+            })
+    };
+    wait_until("the question", || find().is_some());
+    find().expect("wait_until returned only once the question showed")
+}
+
+/// Presses `button` in Folder Options' Folder views box and returns the
+/// question it asks.
+pub(in crate::window) fn ask_from_folder_options(
+    options: &crate::dialog::Dialog,
+    button: &str,
+) -> crate::dialog::Dialog {
+    options_button(options, button).emit_clicked();
+    question_over(options)
+}
+
+/// Presses `button` (OK or Cancel) in `options` and waits until Folder
+/// Options is gone, so no window of it outlives the test.
+pub(in crate::window) fn close_folder_options(
+    test: &TestWindow,
+    options: &crate::dialog::Dialog,
+    button: &str,
+) {
+    options.press(button);
+    wait_for_no_dialog(test);
+}
+
+/// Waits until the question over `options` is gone.
+fn wait_for_no_question(options: &crate::dialog::Dialog) {
+    let shown = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<crate::dialog::Dialog>().ok())
+            .any(|dialog| {
+                dialog.is_visible() && dialog.transient_for().as_ref() == Some(options.upcast_ref())
+            })
+    };
+    wait_until("the question to close", || !shown());
+}
+
+/// Folder Options > View > Folder views > Apply to Folders, as in Windows
+/// 11: it asks first, No and closing the question change nothing, and Yes
+/// gives every folder, every window and both panes of a split tab the
+/// view of the folder Folder Options was opened from. Folder Options stays
+/// open, as in Windows.
 ///
 /// parity: VIEW-020
 #[gtk::test]
-fn apply_to_all_folders_shows_this_folders_view_everywhere_after_asking() {
+fn apply_to_folders_gives_every_folder_and_window_this_folders_view_after_yes() {
+    use crate::window::session::PaneSide;
+
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     three_saved_views(&test, &fixture);
+    test.window
+        .split_tab(Some(&fixture.uri_of("Documents")))
+        .expect("split");
+    test.wait_for_listing("the right pane");
+    test.window.activate_pane(PaneSide::Start);
+    let beside = test.open_beside(&fixture.uri_of("Documents"));
+    assert_eq!(sort_of(beside.window.folder_pane()), "type");
+    assert_eq!(sort_of(test.window.pane_on(PaneSide::End)), "type");
 
-    let question = ask_from_the_display_style_dialog(&test, "Apply to all folders");
-    assert_eq!(question.title_text(), "Apply this view to all folders?");
-    assert_eq!(question.button_labels(), ["Cancel", "Apply"]);
-    question.press("Cancel");
-    wait_for_no_dialog(&test);
-    let unchanged = test.context.settings_data().preferences;
+    let options = open_folder_options(&test);
+    assert!(options
+        .texts()
+        .iter()
+        .any(|text| text == "You can apply this view (such as Details or Icons) to all folders."));
+    let question = ask_from_folder_options(&options, "Apply to Folders");
+    assert_eq!(question.title_text(), "Folder Views");
     assert_eq!(
-        unchanged.folder_views.len(),
-        2,
-        "Cancel keeps every folder's view"
+        question.message_text(),
+        "Do you want all folders to match this folder's view settings?"
     );
+    assert_eq!(question.button_labels(), ["Yes", "No"]);
+    question.press("No");
+    wait_for_no_question(&options);
+    ask_from_folder_options(&options, "Apply to Folders").close();
+    wait_for_no_question(&options);
+    settle();
+    let unchanged = test.context.settings_data().preferences;
+    assert_eq!(unchanged.folder_views.len(), 2, "No keeps every folder's view");
+    assert_eq!(sort_of(beside.window.folder_pane()), "type");
 
-    ask_from_the_display_style_dialog(&test, "Apply to all folders").press("Apply");
+    ask_from_folder_options(&options, "Apply to Folders").press("Yes");
     wait_until("one view for every folder", || {
         let saved = test.context.settings_data().preferences;
         saved.folder_views.is_empty() && saved.view_defaults.is_some_and(|style| style.sort == "size")
     });
+    wait_until("every window and pane to follow", || {
+        sort_of(beside.window.folder_pane()) == "size"
+            && sort_of(test.window.pane_on(PaneSide::End)) == "size"
+    });
+    assert!(options.is_visible(), "Folder Options stays open");
+    close_folder_options(&test, &options, "Cancel");
+    let saved = Settings::open(test.settings_directory());
+    assert!(saved.data().preferences.folder_views.is_empty(), "saved to disk");
     test.window
         .navigate(&fixture.uri_of("Documents"))
         .expect("a folder");
     test.wait_for_listing("Documents");
-
     assert_eq!(
         test.action_state("sort").as_deref(),
         Some("size"),
@@ -270,103 +301,467 @@ fn apply_to_all_folders_shows_this_folders_view_everywhere_after_asking() {
     );
 }
 
-/// Apply to all folders applies what the dialog shows, as OK does: a
-/// Group by chosen there before pressing it is saved for every folder and
-/// shown in this one, instead of the view the folder had when the dialog
-/// opened.
+/// Folder Options > View > Folder views > Reset Folders: No changes
+/// nothing; Yes makes every folder, window and pane forget its view and
+/// show the default one, Details sorted by name.
 ///
 /// parity: VIEW-020
 #[gtk::test]
-fn apply_to_all_folders_applies_the_choices_made_in_the_dialog() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
-    test.activate("view-properties", None);
-    let dialog = open_dialog(&test);
-    let choices = descendants::<gtk::DropDown>(&dialog);
-    let [_, _, _, group_by] = choices.as_slice() else {
-        panic!("the dialog has four choices: {}", choices.len());
-    };
-    let by_type = GroupBy::ALL
-        .iter()
-        .position(|by| *by == GroupBy::Type)
-        .expect("Type is offered");
-    group_by.set_selected(u32::try_from(by_type).expect("a small index"));
-
-    dialog.press("Apply to all folders");
-    wait_until("the question", || {
-        open_dialog(&test).title_text() != dialog.title_text()
-    });
-    open_dialog(&test).press("Apply");
-
-    wait_until("Group by Type saved for every folder", || {
-        let saved = test.context.settings_data().preferences;
-        saved
-            .view_defaults
-            .is_some_and(|style| style.grouping() == GroupBy::Type)
-    });
-    wait_until("this folder grouped by type", || {
-        test.action_state("group-by").as_deref() == Some("type")
-    });
-    test.window
-        .navigate(&fixture.uri_of("Documents"))
-        .expect("a folder");
-    test.wait_for_listing("Documents");
-    assert_eq!(
-        test.action_state("group-by").as_deref(),
-        Some("type"),
-        "Documents shows the applied Group by"
-    );
-    test.activate("view-properties", None);
-    let reopened = open_dialog(&test);
-    let shown = descendants::<gtk::DropDown>(&reopened)[3].selected();
-    assert_eq!(shown as usize, by_type, "the dialog shows Group by Type again");
-    reopened.press("Cancel");
-}
-
-/// Folder views > Reset folders: after asking, every folder forgets its
-/// view and the shared one, and the window shows the default at once.
-/// Cancel changes nothing.
-///
-/// parity: VIEW-020
-#[gtk::test]
-fn reset_folders_shows_the_default_view_everywhere_after_asking() {
+fn reset_folders_returns_every_folder_and_window_to_the_default_view_after_yes() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     three_saved_views(&test, &fixture);
+    let beside = test.open_beside(&fixture.uri_of("Documents"));
+    assert_eq!(sort_of(beside.window.folder_pane()), "type");
 
-    let question = ask_from_the_display_style_dialog(&test, "Reset folders");
-    assert_eq!(question.title_text(), "Reset all folders to the default view?");
-    assert_eq!(question.button_labels(), ["Cancel", "Reset"]);
-    question.press("Cancel");
-    wait_for_no_dialog(&test);
-    let unchanged = test.context.settings_data().preferences;
+    let options = open_folder_options(&test);
+    let question = ask_from_folder_options(&options, "Reset Folders");
+    assert_eq!(question.title_text(), "Folder Views");
     assert_eq!(
-        unchanged.folder_views.len(),
-        2,
-        "Cancel keeps every folder's view"
+        question.message_text(),
+        "Do you want to reset all folders to their default view settings?"
     );
+    assert_eq!(question.button_labels(), ["Yes", "No"]);
+    question.press("No");
+    wait_for_no_question(&options);
+    settle();
+    let unchanged = test.context.settings_data().preferences;
+    assert_eq!(unchanged.folder_views.len(), 2, "No keeps every folder's view");
     assert!(unchanged.view_defaults.is_some());
 
-    ask_from_the_display_style_dialog(&test, "Reset folders").press("Reset");
+    ask_from_folder_options(&options, "Reset Folders").press("Yes");
     wait_until("every view forgotten", || {
         let saved = test.context.settings_data().preferences;
         saved.folder_views.is_empty() && saved.view_defaults.is_none()
     });
-    wait_until("the default view shown", || {
-        test.action_state("sort").as_deref() == Some("name")
+    wait_until("the default view in every window", || {
+        test.action_state("sort").as_deref() == Some("name") && sort_of(beside.window.folder_pane()) == "name"
     });
-    let saved = Settings::open(test.settings_directory());
-    assert!(saved.data().preferences.folder_views.is_empty(), "saved to disk");
+    assert_eq!(test.window.folder_pane().view(), FolderView::Details);
+    assert_eq!(beside.window.folder_pane().view(), FolderView::Details);
+    close_folder_options(&test, &options, "OK");
     test.window
         .navigate(&fixture.uri_of("Documents"))
         .expect("a folder");
     test.wait_for_listing("Documents");
     assert_eq!(test.action_state("sort").as_deref(), Some("name"));
+    assert_eq!(test.window.folder_pane().view(), FolderView::Details);
+}
+
+/// Apply to Folders needs a folder to take the view from, as in Windows:
+/// opened from This PC or from search results it cannot be pressed, while
+/// Reset Folders can.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn apply_to_folders_is_unavailable_without_a_folder() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(crate::locations::Page::ThisPc.uri());
+    let options = open_folder_options(&test);
+    assert!(!options_button(&options, "Apply to Folders").is_sensitive());
+    assert!(options_button(&options, "Reset Folders").is_sensitive());
+    close_folder_options(&test, &options, "Cancel");
+
+    test.window.navigate(&fixture.uri()).expect("a folder");
+    test.wait_for_listing("the folder");
+    let options = open_folder_options(&test);
+    assert!(options_button(&options, "Apply to Folders").is_sensitive());
+    close_folder_options(&test, &options, "Cancel");
+
+    test.start_search_cache();
+    test.window.search_box().entry().set_text("Documents");
+    wait_until("the search", || test.window.is_searching());
+    let options = open_folder_options(&test);
+    assert!(!options_button(&options, "Apply to Folders").is_sensitive());
+    close_folder_options(&test, &options, "Cancel");
+}
+
+/// Folder Options' advanced settings that Windows has and the app has
+/// too: a change takes effect with Apply or OK, Cancel drops it, and
+/// Restore Defaults sets the boxes back to their defaults.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn folder_options_advanced_settings_apply_with_ok_or_apply() {
+    const FULL_PATH: &str = "Display the full path in the title bar";
+    const CHECK_BOXES: &str = "Use check boxes to select items";
+    const RESTORE: &str = "Restore previous folder windows at logon";
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let check = |options: &crate::dialog::Dialog, label: &str| option_check(options, "View", label);
+
+    let options = open_folder_options(&test);
+    assert_eq!(options.button_labels(), ["OK", "Cancel", "Apply"]);
+    assert!(!options.can_press("Apply"), "nothing changed yet");
+    assert!(check(&options, CHECK_BOXES).is_active());
+    check(&options, FULL_PATH).set_active(true);
+    assert!(options.can_press("Apply"));
+    close_folder_options(&test, &options, "Cancel");
+    settle();
+    assert!(!test.context.settings_data().preferences.full_path_in_title);
+
+    let options = open_folder_options(&test);
+    check(&options, FULL_PATH).set_active(true);
+    check(&options, RESTORE).set_active(true);
+    options.press("Apply");
+    wait_until("the change saved", || {
+        let saved = test.context.settings_data().preferences;
+        saved.full_path_in_title && saved.restore_session
+    });
+    assert!(options.is_visible(), "Apply keeps Folder Options open");
+    assert!(!options.can_press("Apply"));
+    check(&options, CHECK_BOXES).set_active(false);
+    close_folder_options(&test, &options, "OK");
+    wait_until("OK saves it", || {
+        !test.context.settings_data().preferences.selection_marker
+    });
+
+    let options = open_folder_options(&test);
+    tab_button(&options, "View", "Restore Defaults").emit_clicked();
+    assert!(check(&options, REMEMBER_VIEWS).is_active());
+    assert!(!check(&options, SHOW_HIDDEN).is_active());
+    assert!(!check(&options, ICONS_ONLY).is_active());
+    assert!(!check(&options, FULL_PATH).is_active());
+    assert!(!check(&options, RESTORE).is_active());
+    assert!(check(&options, CHECK_BOXES).is_active());
+    close_folder_options(&test, &options, "OK");
+    wait_until("the defaults saved", || {
+        let saved = test.context.settings_data().preferences;
+        !saved.full_path_in_title && !saved.restore_session && saved.selection_marker
+    });
+}
+
+/// The page of the Folder Options tab labelled `title`.
+fn options_tab(options: &crate::dialog::Dialog, title: &str) -> gtk::Widget {
+    let notebook = descendants::<gtk::Notebook>(options)
+        .into_iter()
+        .next()
+        .expect("Folder Options has tabs");
+    (0..notebook.n_pages())
+        .filter_map(|index| notebook.nth_page(Some(index)))
+        .find(|page| notebook.tab_label_text(page).as_deref() == Some(title))
+        .unwrap_or_else(|| panic!("Folder Options has a {title} tab"))
+}
+
+/// The check box labelled `label` on the tab `tab` of `options`.
+fn option_check(options: &crate::dialog::Dialog, tab: &str, label: &str) -> gtk::CheckButton {
+    descendants::<gtk::CheckButton>(&options_tab(options, tab))
+        .into_iter()
+        .find(|check| check.label().as_deref() == Some(label))
+        .unwrap_or_else(|| panic!("the {tab} tab has {label}"))
+}
+
+/// The button labelled `label` on the tab `tab` of `options`.
+fn tab_button(options: &crate::dialog::Dialog, tab: &str, label: &str) -> gtk::Button {
+    descendants::<gtk::Button>(&options_tab(options, tab))
+        .into_iter()
+        .find(|button| button.label().as_deref() == Some(label))
+        .unwrap_or_else(|| panic!("the {tab} tab has a {label} button"))
+}
+
+/// The state of `test`'s Show hidden files toggle.
+fn hidden_state(test: &TestWindow) -> Option<bool> {
+    test.window.lookup_action("hidden")?.state()?.get::<bool>()
+}
+
+const SHOW_HIDDEN: &str = "Show hidden files, folders, and drives";
+const ICONS_ONLY: &str = "Always show icons, never thumbnails";
+const REMEMBER_VIEWS: &str = "Remember each folder's view settings";
+
+/// Folder Options has Windows' General and View tabs, each option on
+/// the tab Windows puts it on.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn folder_options_has_the_general_and_view_tabs_of_windows() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = open_folder_options(&test);
+    let notebook = descendants::<gtk::Notebook>(&options).remove(0);
+    let titles: Vec<String> = (0..notebook.n_pages())
+        .filter_map(|index| notebook.nth_page(Some(index)))
+        .filter_map(|page| notebook.tab_label_text(&page).map(String::from))
+        .collect();
+    assert_eq!(titles, ["General", "View"]);
+    let general = options_tab(&options, "General");
+    assert_eq!(
+        descendants::<gtk::DropDown>(&general).len(),
+        1,
+        "Open File Explorer to"
+    );
+    assert!(descendants::<gtk::Label>(&general)
+        .iter()
+        .any(|label| label.text() == "Open File Explorer to:"));
+    let view_checks: Vec<String> = descendants::<gtk::CheckButton>(&options_tab(&options, "View"))
+        .iter()
+        .filter_map(|check| check.label().map(String::from))
+        .collect();
+    assert_eq!(
+        view_checks,
+        [
+            ICONS_ONLY,
+            "Display the full path in the title bar",
+            REMEMBER_VIEWS,
+            "Restore previous folder windows at logon",
+            SHOW_HIDDEN,
+            "Use check boxes to select items",
+        ]
+    );
+    // Push buttons drawn as the dialog's own Cancel and Apply, not links.
+    for (tab, label) in [
+        ("View", "Apply to Folders"),
+        ("View", "Reset Folders"),
+        ("View", "Restore Defaults"),
+        ("General", "Restore Defaults"),
+    ] {
+        let button = tab_button(&options, tab, label);
+        assert!(
+            button.has_css_class("bordered") && button.has_css_class("dialog-button"),
+            "{label} is a bordered push button"
+        );
+        assert!(
+            !button.has_css_class("accent"),
+            "{label} is not the default button"
+        );
+    }
+    close_folder_options(&test, &options, "Cancel");
+}
+
+/// Hidden files are one setting for every folder, as in Windows: Ctrl+H
+/// in one folder shows them in every folder, window and pane, even with
+/// each folder keeping its own view, and Folder Options' "Show hidden
+/// files, folders, and drives" turns them off everywhere again.
+///
+/// parity: VIEW-023
+#[gtk::test]
+fn hidden_files_are_one_setting_for_every_folder_and_window() {
+    use crate::window::session::PaneSide;
+
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents").join(".draft"), b"Synthetic test data\n").expect("a file");
+    let test = TestWindow::open(&fixture.uri());
+    assert!(test.context.settings_data().preferences.per_folder_views);
+    let beside = test.open_beside(&fixture.uri_of("Documents"));
+    test.window
+        .split_tab(Some(&fixture.uri_of("Documents")))
+        .expect("split");
+    test.wait_for_listing("the right pane");
+    test.window.activate_pane(PaneSide::Start);
+    let shows_hidden = |pane: &crate::window::folder_pane::FolderPane| pane.model().shows_hidden();
+    assert!(!shows_hidden(test.window.folder_pane()));
+
+    test.activate("hidden", None);
+    wait_until("hidden files saved for every folder", || {
+        test.context.settings_data().preferences.show_hidden
+    });
+    wait_until("every window and pane to show them", || {
+        shows_hidden(beside.window.folder_pane()) && shows_hidden(test.window.pane_on(PaneSide::End))
+    });
+    assert!(test.names().contains(&".private".to_owned()));
+    beside.window.navigate(&fixture.uri()).expect("a folder");
+    beside.wait_for_listing("the folder");
+    assert!(
+        shows_hidden(beside.window.folder_pane()),
+        "another folder shows them too"
+    );
+    assert_eq!(hidden_state(&beside), Some(true));
+
+    let options = open_folder_options(&test);
+    let check = option_check(&options, "View", SHOW_HIDDEN);
+    assert!(check.is_active());
+    check.set_active(false);
+    close_folder_options(&test, &options, "OK");
+    wait_until("hidden files off everywhere", || {
+        !test.context.settings_data().preferences.show_hidden
+            && !shows_hidden(test.window.folder_pane())
+            && !shows_hidden(test.window.pane_on(PaneSide::End))
+            && !shows_hidden(beside.window.folder_pane())
+    });
+    assert_eq!(hidden_state(&test), Some(false));
+}
+
+/// Hidden files shown or hidden again redraw the pane beside the active
+/// one too: a folder of hidden items only loses its "This folder is
+/// empty" note when they show, and gets it back when they hide.
+///
+/// parity: VIEW-023
+#[gtk::test]
+fn hidden_files_redraw_the_inactive_pane_of_a_split_tab() {
+    use crate::window::session::PaneSide;
+
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents").join(".draft"), b"Synthetic test data\n").expect("a file");
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .split_tab(Some(&fixture.uri_of("Documents")))
+        .expect("split");
+    test.wait_for_listing("the right pane");
+    test.window.activate_pane(PaneSide::Start);
+    let beside = test.window.pane_on(PaneSide::End);
+    wait_until("the empty note beside", || beside.shows_empty_note());
+
+    test.activate("hidden", None);
+    wait_until("the hidden file beside", || beside.model().n_items() == 1);
+    assert!(!beside.shows_empty_note(), "no empty note over the hidden file");
+
+    test.activate("hidden", None);
+    wait_until("the hidden file gone beside", || beside.model().n_items() == 0);
+    assert!(beside.shows_empty_note(), "the empty note is back");
+}
+
+/// "Always show icons, never thumbnails" turns previews off in every
+/// folder and window, and is the opposite of Settings' "Show previews".
+///
+/// parity: VIEW-058
+#[gtk::test]
+fn always_show_icons_turns_thumbnails_off_everywhere() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let beside = test.open_beside(&fixture.uri_of("Documents"));
+    assert!(test.window.folder_pane().owners().previews().shown);
+
+    let options = open_folder_options(&test);
+    let check = option_check(&options, "View", ICONS_ONLY);
+    assert!(!check.is_active());
+    check.set_active(true);
+    close_folder_options(&test, &options, "OK");
+    wait_until("previews off everywhere", || {
+        !test
+            .context
+            .settings_data()
+            .preferences
+            .view_options
+            .show_previews
+            && !test.window.folder_pane().owners().previews().shown
+            && !beside.window.folder_pane().owners().previews().shown
+    });
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("Documents");
+    assert!(!test.window.folder_pane().owners().previews().shown);
+}
+
+/// "Remember each folder's view settings" is on by default, as in
+/// Windows 11: sorting one folder leaves the others as they were.
+/// Turning it off in Folder Options gives every folder one view again.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn each_folder_remembers_its_view_by_default_until_folder_options_turns_it_off() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("sort", Some("size"));
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("Documents");
+    assert_eq!(test.action_state("sort").as_deref(), Some("name"));
+
+    let options = open_folder_options(&test);
+    let check = option_check(&options, "View", REMEMBER_VIEWS);
+    assert!(check.is_active(), "on by default");
+    check.set_active(false);
+    close_folder_options(&test, &options, "OK");
+    wait_until("one view for every folder", || {
+        !test.context.settings_data().preferences.per_folder_views
+    });
+    let saved = Settings::open(test.settings_directory());
+    assert!(!saved.data().preferences.per_folder_views, "saved to disk");
+}
+
+/// "Open File Explorer to" offers the start places the app has, Home and
+/// This PC, and keeps a folder chosen in Settings when left alone.
+///
+/// parity: TAB-055
+#[gtk::test]
+fn open_file_explorer_to_chooses_where_new_windows_open() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let choice = |options: &crate::dialog::Dialog| {
+        descendants::<gtk::DropDown>(&options_tab(options, "General")).remove(0)
+    };
+    let labels = |drop_down: &gtk::DropDown| {
+        let list = drop_down
+            .model()
+            .and_downcast::<gtk::StringList>()
+            .expect("a list of names");
+        (0..list.n_items())
+            .filter_map(|index| list.string(index).map(String::from))
+            .collect::<Vec<_>>()
+    };
+
+    let options = open_folder_options(&test);
+    let drop_down = choice(&options);
+    assert_eq!(labels(&drop_down), ["Home", "This PC"]);
+    assert_eq!(drop_down.selected(), 0);
+    drop_down.set_selected(1);
+    close_folder_options(&test, &options, "OK");
+    wait_until("This PC saved", || {
+        test.context.settings_data().preferences.startup_folder.as_deref()
+            == Some(crate::locations::Page::ThisPc.uri())
+    });
+
+    change_preferences(
+        &test,
+        &PreferencesUpdate {
+            startup_folder: Some(fixture.uri_of("Documents")),
+            ..PreferencesUpdate::default()
+        },
+    );
+    wait_until("the folder chosen in Settings", || {
+        test.context
+            .settings_data()
+            .preferences
+            .startup_folder
+            .is_some_and(|folder| folder.ends_with("Documents"))
+    });
+    let options = open_folder_options(&test);
+    let drop_down = choice(&options);
+    assert_eq!(labels(&drop_down).len(), 3, "the folder chosen in Settings");
+    assert_eq!(drop_down.selected(), 2);
+    tab_button(&options, "General", "Restore Defaults").emit_clicked();
+    assert_eq!(drop_down.selected(), 0, "Home");
+    close_folder_options(&test, &options, "Cancel");
+    settle();
+    assert!(test
+        .context
+        .settings_data()
+        .preferences
+        .startup_folder
+        .is_some_and(|folder| folder.ends_with("Documents")));
+}
+
+/// Apply to Folders works only from a folder: the Recycle Bin and Recent
+/// have no view to give, while Reset Folders works there too.
+///
+/// parity: VIEW-020
+#[gtk::test]
+fn apply_to_folders_is_unavailable_in_the_recycle_bin_and_recent() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    for place in [
+        ox_core::location::TRASH_URI,
+        ox_core::location::RECENT_LOCATIONS_URI,
+    ] {
+        test.window.navigate(place).expect("a place");
+        test.wait_for_listing(place);
+        let options = open_folder_options(&test);
+        assert!(
+            !options_button(&options, "Apply to Folders").is_sensitive(),
+            "{place}"
+        );
+        assert!(
+            options_button(&options, "Reset Folders").is_sensitive(),
+            "{place}"
+        );
+        close_folder_options(&test, &options, "Cancel");
+    }
 }
 
 /// Saved styles and header callbacks belong to their respective split
-/// panes, including the inactive pane's preview policy and column widths.
+/// panes, including the inactive pane's column widths.
 ///
 /// parity: VIEW-020, VIEW-059
 #[gtk::test]
@@ -388,7 +783,6 @@ fn split_panes_keep_their_own_display_styles() {
     });
     let mut style = test.window.current_style();
     style.sort = "size".to_owned();
-    style.show_previews = Some(false);
     style.details_columns = Some(vec!["size".to_owned()]);
     test.window.apply_style(&style);
     test.window.remember_style();
@@ -397,8 +791,8 @@ fn split_panes_keep_their_own_display_styles() {
             .settings_data()
             .preferences
             .view_for(&fixture.uri())
-            .show_previews
-            == Some(false)
+            .sort
+            == "size"
     });
     test.window
         .split_tab(Some(&fixture.uri_of("Documents")))
@@ -406,8 +800,6 @@ fn split_panes_keep_their_own_display_styles() {
     test.wait_for_listing("right folder");
     let left = test.window.pane_on(PaneSide::Start);
     let right = test.window.pane_on(PaneSide::End);
-    assert!(!left.owners().previews().shown);
-    assert!(right.owners().previews().shown);
     assert_eq!(left.details().chosen_columns(), [SortColumn::Size]);
     right.details().sort_by(SortOrder {
         column: SortColumn::Modified,

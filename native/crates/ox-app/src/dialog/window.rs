@@ -216,6 +216,12 @@ impl Dialog {
         self.append_field(control);
     }
 
+    /// Adds `widget`, such as a dialog's tabs, under the fields added so
+    /// far.
+    pub(crate) fn add_field(&self, widget: &impl IsA<gtk::Widget>) {
+        self.append_field(widget);
+    }
+
     /// Adds a boxed note in muted text (`.modal-note`).
     pub(crate) fn add_note(&self, text: &str) {
         self.add_text_line(text, "dialog-note");
@@ -308,6 +314,14 @@ impl Dialog {
         entry.connect_activate(move |_| {
             let _ = answers.try_send(Some(button));
         });
+    }
+
+    /// Lets `button` be pressed, or greys it out, such as Apply while
+    /// nothing has changed.
+    pub(crate) fn set_button_sensitive(&self, button: DialogButton, sensitive: bool) {
+        if let Some(button) = self.imp().buttons.borrow().get(button.0) {
+            button.set_sensitive(sensitive);
+        }
     }
 
     /// A button appended to the actions and remembered.

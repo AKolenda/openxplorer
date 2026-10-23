@@ -160,7 +160,7 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 
 /// The View menu: the views (Details, List and Explorer's four icon
 /// sizes), the hidden-files toggle, the pane toggles, Compact view and the
-/// terminal, Dolphin's display style dialog, then the text size.
+/// terminal, then the text size.
 pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details);
     let compact = view_item(&gettext("List"), Icon::Table, FolderView::Compact);
@@ -222,12 +222,6 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
         )
         .with_shortcut("Ctrl+Shift+F4")
         .into(),
-        MenuEntry::Divider,
-        item(
-            ox_core::i18n::gettext_static("Adjust view display style…"),
-            Icon::Settings,
-            WindowAction::ViewProperties,
-        ),
         MenuEntry::Divider,
         text_size_item(&gettext("Larger text"), Icon::Add, Step::Increase, "Ctrl++"),
         text_size_item(&gettext("Smaller text"), Icon::Subtract, Step::Decrease, "Ctrl+−"),
@@ -304,6 +298,8 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
             Icon::Search,
             WindowAction::SelectMatching,
         ),
+        // Last of the folder's commands, as in Windows 11's "…" menu.
+        item(&gettext("Options"), Icon::Settings, WindowAction::FolderOptions),
         MenuEntry::Divider,
         // app.js asked for a `code` glyph it did not have and drew a
         // document; the native app has the code glyph.
@@ -325,4 +321,44 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
         item(&gettext("About this build"), Icon::Info, WindowAction::About),
     ]);
     entries
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::window::menu_popover::MenuAction;
+
+    /// The labels of the items of `entries` that run `action`.
+    fn labels_running(entries: &[MenuEntry], action: WindowAction) -> Vec<String> {
+        entries
+            .iter()
+            .filter_map(|entry| match entry {
+                MenuEntry::Item(item) if item.action == MenuAction::Window(action) => {
+                    Some(item.label.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Folder Options is "…" > Options, as in Windows 11, and the View
+    /// menu no longer opens Dolphin's display style dialog.
+    ///
+    /// parity: VIEW-020
+    #[test]
+    fn options_in_the_more_menu_opens_folder_options() {
+        assert_eq!(
+            labels_running(&more_menu(), WindowAction::FolderOptions),
+            ["Options"]
+        );
+        assert!(labels_running(&view_menu(), WindowAction::FolderOptions).is_empty());
+        let view_labels: Vec<String> = view_menu()
+            .iter()
+            .filter_map(|entry| match entry {
+                MenuEntry::Item(item) => Some(item.label.clone()),
+                MenuEntry::Divider => None,
+            })
+            .collect();
+        assert!(!view_labels.iter().any(|label| label.contains("display style")));
+    }
 }

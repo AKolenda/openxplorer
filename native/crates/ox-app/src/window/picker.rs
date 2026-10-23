@@ -3185,6 +3185,34 @@ mod tests {
         assert_eq!(split.model().n_items(), 1, "only notes.txt");
     }
 
+    /// An Open or Save dialog shows folders as every window does after
+    /// Folder Options' Apply to Folders and Reset Folders in another
+    /// window.
+    ///
+    /// parity: INT-032, VIEW-020
+    #[gtk::test]
+    fn a_dialog_follows_apply_to_folders_and_reset_folders() {
+        use crate::window::tests::view_styles::{
+            ask_from_folder_options, close_folder_options, open_folder_options,
+        };
+        let fixture = Fixture::standard();
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let picker = &portal.test.window;
+        let sort = || crate::window::BrowserWindow::style_of_pane(picker.folder_pane()).sort;
+        assert_eq!(sort(), "name");
+        let explorer = portal.test.open_beside(&fixture.uri());
+        explorer.activate("sort", Some("size"));
+
+        let options = open_folder_options(&explorer);
+        ask_from_folder_options(&options, "Apply to Folders").press("Yes");
+        wait_until("the dialog sorted by size", || sort() == "size");
+        ask_from_folder_options(&options, "Reset Folders").press("Yes");
+        wait_until("the dialog sorted by name again", || sort() == "name");
+        close_folder_options(&explorer, &options, "OK");
+        assert!(picker.is_picking(), "the dialog is still open");
+    }
+
     /// Save stays on with a name where nothing can be saved, such as This
     /// PC, and pressing it says why instead of doing nothing; the button's
     /// tooltip says so too.

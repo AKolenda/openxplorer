@@ -67,7 +67,7 @@ mod stopping;
 mod support;
 mod tab_commands;
 mod tabs;
-mod view_styles;
+pub(super) mod view_styles;
 mod views;
 mod worker_questions;
 mod zip_folder;

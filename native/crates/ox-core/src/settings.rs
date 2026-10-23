@@ -366,9 +366,11 @@ impl Settings {
         })
     }
 
-    /// Forgets every folder's display style, the shared one and the Group
-    /// by chosen in Downloads, so every folder shows the default style
-    /// (Windows' Reset Folders) and Downloads is grouped by date again.
+    /// Forgets every folder's display style, the shared one, the view the
+    /// Python app reads and the Group by chosen in Downloads, so every
+    /// folder shows the default style, Details (Windows' Reset Folders),
+    /// and Downloads is grouped by date again. Whether hidden files show
+    /// stays, as Reset Folders leaves it in Windows.
     ///
     /// # Errors
     ///
@@ -377,6 +379,7 @@ impl Settings {
         self.mutate(|data| {
             let preferences = &mut data.preferences;
             view_properties::reset(&mut preferences.folder_views, &mut preferences.view_defaults);
+            preferences.view = View::default();
             preferences.downloads_group_by = None;
             Ok(preferences.clone())
         })
