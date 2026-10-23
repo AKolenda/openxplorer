@@ -13,7 +13,9 @@
 //! caller and its options are ox-core's
 //! ([`ox_core::integration::FileChooserBus`]).
 
-use ox_core::integration::{DisabledFileDialogs, FileDialogRegistration, PortalRestart, KDE_PORTAL_VARIABLE};
+use ox_core::integration::{
+    DisabledFileDialogs, FileDialogRegistration, PortalRestart, GTK_PORTAL_VARIABLE, KDE_PORTAL_VARIABLE,
+};
 
 use super::changes::IntegrationError;
 use super::DesktopIntegration;
@@ -27,74 +29,172 @@ pub(crate) struct FileDialogsStatus {
     pub(crate) is_enabled: bool,
     /// The backend the portal configuration names now, if any.
     pub(crate) backend: Option<String>,
+    /// Where GTK 3 apps stand.
+    pub(crate) gtk_apps: LoginApps,
     /// Where KDE's own apps stand.
-    pub(crate) kde_apps: KdeApps,
+    pub(crate) kde_apps: LoginApps,
 }
 
-/// Whether KDE's own apps, which need a login script to ask the portal,
-/// send their dialogs to the app.
+/// Whether apps that need a login file to ask the portal (GTK 3 apps, and
+/// KDE's own on KDE) send their dialogs to the app.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum KdeApps {
-    /// Not a KDE session: nothing to do.
+pub(crate) enum LoginApps {
+    /// Nothing to do: KDE's own apps off KDE.
     #[default]
-    NotKde,
-    /// A KDE session without the app's login script.
+    NotNeeded,
+    /// The app's login file is not there.
     NotCovered,
-    /// A file of the user's sits where the script goes and is left alone.
+    /// A file of the user's sits where the login file goes and is left
+    /// alone.
     LeftAlone,
-    /// The script is in place; it applies at the next login.
+    /// The login file is in place; it applies at the next login.
     NextLogin,
-    /// The script is in place and this session started with it.
+    /// The login file is in place and this session started with it.
     Following,
 }
 
 impl FileDialogsStatus {
     /// Whether Enable has something to do: dialogs do not use the app
-    /// yet, or (enabled with an earlier version) KDE's own apps are not
+    /// yet, or (enabled with an earlier version) GTK or KDE apps are not
     /// covered yet.
     pub(crate) fn can_enable(&self) -> bool {
-        !self.is_enabled || self.kde_apps == KdeApps::NotCovered
+        !self.is_enabled || self.gtk_apps == LoginApps::NotCovered || self.kde_apps == LoginApps::NotCovered
     }
 
-    /// The row's status line.
+    /// The row's status line, translated sentence by sentence.
     pub(crate) fn text(&self) -> String {
         if !self.is_available {
-            return "Open and Save dialogs: available in the installed package, not the Flatpak.".to_owned();
+            return ox_core::i18n::gettext_static(
+                "Open and Save dialogs: available in the installed package, not the Flatpak.",
+            )
+            .to_owned();
         }
         if self.is_enabled {
-            let mut text = "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their \
-                            file dialogs here after Apply now or the next login."
-                .to_owned();
-            match self.kde_apps {
-                KdeApps::Following => text.push_str(" KDE apps do too."),
-                KdeApps::NextLogin => text.push_str(" KDE apps follow after you log out and back in."),
-                KdeApps::LeftAlone => text.push_str(
-                    " KDE apps keep KDE's dialog: ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh \
-                     is not OpenXplorer's, so it was left alone.",
-                ),
-                KdeApps::NotKde | KdeApps::NotCovered => {}
-            }
-            return text;
+            let mut sentences = vec![ox_core::i18n::gettext_static(
+                "Open and Save dialogs: OpenXplorer. Apps that use the desktop portal show their file dialogs \
+                 here after Apply now or the next login.",
+            )];
+            sentences.extend(match self.gtk_apps {
+                LoginApps::Following => Some(ox_core::i18n::gettext_static("GTK 3 apps do too.")),
+                LoginApps::NextLogin => Some(ox_core::i18n::gettext_static("GTK 3 apps follow after you log out and back in.")),
+                LoginApps::LeftAlone => Some(ox_core::i18n::gettext_static(
+                    "GTK 3 apps keep GTK's dialog: ~/.config/environment.d/60-openxplorer-file-dialogs.conf is \
+                     not OpenXplorer's, so it was left alone.",
+                )),
+                LoginApps::NotCovered => Some(ox_core::i18n::gettext_static("Click Enable for GTK 3 apps too.")),
+                LoginApps::NotNeeded => None,
+            });
+            sentences.extend(match self.kde_apps {
+                LoginApps::Following => Some(ox_core::i18n::gettext_static("KDE apps do too.")),
+                LoginApps::NextLogin => Some(ox_core::i18n::gettext_static("KDE apps follow after you log out and back in.")),
+                LoginApps::LeftAlone => Some(ox_core::i18n::gettext_static(
+                    "KDE apps keep KDE's dialog: ~/.config/plasma-workspace/env/openxplorer-file-dialogs.sh is \
+                     not OpenXplorer's, so it was left alone.",
+                )),
+                LoginApps::NotNeeded | LoginApps::NotCovered => None,
+            });
+            return sentences.join(" ");
         }
         match self.backend.as_deref() {
-            Some(backend) => format!("Open and Save dialogs: the desktop's ({backend})."),
-            None => "Open and Save dialogs: the desktop's.".to_owned(),
+            Some(backend) => ox_core::i18n::format_message(
+                "Open and Save dialogs: the desktop's ({backend}).",
+                &[("backend", backend)],
+            ),
+            None => ox_core::i18n::gettext_static("Open and Save dialogs: the desktop's.").to_owned(),
         }
     }
 }
 
+/// Whether this session started with `variable` set to 1, as a login
+/// file sets it.
+fn session_has(variable: &str) -> bool {
+    std::env::var(variable).is_ok_and(|value| value == "1")
+}
+
+/// What is at a login file's path, for the status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LoginFileAt {
+    /// The app's file.
+    Ours,
+    /// Nothing, or what cannot be read.
+    Nothing,
+    /// A file of the user's, or a symlink, left alone.
+    Theirs,
+}
+
+impl LoginFileAt {
+    fn of(covered: bool, someone_elses: bool) -> Self {
+        if covered {
+            Self::Ours
+        } else if someone_elses {
+            Self::Theirs
+        } else {
+            Self::Nothing
+        }
+    }
+}
+
+/// Where apps that need a login file stand: whether this session needs
+/// it, what is at its path, and whether this session started with its
+/// variable. A file of the user's there is left alone, but a session that
+/// has the variable all the same follows.
+fn login_apps(needed: bool, file: LoginFileAt, following: bool) -> LoginApps {
+    match (needed, file, following) {
+        (false, _, _) => LoginApps::NotNeeded,
+        (true, LoginFileAt::Theirs, false) => LoginApps::LeftAlone,
+        (true, LoginFileAt::Nothing, _) => LoginApps::NotCovered,
+        (true, LoginFileAt::Ours, false) => LoginApps::NextLogin,
+        (true, LoginFileAt::Ours | LoginFileAt::Theirs, true) => LoginApps::Following,
+    }
+}
+
+/// Where GTK 3 apps stand for `registration`, in this session.
+fn gtk_apps(registration: &FileDialogRegistration) -> LoginApps {
+    login_apps(
+        registration.reads_gtk_env_file(),
+        LoginFileAt::of(
+            registration.covers_gtk_apps(),
+            registration.gtk_env_is_someone_elses(),
+        ),
+        session_has(GTK_PORTAL_VARIABLE),
+    )
+}
+
 /// Where KDE's own apps stand for `registration`, in this session.
-fn kde_apps(registration: &FileDialogRegistration) -> KdeApps {
-    if !registration.is_kde_session() {
-        KdeApps::NotKde
-    } else if registration.kde_script_is_someone_elses() {
-        KdeApps::LeftAlone
-    } else if !registration.covers_kde_apps() {
-        KdeApps::NotCovered
-    } else if std::env::var(KDE_PORTAL_VARIABLE).is_ok_and(|value| value == "1") {
-        KdeApps::Following
-    } else {
-        KdeApps::NextLogin
+fn kde_apps(registration: &FileDialogRegistration) -> LoginApps {
+    login_apps(
+        registration.is_kde_session(),
+        LoginFileAt::of(
+            registration.covers_kde_apps(),
+            registration.kde_script_is_someone_elses(),
+        ),
+        session_has(KDE_PORTAL_VARIABLE),
+    )
+}
+
+/// Which apps follow an Enable only after a new login, for its toast.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AfterLogin {
+    /// None: every login file this session needs is in place and was
+    /// read at its start, or none could be written.
+    Nothing,
+    Gtk,
+    Kde,
+    GtkAndKde,
+}
+
+impl AfterLogin {
+    /// The apps whose login file is in place for `registration` but not
+    /// yet read by this session.
+    pub(crate) fn of(registration: &FileDialogRegistration) -> Self {
+        let gtk = gtk_apps(registration) == LoginApps::NextLogin;
+        let kde = kde_apps(registration) == LoginApps::NextLogin;
+        match (gtk, kde) {
+            (false, false) => Self::Nothing,
+            (true, false) => Self::Gtk,
+            (false, true) => Self::Kde,
+            (true, true) => Self::GtkAndKde,
+        }
     }
 }
 
@@ -106,17 +206,26 @@ impl DesktopIntegration {
     /// [`IntegrationError::FileDialogs`] when the configuration cannot be
     /// written, or inside Flatpak.
     pub(crate) async fn enable_file_dialogs(&self) -> Result<String, IntegrationError> {
-        let kde = self
+        let after_login = self
             .file_dialogs()
-            .run_in_background(|registration| registration.enable().map(|()| registration.covers_kde_apps()))
+            .run_in_background(|registration| registration.enable().map(|()| AfterLogin::of(registration)))
             .await?;
         self.notify_changed();
-        Ok(if kde {
-            "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; KDE apps \
-             follow after you log out and back in."
-        } else {
-            "Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in."
-        }
+        Ok(ox_core::i18n::gettext_static(match after_login {
+            AfterLogin::Nothing => crate::i18n::message_id("Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in."),
+            AfterLogin::Gtk => {
+                crate::i18n::message_id("Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 apps \
+                 follow after you log out and back in.")
+            }
+            AfterLogin::Kde => {
+                crate::i18n::message_id("Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; KDE apps \
+                 follow after you log out and back in.")
+            }
+            AfterLogin::GtkAndKde => {
+                crate::i18n::message_id("Open and Save dialogs will use OpenXplorer. Click Apply now, or log out and back in; GTK 3 and \
+                 KDE apps follow after you log out and back in.")
+            }
+        })
         .to_owned())
     }
 
@@ -132,16 +241,18 @@ impl DesktopIntegration {
             .run_in_background(FileDialogRegistration::disable)
             .await?;
         self.notify_changed();
-        Ok(match outcome {
-            DisabledFileDialogs::Restored => {
-                "Open and Save dialogs are back to the desktop's. Click Apply now, or log out and back in."
-            }
-            DisabledFileDialogs::LineRemoved => {
+        Ok(ox_core::i18n::gettext_static(match outcome {
+            DisabledFileDialogs::Restored => crate::i18n::message_id(
+                "Open and Save dialogs are back to the desktop's. Click Apply now, or log out and back in.",
+            ),
+            DisabledFileDialogs::LineRemoved => crate::i18n::message_id(
                 "Removed OpenXplorer's line from your portal settings and kept your other edits. Click \
-                 Apply now, or log out and back in."
+                 Apply now, or log out and back in.",
+            ),
+            DisabledFileDialogs::NotEnabled => {
+                crate::i18n::message_id("Open and Save dialogs were not using OpenXplorer.")
             }
-            DisabledFileDialogs::NotEnabled => "Open and Save dialogs were not using OpenXplorer.",
-        }
+        })
         .to_owned())
     }
 
@@ -157,15 +268,15 @@ impl DesktopIntegration {
             .run_in_background(FileDialogRegistration::restart_portal)
             .await?;
         self.notify_changed();
-        Ok(match restart {
-            PortalRestart::Restarted => {
-                "The desktop portal restarted. Open and Save dialogs follow the new choice."
-            }
-            PortalRestart::NotRunning => {
+        Ok(ox_core::i18n::gettext_static(match restart {
+            PortalRestart::Restarted => crate::i18n::message_id(
+                "The desktop portal restarted. Open and Save dialogs follow the new choice.",
+            ),
+            PortalRestart::NotRunning => crate::i18n::message_id(
                 "The desktop portal is not running as a service that can be restarted. The choice applies \
-                 the next time you log in."
-            }
-        }
+                 the next time you log in.",
+            ),
+        })
         .to_owned())
     }
 
@@ -175,6 +286,7 @@ impl DesktopIntegration {
             .run_in_background(|registration| FileDialogsStatus {
                 is_available: registration.is_available(),
                 is_enabled: registration.is_enabled(),
+                gtk_apps: gtk_apps(registration),
                 kde_apps: kde_apps(registration),
                 backend: registration.current_backend(),
             })
@@ -190,12 +302,20 @@ impl DesktopIntegration {
 mod tests {
     use super::*;
 
-    fn enabled(kde_apps: KdeApps) -> FileDialogsStatus {
+    fn enabled(kde_apps: LoginApps) -> FileDialogsStatus {
         FileDialogsStatus {
             is_available: true,
             is_enabled: true,
             backend: Some("io.winspace.Development".to_owned()),
+            gtk_apps: LoginApps::Following,
             kde_apps,
+        }
+    }
+
+    fn enabled_for_gtk(gtk_apps: LoginApps) -> FileDialogsStatus {
+        FileDialogsStatus {
+            gtk_apps,
+            ..enabled(LoginApps::NotNeeded)
         }
     }
 
@@ -206,19 +326,58 @@ mod tests {
     /// parity: INT-032
     #[test]
     fn the_status_says_when_kde_apps_follow() {
-        assert!(enabled(KdeApps::NextLogin)
+        assert!(enabled(LoginApps::NextLogin)
             .text()
             .ends_with("KDE apps follow after you log out and back in."));
-        assert!(enabled(KdeApps::Following).text().ends_with("KDE apps do too."));
-        assert!(!enabled(KdeApps::NotKde).text().contains("KDE"));
-        assert!(enabled(KdeApps::NotCovered).can_enable());
-        assert!(!enabled(KdeApps::NextLogin).can_enable());
-        assert!(!enabled(KdeApps::NotKde).can_enable());
-        assert!(enabled(KdeApps::LeftAlone)
+        assert!(enabled(LoginApps::Following).text().ends_with("KDE apps do too."));
+        assert!(!enabled(LoginApps::NotNeeded).text().contains("KDE"));
+        assert!(enabled(LoginApps::NotCovered).can_enable());
+        assert!(!enabled(LoginApps::NextLogin).can_enable());
+        assert!(!enabled(LoginApps::NotNeeded).can_enable());
+        assert!(enabled(LoginApps::LeftAlone)
             .text()
             .ends_with("so it was left alone."));
-        assert!(!enabled(KdeApps::LeftAlone).can_enable());
+        assert!(!enabled(LoginApps::LeftAlone).can_enable());
         let off = FileDialogsStatus::default();
         assert!(off.can_enable());
+    }
+
+    /// A session that needs no login file says nothing about it; a file
+    /// of the user's in its place reads as left alone unless the session
+    /// has the variable all the same.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn login_apps_follow_the_session_before_the_file() {
+        use LoginFileAt::{Nothing, Ours, Theirs};
+        assert_eq!(login_apps(false, Ours, true), LoginApps::NotNeeded);
+        assert_eq!(login_apps(true, Theirs, false), LoginApps::LeftAlone);
+        assert_eq!(login_apps(true, Theirs, true), LoginApps::Following);
+        assert_eq!(login_apps(true, Nothing, true), LoginApps::NotCovered);
+        assert_eq!(login_apps(true, Ours, false), LoginApps::NextLogin);
+        assert_eq!(login_apps(true, Ours, true), LoginApps::Following);
+    }
+
+    /// The status says when GTK 3 apps follow, and Enable stays available
+    /// to add their environment file for those who enabled the dialogs
+    /// with an earlier version.
+    ///
+    /// parity: INT-032
+    #[test]
+    fn the_status_says_when_gtk_apps_follow() {
+        assert!(enabled_for_gtk(LoginApps::NextLogin)
+            .text()
+            .ends_with("GTK 3 apps follow after you log out and back in."));
+        assert!(enabled_for_gtk(LoginApps::Following)
+            .text()
+            .ends_with("GTK 3 apps do too."));
+        let not_covered = enabled_for_gtk(LoginApps::NotCovered);
+        assert!(not_covered.text().ends_with("Click Enable for GTK 3 apps too."));
+        assert!(not_covered.can_enable());
+        let left_alone = enabled_for_gtk(LoginApps::LeftAlone);
+        assert!(left_alone.text().ends_with("so it was left alone."));
+        assert!(!left_alone.can_enable());
+        assert!(!enabled_for_gtk(LoginApps::NextLogin).can_enable());
+        assert!(!enabled_for_gtk(LoginApps::Following).can_enable());
     }
 }
