@@ -29,9 +29,6 @@ use crate::icons::Icon;
 use advanced::AdvancedBits;
 use choices::{AccessChoice, AccountChoice, StateCheck};
 
-/// The toast after the permissions were changed.
-const CHANGED: &str = crate::i18n::message_id("Permissions changed.");
-
 /// An item the editor changes.
 #[derive(Debug, Clone)]
 pub(super) struct EditedItem {
@@ -335,10 +332,8 @@ fn start_change(
         if let Some(button) = button.upgrade() {
             button.set_sensitive(true);
         }
-        match (result, frame, window) {
-            (Ok(()), _, Some(window)) => window.show_message(ox_core::i18n::gettext_static(CHANGED)),
-            (Err(error), Some(frame), _) => frame.show_error(&error.to_string()),
-            _ => {}
+        if let (Err(error), Some(frame)) = (result, frame) {
+            frame.show_error(&error.to_string());
         }
     });
 }

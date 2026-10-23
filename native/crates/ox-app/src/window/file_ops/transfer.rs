@@ -220,8 +220,7 @@ impl BrowserWindow {
                 }
             }
         });
-        self.conclude_operation_in(finished, origin.as_deref(), None)
-            .await;
+        self.conclude_operation_in(finished, origin.as_deref()).await;
         outcome.ok()
     }
 

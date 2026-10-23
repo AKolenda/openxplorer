@@ -60,9 +60,10 @@ mod probe;
 const DEFAULT_SIZE: (i32, i32) = (980, 640);
 
 /// The window commands that make no sense while choosing a file: more tabs,
-/// windows or panes, Settings, and Format…, as a dialog closes on its own
-/// once answered, leaving no window to report the format in.
-const DISABLED_ACTIONS: [WindowAction; 15] = [
+/// windows or panes, Settings, Format…, as a dialog closes on its own
+/// once answered, leaving no window to report the format in, and Full
+/// screen, as a Windows Open or Save dialog keeps its size.
+const DISABLED_ACTIONS: [WindowAction; 16] = [
     WindowAction::NewTab,
     WindowAction::OpenTab,
     WindowAction::OpenTabBackground,
@@ -78,6 +79,7 @@ const DISABLED_ACTIONS: [WindowAction; 15] = [
     WindowAction::OpenFileLocationInWindow,
     WindowAction::SplitView,
     WindowAction::FormatDrive,
+    WindowAction::FullScreen,
 ];
 
 /// Shown when the File name box names nothing that exists.
@@ -1314,6 +1316,7 @@ mod tests {
 
     use gtk::glib::translate::IntoGlib;
     use gtk::prelude::*;
+    use gtk::subclass::prelude::*;
     use gtk::{gdk, gio, glib};
     use ox_core::integration::{
         options_from_entries, path_variant, FileChooserBus, FileFilter, FilterPattern,
@@ -2953,6 +2956,31 @@ mod tests {
         assert_eq!(response, RESPONSE_CANCELLED, "Ctrl+Q cancels the dialog");
         assert!(uris.is_empty());
         wait_until("the picker to close", || !window.is_visible());
+    }
+
+    /// F11 leaves a dialog at its size, as a Windows Open or Save dialog
+    /// does, while Ctrl+E still moves to the search box.
+    ///
+    /// parity: INT-032, CMD-036
+    #[gtk::test]
+    fn a_dialog_does_not_go_full_screen() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        window.folder_pane().focus_view();
+
+        let full_screen = window.lookup_action("full-screen").expect("the action");
+        assert!(!full_screen.is_enabled(), "Full screen is off in a dialog");
+        assert!(
+            !press(test, gdk::Key::F11, gdk::ModifierType::empty()),
+            "F11 does nothing"
+        );
+        assert!(!window.imp().wants_full_screen.get());
+        assert!(press(test, gdk::Key::e, gdk::ModifierType::CONTROL_MASK));
+        assert!(window.focus_is_in_text_field(), "Ctrl+E moves to the search box");
     }
 
     /// A dialog for one file keeps one selected: a second item selected

@@ -106,3 +106,197 @@ impl Drop for BindMount {
         let _ = Command::new("umount").arg(&self.0).status();
     }
 }
+
+/// A staging item on a simulated phone (`GVfs` MTP) or share (SMB), or the
+/// folder holding it. Only what staging cleanup asks is answered.
+///
+/// On a phone, asking about or deleting the item answers "not found",
+/// which may be false, so only the folder's listing tells whether the item
+/// is really gone: it lists the item while `listed` is true.
+///
+/// On a share, the item is a staging folder whose removal fails because
+/// another client removed an item inside it first: "not found" for that
+/// item, while the staging folder itself stays while `listed` is true.
+#[derive(Clone, Copy)]
+pub(crate) struct RemoteStage {
+    /// The staging item's name.
+    name: &'static str,
+    /// True for the folder holding the item, false for the item.
+    folder: bool,
+    /// Whether the item is still there.
+    listed: bool,
+    /// True on a share, false on a phone.
+    share: bool,
+}
+
+impl RemoteStage {
+    /// The staging item `name` on a phone, still listed by its folder when
+    /// `listed`.
+    pub(crate) fn on_phone(name: &'static str, listed: bool) -> Self {
+        Self {
+            name,
+            folder: false,
+            listed,
+            share: false,
+        }
+    }
+
+    /// The staging folder `name` on a share, still there when `listed`.
+    pub(crate) fn on_share(name: &'static str, listed: bool) -> Self {
+        Self {
+            share: true,
+            ..Self::on_phone(name, listed)
+        }
+    }
+
+    fn not_found(uri: &str) -> crate::transfer::TransferError {
+        crate::transfer::TransferError::NotFound(format!("Error removing file {uri}: No such file"))
+    }
+}
+
+impl crate::transfer::Node for RemoteStage {
+    fn uri(&self) -> String {
+        let folder = if self.share {
+            "smb://server.example/Share"
+        } else {
+            "mtp://phone.example/Folder"
+        };
+        if self.folder {
+            folder.to_owned()
+        } else {
+            format!("{folder}/{}", self.name)
+        }
+    }
+
+    fn name(&self) -> std::ffi::OsString {
+        if self.folder { "Folder" } else { self.name }.into()
+    }
+
+    fn path(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+
+    fn child(&self, _name: &std::ffi::OsStr) -> Box<dyn crate::transfer::Node> {
+        unreachable!("staging cleanup does not ask for a child")
+    }
+
+    fn parent(&self) -> Option<Box<dyn crate::transfer::Node>> {
+        (!self.folder).then(|| {
+            Box::new(RemoteStage {
+                folder: true,
+                ..*self
+            }) as Box<dyn crate::transfer::Node>
+        })
+    }
+
+    fn exists(&self, _cancel: Option<&crate::transfer::Cancellation>) -> bool {
+        self.folder || self.listed
+    }
+
+    fn info(
+        &self,
+        _cancel: Option<&crate::transfer::Cancellation>,
+    ) -> Result<crate::transfer::NodeInfo, crate::transfer::TransferError> {
+        if self.share && (self.folder || self.listed) {
+            return Ok(crate::transfer::NodeInfo {
+                kind: crate::transfer::NodeKind::Directory,
+                size: 0,
+                mode: None,
+                modified: None,
+                identity: None,
+            });
+        }
+        Err(Self::not_found(&crate::transfer::Node::uri(self)))
+    }
+
+    fn is_directory(
+        &self,
+        _cancel: Option<&crate::transfer::Cancellation>,
+    ) -> Result<bool, crate::transfer::TransferError> {
+        Ok(self.folder)
+    }
+
+    fn children(
+        &self,
+        _cancel: Option<&crate::transfer::Cancellation>,
+    ) -> Result<Vec<Box<dyn crate::transfer::Node>>, crate::transfer::TransferError> {
+        let item = RemoteStage {
+            folder: false,
+            ..*self
+        };
+        Ok(if self.folder && self.listed {
+            vec![Box::new(item)]
+        } else {
+            Vec::new()
+        })
+    }
+    fn create_directory(
+        &self,
+        _cancel: Option<&crate::transfer::Cancellation>,
+    ) -> Result<(), crate::transfer::TransferError> {
+        unreachable!("staging cleanup creates nothing")
+    }
+
+    fn copy_file(
+        &self,
+        _target: &dyn crate::transfer::Node,
+        _cancel: &crate::transfer::Cancellation,
+        _progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<(), crate::transfer::TransferError> {
+        unreachable!("staging cleanup copies nothing")
+    }
+
+    fn move_native(
+        &self,
+        _target: &dyn crate::transfer::Node,
+        _cancel: Option<&crate::transfer::Cancellation>,
+    ) -> Result<(), crate::transfer::TransferError> {
+        unreachable!("staging cleanup moves nothing")
+    }
+
+    fn replace_native(
+        &self,
+        _target: &dyn crate::transfer::Node,
+        _cancel: Option<&crate::transfer::Cancellation>,
+    ) -> Result<(), crate::transfer::TransferError> {
+        unreachable!("staging cleanup replaces nothing")
+    }
+
+    fn delete(&self) -> Result<(), crate::transfer::TransferError> {
+        Err(Self::not_found(&crate::transfer::Node::uri(self)))
+    }
+
+    fn delete_staging(
+        &self,
+        _created: Option<crate::transfer::ItemIdentity>,
+    ) -> Result<(), crate::transfer::TransferError> {
+        let uri = crate::transfer::Node::uri(self);
+        if self.share {
+            return Err(Self::not_found(&format!("{uri}/payload")));
+        }
+        Err(Self::not_found(&uri))
+    }
+
+    fn trash(&self, _cancel: &crate::transfer::Cancellation) -> Result<(), crate::transfer::TransferError> {
+        unreachable!("staging cleanup never uses the Trash")
+    }
+
+    fn can_trash(
+        &self,
+        _cancel: Option<&crate::transfer::Cancellation>,
+    ) -> Result<bool, crate::transfer::TransferError> {
+        unreachable!("staging cleanup never uses the Trash")
+    }
+
+    fn delete_tree(
+        &self,
+        _cancel: &crate::transfer::Cancellation,
+        _guard: Option<&crate::transfer::WriteGuard>,
+    ) -> Result<(), crate::transfer::TransferError> {
+        unreachable!("staging cleanup deletes by delete or delete_staging")
+    }
+
+    fn has_sibling_staging(&self) -> bool {
+        !self.share
+    }
+}

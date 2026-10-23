@@ -356,7 +356,8 @@ fn signing_out_forgets_the_server_and_its_tabs() {
 
     assert_eq!(
         test.window.shown_message().as_str(),
-        "Disconnected. Saved credentials are retained."
+        "",
+        "signing out says nothing"
     );
     assert!(!test.window.sidebar().labels().contains(&"share".to_owned()));
     let tabs = test.tab_listing_needs();
@@ -398,7 +399,8 @@ fn signing_out_of_the_server_on_screen_drops_its_rows() {
     assert_eq!(rows.n_items(), 0);
     assert_eq!(
         test.window.shown_message().as_str(),
-        "Disconnected. Saved credentials are retained."
+        "",
+        "signing out says nothing"
     );
 }
 
@@ -450,7 +452,7 @@ fn keep_in_network_saves_a_browsed_share_and_remove_deletes_it() {
 
     test.activate("remove-saved-location", Some("smb://nas/media"));
     wait_until("the removal", || test.context.settings_data().shares.is_empty());
-    assert_eq!(test.window.shown_message().as_str(), "Saved location removed.");
+    assert_eq!(test.window.shown_message().as_str(), "", "removing says nothing");
 }
 
 /// parity: SIDE-017, SIDE-020
