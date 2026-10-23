@@ -41,7 +41,9 @@ pub(crate) enum SourceChange {
 ///
 /// The source tree is checked when `source_change` is
 /// [`SourceChange::Changed`]; `destination` is checked in parallel with the
-/// source tree (copy, move). Nothing is followed through symbolic links and
+/// source tree (copy, move). `source_kind` is what the caller has just
+/// found `source` to be, which saves asking the backend again; `None` asks.
+/// Nothing is followed through symbolic links and
 /// nothing is modified. Without a guard this does nothing, exactly like the
 /// Python engine. The Python app also runs it before a rename (`rename_item`
 /// in `v2.0.0:desktop/gio_backend.py`).
@@ -53,6 +55,7 @@ pub(crate) enum SourceChange {
 pub(crate) fn check_write_tree(
     guard: Option<&WriteGuard>,
     source: &dyn Node,
+    source_kind: Option<NodeKind>,
     destination: Option<&dyn Node>,
     cancel: &Cancellation,
     source_change: SourceChange,
@@ -65,7 +68,7 @@ pub(crate) fn check_write_tree(
         cancel,
         source_change,
     };
-    preflight.check_tree(source, destination, 0)
+    preflight.check_tree(source, source_kind, destination, 0)
 }
 
 /// One preflight walk.
@@ -76,11 +79,13 @@ struct WritePreflight<'a> {
 }
 
 impl WritePreflight<'_> {
-    /// Checks `source` (at nesting `depth`), its counterpart in the
-    /// destination, and everything below them.
+    /// Checks `source` (at nesting `depth`, of `source_kind` when already
+    /// known), its counterpart in the destination, and everything below
+    /// them.
     fn check_tree(
         &self,
         source: &dyn Node,
+        source_kind: Option<NodeKind>,
         destination: Option<&dyn Node>,
         depth: usize,
     ) -> Result<(), TransferError> {
@@ -96,7 +101,11 @@ impl WritePreflight<'_> {
         }
         // Inspected without following links: a link to a protected folder is
         // checked as the link itself, and its target is never walked.
-        if source.info(Some(self.cancel))?.kind != NodeKind::Directory {
+        let kind = match source_kind {
+            Some(kind) => kind,
+            None => source.info(Some(self.cancel))?.kind,
+        };
+        if kind != NodeKind::Directory {
             return Ok(());
         }
         for child in source.children(Some(self.cancel))? {
@@ -104,7 +113,7 @@ impl WritePreflight<'_> {
                 Some(folder) => Some(child_node(folder, child.name())?),
                 None => None,
             };
-            self.check_tree(child.as_ref(), child_destination.as_deref(), depth + 1)?;
+            self.check_tree(child.as_ref(), None, child_destination.as_deref(), depth + 1)?;
         }
         Ok(())
     }
