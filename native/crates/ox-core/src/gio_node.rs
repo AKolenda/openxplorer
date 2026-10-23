@@ -33,7 +33,7 @@ use gio::prelude::*;
 
 use crate::location::split_location;
 use crate::transfer::{
-    check_cancelled, clean_staging, Cancellation, FilesystemInfo, ItemIdentity, Node, NodeInfo,
+    check_cancelled, clean_staging, Cancellation, FilesystemInfo, ItemIdentity, Node, NodeInfo, NodeKind,
     TransferError, WriteGuard,
 };
 
@@ -202,7 +202,16 @@ impl Node for GioNode {
     }
 
     fn delete_tree(&self, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError> {
-        self.delete_item_tree(cancel, guard)
+        self.delete_item_tree(None, cancel, guard)
+    }
+
+    fn delete_tree_of_kind(
+        &self,
+        kind: NodeKind,
+        cancel: &Cancellation,
+        guard: Option<&WriteGuard>,
+    ) -> Result<(), TransferError> {
+        self.delete_item_tree(Some(kind), cancel, guard)
     }
 
     fn delete_staging(&self, created: Option<ItemIdentity>) -> Result<(), TransferError> {
