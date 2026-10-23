@@ -108,15 +108,27 @@ fn summarize_items(message: &str, result: &TransferResult) -> OperationSummary {
 
 /// What is said about a run that did not fully succeed: once the user
 /// cancelled, only the failures no question showed and what needs
-/// recovery by hand, otherwise the report.
+/// recovery by hand, otherwise the report. Each presented message
+/// silences one failure, so of two failures with the same message the
+/// one never asked about is still reported.
 fn problems(result: &TransferResult) -> OperationSummary {
     if !result.cancelled {
         return OperationSummary::Report(report_lines(result));
     }
+    let mut presented: Vec<&String> = result.presented.iter().collect();
     let unsaid: Vec<&str> = result
         .errors
         .iter()
-        .filter(|error| result.recovery.contains(error) || !result.presented.contains(error))
+        .filter(|error| {
+            if result.recovery.contains(error) {
+                return true;
+            }
+            let Some(seen) = presented.iter().position(|message| message == error) else {
+                return true;
+            };
+            presented.swap_remove(seen);
+            false
+        })
         .map(String::as_str)
         .collect();
     if unsaid.is_empty() {
@@ -149,6 +161,7 @@ fn report_lines(result: &TransferResult) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ops::results::merge_results;
 
     fn result(done: usize, skipped: usize, errors: &[&str], cancelled: bool) -> TransferResult {
         TransferResult {
@@ -273,6 +286,29 @@ mod tests {
         assert_eq!(summarize_restore(&outcome), report);
         assert_eq!(summarize_batch_rename(&outcome), report);
         assert_eq!(summarize_undo(&record, &outcome), report);
+    }
+
+    /// Two failures with the same message, such as a special file of the
+    /// same name in two duplicated folders, one answered with "Skip all"
+    /// and one left out without asking: Cancel still reports the second,
+    /// also once the results of the two runs are added up.
+    ///
+    /// parity: OPS-023, OPS-047
+    #[test]
+    fn a_cancelled_run_reports_each_unseen_failure_with_a_seen_message() {
+        let pipe = "tree/pipe: Sockets, devices and other special files are not copied.";
+        let first = TransferResult {
+            presented: vec![pipe.to_owned()],
+            ..result(1, 0, &[pipe], false)
+        };
+        let second = result(0, 0, &[pipe], true);
+        let mut total = TransferResult::default();
+        merge_results(&mut total, first);
+        merge_results(&mut total, second);
+
+        let summary = summarize_duplicate(&total);
+
+        assert_eq!(summary, OperationSummary::Report(pipe.into()));
     }
 
     #[test]

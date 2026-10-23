@@ -211,8 +211,10 @@ pub struct TransferResult {
     /// reported even after a cancellation.
     pub recovery: Vec<String>,
     /// The messages of `errors` the user saw in the question about a failed
-    /// item and answered (OPS-047). A cancellation leaves only these
-    /// unsaid; every other failure is still reported.
+    /// item and answered (OPS-047), once per failure: a message two
+    /// failures share is here twice only when both were answered. A
+    /// cancellation leaves only these failures unsaid; every other one is
+    /// still reported.
     pub presented: Vec<String>,
     /// Where each copied or moved item of `done` is now, in the same
     /// order, under the name the engine gave it (a Keep both `- Copy`
