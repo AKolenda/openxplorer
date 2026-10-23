@@ -84,7 +84,7 @@ pub(crate) struct ItemFacts {
     /// Whether a folder is cached for search; `None` for a file or a
     /// folder the search cache cannot take.
     pub(crate) caching: Option<Caching>,
-    /// Delete's label: "Move to Trash" or "Delete permanently".
+    /// Delete's label: "Delete", or "Delete permanently" in the Recycle Bin.
     pub(crate) delete_label: &'static str,
     /// The installed disk tool the item offers: Mount disk image for a
     /// local `.iso` or `.img` file (DEV-011), Analyse disk usage for a
@@ -324,11 +324,11 @@ fn duplicate_item() -> MenuEntry {
     .into()
 }
 
-/// Copy path, one line per selected item (CLIP-014), with Explorer's key
-/// for "Copy as path" (CLIP-013).
+/// Copy as path, as Windows names it, one line per selected item
+/// (CLIP-014), with Explorer's key (CLIP-013).
 fn copy_path_item() -> MenuEntry {
     item(
-        ox_core::i18n::gettext_static("Copy path"),
+        ox_core::i18n::gettext_static("Copy as path"),
         Icon::Link,
         WindowAction::CopyPath,
     )
@@ -395,7 +395,7 @@ pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
 }
 
 /// The Windows 11 style: the edit commands in the strip, the Open group,
-/// Copy path, the details and "Show more options" (CMD-010).
+/// Copy as path, the details and "Show more options" (CMD-010).
 fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     let mut entries = open_group(facts);
     entries.push(duplicate_item());
@@ -574,7 +574,7 @@ fn open_with_application(application: &ApplicationChoice) -> MenuItem {
 }
 
 /// The menu of items inside a ZIP opened like a folder, as Explorer's
-/// inside a "Compressed (zipped) Folder": Open, Copy, Copy path and
+/// inside a "Compressed (zipped) Folder": Open, Copy, Copy as path and
 /// Extract all (ARC-026). The ZIP is read-only, so nothing else applies.
 pub(crate) fn zip_item_menu() -> Vec<MenuEntry> {
     vec![
@@ -594,7 +594,7 @@ pub(crate) fn zip_item_menu() -> Vec<MenuEntry> {
         .with_shortcut("Ctrl+C")
         .into(),
         item(
-            ox_core::i18n::gettext_static("Copy path"),
+            ox_core::i18n::gettext_static("Copy as path"),
             Icon::Link,
             WindowAction::CopyPath,
         )
@@ -701,7 +701,7 @@ mod tests {
             editors: Vec::new(),
             applications: Vec::new(),
             caching: None,
-            delete_label: "Move to Trash",
+            delete_label: "Delete",
             disk_tool: None,
         }
     }
@@ -760,9 +760,9 @@ mod tests {
                 "Paste into folder",
                 "-",
                 "Rename",
-                "Move to Trash",
+                "Delete",
                 "Duplicate",
-                "Copy path",
+                "Copy as path",
                 "Compress to ZIP file",
                 "Compress to…",
                 "Cache this folder for search",
@@ -787,9 +787,9 @@ mod tests {
             ("Copy", "Ctrl+C"),
             // CMD-019: Paste on one folder pastes into it, without a key.
             ("Rename", "F2"),
-            ("Move to Trash", "Delete"),
+            ("Delete", "Delete"),
             // A gain: the Python app had no key for Copy path.
-            ("Copy path", "Ctrl+Shift+C"),
+            ("Copy as path", "Ctrl+Shift+C"),
             ("Properties", "Alt+Enter"),
         ];
         let expected: Vec<(String, &str)> = expected
@@ -1021,10 +1021,7 @@ mod tests {
         let menu = item_menu(&folder(), MenuStyle::Compact);
 
         let strip: Vec<&str> = menu.strip.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(
-            strip,
-            ["Cut", "Copy", "Paste into folder", "Rename", "Move to Trash"]
-        );
+        assert_eq!(strip, ["Cut", "Copy", "Paste into folder", "Rename", "Delete"]);
         assert_eq!(
             labels(&menu.entries),
             [
@@ -1035,7 +1032,7 @@ mod tests {
                 "Open in new window",
                 "Pin to Quick access",
                 "Duplicate",
-                "Copy path",
+                "Copy as path",
                 "Compress to ZIP file",
                 "-",
                 "Calculate folder size",

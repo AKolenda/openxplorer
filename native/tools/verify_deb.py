@@ -86,6 +86,9 @@ def check_dependencies(report: Report, fields: dict[str, str], channel: Channel)
     report.check('GVfs, a Secret Service, xdg-utils and a terminal are recommended',
                  all(name in recommends for name in
                      ('gvfs-backends', 'gvfs-fuse', 'gnome-keyring', 'xdg-utils', 'terminal')))
+    report.check("Share's Email portal backend is recommended",
+                 'xdg-desktop-portal-gtk' in recommends
+                 and 'xdg-desktop-portal-gtk' not in depends)
     if channel is Channel.STABLE:
         report.check('Updates and the mount helper have their programs recommended',
                      all(name in recommends for name in ('pkexec', 'cifs-utils')))

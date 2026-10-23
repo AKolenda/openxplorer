@@ -115,6 +115,8 @@ pub(crate) enum WindowAction {
     PinFolder,
     /// Copies the path of the selection, or of the folder.
     CopyPath,
+    /// Emails the selected files through the desktop's Email portal.
+    Share,
     /// Shows what this build is.
     /// Opens the offline user manual at the topic of what the window
     /// shows (F1, CMD-033).
@@ -143,6 +145,9 @@ pub(crate) enum WindowAction {
     /// Splits the tab into two panes, or closes its active pane (F3,
     /// VIEW-059).
     SplitView,
+    /// Windows Explorer's Full screen: makes the window fill the screen,
+    /// or gives it back its size (F11, CMD-036).
+    FullScreen,
     /// Shows or hides the folder tree (F7, SIDE-028).
     FolderTree,
     /// Switches the folder tree option named by the string target (its
@@ -480,6 +485,7 @@ impl WindowAction {
             WindowAction::PinSelected => "pin-selected",
             WindowAction::PinFolder => "pin-folder",
             WindowAction::CopyPath => "copy-path",
+            WindowAction::Share => "share",
             WindowAction::About => "about",
             WindowAction::Help => "help",
             WindowAction::KeyboardShortcuts => "keyboard-shortcuts",
@@ -492,6 +498,7 @@ impl WindowAction {
             WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
             WindowAction::SplitView => "split-view",
+            WindowAction::FullScreen => "full-screen",
             WindowAction::FolderTree => "folder-tree",
             WindowAction::FolderTreeOption => "folder-tree-option",
             WindowAction::SidebarIconSize => "sidebar-icon-size",

@@ -153,7 +153,7 @@ fn copied_items_paste_as_real_files() {
     assert!(test.window.shown_message().contains("read-only"));
     test.activate("copy", None);
     wait_until("the copies on the clipboard", || {
-        test.window.shown_message().contains("copied")
+        copied_uris(&test).is_some_and(|uris| uris.ends_with("/readme.txt"))
     });
 
     test.window
@@ -164,6 +164,97 @@ fn copied_items_paste_as_real_files() {
     let pasted = fixture.path("Documents/readme.txt");
     wait_until("the pasted file", || pasted.exists());
     assert_eq!(fs::read(&pasted).expect("pasted"), b"read me");
+}
+
+/// Writes `Large.zip` into `fixture`, holding `large.bin`, and shows it in
+/// a window that opens ZIPs like folders. The member is random bytes,
+/// stored: large enough that Cancel comes long before its extraction could
+/// end, and never refused as a ZIP bomb.
+fn open_large_zip(fixture: &Fixture) -> TestWindow {
+    let script = "import os, sys, zipfile\n\
+                  with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_STORED) as archive:\n\
+                  \x20   archive.writestr('large.bin', os.urandom(64 << 20))\n";
+    let status = std::process::Command::new("python3")
+        .args(["-c", script])
+        .arg(fixture.path("Large.zip"))
+        .status()
+        .expect("Python 3 writes the fixture archive");
+    assert!(status.success());
+    let test = opening_zips_as_folders(fixture);
+    let root = ArchiveLocation::root(&fixture.uri_of("Large.zip"));
+    test.window.navigate(&root.uri()).expect("the ZIP");
+    test.wait_for_listing("the ZIP's listing");
+    test
+}
+
+/// Cancel while Copy extracts the selection out of a ZIP just stops, as in
+/// Windows Explorer: no message follows.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn cancelling_a_copy_out_of_a_zip_says_nothing() {
+    let fixture = Fixture::standard();
+    let test = open_large_zip(&fixture);
+    test.select_named("large.bin");
+
+    test.activate("copy", None);
+    wait_until("the extraction to start", || {
+        test.window.transfer_panel().is_busy()
+    });
+    test.window.transfer_panel().cancel();
+    wait_until("the extraction to stop", || {
+        !test.window.transfer_panel().is_busy()
+    });
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+
+    assert_eq!(test.window.shown_message(), "", "nothing is said after Cancel");
+}
+
+/// Cancel while a drop in this app waits for the copies of an item dragged
+/// out of a ZIP refuses the drop without a word, as in Windows Explorer.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn cancelling_a_drag_out_of_a_zip_says_nothing() {
+    use crate::window::file_drop::{DropAction, DropDestination, DropRun};
+
+    let fixture = Fixture::standard();
+    let test = open_large_zip(&fixture);
+    let content = test
+        .window
+        .drag_content_for(test.position_of("large.bin"))
+        .expect("a drag")
+        .downcast::<crate::window::zip_copies::ZipDragContent>()
+        .expect("the drag of items inside a ZIP");
+    let destination = DropDestination::Folder(fixture.uri_of("Documents"));
+    let shown = test.window.current_uri();
+    let finished = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = std::rc::Rc::clone(&finished);
+    let window = test.window.clone();
+    gtk::glib::spawn_future_local(async move {
+        window
+            .take_zip_drag(
+                &content,
+                shown.as_deref(),
+                destination,
+                DropRun::Run(DropAction::Copy),
+            )
+            .await;
+        done.set(true);
+    });
+
+    wait_until("the extraction to start", || {
+        test.window.transfer_panel().is_busy()
+    });
+    test.window.transfer_panel().cancel();
+    wait_until("the drop to end", || finished.get());
+    test.window.end_file_drag();
+
+    assert_eq!(test.window.shown_message(), "", "nothing is said after Cancel");
+    assert!(
+        !fixture.path("Documents/large.bin").exists(),
+        "nothing was dropped"
+    );
 }
 
 /// A drag of items inside a ZIP offers a file list that is made only when
@@ -429,21 +520,26 @@ fn a_link_in_the_zip_does_not_stop_copying_other_items_out() {
     test.wait_for_listing("the ZIP's listing");
     assert_eq!(test.names(), ["Docs", "notes.txt"], "the links are hidden");
 
+    let listing_notice = test.window.shown_message();
     test.select_named("notes.txt");
     test.activate("copy", None);
     wait_until("the copy on the clipboard", || {
-        test.window.shown_message().contains("copied")
-    });
-    assert!(!test.window.shown_message().contains("left out"));
-
-    test.select_named("Docs");
-    test.activate("copy", None);
-    wait_until("the copies on the clipboard, with a note", || {
-        test.window.shown_message().contains("left out")
+        copied_uris(&test).is_some_and(|uris| uris.ends_with("/notes.txt"))
     });
     assert_eq!(
         test.window.shown_message(),
-        "1 item(s) copied — ready to paste in another window. 1 link or special file inside was left out."
+        listing_notice,
+        "a whole copy says nothing"
+    );
+
+    test.select_named("Docs");
+    test.activate("copy", None);
+    wait_until("the copies on the clipboard", || {
+        copied_uris(&test).is_some_and(|uris| uris.ends_with("/Docs"))
+    });
+    assert_eq!(
+        test.window.shown_message(),
+        "1 link or special file inside was left out."
     );
 
     test.window
@@ -455,6 +551,22 @@ fn a_link_in_the_zip_does_not_stop_copying_other_items_out() {
     wait_until("the pasted folder", || pasted.exists());
     assert_eq!(fs::read(&pasted).expect("pasted"), b"first");
     assert!(fs::symlink_metadata(fixture.path("Documents/Docs/shortcut")).is_err());
+}
+
+/// The one URI the window's clipboard holds as a URI list, if any.
+fn copied_uris(test: &TestWindow) -> Option<String> {
+    let clipboard = test.window.clipboard();
+    let bytes = gtk::glib::MainContext::default().block_on(async {
+        let (stream, _) = clipboard
+            .read_future(&["text/uri-list"], gtk::glib::Priority::DEFAULT)
+            .await
+            .ok()?;
+        stream
+            .read_bytes_future(4096, gtk::glib::Priority::DEFAULT)
+            .await
+            .ok()
+    })?;
+    Some(String::from_utf8_lossy(&bytes).trim_end().to_owned())
 }
 
 /// A ZIP another app hands to this one is browsed even with "Open
@@ -530,7 +642,7 @@ fn the_menus_inside_a_zip_are_short() {
     test.window.right_click(Some(position));
     assert_eq!(
         test.window.context_menu().row_labels(),
-        ["Open", "-", "Copy", "Copy path", "-", "Extract all…"]
+        ["Open", "-", "Copy", "Copy as path", "-", "Extract all…"]
     );
     test.window.context_menu().popdown();
     test.window.right_click(None);

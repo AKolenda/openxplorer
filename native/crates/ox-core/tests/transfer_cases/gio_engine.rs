@@ -306,6 +306,7 @@ fn a_failed_item_is_retried_or_skipped_as_answered() {
     assert_eq!(*asked.lock().expect("question log"), ["a.txt", "b.txt"]);
     assert_eq!(result.done, [file_uri(&paths[0]), file_uri(&paths[2])]);
     assert_eq!(result.errors.len(), 2, "{result:?}");
+    assert_eq!(result.presented, result.errors[..1], "d.txt was left out unasked");
     assert!(!result.cancelled);
     assert_eq!(list(&fixture.destination_folder), ["a.txt", "c.txt"]);
     fixture.assert_no_staging();
@@ -362,6 +363,7 @@ fn an_entry_inside_a_folder_is_asked_about_by_itself() {
     assert!(!result.cancelled);
     assert_eq!(result.errors.len(), 1, "{result:?}");
     assert!(result.errors[0].starts_with("tree/inner/pipe: "), "{result:?}");
+    assert_eq!(result.presented, result.errors, "the pipe was asked about");
     let copy = fixture.destination_folder.join("tree");
     assert_eq!(list(&copy), ["a.txt", "inner", "locked.txt"]);
     assert_eq!(read(&copy.join("locked.txt")), "locked");
@@ -396,6 +398,11 @@ fn skip_all_and_cancel_about_an_entry_inside_a_folder() {
     let result = fixture.run(&mut engine, &[&tree], Request::Copy(ConflictPolicy::Skip));
     assert_eq!(*asked.lock().expect("count"), 1, "asked once");
     assert_eq!(result.errors.len(), 3, "{result:?}");
+    assert_eq!(
+        result.presented,
+        result.errors[..1],
+        "the later pipes were unasked"
+    );
     assert_eq!(list(&fixture.destination_folder.join("tree")), ["a.txt"]);
     fixture.assert_no_staging();
 

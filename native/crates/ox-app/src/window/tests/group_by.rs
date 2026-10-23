@@ -439,8 +439,9 @@ fn back_to_a_grouped_folder_keeps_its_scroll_position() {
 }
 
 /// The Sort menu's submenus: More holds Size and the further keys, and
-/// Group by Explorer's choices, "Same as sort" and (None); choosing one
-/// from the open menu groups the folder.
+/// Group by Explorer's choices, "Same as sort" and (None). A submenu
+/// shows in the same popup as the Sort menu, under a row that goes back;
+/// choosing one of its items groups the folder.
 ///
 /// parity: VIEW-022
 #[gtk::test]
@@ -454,14 +455,14 @@ fn the_sort_menu_has_more_and_group_by_submenus() {
         menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
     });
     capture_popover(&test.window, menu.upcast_ref(), "native-sort-menu.png");
-    // Clicking Group by opens it beside the Sort menu, which stays open.
+    let sort_rows = menu.row_labels();
+    // Clicking Group by shows its choices in the same menu.
     menu.row("Group by").emit_activate();
-    let group_by = menu.open_submenu_menu().expect("Group by opens beside the menu");
-    wait_until("the Group by submenu", || group_by.is_visible());
-    assert!(menu.is_visible(), "the Sort menu stays open");
     assert_eq!(
-        group_by.row_labels(),
+        menu.row_labels(),
         [
+            "Group by",
+            "-",
             "Name",
             "Date modified",
             "Type",
@@ -471,92 +472,113 @@ fn the_sort_menu_has_more_and_group_by_submenus() {
             "(None)"
         ]
     );
-    capture_popover(&test.window, group_by.upcast_ref(), "native-group-by-menu.png");
+    assert!(menu.is_visible(), "the menu stays open");
+    assert_eq!(open_menus(&test).len(), 1, "one popup only");
+    capture_popover(&test.window, menu.upcast_ref(), "native-group-by-menu.png");
 
-    // Left closes only the submenu; Right on Group by opens it again.
-    assert!(group_by.press_in_list(gtk::gdk::Key::Left));
-    assert!(menu.open_submenu_menu().is_none());
-    assert!(menu.is_visible());
-    menu.row("Group by").grab_focus();
+    // Left goes back to the Sort menu, on Group by; Right opens it again.
+    assert!(menu.press_in_list(gtk::gdk::Key::Left));
+    assert_eq!(menu.row_labels(), sort_rows);
+    assert_eq!(focused_row_label(&menu).as_deref(), Some("Group by"));
     assert!(menu.press_in_list(gtk::gdk::Key::Right));
-    let group_by = menu.open_submenu_menu().expect("Right opens it");
+    assert_eq!(menu.row_labels().first().map(String::as_str), Some("Group by"));
+    // The back row goes back too.
+    menu.rows()[0].emit_activate();
+    assert_eq!(menu.row_labels(), sort_rows);
 
-    // Choosing in the submenu closes both menus, then groups.
-    group_by.row("Date modified").emit_activate();
-    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
-    wait_until("both menus to close", || {
-        !menu.is_visible() && !group_by.is_visible()
-    });
-}
-
-/// With Group by open, the submenu grabs the pointer, so its motion over
-/// the Sort menu reaches the Sort menu through the submenu, as a position
-/// on the Sort menu's surface: resting there on More still opens More's
-/// submenu in Group by's place. Before, More stayed shut on KDE Plasma.
-///
-/// parity: VIEW-022
-#[gtk::test]
-fn the_pointer_back_from_group_by_still_opens_more() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    test.window.right_click(None);
-    let menu = test.window.context_menu();
-    menu.row("Sort by").emit_activate();
-    wait_until("the Sort menu", || {
-        menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
-    });
-    menu.hover_row(Some("Group by"));
-    wait_until("the Group by submenu", || {
-        menu.open_submenu_menu()
-            .is_some_and(|submenu| submenu.is_visible())
-    });
-    // The pointer goes into the submenu, then back over the Sort menu.
-    menu.hover_row(None);
-    menu.hover_row_through_submenu("Descending");
-    menu.hover_row_through_submenu("More");
-    wait_until("More's submenu in Group by's place", || {
-        menu.open_submenu_menu()
-            .is_some_and(|submenu| submenu.row_labels().first().map(String::as_str) == Some("Size"))
-    });
-    menu.hover_row_through_submenu("Folders first");
-    wait_until("the submenu to close", || menu.open_submenu_menu().is_none());
-    assert!(menu.is_visible(), "the Sort menu stays open");
-}
-
-/// Resting the pointer on Group by opens its submenu after a moment, and
-/// resting it on another row closes it again, as Windows' menus do.
-///
-/// parity: VIEW-022
-#[gtk::test]
-fn hovering_group_by_opens_its_submenu_beside_the_menu() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    test.window.right_click(None);
-    let menu = test.window.context_menu();
-    menu.row("Sort by").emit_activate();
-    wait_until("the Sort menu", || {
-        menu.is_visible() && menu.row_labels().contains(&"Group by".to_owned())
-    });
-    menu.hover_row(Some("Group by"));
-    assert!(menu.open_submenu_menu().is_none(), "not at once");
-    wait_until("the submenu after a moment", || {
-        menu.open_submenu_menu()
-            .is_some_and(|submenu| submenu.is_visible())
-    });
-    let submenu = menu.open_submenu_menu().expect("open");
-    assert!(
-        !submenu.is_ancestor(&menu.row_list()),
-        "the pointer over the submenu does not hover the menu's rows"
+    // More holds Size and the further keys.
+    menu.row("More").emit_activate();
+    assert_eq!(
+        menu.row_labels(),
+        [
+            "More",
+            "-",
+            "Size",
+            "Date created",
+            "Date accessed",
+            "File extension",
+            "Permissions",
+            "Owner",
+            "User group",
+            "Link destination"
+        ]
     );
-    menu.hover_row(Some("More"));
-    wait_until("More's submenu in its place", || {
-        menu.open_submenu_menu()
-            .is_some_and(|submenu| submenu.row_labels().first().map(String::as_str) == Some("Size"))
-    });
-    menu.hover_row(Some("Ascending"));
-    wait_until("the submenu to close", || menu.open_submenu_menu().is_none());
-    assert!(menu.is_visible(), "the Sort menu stays open");
+    menu.rows()[0].emit_activate();
 
+    // Choosing in a submenu closes the menu, then groups.
+    menu.row("Group by").emit_activate();
+    menu.row("Date modified").emit_activate();
+    assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
+    wait_until("the menu to close", || !menu.is_visible());
+}
+
+/// Resting the pointer on Group by opens nothing: a submenu opens on a
+/// click, Enter or Right only, so no timer ever opens or closes a menu.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_submenu_opens_only_when_chosen() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sort = sort_button(&test);
+    let menu = sort
+        .popover()
+        .and_downcast::<crate::window::menu_popover::MenuPopover>()
+        .expect("an app menu");
+    sort.popup();
+    wait_until("the Sort menu", || menu.is_visible());
+    let sort_rows = menu.row_labels();
+    // The pointer comes onto Group by and rests there.
+    let row = menu.row("Group by");
+    row.grab_focus();
+    let list = menu.row_list();
+    let y = row
+        .compute_point(&list, &gtk::graphene::Point::new(4.0, 4.0))
+        .map_or(0.0, |point| f64::from(point.y()));
+    for controller in list
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+    {
+        if let Ok(motion) = controller.downcast::<gtk::EventControllerMotion>() {
+            motion.emit_by_name::<()>("enter", &[&4.0_f64, &y]);
+            motion.emit_by_name::<()>("motion", &[&4.0_f64, &y]);
+        }
+    }
+    wait_past_the_submenu_delay(&test);
+    assert_eq!(menu.row_labels(), sort_rows, "focus or hover opens nothing");
+    assert_eq!(open_menus(&test).len(), 1);
+}
+
+/// A menu closed inside a submenu opens again at its top level.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_menu_closed_in_a_submenu_reopens_at_its_top() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sort = sort_button(&test);
+    let menu = sort
+        .popover()
+        .and_downcast::<crate::window::menu_popover::MenuPopover>()
+        .expect("an app menu");
+    sort.popup();
+    wait_until("the Sort menu", || menu.is_visible());
+    let sort_rows = menu.row_labels();
+    menu.row("Group by").emit_activate();
+    assert_ne!(menu.row_labels(), sort_rows);
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_visible());
+    sort.popup();
+    wait_until("the Sort menu again", || menu.is_visible());
+    assert_eq!(menu.row_labels(), sort_rows);
+}
+
+/// The Sort menu's submenus hold what Explorer's do.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn the_sort_menu_s_submenus_hold_explorer_s_choices() {
     let submenu = |label: &str| -> Vec<String> {
         sort_menu()
             .into_iter()
@@ -597,6 +619,16 @@ fn hovering_group_by_opens_its_submenu_beside_the_menu() {
             "(None)"
         ]
     );
+}
+
+/// The label of the row with the keyboard focus.
+fn focused_row_label(menu: &crate::window::menu_popover::MenuPopover) -> Option<String> {
+    let row = menu.row_list().focus_child().and_downcast::<gtk::ListBoxRow>()?;
+    let labels = menu.row_labels();
+    let labels: Vec<&String> = labels.iter().filter(|label| *label != "-").collect();
+    labels
+        .get(usize::try_from(row.index()).ok()?)
+        .map(|label| (*label).clone())
 }
 
 /// A folder of many more files than fit on screen, with one subfolder,
@@ -786,8 +818,8 @@ fn sort_button(test: &TestWindow) -> gtk::MenuButton {
         .expect("the command bar has Sort")
 }
 
-/// Waits a while after a menu closes, longer than a submenu takes to
-/// open or close on a timer, letting the window draw.
+/// Waits a while, longer than a submenu took to open or close on a
+/// timer before submenus opened only when chosen, letting the window draw.
 fn wait_past_the_submenu_delay(test: &TestWindow) {
     let waited = std::rc::Rc::new(std::cell::Cell::new(false));
     let done = std::rc::Rc::clone(&waited);
@@ -806,8 +838,7 @@ fn open_menus(test: &TestWindow) -> Vec<String> {
 }
 
 /// Choosing Group by › Date modified in the command bar's Sort menu
-/// closes every menu, also when the pointer crossed other rows of the Sort
-/// menu on its way into Group by, and no menu opens again afterwards.
+/// closes the menu, and no menu opens again afterwards.
 ///
 /// parity: VIEW-022
 #[gtk::test]
@@ -821,32 +852,22 @@ fn choosing_in_the_group_by_submenu_of_the_sort_button_closes_every_menu() {
         .expect("an app menu");
     sort.popup();
     wait_until("the Sort menu", || menu.is_visible());
-    menu.hover_row(Some("Group by"));
-    wait_until("the Group by submenu", || {
-        menu.open_submenu_menu()
-            .is_some_and(|submenu| submenu.is_visible())
-    });
-    let group_by = menu.open_submenu_menu().expect("Group by is open");
-    // On its way into Group by, the pointer crosses the Sort menu's rows,
-    // and the submenu reports where it is over the Sort menu.
-    menu.hover_row(Some("Folders first"));
-    menu.hover_row(None);
-    menu.hover_row_through_submenu("Group by");
-    group_by.hover_row(Some("Date modified"));
+    menu.row("Group by").emit_activate();
+    assert_eq!(open_menus(&test).len(), 1, "one popup only");
 
-    group_by.row("Date modified").emit_activate();
+    menu.row("Date modified").emit_activate();
 
     assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
     wait_past_the_submenu_delay(&test);
-    assert!(!group_by.is_visible(), "Group by closed");
+    assert!(!menu.is_visible(), "the Sort menu closed");
     assert!(!sort.is_active(), "the Sort button is up");
     assert_eq!(open_menus(&test), Vec::<String>::new(), "no menu is open");
 }
 
-/// A press anywhere in the window but on a menu closes the Sort menu and
-/// its Group by submenu, even if they did not close themselves, as on KDE
+/// A press anywhere in the window but on a menu closes the Sort menu,
+/// even inside Group by and even if it did not close itself, as on KDE
 /// Plasma, where a press in the app's own window is the app's to handle.
-/// A press on a menu closes nothing.
+/// A press on the menu closes nothing.
 ///
 /// parity: VIEW-022
 #[gtk::test]
@@ -860,23 +881,15 @@ fn a_press_in_the_window_closes_every_menu_and_a_press_on_a_menu_none() {
         .expect("an app menu");
     sort.popup();
     wait_until("the Sort menu", || menu.is_visible());
-    menu.hover_row(Some("Group by"));
-    wait_until("the Group by submenu", || {
-        menu.open_submenu_menu()
-            .is_some_and(|submenu| submenu.is_visible())
-    });
-    let group_by = menu.open_submenu_menu().expect("Group by is open");
+    menu.row("Group by").emit_activate();
     let window: &gtk::Widget = test.window.upcast_ref();
 
-    for on in [&menu, &group_by] {
-        let surface = gtk::prelude::NativeExt::surface(on);
-        crate::window::menu_popover::close_menus_in(window, surface.as_ref());
-        assert!(menu.is_visible() && group_by.is_visible(), "a press on a menu");
-    }
+    let surface = gtk::prelude::NativeExt::surface(&menu);
+    crate::window::menu_popover::close_menus_in(window, surface.as_ref());
+    assert!(menu.is_visible(), "a press on the menu");
 
     let window_surface = gtk::prelude::NativeExt::surface(&test.window);
     crate::window::menu_popover::close_menus_in(window, window_surface.as_ref());
-    assert!(!group_by.is_visible(), "Group by closed");
     assert!(!menu.is_visible(), "the Sort menu closed");
     assert!(!sort.is_active(), "the Sort button is up");
     wait_past_the_submenu_delay(&test);

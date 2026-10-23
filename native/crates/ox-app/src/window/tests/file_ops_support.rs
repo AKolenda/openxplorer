@@ -22,7 +22,7 @@ pub(in crate::window) fn open_dialog(test: &TestWindow) -> Dialog {
 }
 
 /// The dialog over `test`'s window, if one shows.
-pub(super) fn dialog_over(test: &TestWindow) -> Option<Dialog> {
+pub(in crate::window) fn dialog_over(test: &TestWindow) -> Option<Dialog> {
     gtk::Window::list_toplevels()
         .into_iter()
         .filter_map(|window| window.downcast::<Dialog>().ok())
@@ -154,6 +154,14 @@ pub(in crate::window) fn is_triggered_by(
     modifiers: gdk::ModifierType,
 ) -> bool {
     if let Some(alternatives) = trigger.downcast_ref::<gtk::AlternativeTrigger>() {
+        // GTK 4.24 parses "a|b|c" into one trigger that lists all three,
+        // whose first and second reach only two; older GTK nests pairs.
+        if let Some(list) = alternatives.dynamic_cast_ref::<gio::ListModel>() {
+            return list
+                .iter::<gtk::ShortcutTrigger>()
+                .filter_map(Result::ok)
+                .any(|alternative| is_triggered_by(&alternative, keyval, modifiers));
+        }
         return is_triggered_by(&alternatives.first(), keyval, modifiers)
             || is_triggered_by(&alternatives.second(), keyval, modifiers);
     }

@@ -73,6 +73,9 @@ RECOMMENDS = (
     # Open in Terminal, and Open in archive manager.
     'gnome-terminal | x-terminal-emulator',
     'file-roller',
+    # The Email portal backend that Share uses on GNOME; KDE Plasma's own
+    # portal backend has Email too.
+    'xdg-desktop-portal-gtk',
 )
 STABLE_RECOMMENDS = (
     # The administrator prompt of in-app updates.

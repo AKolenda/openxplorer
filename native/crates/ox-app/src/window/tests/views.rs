@@ -353,6 +353,11 @@ fn text_size_steps_stay_between_80_and_200_percent() {
     assert_eq!(skin.text_size().percent(), 80);
     test.activate("text-reset", None);
     assert_eq!(skin.text_size().percent(), 100);
+    assert_eq!(
+        test.window.shown_message(),
+        "",
+        "a step shows no message, as Windows Explorer"
+    );
     skin.set_text_size(before);
 }
 
@@ -490,7 +495,7 @@ fn a_chosen_view_starts_at_the_top_and_has_explorers_keys() {
     assert_eq!(keys("details"), ["<Shift><Control>6"]);
     assert_eq!(keys("extra-large"), ["<Shift><Control>1"]);
     let pane_keys = application().accels_for_action(&WindowAction::DetailsPane.detailed_name());
-    assert_eq!(pane_keys, ["<Shift><Alt>p"]);
+    assert_eq!(pane_keys, ["<Shift><Alt>p", "<Alt>p"]);
 }
 
 /// Ctrl+H shows hidden files wherever focus is, except in a text field,

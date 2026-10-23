@@ -113,14 +113,6 @@ fn not_saved_message(error: &SettingsError) -> String {
     )
 }
 
-/// The toast a text-size change shows (`changeTextSize`).
-fn text_size_toast(size: TextSize) -> String {
-    ox_core::i18n::format_message(
-        "Text size: {percent}%",
-        &[("percent", &size.percent().to_string())],
-    )
-}
-
 /// The sidebar widths the settings save (ox-core's [`SIDEBAR_WIDTHS`]),
 /// in GTK's pixels. The window never shows a width the settings would
 /// refuse to save, nor saves one the Python app would ignore.
@@ -361,13 +353,13 @@ impl BrowserWindow {
         )
     }
 
-    /// Draws text at `size` in every window, says so and saves it for all
-    /// windows (`changeTextSize` in app.js). Saves run one after another,
+    /// Draws text at `size` in every window and saves it for all windows
+    /// (`changeTextSize` in app.js), without a message, as Windows
+    /// Explorer's zoom. Saves run one after another,
     /// so the size asked for last is the one kept.
     pub(super) fn change_text_size(&self, size: TextSize) {
         self.reset_typeahead();
         self.skin().set_text_size(size);
-        self.show_message(&text_size_toast(size));
         self.save_preference(Preference::TextSize(size));
     }
 }
@@ -404,8 +396,7 @@ mod tests {
 
     /// parity: VIEW-045
     #[test]
-    fn a_text_size_change_says_the_size_or_why_it_was_not_saved() {
-        assert_eq!(text_size_toast(TextSize::from_percent(125)), "Text size: 125%");
+    fn a_text_size_change_says_why_it_was_not_saved() {
         let error = SettingsError::Invalid("the disk is full".to_owned());
         let failure = Preference::TextSize(TextSize::DEFAULT).failure_message(&error);
         let expected = "Text size changed for this window, but could not be saved: the disk is full";

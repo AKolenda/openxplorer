@@ -333,6 +333,8 @@ impl BrowserWindow {
     /// [`Self::show_tab`], with keyboard focus going where `focus` says,
     /// and the pane beside it when the tab is split.
     pub(super) fn show_tab_with(&self, id: TabId, focus: FocusOnShow) {
+        // A rename a slow click scheduled is for the pane clicked.
+        self.cancel_slow_click_rename();
         self.keep_activations_of(id);
         self.reset_typeahead();
         self.hide_message();

@@ -35,7 +35,8 @@ optdepends=('gvfs: the Recycle Bin and the drive and phone list'
             'gvfs-mtp: phones'
             'gnome-keyring: remembering SMB passwords'
             'xdg-utils: making OpenXplorer the default file manager'
-            'file-roller: Open in archive manager')
+            'file-roller: Open in archive manager'
+            'xdg-desktop-portal-gtk: Share on GNOME (its Email portal)')
 if [[ $pkgname == openxplorer ]]; then
   optdepends+=('cifs-utils: the persistent SMB mount helper, openxplorer-mount-share')
 fi

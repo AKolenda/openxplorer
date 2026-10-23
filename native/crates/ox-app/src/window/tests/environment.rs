@@ -124,9 +124,22 @@ fn pinning_the_current_folder_adds_it_to_quick_access() {
         pins.iter().map(|pin| pin.uri.as_str()).collect::<Vec<_>>(),
         [fixture.uri()]
     );
+    // Taking the pin request proves the first one has ended.
+    wait_until("the pin request to end", || test.window.start_pinning());
+    test.window.end_pinning();
+    assert_eq!(
+        test.window.shown_message().as_str(),
+        "",
+        "pinning shows no message"
+    );
     test.activate("pin-folder", None);
     let message = test.window.shown_message();
-    assert_eq!(message.as_str(), "Already pinned to Quick access.");
+    assert_eq!(
+        message.as_str(),
+        "",
+        "pinning again does nothing, as Windows Explorer"
+    );
+    assert_eq!(test.context.settings_data().pins.len(), 1, "nor pins it twice");
 }
 
 #[gtk::test]

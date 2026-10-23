@@ -136,7 +136,7 @@ fn describe(name: &str) -> Option<(Group, String)> {
         "win.cut" => (Group::Files, ox_core::i18n::gettext_static("Cut")),
         "win.copy" => (Group::Files, ox_core::i18n::gettext_static("Copy")),
         "win.paste" => (Group::Files, ox_core::i18n::gettext_static("Paste")),
-        "win.copy-path" => (Group::Files, ox_core::i18n::gettext_static("Copy path")),
+        "win.copy-path" => (Group::Files, ox_core::i18n::gettext_static("Copy as path")),
         "win.rename" => (Group::Files, ox_core::i18n::gettext_static("Rename")),
         "win.trash" => (Group::Files, ox_core::i18n::gettext_static("Delete")),
         "win.delete-permanently" => (Group::Files, ox_core::i18n::gettext_static("Delete permanently")),
@@ -149,6 +149,7 @@ fn describe(name: &str) -> Option<(Group, String)> {
         "win.hidden" => (Group::View, ox_core::i18n::gettext_static("Show hidden files")),
         "win.details-pane" => (Group::View, ox_core::i18n::gettext_static("Details pane")),
         "win.sidebar" => (Group::View, ox_core::i18n::gettext_static("Navigation pane")),
+        "win.full-screen" => (Group::View, ox_core::i18n::gettext_static("Full screen")),
         "win.search" => (Group::Search, ox_core::i18n::gettext_static("Search")),
         "win.search-tool" => (Group::Search, ox_core::i18n::gettext_static("Search tool")),
         "win.text-larger" => (Group::TextSize, ox_core::i18n::gettext_static("Larger text")),
@@ -339,6 +340,50 @@ mod tests {
         assert!(rows.iter().any(|row| row.label == "Help" && row.keys == ["F1"]));
         assert!(is_shown("Paste"));
         assert!(!is_shown("Rename"), "the search hides the other lines");
+        dialog.finish();
+    }
+
+    /// Explorer's Ctrl+E, Ctrl+D, F11 and Alt+P are listed beside the keys
+    /// they match, and the search finds them by name and by key.
+    ///
+    /// parity: CMD-032, CMD-036
+    #[gtk::test]
+    fn the_shortcuts_window_lists_explorers_further_keys() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+
+        let (rows, _) = test.window.shortcut_rows();
+        let keys_of = |label: &str| {
+            rows.iter()
+                .find(|row| row.label == label)
+                .map_or_else(|| panic!("{label} is listed"), |row| row.keys.clone())
+        };
+        let dialog = test.window.shortcuts_dialog();
+        let search = descendants::<gtk::Entry>(&dialog).remove(0);
+        let shown_after = |query: &str| {
+            search.set_text(query);
+            descendants::<gtk::Label>(&dialog)
+                .iter()
+                .filter(|label| label.get_visible() && label.parent().is_some_and(|grid| grid.get_visible()))
+                .filter(|label| !label.has_css_class("dialog-hint"))
+                .map(|label| label.text().to_string())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(keys_of("Search"), ["Ctrl+F", "Ctrl+E"]);
+        assert_eq!(keys_of("Delete"), ["Delete", "Ctrl+D"]);
+        assert_eq!(keys_of("Details pane"), ["Shift+Alt+P", "Alt+P"]);
+        assert_eq!(keys_of("Full screen"), ["F11"]);
+        assert_eq!(
+            rows.iter()
+                .find(|row| row.label == "Full screen")
+                .map(|row| row.group),
+            Some(Group::View)
+        );
+        assert!(shown_after("full").contains(&"Full screen".to_owned()));
+        assert!(shown_after("ctrl+d").contains(&"Delete".to_owned()));
+        assert!(shown_after("ctrl+e").contains(&"Search".to_owned()));
+        assert!(shown_after("alt+p").contains(&"Details pane".to_owned()));
         dialog.finish();
     }
 }
