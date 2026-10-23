@@ -53,6 +53,18 @@
 //! which Plasma runs at login, exporting that variable; disabling removes
 //! it if it still holds what the app wrote. It applies from the next
 //! login, as Plasma reads it only then.
+//!
+//! GTK 4 applications ask the portal whenever it runs, but GTK 3 ones
+//! show GTK's own dialog unless `GTK_USE_PORTAL=1` is set. Enabling therefore also
+//! writes `$XDG_CONFIG_HOME/environment.d/60-openxplorer-file-dialogs.conf`,
+//! which the systemd user manager reads at login and passes to the
+//! session; disabling removes it if it still holds what the app wrote. It
+//! applies from the next login. Only a session the user manager starts
+//! (GNOME, KDE Plasma by default) passes that environment to its apps; on
+//! others (Xfce, MATE) the file would change nothing, so it is written
+//! only while [`GRAPHICAL_SESSION_TARGET`] is active, which such a session
+//! starts. Applications that draw a dialog of their
+//! own (GTK's dialog widget used directly, or another toolkit's) keep it.
 
 use std::fs;
 use std::future::Future;
@@ -117,11 +129,52 @@ const KDE_ENV_SCRIPT: &str = "# Open and Save dialogs of KDE apps go to the desk
                               # OpenXplorer. Set by OpenXplorer (Settings > Default apps); Restore removes it.\n\
                               export PLASMA_INTEGRATION_USE_PORTAL=1\n";
 
-/// What is at the KDE login script's path.
+/// The systemd user unit a desktop session started by the user manager
+/// activates; only such a session passes `environment.d` to its apps.
+pub const GRAPHICAL_SESSION_TARGET: &str = "graphical-session.target";
+
+/// The variable that makes GTK 3 applications ask the portal for file
+/// dialogs instead of showing GTK's own. GTK 4 asks the portal anyway,
+/// and GIO does not read it.
+pub const GTK_PORTAL_VARIABLE: &str = "GTK_USE_PORTAL";
+
+/// The file below `$XDG_CONFIG_HOME/environment.d` that sets
+/// [`GTK_PORTAL_VARIABLE`] at login.
+const GTK_ENV_SUBDIR: &str = "environment.d";
+const GTK_ENV_FILE_NAME: &str = "60-openxplorer-file-dialogs.conf";
+
+/// What the app's environment file holds.
+const GTK_ENV_FILE: &str = "# Open and Save dialogs of GTK 3 apps go to the desktop portal, which sends them\n\
+                            # to OpenXplorer. Set by OpenXplorer (Settings > Default apps); Restore removes it.\n\
+                            GTK_USE_PORTAL=1\n";
+
+/// A file read at login that makes one kind of application ask the
+/// portal for file dialogs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum KdeScript {
+enum LoginFile {
+    /// KDE's login script, which Plasma runs.
+    Kde,
+    /// The environment file the systemd user manager reads, for GTK 3
+    /// apps.
+    Gtk,
+}
+
+impl LoginFile {
+    /// The folder below `$XDG_CONFIG_HOME`, the file's name there, and
+    /// what the app writes.
+    fn parts(self) -> (&'static str, &'static str, &'static str) {
+        match self {
+            Self::Kde => (KDE_ENV_SUBDIR, KDE_ENV_FILE_NAME, KDE_ENV_SCRIPT),
+            Self::Gtk => (GTK_ENV_SUBDIR, GTK_ENV_FILE_NAME, GTK_ENV_FILE),
+        }
+    }
+}
+
+/// What is at a login file's path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LoginFileState {
     Missing,
-    /// The script the app writes.
+    /// The file the app writes.
     Ours,
     /// A file of the user's, or a symlink.
     Other,
@@ -143,6 +196,21 @@ pub struct FileDialogPaths {
     /// The one folder the portal reads, when its service's environment
     /// sets [`PORTAL_DIR_VARIABLE`].
     pub portal_dir: PortalDir,
+    /// Whether the desktop session is started by the systemd user
+    /// manager, and so gives its apps what `environment.d` sets.
+    pub systemd_session: SystemdSession,
+}
+
+/// Whether the desktop session takes its environment from the systemd
+/// user manager.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemdSession {
+    /// Asked of the user manager: [`GRAPHICAL_SESSION_TARGET`] is active.
+    /// It is asked once per [`FileDialogRegistration::run_in_background`]
+    /// operation, on its worker thread.
+    FromManager,
+    /// Known, as in tests.
+    Known(bool),
 }
 
 impl FileDialogPaths {
@@ -160,6 +228,7 @@ impl FileDialogPaths {
             system_dirs,
             desktops: desktops_from(std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref()),
             portal_dir: PortalDir::FromService,
+            systemd_session: SystemdSession::FromManager,
         }
     }
 }
@@ -413,8 +482,8 @@ impl FileDialogRegistration {
         let only = self.portal_dir()?;
         let only = only.as_deref();
         if self.is_enabled_in(only) {
-            // Enabled before KDE apps were covered: add their script.
-            return self.enable_for_kde_apps().map(|_| ());
+            // Enabled before GTK 3 or KDE apps were covered: add their file.
+            return self.enable_login_files().map(drop);
         }
         if let Some(dir) = only {
             fs::create_dir_all(dir).map_err(|error| FileDialogError::PortalDir {
@@ -436,19 +505,15 @@ impl FileDialogRegistration {
             }
             record => record,
         };
-        // KDE's login script is written first, so an Enable that fails
+        // The login files are written first, so an Enable that fails
         // there changes nothing; if the backend's link or the portal file
         // then fails, what was just made is taken away again.
-        let wrote_script = self.enable_for_kde_apps()?;
-        let undo_script = || {
-            if wrote_script {
-                let _ = remove_file(&self.kde_env_file());
-            }
-        };
+        let wrote_files = self.enable_login_files()?;
+        let undo_files = || remove_written(&wrote_files);
         let link = match only.map(|dir| self.show_backend(dir)).transpose() {
             Ok(link) => link.flatten(),
             Err(error) => {
-                undo_script();
+                undo_files();
                 return Err(error);
             }
         };
@@ -491,7 +556,7 @@ impl FileDialogRegistration {
             write_text(&file, &written)
         };
         commit().inspect_err(|_| {
-            undo_script();
+            undo_files();
             if let Some(link) = &link {
                 let _ = remove_link(link);
             }
@@ -556,69 +621,142 @@ impl FileDialogRegistration {
 
     /// The login script that sets [`KDE_PORTAL_VARIABLE`].
     pub fn kde_env_file(&self) -> PathBuf {
-        self.paths
-            .config_home
-            .join(KDE_ENV_SUBDIR)
-            .join(KDE_ENV_FILE_NAME)
+        self.login_file_path(LoginFile::Kde)
     }
 
     /// Whether KDE's own applications are set to ask the portal at the
     /// next login: this is a KDE session and the app's login script is in
     /// place. Reading only reads.
     pub fn covers_kde_apps(&self) -> bool {
-        self.is_kde_session() && matches!(self.kde_script(), Ok(KdeScript::Ours))
+        self.is_kde_session() && matches!(self.login_file(LoginFile::Kde), Ok(LoginFileState::Ours))
     }
 
     /// Whether a file of the user's, or a symlink, sits where the login
     /// script goes on a KDE session, so the app leaves it alone and KDE's
     /// own applications keep KDE's dialog.
     pub fn kde_script_is_someone_elses(&self) -> bool {
-        self.is_kde_session() && matches!(self.kde_script(), Ok(KdeScript::Other))
+        self.is_kde_session() && matches!(self.login_file(LoginFile::Kde), Ok(LoginFileState::Other))
     }
 
-    /// What is at the login script's path: nothing, the app's script, or
+    /// The environment file that sets [`GTK_PORTAL_VARIABLE`] at login.
+    pub fn gtk_env_file(&self) -> PathBuf {
+        self.login_file_path(LoginFile::Gtk)
+    }
+
+    /// Whether GTK 3 applications are set to ask the portal from the next
+    /// login: the app's environment file is in place. Reading only reads.
+    pub fn covers_gtk_apps(&self) -> bool {
+        matches!(self.login_file(LoginFile::Gtk), Ok(LoginFileState::Ours))
+    }
+
+    /// Whether a file of the user's, or a symlink, sits where the
+    /// environment file goes, so the app leaves it alone and GTK 3
+    /// applications keep GTK's dialog.
+    pub fn gtk_env_is_someone_elses(&self) -> bool {
+        matches!(self.login_file(LoginFile::Gtk), Ok(LoginFileState::Other))
+    }
+
+    /// Whether a login file this session needs is not in place: with the
+    /// dialogs already using the app (enabled by an earlier version),
+    /// Enable then still has something to do, or an error to report when
+    /// its path cannot be read. A file of the user's in its place does not
+    /// count, as Enable leaves it alone.
+    pub fn leaves_apps_out(&self) -> bool {
+        self.login_files().into_iter().any(|file| {
+            !matches!(
+                self.login_file(file),
+                Ok(LoginFileState::Ours | LoginFileState::Other)
+            )
+        })
+    }
+
+    /// Whether this session reads GTK 3 apps' environment file at login:
+    /// the systemd user manager starts it.
+    pub fn reads_gtk_env_file(&self) -> bool {
+        match self.paths.systemd_session {
+            SystemdSession::Known(known) => known,
+            SystemdSession::FromManager => graphical_session_is_active(),
+        }
+    }
+
+    /// The login files this session needs: GTK's where the systemd user
+    /// manager starts the session, and KDE's on a KDE session.
+    fn login_files(&self) -> Vec<LoginFile> {
+        let mut files = Vec::new();
+        if self.reads_gtk_env_file() {
+            files.push(LoginFile::Gtk);
+        }
+        if self.is_kde_session() {
+            files.push(LoginFile::Kde);
+        }
+        files
+    }
+
+    fn login_file_path(&self, file: LoginFile) -> PathBuf {
+        let (subdir, name, _) = file.parts();
+        self.paths.config_home.join(subdir).join(name)
+    }
+
+    /// What is at a login file's path: nothing, the app's file, or
     /// anything else (a file of the user's, a symlink, or an entry that
     /// cannot be read as text).
-    fn kde_script(&self) -> Result<KdeScript, FileDialogError> {
-        let script = self.kde_env_file();
-        if refuse_symlink(&script).is_err_and(|error| matches!(error, FileDialogError::Symlink(_))) {
-            return Ok(KdeScript::Other);
+    fn login_file(&self, file: LoginFile) -> Result<LoginFileState, FileDialogError> {
+        let path = self.login_file_path(file);
+        if refuse_symlink(&path).is_err_and(|error| matches!(error, FileDialogError::Symlink(_))) {
+            return Ok(LoginFileState::Other);
         }
-        match read_optional(&script) {
-            Ok(None) => Ok(KdeScript::Missing),
-            Ok(Some(contents)) if contents == KDE_ENV_SCRIPT => Ok(KdeScript::Ours),
-            Ok(Some(_)) => Ok(KdeScript::Other),
+        match read_optional(&path) {
+            Ok(None) => Ok(LoginFileState::Missing),
+            Ok(Some(contents)) if contents == file.parts().2 => Ok(LoginFileState::Ours),
+            Ok(Some(_)) => Ok(LoginFileState::Other),
             // Something there that cannot be read as text (a folder, say)
-            // is not the app's script either: Enable and Restore leave it.
-            Err(_) if fs::symlink_metadata(&script).is_ok() => Ok(KdeScript::Other),
+            // is not the app's file either: Enable and Restore leave it.
+            Err(_) if fs::symlink_metadata(&path).is_ok() => Ok(LoginFileState::Other),
             Err(error) => Err(error),
         }
     }
 
-    /// Writes the login script on a KDE session and says whether it did.
-    /// A file of the user's at that name, or a symlink, is left alone.
-    fn enable_for_kde_apps(&self) -> Result<bool, FileDialogError> {
-        if !self.is_kde_session() || self.kde_script()? != KdeScript::Missing {
-            return Ok(false);
+    /// Writes the login files this session needs that are missing and
+    /// returns the ones it wrote. A file of the user's at that name, or a
+    /// symlink, is left alone; if one cannot be written, those written
+    /// before it are taken away again.
+    fn enable_login_files(&self) -> Result<Vec<PathBuf>, FileDialogError> {
+        let mut written = Vec::new();
+        for file in self.login_files() {
+            let result = self.login_file(file).and_then(|state| {
+                if state != LoginFileState::Missing {
+                    return Ok(None);
+                }
+                let path = self.login_file_path(file);
+                write_text(&path, file.parts().2).map(|()| Some(path))
+            });
+            match result {
+                Ok(path) => written.extend(path),
+                Err(error) => {
+                    remove_written(&written);
+                    return Err(error);
+                }
+            }
         }
-        write_text(&self.kde_env_file(), KDE_ENV_SCRIPT)?;
-        Ok(true)
+        Ok(written)
     }
 
-    /// Takes the login script away if it still holds what the app wrote.
+    /// Takes the login files away if they still hold what the app wrote.
     /// A file of the user's, a symlink, or anything that cannot be read
     /// there is not the app's and is left alone, so Restore goes on.
-    fn disable_for_kde_apps(&self) -> Result<(), FileDialogError> {
-        if matches!(self.kde_script(), Ok(KdeScript::Ours)) {
-            remove_file(&self.kde_env_file())?;
+    fn disable_login_files(&self) -> Result<(), FileDialogError> {
+        for file in [LoginFile::Kde, LoginFile::Gtk] {
+            if matches!(self.login_file(file), Ok(LoginFileState::Ours)) {
+                remove_file(&self.login_file_path(file))?;
+            }
         }
         Ok(())
     }
 
     /// Gives file dialogs back: restores the file if it still holds what
-    /// the app wrote, otherwise removes only the app's line. KDE's login
-    /// script goes first, so if it cannot be removed nothing has changed
-    /// and Restore can be tried again.
+    /// the app wrote, otherwise removes only the app's line. The login
+    /// files go first, so if one cannot be removed the dialogs still use
+    /// the app and Restore can be tried again.
     ///
     /// # Errors
     ///
@@ -626,7 +764,7 @@ impl FileDialogRegistration {
     /// record, and the portal's folder is not absolute) or
     /// [`FileDialogError::Io`].
     pub fn disable(&self) -> Result<DisabledFileDialogs, FileDialogError> {
-        self.disable_for_kde_apps()?;
+        self.disable_login_files()?;
         let outcome = match self.read_record()? {
             Some(record) => self.settle(&record)?,
             None => self.restore(&self.config_file()?, None)?,
@@ -728,6 +866,9 @@ impl FileDialogRegistration {
                         Err(reason) => PortalDir::Unknown(reason),
                     };
                 }
+                if registration.paths.systemd_session == SystemdSession::FromManager {
+                    registration.paths.systemd_session = SystemdSession::Known(graphical_session_is_active());
+                }
                 operation(&registration)
             })
         })
@@ -800,6 +941,48 @@ impl FileDialogRegistration {
 /// Why the folder cannot be told: an environment file the fallback cannot
 /// read as systemd does ([`environment_file_assignments`]), or a folder
 /// or environment file that is not UTF-8.
+/// Whether [`GRAPHICAL_SESSION_TARGET`] is active in the systemd user
+/// manager, asked over D-Bus without starting anything; `false` when no
+/// manager answers or the unit is not loaded.
+fn graphical_session_is_active() -> bool {
+    let Ok(connection) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE) else {
+        return false;
+    };
+    let call = |path: &str, interface: &str, method: &str, parameters: &glib::Variant| {
+        connection
+            .call_sync(
+                Some(SYSTEMD_NAME),
+                path,
+                interface,
+                method,
+                Some(parameters),
+                None,
+                gio::DBusCallFlags::NO_AUTO_START,
+                SYSTEMD_TIMEOUT_MS,
+                gio::Cancellable::NONE,
+            )
+            .ok()
+    };
+    let Some((unit,)) = call(
+        SYSTEMD_PATH,
+        SYSTEMD_MANAGER,
+        "GetUnit",
+        &(GRAPHICAL_SESSION_TARGET,).to_variant(),
+    )
+    .and_then(|reply| reply.get::<(glib::variant::ObjectPath,)>()) else {
+        return false;
+    };
+    call(
+        unit.as_str(),
+        "org.freedesktop.DBus.Properties",
+        "Get",
+        &("org.freedesktop.systemd1.Unit", "ActiveState").to_variant(),
+    )
+    .and_then(|reply| reply.get::<(glib::Variant,)>())
+    .and_then(|(state,)| state.get::<String>())
+    .is_some_and(|state| state == "active")
+}
+
 fn service_portal_dir() -> Result<Option<String>, String> {
     let Ok(connection) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE) else {
         return Ok(None);
@@ -977,6 +1160,13 @@ fn environment_file_assignments(contents: &str) -> Option<Vec<String>> {
 
 /// Removes the backend's link `link` if it is still the symlink the app
 /// made, pointing where it did; anything else there is left alone.
+/// Takes away the login files an Enable that then failed had written.
+fn remove_written(paths: &[PathBuf]) {
+    for path in paths {
+        let _ = remove_file(path);
+    }
+}
+
 fn remove_link(link: &PortalLink) -> Result<(), FileDialogError> {
     match fs::read_link(&link.path) {
         Ok(target) if target == link.target => remove_file(&link.path),

@@ -36,11 +36,14 @@ use rustix::fd::{AsFd, BorrowedFd, OwnedFd};
 use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat, StatxFlags};
 
 use crate::transfer::{
-    check_cancelled, nesting_error, Cancellation, ItemIdentity, TransferError, WriteGuard, MAX_DEPTH,
-    PRIVATE_DIRECTORY_MODE, STAGING_LEVELS,
+    check_cancelled, nesting_error, Cancellation, ItemIdentity, NodeKind, TransferError, WriteGuard,
+    MAX_DEPTH, PRIVATE_DIRECTORY_MODE, STAGING_LEVELS,
 };
 
 /// Permanently deletes the local item at `path` and everything inside it.
+/// When the caller found it to be something other than a folder (`kind`),
+/// nothing inside it is touched: a folder that has taken its place since
+/// is removed only while it is empty.
 ///
 /// # Errors
 ///
@@ -48,6 +51,7 @@ use crate::transfer::{
 /// [`TransferError::Cancelled`]; items not yet reached stay in place.
 pub(super) fn delete_tree(
     path: &Path,
+    kind: Option<NodeKind>,
     cancel: &Cancellation,
     guard: Option<&WriteGuard>,
 ) -> Result<(), TransferError> {
@@ -58,6 +62,7 @@ pub(super) fn delete_tree(
         guard,
         max_depth: MAX_DEPTH,
         folders: FolderAccess::AsFound,
+        enter_root: kind.is_none_or(|kind| kind == NodeKind::Directory),
         root_identity: None,
         drive: None,
     };
@@ -79,6 +84,7 @@ pub(super) fn delete_staging(path: &Path, created: Option<ItemIdentity>) -> Resu
         // The staging folder and its payload add two levels to the tree.
         max_depth: MAX_DEPTH + STAGING_LEVELS,
         folders: FolderAccess::MadePrivate,
+        enter_root: true,
         root_identity: created,
         drive: None,
     };
@@ -128,6 +134,8 @@ struct Deletion<'a> {
     max_depth: usize,
     /// Whether folders are made owner-only before they are emptied.
     folders: FolderAccess,
+    /// Whether the deleted item may be entered when it is a folder.
+    enter_root: bool,
     /// The identity the deleted item itself must have, when known.
     root_identity: Option<ItemIdentity>,
     /// The mount of the folder that holds the item, once it is opened;
@@ -174,6 +182,14 @@ impl Deletion<'_> {
             self.require_same_drive(parent, name, path, depth)?;
         }
         if FileType::from_raw_mode(seen.st_mode) == FileType::Directory {
+            if depth == 0 && !self.enter_root {
+                // The caller found no folder here and checked nothing
+                // inside it: a folder that took its place goes only while
+                // it is empty.
+                check_cancelled(self.cancel)?;
+                fs::unlinkat(parent, name, AtFlags::REMOVEDIR)?;
+                return Ok(());
+            }
             return self.delete_folder(parent, name, path, &seen, depth);
         }
         // unlinkat removes a link itself. If the name raced into a folder,
@@ -436,5 +452,27 @@ mod tests {
         let opened = open_parent(root.path());
 
         assert!(opened.is_ok(), "{:?}", opened.err());
+    }
+
+    /// A folder that took the place of an item the caller found to be a
+    /// file is never emptied: the caller checked nothing inside it.
+    ///
+    /// parity: XFER-015, XFER-020
+    #[test]
+    fn a_folder_found_as_a_file_is_removed_only_while_empty() {
+        let root = temporary_folder();
+        let full = root.path().join("full");
+        std::fs::create_dir(&full).expect("create the folder");
+        std::fs::write(full.join("kept"), b"kept").expect("write");
+        let empty = root.path().join("empty");
+        std::fs::create_dir(&empty).expect("create the folder");
+
+        let full_deleted = delete_tree(&full, Some(NodeKind::File), &Cancellation::new(), None);
+        let empty_deleted = delete_tree(&empty, Some(NodeKind::File), &Cancellation::new(), None);
+
+        assert!(full_deleted.is_err());
+        assert_eq!(std::fs::read(full.join("kept")).expect("read"), b"kept");
+        assert_eq!(empty_deleted, Ok(()));
+        assert!(!empty.exists());
     }
 }

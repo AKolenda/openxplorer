@@ -56,7 +56,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{
     BraveIntegration, BravePaths, DefaultApps, FileDialogPaths, FileDialogRegistration, LaunchShortcut,
-    PortalDir, RevealPaths, RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
+    PortalDir, RevealPaths, RevealRegistration, Sandbox, SystemdSession, DESKTOP_PORTAL_NAME,
 };
 
 #[cfg(test)]
@@ -68,7 +68,7 @@ pub(crate) use applications::{
 pub(crate) use brave_dialog::BraveDialog;
 pub(crate) use changes::{IntegrationError, MakeDefaultChoice};
 pub(crate) use editors::{editor_shortcuts_in_background, EditorShortcut};
-pub(crate) use file_dialog_service::FileDialogsStatus;
+pub(crate) use file_dialog_service::{AfterLogin, FileDialogsStatus};
 pub(crate) use launch_shortcut_service::ShortcutStatus;
 pub(crate) use mime_backend::MimeBackend;
 pub(crate) use open_with_dialog::{Launcher, OpenWithDialog, OpenWithSubject};
@@ -105,6 +105,9 @@ pub(crate) struct IntegrationFolders {
     /// Where the one folder the desktop portal may be told to read comes
     /// from: its service's environment, or none in tests.
     pub(crate) portal_dir: PortalDir,
+    /// Whether the desktop session is started by the systemd user
+    /// manager: asked of it, or started so in tests.
+    pub(crate) systemd_session: SystemdSession,
 }
 
 impl IntegrationFolders {
@@ -119,6 +122,7 @@ impl IntegrationFolders {
             portal_system_dirs: portal.system_dirs,
             desktops: portal.desktops,
             portal_dir: portal.portal_dir,
+            systemd_session: portal.systemd_session,
         }
     }
 
@@ -134,6 +138,7 @@ impl IntegrationFolders {
             portal_system_dirs: vec![root.join("system")],
             desktops: vec!["kde".to_owned()],
             portal_dir: PortalDir::Fixed(None),
+            systemd_session: SystemdSession::Known(true),
         }
     }
 }
@@ -279,6 +284,7 @@ impl DesktopIntegration {
                     system_dirs: folders.portal_system_dirs.clone(),
                     desktops: folders.desktops.clone(),
                     portal_dir: folders.portal_dir.clone(),
+                    systemd_session: folders.systemd_session,
                 },
                 crate::config::APP_ID,
                 sandbox,
