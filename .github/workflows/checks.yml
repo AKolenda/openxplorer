@@ -89,8 +89,8 @@ jobs:
           name: release-${{ matrix.family }}-${{ matrix.format }}
           path: dist/native/
           if-no-files-found: error
-          # Only the release job of this run downloads it. Its self-hosted runner
-          # can leave it queued for a day, and a failed release can be re-run.
+          # Only the release job of this run downloads it; a failed release can
+          # be re-run.
           retention-days: 3
 
   native-flatpak:
@@ -120,17 +120,17 @@ jobs:
           name: release-flatpak
           path: io.winspace.Development.flatpak
           if-no-files-found: error
-          # Only the release job of this run downloads it. Its self-hosted runner
-          # can leave it queued for a day, and a failed release can be re-run.
+          # Only the release job of this run downloads it; a failed release can
+          # be re-run.
           retention-days: 3
 
   website:
     # The website deploys on its own, so a failed package release (or one that
     # is not due) never leaves the site behind. Its download button opens
-    # GitHub's latest release, so it needs no release to exist first. Public
-    # pull requests and non-main dispatches must not run on the LAN host.
+    # GitHub's latest release, so it needs no release to exist first. Only
+    # main deploys.
     if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, Linux, X64, openxplorer]
+    runs-on: ubuntu-24.04
     # The Cloudflare token is a secret of this environment, which only main
     # may use, so a workflow pushed on another branch cannot read it.
     environment: production
@@ -139,7 +139,6 @@ jobs:
       contents: read
     env:
       NEXT_TELEMETRY_DISABLED: '1'
-      TMPDIR: /var/tmp/openxplorer-runner
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -147,7 +146,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
-      - name: Activate the pinned package manager without administrator access
+      - name: Activate the pinned package manager
         run: |
           test -s pnpm-lock.yaml
           npm install --prefix "$RUNNER_TEMP/package-manager" pnpm@10.34.5
@@ -160,7 +159,7 @@ jobs:
         run: |
           /usr/bin/python3 -m venv --system-site-packages "$RUNNER_TEMP/browser-tests"
           "$RUNNER_TEMP/browser-tests/bin/python" -m pip install playwright==1.62.0
-          "$RUNNER_TEMP/browser-tests/bin/python" -m playwright install chromium
+          "$RUNNER_TEMP/browser-tests/bin/python" -m playwright install --with-deps chromium
           "$RUNNER_TEMP/browser-tests/bin/python" - <<'PY'
           import os
           from playwright.sync_api import sync_playwright
@@ -190,15 +189,13 @@ jobs:
           pnpm exec wrangler deploy
 
   release:
-    # Public pull requests and non-main dispatches must not run on the LAN host.
+    # Only main publishes.
     if: github.ref == 'refs/heads/main'
     needs: [native-package, native-flatpak]
-    runs-on: [self-hosted, Linux, X64, openxplorer]
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: write
-    env:
-      TMPDIR: /var/tmp/openxplorer-runner
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -206,6 +203,12 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+      - name: Install the package validators
+        # verify_layout.py runs desktop-file-validate and appstreamcli on the
+        # staged Debian package; dpkg-deb is already on the image.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils appstream
       - name: Verify release source and public-data policies
         run: |
           /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'

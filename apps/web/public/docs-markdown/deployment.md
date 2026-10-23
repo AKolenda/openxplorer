@@ -44,9 +44,9 @@ pnpm cf:deploy
 
 ## Automatic releases
 
-Changes merged into main run on the dedicated OpenXplorer self-hosted GitHub Actions runner. The workflow checks the website and desktop, verifies native file transport, packages matching installer and source archives, and publishes a new version to GitHub Releases; existing release assets are not overwritten. A separate job checks and deploys the website to Cloudflare, so a failed or skipped package release does not hold the site back. The website's download button opens GitHub's latest release and names no version.
+Changes merged into main run on GitHub-hosted Actions runners. The workflow checks the website and desktop, verifies native file transport, packages matching installer and source archives, and publishes a new version to GitHub Releases; existing release assets are not overwritten. A separate job checks and deploys the website to Cloudflare, so a failed or skipped package release does not hold the site back. The website's download button opens GitHub's latest release and names no version.
 
-Pull requests and workflows from other branches do not execute on this runner. Cloudflare uses a dedicated secret in the `production` environment, which only `main` may deploy from; local OAuth credentials are not copied to CI. Runner setup and recovery are documented in docs/SELF-HOSTED-RUNNER.md.
+Only `main` publishes a release or deploys the website. Cloudflare uses a dedicated secret in the `production` environment, which only `main` may deploy from; local OAuth credentials are not copied to CI. Repository configuration and recovery are documented in docs/RELEASE-WORKFLOW.md.
 
 ## Check before announcing
 

@@ -1,6 +1,6 @@
 name: Native Rust checks
 # Pull requests are checked here on hosted runners. checks.yml runs only on
-# pushes to main, on the production host, so anything this workflow skips is
+# pushes to main, so anything this workflow skips is
 # first checked after it has merged.
 on:
   pull_request:
@@ -28,7 +28,6 @@ permissions:
   contents: read
 jobs:
   native:
-    # Public code is checked on a hosted runner, never the production LAN host.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:

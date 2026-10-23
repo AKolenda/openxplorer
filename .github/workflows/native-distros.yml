@@ -37,7 +37,6 @@ env:
 jobs:
   distribution:
     name: ${{ matrix.name }}
-    # Public code is checked on a hosted runner, never the production LAN host.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     container:
