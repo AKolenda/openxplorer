@@ -1,11 +1,3 @@
-# Unreleased
-
-- When a paste, move, duplicate, extraction, compression or new file
-  fails, the error now names the real file or folder (for example
-  `…/Locked/one.txt`) and keeps the system's reason, such as
-  "Permission denied". Before, it named a hidden temporary item like
-  `.winspace-transfer-….part`.
-
 # 2.0.6 — 2026-10-13
 
 ## What's Changed
