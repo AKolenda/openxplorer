@@ -270,6 +270,9 @@ pub(crate) struct BrowserWindow {
     /// answer: the private test display has no window manager.
     #[cfg(test)]
     pub(super) full_screen_for_tests: Cell<Option<bool>>,
+    /// Whether the window is maximized, as tests play the desktop's answer.
+    #[cfg(test)]
+    pub(super) maximized_for_tests: Cell<Option<bool>>,
     /// The tabs closed in this window, most recent first.
     pub(super) closed_tabs: RefCell<Vec<ClosedTab>>,
     /// The in-window dialogs, Properties by tab, and the tabs that

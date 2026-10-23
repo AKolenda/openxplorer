@@ -36,16 +36,17 @@ impl BrowserWindow {
     /// Shows a new window at the saved size and saves its size from now
     /// on.
     pub(crate) fn present_as_new_window(&self) {
-        self.open_at_saved_size();
+        let maximized = self.open_at_saved_size();
         self.present();
-        self.remember_size();
+        self.remember_size(maximized);
         self.imp().remembers_session.set(true);
     }
 
-    /// Gives the window the saved size, before it is shown.
-    fn open_at_saved_size(&self) {
+    /// Gives the window the saved size, before it is shown. Returns
+    /// whether it asked to be maximized.
+    fn open_at_saved_size(&self) -> bool {
         let Some(size) = self.context().settings_data().preferences.window_size else {
-            return;
+            return false;
         };
         let width = i32::try_from(size.width).unwrap_or(i32::MAX);
         let height = i32::try_from(size.height).unwrap_or(i32::MAX);
@@ -53,11 +54,15 @@ impl BrowserWindow {
         if size.maximized {
             self.maximize();
         }
+        size.maximized
     }
 
     /// Saves the window's size whenever the user changes it, once it is
-    /// shown.
-    fn remember_size(&self) {
+    /// shown. The size and state it opened at, `maximized` or not, are
+    /// noted first, so the desktop granting them saves nothing, as Windows
+    /// Explorer saves only the user's own changes.
+    fn remember_size(&self, maximized: bool) {
+        self.imp().size_to_save.set(self.size_now(maximized));
         for property in ["default-width", "default-height", "maximized"] {
             self.connect_notify_local(Some(property), |window, _| {
                 // A save already waiting stays; full screen and back starts
@@ -78,18 +83,32 @@ impl BrowserWindow {
         if self.is_full_screen_now() {
             return false;
         }
+        let size = self.size_now(self.is_maximized_now());
+        size.is_some() && self.imp().size_to_save.replace(size) != size
+    }
+
+    /// The window's size now, `maximized` or not, as it is saved.
+    fn size_now(&self, maximized: bool) -> Option<WindowSize> {
         let (width, height) = self.default_size();
         let (Ok(width), Ok(height)) = (u32::try_from(width), u32::try_from(height)) else {
-            return false;
+            return None;
         };
         // A window narrower than the minimum saves the minimum rather than
         // nothing, so the next window does not open at an older size.
-        let size = Some(WindowSize {
+        Some(WindowSize {
             width: width.clamp(*WINDOW_WIDTHS.start(), *WINDOW_WIDTHS.end()),
             height: height.clamp(*WINDOW_HEIGHTS.start(), *WINDOW_HEIGHTS.end()),
-            maximized: self.is_maximized(),
-        });
-        self.imp().size_to_save.replace(size) != size
+            maximized,
+        })
+    }
+
+    /// Whether the window is maximized now.
+    fn is_maximized_now(&self) -> bool {
+        #[cfg(test)]
+        if let Some(maximized) = self.imp().maximized_for_tests.get() {
+            return maximized;
+        }
+        self.is_maximized()
     }
 
     /// Saves the size [`SAVE_DELAY`] after the last change.
@@ -252,5 +271,118 @@ mod tests {
 
         assert!(!save_started, "full screen and back starts no save");
         assert_eq!(saved_size(), Some((900, 640)), "the newer size stays saved");
+    }
+
+    /// A new window for `test`'s folder, shown as the app shows one.
+    fn open_new_window(test: &TestWindow, fixture: &Fixture) -> BrowserWindow {
+        let window = BrowserWindow::new(&application(), &test.context);
+        window.add_tab(&fixture.uri()).expect("valid folder");
+        window.present_as_new_window();
+        settle();
+        window
+    }
+
+    /// The size the next window opens at.
+    fn saved_size(test: &TestWindow) -> Option<WindowSize> {
+        test.context.settings_data().preferences.window_size
+    }
+
+    /// Plays the desktop maximizing or restoring `window`, which the
+    /// private display cannot do.
+    fn set_maximized(window: &BrowserWindow, maximized: bool) {
+        window.imp().maximized_for_tests.set(Some(maximized));
+        window.notify("maximized");
+    }
+
+    /// A window that opens maximized from the saved state starts no save
+    /// of its own, and neither does its F11 round trip, also where the
+    /// desktop reports it maximized only later and not maximized while
+    /// full screen: another window's newer size stays saved.
+    ///
+    /// parity: TAB-054, CMD-036
+    #[gtk::test]
+    fn a_window_restored_maximized_saves_nothing_for_its_own_starting_state() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let restored = WindowSize {
+            width: 900,
+            height: 640,
+            maximized: true,
+        };
+        test.window.save_preference(Preference::WindowSize(restored));
+        wait_until("the saved state", || saved_size(&test) == Some(restored));
+        let first = open_new_window(&test, &fixture);
+        // The desktop answers the maximize request after the window shows.
+        set_maximized(&first, true);
+        let opening_saves = first.imp().size_save.borrow().is_some();
+        let second = open_new_window(&test, &fixture);
+        second.set_default_size(1000, 700);
+        let newer = WindowSize {
+            width: 1000,
+            height: 700,
+            maximized: true,
+        };
+        wait_until("the second window's size", || saved_size(&test) == Some(newer));
+
+        WindowAction::FullScreen.activate_from(&first, None);
+        first.imp().full_screen_for_tests.set(Some(true));
+        first.notify("fullscreened");
+        set_maximized(&first, false);
+        WindowAction::FullScreen.activate_from(&first, None);
+        first.imp().full_screen_for_tests.set(Some(false));
+        first.notify("fullscreened");
+        set_maximized(&first, true);
+        let round_trip_saves = first.imp().size_save.borrow().is_some();
+        first.close();
+        second.close();
+        settle();
+
+        assert!(!opening_saves, "opening at the saved state saves nothing");
+        assert!(!round_trip_saves, "full screen and back saves nothing");
+        assert_eq!(saved_size(&test), Some(newer), "the newer size stays saved");
+    }
+
+    /// A resize is saved once: the same size reported again starts no
+    /// second save.
+    ///
+    /// parity: TAB-054
+    #[gtk::test]
+    fn a_resize_is_saved_once() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let window = open_new_window(&test, &fixture);
+
+        window.set_default_size(1000, 700);
+        let resized = WindowSize {
+            width: 1000,
+            height: 700,
+            maximized: false,
+        };
+        wait_until("the new size", || saved_size(&test) == Some(resized));
+        wait_until("the save to finish", || window.imp().size_save.borrow().is_none());
+        window.notify("default-width");
+        let saves_again = window.imp().size_save.borrow().is_some();
+        window.close();
+        settle();
+
+        assert!(!saves_again, "an unchanged size is not saved again");
+    }
+
+    /// Maximizing is saved, and so is restoring.
+    ///
+    /// parity: TAB-054
+    #[gtk::test]
+    fn maximizing_and_restoring_are_saved() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let window = open_new_window(&test, &fixture);
+        let maximized = || saved_size(&test).map(|size| size.maximized);
+
+        set_maximized(&window, true);
+        wait_until("the maximized state", || maximized() == Some(true));
+        set_maximized(&window, false);
+        wait_until("the restored state", || maximized() == Some(false));
+        window.close();
+        settle();
     }
 }
