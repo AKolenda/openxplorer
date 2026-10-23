@@ -204,7 +204,8 @@ impl ZipExtractor {
         archive_uri: &str,
         cancel: &Cancellation,
     ) -> Result<ExtractionSummary, ArchiveError> {
-        let archive = open_archive(self.opener.as_ref(), archive_uri, cancel)?;
+        let archive = open_archive(self.opener.as_ref(), archive_uri, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         let plan = plan(archive.members(), &self.limits, cancel)?;
         Ok(plan.summary)
     }
@@ -246,7 +247,8 @@ impl ZipExtractor {
             .map_err(|error| error.unless_cancelled(cancel))?;
         let name = request.folder_name.clone();
         self.report("Checking ZIP contents…".to_owned(), 0.0);
-        let mut archive = open_archive(self.opener.as_ref(), &archive_uri, cancel)?;
+        let mut archive = open_archive(self.opener.as_ref(), &archive_uri, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         // ARC-026: a copy out of the archive checks only what it copies.
         let plan = match &self.selection {
             Some(selected) => plan_selected(archive.members(), selected, &self.limits, cancel)?,

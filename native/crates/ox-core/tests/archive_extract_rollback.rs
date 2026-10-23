@@ -17,7 +17,7 @@ mod transfer_support;
 use std::fs;
 use std::sync::Arc;
 
-use ox_core::archive::{ArchiveError, ZipFormatError};
+use ox_core::archive::{ArchiveError, ArchiveStream, ZipExtractor, ZipFormatError};
 use ox_core::transfer::{Cancellation, Node, TransferError};
 
 use archive_support::{
@@ -126,6 +126,31 @@ fn cancelling_while_the_staging_folder_is_made_is_a_cancellation() {
     fixture.write_sample_zip();
     let factory = LocalNode::factory(Arc::new(CancelledWhileStaging(fixture.cancel.clone())));
     let mut extractor = fixture.extractor_with(factory, Arc::new(LocalFileOutput::owner_only()));
+
+    let result = fixture.extract_with(&mut extractor, "Unpacked");
+
+    assert_eq!(result.unwrap_err(), ArchiveError::Cancelled);
+    fixture.assert_no_output();
+}
+
+/// Cancel while the archive is being opened, as on a share where GIO then
+/// aborts the read with an error of its own, is a cancellation too.
+///
+/// parity: ARC-011, ARC-013
+#[test]
+fn cancelling_while_the_archive_opens_is_a_cancellation() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_sample_zip();
+    let cancel = fixture.cancel.clone();
+    let opener = move |_uri: &str, _cancel: &Cancellation| -> Result<Box<dyn ArchiveStream>, ArchiveError> {
+        cancel.cancel();
+        Err(TransferError::failed("Operation was cancelled").into())
+    };
+    let mut extractor = ZipExtractor::new(
+        Arc::new(opener),
+        gio_factory(),
+        Arc::new(LocalFileOutput::owner_only()),
+    );
 
     let result = fixture.extract_with(&mut extractor, "Unpacked");
 
