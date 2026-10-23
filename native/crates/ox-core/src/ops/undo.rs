@@ -30,6 +30,7 @@
 
 use std::path::PathBuf;
 
+use super::journal::JournalDirection;
 use crate::location::ItemKind;
 use crate::transfer::TransferResult;
 
@@ -124,33 +125,95 @@ pub struct MovedItem {
     pub moved_uri: String,
 }
 
-impl UndoRecord {
-    /// The operation's name as the Undo command shows it (`Rename`, `Move
-    /// to Trash`, ...).
-    pub fn title(&self) -> &'static str {
+/// The operation a step of the journal belongs to, in Windows Explorer's
+/// words: "Undo Delete" after a Move to Trash, "Undo Rename" after any
+/// rename and "Undo New" after a new folder or file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operation {
+    /// A rename or a batch rename.
+    Rename,
+    /// New links.
+    Link,
+    /// A new folder or file.
+    New,
+    /// A copy.
+    Copy,
+    /// Duplicate.
+    Duplicate,
+    /// A move.
+    Move,
+    /// Move to Trash.
+    Delete,
+    /// Restore from the Recycle Bin.
+    Restore,
+}
+
+impl Operation {
+    /// The operation's name on its own, such as `Rename`.
+    pub fn title(self) -> &'static str {
         match self {
-            UndoRecord::Rename { .. } => crate::i18n::gettext_static("Rename"),
-            UndoRecord::BatchRename { .. } => crate::i18n::gettext_static("Batch rename"),
-            UndoRecord::Link { .. } => crate::i18n::gettext_static("Link"),
-            UndoRecord::Create {
-                kind: ItemKind::Folder,
-                ..
-            } => crate::i18n::gettext_static("New folder"),
-            UndoRecord::Create {
-                kind: ItemKind::File, ..
-            } => crate::i18n::gettext_static("New file"),
-            UndoRecord::Copy { .. } => crate::i18n::gettext_static("Copy"),
-            UndoRecord::Duplicate { .. } => crate::i18n::gettext_static("Duplicate"),
-            UndoRecord::Move { .. } => crate::i18n::gettext_static("Move"),
-            UndoRecord::Trash { .. } => crate::i18n::gettext_static("Move to Trash"),
-            UndoRecord::Restore { .. } => crate::i18n::gettext_static("Restore"),
+            Operation::Rename => crate::i18n::gettext_static("Rename"),
+            Operation::Link => crate::i18n::gettext_static("Link"),
+            Operation::New => crate::i18n::gettext_static("New"),
+            Operation::Copy => crate::i18n::gettext_static("Copy"),
+            Operation::Duplicate => crate::i18n::gettext_static("Duplicate"),
+            Operation::Move => crate::i18n::gettext_static("Move"),
+            Operation::Delete => crate::i18n::gettext_static("Delete"),
+            Operation::Restore => crate::i18n::gettext_static("Restore"),
         }
     }
 
+    /// The label of the command walking `direction` through this
+    /// operation, such as `Undo Rename`. Each label is one message, so a
+    /// translation can inflect the operation's name inside it.
+    pub fn label(self, direction: JournalDirection) -> &'static str {
+        use JournalDirection::{Redo, Undo};
+        match (direction, self) {
+            (Undo, Operation::Rename) => crate::i18n::gettext_static("Undo Rename"),
+            (Undo, Operation::Link) => crate::i18n::gettext_static("Undo Link"),
+            (Undo, Operation::New) => crate::i18n::gettext_static("Undo New"),
+            (Undo, Operation::Copy) => crate::i18n::gettext_static("Undo Copy"),
+            (Undo, Operation::Duplicate) => crate::i18n::gettext_static("Undo Duplicate"),
+            (Undo, Operation::Move) => crate::i18n::gettext_static("Undo Move"),
+            (Undo, Operation::Delete) => crate::i18n::gettext_static("Undo Delete"),
+            (Undo, Operation::Restore) => crate::i18n::gettext_static("Undo Restore"),
+            (Redo, Operation::Rename) => crate::i18n::gettext_static("Redo Rename"),
+            (Redo, Operation::Link) => crate::i18n::gettext_static("Redo Link"),
+            (Redo, Operation::New) => crate::i18n::gettext_static("Redo New"),
+            (Redo, Operation::Copy) => crate::i18n::gettext_static("Redo Copy"),
+            (Redo, Operation::Duplicate) => crate::i18n::gettext_static("Redo Duplicate"),
+            (Redo, Operation::Move) => crate::i18n::gettext_static("Redo Move"),
+            (Redo, Operation::Delete) => crate::i18n::gettext_static("Redo Delete"),
+            (Redo, Operation::Restore) => crate::i18n::gettext_static("Redo Restore"),
+        }
+    }
+}
+
+impl UndoRecord {
+    /// The operation the record reverses.
+    pub fn operation(&self) -> Operation {
+        match self {
+            UndoRecord::Rename { .. } | UndoRecord::BatchRename { .. } => Operation::Rename,
+            UndoRecord::Link { .. } => Operation::Link,
+            UndoRecord::Create { .. } => Operation::New,
+            UndoRecord::Copy { .. } => Operation::Copy,
+            UndoRecord::Duplicate { .. } => Operation::Duplicate,
+            UndoRecord::Move { .. } => Operation::Move,
+            UndoRecord::Trash { .. } => Operation::Delete,
+            UndoRecord::Restore { .. } => Operation::Restore,
+        }
+    }
+
+    /// The operation's name as the Undo command shows it (`Rename`,
+    /// `Delete`, ...).
+    pub fn title(&self) -> &'static str {
+        self.operation().title()
+    }
+
     /// The label of the Undo command for this operation, for example
-    /// `Undo: Rename`.
+    /// `Undo Rename`.
     pub fn undo_label(&self) -> String {
-        crate::i18n::format_message("Undo: {title}", &[("title", self.title())])
+        self.operation().label(JournalDirection::Undo).to_owned()
     }
 
     /// The record that reverses what reversing this record did, given the
@@ -264,32 +327,32 @@ mod tests {
         let cases = [
             LabelCase {
                 record: rename(1),
-                label: "Undo: Rename",
+                label: "Undo Rename",
             },
             LabelCase {
                 record: UndoRecord::Create {
                     uri: "file:///tmp/a".into(),
                     kind: ItemKind::Folder,
                 },
-                label: "Undo: New folder",
+                label: "Undo New",
             },
             LabelCase {
                 record: UndoRecord::Create {
                     uri: "file:///tmp/a.txt".into(),
                     kind: ItemKind::File,
                 },
-                label: "Undo: New file",
+                label: "Undo New",
             },
             LabelCase {
                 record: UndoRecord::Duplicate { copies: Vec::new() },
-                label: "Undo: Duplicate",
+                label: "Undo Duplicate",
             },
             LabelCase {
                 record: UndoRecord::Trash {
                     original_paths: Vec::new(),
                     trashed_since: 0,
                 },
-                label: "Undo: Move to Trash",
+                label: "Undo Delete",
             },
         ];
         for case in cases {

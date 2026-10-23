@@ -3666,7 +3666,7 @@ msgstr ""
 msgid "Cut (Ctrl+X)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Delete"
 msgstr ""
 
@@ -3686,7 +3686,7 @@ msgstr ""
 msgid "More options"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
 msgstr ""
 
@@ -4171,11 +4171,6 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/extract_into.rs
-msgid "Added {added} of {offered} items to {name}."
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/extract_into.rs
 msgid "Could not remove the extraction's temporary folder: {error}"
 msgstr ""
 
@@ -4605,7 +4600,7 @@ msgstr ""
 msgid "Use a name without slashes or control characters."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/new_items.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/file_ops/new_items.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "New folder"
 msgstr ""
 
@@ -4615,11 +4610,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/recycle_bin.rs
 msgid "Restoring items…"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/rename.rs
-msgid "Renamed to “{name}”."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/rename.rs
@@ -4650,7 +4640,7 @@ msgstr ""
 msgid "File type / template"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/template_dialog.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/file_ops/template_dialog.rs
 msgid "New file"
 msgstr ""
 
@@ -4794,7 +4784,7 @@ msgstr ""
 msgid "Limit to home folder"
 msgstr ""
 
-#: crates/ox-app/src/window/folder_tree/menu.rs crates/ox-core/src/ops/delete_plan.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/folder_tree/menu.rs crates/ox-core/src/ops/delete_plan.rs
 msgid "Move to Trash"
 msgstr ""
 
@@ -7031,11 +7021,6 @@ msgstr ""
 msgid "Filesystem roots cannot be copied, moved or trashed as items."
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/ops/journal.rs
-msgid "{command}: {title}"
-msgstr ""
-
 #: crates/ox-core/src/ops/links.rs
 msgid "Enter a name for the link."
 msgstr ""
@@ -7256,10 +7241,6 @@ msgid "Empty file"
 msgstr ""
 
 #: crates/ox-core/src/ops/undo.rs
-msgid "Batch rename"
-msgstr ""
-
-#: crates/ox-core/src/ops/undo.rs
 msgid "Link"
 msgstr ""
 
@@ -7267,9 +7248,68 @@ msgstr ""
 msgid "Move"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/ops/undo.rs
-msgid "Undo: {title}"
+msgid "Redo Copy"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Delete"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Duplicate"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Link"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Move"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo New"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Rename"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Redo Restore"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Copy"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Delete"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Duplicate"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Link"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Move"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo New"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Rename"
+msgstr ""
+
+#: crates/ox-core/src/ops/undo.rs
+msgid "Undo Restore"
 msgstr ""
 
 #: crates/ox-core/src/ops/unfinished.rs

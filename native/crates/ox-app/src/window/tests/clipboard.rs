@@ -84,7 +84,7 @@ fn copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy() {
     });
     assert!(fixture.path("Documents/Notes 2.txt").is_file());
     assert!(fixture.path("Notes 2.txt").is_file(), "a copy keeps its source");
-    assert_eq!(test.window.shown_message(), "1 item(s) copied.");
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
 /// The menu of one selected folder pastes into that folder, not into
@@ -125,12 +125,10 @@ fn cut_then_paste_moves_the_items_and_empties_the_cut() {
 
     test.activate("paste", None);
 
-    // Paste is also disabled while the move runs, and the file is in
-    // place before the move is reported, so the report comes first.
-    wait_until("the move to be reported", || {
-        test.window.shown_message() == "1 item(s) moved."
+    wait_until("the moved item", || {
+        fixture.path("Documents/Notes 10.txt").is_file()
     });
-    assert!(fixture.path("Documents/Notes 10.txt").is_file());
+    super::file_ops_support::assert_ended_without_a_message(&test);
     assert!(!fixture.path("Notes 10.txt").exists());
     wait_until("the moved item to leave the clipboard", || {
         !is_enabled(&test, "paste")

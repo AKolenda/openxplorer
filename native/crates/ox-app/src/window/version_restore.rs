@@ -75,7 +75,6 @@ impl BrowserWindow {
             async move {
                 let outcome = run_transfer(&request, &operation, progress).await;
                 window.finish_archive_operation();
-                // Listing a folder hides the toast, so the report comes last.
                 window.reload_tabs_showing(&destination);
                 match outcome {
                     Ok(outcome) => window.report_transfer(&summarize(TransferMode::Copy, &outcome.result)),
@@ -87,15 +86,12 @@ impl BrowserWindow {
         ));
     }
 
-    /// Shows how a copy ended: a toast for complete success, else the
-    /// Operation result dialog.
+    /// Shows how a copy ended: nothing for complete success or a
+    /// cancellation, as in Windows Explorer, else the Operation result
+    /// dialog.
     fn report_transfer(&self, summary: &OperationSummary) {
-        match summary {
-            OperationSummary::Toast(text) => self.show_message(text),
-            OperationSummary::Report(text) => {
-                self.show_result_dialog(ox_core::i18n::gettext_static(RESULT_TITLE), text);
-            }
-            OperationSummary::Cancelled => {}
+        if let OperationSummary::Report(text) = summary {
+            self.show_result_dialog(ox_core::i18n::gettext_static(RESULT_TITLE), text);
         }
     }
 }

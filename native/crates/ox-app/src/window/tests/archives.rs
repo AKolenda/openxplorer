@@ -215,7 +215,7 @@ fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
         fs::read(extracted.join("Docs/a.txt")).expect("an extracted file"),
         b"first"
     );
-    assert_eq!(test.window.shown_message(), "Extracted 2 files into Bundle.");
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
 /// Marks every member of the ZIP at `path` as encrypted, in its local
@@ -315,9 +315,7 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
             .is_some_and(|dialog| dialog.message_text().contains("1 skipped"))
     });
     super::file_ops_support::open_dialog(&test).press("OK");
-    wait_until("the message", || {
-        test.window.shown_message() == "Added 1 of 2 items to Example projects."
-    });
+    super::file_ops_support::assert_ended_without_a_message(&test);
     assert_eq!(
         fs::read(fixture.path("readme.txt")).expect("kept"),
         b"mine",
@@ -404,11 +402,11 @@ fn extract_all_into_an_existing_folder_counts_its_files_when_nothing_is_left_out
     descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.path("Documents").display().to_string());
     press(&frame, "Extract");
 
-    wait_until("the message", || {
-        test.window.shown_message() == "Extracted 2 files into Documents."
+    wait_until("the extracted files", || {
+        fixture.path("Documents/readme.txt").exists()
     });
     assert!(fixture.path("Documents/Docs/a.txt").exists());
-    assert!(fixture.path("Documents/readme.txt").exists());
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
 /// parity: ARC-009
@@ -480,9 +478,7 @@ fn extract_here_uses_the_next_free_name() {
             .count(),
         0
     );
-    wait_until("the toast", || {
-        test.window.shown_message() == "Extracted 2 files into Bundle (2)."
-    });
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
 /// parity: OPS-024
@@ -573,13 +569,11 @@ fn compress_to_zip_puts_the_selection_into_a_new_zip_beside_it() {
 
     let archive = fixture.path("Documents.zip");
     wait_until("the new ZIP", || archive.exists());
-    wait_until("the toast", || {
-        test.window.shown_message() == "Compressed 1 items into Documents.zip."
-    });
     test.wait_for_listing("the folder listed again");
     wait_until("the ZIP in the listing", || {
         test.names().contains(&"Documents.zip".to_owned())
     });
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
 /// Compress to… asks for the name and format, writes a .tar.xz, and
@@ -604,9 +598,7 @@ fn compress_to_asks_for_a_name_and_a_format() {
     compress("Backup");
     let archive = fixture.path("Backup.tar.xz");
     wait_until("the new archive", || archive.exists());
-    wait_until("the toast", || {
-        test.window.shown_message() == "Compressed 1 items into Backup.tar.xz."
-    });
+    super::file_ops_support::assert_ended_without_a_message(&test);
     let frame = compress("Backup");
     wait_until("the refusal", || !frame.error_text().is_empty());
     assert_eq!(test.shown_dialog(), Some(frame));

@@ -11,12 +11,12 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::ops::{JournalDirection, JournalEntry, UndoRecord};
+use ox_core::ops::{JournalDirection, JournalEntry, Operation, UndoRecord};
 
 use super::{AppContext, JOURNAL_CHANGED};
 
 impl AppContext {
-    /// The label of the Undo or Redo command, such as `Undo: Rename`;
+    /// The label of the Undo or Redo command, such as `Undo Rename`;
     /// `None` while it has nothing to do.
     pub(crate) fn journal_label(&self, direction: JournalDirection) -> Option<String> {
         self.imp().undo_journal.borrow().label(direction)
@@ -47,11 +47,11 @@ impl AppContext {
     pub(crate) fn record_reversal(
         &self,
         direction: JournalDirection,
-        title: &'static str,
+        operation: Operation,
         inverse: Option<UndoRecord>,
     ) {
         let mut journal = self.imp().undo_journal.borrow_mut();
-        journal.record_reversal(direction, title, inverse);
+        journal.record_reversal(direction, operation, inverse);
         drop(journal);
         self.notify_journal_changed();
     }

@@ -370,7 +370,7 @@ fn undoing_a_restore_moves_the_items_to_the_trash_again() {
 
     let result = block_on(undo(&record, &OperationContext::default(), |_| {})).unwrap();
 
-    assert_eq!(record.undo_label(), "Undo: Restore");
+    assert_eq!(record.undo_label(), "Undo Restore");
     assert_eq!(result.done, [file_uri(&draft)]);
     assert!(!draft.exists());
     assert_eq!(recycled_from(&draft).name, "draft.txt");
