@@ -17,6 +17,7 @@
 * fix(menus): show menus in full when they fit on the monitor by @addition-official in https://github.com/AKolenda/openxplorer/pull/148
 * feat(share): make the command bar Share button email the selected files by @addition-official in https://github.com/AKolenda/openxplorer/pull/149
 * feat(views): replace Adjust view display style with Windows Folder Options by @addition-official in https://github.com/AKolenda/openxplorer/pull/150
+* revert(ops): stop showing a message and Undo button after a file operation by @addition-official in https://github.com/AKolenda/openxplorer/pull/140
 
 ## Packages
 Download them from the assets below.
