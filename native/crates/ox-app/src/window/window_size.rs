@@ -6,8 +6,9 @@
 //! maximized state, and so does this. A window saves its size a moment
 //! after the user stops resizing it, or maximizes or restores it, and when
 //! it closes; the size saved is the one it has when not maximized, kept
-//! within the 670 × 470 minimum the settings accept. Full screen (F11) is
-//! not saved: the size and state before it stay saved. Every browser window
+//! within the 670 × 470 minimum the settings accept. Full screen is never
+//! saved, from F11 or the desktop: the size and state the window had
+//! before it are noted as they change and saved as usual. Every browser window
 //! opens through [`BrowserWindow::present_as_new_window`]; snapshot
 //! windows set their own size and do not save it.
 
@@ -58,8 +59,32 @@ impl BrowserWindow {
     /// shown.
     fn remember_size(&self) {
         for property in ["default-width", "default-height", "maximized"] {
-            self.connect_notify_local(Some(property), |window, _| window.schedule_size_save());
+            self.connect_notify_local(Some(property), |window, _| {
+                window.note_size();
+                window.schedule_size_save();
+            });
         }
+    }
+
+    /// Notes the size and maximized state to save, unless the window is
+    /// full screen: GTK calls a full-screen window not maximized, and it
+    /// says so only once the window is full screen, so the note keeps the
+    /// state from before full screen, however full screen began.
+    fn note_size(&self) {
+        if self.is_full_screen_now() {
+            return;
+        }
+        let (width, height) = self.default_size();
+        let (Ok(width), Ok(height)) = (u32::try_from(width), u32::try_from(height)) else {
+            return;
+        };
+        // A window narrower than the minimum saves the minimum rather than
+        // nothing, so the next window does not open at an older size.
+        self.imp().size_to_save.set(Some(WindowSize {
+            width: width.clamp(*WINDOW_WIDTHS.start(), *WINDOW_WIDTHS.end()),
+            height: height.clamp(*WINDOW_HEIGHTS.start(), *WINDOW_HEIGHTS.end()),
+            maximized: self.is_maximized(),
+        }));
     }
 
     /// Saves the size [`SAVE_DELAY`] after the last change.
@@ -89,24 +114,10 @@ impl BrowserWindow {
         }
     }
 
-    /// Saves the window's size, unless it is the one saved already or
-    /// the window is full screen.
+    /// Saves the size last noted, unless it is the one saved already.
     fn save_size(&self) {
-        // F11's full screen is not saved, and GTK calls a full-screen
-        // window not maximized, so the state before it stays saved.
-        if self.is_fullscreen() {
+        let Some(size) = self.imp().size_to_save.get() else {
             return;
-        }
-        let (width, height) = self.default_size();
-        let (Ok(width), Ok(height)) = (u32::try_from(width), u32::try_from(height)) else {
-            return;
-        };
-        // A window narrower than the minimum saves the minimum rather than
-        // nothing, so the next window does not open at an older size.
-        let size = WindowSize {
-            width: width.clamp(*WINDOW_WIDTHS.start(), *WINDOW_WIDTHS.end()),
-            height: height.clamp(*WINDOW_HEIGHTS.start(), *WINDOW_HEIGHTS.end()),
-            maximized: self.is_maximized(),
         };
         let saved = self.context().settings_data().preferences.window_size;
         if saved.unwrap_or(DEFAULT_SIZE) != size {
@@ -150,35 +161,41 @@ mod tests {
         assert_eq!(size, (900, 640), "the size it restores to");
     }
 
-    /// F11 saves a size still waiting for its moment first: full screen
-    /// saves nothing, so a window resized and then closed while full
-    /// screen would otherwise lose the size it had before F11.
+    /// Full screen never loses a size still waiting to be saved, whether
+    /// F11 or the desktop (its own key or window menu) starts it: a window
+    /// resized and then closed while full screen saves the size it had
+    /// before full screen.
     ///
     /// parity: TAB-054, CMD-036
     #[gtk::test]
-    fn full_screen_first_saves_a_size_still_waiting() {
-        let fixture = Fixture::standard();
-        let test = TestWindow::open(&fixture.uri());
-        let window = BrowserWindow::new(&application(), &test.context);
-        window.add_tab(&fixture.uri()).expect("valid folder");
-        window.present_as_new_window();
-        settle();
+    fn a_size_still_waiting_survives_full_screen_from_f11_or_the_desktop() {
+        for from_f11 in [true, false] {
+            let fixture = Fixture::standard();
+            let test = TestWindow::open(&fixture.uri());
+            let window = BrowserWindow::new(&application(), &test.context);
+            window.add_tab(&fixture.uri()).expect("valid folder");
+            window.present_as_new_window();
+            settle();
 
-        window.set_default_size(900, 640);
-        assert!(window.imp().size_save.borrow().is_some(), "a save waits");
-        WindowAction::FullScreen.activate_from(&window, None);
-        let still_waiting = window.imp().size_save.borrow().is_some();
-        wait_until("the size to be saved", || {
-            test.context
-                .settings_data()
-                .preferences
-                .window_size
-                .map(|size| (size.width, size.height))
-                == Some((900, 640))
-        });
-        window.close();
-        settle();
+            window.set_default_size(900, 640);
+            assert!(window.imp().size_save.borrow().is_some(), "a save waits");
+            if from_f11 {
+                WindowAction::FullScreen.activate_from(&window, None);
+            }
+            // The desktop's answer, which the private display cannot give.
+            window.imp().full_screen_for_tests.set(Some(true));
+            window.notify("fullscreened");
+            window.close();
 
-        assert!(!still_waiting, "F11 saved the size at once");
+            let what = format!("the size before full screen to be saved (F11: {from_f11})");
+            wait_until(&what, || {
+                test.context
+                    .settings_data()
+                    .preferences
+                    .window_size
+                    .map(|size| (size.width, size.height))
+                    == Some((900, 640))
+            });
+        }
     }
 }
