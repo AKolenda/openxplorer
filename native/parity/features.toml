@@ -16241,7 +16241,7 @@ priority = "must"
 openxplorer = "has"
 sources = [
   "v2.0.0:desktop/CHANGELOG.md (1.0.0, 1.1.0 publication audit)",
-  "docs/SELF-HOSTED-RUNNER.md",
+  "docs/RELEASE-WORKFLOW.md",
   "docs/PUBLIC-RELEASE-CHECKLIST.md",
 ]
 python_tests = []
