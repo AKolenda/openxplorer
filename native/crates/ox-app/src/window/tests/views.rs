@@ -351,6 +351,11 @@ fn text_size_steps_stay_between_80_and_200_percent() {
     assert_eq!(skin.text_size().percent(), 80);
     test.activate("text-reset", None);
     assert_eq!(skin.text_size().percent(), 100);
+    assert_eq!(
+        test.window.shown_message(),
+        "",
+        "a step shows no message, as Windows Explorer"
+    );
     skin.set_text_size(before);
 }
 

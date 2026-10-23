@@ -153,7 +153,7 @@ fn copied_items_paste_as_real_files() {
     assert!(test.window.shown_message().contains("read-only"));
     test.activate("copy", None);
     wait_until("the copies on the clipboard", || {
-        test.window.shown_message().contains("copied")
+        copied_uris(&test).is_some_and(|uris| uris.ends_with("/readme.txt"))
     });
 
     test.window
@@ -429,21 +429,26 @@ fn a_link_in_the_zip_does_not_stop_copying_other_items_out() {
     test.wait_for_listing("the ZIP's listing");
     assert_eq!(test.names(), ["Docs", "notes.txt"], "the links are hidden");
 
+    let listing_notice = test.window.shown_message();
     test.select_named("notes.txt");
     test.activate("copy", None);
     wait_until("the copy on the clipboard", || {
-        test.window.shown_message().contains("copied")
-    });
-    assert!(!test.window.shown_message().contains("left out"));
-
-    test.select_named("Docs");
-    test.activate("copy", None);
-    wait_until("the copies on the clipboard, with a note", || {
-        test.window.shown_message().contains("left out")
+        copied_uris(&test).is_some_and(|uris| uris.ends_with("/notes.txt"))
     });
     assert_eq!(
         test.window.shown_message(),
-        "1 item(s) copied — ready to paste in another window. 1 link or special file inside was left out."
+        listing_notice,
+        "a whole copy says nothing"
+    );
+
+    test.select_named("Docs");
+    test.activate("copy", None);
+    wait_until("the copies on the clipboard", || {
+        copied_uris(&test).is_some_and(|uris| uris.ends_with("/Docs"))
+    });
+    assert_eq!(
+        test.window.shown_message(),
+        "1 link or special file inside was left out."
     );
 
     test.window
@@ -455,6 +460,22 @@ fn a_link_in_the_zip_does_not_stop_copying_other_items_out() {
     wait_until("the pasted folder", || pasted.exists());
     assert_eq!(fs::read(&pasted).expect("pasted"), b"first");
     assert!(fs::symlink_metadata(fixture.path("Documents/Docs/shortcut")).is_err());
+}
+
+/// The one URI the window's clipboard holds as a URI list, if any.
+fn copied_uris(test: &TestWindow) -> Option<String> {
+    let clipboard = test.window.clipboard();
+    let bytes = gtk::glib::MainContext::default().block_on(async {
+        let (stream, _) = clipboard
+            .read_future(&["text/uri-list"], gtk::glib::Priority::DEFAULT)
+            .await
+            .ok()?;
+        stream
+            .read_bytes_future(4096, gtk::glib::Priority::DEFAULT)
+            .await
+            .ok()
+    })?;
+    Some(String::from_utf8_lossy(&bytes).trim_end().to_owned())
 }
 
 /// A ZIP another app hands to this one is browsed even with "Open
