@@ -27,10 +27,10 @@ impl GioNode {
 
     /// XFER-015: permanently deletes the item and everything inside it.
     /// Local items are deleted relative to pinned folder descriptors; every
-    /// other location is deleted by path, as the Python app does. `kind`,
-    /// when the caller just queried it, spares a remote location that
-    /// question; the local walk inspects every item through its pinned
-    /// descriptors regardless.
+    /// other location is deleted by path, as the Python app does. `kind` is
+    /// what the caller found the item to be, as for
+    /// [`Node::delete_tree_of_kind`](crate::transfer::Node::delete_tree_of_kind):
+    /// anything but a folder is deleted without looking inside it.
     ///
     /// # Errors
     ///
@@ -45,7 +45,7 @@ impl GioNode {
     ) -> Result<(), TransferError> {
         self.require_item()?;
         match self.local_path() {
-            Some(path) => local_delete::delete_tree(&path, cancel, guard),
+            Some(path) => local_delete::delete_tree(&path, kind, cancel, guard),
             None => remote_delete::delete_tree(&self.file, kind, cancel, guard),
         }
     }

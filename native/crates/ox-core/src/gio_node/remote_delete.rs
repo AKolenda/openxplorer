@@ -27,12 +27,14 @@ use super::query::{enumerate_kinds, node_kind};
 use crate::transfer::{nesting_error, Cancellation, NodeKind, TransferError, WriteGuard, MAX_DEPTH};
 
 /// Permanently deletes `file` and, for a folder, everything inside it.
-/// `kind` is what the caller just found `file` to be, without following
-/// links; `None` asks the backend.
+/// `kind` is what the caller found `file` to be, without following links;
+/// `None` asks the backend.
 ///
 /// Every question is a round trip to the share, and `GVfs` runs one at a
-/// time per SMB mount, so the walk asks only what it does not know yet:
-/// items inside a folder take their kind from its listing.
+/// time per SMB mount, so the walk asks only about folders: other items
+/// keep the kind the caller or the folder listing reported and are
+/// deleted at once. GIO never deletes a folder with items in it, so a
+/// folder that has taken such an item's place since fails the deletion.
 ///
 /// # Errors
 ///
@@ -54,8 +56,8 @@ struct RemoteDeletion<'a> {
 }
 
 impl RemoteDeletion<'_> {
-    /// Deletes `file` at nesting `depth`, children first. `kind` is the
-    /// item's kind when already known.
+    /// Deletes `file` at nesting `depth`, children first. `kind` is what
+    /// it was last seen to be, when known.
     fn delete(&self, file: &gio::File, kind: Option<NodeKind>, depth: usize) -> Result<(), TransferError> {
         self.cancel.check()?;
         if let Some(guard) = self.guard {
@@ -68,8 +70,10 @@ impl RemoteDeletion<'_> {
             return Err(nesting_error());
         }
         let kind = match kind {
-            Some(kind) => kind,
-            None => self.kind(file)?,
+            Some(kind) if kind != NodeKind::Directory => kind,
+            // A folder is asked about again after the guard: a link that
+            // took its place since it was listed is deleted as a link.
+            _ => self.kind(file)?,
         };
         // Only a real folder is entered: a link is deleted as a link.
         if kind == NodeKind::Directory {
@@ -146,6 +150,54 @@ mod tests {
         assert_eq!(result, Ok(()));
         assert!(!selected.exists());
         assert_eq!(fs::read(outside.join("kept")).expect("read"), b"kept");
+    }
+
+    /// A folder is asked about again before it is entered, so a link that
+    /// took the place of a listed folder is removed as a link.
+    ///
+    /// parity: XFER-015, XFER-017
+    #[test]
+    fn a_link_in_place_of_a_folder_seen_earlier_is_removed_as_a_link() {
+        let root = temporary_folder();
+        let outside = root.path().join("outside");
+        fs::create_dir(&outside).expect("create the target");
+        fs::write(outside.join("kept"), b"kept").expect("write");
+        let link = root.path().join("was-a-folder");
+        symlink(&outside, &link).expect("create the link");
+
+        let result = delete_tree(
+            &gio::File::for_path(&link),
+            Some(NodeKind::Directory),
+            &Cancellation::new(),
+            None,
+        );
+
+        assert_eq!(result, Ok(()));
+        assert!(fs::symlink_metadata(&link).is_err());
+        assert_eq!(fs::read(outside.join("kept")).expect("read"), b"kept");
+    }
+
+    /// An item last seen as a file is deleted without a further question,
+    /// and GIO never deletes a folder with items in it, so a folder that
+    /// took its place is not emptied.
+    ///
+    /// parity: XFER-015, XFER-020
+    #[test]
+    fn a_folder_in_place_of_a_file_seen_earlier_is_not_emptied() {
+        let root = temporary_folder();
+        let folder = root.path().join("was-a-file");
+        fs::create_dir(&folder).expect("create the folder");
+        fs::write(folder.join("kept"), b"kept").expect("write");
+
+        let result = delete_tree(
+            &gio::File::for_path(&folder),
+            Some(NodeKind::File),
+            &Cancellation::new(),
+            None,
+        );
+
+        assert!(result.is_err());
+        assert_eq!(fs::read(folder.join("kept")).expect("read"), b"kept");
     }
 
     /// parity: XFER-015, XFER-020

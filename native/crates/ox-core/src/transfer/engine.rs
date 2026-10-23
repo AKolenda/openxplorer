@@ -444,10 +444,6 @@ impl TransferEngine {
     }
 
     /// Trashes or permanently deletes one user-selected item.
-    ///
-    /// The kind found when the item was selected is passed on, so a share
-    /// is not asked again what the item is: on SMB every question is a
-    /// queued round trip, which adds up over many files.
     fn remove(
         &self,
         removal: Removal,
@@ -455,12 +451,21 @@ impl TransferEngine {
         cancel: &Cancellation,
     ) -> Result<(), TransferError> {
         let source = selected.node.as_ref();
+        // A permanent delete of anything but a folder never looks inside
+        // the item (`delete_tree_of_kind`), so the kind found when it was
+        // selected is enough here: on a share every question is a queued
+        // round trip, which adds up over many files. The Trash takes the
+        // item whole, so it is asked again.
+        let known_kind = match removal {
+            Removal::PermanentDelete if selected.kind != NodeKind::Directory => Some(selected.kind),
+            _ => None,
+        };
         // XFER-020: a protected descendant anywhere in the tree stops the
         // whole item before anything is removed.
         check_write_tree(
             self.guard(),
             source,
-            Some(selected.kind),
+            known_kind,
             None,
             cancel,
             SourceChange::Changed,
