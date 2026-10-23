@@ -166,6 +166,97 @@ fn copied_items_paste_as_real_files() {
     assert_eq!(fs::read(&pasted).expect("pasted"), b"read me");
 }
 
+/// Writes `Large.zip` into `fixture`, holding `large.bin`, and shows it in
+/// a window that opens ZIPs like folders. The member is random bytes,
+/// stored: large enough that Cancel comes long before its extraction could
+/// end, and never refused as a ZIP bomb.
+fn open_large_zip(fixture: &Fixture) -> TestWindow {
+    let script = "import os, sys, zipfile\n\
+                  with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_STORED) as archive:\n\
+                  \x20   archive.writestr('large.bin', os.urandom(64 << 20))\n";
+    let status = std::process::Command::new("python3")
+        .args(["-c", script])
+        .arg(fixture.path("Large.zip"))
+        .status()
+        .expect("Python 3 writes the fixture archive");
+    assert!(status.success());
+    let test = opening_zips_as_folders(fixture);
+    let root = ArchiveLocation::root(&fixture.uri_of("Large.zip"));
+    test.window.navigate(&root.uri()).expect("the ZIP");
+    test.wait_for_listing("the ZIP's listing");
+    test
+}
+
+/// Cancel while Copy extracts the selection out of a ZIP just stops, as in
+/// Windows Explorer: no message follows.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn cancelling_a_copy_out_of_a_zip_says_nothing() {
+    let fixture = Fixture::standard();
+    let test = open_large_zip(&fixture);
+    test.select_named("large.bin");
+
+    test.activate("copy", None);
+    wait_until("the extraction to start", || {
+        test.window.transfer_panel().is_busy()
+    });
+    test.window.transfer_panel().cancel();
+    wait_until("the extraction to stop", || {
+        !test.window.transfer_panel().is_busy()
+    });
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+
+    assert_eq!(test.window.shown_message(), "", "nothing is said after Cancel");
+}
+
+/// Cancel while a drop in this app waits for the copies of an item dragged
+/// out of a ZIP refuses the drop without a word, as in Windows Explorer.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn cancelling_a_drag_out_of_a_zip_says_nothing() {
+    use crate::window::file_drop::{DropAction, DropDestination, DropRun};
+
+    let fixture = Fixture::standard();
+    let test = open_large_zip(&fixture);
+    let content = test
+        .window
+        .drag_content_for(test.position_of("large.bin"))
+        .expect("a drag")
+        .downcast::<crate::window::zip_copies::ZipDragContent>()
+        .expect("the drag of items inside a ZIP");
+    let destination = DropDestination::Folder(fixture.uri_of("Documents"));
+    let shown = test.window.current_uri();
+    let finished = std::rc::Rc::new(std::cell::Cell::new(false));
+    let done = std::rc::Rc::clone(&finished);
+    let window = test.window.clone();
+    gtk::glib::spawn_future_local(async move {
+        window
+            .take_zip_drag(
+                &content,
+                shown.as_deref(),
+                destination,
+                DropRun::Run(DropAction::Copy),
+            )
+            .await;
+        done.set(true);
+    });
+
+    wait_until("the extraction to start", || {
+        test.window.transfer_panel().is_busy()
+    });
+    test.window.transfer_panel().cancel();
+    wait_until("the drop to end", || finished.get());
+    test.window.end_file_drag();
+
+    assert_eq!(test.window.shown_message(), "", "nothing is said after Cancel");
+    assert!(
+        !fixture.path("Documents/large.bin").exists(),
+        "nothing was dropped"
+    );
+}
+
 /// A drag of items inside a ZIP offers a file list that is made only when
 /// the drop asks for it, and names real copies.
 ///

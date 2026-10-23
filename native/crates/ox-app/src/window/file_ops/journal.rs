@@ -66,6 +66,9 @@ impl BrowserWindow {
             Err(error) => {
                 self.context().put_back_journal_step(direction, step);
                 self.reload_selecting(Vec::new());
+                if error.is_cancelled() {
+                    return;
+                }
                 dialog::show_message(
                     self,
                     ox_core::i18n::gettext_static(STOPPED_TITLE),

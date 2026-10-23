@@ -253,6 +253,11 @@ impl BrowserWindow {
                 if still_here {
                     self.reload_selecting(Vec::new());
                 }
+                // Cancelled before any item ran, as during the free-space
+                // check: nothing to say.
+                if error.is_cancelled() {
+                    return;
+                }
                 dialog::show_message(
                     self,
                     ox_core::i18n::gettext_static(STOPPED_TITLE),
@@ -286,6 +291,8 @@ impl BrowserWindow {
             OperationSummary::Report(text) => {
                 dialog::show_message(self, ox_core::i18n::gettext_static(RESULT_TITLE), &text).await;
             }
+            // Windows Explorer says nothing after Cancel.
+            OperationSummary::Cancelled => {}
         }
     }
 
@@ -306,5 +313,40 @@ impl BrowserWindow {
             tab.selected = uris;
         }
         self.load_tab(id, LoadMode::Reload);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use gtk::glib;
+    use ox_core::ops::OpsError;
+
+    use crate::test_support::harness::{wait_for, Fixture, TestWindow};
+    use crate::window::tests::file_ops_support::{dialog_over, open_dialog};
+
+    /// A request the user cancelled before any item ran, as during the
+    /// free-space check of a large copy, ends without a word, as in
+    /// Windows Explorer; a refused one still says why.
+    ///
+    /// parity: OPS-023
+    #[gtk::test]
+    fn a_request_cancelled_before_it_started_says_nothing() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let conclude = |error: OpsError| {
+            let window = test.window.clone();
+            glib::spawn_future_local(async move { window.conclude_operation(Err(error)).await });
+        };
+
+        conclude(OpsError::Cancelled);
+        wait_for(Duration::from_millis(300));
+        assert!(dialog_over(&test).is_none(), "nothing is said after Cancel");
+
+        conclude(OpsError::Failed("Not enough free space.".to_owned()));
+        let stopped = open_dialog(&test);
+        assert_eq!(stopped.title_text(), "Operation stopped");
+        stopped.press("OK");
     }
 }

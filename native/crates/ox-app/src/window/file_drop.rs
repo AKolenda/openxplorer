@@ -47,10 +47,11 @@ use super::activation::query_entry;
 use super::file_drag::{has_open_popover, DraggedItems};
 use super::file_ops::IncomingItems;
 use super::session::{TabPlacement, TabPosition};
-use super::zip_copies::{is_zip_copy, ZipDragContent};
+use super::zip_copies::{is_zip_copy, CopiesFailure, ZipDragContent};
 use super::BrowserWindow;
 
-use action::{drop_run_action, DropRun};
+use action::drop_run_action;
+pub(in crate::window) use action::DropRun;
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{query_program, ProgramChecks, ProgramTarget};
 pub(super) use targets::{DragScroll, DropZone};
@@ -316,9 +317,8 @@ impl BrowserWindow {
             // from the drop, and their copies are made without the
             // timeout, as a large member can take longer to extract.
             drop.finish(finish_action(&drop));
-            let read = content.copies().await.map_err(DropRefusal::NotCopied);
-            let action = read_drop_action(run, &read, &destination).await;
-            self.take_read_drop(shown.as_deref(), read, destination, action);
+            self.take_zip_drag(&content, shown.as_deref(), destination, run)
+                .await;
             return;
         }
         let read = read_dropped_uris(&drop).await;
@@ -332,6 +332,25 @@ impl BrowserWindow {
         drop.finish(finished_as);
         let action = read_drop_action(run, &read, &destination).await;
         self.take_read_drop(shown.as_deref(), read, destination, action);
+    }
+
+    /// Takes items dragged out of a ZIP in this app: makes their copies,
+    /// then runs `run` on them as [`Self::take_read_drop`] does. After
+    /// Cancel the drop just ends, as in Windows Explorer.
+    pub(in crate::window) async fn take_zip_drag(
+        &self,
+        content: &ZipDragContent,
+        shown: Option<&str>,
+        destination: DropDestination,
+        run: DropRun,
+    ) {
+        let read = match content.copies().await {
+            Ok(uris) => Ok(uris),
+            Err(CopiesFailure::Cancelled) => return,
+            Err(CopiesFailure::Failed(message)) => Err(DropRefusal::NotCopied(message)),
+        };
+        let action = read_drop_action(run, &read, &destination).await;
+        self.take_read_drop(shown, read, destination, action);
     }
 
     /// Runs `action` on the items a drop read, unless reading failed or

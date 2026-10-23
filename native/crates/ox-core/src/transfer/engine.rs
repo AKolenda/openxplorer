@@ -356,6 +356,8 @@ impl TransferEngine {
         let mut staging = ItemStaging::default();
         self.failures.start_item(batch.mode(), self.display_name(uri));
         let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
+        // Whether the user saw the error of `outcome` in the question.
+        let mut answered = false;
         while let Err(error) = &outcome {
             if batch.cancel.is_cancelled() || !self.failures.asks_about(error) {
                 break;
@@ -374,14 +376,24 @@ impl TransferEngine {
                 }
                 Some(FailureAnswer::Cancel) => {
                     state.result.cancelled = true;
+                    answered = true;
                     break;
                 }
-                Some(FailureAnswer::Skip | FailureAnswer::SkipAll) | None => break,
+                Some(FailureAnswer::Skip | FailureAnswer::SkipAll) => {
+                    answered = true;
+                    break;
+                }
+                None => break,
             }
         }
         // OPS-047: the entries inside it that were left out, even when the
         // item failed or was cancelled after them.
-        state.result.errors.extend(self.failures.take_left_out());
+        for (message, seen) in self.failures.take_left_out() {
+            if seen {
+                state.result.presented.push(message.clone());
+            }
+            state.result.errors.push(message);
+        }
         match outcome {
             Ok(ItemOutcome::Skipped) => state.result.skipped.push(uri.to_owned()),
             Ok(ItemOutcome::Done) => {
@@ -389,10 +401,10 @@ impl TransferEngine {
                 // A published copy leaves its private folder empty. Failing
                 // to remove it is reported, but the copy stays done.
                 if let Err(error) = staging.remove_empty_folder() {
-                    self.record_failure(batch, uri, &error, &mut state.result);
+                    self.record_failure(batch, uri, &error, false, &mut state.result);
                 }
             }
-            Err(error) => self.record_failure(batch, uri, &error, &mut state.result),
+            Err(error) => self.record_failure(batch, uri, &error, answered, &mut state.result),
         }
         self.discard_leftover_stage(staging, &mut state.result);
     }
@@ -637,8 +649,15 @@ impl TransferEngine {
     }
 
     /// Adds a failed item to `result`, unless the user's cancellation
-    /// explains it.
-    fn record_failure(&self, batch: &Batch, uri: &str, error: &TransferError, result: &mut TransferResult) {
+    /// explains it; `answered` when the user saw the error in the question.
+    fn record_failure(
+        &self,
+        batch: &Batch,
+        uri: &str,
+        error: &TransferError,
+        answered: bool,
+        result: &mut TransferResult,
+    ) {
         // Only the user's own cancellation counts: a backend reporting
         // "cancelled" by itself is an ordinary error.
         let cancelled = error.is_cancelled() || batch.cancel.is_cancelled();
@@ -646,8 +665,16 @@ impl TransferEngine {
         // XFER-003 and XFER-010: cancellation must not hide the location of
         // a retained backup or another problem that requires manual
         // recovery.
-        if !cancelled || matches!(error, TransferError::RecoveryRequired(_)) {
-            result.errors.push(format!("{}: {error}", self.display_name(uri)));
+        let needs_recovery = matches!(error, TransferError::RecoveryRequired(_));
+        if !cancelled || needs_recovery {
+            let message = format!("{}: {error}", self.display_name(uri));
+            if needs_recovery {
+                result.recovery.push(message.clone());
+            }
+            if answered {
+                result.presented.push(message.clone());
+            }
+            result.errors.push(message);
         }
     }
 
@@ -659,7 +686,9 @@ impl TransferEngine {
         };
         let root = stage.root();
         if let Err(problem) = discard_stage(root, staging.created, staging.place, &*self.sleep) {
-            result.errors.push(leftover_report(root, staging.place, &problem));
+            let message = leftover_report(root, staging.place, &problem);
+            result.recovery.push(message.clone());
+            result.errors.push(message);
         }
     }
 

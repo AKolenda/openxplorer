@@ -687,3 +687,75 @@ fn every_published_format_is_offered_for_a_clipboard_manager_to_keep() {
         assert!(storable.contain_mime_type(mime_type), "{mime_type}");
     }
 }
+
+/// Copies `Alpha.txt` and `Beta.txt` of the fixture's folder, the file
+/// called `unreadable` without read permission, and starts pasting them
+/// into Documents: the copy stops at that file with the failed-item
+/// dialog, which this returns. Tests run as a normal user: root reads the
+/// file anyway.
+fn paste_with_an_unreadable_file(fixture: &Fixture, unreadable: &str) -> (TestWindow, crate::dialog::Dialog) {
+    use std::os::unix::fs::PermissionsExt;
+
+    fixture.write("Alpha.txt");
+    fixture.write("Beta.txt");
+    fs::set_permissions(fixture.path(unreadable), fs::Permissions::from_mode(0o000))
+        .expect("take read permission away");
+    let test = clipboard_then_documents(fixture, "copy", &["Alpha.txt", "Beta.txt"]);
+    test.activate("paste", None);
+    let failed = open_dialog(&test);
+    assert!(
+        failed.button_labels().contains(&"Retry".to_owned()),
+        "the failed-item dialog"
+    );
+    (test, failed)
+}
+
+/// Cancel in the failed-item dialog just stops, as in Windows Explorer:
+/// no "Operation result" follows, the item copied before stays, and
+/// Ctrl+Z takes that copy back.
+///
+/// parity: OPS-023, OPS-029
+#[gtk::test]
+fn cancel_in_the_failed_item_dialog_just_stops_and_undo_takes_back_what_was_copied() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    let (test, failed) = paste_with_an_unreadable_file(&fixture, "Beta.txt");
+
+    failed.press("Cancel");
+    wait_until("the finished copy to be selected", || {
+        test.selected_names() == ["Alpha.txt"]
+    });
+
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing is reported after Cancel"
+    );
+    assert!(!fixture.path("Documents/Beta.txt").exists());
+    test.activate("undo", None);
+    wait_until("Undo to take the copy back", || {
+        !fixture.path("Documents/Alpha.txt").exists()
+    });
+    assert!(fixture.path("Alpha.txt").is_file(), "the original stays");
+}
+
+/// The progress panel's Cancel stops a copy without a report, also after
+/// an item was skipped.
+///
+/// parity: OPS-019, OPS-023
+#[gtk::test]
+fn the_panels_cancel_stops_a_copy_without_a_report() {
+    let fixture = Fixture::standard();
+    let (test, failed) = paste_with_an_unreadable_file(&fixture, "Alpha.txt");
+
+    test.activate("cancel-operation", None);
+    failed.press("Skip");
+    wait_for_no_dialog(&test);
+    wait_until("the copy to end", || !test.window.is_writing_files());
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "nothing is reported after Cancel"
+    );
+    assert!(!fixture.path("Documents/Beta.txt").exists(), "the copy stopped");
+}

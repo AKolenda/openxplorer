@@ -218,7 +218,8 @@ impl ZipExtractor {
         archive_uri: &str,
         cancel: &Cancellation,
     ) -> Result<ExtractionSummary, ArchiveError> {
-        let archive = open_archive(self.opener.as_ref(), archive_uri, cancel)?;
+        let archive = open_archive(self.opener.as_ref(), archive_uri, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         let plan = plan(archive.members(), &self.limits, cancel)?;
         Ok(plan.summary)
     }
@@ -251,25 +252,32 @@ impl ZipExtractor {
         request: &ExtractionRequest,
         cancel: &Cancellation,
     ) -> Result<ExtractedFolder, ArchiveError> {
+        // Once the user cancelled, GIO aborts the call in progress with an
+        // error of its own; each step that asks GIO maps it to Cancelled.
         let archive_uri = normalise(&request.archive_uri)?;
         let destination_uri = normalise(&request.destination_uri)?;
-        let destination = self.prepare_destination(&destination_uri, &request.folder_name, cancel)?;
+        let destination = self
+            .prepare_destination(&destination_uri, &request.folder_name, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         let name = request.folder_name.clone();
         self.report("Checking ZIP contents…".to_owned(), 0.0);
-        let mut archive = open_archive(self.opener.as_ref(), &archive_uri, cancel)?;
+        let mut archive = open_archive(self.opener.as_ref(), &archive_uri, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         // ARC-026: a copy out of the archive checks only what it copies.
         let plan = match &self.selection {
             Some(selected) => plan_selected(archive.members(), selected, &self.limits, cancel)?,
             None => plan(archive.members(), &self.limits, cancel)?,
         };
-        self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)?;
+        self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         cancel.check()?;
         let output = if self.into_existing {
             Output::InsideExisting(&name)
         } else {
             Output::NewFolder(&name)
         };
-        let mut staging = ExtractionStaging::create(destination.folder.as_ref(), output, cancel)?;
+        let mut staging = ExtractionStaging::create(destination.folder.as_ref(), output, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         let mut unpacking = Unpacking::new(self, plan.summary, cancel);
         if let Err(error) = unpacking.run(&mut archive, &plan, &mut staging, destination.new_folder.as_ref())
         {
