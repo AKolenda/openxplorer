@@ -9,7 +9,7 @@ use std::fs;
 use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
-use super::file_ops_support::{is_enabled, select_names};
+use super::file_ops_support::{dialog_over, is_enabled, open_dialog, select_names, wait_for_no_dialog};
 use crate::test_support::harness::{settle, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuStyle;
 
@@ -223,13 +223,15 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
 }
 
 /// In a folder the user may not write to (no write permission, on a
-/// writable drive), the folder menu's New… and Paste are off and say why,
-/// whether the folder holds items or not, as CMD-011 asks. Tests run as a
-/// normal user: root ignores the permission.
+/// writable drive), the folder menu's New… and Paste stay on, empty
+/// folder or not, as in Windows Explorer: the user tries, and the
+/// system's error says why. Paste asks about the item that failed, New
+/// says why in the toast, and nothing is made. Tests run as a normal
+/// user: root ignores the permission.
 ///
-/// parity: CMD-011, CMD-031
+/// parity: CMD-011, CMD-031, OPS-001, OPS-047
 #[gtk::test]
-fn a_folder_without_write_permission_offers_neither_new_nor_paste() {
+fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
     use std::os::unix::fs::PermissionsExt;
 
     /// Gives the folders their write permission back, also when the test
@@ -256,33 +258,65 @@ fn a_folder_without_write_permission_offers_neither_new_nor_paste() {
     assert!(is_enabled(&test, "paste"), "something to paste");
 
     for (folder, what) in [
-        ("Locked", "a folder with items"),
         ("Documents", "an empty folder"),
+        ("Locked", "a folder with items"),
     ] {
         test.window.navigate(&fixture.uri_of(folder)).expect("a folder");
         test.wait_for_listing(what);
-        wait_until("New and Paste to turn off", || {
-            !is_enabled(&test, "new-folder") && !is_enabled(&test, "paste")
-        });
+        settle();
+        wait_for_frames(&test.window, 3);
+        assert!(is_enabled(&test, "new-folder"), "New in {what}");
+        assert!(is_enabled(&test, "paste"), "Paste in {what}");
         test.window.right_click(None);
         let menu = test.window.context_menu();
         for label in ["New…", "Paste"] {
-            let row = menu.row(label);
-            assert!(!row.is_sensitive(), "{label} in {what}");
-            assert_eq!(
-                row.tooltip_text().unwrap_or_default(),
-                format!("{label}\nThis folder is read-only."),
-                "{label} in {what} says why"
-            );
+            assert!(menu.row(label).is_sensitive(), "{label} in {what}");
         }
         menu.popdown();
     }
 
-    test.window.navigate(&fixture.uri()).expect("a folder");
-    test.wait_for_listing("the writable folder");
-    wait_until("New and Paste to come back", || {
-        is_enabled(&test, "new-folder") && is_enabled(&test, "paste")
+    test.activate("paste", None);
+    let dialog = open_dialog(&test);
+    assert_eq!(
+        dialog.title().unwrap_or_default(),
+        "Error while copying “Notes 2.txt”"
+    );
+    assert!(
+        dialog.message_text().contains("Permission denied"),
+        "the system's error: {}",
+        dialog.message_text()
+    );
+    dialog.press("Cancel");
+    // Whether a result follows Cancel is not this test's concern: one that
+    // shows is closed.
+    wait_until("the paste to end", || {
+        is_enabled(&test, "new-folder") || dialog_over(&test).is_some_and(|report| report != dialog)
     });
+    if let Some(report) = dialog_over(&test) {
+        report.press("OK");
+    }
+    wait_for_no_dialog(&test);
+    assert!(!fixture.path("Locked/Notes 2.txt").exists(), "nothing pasted");
+
+    wait_until("New to be on again", || is_enabled(&test, "new-folder"));
+    let before = test.window.shown_message().to_string();
+    test.activate("new-folder", None);
+    wait_until("New to say why", || {
+        test.window.shown_message() != before.as_str()
+    });
+    assert!(
+        test.window.shown_message().contains("Permission denied"),
+        "the system's error: {}",
+        test.window.shown_message()
+    );
+    settle();
+    assert!(dialog_over(&test).is_none(), "no dialog");
+    assert!(!fixture.path("Locked/New folder").exists(), "no half-made folder");
+    assert_eq!(
+        fs::read_dir(fixture.path("Locked")).expect("listed").count(),
+        1,
+        "only inside.txt"
+    );
 }
 
 /// The folder menu's "Sort by" opens the command bar's Sort menu in
