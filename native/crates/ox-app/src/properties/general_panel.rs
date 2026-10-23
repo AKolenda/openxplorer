@@ -50,9 +50,6 @@ const METADATA_UNREADABLE: &str = crate::i18n::message_id("Metadata could not be
 /// A file's Opens with row without a default application.
 const NO_DEFAULT_APP: &str = crate::i18n::message_id("No default application");
 
-/// The toast after Copy full path.
-const PATH_COPIED: &str = crate::i18n::message_id("Full path copied.");
-
 /// What the General tab shows besides the item's own properties.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct GeneralFacts<'a> {
@@ -360,14 +357,11 @@ fn type_applications_button(content_type: &str) -> gtk::Button {
     button
 }
 
-/// Copy full path: puts `path` on the clipboard and says so.
+/// Copy full path: puts `path` on the clipboard.
 fn copy_path_button(path: String) -> gtk::Button {
     let button = glyph_button(ox_core::i18n::gettext_static("Copy full path"), Icon::Copy);
     button.connect_clicked(move |button| {
         button.clipboard().set_text(&path);
-        if let Some(window) = button.root().and_downcast::<crate::window::BrowserWindow>() {
-            window.show_message(ox_core::i18n::gettext_static(PATH_COPIED));
-        }
     });
     button
 }

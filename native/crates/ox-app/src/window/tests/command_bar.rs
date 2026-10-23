@@ -457,7 +457,8 @@ fn copy_path_copies_the_selected_items_address_or_the_folders() {
     let message = test.window.shown_message();
     assert_eq!(
         message.as_str(),
-        "Path copied. Sharing permissions are unchanged."
+        "",
+        "copying shows no message, as Windows Explorer"
     );
     test.window.folder_model().select_only(1);
     test.activate("copy-path", None);
@@ -505,8 +506,83 @@ fn copy_path_runs_on_explorers_and_dolphins_keys() {
     let second = fixture.path("Notes 10.txt").display().to_string();
     assert_eq!(explorer_copy, Some(first));
     assert_eq!(clipboard_text(&test), Some(second));
-    assert_eq!(
-        test.window.shown_message().as_str(),
-        "Path copied. Sharing permissions are unchanged."
+    assert_eq!(test.window.shown_message().as_str(), "", "and says nothing");
+}
+
+/// Submenus within submenus, as template folders within folders in the
+/// New menu, show in the one popup: each level under a row that goes
+/// back to the level above, with its check marks, icons and the reasons
+/// a disabled item gives; choosing a deep item closes the menu and runs
+/// it.
+///
+/// parity: CMD-031, OPS-003
+#[gtk::test]
+fn nested_submenus_show_one_level_at_a_time_in_one_popup() {
+    use crate::window::menu_popover::{MenuEntry, MenuItem};
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("sort", Some("name"));
+    let button = super::support::menu_button_with_class(&test, "new-command");
+    let menu = super::support::app_menu(&button);
+    let deep: Vec<MenuEntry> = vec![
+        MenuItem::choice("Name", Icon::ArrowSort, WindowAction::Sort, "name").into(),
+        MenuItem::choice("Size", Icon::ArrowSort, WindowAction::Sort, "size").into(),
+        MenuItem::new("Not here", Icon::Document, WindowAction::NewFolder)
+            .disabled_because(true, "Not in this folder")
+            .into(),
+    ];
+    let work = MenuItem::submenu("Work", Icon::Folder, WindowAction::ShowNewMenu, deep);
+    let letters = MenuItem::submenu(
+        "Letters",
+        Icon::Folder,
+        WindowAction::ShowNewMenu,
+        vec![work.into()],
     );
+    menu.set_entries(vec![
+        MenuItem::new("Folder", Icon::Folder, WindowAction::NewFolder).into(),
+        MenuEntry::Divider,
+        letters.into(),
+    ]);
+    let shown_menus = || {
+        descendants::<MenuPopover>(&test.window)
+            .into_iter()
+            .filter(|menu| menu.is_visible() || menu.is_mapped())
+            .count()
+    };
+
+    button.popup();
+    wait_until("the New menu", || menu.is_visible());
+    // Clicks go through the list's own click handling, which goes on
+    // after the rows it clicked are replaced.
+    menu.click_row("Letters");
+    assert_eq!(menu.row_labels(), ["Letters", "-", "Work"]);
+    menu.click_row("Work");
+    assert_eq!(menu.row_labels(), ["Work", "-", "Name", "Size", "Not here"]);
+    assert_eq!(menu.checked_labels(), ["Name"]);
+    let disabled = menu.row("Not here");
+    assert!(!disabled.is_sensitive());
+    assert_eq!(
+        disabled.tooltip_text().as_deref(),
+        Some("Not here\nNot in this folder")
+    );
+    assert_eq!(shown_menus(), 1, "one popup only");
+
+    // Back one level with Left, then Escape, then down again with
+    // Right and Enter, then choose.
+    assert!(menu.press_in_list(gdk::Key::Left));
+    assert_eq!(menu.row_labels(), ["Letters", "-", "Work"]);
+    assert!(menu.press_in_list(gdk::Key::Escape));
+    assert_eq!(menu.items_labels(), ["Folder", "Letters"]);
+    assert!(menu.is_visible(), "Escape in a submenu leaves the menu open");
+    menu.row("Letters").grab_focus();
+    assert!(menu.press_in_list(gdk::Key::Right));
+    assert_eq!(menu.row_labels(), ["Letters", "-", "Work"]);
+    assert!(menu.press_in_list(gdk::Key::Right));
+    assert_eq!(menu.row_labels().first().map(String::as_str), Some("Work"));
+    menu.click_row("Size");
+    assert_eq!(test.action_state("sort").as_deref(), Some("size"));
+    wait_until("the menu to close", || !menu.is_visible());
+    assert_eq!(shown_menus(), 0);
+    assert_eq!(menu.items_labels(), ["Folder", "Letters"], "back at the top");
 }

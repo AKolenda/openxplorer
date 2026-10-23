@@ -15,7 +15,6 @@ use ox_core::network::{mount_plan, DesktopUser, MountPlan};
 use super::general_panel::glyph_button;
 use crate::dialog::{labelled_entry, note, quiet_text};
 use crate::icons::Icon;
-use crate::window::BrowserWindow;
 
 /// Why the assistant exists and what it does not do.
 const INTRO: &str = crate::i18n::message_id(
@@ -35,9 +34,6 @@ const HELPER_NOTE: &str = crate::i18n::message_id(
                            to overwrite existing configuration. This system mount is separate from your \
                            GVfs/keyring session; “Sign out of server” does not remove it.",
 );
-/// The toast after Copy command.
-pub(super) const COMMAND_COPIED: &str =
-    crate::i18n::message_id("Setup command copied. Review it before running.");
 
 /// The collapsed assistant. "Use this path" hands the planned Linux folder
 /// to `use_path`, which fills Folder location.
@@ -92,9 +88,6 @@ fn fill_plan(result: &gtk::Box, plan: &MountPlan, use_path: Rc<dyn Fn(&str)>) {
     let command = plan.command.clone();
     copy.connect_clicked(move |button| {
         button.clipboard().set_text(&command);
-        if let Some(window) = button.root().and_downcast::<BrowserWindow>() {
-            window.show_message(ox_core::i18n::gettext_static(COMMAND_COPIED));
-        }
     });
     result.append(&copy);
     let target = plan.target_path.to_string_lossy().into_owned();

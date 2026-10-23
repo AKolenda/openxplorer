@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.6
+Version:        2.0.7
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -119,6 +119,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Fri Oct 23 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.7-1
+- OpenXplorer 2.0.7: other apps' Open and Save dialogs, GTK 3 apps'
+  included, as part of Make OpenXplorer default, OpenXplorer's own Format
+  dialog for removable drives, faster deletes on shares, and fixes for moves
+  between drives, Undo, server sign-out and stale search results.
+
 * Tue Oct 13 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.6-1
 - OpenXplorer 2.0.6: Brave's downloads, Save as PDF and uploads through
   OpenXplorer's Open and Save dialogs, an option for Brave to ask where to

@@ -137,6 +137,7 @@ impl BrowserWindow {
         self.install_crumb_actions();
         self.install_selection_actions();
         self.install_view_actions();
+        self.install_full_screen();
         self.install_sort_actions();
         self.install_appearance_actions();
         self.install_settings_actions();
@@ -384,12 +385,17 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 12] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 13] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
-    (WindowAction::Search, &["<Primary>f"]),
-    (WindowAction::DetailsPane, &["<Alt><Shift>p"]),
+    // Ctrl+E is Explorer's other search key (CMD-036).
+    (WindowAction::Search, &["<Primary>f", "<Primary>e"]),
+    // Explorer's Alt+P shows its Preview pane, which is the details pane
+    // here, as it previews the selection too (VIEW-063).
+    (WindowAction::DetailsPane, &["<Alt><Shift>p", "<Alt>p"]),
+    // Explorer's Full screen (CMD-036).
+    (WindowAction::FullScreen, &["F11"]),
     (WindowAction::Settings, &["<Primary>comma"]),
     // Dolphin's Open Terminal and Open Terminal Here (OPEN-021); Ctrl+Shift+F4
     // is its Terminal panel key, which opens the terminal here (OPEN-022).

@@ -7,7 +7,7 @@
 //! branches of `dispatch` in `v2.0.0:desktop/winspace.py`.
 
 use crate::location::LocationError;
-use crate::transfer::{Cancellation, TransferError};
+use crate::transfer::{Cancellation, StagedName, TransferError};
 
 use super::zip::ZipFormatError;
 
@@ -316,6 +316,27 @@ pub enum ArchiveError {
         /// Why it could not be removed.
         cleanup: TransferError,
     },
+    /// ARC-023: the compression failed and its staging file could not be
+    /// removed either.
+    #[error(
+        "{}",
+        crate::i18n::format_message(
+            "{cause}\nThe incomplete archive remains at {staging_uri}. Inspect it before removing it. {cleanup}",
+            &[
+                ("cause", &cause.to_string()),
+                ("staging_uri", staging_uri),
+                ("cleanup", &cleanup.to_string()),
+            ]
+        )
+    )]
+    ArchiveLeftBehind {
+        /// Why the compression stopped.
+        cause: Box<ArchiveError>,
+        /// Where the staging file is.
+        staging_uri: String,
+        /// Why it could not be removed.
+        cleanup: TransferError,
+    },
 }
 
 impl ArchiveError {
@@ -338,6 +359,15 @@ impl ArchiveError {
             ArchiveError::Cancelled
         } else {
             self
+        }
+    }
+
+    /// This error naming the new folder or archive rather than the
+    /// private staging `name` it was built under.
+    pub(crate) fn naming(self, name: &StagedName) -> Self {
+        match self {
+            ArchiveError::Backend(error) => ArchiveError::Backend(name.apply(error)),
+            other => other,
         }
     }
 }

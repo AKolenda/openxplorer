@@ -13,10 +13,6 @@ use crate::dialog::DialogFrame;
 use crate::folder_view::CUSTOM_ICON;
 use crate::icons::Icon;
 
-/// The toasts after a change.
-const ICON_CHANGED: &str = crate::i18n::message_id("Icon changed.");
-const ICON_RESTORED: &str = crate::i18n::message_id("Default icon restored.");
-
 /// Change icon…, and Restore default icon when `has_custom_icon`, for the
 /// local item at `uri`.
 pub(super) fn icon_buttons(row: &gtk::Box, uri: &str, has_custom_icon: bool) {
@@ -35,12 +31,7 @@ pub(super) fn icon_buttons(row: &gtk::Box, uri: &str, has_custom_icon: bool) {
             let target = target.clone();
             glib::spawn_future_local(async move {
                 let result = set_custom_icon(&target, None).await;
-                report(
-                    &button,
-                    &target,
-                    result,
-                    ox_core::i18n::gettext_static(ICON_RESTORED),
-                );
+                report(&button, &target, result);
             });
         });
         row.append(&restore);
@@ -67,7 +58,7 @@ fn choose_icon(button: &gtk::Button, uri: &str) {
             return;
         };
         let result = set_custom_icon(&uri, Some(chosen.uri().to_string())).await;
-        report(&button, &uri, result, ox_core::i18n::gettext_static(ICON_CHANGED));
+        report(&button, &uri, result);
     });
 }
 
@@ -101,14 +92,13 @@ pub(crate) async fn set_custom_icon(uri: &str, icon: Option<String>) -> Result<(
         .map(|_| ())
 }
 
-/// Says how the change went, and has the window redraw the item.
-fn report(button: &gtk::Button, uri: &str, result: Result<(), glib::Error>, done: &str) {
+/// Has the window redraw the item, or shows why the change failed.
+fn report(button: &gtk::Button, uri: &str, result: Result<(), glib::Error>) {
     let window = button.root().and_downcast::<crate::window::BrowserWindow>();
     match result {
         Ok(()) => {
             if let Some(window) = window {
                 window.refresh_item_icon(uri);
-                window.show_message(done);
             }
         }
         Err(error) => {

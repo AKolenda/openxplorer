@@ -23,7 +23,7 @@ The full list of keys is in More options > Keyboard shortcuts (Ctrl+?).
 - New in the command bar creates a folder, a document from the built-in starters, or a file from your Templates folder.
 - Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.
 - Rename with F2. Select several items to rename them together.
-- Delete moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.
+- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.
 - When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.
 - Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.
 - Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.
@@ -37,12 +37,13 @@ The full list of keys is in More options > Keyboard shortcuts (Ctrl+?).
 - Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.
 - In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.
 - Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.
-- Ctrl+H shows or hides hidden files. Alt+Shift+P shows the details pane, F9 the navigation pane.
+- Ctrl+H shows or hides hidden files. Alt+Shift+P or Alt+P shows the details pane, F9 the navigation pane.
+- F11 shows the window full screen; press it again to get the window back as it was.
 - Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size.
 
 ## Search
 
-- Ctrl+F moves to the search box. Typing there filters the folder you are in.
+- Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.
 - Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search. Only names and paths are stored, on this computer; no file contents are read.
 - Open file location (on a result's menu) opens the folder that holds it, with the result selected.
 

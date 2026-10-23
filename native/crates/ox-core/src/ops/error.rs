@@ -108,7 +108,6 @@ impl From<glib::Error> for OpsError {
             Some(gio::IOErrorEnum::Exists) => OpsError::Exists(message),
             Some(gio::IOErrorEnum::NotSupported) => OpsError::NotSupported(message),
             Some(gio::IOErrorEnum::NotDirectory) => OpsError::NotDirectory(message),
-            Some(gio::IOErrorEnum::ReadOnly) => OpsError::Failed(crate::read_only::read_only_failure()),
             _ => OpsError::Failed(message),
         }
     }
@@ -131,7 +130,6 @@ impl From<std::io::Error> for OpsError {
             std::io::ErrorKind::NotFound => OpsError::NotFound(message),
             std::io::ErrorKind::AlreadyExists => OpsError::Exists(message),
             std::io::ErrorKind::PermissionDenied => OpsError::PermissionDenied(message),
-            std::io::ErrorKind::ReadOnlyFilesystem => OpsError::Failed(crate::read_only::read_only_failure()),
             _ => OpsError::Failed(message),
         }
     }
@@ -255,19 +253,20 @@ mod tests {
         assert_eq!(error.code(), "error");
     }
 
-    /// A write to a drive mounted read-only says so in plain words, from
-    /// GIO and from local I/O alike.
+    /// A write to a drive mounted read-only shows the system's own error,
+    /// from GIO and from local I/O alike, as Windows Explorer does.
     ///
     /// parity: DEV-015
     #[test]
-    fn a_read_only_file_system_says_what_to_do() {
-        let expected = crate::read_only::read_only_failure();
+    fn a_read_only_file_system_shows_the_system_error() {
         let from_gio = OpsError::from(glib::Error::new(
             gio::IOErrorEnum::ReadOnly,
             "Read-only file system",
         ));
-        let from_io = OpsError::from(std::io::Error::from_raw_os_error(30));
-        assert_eq!(from_gio.to_string(), expected);
+        let read_only = std::io::Error::from_raw_os_error(30);
+        let expected = read_only.to_string();
+        let from_io = OpsError::from(read_only);
+        assert_eq!(from_gio.to_string(), "Read-only file system");
         assert_eq!(from_io.to_string(), expected);
     }
 }

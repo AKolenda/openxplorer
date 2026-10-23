@@ -44,18 +44,6 @@ const FILE_LIST_FORMATS: [FileListFormat<'static>; 3] = [
     FileListFormat::UriList { kde_cut_marker: None },
 ];
 
-/// The toast after a copy or cut of `count` items.
-fn published_message(mode: ClipboardMode, count: usize) -> String {
-    let verb = match mode {
-        ClipboardMode::Copy => "copied",
-        ClipboardMode::Cut => "cut",
-    };
-    ox_core::i18n::format_message(
-        "{count} item(s) {verb} — ready to paste in another window.",
-        &[("count", &count.to_string()), ("verb", verb)],
-    )
-}
-
 /// Reads the whole payload of `mime_type` from `clipboard`; `None` when
 /// the owner does not offer it, the conversion fails or the payload is
 /// larger than [`MAX_BYTES`].
@@ -182,13 +170,14 @@ impl BrowserWindow {
         self.put_files_on_clipboard(files);
     }
 
-    /// Makes `files` the desktop's clipboard and says so.
+    /// Makes `files` the desktop's clipboard, without a message, as
+    /// Windows Explorer.
     pub(crate) fn put_files_on_clipboard(&self, files: ClipboardFiles) {
         self.put_files_on_clipboard_noting(files, None);
     }
 
-    /// Makes `files` the desktop's clipboard and says so, followed by
-    /// `note` when there is one.
+    /// Makes `files` the desktop's clipboard and shows `note`, such as
+    /// what was left out, when there is one.
     pub(crate) fn put_files_on_clipboard_noting(&self, files: ClipboardFiles, note: Option<&str>) {
         if publish(&self.clipboard(), &files).is_err() {
             self.show_message(ox_core::i18n::gettext_static(
@@ -196,13 +185,10 @@ impl BrowserWindow {
             ));
             return;
         }
-        let mut message = published_message(files.mode(), files.uris().len());
-        if let Some(note) = note {
-            message.push(' ');
-            message.push_str(note);
-        }
         self.remember_clipboard(Some(files));
-        self.show_message(&message);
+        if let Some(note) = note {
+            self.show_message(note);
+        }
     }
 
     /// Reads the desktop's clipboard again and returns its file list
@@ -291,23 +277,5 @@ impl BrowserWindow {
                 window.refresh_file_clipboard().await;
             }
         ));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// parity: CLIP-001, CLIP-002
-    #[test]
-    fn copy_and_cut_say_how_many_items_are_ready_to_paste() {
-        assert_eq!(
-            published_message(ClipboardMode::Copy, 2),
-            "2 item(s) copied — ready to paste in another window."
-        );
-        assert_eq!(
-            published_message(ClipboardMode::Cut, 1),
-            "1 item(s) cut — ready to paste in another window."
-        );
     }
 }

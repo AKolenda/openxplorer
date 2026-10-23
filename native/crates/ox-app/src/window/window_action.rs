@@ -145,6 +145,9 @@ pub(crate) enum WindowAction {
     /// Splits the tab into two panes, or closes its active pane (F3,
     /// VIEW-059).
     SplitView,
+    /// Windows Explorer's Full screen: makes the window fill the screen,
+    /// or gives it back its size (F11, CMD-036).
+    FullScreen,
     /// Shows or hides the folder tree (F7, SIDE-028).
     FolderTree,
     /// Switches the folder tree option named by the string target (its
@@ -494,6 +497,7 @@ impl WindowAction {
             WindowAction::Stop => "stop",
             WindowAction::Sidebar => "sidebar",
             WindowAction::SplitView => "split-view",
+            WindowAction::FullScreen => "full-screen",
             WindowAction::FolderTree => "folder-tree",
             WindowAction::FolderTreeOption => "folder-tree-option",
             WindowAction::SidebarIconSize => "sidebar-icon-size",
