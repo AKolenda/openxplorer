@@ -127,6 +127,15 @@ fn plan_with(
     mut children_have_trash: impl FnMut(&str, &HashSet<String>) -> Result<HashMap<String, bool>, OpsError>,
 ) -> Result<DeletePlan, OpsError> {
     let folders: Vec<String> = items.iter().map(|item| trash_scope(&item.uri)).collect();
+    // The unlisted items of each folder, by their place in the selection,
+    // in order, so a folder's items still to be decided are found without
+    // scanning the rest of the selection again.
+    let mut unlisted_by_folder: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (index, (item, folder)) in items.iter().zip(&folders).enumerate() {
+        if item.can_trash.is_none() {
+            unlisted_by_folder.entry(folder).or_default().push(index);
+        }
+    }
     // The folders where an item can go to the Trash, the folders where an
     // unlisted item was asked about and answered "no Trash", the folders
     // considered for a listing, and the answers listings gave, by item.
@@ -146,14 +155,18 @@ fn plan_with(
             None if folders_with_trash.contains(folder) => true,
             None => {
                 if asked_in_folder.contains(folder) && listed_folders.insert(folder.clone()) {
-                    let wanted: HashSet<String> = items[index..]
-                        .iter()
-                        .zip(&folders[index..])
-                        .filter(|(other, other_folder)| other.can_trash.is_none() && *other_folder == folder)
-                        .map(|(other, _)| other.uri.clone())
-                        .collect();
-                    if wanted.len() >= LISTING_MIN_ITEMS {
-                        listed_answers.extend(children_have_trash(folder, &wanted)?);
+                    let group = unlisted_by_folder
+                        .get(folder.as_str())
+                        .map_or(&[][..], Vec::as_slice);
+                    let remaining = &group[group.partition_point(|&other| other < index)..];
+                    // A URI selected twice counts once, so the set is only
+                    // built when it can reach the threshold.
+                    if remaining.len() >= LISTING_MIN_ITEMS {
+                        let wanted: HashSet<String> =
+                            remaining.iter().map(|&other| items[other].uri.clone()).collect();
+                        if wanted.len() >= LISTING_MIN_ITEMS {
+                            listed_answers.extend(children_have_trash(folder, &wanted)?);
+                        }
                     }
                 }
                 // An item the listing did not answer for, or one of a
@@ -552,6 +565,63 @@ mod tests {
         assert_eq!(asked, ["sftp://host/dir/gone.txt", "sftp://host/dir/kept.txt"]);
         assert_eq!(plan.to_trash, ["sftp://host/dir/kept.txt"]);
         assert_eq!(plan.to_delete, ["sftp://host/dir/gone.txt"]);
+    }
+
+    /// Two unlisted items in each of many folders without a Trash are each
+    /// asked about once, and no folder is listed for them.
+    #[test]
+    fn two_unlisted_items_in_each_of_many_folders_are_each_asked_about_once() {
+        let selection: Vec<DeleteItem> = (0..2000)
+            .flat_map(|folder| numbered(&format!("smb://nas/share/{folder}"), 2))
+            .collect();
+        let mut asked: HashMap<String, usize> = HashMap::new();
+
+        let plan = plan_with(
+            &selection,
+            &Cancellation::new(),
+            |uri| {
+                *asked.entry(uri.to_owned()).or_default() += 1;
+                Ok(false)
+            },
+            |folder, _| panic!("{folder} was listed"),
+        )
+        .unwrap();
+
+        assert_eq!(asked.len(), selection.len());
+        assert!(asked.values().all(|&times| times == 1));
+        assert_eq!(plan.to_delete.len(), selection.len());
+    }
+
+    /// A listing that fails partway keeps the answers it read, and the
+    /// items it did not reach are asked about themselves.
+    #[test]
+    fn a_listing_that_fails_partway_keeps_what_it_read() {
+        let selection = numbered("smb://nas/share", LISTING_MIN_ITEMS + 1);
+        let read_before_failing = 10;
+        let mut asked = Vec::new();
+
+        let plan = plan_with(
+            &selection,
+            &Cancellation::new(),
+            |uri| {
+                asked.push(uri.to_owned());
+                Ok(false)
+            },
+            |folder, wanted| {
+                let mut children =
+                    (1..=read_before_failing).map(|number| (format!("{folder}/{number}"), Some(false)));
+                selected_answers(wanted, &Cancellation::new(), || children.next())
+            },
+        )
+        .unwrap();
+
+        let unread =
+            (read_before_failing + 1..=LISTING_MIN_ITEMS).map(|number| format!("smb://nas/share/{number}"));
+        let expected: Vec<String> = std::iter::once("smb://nas/share/0".to_owned())
+            .chain(unread)
+            .collect();
+        assert_eq!(asked, expected);
+        assert_eq!(plan.to_delete.len(), LISTING_MIN_ITEMS + 1);
     }
 
     /// An item its folder's listing did not answer for is asked about
