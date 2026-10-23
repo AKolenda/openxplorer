@@ -188,6 +188,9 @@ impl MenuPopover {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
     use super::*;
     use crate::icons::Icon;
     use crate::test_support::harness::{settle, skin, wait_until};
@@ -540,10 +543,26 @@ mod tests {
             menu.position() == gtk::PositionType::Right
         });
         menu.popdown();
+        // A user's button is laid out long before they open its menu again;
+        // settle() runs only what is due, so wait for the frame that moves
+        // it, or GTK places the menu below where the button was.
         button.set_margin_top(0);
-        settle();
+        wait_until("the button to move to the top", || {
+            button
+                .compute_bounds(&window)
+                .is_some_and(|bounds| bounds.y() == 0.0)
+        });
+        // Whether the menu fits below the button is known once GTK has laid
+        // out its popup there, after the handler that moves it beside.
+        let laid_out = Rc::new(Cell::new(false));
+        let surface = menu.surface().expect("the menu keeps its popup");
+        surface.connect_layout(glib::clone!(
+            #[strong]
+            laid_out,
+            move |_, _, _| laid_out.set(true)
+        ));
         menu.popup();
-        wait_until("the menu to open", || menu.is_mapped());
+        wait_until("the menu to be laid out again", || laid_out.get());
         settle();
         assert_eq!(
             menu.position(),
