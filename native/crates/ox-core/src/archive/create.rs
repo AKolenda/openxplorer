@@ -679,10 +679,10 @@ mod tests {
     /// parity: ARC-023, XFER-022
     #[test]
     fn a_phones_unconfirmed_not_found_still_reports_the_staging_file() {
-        use crate::test_support::PhoneStage;
+        use crate::test_support::RemoteStage;
 
-        let still_listed = PhoneStage::item(".openxplorer-compress-1.part", true);
-        let gone = PhoneStage::item(".openxplorer-compress-2.part", false);
+        let still_listed = RemoteStage::on_phone(".openxplorer-compress-1.part", true);
+        let gone = RemoteStage::on_phone(".openxplorer-compress-2.part", false);
 
         let reported = discard(&still_listed, ArchiveError::IncompleteWrite).to_string();
         assert!(

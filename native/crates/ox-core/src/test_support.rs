@@ -107,45 +107,64 @@ impl Drop for BindMount {
     }
 }
 
-/// A staging item on a simulated phone (`GVfs` MTP), or the folder holding
-/// it. Asking about or deleting the item answers "not found", which on a
-/// phone may be false, so only the folder's listing tells whether the item
-/// is really gone: it lists the item while `listed` is true. Only what
-/// staging cleanup asks is answered.
+/// A staging item on a simulated phone (`GVfs` MTP) or share (SMB), or the
+/// folder holding it. Only what staging cleanup asks is answered.
+///
+/// On a phone, asking about or deleting the item answers "not found",
+/// which may be false, so only the folder's listing tells whether the item
+/// is really gone: it lists the item while `listed` is true.
+///
+/// On a share, the item is a staging folder whose removal fails because
+/// another client removed an item inside it first: "not found" for that
+/// item, while the staging folder itself stays while `listed` is true.
 #[derive(Clone, Copy)]
-pub(crate) struct PhoneStage {
+pub(crate) struct RemoteStage {
     /// The staging item's name.
     name: &'static str,
     /// True for the folder holding the item, false for the item.
     folder: bool,
-    /// Whether the folder's listing still shows the item.
+    /// Whether the item is still there.
     listed: bool,
+    /// True on a share, false on a phone.
+    share: bool,
 }
 
-impl PhoneStage {
-    /// The staging item `name`, still listed by its folder when `listed`.
-    pub(crate) fn item(name: &'static str, listed: bool) -> Self {
+impl RemoteStage {
+    /// The staging item `name` on a phone, still listed by its folder when
+    /// `listed`.
+    pub(crate) fn on_phone(name: &'static str, listed: bool) -> Self {
         Self {
             name,
             folder: false,
             listed,
+            share: false,
         }
     }
 
-    fn not_found(&self) -> crate::transfer::TransferError {
-        crate::transfer::TransferError::NotFound(format!(
-            "Error removing file {}: No such file",
-            crate::transfer::Node::uri(self)
-        ))
+    /// The staging folder `name` on a share, still there when `listed`.
+    pub(crate) fn on_share(name: &'static str, listed: bool) -> Self {
+        Self {
+            share: true,
+            ..Self::on_phone(name, listed)
+        }
+    }
+
+    fn not_found(uri: &str) -> crate::transfer::TransferError {
+        crate::transfer::TransferError::NotFound(format!("Error removing file {uri}: No such file"))
     }
 }
 
-impl crate::transfer::Node for PhoneStage {
+impl crate::transfer::Node for RemoteStage {
     fn uri(&self) -> String {
-        if self.folder {
-            "mtp://phone.example/Folder".to_owned()
+        let folder = if self.share {
+            "smb://server.example/Share"
         } else {
-            format!("mtp://phone.example/Folder/{}", self.name)
+            "mtp://phone.example/Folder"
+        };
+        if self.folder {
+            folder.to_owned()
+        } else {
+            format!("{folder}/{}", self.name)
         }
     }
 
@@ -163,7 +182,7 @@ impl crate::transfer::Node for PhoneStage {
 
     fn parent(&self) -> Option<Box<dyn crate::transfer::Node>> {
         (!self.folder).then(|| {
-            Box::new(PhoneStage {
+            Box::new(RemoteStage {
                 folder: true,
                 ..*self
             }) as Box<dyn crate::transfer::Node>
@@ -178,7 +197,16 @@ impl crate::transfer::Node for PhoneStage {
         &self,
         _cancel: Option<&crate::transfer::Cancellation>,
     ) -> Result<crate::transfer::NodeInfo, crate::transfer::TransferError> {
-        Err(self.not_found())
+        if self.share && (self.folder || self.listed) {
+            return Ok(crate::transfer::NodeInfo {
+                kind: crate::transfer::NodeKind::Directory,
+                size: 0,
+                mode: None,
+                modified: None,
+                identity: None,
+            });
+        }
+        Err(Self::not_found(&crate::transfer::Node::uri(self)))
     }
 
     fn is_directory(
@@ -192,7 +220,7 @@ impl crate::transfer::Node for PhoneStage {
         &self,
         _cancel: Option<&crate::transfer::Cancellation>,
     ) -> Result<Vec<Box<dyn crate::transfer::Node>>, crate::transfer::TransferError> {
-        let item = PhoneStage {
+        let item = RemoteStage {
             folder: false,
             ..*self
         };
@@ -235,14 +263,18 @@ impl crate::transfer::Node for PhoneStage {
     }
 
     fn delete(&self) -> Result<(), crate::transfer::TransferError> {
-        Err(self.not_found())
+        Err(Self::not_found(&crate::transfer::Node::uri(self)))
     }
 
     fn delete_staging(
         &self,
         _created: Option<crate::transfer::ItemIdentity>,
     ) -> Result<(), crate::transfer::TransferError> {
-        Err(self.not_found())
+        let uri = crate::transfer::Node::uri(self);
+        if self.share {
+            return Err(Self::not_found(&format!("{uri}/payload")));
+        }
+        Err(Self::not_found(&uri))
     }
 
     fn trash(&self, _cancel: &crate::transfer::Cancellation) -> Result<(), crate::transfer::TransferError> {
@@ -265,6 +297,6 @@ impl crate::transfer::Node for PhoneStage {
     }
 
     fn has_sibling_staging(&self) -> bool {
-        true
+        !self.share
     }
 }

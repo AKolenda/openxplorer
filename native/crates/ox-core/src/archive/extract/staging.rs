@@ -168,15 +168,20 @@ pub(in crate::archive) fn is_staging_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::RemoteStage;
 
-    /// A staging folder on a phone, for the cleanup tests.
-    fn phone_staging(listed: bool) -> ExtractionStaging {
+    /// A staging folder on a phone or share, for the cleanup tests.
+    fn remote_staging(folder: RemoteStage) -> ExtractionStaging {
         let stage = ".openxplorer-extract-1.part";
         ExtractionStaging {
-            folder: Box::new(crate::test_support::PhoneStage::item(stage, listed)),
+            folder: Box::new(folder),
             name: StagedName::new(stage, &[], "Unpacked"),
             created: None,
         }
+    }
+
+    fn phone_staging(listed: bool) -> ExtractionStaging {
+        remote_staging(RemoteStage::on_phone(".openxplorer-extract-1.part", listed))
     }
 
     /// A phone's "not found" for the staging folder counts as cleaned up
@@ -195,6 +200,27 @@ mod tests {
                 if staging_uri == "mtp://phone.example/Folder/.openxplorer-extract-1.part"),
             "{still_listed:?}"
         );
+    }
+
+    /// Another client can remove an item inside the staging folder on a
+    /// share while cleanup empties it; cleanup then stops at that item's
+    /// "not found" and the staging folder stays. That is reported with the
+    /// folder's location; only a staging folder that is itself gone counts
+    /// as cleaned up.
+    ///
+    /// parity: ARC-013, XFER-003
+    #[test]
+    fn a_not_found_inside_the_staging_folder_still_reports_the_folder() {
+        let stage = ".openxplorer-extract-1.part";
+        let remains = remote_staging(RemoteStage::on_share(stage, true)).discard(ArchiveError::Cancelled);
+        let gone = remote_staging(RemoteStage::on_share(stage, false)).discard(ArchiveError::Cancelled);
+
+        assert!(
+            matches!(&remains, ArchiveError::StagingLeftBehind { staging_uri, .. }
+                if staging_uri == "smb://server.example/Share/.openxplorer-extract-1.part"),
+            "{remains:?}"
+        );
+        assert_eq!(gone, ArchiveError::Cancelled);
     }
 
     /// parity: ARC-013

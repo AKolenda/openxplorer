@@ -412,10 +412,10 @@ mod tests {
     /// parity: OPS-048, XFER-022
     #[test]
     fn a_stage_file_a_phone_discarded_is_not_reported_as_left_behind() {
-        use crate::test_support::PhoneStage;
+        use crate::test_support::RemoteStage;
 
-        let gone = PhoneStage::item(".winspace-new-1", false);
-        let still_listed = PhoneStage::item(".winspace-new-2", true);
+        let gone = RemoteStage::on_phone(".winspace-new-1", false);
+        let still_listed = RemoteStage::on_phone(".winspace-new-2", true);
 
         assert_eq!(discard_stage(&gone, OpsError::Cancelled), OpsError::Cancelled);
         let reported = discard_stage(&still_listed, OpsError::Cancelled).to_string();
