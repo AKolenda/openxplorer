@@ -393,6 +393,33 @@ fn extract_all_creates_a_missing_folder_with_its_parents() {
     );
 }
 
+/// Enter in the folder field extracts, as Explorer's dialog does.
+///
+/// parity: ARC-009
+#[gtk::test]
+fn enter_in_the_folder_field_extracts() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.wait_for_dialog("the Extract dialog");
+    wait_until("the check", || {
+        texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+    });
+
+    descendants::<gtk::Entry>(&frame)[0].emit_activate();
+
+    let extracted = fixture.path("Bundle");
+    wait_until("the extracted folder", || {
+        test.window.current_uri() == Some(file_uri(&extracted))
+    });
+    assert!(test.shown_dialog().is_none());
+    assert_eq!(
+        fs::read(extracted.join("readme.txt")).expect("extracted"),
+        b"read me"
+    );
+}
+
 /// parity: ARC-025
 #[gtk::test]
 fn extract_here_uses_the_next_free_name() {
