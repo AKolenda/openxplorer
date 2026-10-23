@@ -394,10 +394,16 @@ impl ExtractForm {
     }
 }
 
-/// Cancel and Extract.
+/// Cancel and Extract; Enter in the folder field extracts too, as in
+/// Explorer.
 fn add_buttons(frame: &DialogFrame, form: ExtractForm, extract: impl Fn(ExtractionChoice) + 'static) {
     frame.add_closing_button(&ox_core::i18n::gettext("Cancel"), ButtonStyle::Bordered, || {});
     let confirm = frame.add_button(&ox_core::i18n::gettext("Extract"), ButtonStyle::Accent);
+    form.target.connect_activate(glib::clone!(
+        #[weak]
+        confirm,
+        move |_| confirm.emit_clicked()
+    ));
     confirm.connect_clicked(glib::clone!(
         #[weak]
         frame,
