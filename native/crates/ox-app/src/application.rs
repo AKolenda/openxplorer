@@ -51,11 +51,6 @@ pub(crate) enum AppAction {
     /// Brings the window whose id is the `u32` target to the front
     /// (`focusWindow`).
     FocusWindow,
-    /// Brings back the window whose id is the first value of the
-    /// `(u, s, as)` target and opens there the folder (the second, empty
-    /// when unknown) or reveals the items (the third): the Show button of
-    /// a background operation's notification (INT-026).
-    ShowDestination,
     /// Lists the open windows (`showWindows`, the launcher's "Open
     /// windows…").
     Windows,
@@ -71,7 +66,6 @@ impl AppAction {
         match self {
             AppAction::NewWindow => "new-window",
             AppAction::FocusWindow => "focus-window",
-            AppAction::ShowDestination => "show-destination",
             AppAction::Windows => "windows",
             AppAction::Settings => "settings",
             AppAction::Quit => "quit",
@@ -331,8 +325,7 @@ impl Application {
         RuntimeInfo::install(self);
     }
 
-    /// Adds `app.new-window`, `app.focus-window`, `app.show-destination`,
-    /// `app.windows`,
+    /// Adds `app.new-window`, `app.focus-window`, `app.windows`,
     /// `app.settings` and `app.quit`, which the launcher's quick actions
     /// and the windows menu run.
     fn install_actions(&self) {
@@ -351,40 +344,12 @@ impl Application {
                 }
             })
             .build();
-        let show_destination = gio::ActionEntry::builder(AppAction::ShowDestination.name())
-            .parameter_type(Some(&<(u32, String, Vec<String>)>::static_variant_type()))
-            .activate(|app: &Self, _, target| {
-                if let Some(target) = target.and_then(glib::Variant::get) {
-                    app.show_destination(target);
-                }
-            })
-            .build();
         let windows = Self::state_entry(AppAction::Windows, AppState::show_windows);
         let settings = Self::state_entry(AppAction::Settings, AppState::open_settings);
         let quit = Self::state_entry(AppAction::Quit, |state, app| {
             state.quit_safely(app);
         });
-        self.add_action_entries([
-            new_window,
-            focus_window,
-            show_destination,
-            windows,
-            settings,
-            quit,
-        ]);
-    }
-
-    /// Opens a finished operation's destination in the window that ran
-    /// it, or the active window once that one has closed.
-    fn show_destination(&self, (id, folder, items): (u32, String, Vec<String>)) {
-        let window = self
-            .window_by_id(id)
-            .and_downcast::<crate::window::BrowserWindow>();
-        let Some(window) = window.or_else(|| active_window(self.upcast_ref())) else {
-            return;
-        };
-        let folder = (!folder.is_empty()).then_some(folder.as_str());
-        window.show_destination(folder, &items);
+        self.add_action_entries([new_window, focus_window, windows, settings, quit]);
     }
 
     /// An action that runs `run` on the application state.
