@@ -60,8 +60,11 @@ impl BrowserWindow {
     fn remember_size(&self) {
         for property in ["default-width", "default-height", "maximized"] {
             self.connect_notify_local(Some(property), |window, _| {
-                window.note_size();
-                window.schedule_size_save();
+                // A save already waiting stays; full screen and back starts
+                // none, as the window's own size and state did not change.
+                if window.note_size() {
+                    window.schedule_size_save();
+                }
             });
         }
     }
@@ -69,22 +72,24 @@ impl BrowserWindow {
     /// Notes the size and maximized state to save, unless the window is
     /// full screen: GTK calls a full-screen window not maximized, and it
     /// says so only once the window is full screen, so the note keeps the
-    /// state from before full screen, however full screen began.
-    fn note_size(&self) {
+    /// state from before full screen, however full screen began. Returns
+    /// whether the note changed.
+    fn note_size(&self) -> bool {
         if self.is_full_screen_now() {
-            return;
+            return false;
         }
         let (width, height) = self.default_size();
         let (Ok(width), Ok(height)) = (u32::try_from(width), u32::try_from(height)) else {
-            return;
+            return false;
         };
         // A window narrower than the minimum saves the minimum rather than
         // nothing, so the next window does not open at an older size.
-        self.imp().size_to_save.set(Some(WindowSize {
+        let size = Some(WindowSize {
             width: width.clamp(*WINDOW_WIDTHS.start(), *WINDOW_WIDTHS.end()),
             height: height.clamp(*WINDOW_HEIGHTS.start(), *WINDOW_HEIGHTS.end()),
             maximized: self.is_maximized(),
-        }));
+        });
+        self.imp().size_to_save.replace(size) != size
     }
 
     /// Saves the size [`SAVE_DELAY`] after the last change.
@@ -197,5 +202,55 @@ mod tests {
                     == Some((900, 640))
             });
         }
+    }
+
+    /// Full screen and back saves nothing, also where the desktop calls a
+    /// full-screen window not maximized: a second window's newer size
+    /// stays saved, as only a change of a window's own size or maximized
+    /// state outside full screen is saved.
+    ///
+    /// parity: TAB-054, CMD-036
+    #[gtk::test]
+    fn full_screen_and_back_keeps_another_windows_newer_size() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let saved_size = || {
+            test.context
+                .settings_data()
+                .preferences
+                .window_size
+                .map(|size| (size.width, size.height))
+        };
+        let open_window = || {
+            let window = BrowserWindow::new(&application(), &test.context);
+            window.add_tab(&fixture.uri()).expect("valid folder");
+            window.present_as_new_window();
+            settle();
+            window
+        };
+        let first = open_window();
+        first.set_default_size(1000, 700);
+        wait_until("the first window's size", || saved_size() == Some((1000, 700)));
+        let second = open_window();
+        second.set_default_size(900, 640);
+        wait_until("the second window's size", || saved_size() == Some((900, 640)));
+
+        // The desktop's answers to F11 and F11 again, which the private
+        // display cannot give, with the maximized state it reports.
+        WindowAction::FullScreen.activate_from(&first, None);
+        first.imp().full_screen_for_tests.set(Some(true));
+        first.notify("fullscreened");
+        first.notify("maximized");
+        WindowAction::FullScreen.activate_from(&first, None);
+        first.imp().full_screen_for_tests.set(Some(false));
+        first.notify("fullscreened");
+        first.notify("maximized");
+        let save_started = first.imp().size_save.borrow().is_some();
+        first.close();
+        second.close();
+        settle();
+
+        assert!(!save_started, "full screen and back starts no save");
+        assert_eq!(saved_size(), Some((900, 640)), "the newer size stays saved");
     }
 }
