@@ -1,11 +1,28 @@
-# Unreleased
+# 2.0.7 — 2026-10-23
 
-- Menus no longer scroll once they are 560 pixels tall: like Windows, a
-  menu shows in full whenever it fits on the monitor it opens on, and
-  scrolls only when it is taller than that monitor. A context menu,
-  opened with the mouse or from the keyboard, that is too tall to fit
-  below or above the pointer or row opens beside it and moves up to
-  fit, instead of being cut short.
+## What's Changed
+* feat(defaults): include other apps' Open and Save dialogs in Make OpenXplorer default by @AKolenda in https://github.com/AKolenda/openxplorer/pull/132
+* fix(native,web): resolve safety, correctness, and performance bugs by @AKolenda in https://github.com/AKolenda/openxplorer/pull/126
+* feat(devices): format drives in OpenXplorer's own Format dialog by @AKolenda in https://github.com/AKolenda/openxplorer/pull/133
+* feat(archives): press Enter in the Extract dialog to extract by @AKolenda in https://github.com/AKolenda/openxplorer/pull/142
+* chore(web): Upgrade Next.js to 16.4.2 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/152
+* perf(delete): Ask a share once per file instead of three times when deleting by @AKolenda in https://github.com/AKolenda/openxplorer/pull/154
+* feat(defaults): send GTK 3 apps' Open and Save dialogs to OpenXplorer by @AKolenda in https://github.com/AKolenda/openxplorer/pull/143
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.7_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.7-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.7-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.7-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.7-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.6...v2.0.7
 
 # 2.0.6 — 2026-10-13
 
