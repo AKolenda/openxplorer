@@ -89,7 +89,7 @@ fn identity(info: &gio::FileInfo) -> Option<ItemIdentity> {
 }
 
 /// The kind of item GIO reports, without following links.
-fn node_kind(file_type: gio::FileType) -> NodeKind {
+pub(super) fn node_kind(file_type: gio::FileType) -> NodeKind {
     match file_type {
         gio::FileType::Directory => NodeKind::Directory,
         gio::FileType::Regular => NodeKind::File,
@@ -109,8 +109,41 @@ pub(super) fn enumerate_files(
     folder: &gio::File,
     cancel: Option<&Cancellation>,
 ) -> Result<Vec<gio::File>, TransferError> {
+    let entries = enumerate(folder, "standard::name", cancel)?;
+    Ok(entries.into_iter().map(|(file, _)| file).collect())
+}
+
+/// [`enumerate_files`] with the kind the listing reports for each item,
+/// without following links, so a walk need not ask about every item
+/// again. `None` where the backend left the kind out.
+///
+/// # Errors
+///
+/// As [`enumerate_files`].
+pub(super) fn enumerate_kinds(
+    folder: &gio::File,
+    cancel: Option<&Cancellation>,
+) -> Result<Vec<(gio::File, Option<NodeKind>)>, TransferError> {
+    let entries = enumerate(folder, "standard::name,standard::type", cancel)?;
+    let kinds = entries
+        .into_iter()
+        .map(|(file, info)| {
+            let known = info.has_attribute("standard::type") && info.file_type() != gio::FileType::Unknown;
+            (file, known.then(|| node_kind(info.file_type())))
+        })
+        .collect();
+    Ok(kinds)
+}
+
+/// Every item in `folder` with `attributes`, without following links. The
+/// listing is closed on success, cancellation and error alike.
+fn enumerate(
+    folder: &gio::File,
+    attributes: &str,
+    cancel: Option<&Cancellation>,
+) -> Result<Vec<(gio::File, gio::FileInfo)>, TransferError> {
     let enumerator = folder.enumerate_children(
-        "standard::name",
+        attributes,
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         gio_cancellable(cancel),
     )?;
@@ -133,13 +166,13 @@ pub(super) fn enumerate_files(
 fn collect_files(
     enumerator: &gio::FileEnumerator,
     cancel: Option<&Cancellation>,
-) -> Result<Vec<gio::File>, TransferError> {
+) -> Result<Vec<(gio::File, gio::FileInfo)>, TransferError> {
     let mut files = Vec::new();
     loop {
         check_cancelled(cancel)?;
         let Some(info) = enumerator.next_file(gio_cancellable(cancel))? else {
             return Ok(files);
         };
-        files.push(enumerator.child(&info));
+        files.push((enumerator.child(&info), info));
     }
 }
