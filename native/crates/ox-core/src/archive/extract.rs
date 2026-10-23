@@ -237,6 +237,22 @@ impl ZipExtractor {
         request: &ExtractionRequest,
         cancel: &Cancellation,
     ) -> Result<ExtractedFolder, ArchiveError> {
+        // Once the user cancelled, GIO aborts the call in progress at any
+        // step with an error of its own. A staging folder left behind is
+        // still reported (XFER-003).
+        self.extract_steps(request, cancel).map_err(|error| match error {
+            ArchiveError::StagingLeftBehind { .. } => error,
+            other => other.unless_cancelled(cancel),
+        })
+    }
+
+    /// The steps of [`Self::extract`], whatever the cancellation did to
+    /// their errors.
+    fn extract_steps(
+        &mut self,
+        request: &ExtractionRequest,
+        cancel: &Cancellation,
+    ) -> Result<ExtractedFolder, ArchiveError> {
         let archive_uri = normalise(&request.archive_uri)?;
         let destination_uri = normalise(&request.destination_uri)?;
         let destination = self.prepare_destination(&destination_uri, &request.folder_name, cancel)?;

@@ -100,6 +100,39 @@ fn cancelling_while_writing_removes_the_staging_folder() {
     assert!(fixture.archive.is_file());
 }
 
+/// A destination where the user cancels while the staging folder is being
+/// made, and the backend then fails with an error of its own, as GIO's
+/// "Operation was cancelled".
+struct CancelledWhileStaging(Cancellation);
+
+impl Provider for CancelledWhileStaging {
+    fn create_directory(
+        &self,
+        _node: &LocalNode,
+        _cancel: Option<&Cancellation>,
+    ) -> Result<(), TransferError> {
+        self.0.cancel();
+        Err(TransferError::failed("Operation was cancelled"))
+    }
+}
+
+/// Cancel before the first member is written is a cancellation too, not
+/// the backend's error about the call it aborted, so the app says nothing.
+///
+/// parity: ARC-011, ARC-013
+#[test]
+fn cancelling_while_the_staging_folder_is_made_is_a_cancellation() {
+    let fixture = ExtractionFixture::new();
+    fixture.write_sample_zip();
+    let factory = LocalNode::factory(Arc::new(CancelledWhileStaging(fixture.cancel.clone())));
+    let mut extractor = fixture.extractor_with(factory, Arc::new(LocalFileOutput::owner_only()));
+
+    let result = fixture.extract_with(&mut extractor, "Unpacked");
+
+    assert_eq!(result.unwrap_err(), ArchiveError::Cancelled);
+    fixture.assert_no_output();
+}
+
 /// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_crc_failure_rolls_back`.
 ///
 /// parity: ARC-013
