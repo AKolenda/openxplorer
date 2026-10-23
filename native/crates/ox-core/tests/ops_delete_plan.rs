@@ -134,6 +134,35 @@ fn an_item_listed_without_a_trash_does_not_decide_for_its_folder() {
     assert_eq!(plan.to_delete, [items[0].uri.clone()]);
 }
 
+/// An unlisted item that vanished before its query answers "no Trash"
+/// for itself alone: the file beside it, dropped or found with it, is
+/// asked about and still goes to the Trash instead of being deleted
+/// permanently.
+#[test]
+fn a_vanished_unlisted_item_does_not_decide_for_its_folder() {
+    let temp = tempfile::tempdir().unwrap();
+    let vanished = temp.path().join("gone.txt");
+    let kept = temp.path().join("kept.txt");
+    fs::write(&kept, b"b").unwrap();
+    let items = [
+        DeleteItem {
+            uri: file_uri(&vanished),
+            name: "gone.txt".into(),
+            can_trash: None,
+        },
+        DeleteItem {
+            uri: file_uri(&kept),
+            name: "kept.txt".into(),
+            can_trash: None,
+        },
+    ];
+
+    let plan = block_on(plan_delete(&items, &Cancellation::new())).unwrap();
+
+    assert_eq!(plan.to_trash, [file_uri(&kept)]);
+    assert_eq!(plan.to_delete, [file_uri(&vanished)]);
+}
+
 /// parity: OPS-037, OPS-017
 #[test]
 fn a_share_that_cannot_answer_counts_as_having_a_trash() {
