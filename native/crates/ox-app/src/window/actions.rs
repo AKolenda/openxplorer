@@ -10,7 +10,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::settings::{Theme, SIDEBAR_ICON_SIZES};
+use ox_core::settings::{PreferencesUpdate, Theme, SIDEBAR_ICON_SIZES};
 
 use crate::application::AppAction;
 use crate::text_size::Step;
@@ -246,6 +246,7 @@ impl BrowserWindow {
             plain_action(WindowAction::PinSelected, BrowserWindow::pin_selected),
             plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
             plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),
+            plain_action(WindowAction::Share, BrowserWindow::share),
             plain_action(WindowAction::About, BrowserWindow::show_about),
             plain_action(WindowAction::Help, BrowserWindow::show_help),
             plain_action(
@@ -259,6 +260,7 @@ impl BrowserWindow {
             ),
         ]);
         self.set_action_enabled(WindowAction::Open, false);
+        self.set_action_enabled(WindowAction::Share, false);
     }
 
     fn install_view_actions(&self) {
@@ -309,18 +311,34 @@ impl BrowserWindow {
         ]);
     }
 
-    /// Show hidden files: lists or hides them, and saves the choice.
+    /// Show hidden files (Ctrl+H, View and More options): one setting for
+    /// every folder, as in Windows. Shows the choice here at once and
+    /// saves it, after which every other window follows.
     fn set_hidden_files_shown(&self, shown: bool) {
-        self.show_hidden_files(shown);
-        self.remember_style();
+        self.follow_hidden_files(shown);
+        let update = PreferencesUpdate {
+            show_hidden: Some(shown),
+            ..PreferencesUpdate::default()
+        };
+        self.context()
+            .update_preferences(update, self.preference_failure_reply());
     }
 
-    /// Lists or hides hidden files, without saving the choice.
-    pub(super) fn show_hidden_files(&self, shown: bool) {
-        self.folder_pane().model().set_show_hidden(shown);
-        self.update_content();
-        // The folder's item count changes with it.
-        self.update_details_pane();
+    /// Lists or hides hidden files in every pane, without saving the
+    /// choice.
+    pub(super) fn follow_hidden_files(&self, shown: bool) {
+        let mut changed = false;
+        for pane in self.folder_panes() {
+            changed |= pane.model().set_show_hidden(shown);
+        }
+        self.set_action_state(WindowAction::Hidden, &shown.to_variant());
+        if changed {
+            self.update_content();
+            // The pane beside the active one shows or loses its items too.
+            self.update_beside_pane();
+            // The folder's item count changes with it.
+            self.update_details_pane();
+        }
     }
 
     fn install_appearance_actions(&self) {

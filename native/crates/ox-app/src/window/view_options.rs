@@ -128,9 +128,8 @@ impl BrowserWindow {
     /// columns.
     pub(super) fn apply_view_options(&self) {
         for (side, uri) in self.shown_panes() {
-            let mut options = self.context().settings_data().preferences.view_options;
+            let options = self.context().settings_data().preferences.view_options;
             let pane = self.pane_on(side);
-            options.show_previews = pane.previews_enabled();
             let is_remote = self.is_remote_folder(&uri);
             pane.owners()
                 .set_previews(PreviewPolicy::for_folder(&options, is_remote));

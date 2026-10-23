@@ -378,9 +378,12 @@ pub struct Preferences {
     /// (Dolphin's `UseShortRelativeDates`, inverted). Stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub absolute_dates: bool,
-    /// Each folder remembers its own display style (Dolphin's
-    /// `GlobalViewProps`, inverted). Stored only when on.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    /// Each folder remembers its own display style: Windows' "Remember
+    /// each folder's view settings" (Dolphin's `GlobalViewProps`,
+    /// inverted). On by default, as in Windows 11; stored only when off.
+    /// Before, it was off by default and stored only when on, so a file
+    /// without it gets the new default.
+    #[serde(skip_serializing_if = "is_true")]
     pub per_folder_views: bool,
     /// Hovering an item shows the marker that adds it to the selection or
     /// takes it out (Dolphin's `ShowSelectionToggle`). Stored only when off.
@@ -476,7 +479,7 @@ impl Default for Preferences {
             tab_switches_split_panes: false,
             folder_tree: FolderTreeOptions::default(),
             absolute_dates: false,
-            per_folder_views: false,
+            per_folder_views: true,
             selection_marker: true,
             item_checks_on_ctrl: true,
             expandable_folders: true,
@@ -581,9 +584,7 @@ impl Preferences {
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
-        if let Some(options) = &update.view_options {
-            self.view_options = options.clone();
-        }
+        let columns_changed = self.apply_view_options(update);
         replace_if_some(&mut self.open_tabs_at_end, update.open_tabs_at_end);
         replace_if_some(&mut self.restore_session, update.restore_session);
         replace_if_some(&mut self.begin_in_split_view, update.begin_in_split_view);
@@ -612,20 +613,32 @@ impl Preferences {
             self.folder_views.clone_from(folder_views);
         }
         self.downloads_group_by = update.downloads_group_by.or(self.downloads_group_by);
-        self.sync_style_defaults(update);
+        self.sync_style_defaults(update, columns_changed);
     }
 
-    /// Global Settings changes also update the shared display style.
-    fn sync_style_defaults(&mut self, update: &PreferencesUpdate) {
+    /// Takes the view options of `update`; true when their details columns
+    /// changed. Only such a change reaches the shared style: a thumbnail
+    /// toggle sends the whole view options too.
+    fn apply_view_options(&mut self, update: &PreferencesUpdate) -> bool {
+        let Some(options) = &update.view_options else {
+            return false;
+        };
+        let columns_changed = options.details_columns != self.view_options.details_columns;
+        self.view_options = options.clone();
+        columns_changed
+    }
+
+    /// Global Settings changes also update the shared display style: the
+    /// column widths, and the details columns when `columns_changed`.
+    fn sync_style_defaults(&mut self, update: &PreferencesUpdate, columns_changed: bool) {
         let Some(defaults) = self.view_defaults.as_mut() else {
             return;
         };
         if update.column_widths.is_some() {
             defaults.column_widths.clone_from(&self.column_widths);
         }
-        if let Some(options) = &update.view_options {
-            defaults.show_previews = Some(options.show_previews);
-            defaults.details_columns = Some(options.details_columns.clone());
+        if columns_changed {
+            defaults.details_columns = Some(self.view_options.details_columns.clone());
         }
     }
 
@@ -649,14 +662,13 @@ impl Preferences {
     /// The display style `uri` is shown in: its own when each folder
     /// keeps one, else the shared style (VIEW-020).
     pub fn view_for(&self, uri: &str) -> ViewProperties {
-        // Before a style was saved, the Python app's view and hidden files.
+        // Before a style was saved, the Python app's view.
         let defaults = self.view_defaults.clone().unwrap_or_else(|| ViewProperties {
             mode: match self.view {
                 View::Details => "details",
                 View::Grid => "icons",
             }
             .to_owned(),
-            show_hidden: self.show_hidden,
             ..ViewProperties::default()
         });
         let mut style = if self.per_folder_views {
@@ -664,7 +676,6 @@ impl Preferences {
         } else {
             defaults
         };
-        style.show_previews.get_or_insert(self.view_options.show_previews);
         style
             .details_columns
             .get_or_insert_with(|| self.view_options.details_columns.clone());

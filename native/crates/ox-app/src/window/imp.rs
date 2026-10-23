@@ -152,6 +152,8 @@ pub(crate) struct BrowserWindow {
     pub(super) picker_bar: TemplateChild<gtk::Box>,
     /// The file dialog this window shows, if it is one.
     pub(super) picker: super::picker::PickerSlot,
+    /// Whether the desktop can share by email (Share).
+    pub(super) share: super::share::ShareState,
     /// The Settings page, shown on the Settings tab.
     #[template_child]
     pub(super) settings_page: TemplateChild<SettingsPage>,

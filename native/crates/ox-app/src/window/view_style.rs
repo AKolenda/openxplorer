@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The folder's display style: view, sorting, groups, folders first and
-//! hidden files, shown and remembered as Dolphin's view properties.
+//! columns, shown and remembered as Dolphin's view properties. Hidden
+//! files are one setting for every folder, as in Windows (VIEW-023).
 //!
 //! Ports Dolphin's `DolphinView::applyViewProperties` and
 //! `ViewProperties::save` (VIEW-020): the style the user sets is saved for
@@ -36,11 +37,10 @@ pub(super) fn date_style(preferences: &Preferences) -> DateStyle {
 }
 
 /// The preferences change that saves `style` as every folder's, with the
-/// view and hidden files the Python app reads too.
+/// view the Python app reads too.
 fn shared_style_update(style: ViewProperties, view: FolderView) -> PreferencesUpdate {
     PreferencesUpdate {
         view: Some(view.setting()),
-        show_hidden: Some(style.show_hidden),
         view_defaults: Some(style),
         ..PreferencesUpdate::default()
     }
@@ -139,9 +139,6 @@ impl BrowserWindow {
             groups: false,
             group_by: None,
             folders_first: model.folders_first(),
-            show_hidden: model.shows_hidden(),
-            hidden_last: model.hidden_last(),
-            show_previews: Some(pane.previews_enabled()),
             details_columns: Some(
                 pane.details()
                     .chosen_columns()
@@ -172,7 +169,6 @@ impl BrowserWindow {
         pane.show_view(view);
         let model = pane.model();
         model.set_folders_first(style.folders_first);
-        model.set_hidden_last(style.hidden_last);
         let state = SortState {
             by: SortBy::from_key(&style.sort).unwrap_or(SortBy::Column(SortColumn::Name)),
             direction: if style.descending {
@@ -183,8 +179,6 @@ impl BrowserWindow {
         };
         show_pane_sort(pane, state);
         group_pane(pane, Grouping::of(style.grouping(), state));
-        model.set_show_hidden(style.show_hidden);
-        pane.set_previews_enabled(style.show_previews.unwrap_or(true));
         if let Some(columns) = &style.details_columns {
             pane.details()
                 .show_chosen_columns(crate::folder_view::details::chosen_from_keys(columns));
@@ -266,7 +260,6 @@ impl BrowserWindow {
                 style.set_grouping(preferences.view_for(uri).grouping());
             }
             let mut options = preferences.view_options;
-            options.show_previews = pane.previews_enabled();
             options.details_columns = style.details_columns.clone().unwrap_or_default();
             let mut update = shared_style_update(style, pane.view());
             update.downloads_group_by = downloads_group_by;
@@ -286,8 +279,8 @@ impl BrowserWindow {
 
     /// Follows the preferences of how items are shown: the date style
     /// (VIEW-004), redrawn if it changed, item check boxes (SEL-014), whether
-    /// they wait for Ctrl, and
-    /// expandable folders (VIEW-035).
+    /// they wait for Ctrl, expandable folders (VIEW-035) and hidden files
+    /// (VIEW-023).
     pub(super) fn follow_item_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
         self.show_item_check_boxes(preferences.selection_marker);
@@ -296,10 +289,10 @@ impl BrowserWindow {
             pane.details().set_date_style(date_style(&preferences));
             self.update_expandability_for(pane);
         }
+        self.follow_hidden_files(preferences.show_hidden);
         for (side, uri) in self.shown_panes() {
             let pane = self.pane_on(side);
             let style = preferences.view_for(&uri);
-            pane.set_previews_enabled(style.show_previews.unwrap_or(true));
             if let Some(columns) = &style.details_columns {
                 pane.details()
                     .show_chosen_columns(crate::folder_view::details::chosen_from_keys(columns));
@@ -375,17 +368,14 @@ fn show_pane_sort(pane: &FolderPane, state: SortState) {
 mod tests {
     use super::*;
 
-    /// One style for all folders also saves the view and hidden files the
-    /// Python app reads.
+    /// One style for all folders also saves the view the Python app
+    /// reads; hidden files are a setting of their own.
     #[test]
     fn the_shared_style_keeps_the_python_keys_in_step() {
-        let style = ViewProperties {
-            show_hidden: true,
-            ..ViewProperties::default()
-        };
+        let style = ViewProperties::default();
         let update = shared_style_update(style.clone(), FolderView::Compact);
         assert_eq!(update.view, Some(ox_core::settings::View::Details));
-        assert_eq!(update.show_hidden, Some(true));
+        assert_eq!(update.show_hidden, None);
         assert_eq!(update.view_defaults, Some(style));
     }
 }

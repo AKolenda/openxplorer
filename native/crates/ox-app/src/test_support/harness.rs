@@ -357,6 +357,22 @@ impl TestWindow {
     pub(crate) fn settings_directory(&self) -> &Path {
         self.settings_directory.path()
     }
+
+    /// Turns Folder Options' "Remember each folder's view settings" off,
+    /// so every folder shares one view, saved in the keys the Python app
+    /// reads too, for tests of that mode.
+    pub(crate) fn share_one_view(&self) {
+        Settings::open(self.settings_directory())
+            .update_preferences(&ox_core::settings::PreferencesUpdate {
+                per_folder_views: Some(false),
+                ..ox_core::settings::PreferencesUpdate::default()
+            })
+            .expect("the settings file takes the change");
+        self.context.reload_settings();
+        wait_until("one view for every folder", || {
+            !self.context.settings_data().preferences.per_folder_views
+        });
+    }
 }
 
 impl Drop for TestWindow {

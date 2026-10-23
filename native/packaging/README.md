@@ -157,6 +157,7 @@ explains a missing one when that feature is used:
 | Making OpenXplorer the default file manager | `xdg-utils` | `xdg-utils` | `xdg-utils` | `xdg-utils` |
 | Open in Terminal | `gnome-terminal \| x-terminal-emulator` | (every desktop has one) | (every desktop has one) | (every desktop has one) |
 | Open in archive manager | `file-roller` | `file-roller` | `file-roller` | `file-roller` |
+| Share on GNOME (the Email portal; KDE Plasma's portal has its own) | `xdg-desktop-portal-gtk` | `xdg-desktop-portal-gtk` | `xdg-desktop-portal-gtk` | `xdg-desktop-portal-gtk` |
 | In-app updates (stable `.deb` only) | `pkexec` | | | |
 | Persistent SMB mount helper (stable only) | `cifs-utils` | `cifs-utils` | `cifs-utils` | `cifs-utils` |
 
@@ -165,7 +166,9 @@ WebKitGTK, libsecret and `xdg-user-dirs`; the native programs need none of
 them (the Secret Service client is pure Rust, and the mount helper is a Rust
 program). Python is only a build tool: `tools/package_data.py` installs the
 files. RPM and Arch have no virtual
-terminal package, so they name none.
+terminal package, so they name none. The Flatpak needs no addition for
+Share: the sandbox reaches the host's desktop portal, whose backends the
+host installs.
 
 ## Debian package
 

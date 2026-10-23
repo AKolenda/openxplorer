@@ -25,7 +25,7 @@ use crate::test_support::harness::{
 use crate::window::command_bar::menus::sort_menu;
 use crate::window::menu_popover::MenuEntry;
 
-use super::view_styles::ask_from_the_display_style_dialog;
+use super::view_styles::{ask_from_folder_options, close_folder_options, open_folder_options};
 
 /// The headings the details view draws, top to bottom.
 fn headings(test: &TestWindow) -> Vec<String> {
@@ -253,6 +253,7 @@ fn downloads_is_grouped_by_date_until_the_user_chooses_otherwise() {
     let home = TestHome::new();
     let downloads = home.downloads();
     let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    test.share_one_view();
     assert_eq!(test.action_state("group-by").as_deref(), Some("modified"));
     assert_eq!(
         test.names(),
@@ -329,7 +330,7 @@ fn downloads_keeps_its_own_group_by_when_each_folder_keeps_a_style() {
     assert_eq!(test.action_state("group-by").as_deref(), Some("type"));
 }
 
-/// Folder views > Apply to all folders and Reset folders cover the
+/// Folder Options > Apply to Folders and Reset Folders cover the
 /// Group by kept for Downloads apart from the shared style: Apply gives
 /// Downloads the applied Group by, and Reset groups it by date again.
 ///
@@ -339,6 +340,7 @@ fn apply_to_all_and_reset_folders_cover_the_group_by_of_downloads() {
     let home = TestHome::new();
     let downloads = home.downloads();
     let test = TestWindow::open_with_standard_folders(&downloads, home.locations(), |_| {});
+    test.share_one_view();
     test.activate("group-by", Some("type"));
     wait_until("the choice to be saved", || {
         test.context.settings_data().preferences.downloads_group_by == Some(GroupBy::Type)
@@ -349,10 +351,12 @@ fn apply_to_all_and_reset_folders_cover_the_group_by_of_downloads() {
     test.wait_for_listing("the home folder");
     assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
 
-    ask_from_the_display_style_dialog(&test, "Apply to all folders").press("Apply");
+    let options = open_folder_options(&test);
+    ask_from_folder_options(&options, "Apply to Folders").press("Yes");
     wait_until("the applied view", || {
         test.context.settings_data().preferences.view_defaults.is_some()
     });
+    close_folder_options(&test, &options, "OK");
     test.window.navigate(&downloads).expect("Downloads");
     test.wait_for_listing("Downloads");
     assert_eq!(
@@ -365,11 +369,13 @@ fn apply_to_all_and_reset_folders_cover_the_group_by_of_downloads() {
     wait_until("the choice to be saved", || {
         test.context.settings_data().preferences.downloads_group_by == Some(GroupBy::Type)
     });
-    ask_from_the_display_style_dialog(&test, "Reset folders").press("Reset");
+    let options = open_folder_options(&test);
+    ask_from_folder_options(&options, "Reset Folders").press("Yes");
     wait_until("the default view of Downloads", || {
         test.action_state("group-by").as_deref() == Some("modified")
     });
     assert_eq!(test.context.settings_data().preferences.downloads_group_by, None);
+    close_folder_options(&test, &options, "OK");
 }
 
 /// The first group's heading is in sight when a grouped folder opens: no
@@ -728,9 +734,10 @@ fn turn_groups_on_and_off(test: &TestWindow, choices: &[&str]) {
                 "round {round}: the list is whole again ({shown} items)"
             );
             assert_eq!(test.action_state("group-by").as_deref(), Some("none"));
+            let folder = test.window.current_uri().expect("a folder");
             wait_until("groups off to be saved", || {
-                let saved = test.context.settings_data().preferences.view_defaults;
-                saved.is_some_and(|style| style.grouping() == GroupBy::None)
+                let saved = test.context.settings_data().preferences.view_for(&folder);
+                saved.grouping() == GroupBy::None
             });
             scroll_to_the_middle(test);
         }
