@@ -20,7 +20,8 @@
   View or "…" > Show hidden files and Folder Options all change it, and
   every window follows. Thumbnails too: "Always show icons, never
   thumbnails" is the opposite of Settings' "Show previews". Hidden files
-  and previews saved in a folder's view before are ignored.
+  and previews saved in a folder's view before are ignored; thumbnails
+  turned off with the old "Apply to all folders" stay off.
 - Changed default: "Remember each folder's view settings" is now on, as in
   Windows 11, so each folder keeps the view you give it. Before, one view
   was shared by all folders. Anyone who had turned it on keeps it on; the

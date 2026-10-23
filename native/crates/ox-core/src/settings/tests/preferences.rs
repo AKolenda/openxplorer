@@ -329,8 +329,7 @@ fn views_saved_by_the_old_display_style_dialog_still_load() {
         "view": "grid",
         "perFolderViews": true,
         "showHidden": false,
-        "viewDefaults": {"mode": "icons", "sort": "type", "hiddenLast": true, "showHidden": true,
-                         "showPreviews": false},
+        "viewDefaults": {"mode": "icons", "sort": "type", "hiddenLast": true, "showHidden": true},
         "folderViews": [
             {"uri": "file:///home/someone/Projects", "mode": "details", "sort": "size",
              "hiddenLast": true, "subfolders": true, "showHidden": true, "showPreviews": false},
@@ -441,6 +440,60 @@ fn each_folder_remembers_its_view_unless_turned_off() {
             .preferences
             .per_folder_views
     );
+}
+
+/// The settings file the version before Folder Options saved (eece04ab,
+/// its own serializer's output) after "Apply to all folders" in the display
+/// style dialog with Show previews unticked: the shared view had thumbnails
+/// off, the setting did not. After the upgrade thumbnails stay off, also
+/// once another change is saved.
+/// parity: VIEW-058
+#[test]
+fn thumbnails_turned_off_for_all_folders_stay_off_after_an_upgrade() {
+    let root = temporary_folder();
+    let saved = json!({
+        "version": 2,
+        "pins": [],
+        "shares": [],
+        "hiddenQuick": [],
+        "quickOrder": [],
+        "recent": [],
+        "preferences": {
+            "theme": "dark",
+            "view": "details",
+            "details": true,
+            "showHidden": false,
+            "autoIndex": true,
+            "contextMenu": "win10",
+            "networkInterval": 60,
+            "textSize": 100,
+            "viewDefaults": {
+                "mode": "icons",
+                "iconSize": 56,
+                "sort": "name",
+                "descending": false,
+                "groups": false,
+                "foldersFirst": true,
+                "showHidden": false,
+                "hiddenLast": false,
+                "showPreviews": false,
+                "detailsColumns": ["modified", "type", "size"]
+            },
+            "downloadsGroupBy": "none"
+        }
+    });
+    std::fs::write(root.path().join("settings.json"), saved.to_string()).unwrap();
+
+    let mut store = Settings::open(root.path());
+    assert!(store.warning().is_none());
+    assert!(
+        !store.snapshot().preferences.view_options.show_previews,
+        "thumbnails off"
+    );
+
+    save_preferences(&mut store, &json!({"theme": "light"}));
+    let reread = Settings::open(root.path()).snapshot().preferences;
+    assert!(!reread.view_options.show_previews, "and still off after a save");
 }
 
 /// Turning thumbnails off or on, as Folder Options' "Always show icons,
