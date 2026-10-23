@@ -41,6 +41,19 @@ use ox_core::network::local_path;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
+/// The portal a new window asks whether it can share: the desktop's. In
+/// tests a bus name nobody owns, so that no test depends on the portals
+/// the machine has; a test that needs one points the window at a fake
+/// ([`BrowserWindow::follow_share_service`]).
+#[cfg(not(test))]
+pub(super) const SHARE_PORTAL: &str = ox_core::integration::DESKTOP_PORTAL_NAME;
+#[cfg(test)]
+pub(super) const SHARE_PORTAL: &str = NO_PORTAL;
+
+/// A unique bus name that nobody owns, which answers no call at once.
+#[cfg(test)]
+pub(crate) const NO_PORTAL: &str = ":1.4294967";
+
 /// How long opening the files may take: a share that stopped answering
 /// must not leave Share waiting for ever.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(15);

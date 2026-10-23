@@ -80,11 +80,17 @@ pub(super) fn command_bar_names(test: &TestWindow) -> Vec<String> {
 }
 
 /// Share, between Rename and Move to Trash, shows only where the desktop
-/// can share (`tests::share`); the test session has no Email portal.
+/// can share (`tests::share`); here no Email portal answers, whatever the
+/// machine has.
 #[gtk::test]
 fn the_command_bar_has_the_current_controls_in_order() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    test.window.follow_share_service(crate::window::share::NO_PORTAL);
+    wait_until("the window to ask no portal", || {
+        test.window.share_service_checked(crate::window::share::NO_PORTAL)
+    });
+    wait_for_frames(&test.window, 2);
     let names = command_bar_names(&test);
     assert_eq!(
         names,

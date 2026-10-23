@@ -47,7 +47,7 @@ impl BrowserWindow {
     /// Follows the window's own widgets.
     pub(super) fn connect_signals(&self) {
         self.follow_selection();
-        self.follow_share_service(ox_core::integration::DESKTOP_PORTAL_NAME);
+        self.follow_share_service(super::share::SHARE_PORTAL);
         self.connect_search();
         let search_cache = self.follow_search_cache();
         self.imp().handlers.borrow_mut().search_cache = search_cache;

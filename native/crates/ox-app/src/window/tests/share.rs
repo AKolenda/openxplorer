@@ -40,7 +40,7 @@ fn the_share_button_is_named_share_and_hidden_without_an_email_portal() {
 
     use_portal(&test, &settings_only.name());
     assert!(!button.is_visible(), "a portal without Email cannot share");
-    use_portal(&test, ":1.4294967");
+    use_portal(&test, crate::window::share::NO_PORTAL);
     assert!(!button.is_visible(), "nobody answers under that name");
 }
 
