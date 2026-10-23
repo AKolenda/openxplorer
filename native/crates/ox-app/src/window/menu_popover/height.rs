@@ -16,9 +16,12 @@
 //! nor above (`create_popup_layout` in GTK 4.14's gtkpopover.c). Windows
 //! moves such a menu up until it fits, so a menu at the pointer that may
 //! fit on neither side opens beside it instead, its top at the pointer,
-//! where GTK slides it up.
+//! where GTK slides it up. A menu below a button opens below it whenever
+//! there is room there or above, so it moves beside the button only once
+//! GTK has cut it short, and opens below it again the next time.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::MenuPopover;
@@ -81,7 +84,8 @@ impl MenuPopover {
     }
 
     /// Fits the menu again whenever its popup enters a monitor, as when
-    /// GTK first places it, or places it again on another monitor.
+    /// GTK first places it, or places it again on another monitor, and
+    /// watches GTK cut short a menu below a button.
     pub(super) fn follow_monitor_changes(&self) {
         let Some(surface) = self.surface() else { return };
         surface.connect_enter_monitor(glib::clone!(
@@ -89,6 +93,36 @@ impl MenuPopover {
             self,
             move |_, _| menu.refit_if_shown()
         ));
+        surface.connect_layout(glib::clone!(
+            #[weak(rename_to = menu)]
+            self,
+            move |_, _, height| menu.move_beside_button_if_cut_short(height)
+        ));
+    }
+
+    /// Moves a menu below a button beside it when GTK placed its popup only
+    /// `height` tall there, though the menu fits on the monitor: it fits
+    /// neither below nor above the button, and beside it GTK slides it up.
+    fn move_beside_button_if_cut_short(&self, height: i32) {
+        if self.position() != gtk::PositionType::Bottom || self.point_anchor_height().is_some() {
+            return;
+        }
+        let Some(rows) = self.row_scroller() else { return };
+        let fits_on_monitor =
+            self.list().measure(gtk::Orientation::Vertical, -1).1 <= rows.max_content_height();
+        if fits_on_monitor && height < self.preferred_size().1.height() {
+            self.imp().beside_button.set(true);
+            self.set_position(self.side());
+            self.set_valign(gtk::Align::Start);
+        }
+    }
+
+    /// Opens a menu moved beside its button below it again, to be moved
+    /// beside it only if GTK cuts it short there again.
+    pub(super) fn open_below_button_again(&self) {
+        if self.imp().beside_button.take() {
+            self.set_position(gtk::PositionType::Bottom);
+        }
     }
 
     /// Fits the menu again when its rows change while it shows: a menu
@@ -119,12 +153,19 @@ impl MenuPopover {
             let full_menu = chrome + self.list().measure(gtk::Orientation::Vertical, -1).1;
             self.set_position(if fits_below_or_above(full_menu, anchor_height, monitor_height) {
                 gtk::PositionType::Bottom
-            } else if self.direction() == gtk::TextDirection::Rtl {
-                gtk::PositionType::Left
             } else {
-                gtk::PositionType::Right
+                self.side()
             });
             self.set_valign(gtk::Align::Start);
+        }
+    }
+
+    /// The side a menu opens beside its anchor on: the way its rows read.
+    fn side(&self) -> gtk::PositionType {
+        if self.direction() == gtk::TextDirection::Rtl {
+            gtk::PositionType::Left
+        } else {
+            gtk::PositionType::Right
         }
     }
 
@@ -169,12 +210,23 @@ mod tests {
         window_height: i32,
         anchor: Option<gdk::Rectangle>,
     ) -> (gtk::Window, MenuPopover) {
+        open_menu_from(&gtk::Button::with_label("Open"), rows, window_height, anchor)
+    }
+
+    /// A menu of `rows` items open in a shown window `window_height` tall
+    /// holding `button`, below `button` or, when there is one, at `anchor`
+    /// in it.
+    fn open_menu_from(
+        button: &gtk::Button,
+        rows: usize,
+        window_height: i32,
+        anchor: Option<gdk::Rectangle>,
+    ) -> (gtk::Window, MenuPopover) {
         let _ = skin();
-        let button = gtk::Button::with_label("Open");
         let window = gtk::Window::builder()
             .default_width(400)
             .default_height(window_height)
-            .child(&button)
+            .child(button)
             .build();
         window.present();
         wait_until("the window to be shown", || window.height() == window_height);
@@ -182,7 +234,7 @@ mod tests {
             .map(|row| MenuItem::new(&format!("Item {row}"), Icon::Copy, WindowAction::CopyAddress).into())
             .collect();
         let menu = MenuPopover::new(entries);
-        menu.set_parent(&button);
+        menu.set_parent(button);
         if let Some(anchor) = anchor {
             menu.set_pointing_to(Some(&anchor));
         }
@@ -444,6 +496,61 @@ mod tests {
     fn a_menu_below_a_button_stays_below_it() {
         let (window, menu) = open_menu(26);
         assert_eq!(menu.position(), gtk::PositionType::Bottom);
+        close(&window, &menu);
+    }
+
+    /// A button `top` pixels down the monitor.
+    fn button_at(top: i32) -> gtk::Button {
+        gtk::Button::builder()
+            .label("New")
+            .valign(gtk::Align::Start)
+            .margin_top(top)
+            .build()
+    }
+
+    #[gtk::test]
+    fn a_tall_menu_below_a_button_in_the_middle_of_the_monitor_moves_beside_it_to_show_in_full() {
+        let button = button_at(300);
+        let (window, menu) = open_menu_from(&button, 26, 900, None);
+        let natural = all_rows_height(&menu);
+        assert!(
+            natural > TEST_MONITOR_HEIGHT - 300 - button.height() && natural > 300,
+            "the {natural} pixel rows fit neither below nor above the button"
+        );
+        wait_for_rows_height(&menu, "every row to show", |height| height >= natural);
+        assert!(!scrolls(&menu), "a menu that fits on the monitor does not scroll");
+        assert_eq!(
+            menu.position(),
+            gtk::PositionType::Right,
+            "the menu opens beside the button"
+        );
+        assert_eq!(
+            menu.valign(),
+            gtk::Align::Start,
+            "its top level with the button's"
+        );
+        close(&window, &menu);
+    }
+
+    #[gtk::test]
+    fn a_menu_moved_beside_its_button_opens_below_it_again_when_it_fits() {
+        let button = button_at(300);
+        let (window, menu) = open_menu_from(&button, 26, 900, None);
+        wait_until("the menu to open beside the button", || {
+            menu.position() == gtk::PositionType::Right
+        });
+        menu.popdown();
+        button.set_margin_top(0);
+        settle();
+        menu.popup();
+        wait_until("the menu to open", || menu.is_mapped());
+        settle();
+        assert_eq!(
+            menu.position(),
+            gtk::PositionType::Bottom,
+            "the menu fits below the button"
+        );
+        assert!(!scrolls(&menu));
         close(&window, &menu);
     }
 

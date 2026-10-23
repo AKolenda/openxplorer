@@ -104,6 +104,9 @@ mod imp {
         /// The row the pointer rests on, and the timer that opens or
         /// closes a submenu once it has rested there.
         pub(super) hover: RefCell<(Option<i32>, Option<glib::SourceId>)>,
+        /// Whether the menu opens beside its button because GTK cut it
+        /// short below it (height.rs).
+        pub(super) beside_button: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -166,6 +169,7 @@ mod imp {
     impl WidgetImpl for MenuPopover {
         fn show(&self) {
             // Before GTK places the menu, so it is placed at its full size.
+            self.obj().open_below_button_again();
             self.obj().fit_to_monitor();
             #[expect(
                 deprecated,
