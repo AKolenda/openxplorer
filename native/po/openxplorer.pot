@@ -8131,6 +8131,10 @@ msgid "First packaged native preview of the GTK 4 interface, for trying it besid
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Make OpenXplorer default also sends other apps' Open and Save dialogs to OpenXplorer, and GTK 3 apps use them too after the next login. Format on a removable drive opens OpenXplorer's own Format dialog instead of GNOME Disks, and Enter in Extract all extracts. Deleting many files on a share asks the server about each file once instead of three times. A move between drives keeps the source files of a folder it skipped partway, Undo asks first when it cannot check a whole copy, signing out of a server forgets its passwords on every port, and the Recycle Bin and search results no longer show stale items."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "NAS"
 msgstr ""
 
