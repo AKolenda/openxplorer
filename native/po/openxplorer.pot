@@ -3674,6 +3674,14 @@ msgstr ""
 msgid "Cut (Ctrl+X)"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Delete"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Delete (Delete)"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Extract all"
 msgstr ""
@@ -3684,14 +3692,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
 msgid "More options"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-core/src/ops/delete_plan.rs crates/ox-core/src/ops/undo.rs
-msgid "Move to Trash"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar.rs
-msgid "Move to Trash (Delete)"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
@@ -3903,7 +3903,7 @@ msgstr ""
 msgid "Compress to…"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/trash_support.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/delete_plan.rs
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/delete_plan.rs
 msgid "Delete permanently"
 msgstr ""
 
@@ -4734,6 +4734,10 @@ msgstr ""
 msgid "Limit to home folder"
 msgstr ""
 
+#: crates/ox-app/src/window/folder_tree/menu.rs crates/ox-core/src/ops/delete_plan.rs crates/ox-core/src/ops/undo.rs
+msgid "Move to Trash"
+msgstr ""
+
 #: crates/ox-app/src/window/folder_tree/menu.rs
 msgid "Rename…"
 msgstr ""
@@ -5228,10 +5232,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Context menu"
-msgstr ""
-
-#: crates/ox-app/src/window/shortcuts_window.rs
-msgid "Delete"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs

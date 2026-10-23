@@ -5868,7 +5868,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (the_command_bar_has_the_current_controls_in_order, the_edit_commands_follow_the_selection_with_their_python_tooltips); native/crates/ox-app/src/window/file_ops/trash_support.rs (delete_reads_delete_permanently_only_where_no_trash_is_known)."
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (the_command_bar_has_the_current_controls_in_order, the_edit_commands_follow_the_selection_with_their_python_tooltips); native/crates/ox-app/src/window/file_ops/delete_label.rs (delete_reads_delete_except_in_the_recycle_bin)."
 
 [[feature]]
 id = "CMD-002"
@@ -5917,7 +5917,7 @@ python_tests = []
 bridge = ["trashSupport"]
 gnome = "GIO access::can-trash / g_file_trash"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_ops/trash_support.rs (delete_reads_delete_permanently_only_where_no_trash_is_known): the window asks each folder it shows once, and the command bar, the menus and the Delete confirmation follow the answer."
+native_note = "Changed to match Windows Explorer: Delete is named plainly \"Delete\" in the command bar and the menus, and \"Delete permanently\" only in the Recycle Bin (native/crates/ox-app/src/window/file_ops/delete_label.rs, delete_reads_delete_except_in_the_recycle_bin). Asking GIO about one item per folder could name the command wrongly for the item selected, so the window no longer asks; each Delete decides every selected item with plan_delete, and only the confirmation says that items without a Trash are deleted permanently (native/crates/ox-app/src/window/tests/file_operations.rs, delete_reads_delete_and_asks_only_for_items_without_a_trash)."
 
 [[feature]]
 id = "CMD-004"
@@ -6919,7 +6919,7 @@ bridge = ["trashSupport", "operate"]
 dolphin = "Move to Trash / Delete with confirmation; Dolphin: Delete moves to Trash without confirming by default; Shift+Delete deletes permanently.; Del → Trash, Shift+Del → delete; movetotrash: Delete; delete_shortcut (Delete mapped to delete when trash unavailable)"
 gnome = "g_file_trash / access::can-trash"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores, cancelling_the_delete_confirmation_keeps_the_items); the wording of all three confirmations is tested in native/crates/ox-core/src/ops/delete_plan.rs."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores, cancelling_the_delete_confirmation_keeps_the_items, delete_trashes_an_item_in_a_folder_whose_own_folder_is_read_only); the wording of all three confirmations is tested in native/crates/ox-core/src/ops/delete_plan.rs. Each item goes to the Trash wherever GIO says the item itself can, as in Windows Explorer, also directly in the home folder and at the top of a USB drive."
 
 [[feature]]
 id = "OPS-016"
@@ -6985,7 +6985,7 @@ bridge = ["operate", "trashSupport"]
 dolphin = "KIO::trash (kio_trash implements the freedesktop Trash spec)"
 gnome = "g_file_trash + access::can-trash"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores) trashes through GIO into the freedesktop Trash; the per-folder labels are CMD-003 and the engine never falls back to a delete (XFER-014)."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores) trashes through GIO into the freedesktop Trash; Delete is named plainly (CMD-003) and the engine never falls back to a delete (XFER-014)."
 
 [[feature]]
 id = "OPS-019"
@@ -11156,7 +11156,7 @@ bridge = ["normalise", "connect", "list", "authReply", "environment"]
 dolphin = "kio sftp:/ and fish:/ workers; Network → Add Network Folder (SSH)"
 gnome = "GVfs sftp backend (sftp.mount), GMountOperation ask-question (host key) / ask-password, ssh-agent"
 native = "done"
-native_note = "sftp:// and ssh:// are browsed through GVfs (native/crates/ox-core/src/location/normalise/remote.rs; sftp_ftp_webdav_and_nfs_urls_are_canonical). A user name may name the account (sftp://anna@host/); a password is refused (SAFE-010). GVfs's host-key question is asked in OpenXplorer's own sign-in dialog (native/crates/ox-core/src/network/prompts/tests.rs, a_question_is_answered_with_the_chosen_button). Connected SFTP mounts, also those other apps made, and browsed SFTP folders are listed under Network as one connected row per server (native/crates/ox-core/tests/places_composition.rs, a_browsed_sftp_folder_joins_its_servers_mount; native/crates/ox-core/src/network/visited.rs, a_remote_server_is_remembered_once_at_the_first_folder_opened), whose menu keeps or disconnects it (native/crates/ox-app/src/window/place_menus.rs, a_connected_sftp_folder_can_be_kept_and_disconnected, on the merged row). Delete asks for a permanent delete wherever GIO reports no Trash for the folder (native/crates/ox-core/src/ops/delete_plan.rs, trash_support), which is the same code for every protocol and is not tested against an SFTP server. Credentials are not reused across servers, protocols or aliases: only GVfs remembers them per server."
+native_note = "sftp:// and ssh:// are browsed through GVfs (native/crates/ox-core/src/location/normalise/remote.rs; sftp_ftp_webdav_and_nfs_urls_are_canonical). A user name may name the account (sftp://anna@host/); a password is refused (SAFE-010). GVfs's host-key question is asked in OpenXplorer's own sign-in dialog (native/crates/ox-core/src/network/prompts/tests.rs, a_question_is_answered_with_the_chosen_button). Connected SFTP mounts, also those other apps made, and browsed SFTP folders are listed under Network as one connected row per server (native/crates/ox-core/tests/places_composition.rs, a_browsed_sftp_folder_joins_its_servers_mount; native/crates/ox-core/src/network/visited.rs, a_remote_server_is_remembered_once_at_the_first_folder_opened), whose menu keeps or disconnects it (native/crates/ox-app/src/window/place_menus.rs, a_connected_sftp_folder_can_be_kept_and_disconnected, on the merged row). Delete asks for a permanent delete wherever GIO reports no Trash for the item (native/crates/ox-core/src/ops/delete_plan.rs, plan_delete), which is the same code for every protocol and is not tested against an SFTP server. Credentials are not reused across servers, protocols or aliases: only GVfs remembers them per server."
 
 [[feature]]
 id = "NET-031"
