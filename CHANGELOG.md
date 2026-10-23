@@ -1,35 +1,28 @@
-# Unreleased
+# 2.0.7 — 2026-10-23
 
-- View > "Adjust view display style…" is replaced by Folder Options, as in
-  Windows 11 File Explorer: "…" > Options opens it, with Windows' General
-  and View tabs.
-  - General: "Open File Explorer to" chooses Home or This PC (or keeps the
-    folder chosen in Settings).
-  - View > Folder views: Apply to Folders, after a Yes/No question, gives
-    every folder this folder's view (layout, icon size, columns, sort and
-    grouping); Reset Folders, after a Yes/No question, gives every folder
-    the default view (Details, by name) again. Both act at once in every
-    window, split pane and Open/Save dialog. OpenXplorer has no folder
-    types, so they cover all folders. Apply to Folders cannot be pressed
-    from This PC, Network, Recent, search results or the Recycle Bin.
-  - View > Advanced settings: "Always show icons, never thumbnails",
-    "Display the full path in the title bar", "Remember each folder's view
-    settings", "Restore previous folder windows at logon", "Show hidden
-    files, folders, and drives" and "Use check boxes to select items".
-- Hidden files are now one setting for every folder, as in Windows: Ctrl+H,
-  View or "…" > Show hidden files and Folder Options all change it, and
-  every window follows. Thumbnails too: "Always show icons, never
-  thumbnails" is the opposite of Settings' "Show previews". Hidden files
-  and previews saved in a folder's view before are ignored; thumbnails
-  turned off with the old "Apply to all folders" stay off.
-- Changed default: "Remember each folder's view settings" is now on, as in
-  Windows 11, so each folder keeps the view you give it. Before, one view
-  was shared by all folders. Anyone who had turned it on keeps it on; the
-  old off setting was never saved, so everyone else gets the new default
-  and can turn it off in Folder Options.
-- Dropped with the old dialog, as Windows has none of them: "This folder
-  and its subfolders", "Use these settings as the default for all
-  folders" and "Show hidden items last". Views it saved still load.
+## What's Changed
+* feat(defaults): include other apps' Open and Save dialogs in Make OpenXplorer default by @AKolenda in https://github.com/AKolenda/openxplorer/pull/132
+* fix(native,web): resolve safety, correctness, and performance bugs by @AKolenda in https://github.com/AKolenda/openxplorer/pull/126
+* feat(devices): format drives in OpenXplorer's own Format dialog by @AKolenda in https://github.com/AKolenda/openxplorer/pull/133
+* feat(archives): press Enter in the Extract dialog to extract by @AKolenda in https://github.com/AKolenda/openxplorer/pull/142
+* chore(web): Upgrade Next.js to 16.4.2 by @AKolenda in https://github.com/AKolenda/openxplorer/pull/152
+* perf(delete): Ask a share once per file instead of three times when deleting by @AKolenda in https://github.com/AKolenda/openxplorer/pull/154
+* feat(defaults): send GTK 3 apps' Open and Save dialogs to OpenXplorer by @AKolenda in https://github.com/AKolenda/openxplorer/pull/143
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.7_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.7-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.7-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.7-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.7-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.6...v2.0.7
 
 # 2.0.6 — 2026-10-13
 
