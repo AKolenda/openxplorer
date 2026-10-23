@@ -23,10 +23,16 @@
 
 use gio::prelude::*;
 
-use super::query::enumerate_files;
-use crate::transfer::{nesting_error, Cancellation, TransferError, WriteGuard, MAX_DEPTH};
+use super::query::{enumerate_kinds, node_kind};
+use crate::transfer::{nesting_error, Cancellation, NodeKind, TransferError, WriteGuard, MAX_DEPTH};
 
 /// Permanently deletes `file` and, for a folder, everything inside it.
+/// `kind` is what the caller just found `file` to be, without following
+/// links; `None` asks the backend.
+///
+/// Every question is a round trip to the share, and `GVfs` runs one at a
+/// time per SMB mount, so the walk asks only what it does not know yet:
+/// items inside a folder take their kind from its listing.
 ///
 /// # Errors
 ///
@@ -34,10 +40,11 @@ use crate::transfer::{nesting_error, Cancellation, TransferError, WriteGuard, MA
 /// [`TransferError::Cancelled`]; items not yet reached stay in place.
 pub(super) fn delete_tree(
     file: &gio::File,
+    kind: Option<NodeKind>,
     cancel: &Cancellation,
     guard: Option<&WriteGuard>,
 ) -> Result<(), TransferError> {
-    RemoteDeletion { cancel, guard }.delete(file, 0)
+    RemoteDeletion { cancel, guard }.delete(file, kind, 0)
 }
 
 /// One user-confirmed permanent deletion.
@@ -47,8 +54,9 @@ struct RemoteDeletion<'a> {
 }
 
 impl RemoteDeletion<'_> {
-    /// Deletes `file` at nesting `depth`, children first.
-    fn delete(&self, file: &gio::File, depth: usize) -> Result<(), TransferError> {
+    /// Deletes `file` at nesting `depth`, children first. `kind` is the
+    /// item's kind when already known.
+    fn delete(&self, file: &gio::File, kind: Option<NodeKind>, depth: usize) -> Result<(), TransferError> {
         self.cancel.check()?;
         if let Some(guard) = self.guard {
             guard(&file.uri())?;
@@ -59,10 +67,14 @@ impl RemoteDeletion<'_> {
         if depth > MAX_DEPTH {
             return Err(nesting_error());
         }
+        let kind = match kind {
+            Some(kind) => kind,
+            None => self.kind(file)?,
+        };
         // Only a real folder is entered: a link is deleted as a link.
-        if self.is_real_folder(file)? {
-            for child in enumerate_files(file, Some(self.cancel))? {
-                self.delete(&child, depth + 1)?;
+        if kind == NodeKind::Directory {
+            for (child, child_kind) in enumerate_kinds(file, Some(self.cancel))? {
+                self.delete(&child, child_kind, depth + 1)?;
             }
         }
         self.cancel.check()?;
@@ -70,14 +82,14 @@ impl RemoteDeletion<'_> {
         Ok(())
     }
 
-    /// True only for a folder itself, never for a link to one.
-    fn is_real_folder(&self, file: &gio::File) -> Result<bool, TransferError> {
+    /// What `file` is, never what a link to it points at.
+    fn kind(&self, file: &gio::File) -> Result<NodeKind, TransferError> {
         let info = file.query_info(
             "standard::type",
             gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
             Some(self.cancel.cancellable()),
         )?;
-        Ok(info.file_type() == gio::FileType::Directory)
+        Ok(node_kind(info.file_type()))
     }
 }
 
@@ -96,7 +108,7 @@ mod tests {
 
     /// Deletes the local tree at `path` through the remote deletion walk.
     fn delete(path: &Path, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError> {
-        delete_tree(&gio::File::for_path(path), cancel, guard)
+        delete_tree(&gio::File::for_path(path), None, cancel, guard)
     }
 
     /// Ported from `_delete_recursive` in `v2.0.0:desktop/gio_backend.py`: hidden items

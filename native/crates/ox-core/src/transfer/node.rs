@@ -248,6 +248,23 @@ pub trait Node: Send + Sync {
     /// items not yet reached are left in place.
     fn delete_tree(&self, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError>;
 
+    /// [`Node::delete_tree`] for an item the caller has just inspected,
+    /// without following links, as `kind`. A backend that pays a network
+    /// round trip per question (SMB, phones) need not ask again; the
+    /// default ignores `kind` and asks as usual.
+    ///
+    /// # Errors
+    ///
+    /// As [`Node::delete_tree`].
+    fn delete_tree_of_kind(
+        &self,
+        _kind: NodeKind,
+        cancel: &Cancellation,
+        guard: Option<&WriteGuard>,
+    ) -> Result<(), TransferError> {
+        self.delete_tree(cancel, guard)
+    }
+
     /// Removes this staging tree, which the engine created. `created` is
     /// the identity recorded right after the engine made it, when the
     /// backend has one.

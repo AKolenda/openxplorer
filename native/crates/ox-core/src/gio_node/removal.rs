@@ -7,7 +7,7 @@
 use gio::prelude::*;
 
 use super::{local_delete, remote_delete, GioNode};
-use crate::transfer::{Cancellation, TransferError, WriteGuard};
+use crate::transfer::{Cancellation, NodeKind, TransferError, WriteGuard};
 
 impl GioNode {
     /// Moves the item to the Trash. XFER-014: never falls back to a
@@ -27,7 +27,10 @@ impl GioNode {
 
     /// XFER-015: permanently deletes the item and everything inside it.
     /// Local items are deleted relative to pinned folder descriptors; every
-    /// other location is deleted by path, as the Python app does.
+    /// other location is deleted by path, as the Python app does. `kind`,
+    /// when the caller just queried it, spares a remote location that
+    /// question; the local walk inspects every item through its pinned
+    /// descriptors regardless.
     ///
     /// # Errors
     ///
@@ -36,13 +39,14 @@ impl GioNode {
     /// deletion; what was deleted before it stays deleted.
     pub(super) fn delete_item_tree(
         &self,
+        kind: Option<NodeKind>,
         cancel: &Cancellation,
         guard: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
         self.require_item()?;
         match self.local_path() {
             Some(path) => local_delete::delete_tree(&path, cancel, guard),
-            None => remote_delete::delete_tree(&self.file, cancel, guard),
+            None => remote_delete::delete_tree(&self.file, kind, cancel, guard),
         }
     }
 }

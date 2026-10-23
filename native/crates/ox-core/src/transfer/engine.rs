@@ -409,7 +409,7 @@ impl TransferEngine {
         let selected = self.start_item(batch, index, uri)?;
         match &batch.action {
             ItemAction::Remove(removal) => {
-                self.remove(*removal, selected.node.as_ref(), batch.cancel)?;
+                self.remove(*removal, &selected, batch.cancel)?;
                 Ok(ItemOutcome::Done)
             }
             ItemAction::Transfer(placement) => self.transfer(batch, placement, &selected, state, staging),
@@ -444,22 +444,34 @@ impl TransferEngine {
     }
 
     /// Trashes or permanently deletes one user-selected item.
+    ///
+    /// The kind found when the item was selected is passed on, so a share
+    /// is not asked again what the item is: on SMB every question is a
+    /// queued round trip, which adds up over many files.
     fn remove(
         &self,
         removal: Removal,
-        source: &dyn Node,
+        selected: &SelectedItem,
         cancel: &Cancellation,
     ) -> Result<(), TransferError> {
+        let source = selected.node.as_ref();
         // XFER-020: a protected descendant anywhere in the tree stops the
         // whole item before anything is removed.
-        check_write_tree(self.guard(), source, None, cancel, SourceChange::Changed)?;
+        check_write_tree(
+            self.guard(),
+            source,
+            Some(selected.kind),
+            None,
+            cancel,
+            SourceChange::Changed,
+        )?;
         match removal {
             // XFER-014: the backend reports an error rather than falling
             // back to a permanent delete.
             Removal::Trash => source.trash(cancel),
             // XFER-015: reached only after the user confirmed a permanent
             // delete. The backend re-checks every item with the write guard.
-            Removal::PermanentDelete => source.delete_tree(cancel, self.guard()),
+            Removal::PermanentDelete => source.delete_tree_of_kind(selected.kind, cancel, self.guard()),
         }
     }
 
@@ -494,6 +506,7 @@ impl TransferEngine {
         check_write_tree(
             self.guard(),
             source,
+            None,
             Some(destination),
             batch.cancel,
             source_change,
