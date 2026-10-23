@@ -122,8 +122,9 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 * Fri Oct 23 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.8-1
 - OpenXplorer 2.0.8: Folder Options, Explorer's Ctrl+E, Ctrl+D, F11 and
   Alt+P, a Share button that emails the selected files, Delete to the
-  Recycle Bin wherever it works, no messages after file operations as in
-  Windows Explorer, and fixes for menus, dialogs, rename and copy errors.
+  Recycle Bin wherever it works, no message after a file operation that
+  succeeds or is cancelled, as in Windows Explorer (failures are still
+  reported), and fixes for menus, dialogs, rename and copy errors.
 
 * Fri Oct 23 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.7-1
 - OpenXplorer 2.0.7: other apps' Open and Save dialogs, GTK 3 apps'
