@@ -50,7 +50,7 @@ oo7 = { version = "0.6", default-features = false, features = ["async-std", "nat
 # C library is linked.
 flate2 = "1.1"
 bzip2 = "0.6"
-lzma-rust2 = { version = "0.22", default-features = false, features = ["std", "optimization", "xz", "encoder"] }
+lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "optimization", "xz", "encoder"] }
 # Zstandard decompression for .tar.zst archives (ARC-024), pure Rust like the
 # decoders above.
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }
