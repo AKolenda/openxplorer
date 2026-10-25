@@ -31,6 +31,7 @@ use std::path::{Component, Path, PathBuf};
 use rustix::fd::{AsFd, BorrowedFd, OwnedFd};
 use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat};
 
+use super::mounts::TrustedMounts;
 use super::report::{Record, Totals};
 use crate::i18n::{format_message, gettext};
 use crate::safe_walk::{mount_of, require_same_item, require_still_named, Mount};
@@ -44,6 +45,19 @@ pub(crate) type MountProbe = Box<dyn Fn(&Path, Mount) -> Mount>;
 /// Run just before each item is handled. Only a test installs one.
 pub(crate) type ItemHook = Box<dyn Fn(&Path)>;
 
+/// Decides whether a link or folder is on a mount a link may be
+/// followed on, given the path and what the mount table said. The real
+/// walk takes the mount table's word; a test makes one path's mount
+/// count as a stick, a FUSE filesystem or anything else a user can
+/// supply, without needing one.
+pub(crate) type MountTrustProbe = Box<dyn Fn(&Path, bool) -> bool>;
+
+/// The mount-trust probe of a real deletion: whatever the mount table
+/// says.
+pub(crate) fn mount_table_trust() -> MountTrustProbe {
+    Box::new(|_path, trusted| trusted)
+}
+
 /// The mount probe of a real deletion: whatever the kernel reports.
 pub(crate) fn kernel_mounts() -> MountProbe {
     Box::new(|_path, mount| mount)
@@ -51,7 +65,7 @@ pub(crate) fn kernel_mounts() -> MountProbe {
 
 /// How many symbolic links one resolution of the item's folder may
 /// follow before it is a loop or a deliberate pile.
-const MAX_LINK_HOPS: usize = 40;
+pub(super) const MAX_LINK_HOPS: usize = 40;
 
 /// Directory modes that let somebody other than the owner change what is
 /// in a folder: group write and other write. The sticky bit does not
@@ -62,21 +76,23 @@ const WRITABLE_BY_OTHERS: u32 = 0o022;
 /// Who may own a symbolic link, and the directories above it, for the
 /// walk to follow that link.
 ///
-/// Outside the tests this is root and nothing else: [`TrustedOwner::ROOT`]
-/// is the only value that can be built, because the constructor that
-/// takes a uid exists only under `cfg(test)`. A test needs it because an
-/// unprivileged process cannot create a root-owned link, so it trusts
-/// root and itself and builds the chain under its own home.
+/// Outside the tests this is root and nothing else, and a release build
+/// cannot widen it: the struct has no field at all unless `cfg(test)` is
+/// set, so there is nothing to set. A test needs the extra uid because
+/// an unprivileged process cannot create a root-owned link.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct TrustedOwner {
-    /// One further uid the tests trust. It is always `None` in a real
-    /// build: the only constructor that sets it is `cfg(test)`.
+    /// One further uid the tests trust.
+    #[cfg(test)]
     also: Option<u32>,
 }
 
 impl TrustedOwner {
     /// Root, and nobody else. This is what the helper always runs with.
-    pub(crate) const ROOT: Self = Self { also: None };
+    pub(crate) const ROOT: Self = Self {
+        #[cfg(test)]
+        also: None,
+    };
 
     /// Root and `uid`, for a test that cannot create a root-owned link.
     #[cfg(test)]
@@ -84,9 +100,16 @@ impl TrustedOwner {
         Self { also: Some(uid) }
     }
 
-    /// Whether something owned by `uid` is trusted.
+    /// Whether something owned by `uid` is trusted. A release build
+    /// reads nothing from `self`, because there is nothing in it: root
+    /// is the only answer.
+    #[cfg_attr(not(test), expect(clippy::unused_self, reason = "no field outside the tests"))]
     fn allows(self, uid: u32) -> bool {
-        uid == 0 || self.also == Some(uid)
+        #[cfg(test)]
+        if self.also == Some(uid) {
+            return true;
+        }
+        uid == 0
     }
 }
 
@@ -109,6 +132,9 @@ pub(crate) struct Options {
     /// Who may own a symbolic link on the way to the item, and the
     /// folders above it. Always [`TrustedOwner::ROOT`] in a real build.
     pub(crate) trusted: TrustedOwner,
+    /// How the walk learns whether a link may be followed on the mount
+    /// it is on.
+    pub(crate) mount_trust: MountTrustProbe,
 }
 
 impl Default for Options {
@@ -118,6 +144,7 @@ impl Default for Options {
             mounts: kernel_mounts(),
             at_item: None,
             trusted: TrustedOwner::ROOT,
+            mount_trust: mount_table_trust(),
         }
     }
 }
@@ -145,7 +172,7 @@ pub(crate) fn delete_tree(
     let name = check_target(target)?;
     // `check_target` refused a path without a parent, so the item has one.
     let parent_path = target.parent().unwrap_or(Path::new("/"));
-    let parent = ParentWalk::new(options.trusted).open(parent_path)?;
+    let parent = ParentWalk::new(options).open(parent_path)?;
     let mut walk = Walk {
         cancel,
         options,
@@ -339,16 +366,16 @@ impl Walk<'_> {
 /// because a normalised path is no longer the path the user confirmed.
 fn check_target(target: &Path) -> Result<&OsStr, TransferError> {
     // Split on the separator itself rather than with `Path::components`,
-    // which quietly drops a `.` and would let `/etc/.` through as `/etc`.
-    // Nothing a privileged helper is given is normalised: a path that is
-    // not already the item's own path is refused.
+    // which quietly drops a `.` and a trailing slash and would let
+    // `/etc/.` through as `/etc`. Nothing a privileged helper is given
+    // is normalised: a path that is not already the item's own path,
+    // byte for byte, is refused rather than guessed at.
     let raw = target.as_os_str().as_bytes();
-    let trimmed = raw.strip_suffix(b"/").unwrap_or(raw);
-    if trimmed.is_empty() {
+    if raw == b"/" {
         return Err(refusal(gettext("Filesystem roots cannot be deleted.")));
     }
-    let plain = trimmed.starts_with(b"/")
-        && trimmed
+    let plain = raw.starts_with(b"/")
+        && raw
             .split(|byte| *byte == b'/')
             .skip(1)
             .all(|part| !part.is_empty() && part != b"." && part != b"..");
@@ -362,49 +389,67 @@ fn check_target(target: &Path) -> Result<&OsStr, TransferError> {
         .ok_or_else(|| refusal(gettext("Filesystem roots cannot be deleted.")))
 }
 
-/// Flags for a descriptor that only anchors the `*at` calls below it:
-/// the helper never reads or writes through one.
-const ANCHOR: OFlags = OFlags::PATH.union(OFlags::DIRECTORY).union(OFlags::CLOEXEC);
+/// Flags for a descriptor that only anchors the `*at` calls below it,
+/// and names the object itself rather than what a link points at: the
+/// helper never reads or writes through one.
+const ANCHOR: OFlags = OFlags::PATH.union(OFlags::NOFOLLOW).union(OFlags::CLOEXEC);
 
 /// One resolution of the folder that holds the item being deleted.
 ///
-/// This is the step a privileged helper cannot take by path. Every
-/// component is opened relative to a descriptor the walk already holds,
-/// so nothing is resolved twice, and a symbolic link is followed only
-/// under the rule in [`ParentWalk::follow`].
-struct ParentWalk {
+/// This is the step a privileged helper cannot take by path. Each
+/// component is looked up exactly once, with one `openat` relative to a
+/// descriptor the walk already holds, and everything after that asks
+/// that descriptor rather than the name again. A symbolic link is
+/// followed only under the rule in [`ParentWalk::follow`].
+struct ParentWalk<'a> {
     /// Who may own a link, and the folders above it.
     trusted: TrustedOwner,
+    /// Which mounts a link may be followed on, read once and only when
+    /// a link is actually in the way.
+    mounts: Option<TrustedMounts>,
+    /// The test seam that overrides what the mount table said.
+    mount_trust: &'a MountTrustProbe,
     /// Links followed so far, across the whole resolution.
     hops: usize,
 }
 
 /// A folder the walk holds open, and what it knows about the way there.
 struct Reached {
-    /// The descriptor, which is what every further step resolves against.
+    /// The descriptor, which is what every further step resolves
+    /// against. The name it was opened under is never looked up again.
     folder: OwnedFd,
     /// The path walked so far. It is only ever shown to the user; the
     /// walk never resolves it again.
     path: PathBuf,
     /// Whether every folder opened on the way here, this one included,
-    /// is owned by a trusted user and writable by nobody else.
+    /// is one nobody but a trusted user could have changed: owned by a
+    /// trusted user, writable by nobody else, and on a mount only root
+    /// could have made ([`crate::admin_delete::mounts`]).
     ///
-    /// This is the invariant the whole rule rests on. Checking a link
-    /// with `fstatat` and then reading it with `readlinkat` is two
-    /// calls, so in general the name could be swapped in between — but
-    /// only by somebody who can write to the folder that holds it. When
-    /// every folder from `/` down is writable by the trusted user alone,
-    /// nobody else can have created the link, and nobody else can
-    /// replace it between the two calls either. The check and the read
-    /// then describe the same link, and following it cannot hand the
-    /// deletion to anyone.
+    /// This is the invariant the whole rule rests on, and it is what
+    /// makes following a link safe. The walk looks a component up once,
+    /// with `openat(…, O_PATH | O_NOFOLLOW)`, and then asks that
+    /// descriptor what it is, who owns it, which mount it is on and,
+    /// for a link, where it points (`readlinkat(fd, "")`). There is no
+    /// second lookup by name, so the object that was authorised and the
+    /// object that is read are the same object, whatever happens to the
+    /// name meanwhile. The flag then answers the remaining question: a
+    /// descriptor can only have been handed a link worth following if
+    /// nobody untrusted could have created that link in the first
+    /// place, which is what root-only-writable folders on a root-only
+    /// mount mean.
     trusted: bool,
 }
 
-impl ParentWalk {
-    /// A resolution that trusts links owned by `trusted`.
-    fn new(trusted: TrustedOwner) -> Self {
-        Self { trusted, hops: 0 }
+impl<'a> ParentWalk<'a> {
+    /// A resolution with the rules in `options`.
+    fn new(options: &'a Options) -> Self {
+        Self {
+            trusted: options.trusted,
+            mounts: None,
+            mount_trust: &options.mount_trust,
+            hops: 0,
+        }
     }
 
     /// Opens the absolute path `folder`, starting from `/`.
@@ -414,9 +459,10 @@ impl ParentWalk {
     }
 
     /// Opens `/`, where every resolution starts.
-    fn root(&self) -> Result<Reached, TransferError> {
+    fn root(&mut self) -> Result<Reached, TransferError> {
         let root = Path::new("/");
-        let folder = fs::open(root, ANCHOR, Mode::empty()).map_err(|errno| opening_failed(root, errno))?;
+        let folder = fs::open(root, ANCHOR | OFlags::DIRECTORY, Mode::empty())
+            .map_err(|errno| opening_failed(root, errno))?;
         let trusted = self.is_trusted(&folder, root)?;
         Ok(Reached {
             folder,
@@ -431,11 +477,7 @@ impl ParentWalk {
         for part in path.components() {
             reached = match part {
                 Component::Normal(name) => self.step(reached, name)?,
-                // A link's target may lead back up. `..` is resolved by
-                // the kernel against the descriptor, never by path, and
-                // it can only reach a folder this walk already opened
-                // and already judged.
-                Component::ParentDir => step_up(&reached)?,
+                Component::ParentDir => self.step_up(&reached)?,
                 Component::RootDir => self.root()?,
                 Component::CurDir | Component::Prefix(_) => reached,
             };
@@ -446,15 +488,33 @@ impl ParentWalk {
     /// Enters `name` inside the folder `at` holds open.
     fn step(&mut self, at: Reached, name: &OsStr) -> Result<Reached, TransferError> {
         let path = at.path.join(name);
-        let seen = fs::statat(&at.folder, name, AtFlags::SYMLINK_NOFOLLOW)
+        // The one lookup of this component. `O_PATH | O_NOFOLLOW` names
+        // the entry itself, link or folder, and nothing is read or
+        // written through it.
+        let entry = fs::openat(&at.folder, name, ANCHOR, Mode::empty())
             .map_err(|errno| opening_failed(&path, errno))?;
-        if FileType::from_raw_mode(seen.st_mode) == FileType::Symlink {
-            return self.follow(at, name, &path, seen.st_uid);
+        let seen = fs::fstat(&entry).map_err(|errno| opening_failed(&path, errno))?;
+        match FileType::from_raw_mode(seen.st_mode) {
+            FileType::Symlink => self.follow(at, &entry, &path, seen.st_uid),
+            FileType::Directory => {
+                let trusted = at.trusted && self.is_trusted(&entry, &path)?;
+                Ok(Reached {
+                    folder: entry,
+                    path,
+                    trusted,
+                })
+            }
+            // Everything on the way to the item has to be a folder.
+            _ => Err(not_a_folder_refusal(&path)),
         }
-        // `O_DIRECTORY` with `O_NOFOLLOW` also refuses a name that became
-        // a link after the check above, so the check only decides whether
-        // the link is followed, never whether one is followed by mistake.
-        let folder = fs::openat(&at.folder, name, ANCHOR | OFlags::NOFOLLOW, Mode::empty())
+    }
+
+    /// Goes up to the folder that holds the one `at` holds open. `..`
+    /// is resolved by the kernel against the descriptor, never by path,
+    /// and it is judged like any other folder the walk opens.
+    fn step_up(&mut self, at: &Reached) -> Result<Reached, TransferError> {
+        let path = at.path.parent().unwrap_or(Path::new("/")).to_path_buf();
+        let folder = fs::openat(&at.folder, "..", ANCHOR | OFlags::DIRECTORY, Mode::empty())
             .map_err(|errno| opening_failed(&path, errno))?;
         let trusted = at.trusted && self.is_trusted(&folder, &path)?;
         Ok(Reached {
@@ -464,17 +524,21 @@ impl ParentWalk {
         })
     }
 
-    /// Follows the symbolic link `name`, which `owner` owns, if and only
-    /// if nobody but a trusted user could have put it there.
+    /// Follows the symbolic link the descriptor `link` names, which
+    /// `owner` owns, if and only if nobody but a trusted user could
+    /// have put it there.
     fn follow(
         &mut self,
         at: Reached,
-        name: &OsStr,
+        link: &OwnedFd,
         path: &Path,
         owner: u32,
     ) -> Result<Reached, TransferError> {
         if !self.trusted.allows(owner) {
             return Err(untrusted_link_refusal(path));
+        }
+        if !self.is_on_a_trusted_mount(link, path)? {
+            return Err(supplied_mount_refusal(path));
         }
         if !at.trusted {
             return Err(reachable_link_refusal(path, &at.path));
@@ -483,8 +547,9 @@ impl ParentWalk {
         if self.hops > MAX_LINK_HOPS {
             return Err(too_many_links_refusal(path));
         }
-        let target =
-            fs::readlinkat(&at.folder, name, Vec::new()).map_err(|errno| opening_failed(path, errno))?;
+        // Read from the descriptor, not from the name: this is the same
+        // object the checks above were about.
+        let target = fs::readlinkat(link, "", Vec::new()).map_err(|errno| opening_failed(path, errno))?;
         let target = PathBuf::from(OsString::from_vec(target.into_bytes()));
         // An absolute target starts again at `/`; a relative one carries
         // on from the folder that holds the link, with what the walk
@@ -495,31 +560,29 @@ impl ParentWalk {
         self.descend(from, &target)
     }
 
-    /// Whether `folder` is owned by a trusted user and writable by
-    /// nobody else.
-    fn is_trusted(&self, folder: &OwnedFd, path: &Path) -> Result<bool, TransferError> {
-        let status = fs::fstat(folder).map_err(|errno| opening_failed(path, errno))?;
-        Ok(self.trusted.allows(status.st_uid) && status.st_mode & WRITABLE_BY_OTHERS == 0)
+    /// Whether the folder `entry` names is one nobody but a trusted
+    /// user could have changed.
+    fn is_trusted(&mut self, entry: &OwnedFd, path: &Path) -> Result<bool, TransferError> {
+        let status = fs::fstat(entry).map_err(|errno| opening_failed(path, errno))?;
+        if !self.trusted.allows(status.st_uid) || status.st_mode & WRITABLE_BY_OTHERS != 0 {
+            return Ok(false);
+        }
+        self.is_on_a_trusted_mount(entry, path)
     }
-}
 
-/// Goes up to the folder that holds the one `at` holds open. `..` is
-/// resolved by the kernel against the descriptor, never by path, and it
-/// can only reach a folder the walk already opened and already judged.
-fn step_up(at: &Reached) -> Result<Reached, TransferError> {
-    let path = at.path.parent().unwrap_or(Path::new("/")).to_path_buf();
-    let folder =
-        fs::openat(&at.folder, "..", ANCHOR, Mode::empty()).map_err(|errno| opening_failed(&path, errno))?;
-    Ok(Reached {
-        folder,
-        path,
-        trusted: at.trusted,
-    })
+    /// Whether `entry` sits on a mount only root could have made. Owner
+    /// and mode are only worth reading when the filesystem reporting
+    /// them is not one a user supplied.
+    fn is_on_a_trusted_mount(&mut self, entry: &OwnedFd, path: &Path) -> Result<bool, TransferError> {
+        let mount = mount_of(entry.as_fd(), c"", AtFlags::EMPTY_PATH)?;
+        let mounts = self.mounts.get_or_insert_with(TrustedMounts::read);
+        Ok((self.mount_trust)(path, mounts.allows_links_on(mount.id)))
+    }
 }
 
 /// The refusal for a link on the item's path that the administrator does
 /// not own.
-fn untrusted_link_refusal(path: &Path) -> TransferError {
+pub(super) fn untrusted_link_refusal(path: &Path) -> TransferError {
     refusal(format_message(
         "{path} is a shortcut (a symbolic link) that the administrator does not own. An \
          administrator deletion follows one only when nobody else could have created it, \
@@ -529,9 +592,21 @@ fn untrusted_link_refusal(path: &Path) -> TransferError {
     ))
 }
 
+/// The refusal for a link on a drive, share or filesystem a user can
+/// supply, where owner and mode say only what that filesystem claims.
+pub(super) fn supplied_mount_refusal(path: &Path) -> TransferError {
+    refusal(format_message(
+        "{path} is a shortcut (a symbolic link) on a drive, share or folder that somebody \
+         other than the administrator could have provided, so what it says about itself \
+         cannot be relied on. An administrator deletion does not follow one. Open the folder \
+         it leads to and delete the item there. Deleting items on that drive still works.",
+        &[("path", &path.display().to_string())],
+    ))
+}
+
 /// The refusal for a link that somebody other than the administrator
 /// could replace, because a folder above it is writable by others.
-fn reachable_link_refusal(path: &Path, folder: &Path) -> TransferError {
+pub(super) fn reachable_link_refusal(path: &Path, folder: &Path) -> TransferError {
     refusal(format_message(
         "{path} is a shortcut (a symbolic link) inside {folder}, which other users can \
          change. An administrator deletion does not follow a shortcut anyone could replace \
@@ -544,7 +619,7 @@ fn reachable_link_refusal(path: &Path, folder: &Path) -> TransferError {
 }
 
 /// The refusal for a path that leads through one shortcut after another.
-fn too_many_links_refusal(path: &Path) -> TransferError {
+pub(super) fn too_many_links_refusal(path: &Path) -> TransferError {
     refusal(format_message(
         "The path to {path} leads through more than {limit} shortcuts (symbolic links), so it \
          may be a loop. Nothing was deleted.",
@@ -552,6 +627,14 @@ fn too_many_links_refusal(path: &Path) -> TransferError {
             ("path", &path.display().to_string()),
             ("limit", &MAX_LINK_HOPS.to_string()),
         ],
+    ))
+}
+
+/// The refusal for something on the way to the item that is not a folder.
+pub(super) fn not_a_folder_refusal(path: &Path) -> TransferError {
+    refusal(format_message(
+        "{path} is not a folder, so the item said to be inside it cannot be deleted.",
+        &[("path", &path.display().to_string())],
     ))
 }
 
@@ -577,4 +660,50 @@ pub(crate) fn mount_point_refusal(path: &Path) -> TransferError {
 /// A refusal made before anything was deleted.
 fn refusal(message: String) -> TransferError {
     TransferError::failed(message)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+    use crate::test_support::temporary_folder;
+
+    /// Opens `path` the way the walk does, so its trust can be asked.
+    fn anchor(path: &Path) -> OwnedFd {
+        fs::open(path, ANCHOR | OFlags::DIRECTORY, Mode::empty()).expect("the folder is opened")
+    }
+
+    /// Both halves of the owner-and-mode test, each on its own: a folder
+    /// is trusted only while a trusted user owns it and nobody else can
+    /// change it. The mount half has its own tests in `super::mounts`,
+    /// and is held out of the way here.
+    ///
+    /// parity: XFER-015
+    #[test]
+    fn a_folder_is_trusted_only_while_a_trusted_user_alone_can_change_it() {
+        let folder = temporary_folder();
+        let path = folder.path();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("the mode is set");
+        let mine = rustix::process::getuid().as_raw();
+        let ask = |trusted: TrustedOwner| {
+            let options = Options {
+                trusted,
+                mount_trust: Box::new(|_path, _trusted| true),
+                ..Options::default()
+            };
+            ParentWalk::new(&options)
+                .is_trusted(&anchor(path), path)
+                .expect("the folder can be inspected")
+        };
+
+        let owned_by_a_trusted_user = ask(TrustedOwner::root_and(mine));
+        let owned_by_somebody_else = ask(TrustedOwner::ROOT);
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o775)).expect("the mode is set");
+        let group_writable = ask(TrustedOwner::root_and(mine));
+
+        assert!(owned_by_a_trusted_user);
+        assert!(!owned_by_somebody_else, "the owner is not one the walk trusts");
+        assert!(!group_writable, "somebody in the group can change it");
+    }
 }

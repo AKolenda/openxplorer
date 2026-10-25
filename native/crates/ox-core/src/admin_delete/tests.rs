@@ -288,10 +288,9 @@ fn a_link_in_the_folders_above_the_item_is_refused_rather_than_followed() {
 
     let (result, reported) = delete(&through_a_link);
 
-    let message = result.expect_err("the link in the path is refused").to_string();
-    assert!(
-        message.contains(&root.path().join("link").display().to_string()),
-        "the refusal does not name the link: {message}"
+    assert_eq!(
+        result,
+        Err(super::walk::untrusted_link_refusal(&root.path().join("link")))
     );
     assert!(reported.records.is_empty(), "{:?}", reported.records);
     assert_eq!(

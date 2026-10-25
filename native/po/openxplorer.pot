@@ -6207,7 +6207,17 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is a shortcut (a symbolic link) on a drive, share or folder that somebody other than the administrator could have provided, so what it says about itself cannot be relied on. An administrator deletion does not follow one. Open the folder it leads to and delete the item there. Deleting items on that drive still works."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
 msgid "{path} is a shortcut (a symbolic link) that the administrator does not own. An administrator deletion follows one only when nobody else could have created it, because a shortcut someone else controls could point anywhere. Open the folder it leads to and delete the item there."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/admin_delete/walk.rs
+msgid "{path} is not a folder, so the item said to be inside it cannot be deleted."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
