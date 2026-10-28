@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Windows 11's View > Show > Item check boxes (SEL-014), here View >
 //! Item check boxes and Settings > Item check boxes: one choice, saved,
-//! that every window follows. On by default, as in Windows 11.
+//! that every window follows. Off by default, so a selected item is only
+//! highlighted; Windows 11 has them on.
 //!
 //! The check boxes are the folder views' (`folder_view/cells/item_check.rs`
 //! and `folder_view/details/select_all.rs`); this is the toggle. The
