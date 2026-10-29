@@ -10,6 +10,8 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Language: zh_CN\n"
 "Language-Team: Simplified Chinese\n"
+"Last-Translator: Clansty <clansty@users.noreply.github.com>\n"
+"PO-Revision-Date: 2026-10-30\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #: crates/ox-app/resources/manual.md
@@ -3212,7 +3214,6 @@ msgstr "没有匹配的设置"
 msgid "{count} matching setting"
 msgid_plural "{count} matching settings"
 msgstr[0] "{count} 个匹配的设置"
-msgstr[1] "{count} 个匹配的设置"
 
 #: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/history_menu.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Home"
@@ -5418,7 +5419,6 @@ msgstr "就绪"
 msgid "{count} item"
 msgid_plural "{count} items"
 msgstr[0] "{count} 个项目"
-msgstr[1] "{count} 个项目"
 
 #: crates/ox-app/src/window/stop_listing.rs
 msgid "Stopped. Some items may be missing; press F5 to list the folder again."
@@ -5572,7 +5572,6 @@ msgstr "{value1} 分钟"
 msgid "1 link or special file inside was left out."
 msgid_plural "{count} links or special files inside were left out."
 msgstr[0] "其中有 {count} 个链接或特殊文件被略过。"
-msgstr[1] "其中有 {count} 个链接或特殊文件被略过。"
 
 #: crates/ox-app/src/window/zip_copies.rs
 msgid "Copy items from one ZIP at a time."
@@ -7550,19 +7549,16 @@ msgstr "目标位置不是文件夹。"
 msgid "1 item appeared in the source during the move and was"
 msgid_plural "{count} items appeared in the source during the move and were"
 msgstr[0] "{count} 个项目在移动期间出现在源位置，已"
-msgstr[1] "{count} 个项目在移动期间出现在源位置，已"
 
 #: crates/ox-core/src/transfer/source_removal.rs
 msgid "1 item changed during the move and was"
 msgid_plural "{count} items changed during the move and were"
 msgstr[0] "{count} 个项目在移动期间发生了更改，已"
-msgstr[1] "{count} 个项目在移动期间发生了更改，已"
 
 #: crates/ox-core/src/transfer/source_removal.rs
 msgid "1 item could not be moved and was"
 msgid_plural "{count} items could not be moved and were"
 msgstr[0] "{count} 个项目无法移动，已"
-msgstr[1] "{count} 个项目无法移动，已"
 
 #: crates/ox-core/src/transfer/source_removal.rs
 msgid "{items} kept at {location}."
