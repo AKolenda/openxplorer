@@ -4,7 +4,8 @@
 //!
 //! As in Explorer and Dolphin, the field starts with a file's name before
 //! its extension selected, or a folder's whole name. Enter or moving focus
-//! away commits; Escape cancels. The name is checked with the Python Rename
+//! away commits; Escape cancels. The field's own right-click menu and
+//! switching to another window keep the rename going. The name is checked with the Python Rename
 //! dialog's rules and messages (`validateName`, then the backend's); a
 //! refusal, such as a taken name, shows in the toast and editing goes on,
 //! so the typed name is not lost. While the rename runs the field is
@@ -113,7 +114,17 @@ impl BrowserWindow {
                     editor,
                     #[strong]
                     target,
-                    move || window.commit_name(&cell, &editor, &target)
+                    move || {
+                        // GTK also says focus left when the field's own
+                        // right-click menu gives it back, and when the
+                        // window goes to the background; the keyboard is
+                        // still in the field then, and editing goes on, as
+                        // in Explorer.
+                        let focus = editor.root().and_then(|root| root.focus());
+                        if !focus.is_some_and(|focus| focus.is_ancestor(&editor)) {
+                            window.commit_name(&cell, &editor, &target);
+                        }
+                    }
                 ));
             }
         ));

@@ -3,7 +3,8 @@
 //! has a check box that is checked while it is selected and selects or
 //! deselects it alone; it shows while its row or tile is hovered or
 //! selected; the Details header has one that selects all or none; and
-//! View > Item check boxes turns them all off, saved for every window.
+//! View > Item check boxes turns them all on or off, saved for every
+//! window. They are off by default, so the tests below turn them on.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -13,6 +14,15 @@ use super::geometry::laid_out;
 use super::icons::pixel_rows;
 use crate::folder_view::cells::FileCell;
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
+
+/// `test` with item check boxes turned on through View > Item check
+/// boxes, once the window has laid them out.
+fn with_check_boxes(test: TestWindow) -> TestWindow {
+    test.activate("item-check-boxes", None);
+    assert_eq!(toggle_is_on(&test), Some(true));
+    wait_for_frames(&test.window, 3);
+    test
+}
 
 /// The selected positions, in order.
 fn selected(test: &TestWindow) -> Vec<u32> {
@@ -101,7 +111,7 @@ fn click(check: &gtk::CheckButton) {
 #[gtk::test]
 fn an_item_check_box_selects_its_item_alone() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
+    let test = with_check_boxes(TestWindow::open(&fixture.uri()));
     let pane = test.window.folder_pane();
     pane.model().select_only(1);
     let check = cell_at(&test, 2).item_check();
@@ -141,7 +151,7 @@ fn an_item_check_box_selects_its_item_alone() {
 #[gtk::test]
 fn an_item_check_box_shows_on_hover_and_while_selected() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = with_check_boxes(laid_out(&fixture.uri()));
     test.window.hold_ctrl(true);
     for view in ["details", "large"] {
         test.activate("view", Some(view));
@@ -183,7 +193,7 @@ fn an_item_check_box_shows_on_hover_and_while_selected() {
 #[gtk::test]
 fn the_header_check_box_selects_all_or_none() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
+    let test = with_check_boxes(TestWindow::open(&fixture.uri()));
     let pane = test.window.folder_pane();
     let model = pane.model();
     let check = pane.details().select_all_check().expect("a select-all box");
@@ -218,15 +228,21 @@ fn the_header_check_box_selects_all_or_none() {
     assert!(selected(&test).is_empty());
 }
 
-/// View > Item check boxes turns every box off, the header's too, so they
-/// take no room, and saves the choice; turned on again, they are back.
+/// Item check boxes are off by default, as the owner asked: a selected
+/// item is only highlighted. View > Item check boxes gives every item its
+/// box, and the header its select-all box, and saves the choice; turned
+/// off again, they take no room.
 ///
 /// parity: SEL-014
 #[gtk::test]
-fn view_item_check_boxes_turns_them_off_and_is_saved() {
+fn view_item_check_boxes_are_off_by_default_and_turn_on_and_off() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    assert_eq!(toggle_is_on(&test), Some(true), "on by default, as in Windows 11");
+    assert_eq!(
+        toggle_is_on(&test),
+        Some(false),
+        "off by default: a selected item is only highlighted"
+    );
     let cell = cell_at(&test, 1);
     let header = test
         .window
@@ -234,18 +250,19 @@ fn view_item_check_boxes_turns_them_off_and_is_saved() {
         .details()
         .select_all_check()
         .expect("a select-all box");
-
-    test.activate("item-check-boxes", None);
-    assert_eq!(toggle_is_on(&test), Some(false));
     assert!(!cell.item_check().is_visible() && !header.is_visible());
-    wait_until("the choice to be saved", || {
-        !test.context.settings_data().preferences.selection_marker
-    });
 
     test.activate("item-check-boxes", None);
+    assert_eq!(toggle_is_on(&test), Some(true));
     assert!(cell.item_check().is_visible() && header.is_visible());
     wait_until("the choice to be saved", || {
         test.context.settings_data().preferences.selection_marker
+    });
+
+    test.activate("item-check-boxes", None);
+    assert!(!cell.item_check().is_visible() && !header.is_visible());
+    wait_until("the choice to be saved", || {
+        !test.context.settings_data().preferences.selection_marker
     });
 }
 
@@ -271,7 +288,7 @@ fn press_hits_check(cell: &FileCell) -> bool {
 #[gtk::test]
 fn a_hovered_item_check_box_waits_for_ctrl() {
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = with_check_boxes(laid_out(&fixture.uri()));
     assert!(
         test.context.settings_data().preferences.item_checks_on_ctrl,
         "on by default"
@@ -314,7 +331,7 @@ fn a_hovered_item_check_box_waits_for_ctrl() {
 #[gtk::test]
 fn item_check_boxes_turned_off_elsewhere_go_at_once() {
     let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
+    let test = with_check_boxes(TestWindow::open(&fixture.uri()));
     let cell = cell_at(&test, 1);
     let off = PreferencesUpdate {
         selection_marker: Some(false),
@@ -338,7 +355,7 @@ fn a_click_just_outside_the_box_still_hits_it() {
     /// How far the box reaches past what it draws (folder-views.css).
     const REACH: f32 = 4.0;
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = with_check_boxes(laid_out(&fixture.uri()));
     test.window.hold_ctrl(true);
     let cell = cell_at(&test, 2);
     let check = cell.item_check();
@@ -385,7 +402,7 @@ fn a_checked_box_is_filled_solid_with_the_accent() {
     /// `ox_accent` in resources/light.css (C14).
     const ACCENT: [u8; 3] = [0x00, 0x67, 0xc0];
     let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
+    let test = with_check_boxes(laid_out(&fixture.uri()));
     test.window.folder_pane().model().select_only(2);
     let check = cell_at(&test, 2).item_check();
     wait_for_frames(&test.window, 3);

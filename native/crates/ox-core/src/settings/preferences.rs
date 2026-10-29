@@ -385,9 +385,12 @@ pub struct Preferences {
     /// without it gets the new default.
     #[serde(skip_serializing_if = "is_true")]
     pub per_folder_views: bool,
-    /// Hovering an item shows the marker that adds it to the selection or
-    /// takes it out (Dolphin's `ShowSelectionToggle`). Stored only when off.
-    #[serde(skip_serializing_if = "is_true")]
+    /// Each item has a check box that adds it to the selection or takes
+    /// it out (Windows' item check boxes). Off by default, so a selected
+    /// item is only highlighted; stored only when on. Before, it was on by
+    /// default and stored only when off, so a file without it gets the new
+    /// default.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub selection_marker: bool,
     /// The item check boxes show only while Ctrl is held, as a selection
     /// aid for Ctrl+click, rather than on every hovered item. On by
@@ -480,7 +483,7 @@ impl Default for Preferences {
             folder_tree: FolderTreeOptions::default(),
             absolute_dates: false,
             per_folder_views: true,
-            selection_marker: true,
+            selection_marker: false,
             item_checks_on_ctrl: true,
             expandable_folders: true,
             compact_density: false,

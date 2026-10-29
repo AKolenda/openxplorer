@@ -210,6 +210,50 @@ fn activating_the_other_pane_cancels_a_pending_slow_click_rename() {
     );
 }
 
+/// The field's own right-click menu takes the keyboard and gives it back,
+/// and GTK then says focus left the field: editing goes on with the typed
+/// name, and the name is saved only when focus really moves away.
+///
+/// parity: OPS-010
+#[gtk::test]
+fn the_name_fields_own_menu_keeps_the_rename_going() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+    field.set_text("Plans.txt");
+    let text = descendants::<gtk::Text>(&field)
+        .into_iter()
+        .next()
+        .expect("the field edits in a text");
+    let has_keyboard = || gtk::prelude::RootExt::focus(&test.window).is_some_and(|focus| focus == text);
+    wait_until("the field to take the keyboard", has_keyboard);
+
+    text.activate_action("menu.popup", None)
+        .expect("the text has its menu");
+    let menu = || {
+        descendants::<gtk::PopoverMenu>(&text)
+            .into_iter()
+            .find(WidgetExt::is_visible)
+    };
+    wait_until("the field's menu to open", || menu().is_some());
+    menu().expect("the menu is open").popdown();
+    text.activate_action("selection.select-all", None)
+        .expect("the text selects all");
+    wait_until("the keyboard to come back", has_keyboard);
+    wait_for(Duration::from_millis(300));
+
+    assert!(is_renaming_in_place(&test), "editing goes on");
+    assert_eq!(field.text(), "Plans.txt");
+    assert!(fixture.path("Notes 2.txt").is_file());
+    test.window.folder_pane().focus_view();
+    wait_until("the typed name to be saved", || {
+        fixture.path("Plans.txt").is_file()
+    });
+    assert!(!is_renaming_in_place(&test));
+}
+
 /// parity: OPS-012
 #[gtk::test]
 fn tab_commits_the_name_and_goes_on_to_rename_the_next_item() {
