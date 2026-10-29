@@ -16,6 +16,19 @@ pub(crate) const APP_ID: &str = env!("OX_APP_ID");
 /// so it runs beside the stable app (`openxplorer-native`).
 pub(crate) const IS_PREVIEW: bool = ends_with(APP_ID, ".Native");
 
+/// The gettext domain of this build's catalogues (ox_core's `i18n`): each
+/// channel is its own domain, named after its package, so a machine with
+/// both packages installed has one catalogue each instead of one file
+/// both packages own, which no package format allows. The packages name
+/// the catalogue from the same channel (native/tools/package_data.py).
+pub(crate) const I18N_DOMAIN: &str = if IS_PREVIEW { PREVIEW_DOMAIN } else { STABLE_DOMAIN };
+
+/// The preview's catalogue, beside the stable app's.
+const PREVIEW_DOMAIN: &str = "openxplorer-native";
+
+/// The stable app's catalogue, whose template is `native/po/openxplorer.pot`.
+const STABLE_DOMAIN: &str = "openxplorer";
+
 /// What this build is called in the status bar, About this build and the
 /// About settings (`#status-mode` in `v2.0.0:desktop/ui/app.js`): the product and
 /// its version, and "native preview" in the preview.
