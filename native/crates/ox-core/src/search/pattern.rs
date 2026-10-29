@@ -10,6 +10,11 @@
 //! stands for any text, `?` for one character, and `[a-c]` or `[!a-c]`
 //! for one character in or outside a set; a `[` without its `]` is a
 //! plain character.
+//!
+//! A plain word must be found starting before the name's extension, or be
+//! the whole extension: `pd - m5753` finds `PD - M5753RA.pdf` but not
+//! `WO - M5753.pdf`, whose only `pd` is in `.pdf`, while `pdf`, `.pdf`
+//! and `66873.pdf` still find PDF files.
 
 /// The characters that make a word a wildcard pattern.
 const WILDCARDS: [char; 3] = ['*', '?', '['];
@@ -57,9 +62,37 @@ impl NamePattern {
             if is_wildcard(word) {
                 wildcard_matches(word, lowercase_name)
             } else {
-                lowercase_name.contains(word.as_str()) || lowercase_context.contains(word.as_str())
+                word_in_name(word, lowercase_name) || lowercase_context.contains(word.as_str())
             }
         })
+    }
+}
+
+/// The longest extension: `.docx`, `.jpeg` and `.tar` count, while the
+/// end of `Notes v2.final draft` does not.
+const MAX_EXTENSION_CHARS: usize = 8;
+
+/// Where the extension of `lowercase_name` starts, after its last dot:
+/// up to [`MAX_EXTENSION_CHARS`] characters holding a letter and no
+/// space. `None` when the name has none, as `.bashrc` and `v1.2` do not.
+fn extension_start(lowercase_name: &str) -> Option<usize> {
+    let dot = lowercase_name.rfind('.').filter(|&dot| dot > 0)?;
+    let extension = &lowercase_name[dot + 1..];
+    let is_extension = (1..=MAX_EXTENSION_CHARS).contains(&extension.chars().count())
+        && extension.chars().any(char::is_alphabetic)
+        && !extension.chars().any(char::is_whitespace);
+    is_extension.then_some(dot + 1)
+}
+
+/// Whether the plain `word` is in `lowercase_name`, starting before its
+/// extension, or is the whole extension.
+pub(crate) fn word_in_name(word: &str, lowercase_name: &str) -> bool {
+    let Some(first) = lowercase_name.find(word) else {
+        return false;
+    };
+    match extension_start(lowercase_name) {
+        Some(extension) => first < extension || lowercase_name[extension..] == *word,
+        None => true,
     }
 }
 
@@ -176,6 +209,27 @@ mod tests {
         let words = NamePattern::new("  Report  2026 ");
         assert!(words.matches("quarterly report 2026.docx"));
         assert!(!words.matches("quarterly report 2025.docx"));
+    }
+
+    /// A word found only inside the extension does not match, so the
+    /// `pd` of `pd - m5753` does not find every PDF.
+    ///
+    /// parity: SRCH-004
+    #[test]
+    fn a_word_inside_the_extension_alone_does_not_match() {
+        let pattern = NamePattern::new("pd - m5753");
+        assert!(pattern.matches("PD - M5753RA - 66873.pdf"));
+        assert!(!pattern.matches("WO - TM - M5753 - 66873.pdf"));
+        assert!(!pattern.matches("DOC - M5753RA - M6069RA - 66873.pdf"));
+        assert!(!pattern.matches("MTR - M5753 - 66873 - CC09-24-26.pdf"));
+        for word in ["pdf", ".pdf", "66873.pdf", "873.p"] {
+            assert!(NamePattern::new(word).matches("WO - M5753 - 66873.pdf"), "{word}");
+        }
+        assert!(!NamePattern::new("df").matches("WO - M5753 - 66873.pdf"));
+        // Not extensions: the words are found anywhere.
+        assert!(NamePattern::new("draft").matches("Notes v2.final draft"));
+        assert!(NamePattern::new("2").matches("v1.2"));
+        assert!(NamePattern::new("bash").matches(".bashrc"));
     }
 
     #[test]

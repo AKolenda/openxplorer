@@ -13,7 +13,7 @@ use rusqlite::{Connection, Row};
 
 use super::error::{check_cancelled, SearchError};
 use super::index::SearchIndex;
-use super::pattern::{is_wildcard, wildcard_matches};
+use super::pattern::{is_wildcard, wildcard_matches, word_in_name};
 use super::root::{HiddenItems, RootStatus, SearchEngine};
 use super::text::{display_path, fold, folder_prefix, whole_seconds};
 use crate::entry::EntryKind;
@@ -151,6 +151,7 @@ impl SearchIndex {
         let plan = QueryPlan::new(&words, scope.as_deref(), query.hidden_items, self.engine(), limit);
         let connection = self.connect()?;
         add_name_pattern_function(&connection)?;
+        add_name_word_function(&connection)?;
         let mut hits = run_cancellable(&connection, &plan, cancellable)?;
         let is_truncated = hits.len() > limit;
         hits.truncate(limit);
@@ -215,7 +216,12 @@ impl QueryPlan {
                 conditions.push(format!("{NAME_PATTERN_FUNCTION}(?, e.name)"));
                 plan.values.push(Value::Text(word.clone()));
             } else {
-                conditions.push("instr(e.search_text, ?)>0".to_owned());
+                // The folder may hold the word; in the name, the word
+                // must not be found only in the extension.
+                conditions.push(format!(
+                    "instr(e.search_text, ?)>0 AND {NAME_WORD_FUNCTION}(?, e.name, e.parent)"
+                ));
+                plan.values.push(Value::Text(word.clone()));
                 plan.values.push(Value::Text(word.clone()));
             }
         }
@@ -284,6 +290,23 @@ fn add_name_pattern_function(connection: &Connection) -> rusqlite::Result<()> {
         let word = context.get_raw(0).as_str().unwrap_or_default();
         let name = context.get_raw(1).as_str().unwrap_or_default();
         Ok(wildcard_matches(word, &fold(name)))
+    })
+}
+
+/// The SQL function that tells whether a plain word is in a name, by the
+/// folder's filter rules, or in the folder that holds it (SRCH-008).
+const NAME_WORD_FUNCTION: &str = "ox_word_matches";
+
+/// Adds [`NAME_WORD_FUNCTION`] to `connection`: whether the folded word is
+/// in the folded name, not only in its extension, or in the folded path of
+/// the parent folder, as `search_text` holds it.
+fn add_name_word_function(connection: &Connection) -> rusqlite::Result<()> {
+    let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
+    connection.create_scalar_function(NAME_WORD_FUNCTION, 3, flags, |context| {
+        let word = context.get_raw(0).as_str().unwrap_or_default();
+        let name = context.get_raw(1).as_str().unwrap_or_default();
+        let parent = context.get_raw(2).as_str().unwrap_or_default();
+        Ok(word_in_name(word, &fold(name)) || fold(&display_path(parent)).contains(word))
     })
 }
 
@@ -605,6 +628,23 @@ mod tests {
         assert_eq!(share.found_names("y"), ["xy-report.pdf"]);
         assert_eq!(share.found_names("y-r"), ["xy-report.pdf"]);
         assert_eq!(share.found_names("port.p"), ["xy-report.pdf"]);
+    }
+
+    /// A word found only in a name's extension does not find it, as in the
+    /// folder's filter; the folder that holds it still may.
+    ///
+    /// parity: SRCH-004, SRCH-008
+    #[test]
+    fn a_word_inside_the_extension_alone_finds_nothing() {
+        let share = ScannedShare::new();
+        share.store(&[
+            listed_file(SHARE, "PD - M5753RA - 66873.pdf"),
+            listed_file(SHARE, "WO - TM - M5753 - 66873.pdf"),
+        ]);
+
+        assert_eq!(share.found_names("pd - m5753"), ["PD - M5753RA - 66873.pdf"]);
+        assert_eq!(share.found_names("pdf m5753").len(), 2);
+        assert_eq!(share.found_names("df"), Vec::<String>::new());
     }
 
     /// parity: SRCH-017
