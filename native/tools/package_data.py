@@ -89,6 +89,17 @@ class Channel(enum.Enum):
         """True for the stable app, which also takes over the Python package's commands."""
         return self is Channel.STABLE
 
+    @property
+    def domain(self) -> str:
+        """The gettext domain of this channel's catalogue: its package name.
+
+        Both channels install into the same `share/locale` folder, and no
+        package format lets two packages own one file, so each keeps its own
+        domain; the program searches for the one its build chose (ox-app's
+        `I18N_DOMAIN` in crates/ox-app/src/config.rs).
+        """
+        return self.package
+
 
 class Layout(enum.Enum):
     """Where a package format installs the program and its helpers."""
@@ -218,7 +229,7 @@ def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
     staging = Staging(request.staging)
     install_program(staging, request.program, paths)
     install_desktop_data(staging, request.channel, paths)
-    install_translations(staging, paths.share)
+    install_translations(staging, paths.share, request.channel.domain)
     install_licences(staging, paths.licences)
     install_crate_licences(staging, paths.licences / 'rust-crates', crates)
     if paths.mount_helper is not None:
@@ -269,10 +280,14 @@ def build_portal_file(app_id: str) -> str:
     return template.replace('@APP_ID@', app_id)
 
 
-def install_translations(staging: Staging, share: PurePosixPath) -> None:
-    """Install each translation in native/po compiled, where ox_core::i18n looks for it."""
+def install_translations(staging: Staging, share: PurePosixPath, domain: str) -> None:
+    """Install each translation in native/po compiled, where ox_core::i18n looks for it.
+
+    domain names the catalogue (`<domain>.mo`), so one channel's package never
+    writes the file the other's owns.
+    """
     for po in sorted(i18n.PO_FOLDER.glob('*.po')):
-        catalogue = share / 'locale' / po.stem / 'LC_MESSAGES' / f'{i18n.DOMAIN}.mo'
+        catalogue = share / 'locale' / po.stem / 'LC_MESSAGES' / f'{domain}.mo'
         target = staging.path_of(catalogue)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(i18n.mo_bytes(i18n.parse_po(po.read_text(encoding='utf-8'))))

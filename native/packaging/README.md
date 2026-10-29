@@ -59,7 +59,7 @@ never takes over the Python app's name. Every package build sets it.
 | Portal backend file | `/usr/share/xdg-desktop-portal/portals/<id>.portal` | same | none |
 | Licences | `/usr/share/doc/<command>/` | `/usr/share/licenses/<command>/` | `/app/share/licenses/<id>/` |
 | Mount helper (stable) | `/opt/openxplorer/bin/openxplorer-mount-share`, linked from `/usr/bin` | `/usr/bin/openxplorer-mount-share` | none |
-| Translations | `/usr/share/locale/<lang>/LC_MESSAGES/openxplorer.mo` | same | under `/app/share` |
+| Translations | `/usr/share/locale/<lang>/LC_MESSAGES/<package>.mo` | same | under `/app/share` |
 
 - **Program folder.** The Debian program lives in `/opt/openxplorer/bin`
   because the in-app updater allows installing updates only for that folder
@@ -89,7 +89,17 @@ never takes over the Python app's name. Every package build sets it.
   `python3 native/tools/i18n.py extract` updates. The same catalogue supplies
   translated desktop-entry labels and AppStream descriptions at staging time;
   unqualified English text remains the fallback. Commands, icons, application
-  IDs and licence identifiers are not translated. No translation ships yet.
+  IDs and licence identifiers are not translated. Today it ships a Simplified
+  Chinese (`zh_CN`) translation; a missing catalogue leaves the interface in
+  English.
+- **Catalogue names.** The catalogue is the gettext domain plus `.mo`, and each
+  channel's domain is its package name: `openxplorer.mo` for the stable app and
+  `openxplorer-native.mo` for the preview. Both packages install into the same
+  `/usr/share/locale`, and dpkg and RPM refuse a file that two packages own, so
+  a shared name would stop a machine with the preview installed from installing
+  the stable package. The program asks for the domain of the channel it was
+  built for (`I18N_DOMAIN` in `crates/ox-app/src/config.rs`), and
+  `package_data.py` names the file from the same channel.
 
 ## Desktop integration data
 
