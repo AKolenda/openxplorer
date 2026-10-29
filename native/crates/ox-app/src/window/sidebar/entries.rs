@@ -244,7 +244,7 @@ fn network_entry(location: &NetworkLocation, locations: &LocationContext) -> Sid
 
 /// A top-level row with a coloured glyph: Home, This PC or Network, in
 /// the colours of the `add(...)` calls in `renderSidebar`.
-fn fixed_entry(section: Section, label: &str, icon: Art, uri: &str) -> SidebarEntry {
+fn fixed_entry(section: Section, label: &'static str, icon: Art, uri: &str) -> SidebarEntry {
     let level = if matches!(section, Section::Home | Section::RecentAndBin) {
         RowLevel::Place
     } else {
@@ -253,10 +253,10 @@ fn fixed_entry(section: Section, label: &str, icon: Art, uri: &str) -> SidebarEn
     SidebarEntry {
         section,
         level,
-        label: label.to_owned(),
+        label: ox_core::i18n::gettext_static(label).to_owned(),
         icon,
         target: RowTarget::Location(uri.to_owned()),
-        tooltip: label.to_owned(),
+        tooltip: ox_core::i18n::gettext_static(label).to_owned(),
         pinned: false,
         menu: None,
         eject: None,

@@ -62,7 +62,7 @@ use ox_core::places::KnownFolder;
 const READING: &str = crate::i18n::message_id("Reading file properties…");
 /// Shown for a value being calculated: a size, a content count or a
 /// checksum.
-const CALCULATING: &str = "Calculating…";
+const CALCULATING: &str = crate::i18n::message_id("Calculating…");
 
 #[cfg(test)]
 pub(crate) use custom_icon::set_custom_icon;

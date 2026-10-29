@@ -225,8 +225,8 @@ impl Controls {
                 ButtonStyle::Bordered,
             ),
             file_dialogs_row: SettingRow::new(FILE_DIALOGS),
-            enable_file_dialogs: parts::button("Enable", ButtonStyle::Accent),
-            apply_file_dialogs: parts::button("Apply now", ButtonStyle::Bordered),
+            enable_file_dialogs: parts::button(&ox_core::i18n::gettext("Enable"), ButtonStyle::Accent),
+            apply_file_dialogs: parts::button(&ox_core::i18n::gettext("Apply now"), ButtonStyle::Bordered),
             restore_file_dialogs: parts::button(
                 &ox_core::i18n::gettext("Restore Open and Save dialogs"),
                 ButtonStyle::Bordered,
