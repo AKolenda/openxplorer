@@ -243,7 +243,7 @@ fn folder_heading(facts: &PaneFacts<'_>) -> FolderHeading {
     FolderHeading {
         preview: Preview::Art(folder_art(facts)),
         name: facts.locations.title_for(facts.folder_uri),
-        kind: "Folder",
+        kind: ox_core::i18n::gettext_static("Folder"),
     }
 }
 
@@ -263,7 +263,7 @@ fn size_text(item: &FileItem) -> String {
     let entry = item.entry();
     match (entry.is_dir, item.folder_size(), entry.size) {
         (true, Some(measured), _) => measured.size_text(),
-        (true, None, _) => NOT_SCANNED.to_owned(),
+        (true, None, _) => ox_core::i18n::gettext_static(NOT_SCANNED).to_owned(),
         (false, _, Some(size)) => format::pretty_bytes(size),
         (false, _, None) => String::new(),
     }

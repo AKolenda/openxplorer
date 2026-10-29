@@ -201,7 +201,7 @@ pub(super) fn permissions_editor(items: EditedItems, versions: Arc<PreviousVersi
             items.owner.as_ref(),
             user_choices(),
         );
-        add_control_row(&grid, "Owner", &choice.choice);
+        add_control_row(&grid, &ox_core::i18n::gettext("Owner"), &choice.choice);
         choice
     });
     let group_account = AccountChoice::new(
@@ -209,7 +209,7 @@ pub(super) fn permissions_editor(items: EditedItems, versions: Arc<PreviousVersi
         items.group.as_ref(),
         group_choices(),
     );
-    add_control_row(&grid, "Group", &group_account.choice);
+    add_control_row(&grid, &ox_core::i18n::gettext("Group"), &group_account.choice);
     editor.append(grid.widget());
     let executable = has_files.then(|| {
         let is_executable = items.common(|item| (!item.is_folder).then_some(item.mode & 0o100 != 0));

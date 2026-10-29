@@ -365,7 +365,7 @@ msgstr ""
 msgid "Extract all…"
 msgstr ""
 
-#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/file_ops/conflict_compare.rs
+#: crates/ox-app/src/archive_view/browser.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/file_ops/conflict_compare.rs
 msgid "Folder"
 msgstr ""
 
@@ -1291,6 +1291,10 @@ msgid "No advertised SMB servers found yet. Discover again or enter an address a
 msgstr ""
 
 #: crates/ox-app/src/properties.rs
+msgid "Calculating…"
+msgstr ""
+
+#: crates/ox-app/src/properties.rs
 msgid "Checksums"
 msgstr ""
 
@@ -1362,11 +1366,27 @@ msgid "Restore default icon"
 msgstr ""
 
 #: crates/ox-app/src/properties/folder_sizes.rs
+msgid "1 file"
+msgstr ""
+
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "1 folder"
+msgstr ""
+
+#: crates/ox-app/src/properties/folder_sizes.rs
 msgid "Logical file bytes"
 msgstr ""
 
 #: crates/ox-app/src/properties/folder_sizes.rs
 msgid "Not scanned"
+msgstr ""
+
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "Scanning…"
+msgstr ""
+
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "Unavailable"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -1377,6 +1397,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/properties/folder_sizes.rs
 msgid "{files} files"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/folder_sizes.rs
+msgid "{files}, {folders}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -2013,6 +2038,10 @@ msgstr ""
 msgid "About this build"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/about.rs
+msgid "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs."
+msgstr ""
+
 #: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/status_bar.rs
 msgid "Check for updates"
 msgstr ""
@@ -2021,12 +2050,24 @@ msgstr ""
 msgid "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty."
 msgstr ""
 
+#: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/command_bar/menus.rs
+msgid "License & source"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/about.rs
 msgid "Look for a newer OpenXplorer release."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs crates/ox-app/src/window/about.rs
 msgid "OpenXplorer · License & source"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Read license & source information"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "Updates"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -2285,6 +2326,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
 msgid "Also open ZIP files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/default_apps.rs
+msgid "Apply now"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/default_apps.rs
@@ -3793,10 +3838,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Larger text"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "License & source"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
