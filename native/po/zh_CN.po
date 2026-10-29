@@ -3886,6 +3886,10 @@ msgstr "新建…"
 msgid "Open"
 msgstr "打开"
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Open containing folder in Terminal"
+msgstr "在终端中打开所在文件夹"
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Open folder with…"
 msgstr "用其他应用打开文件夹…"
@@ -3913,6 +3917,10 @@ msgstr "在 {name} 中打开"
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs
 msgid "Open with {name}"
 msgstr "用 {name} 打开"
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Open with…"
+msgstr "打开方式…"
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Paste into folder"
@@ -5356,7 +5364,7 @@ msgstr "从快速访问取消固定"
 
 #: crates/ox-app/src/window/sidebar/menu.rs
 msgid "{verb} section “{name}”"
-msgstr "{verb} 分区“{name}”"
+msgstr "{verb}分区“{name}”"
 
 #: crates/ox-app/src/window/sidebar/row.rs
 msgid "Collapse {section}"

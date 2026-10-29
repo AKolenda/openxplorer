@@ -250,14 +250,14 @@ fn extraction_items(facts: &ItemFacts) -> [MenuEntry; 2] {
 fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     let is_folder = facts.shape == ItemShape::Folder;
     let terminal_label = if is_folder {
-        "Open in Terminal"
+        ox_core::i18n::gettext_static("Open in Terminal")
     } else {
-        "Open containing folder in Terminal"
+        ox_core::i18n::gettext_static("Open containing folder in Terminal")
     };
     let open_with_label = if is_folder {
-        "Open folder with…"
+        ox_core::i18n::gettext_static("Open folder with…")
     } else {
-        "Open with…"
+        ox_core::i18n::gettext_static("Open with…")
     };
     let terminal = item(terminal_label, Icon::WindowConsole, WindowAction::OpenInTerminal);
     let open_with = item(open_with_label, Icon::Apps, WindowAction::OpenWith);

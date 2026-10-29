@@ -3976,6 +3976,10 @@ msgstr ""
 msgid "Open"
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Open containing folder in Terminal"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Open folder with…"
 msgstr ""
@@ -4004,6 +4008,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs
 msgid "Open with {name}"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Open with…"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
