@@ -1,3 +1,23 @@
+# 2.0.9 — 2026-10-29
+
+## What's Changed
+* fix(rename,views): keep the rename field open and turn item check boxes off by default by @AKolenda in https://github.com/AKolenda/openxplorer/pull/162
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.9_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.9-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.9-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.9-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.9-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.8...v2.0.9
+
 # 2.0.8 — 2026-10-23
 
 ## What's Changed
