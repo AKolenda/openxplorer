@@ -151,7 +151,9 @@ impl Checksums {
     /// computed.
     fn calculate(self: &Rc<Self>, kind: ChecksumKind) {
         let row = &self.rows[&kind];
-        if self.computed.borrow().contains_key(&kind) || row.value.text() == ox_core::i18n::gettext_static(CALCULATING) {
+        if self.computed.borrow().contains_key(&kind)
+            || row.value.text() == ox_core::i18n::gettext_static(CALCULATING)
+        {
             return;
         }
         row.value.set_text(ox_core::i18n::gettext_static(CALCULATING));

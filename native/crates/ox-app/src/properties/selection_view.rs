@@ -124,7 +124,10 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
             format::pretty_bytes(bytes)
         },
     );
-    let size_on_disk = grid.add_row(&ox_core::i18n::gettext("Size on disk"), ox_core::i18n::gettext_static(CALCULATING));
+    let size_on_disk = grid.add_row(
+        &ox_core::i18n::gettext("Size on disk"),
+        ox_core::i18n::gettext_static(CALCULATING),
+    );
     let contains = grid.add_row(
         &ox_core::i18n::gettext("Contains"),
         &if has_folders {
