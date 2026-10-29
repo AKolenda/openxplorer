@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.8
+Version:        2.0.9
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -119,6 +119,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Thu Oct 29 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.9-1
+- OpenXplorer 2.0.9: a name being renamed in place stays open through its
+  own right-click menu, item check boxes are off by default, and a search
+  word found only in the extension no longer matches.
+
 * Fri Oct 23 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.8-1
 - OpenXplorer 2.0.8: Folder Options, Explorer's Ctrl+E, Ctrl+D, F11 and
   Alt+P, a Share button that emails the selected files, Delete to the
