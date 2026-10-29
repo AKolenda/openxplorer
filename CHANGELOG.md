@@ -2,6 +2,7 @@
 
 ## What's Changed
 * fix(rename,views): keep the rename field open and turn item check boxes off by default by @AKolenda in https://github.com/AKolenda/openxplorer/pull/162
+* fix(search): stop a word found only in the extension from matching by @AKolenda in https://github.com/AKolenda/openxplorer/pull/164
 
 ## Packages
 Download them from the assets below.
