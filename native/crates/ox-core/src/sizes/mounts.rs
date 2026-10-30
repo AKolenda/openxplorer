@@ -100,12 +100,12 @@ fn mount_of_line(line: &[u8]) -> Option<Mount> {
 /// The space-separated fields of `text`. The kernel escapes only a space,
 /// a tab, a newline and a backslash in a path, so any other character,
 /// a carriage return included, is part of the field it is in.
-pub(crate) fn fields(text: &[u8]) -> impl Iterator<Item = &[u8]> {
+fn fields(text: &[u8]) -> impl Iterator<Item = &[u8]> {
     text.split(|&byte| byte == b' ').filter(|field| !field.is_empty())
 }
 
 /// Decodes the kernel's `\ooo` octal escapes; anything else stays as it is.
-pub(crate) fn unescape_octal(escaped: &[u8]) -> Vec<u8> {
+fn unescape_octal(escaped: &[u8]) -> Vec<u8> {
     let mut decoded = Vec::with_capacity(escaped.len());
     let mut position = 0;
     while position < escaped.len() {

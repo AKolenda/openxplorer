@@ -20,7 +20,6 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | [`walk`] | The privileged walk, the rules root needs on top, and the trusted resolution of the item's own folder |
-//! | [`mounts`] | Which mounts a symbolic link may be followed on |
 //! | [`report`] | The line protocol the helper writes and the app reads |
 //! | [`command`] | The `openxplorer-admin-delete` program itself |
 //! | [`elevation`] | Starting the helper, and the replaceable step that elevates |
@@ -35,7 +34,6 @@
 
 mod command;
 mod elevation;
-mod mounts;
 mod report;
 mod walk;
 
