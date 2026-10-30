@@ -5285,6 +5285,10 @@ msgid "Folders and network locations"
 msgstr "文件夹和网络位置"
 
 #: crates/ox-app/src/window/sidebar/entries.rs
+msgid "1 item"
+msgstr "1 个项目"
+
+#: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Connected"
 msgstr "已连接"
 
@@ -5305,8 +5309,16 @@ msgid "Quick access — drop folders here to pin"
 msgstr "快速访问——将文件夹拖放到此处以固定"
 
 #: crates/ox-app/src/window/sidebar/entries.rs
+msgid "Recent files"
+msgstr "最近使用的文件"
+
+#: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Recent files and Recycle Bin"
 msgstr "最近使用的文件和回收站"
+
+#: crates/ox-core/src/location/virtual_place.rs
+msgid "Recent locations"
+msgstr "最近去过的位置"
 
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Recently used files"
@@ -5315,6 +5327,10 @@ msgstr "最近使用的文件"
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Recently visited folders"
 msgstr "最近去过的文件夹"
+
+#: crates/ox-app/resources/manual.md crates/ox-core/src/location/virtual_place.rs
+msgid "Recycle Bin"
+msgstr "回收站"
 
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Recycle Bin · {state}"
@@ -6553,14 +6569,6 @@ msgstr "地址中的百分号编码文本必须是有效的 UTF-8。"
 #: crates/ox-core/src/location/virtual_place.rs
 msgid "Recent"
 msgstr "最近"
-
-#: crates/ox-core/src/location/virtual_place.rs
-msgid "Recent locations"
-msgstr "最近去过的位置"
-
-#: crates/ox-app/resources/manual.md crates/ox-core/src/location/virtual_place.rs
-msgid "Recycle Bin"
-msgstr "回收站"
 
 #: crates/ox-core/src/location/virtual_place.rs
 msgid "Use {location} without a server name."
@@ -7832,6 +7840,10 @@ msgstr "OpenXplorer 原生预览版"
 #: packaging/data/io.winspace.Development.Native.desktop packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "Preview of the native OpenXplorer file manager"
 msgstr "原生 OpenXplorer 文件管理器的预览版"
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "A name being renamed in place no longer closes when you use its own right-click menu, such as Paste or Select All, or switch to another window. Item check boxes are off by default, so a selected item is only highlighted, as in Windows; View > Item check boxes turns them back on. A search word found only in a name's extension no longer matches, so pd no longer finds every PDF."
+msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "A preview of the next OpenXplorer, drawn with native GTK 4 widgets instead of a web page. It browses local folders, SMB shares and connected phones in the familiar tabbed window styled after Windows 11 File Explorer."

@@ -3277,7 +3277,7 @@ msgid_plural "{count} matching settings"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/history_menu.rs crates/ox-core/src/location/virtual_place.rs
+#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/history_menu.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Home"
 msgstr ""
 
@@ -5428,6 +5428,10 @@ msgid "Folders and network locations"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
+msgid "1 item"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Connected"
 msgstr ""
 
@@ -5448,7 +5452,15 @@ msgid "Quick access — drop folders here to pin"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
+msgid "Recent files"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Recent files and Recycle Bin"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Recent locations"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
@@ -5457,6 +5469,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Recently visited folders"
+msgstr ""
+
+#: crates/ox-app/resources/manual.md crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Recycle Bin"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6752,14 +6768,6 @@ msgstr ""
 
 #: crates/ox-core/src/location/virtual_place.rs
 msgid "Recent"
-msgstr ""
-
-#: crates/ox-core/src/location/virtual_place.rs
-msgid "Recent locations"
-msgstr ""
-
-#: crates/ox-app/resources/manual.md crates/ox-core/src/location/virtual_place.rs
-msgid "Recycle Bin"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
