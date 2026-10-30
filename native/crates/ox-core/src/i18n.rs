@@ -14,7 +14,8 @@
 //!
 //! At start-up [`install`] picks the catalogue of the first language the
 //! desktop asks for that has one (`LANGUAGE`, then `LC_ALL`, `LC_MESSAGES`
-//! and `LANG`, as `g_get_language_names` orders them), searching the
+//! and `LANG`, as `g_get_language_names` orders them), stopping at English,
+//! the messages' own language, searching the
 //! `locale` folder of every XDG data directory, so `/usr/share`,
 //! `/usr/local/share` and a Flatpak's `/app/share` all work. Without one
 //! the interface stays in English. The catalogue is read by this module
@@ -66,14 +67,16 @@ impl Catalog {
 
     /// The catalogue of `domain` for the first of `languages` that has one
     /// in a `<dir>/<language>/LC_MESSAGES` folder of `locale_dirs`.
-    /// Languages are tried in order (`pt_BR` before `pt`); `C` and
-    /// `POSIX` stand for untranslated English and end the search.
+    /// Languages are tried in order (`pt_BR` before `pt`); `C`, `POSIX`
+    /// and plain `en` stand for untranslated English and end the search,
+    /// so a desktop that asks for English first (`LANGUAGE=en_US:zh_CN`)
+    /// stays in English while an `en_GB` catalogue is still found.
     pub fn find(domain: &str, locale_dirs: &[PathBuf], languages: &[String]) -> Option<Self> {
         let file = format!("{domain}.mo");
         let file = file.as_str();
         languages
             .iter()
-            .take_while(|language| !matches!(language.as_str(), "C" | "POSIX"))
+            .take_while(|language| !matches!(language.as_str(), "C" | "POSIX" | "en"))
             .flat_map(|language| {
                 locale_dirs
                     .iter()
@@ -295,6 +298,11 @@ mod tests {
         );
         let english = ["C".to_owned(), "pl".to_owned()];
         assert_eq!(Catalog::find(DOMAIN, &[dir.path().to_owned()], &english), None);
+        let english_first = ["en_US", "en", "pl_PL", "pl", "C"].map(String::from);
+        assert_eq!(
+            Catalog::find(DOMAIN, &[dir.path().to_owned()], &english_first),
+            None
+        );
     }
 
     /// No message says a drive is read-only or guesses why: like Windows

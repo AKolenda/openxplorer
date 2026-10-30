@@ -1,6 +1,7 @@
-# OpenXplorer 简体中文界面翻译。
+# Simplified Chinese translation of the OpenXplorer interface.
 # SPDX-License-Identifier: AGPL-3.0-only
-# 条目顺序与 openxplorer.pot 一致；新增消息后先跑 i18n.py extract，再在此补齐。
+# Entries follow the order of openxplorer.pot; after new messages, run
+# i18n.py extract first, then translate them here.
 msgid ""
 msgstr ""
 "Project-Id-Version: OpenXplorer\n"

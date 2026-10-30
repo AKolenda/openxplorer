@@ -250,13 +250,14 @@ fn fixed_entry(section: Section, label: &'static str, icon: Art, uri: &str) -> S
     } else {
         RowLevel::Group
     };
+    let label = ox_core::i18n::gettext_static(label);
     SidebarEntry {
         section,
         level,
-        label: ox_core::i18n::gettext_static(label).to_owned(),
+        label: label.to_owned(),
         icon,
         target: RowTarget::Location(uri.to_owned()),
-        tooltip: ox_core::i18n::gettext_static(label).to_owned(),
+        tooltip: label.to_owned(),
         pinned: false,
         menu: None,
         eject: None,
