@@ -125,6 +125,15 @@ fn skip(reason: &str) {
 /// `OX_TEST_TRUSTED_BASE` names another folder for a machine where
 /// that does not hold, and `$HOME` is tried after it.
 ///
+/// Each fixture is a [`TempDir`] and removes itself, but a test run
+/// that is killed outright leaves one behind, named
+/// `openxplorer-parent-path-*`. In the checkout `.gitignore` covers
+/// that, and `native/parity/test_check.py` skips the pattern because
+/// the links inside one cannot be copied; run as root the leftover is
+/// instead in whichever of the folders below answered, so it is worth
+/// looking in `/root`, `/srv`, `/opt`, `/usr/local` and `/var/lib`
+/// after a run that was interrupted.
+///
 /// Returns `None`, saying loudly why, where no candidate qualifies.
 fn trusted_base() -> Option<TempDir> {
     let mut refused = Vec::new();
@@ -541,9 +550,12 @@ fn a_chain_of_links_resolves_up_to_the_hop_limit_and_no_further() {
     // The fixture is built from the limit, so the assertions below say
     // nothing about what the limit is. Keep it inside the band that
     // makes it a limit: deep enough for the link chains a real system
-    // has (Fedora Atomic's /home is two), and short enough that a
-    // chain cannot be used to make a privileged helper resolve a path
-    // for an unbounded length of time.
+    // has (Fedora Atomic's /home -> var/home is one, and a chain of a
+    // few is easy to arrive at), and short enough to bound both the
+    // work and the depth, because the walk follows a link by calling
+    // `descend` again and a long enough chain overflows the stack
+    // rather than reaching the refusal. Raising it to 4000 makes
+    // a_loop_of_links_is_refused abort the whole test process.
     assert!(
         (8..=64).contains(&limit),
         "the hop limit is {limit}, which is outside the band this rule means"
@@ -945,11 +957,13 @@ fn a_folder_opened_up_after_the_walk_passed_it_stops_a_link_below_it() {
 /// learn what the root mount *is*, and once to decide whether `/`
 /// itself is trusted. Only the second may be answered differently, or
 /// the root mount itself would change and the link would be refused
-/// for being on another mount instead. The test does not assume that
-/// order: the probe records every question, and the assertions below
-/// check that the first two were about `/` before reading anything
-/// into the result. If the walk ever stops asking twice, this test
-/// fails and says so rather than passing for the wrong reason.
+/// for being on another mount instead. So this test does depend on
+/// that order, and it checks it rather than trusting it: the probe
+/// records every question, and the first assertion is that the first
+/// two were about `/`. If the walk ever stops asking twice, or asks
+/// about something else first, this test fails on that assertion and
+/// says so, instead of passing for a different reason than the one it
+/// means to test.
 ///
 /// Catches: `ParentWalk::root` setting `trusted` to `true` instead of
 /// asking.

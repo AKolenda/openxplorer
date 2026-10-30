@@ -82,6 +82,50 @@ fn another_drive_at(elsewhere: PathBuf) -> walk::MountProbe {
     })
 }
 
+/// A mount probe that tells the truth and, the first time it is asked
+/// about `when`, runs `change`.
+///
+/// Where that window is: for every item below the selected folder the
+/// walk asks which mount the item is on between the `statat` that
+/// decided what the item is and the `openat` that opens it. A probe is
+/// therefore a seam into exactly the moment a folder's name can be
+/// taken over while the walk is on its way into it, and no other seam
+/// is needed to test what the walk does about it.
+fn probe_that_changes_the_tree(when: PathBuf, change: impl Fn() + 'static) -> walk::MountProbe {
+    let done = std::cell::Cell::new(false);
+    Box::new(move |path, mount| {
+        if path == when && !done.replace(true) {
+            change();
+        }
+        mount
+    })
+}
+
+/// A mount probe that tells the truth about `when` the first time and
+/// reports a drive of its own every time after that.
+///
+/// The walk asks twice about a folder below the item: once about the
+/// name, before it is opened, and once about the descriptor it opened.
+/// This answers only the second, which is the one that stands for a
+/// drive mounted there while the walk was opening it.
+fn another_drive_at_the_second_look(when: PathBuf) -> walk::MountProbe {
+    let asked = std::cell::Cell::new(0_usize);
+    Box::new(move |path, mount| {
+        if path != when {
+            return mount;
+        }
+        asked.set(asked.get() + 1);
+        if asked.get() > 1 {
+            Mount {
+                id: Some(u64::MAX),
+                device: (u32::MAX, u32::MAX),
+            }
+        } else {
+            mount
+        }
+    })
+}
+
 /// A folder swapped for a symbolic link while the walk is inside it
 /// cannot redirect the walk: every name below the selected folder is
 /// resolved against a descriptor the walk already holds, so the items
@@ -486,6 +530,128 @@ fn a_tree_deeper_than_the_limit_is_refused() {
         deepest.join("deep.txt").exists(),
         "nothing below the limit was deleted"
     );
+}
+
+/// A folder whose name is taken over by *another folder* between the
+/// look that decided it was a folder and the open that opens it stops
+/// the walk. Only `require_same_item` catches this one: the name still
+/// leads to a folder, so opening it without following links succeeds,
+/// and without that check everything inside the replacement would be
+/// deleted as though it were the tree the walk was given.
+///
+/// The swap happens from the mount probe, which the walk consults in
+/// exactly that window.
+///
+/// parity: XFER-015
+#[test]
+fn a_folder_replaced_by_another_before_it_is_opened_stops_the_walk() {
+    let root = temporary_folder();
+    let selected = root.path().join("selected");
+    let inner = selected.join("inner");
+    fs::create_dir_all(&inner).expect("the tree is created");
+    fs::write(inner.join("mine.txt"), b"mine").expect("its item is written");
+    let stand_in = root.path().join("stand-in");
+    fs::create_dir(&stand_in).expect("the stand-in is created");
+    fs::write(stand_in.join("not yours.txt"), b"not yours").expect("its item is written");
+    let moved_to = root.path().join("moved");
+    let swapped = Arc::new(Mutex::new(false));
+    let swapping = Arc::clone(&swapped);
+    let (real, stand_in_name, moved_name) = (inner.clone(), stand_in.clone(), moved_to.clone());
+    let options = Options {
+        mounts: probe_that_changes_the_tree(inner.clone(), move || {
+            fs::rename(&real, &moved_name).expect("the real folder is moved aside");
+            fs::rename(&stand_in_name, &real).expect("another folder takes the name");
+            *swapping.lock().expect("the lock is not poisoned") = true;
+        }),
+        ..Options::default()
+    };
+
+    let (result, _reported) = run(&selected, &Cancellation::new(), &options);
+
+    assert!(
+        *swapped.lock().expect("the lock is not poisoned"),
+        "the swap never happened"
+    );
+    assert_eq!(result, Err(crate::safe_walk::folder_changed()));
+    assert_eq!(
+        fs::read(inner.join("not yours.txt")).expect("the replacement is untouched"),
+        b"not yours"
+    );
+}
+
+/// A folder whose name is taken over by a *symbolic link* in the same
+/// window is not followed. `OFlags::NOFOLLOW` on the open is what
+/// catches this one, and it catches it as a failure of that one item:
+/// the walk reports it, goes on, and the link's target is untouched.
+///
+/// Without the flag the open would land on the target and the swap
+/// would be caught one line later, by `require_same_item`, which stops
+/// the whole walk instead. Both checks are needed, and for different
+/// swaps.
+///
+/// parity: XFER-015
+#[test]
+fn a_folder_replaced_by_a_link_before_it_is_opened_is_not_followed() {
+    let root = temporary_folder();
+    let (selected, inner, outside) = swap_fixture(root.path());
+    let swapped = Arc::new(Mutex::new(false));
+    let swapping = Arc::clone(&swapped);
+    let (replaced, leads_to) = (inner.clone(), outside.clone());
+    let options = Options {
+        mounts: probe_that_changes_the_tree(inner.clone(), move || {
+            fs::remove_dir_all(&replaced).expect("the folder is removed");
+            symlink(&leads_to, &replaced).expect("the link replaces it");
+            *swapping.lock().expect("the lock is not poisoned") = true;
+        }),
+        ..Options::default()
+    };
+
+    let (result, reported) = run(&selected, &Cancellation::new(), &options);
+
+    assert!(
+        *swapped.lock().expect("the lock is not poisoned"),
+        "the swap never happened"
+    );
+    let totals = result.expect("the walk reports the item and goes on");
+    assert!(!totals.is_complete(), "{totals:?}");
+    assert_eq!(totals.failed, 2, "the link and the folder holding it");
+    assert_eq!(reported.left_behind(), vec![&inner, &selected]);
+    assert_eq!(
+        fs::read(outside.join("bait")).expect("the link's target is untouched"),
+        b"not yours"
+    );
+}
+
+/// A drive mounted on a folder while the walk is opening that folder is
+/// not entered either. The check in front of every item has already
+/// answered for this folder by then, truthfully; the second look, at
+/// the descriptor the walk now holds, is the one that catches it.
+///
+/// parity: XFER-015
+#[test]
+fn a_drive_mounted_while_the_folder_was_being_opened_is_not_entered() {
+    let root = temporary_folder();
+    let selected = root.path().join("selected");
+    let mounted = selected.join("mounted");
+    fs::create_dir_all(&mounted).expect("the tree is created");
+    fs::write(mounted.join("on the drive.txt"), b"keep me").expect("the drive's item is written");
+    fs::write(selected.join("mine.txt"), b"delete me").expect("the selected item is written");
+    let options = Options {
+        mounts: another_drive_at_the_second_look(mounted.clone()),
+        ..Options::default()
+    };
+
+    let (result, reported) = run(&selected, &Cancellation::new(), &options);
+
+    let totals = result.expect("the walk runs");
+    assert!(!totals.is_complete(), "{totals:?}");
+    assert_eq!(totals.skipped, 1);
+    assert_eq!(
+        fs::read(mounted.join("on the drive.txt")).expect("the drive's item is kept"),
+        b"keep me"
+    );
+    assert!(!selected.join("mine.txt").exists());
+    assert_eq!(reported.left_behind(), vec![&mounted, &selected]);
 }
 
 mod parent_path;
