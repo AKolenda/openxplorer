@@ -544,6 +544,43 @@ fn a_folder_whose_name_is_taken_over_part_way_through_stops_the_walk() {
     );
 }
 
+/// The same, for the selected folder itself. The item's own mount was
+/// read before the walk started, from its name, and answered
+/// truthfully; a drive mounted on it while the walk was opening it is
+/// caught by the second look, at the descriptor. Nothing inside it is
+/// read, and the deletion says the folder was left in place rather
+/// than reporting a clean sweep of somebody else's drive.
+///
+/// The depth-1 twin of this is
+/// `a_drive_mounted_while_the_folder_was_being_opened_is_not_entered`;
+/// the check in `delete_folder` does not branch on depth, and these
+/// two are its two sides.
+///
+/// parity: XFER-015
+#[test]
+fn a_drive_mounted_on_the_selected_folder_while_it_was_being_opened_is_not_entered() {
+    let root = temporary_folder();
+    let selected = root.path().join("selected");
+    fs::create_dir(&selected).expect("the folder is created");
+    fs::write(selected.join("on the drive.txt"), b"keep me").expect("its item is written");
+    let options = Options {
+        mounts: another_drive_at_the_second_look(selected.clone()),
+        ..Options::default()
+    };
+
+    let (result, reported) = run(&selected, &Cancellation::new(), &options);
+
+    let totals = result.expect("the walk runs");
+    assert!(!totals.is_complete(), "{totals:?}");
+    assert_eq!(totals.skipped, 1);
+    assert_eq!(totals.deleted, 0);
+    assert_eq!(
+        fs::read(selected.join("on the drive.txt")).expect("the drive's item is kept"),
+        b"keep me"
+    );
+    assert_eq!(reported.left_behind(), vec![&selected]);
+}
+
 /// A bind mount of a single file inside the selected folder is left in
 /// place too. The mount check in front of every item is what stops it:
 /// the one in front of every folder cannot, because this is not a

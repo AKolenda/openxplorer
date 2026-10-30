@@ -166,6 +166,11 @@ def workspace_folder() -> Path:
     root_device = Path('/').stat().st_dev
     for name in WORKSPACE_FOLDERS:
         folder = Path(name)
+        # A link here could lead anywhere, including off the root
+        # filesystem or somewhere another user can write; the stat
+        # below would describe what it leads to, not the name itself.
+        if folder.is_symlink():
+            continue
         try:
             status = folder.stat()
         except OSError:
