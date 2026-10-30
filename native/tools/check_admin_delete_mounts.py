@@ -44,6 +44,19 @@ CONSENT_VARIABLE = 'OX_ADMIN_DELETE_MOUNT_CHECK'
 # The helper's exit status for a request it refused outright.
 REFUSED = 2
 IMAGE_MEGABYTES = 16
+# What the helper must say, from walk.rs's other_mount_refusal, with
+# {path} filled in. Matching the whole line is the point of this check:
+# the helper has several refusals, and one of the others firing instead
+# would mean the rule about mounts was never what stopped it. The
+# helper is run with LANGUAGE and LC_ALL cleared to C so the message
+# stays the English it was written in; a translated run would not match
+# and is not what this check is for.
+OTHER_MOUNT_REFUSAL = (
+    '{path} is a shortcut (a symbolic link) on a drive, share or folder other than this '
+    'computer\u2019s own system drive, so what it says about itself cannot be relied on. '
+    'An administrator deletion does not follow one. Open the folder it leads to and delete '
+    'the item there. Deleting items on that drive still works.'
+)
 # Where the workspace may go: a root-owned folder on the root
 # filesystem that nobody else can write to, so no other rule of the
 # helper's can be what refuses the image's link.
@@ -55,9 +68,14 @@ class CheckError(Exception):
 
 
 def run_helper(helper: Path, target: Path) -> subprocess.CompletedProcess[str]:
-    """Run the helper on target with no standard input, and return it."""
+    """Run the helper on target with no standard input, and return it.
+
+    The language is forced to C, so the refusal this check compares
+    against is the English the message was written in.
+    """
+    environment = dict(os.environ, LANGUAGE='', LC_ALL='C', LC_MESSAGES='C', LANG='C')
     return subprocess.run([str(helper), '--', str(target)], capture_output=True, text=True,
-                          stdin=subprocess.DEVNULL, check=False)
+                          stdin=subprocess.DEVNULL, check=False, env=environment)
 
 
 def build_image(image: Path) -> None:
@@ -90,6 +108,13 @@ def check_refuses_the_link(helper: Path, mount_point: Path, bystander: Path) -> 
             f'the helper did not refuse the link: exit {result.returncode}\n{result.stdout}')
     if not result.stdout.startswith('refused\t'):
         raise CheckError(f'the helper refused without saying so:\n{result.stdout}')
+    link = mount_point / 'folder/link'
+    expected = 'refused\t' + OTHER_MOUNT_REFUSAL.format(path=link)
+    if result.stdout.strip() != expected:
+        raise CheckError(
+            'the helper refused, but not with the refusal about mounts, so some other rule '
+            f'is what stopped it:\n  said:     {result.stdout.strip()}\n'
+            f'  expected: {expected}')
     if not inside.is_file():
         raise CheckError(f'{inside} was deleted through the link the image supplied')
     return result.stdout.strip()

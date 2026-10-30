@@ -11,11 +11,13 @@
 //! ([`parent_path::make_untrusted`]) so that the rule under test is
 //! still the one that fires.
 //!
-//! Nothing here writes outside the folder it made for itself.
-//! `parent_path` does read paths of this machine's own - `/`, a
-//! root-owned link such as `/bin`, and `/dev` - to measure the mount
+//! Nothing here writes outside the folder it made for itself. Some
+//! tests do read paths of this machine's own, to measure the mount
 //! rules against real mounts rather than against a fixture that only
-//! claims to be one; it changes none of them, and it keeps its own
+//! claims to be one: `/` and a root-owned link such as `/bin` in
+//! `parent_path`, `/dev` there and `/proc` here for the mount rules,
+//! and `/proc/self/fd` for the two tests that pin when their own
+//! change ran. None of them is changed, and `parent_path` keeps its
 //! fixtures out of `/tmp` for the reason `parent_path::trusted_base`
 //! gives.
 //!
@@ -83,7 +85,8 @@ fn another_drive_at(elsewhere: PathBuf) -> walk::MountProbe {
 }
 
 /// A mount probe that tells the truth and, the first time it is asked
-/// about `when`, runs `change`.
+/// about `when`, runs `change`. Returns the probe and which question
+/// about `when` the change ran on, once it has run.
 ///
 /// Where that window is: for every item below the selected folder the
 /// walk asks which mount the item is on between the `statat` that
@@ -91,14 +94,78 @@ fn another_drive_at(elsewhere: PathBuf) -> walk::MountProbe {
 /// therefore a seam into exactly the moment a folder's name can be
 /// taken over while the walk is on its way into it, and no other seam
 /// is needed to test what the walk does about it.
-fn probe_that_changes_the_tree(when: PathBuf, change: impl Fn() + 'static) -> walk::MountProbe {
-    let done = std::cell::Cell::new(false);
-    Box::new(move |path, mount| {
-        if path == when && !done.replace(true) {
-            change();
+///
+/// The walk can ask about the same folder twice, the second time about
+/// the descriptor it opened, and a test that means the question before
+/// the open has to say which one it got, or an edit that removes the
+/// first question could leave it testing the window after the open.
+fn probe_that_changes_the_tree(
+    when: PathBuf,
+    change: impl Fn() + 'static,
+) -> (walk::MountProbe, Arc<Mutex<Option<WhenItRan>>>) {
+    let asked = std::cell::Cell::new(0_usize);
+    let ran = Arc::new(Mutex::new(None));
+    let recording = Arc::clone(&ran);
+    let probe: walk::MountProbe = Box::new(move |path, mount| {
+        if path == when {
+            asked.set(asked.get() + 1);
+            let mut ran = recording.lock().expect("the record is not poisoned");
+            if ran.is_none() {
+                *ran = Some(WhenItRan {
+                    question: asked.get(),
+                    folder_was_already_open: this_process_holds_open(&when),
+                });
+                change();
+            }
         }
         mount
+    });
+    (probe, ran)
+}
+
+/// Where in the walk a probe's change ran.
+#[derive(Debug, PartialEq, Eq)]
+struct WhenItRan {
+    /// Which question about the path it was, counting from one.
+    question: usize,
+    /// Whether the walk had already opened the folder by then. The
+    /// question counter alone cannot say: an edit that removes the
+    /// question before the open leaves the one after it as the first,
+    /// and a test about the earlier window would quietly move to the
+    /// later one.
+    folder_was_already_open: bool,
+}
+
+/// Whether this process already holds `path` open as a descriptor,
+/// read from `/proc/self/fd`.
+///
+/// The walk runs in the test's own process, so this says whether it has
+/// opened the folder yet. Only the tests that pin *when* their change
+/// ran use it, and they skip loudly where `/proc/self/fd` cannot be
+/// read.
+fn this_process_holds_open(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(wanted) = fs::metadata(path) else {
+        return false;
+    };
+    let Ok(descriptors) = fs::read_dir("/proc/self/fd") else {
+        return false;
+    };
+    descriptors.flatten().any(|descriptor| {
+        fs::read_link(descriptor.path())
+            .and_then(fs::metadata)
+            .is_ok_and(|open| open.dev() == wanted.dev() && open.ino() == wanted.ino())
     })
+}
+
+/// Whether `/proc/self/fd` can be read, which the tests that pin when
+/// their change ran need. Says loudly why when it cannot.
+fn can_see_this_process_descriptors() -> bool {
+    if fs::read_dir("/proc/self/fd").is_ok() {
+        return true;
+    }
+    parent_path::skip("/proc/self/fd cannot be read, so when the change ran cannot be pinned");
+    false
 }
 
 /// A mount probe that tells the truth about `when` the first time and
@@ -506,28 +573,43 @@ fn a_file_on_another_mount_inside_the_tree_is_not_removed() {
     assert_eq!(reported.left_behind(), vec![&mounted, &selected]);
 }
 
-/// A tree deeper than the limit the engine uses everywhere else stops
-/// the walk, with the same refusal, rather than descending as far as
-/// the kernel will let it.
+/// The nesting limit is a limit, not a hint, and it is the engine's
+/// own: a tree exactly as deep as it allows is deleted, and one level
+/// deeper stops the walk with the engine's refusal rather than
+/// descending as far as the kernel will let it.
+///
+/// Both halves are needed. A limit that is off by one in either
+/// direction passes a test that only ever goes one way.
 ///
 /// parity: XFER-015
 #[test]
-fn a_tree_deeper_than_the_limit_is_refused() {
+fn a_tree_exactly_as_deep_as_the_limit_is_deleted_and_one_deeper_is_refused() {
     let root = temporary_folder();
-    let selected = root.path().join("selected");
-    let deepest = selected.join("one").join("two");
-    fs::create_dir_all(&deepest).expect("the tree is created");
-    fs::write(deepest.join("deep.txt"), b"keep me").expect("the deep item is written");
+    // The selected folder is depth 0, so this item is at depth 2.
+    let at_the_limit = root.path().join("at the limit");
+    fs::create_dir_all(at_the_limit.join("one")).expect("the tree is created");
+    fs::write(at_the_limit.join("one/mine.txt"), b"mine").expect("its item is written");
+    let one_deeper = root.path().join("one deeper");
+    fs::create_dir_all(one_deeper.join("one/two")).expect("the deeper tree is created");
+    fs::write(one_deeper.join("one/two/mine.txt"), b"keep me").expect("its item is written");
     let options = Options {
-        max_depth: 1,
+        max_depth: 2,
         ..Options::default()
     };
 
-    let (result, _reported) = run(&selected, &Cancellation::new(), &options);
+    let (at_limit, _) = run(&at_the_limit, &Cancellation::new(), &options);
+    let (deeper, _) = run(&one_deeper, &Cancellation::new(), &options);
 
-    assert_eq!(result, Err(crate::transfer::nesting_error()));
     assert!(
-        deepest.join("deep.txt").exists(),
+        at_limit
+            .expect("a tree exactly as deep as the limit is deleted")
+            .is_complete(),
+        "the tree at the limit was not deleted in full"
+    );
+    assert!(!at_the_limit.exists());
+    assert_eq!(deeper, Err(crate::transfer::nesting_error()));
+    assert!(
+        one_deeper.join("one/two/mine.txt").exists(),
         "nothing below the limit was deleted"
     );
 }
@@ -545,6 +627,9 @@ fn a_tree_deeper_than_the_limit_is_refused() {
 /// parity: XFER-015
 #[test]
 fn a_folder_replaced_by_another_before_it_is_opened_stops_the_walk() {
+    if !can_see_this_process_descriptors() {
+        return;
+    }
     let root = temporary_folder();
     let selected = root.path().join("selected");
     let inner = selected.join("inner");
@@ -554,28 +639,42 @@ fn a_folder_replaced_by_another_before_it_is_opened_stops_the_walk() {
     fs::create_dir(&stand_in).expect("the stand-in is created");
     fs::write(stand_in.join("not yours.txt"), b"not yours").expect("its item is written");
     let moved_to = root.path().join("moved");
-    let swapped = Arc::new(Mutex::new(false));
-    let swapping = Arc::clone(&swapped);
     let (real, stand_in_name, moved_name) = (inner.clone(), stand_in.clone(), moved_to.clone());
+    let (mounts, swapped_on) = probe_that_changes_the_tree(inner.clone(), move || {
+        fs::rename(&real, &moved_name).expect("the real folder is moved aside");
+        fs::rename(&stand_in_name, &real).expect("another folder takes the name");
+    });
     let options = Options {
-        mounts: probe_that_changes_the_tree(inner.clone(), move || {
-            fs::rename(&real, &moved_name).expect("the real folder is moved aside");
-            fs::rename(&stand_in_name, &real).expect("another folder takes the name");
-            *swapping.lock().expect("the lock is not poisoned") = true;
-        }),
+        mounts,
         ..Options::default()
     };
 
     let (result, _reported) = run(&selected, &Cancellation::new(), &options);
 
-    assert!(
-        *swapped.lock().expect("the lock is not poisoned"),
-        "the swap never happened"
+    // The swap has to land in the window this test is about: the first
+    // question about the folder is the one before it is opened, and it
+    // is the only one the walk gets to ask here, because it stops as
+    // soon as it has opened the name.
+    assert_eq!(
+        *swapped_on.lock().expect("the record is not poisoned"),
+        Some(WhenItRan {
+            question: 1,
+            folder_was_already_open: false,
+        }),
+        "the swap did not run in the window this test is about: the first question about the \
+         folder, asked before the walk had opened it"
     );
     assert_eq!(result, Err(crate::safe_walk::folder_changed()));
     assert_eq!(
         fs::read(inner.join("not yours.txt")).expect("the replacement is untouched"),
         b"not yours"
+    );
+    // The walk opened the replacement and stopped, so it never read the
+    // folder it had looked at. If it had been opened before the swap,
+    // this item would be gone.
+    assert_eq!(
+        fs::read(moved_to.join("mine.txt")).expect("the folder the walk looked at is untouched"),
+        b"mine"
     );
 }
 
@@ -592,34 +691,42 @@ fn a_folder_replaced_by_another_before_it_is_opened_stops_the_walk() {
 /// parity: XFER-015
 #[test]
 fn a_folder_replaced_by_a_link_before_it_is_opened_is_not_followed() {
+    if !can_see_this_process_descriptors() {
+        return;
+    }
     let root = temporary_folder();
     let (selected, inner, outside) = swap_fixture(root.path());
-    let swapped = Arc::new(Mutex::new(false));
-    let swapping = Arc::clone(&swapped);
     let (replaced, leads_to) = (inner.clone(), outside.clone());
+    let (mounts, swapped_on) = probe_that_changes_the_tree(inner.clone(), move || {
+        fs::remove_dir_all(&replaced).expect("the folder is removed");
+        symlink(&leads_to, &replaced).expect("the link replaces it");
+    });
     let options = Options {
-        mounts: probe_that_changes_the_tree(inner.clone(), move || {
-            fs::remove_dir_all(&replaced).expect("the folder is removed");
-            symlink(&leads_to, &replaced).expect("the link replaces it");
-            *swapping.lock().expect("the lock is not poisoned") = true;
-        }),
+        mounts,
         ..Options::default()
     };
 
     let (result, reported) = run(&selected, &Cancellation::new(), &options);
 
-    assert!(
-        *swapped.lock().expect("the lock is not poisoned"),
-        "the swap never happened"
+    assert_eq!(
+        *swapped_on.lock().expect("the record is not poisoned"),
+        Some(WhenItRan {
+            question: 1,
+            folder_was_already_open: false,
+        }),
+        "the swap did not run in the window this test is about: the first question about the \
+         folder, asked before the walk had opened it"
+    );
+    // Checked before the result, because it has to hold whichever way
+    // the walk ended.
+    assert_eq!(
+        fs::read(outside.join("bait")).expect("the link's target is untouched"),
+        b"not yours"
     );
     let totals = result.expect("the walk reports the item and goes on");
     assert!(!totals.is_complete(), "{totals:?}");
     assert_eq!(totals.failed, 2, "the link and the folder holding it");
     assert_eq!(reported.left_behind(), vec![&inner, &selected]);
-    assert_eq!(
-        fs::read(outside.join("bait")).expect("the link's target is untouched"),
-        b"not yours"
-    );
 }
 
 /// A drive mounted on a folder while the walk is opening that folder is
@@ -652,6 +759,88 @@ fn a_drive_mounted_while_the_folder_was_being_opened_is_not_entered() {
     );
     assert!(!selected.join("mine.txt").exists());
     assert_eq!(reported.left_behind(), vec![&mounted, &selected]);
+}
+
+/// A path on a mount of this machine's own that is not the one the
+/// fixtures are on, for the tests about links that point at another
+/// drive. `/proc` is a mount of its own on any ordinary Linux system,
+/// and nothing here writes to it or reads through it.
+///
+/// Says loudly why and returns `None` where that does not hold, so a
+/// run with `OX_REQUIRE_TRUSTED_HOME` set fails rather than passing
+/// without having tested anything.
+fn a_path_on_another_mount(here: &Path) -> Option<PathBuf> {
+    use std::os::unix::fs::MetadataExt;
+    let elsewhere = PathBuf::from("/proc");
+    let (Ok(there), Ok(fixture)) = (fs::metadata(&elsewhere), fs::metadata(here)) else {
+        parent_path::skip("/proc cannot be read on this machine");
+        return None;
+    };
+    if there.dev() == fixture.dev() {
+        parent_path::skip("/proc is not a filesystem of its own on this machine");
+        return None;
+    }
+    Some(elsewhere)
+}
+
+/// A shortcut the user selected, pointing at another drive, is deleted
+/// as the shortcut it is. The mount of the selected item is read
+/// without following links, so the item is the link; reading it through
+/// the link would make the item look like a mount point and refuse it,
+/// and the user would be told their shortcut is a drive.
+///
+/// parity: XFER-015
+#[test]
+fn a_selected_link_onto_another_mount_is_deleted_as_a_link() {
+    let root = temporary_folder();
+    let Some(elsewhere) = a_path_on_another_mount(root.path()) else {
+        return;
+    };
+    let shortcut = root.path().join("shortcut");
+    symlink(&elsewhere, &shortcut).expect("the link is created");
+
+    let (result, reported) = delete(&shortcut);
+
+    let totals = result.expect("a shortcut onto another drive is not a mount point");
+    assert!(totals.is_complete(), "{totals:?}");
+    assert_eq!(totals.deleted, 1);
+    assert!(
+        fs::symlink_metadata(&shortcut).is_err(),
+        "the shortcut itself is gone"
+    );
+    assert!(elsewhere.is_dir(), "what it pointed at is untouched");
+    assert_eq!(reported.left_behind(), Vec::<&PathBuf>::new());
+}
+
+/// The same, one level down: a shortcut onto another drive inside the
+/// selected folder is removed as a shortcut, not left behind as a
+/// drive. The mount in front of every item is read without following
+/// links too, and reading it through the link would skip the shortcut
+/// and then fail to remove the folder holding it.
+///
+/// parity: XFER-015
+#[test]
+fn a_link_inside_the_tree_onto_another_mount_is_removed_as_a_link() {
+    let root = temporary_folder();
+    let Some(elsewhere) = a_path_on_another_mount(root.path()) else {
+        return;
+    };
+    let selected = root.path().join("selected");
+    fs::create_dir(&selected).expect("the folder is created");
+    let shortcut = selected.join("shortcut");
+    symlink(&elsewhere, &shortcut).expect("the link is created");
+
+    let (result, reported) = delete(&selected);
+
+    let totals = result.expect("the walk runs");
+    assert!(
+        totals.is_complete(),
+        "the shortcut was left behind as another drive: {totals:?}"
+    );
+    assert_eq!(totals.skipped, 0);
+    assert!(!selected.exists(), "the folder and its shortcut are gone");
+    assert!(elsewhere.is_dir(), "what the shortcut pointed at is untouched");
+    assert_eq!(reported.left_behind(), Vec::<&PathBuf>::new());
 }
 
 mod parent_path;

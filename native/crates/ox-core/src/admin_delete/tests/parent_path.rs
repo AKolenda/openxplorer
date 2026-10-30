@@ -102,7 +102,7 @@ fn make_dir(path: &Path) -> PathBuf {
 /// Says that a test did nothing, loudly, and fails instead when
 /// `OX_REQUIRE_TRUSTED_HOME` is set, so a continuous-integration run
 /// cannot go green while these tests quietly test nothing.
-fn skip(reason: &str) {
+pub(super) fn skip(reason: &str) {
     assert!(
         std::env::var_os(REQUIRE_TRUSTED_HOME).is_none(),
         "{REQUIRE_TRUSTED_HOME} is set, so this is a failure: {reason}"
