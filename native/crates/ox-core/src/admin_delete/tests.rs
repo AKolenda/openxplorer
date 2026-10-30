@@ -285,6 +285,9 @@ fn a_link_in_the_folders_above_the_item_is_refused_rather_than_followed() {
     fs::write(item.join("data.txt"), b"keep me").expect("its item is written");
     let through_a_link = root.path().join("link").join("selected");
     symlink(&real, root.path().join("link")).expect("the link is created");
+    // Run as root the link would belong to root, which a real deletion
+    // trusts; give it away so the rule being tested is the same one.
+    parent_path::make_untrusted(&root.path().join("link"));
 
     let (result, reported) = delete(&through_a_link);
 

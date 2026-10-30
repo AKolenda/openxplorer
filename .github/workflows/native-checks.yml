@@ -67,8 +67,14 @@ jobs:
         # OX_REQUIRE_KEYRING makes the keyring tests fail instead of skipping
         # when GNOME Keyring or libsecret is missing, so the keyring
         # compatibility with the Python app is always proven here.
+        # OX_REQUIRE_TRUSTED_HOME does the same for the tests of which
+        # symbolic links an administrator deletion may follow: they need a
+        # home folder on the root mount that nobody but its owner can
+        # change, and libtest hides the reason a passing test printed, so
+        # a run where they all quietly did nothing would still be green.
         env:
           OX_REQUIRE_KEYRING: '1'
+          OX_REQUIRE_TRUSTED_HOME: '1'
         run: python3 native/tools/check.py
 
   release-policies:

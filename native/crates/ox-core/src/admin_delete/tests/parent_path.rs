@@ -109,47 +109,84 @@ fn skip(reason: &str) {
     eprintln!("SKIPPED (nothing was tested): {reason}");
 }
 
-/// A folder under the test user's own home, on the same mount as `/`,
-/// with its whole path from `/` writable by nobody but trusted users,
-/// so a link created in it is one the walk may follow.
+/// A folder for a fixture whose whole path from `/` is on the same
+/// mount as `/` and writable by nobody but trusted users, so a link
+/// created in it is one the walk may follow.
 ///
-/// Returns `None`, saying loudly why, where this machine's home does
-/// not allow that: a group-writable home, one under a world-writable
-/// folder, or one on a mount of its own, which rule 2 refuses links on
-/// however the folders above it are owned.
+/// Where it goes matters, and `$HOME` is the wrong answer. The check
+/// driver `native/tools/check.py` gives every test executable a
+/// disposable `HOME` under `TMPDIR`, and `/tmp` is world-writable, so
+/// a fixture there is refused by rule 1 whoever owns it — which is
+/// what every one of these tests would then be measuring. The default
+/// is therefore the crate's own folder, which `CARGO_MANIFEST_DIR`
+/// fixes at compile time and which lives in the checkout, normally
+/// owned by whoever runs the tests and writable by nobody else.
+/// `OX_TEST_TRUSTED_BASE` names another folder for a machine where
+/// that does not hold, and `$HOME` is tried last.
+///
+/// Returns `None`, saying loudly why, where no candidate qualifies.
 fn trusted_base() -> Option<TempDir> {
-    let home = PathBuf::from(std::env::var_os("HOME")?);
-    let base = tempfile::Builder::new()
-        .prefix("openxplorer-parent-path-")
-        .tempdir_in(&home)
-        .ok()?;
-    set_mode(base.path(), 0o755);
-    if !same_device_as_root(base.path()) {
-        skip(&format!(
-            "{} is not on the same mount as /, so a link in it is refused by rule 2 whoever \
-             owns it",
-            base.path().display()
-        ));
-        return None;
+    let mut refused = Vec::new();
+    for candidate in base_candidates() {
+        let base = match tempfile::Builder::new()
+            .prefix("openxplorer-parent-path-")
+            .tempdir_in(&candidate)
+        {
+            Ok(base) => base,
+            Err(error) => {
+                refused.push(format!("{}: {error}", candidate.display()));
+                continue;
+            }
+        };
+        set_mode(base.path(), 0o755);
+        match untrusted_folder_above(base.path()) {
+            None => return Some(base),
+            Some(reason) => refused.push(reason),
+        }
     }
-    // The same question the walk asks about owners and modes, asked here
-    // only to decide whether the machine can host the fixture at all.
-    // What the tests assert is the walk's own answer, never this one.
+    skip(&format!(
+        "no folder on this machine can host a link the walk would follow: {}. Set \
+         OX_TEST_TRUSTED_BASE to a folder on the same mount as / whose whole path is \
+         writable by nobody but its owner.",
+        refused.join("; ")
+    ));
+    None
+}
+
+/// Where a fixture may live, best first.
+fn base_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(named) = std::env::var_os("OX_TEST_TRUSTED_BASE") {
+        candidates.push(PathBuf::from(named));
+    }
+    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+    if let Some(home) = std::env::var_os("HOME") {
+        candidates.push(PathBuf::from(home));
+    }
+    candidates
+}
+
+/// Why `base` cannot hold a followable link, or `None` when it can.
+///
+/// This asks the standard library, not the walk, so that removing the
+/// rule under test makes these tests fail rather than quietly skip.
+fn untrusted_folder_above(base: &Path) -> Option<String> {
+    if !same_device_as_root(base) {
+        return Some(format!("{} is not on the same mount as /", base.display()));
+    }
     let mine = rustix::process::getuid().as_raw();
-    let mut folder = Some(base.path());
+    let mut folder = Some(base);
     while let Some(path) = folder {
         let status = fs::metadata(path).ok()?;
         if (status.uid() != 0 && status.uid() != mine) || status.mode() & 0o022 != 0 {
-            skip(&format!(
-                "this machine's home cannot host a trusted link: {} is a folder others can \
-                 change, or that neither root nor this user owns",
+            return Some(format!(
+                "{} is a folder others can change, or that neither root nor this user owns",
                 path.display()
             ));
-            return None;
         }
         folder = path.parent();
     }
-    Some(base)
+    None
 }
 
 /// Whether `path` is on the same filesystem as `/`, asked of the
@@ -191,11 +228,82 @@ fn mount_of_one_path(elsewhere: PathBuf, mount: Mount) -> walk::MountProbe {
     Box::new(move |path, real| if path == elsewhere { mount } else { real })
 }
 
+/// The mount `/` is really on, as the walk reads it.
+fn root_mount_of_this_machine() -> Mount {
+    let root = rustix::fs::open(
+        "/",
+        OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .expect("/ is opened");
+    crate::safe_walk::mount_of(rustix::fd::AsFd::as_fd(&root), c"", AtFlags::EMPTY_PATH)
+        .expect("the mount of / can be read")
+}
+
 /// A mount nothing else is on.
 const ANOTHER_DRIVE: Mount = Mount {
     id: Some(u64::MAX),
     device: (u32::MAX, u32::MAX),
 };
+
+/// The uid of `nobody`, which no system gives to a real person. A test
+/// running as root hands a fixture to it to mean "somebody root is not".
+const NOBODY: u32 = 65534;
+
+/// Makes `path` owned by somebody the walk does not trust, so that a
+/// test about an untrusted owner tests the same rule however it is run.
+///
+/// Run as an ordinary user, the fixture already belongs to somebody who
+/// is not root, and nothing is needed. Run as root, every fixture would
+/// belong to root and the rule would never fire, so ownership goes to
+/// `nobody`. Links are changed as links, never through them.
+pub(super) fn make_untrusted(path: &Path) {
+    if rustix::process::getuid().as_raw() != 0 {
+        return;
+    }
+    std::os::unix::fs::lchown(path, Some(NOBODY), None).expect("root can give the fixture away");
+}
+
+/// A mount probe that tells the truth until it has been asked about
+/// `elsewhere` `after` times, and reports `mount` from then on.
+///
+/// The walk asks about a folder once each time it opens it, in a fixed
+/// order, so this puts an answer at one exact point of one exact
+/// resolution. It is how a test reaches the second look at a folder
+/// without disturbing the first.
+fn mount_of_one_path_after(elsewhere: PathBuf, mount: Mount, after: usize) -> walk::MountProbe {
+    let asked = std::sync::atomic::AtomicUsize::new(0);
+    Box::new(move |path, real| {
+        if path != elsewhere {
+            return real;
+        }
+        let seen = asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if seen < after {
+            real
+        } else {
+            mount
+        }
+    })
+}
+
+/// A mount probe that tells the truth and, the first time it is asked
+/// about `when`, runs `change`.
+///
+/// The walk asks this between opening a name and reading what it holds,
+/// so a test can change the tree at exactly that moment and show that
+/// what the walk goes on to read is the thing it opened, not the name.
+fn mount_probe_that_changes_the_tree(
+    when: PathBuf,
+    change: impl Fn() + Send + Sync + 'static,
+) -> walk::MountProbe {
+    let done = std::sync::atomic::AtomicBool::new(false);
+    Box::new(move |path, real| {
+        if path == when && !done.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            change();
+        }
+        real
+    })
+}
 
 // ---------------------------------------------------------------- //
 // Rules 1 and 2 against this machine's own mounts, with the rules a //
@@ -548,6 +656,217 @@ fn a_reused_mount_id_on_another_device_is_not_the_root_mount() {
     assert!(selected.exists(), "nothing was deleted");
 }
 
+/// Every folder above a link has to be trusted, not just the one that
+/// holds it. A folder anybody can write to can be renamed within the
+/// folder that holds it, so whoever can write to it chooses which of
+/// the root-owned folders inside it the walk ends up in, and so which
+/// root-owned link gets followed. The link and its own folder can be
+/// beyond reproach and it still must not be followed.
+///
+/// Catches: dropping `at.trusted &&` from the folder arm of
+/// `ParentWalk::step`.
+///
+/// parity: XFER-015
+#[test]
+fn a_link_below_a_folder_others_can_change_is_refused() {
+    let Some(base) = trusted_base() else { return };
+    let open_to_all = make_dir(&base.path().join("shared"));
+    // Nothing about this folder or the link in it is open to anyone:
+    // only the folder *above* them is.
+    let closed = make_dir(&open_to_all.join("closed"));
+    let (real, selected) = tree_to_delete(base.path());
+    let link = closed.join("link");
+    symlink(&real, &link).expect("the link is created");
+    let through_the_link = closed.join("link/selected");
+    let trusted = trusting(trusted_here());
+
+    let followed = delete(&through_the_link.join("inner/data.txt"), &trusted);
+    set_mode(&open_to_all, 0o775);
+    let group_writable = delete(&through_the_link, &trusted);
+    set_mode(&open_to_all, 0o777);
+    let world_writable = delete(&through_the_link, &trusted);
+    set_mode(&open_to_all, 0o755);
+
+    assert_eq!(
+        followed,
+        Ok(()),
+        "the link is followed while every folder above it is closed"
+    );
+    // The refusal names the folder that holds the link, which is itself
+    // closed: what is wrong is further up.
+    assert_eq!(group_writable, Err(reachable_link_refusal(&link, &closed)));
+    assert_eq!(world_writable, Err(reachable_link_refusal(&link, &closed)));
+    assert!(selected.exists(), "nothing was deleted");
+}
+
+/// A folder on a drive somebody else could have provided is not trusted
+/// either, so a link below it is refused however genuine the link is.
+/// Here the link really is on the root mount; only a folder above it
+/// reports otherwise.
+///
+/// Catches: leaving the mount check out of `ParentWalk::is_trusted`, so
+/// that only owner and mode decide whether a folder is trusted.
+///
+/// parity: XFER-015
+#[test]
+fn a_link_below_a_folder_on_another_drive_is_refused() {
+    let Some(base) = trusted_base() else { return };
+    let mid = make_dir(&base.path().join("mid"));
+    let (real, selected) = tree_to_delete(base.path());
+    let link = mid.join("link");
+    symlink(&real, &link).expect("the link is created");
+    let elsewhere = Options {
+        mounts: mount_of_one_path(mid.clone(), ANOTHER_DRIVE),
+        ..trusting(trusted_here())
+    };
+
+    let result = delete(&link.join("selected"), &elsewhere);
+
+    assert_eq!(result, Err(reachable_link_refusal(&link, &mid)));
+    assert!(selected.exists(), "nothing was deleted");
+}
+
+/// The link the walk checked is the link it reads. The walk opens the
+/// name once and then asks the descriptor, so renaming another link
+/// over that name afterwards changes nothing: the target it resolves is
+/// the one the descriptor points at.
+///
+/// The probe runs between the `openat` and the `readlinkat`, which is
+/// exactly the window a second lookup by name would sit in.
+///
+/// Catches: reading the link with `readlinkat(parent, name)` instead of
+/// `readlinkat(link, "")`.
+///
+/// parity: XFER-015
+#[test]
+fn the_link_that_was_checked_is_the_link_that_is_read() {
+    let Some(base) = trusted_base() else { return };
+    let was_there = make_dir(&base.path().join("was there"));
+    let swapped_in = make_dir(&base.path().join("swapped in"));
+    let link = base.path().join("link");
+    let other = base.path().join("other");
+    symlink(&was_there, &link).expect("the link the walk opens");
+    symlink(&swapped_in, &other).expect("the link somebody renames over it");
+    let renaming = (other.clone(), link.clone());
+    let swap_them = Options {
+        mounts: mount_probe_that_changes_the_tree(link.clone(), move || {
+            fs::rename(&renaming.0, &renaming.1).expect("the name is taken over");
+        }),
+        ..trusting(trusted_here())
+    };
+
+    let resolved = resolve(&link, &swap_them).expect("the link is followed");
+
+    assert_eq!(
+        identity_of_descriptor(&resolved),
+        identity_of(&was_there),
+        "the walk resolved the link that replaced the name, not the one it opened"
+    );
+    // The swap really happened, so the test is not passing by accident.
+    assert_eq!(
+        fs::read_link(&link).expect("the name still holds a link"),
+        swapped_in
+    );
+}
+
+/// A mount ID says which mount, and the device says which filesystem.
+/// Both have to match `/`, so a mount that is on the root device but is
+/// not the root mount — a bind mount of part of it — is refused. The
+/// companion test covers the other way round.
+///
+/// Catches: comparing the device alone and ignoring the mount ID.
+///
+/// parity: XFER-015
+#[test]
+fn another_mount_on_the_root_device_is_not_the_root_mount() {
+    let Some(base) = trusted_base() else { return };
+    let (real, selected) = tree_to_delete(base.path());
+    let link = base.path().join("link");
+    symlink(&real, &link).expect("the link is created");
+    let root_device = root_mount_of_this_machine().device;
+    let bind_mount = Options {
+        mounts: mount_of_one_path(
+            link.clone(),
+            Mount {
+                id: Some(u64::MAX),
+                device: root_device,
+            },
+        ),
+        ..trusting(trusted_here())
+    };
+
+    let result = delete(&link.join("selected"), &bind_mount);
+
+    assert_eq!(result, Err(other_mount_refusal(&link)));
+    assert!(selected.exists(), "nothing was deleted");
+}
+
+/// `..` is judged like any other folder the walk opens. A folder that
+/// was closed when the walk descended through it, and that somebody
+/// opens up before the walk comes back to it through a link's `..`,
+/// stops the links below it.
+///
+/// The probe opens the folder up at the moment the walk steps into the
+/// folder beside it, which is after the first look and before the `..`.
+///
+/// Catches: `ParentWalk::step_up` carrying `at.trusted` over instead of
+/// judging the folder it reaches.
+///
+/// parity: XFER-015
+#[test]
+fn a_folder_opened_up_after_the_walk_passed_it_stops_a_link_below_it() {
+    let Some(base) = trusted_base() else { return };
+    let (real, selected) = tree_to_delete(base.path());
+    // A second link inside the target, which is what the walk judges
+    // once `..` has taken it back to the folder that was opened up.
+    symlink("selected", real.join("second")).expect("the second link");
+    let beside = make_dir(&base.path().join("beside"));
+    symlink("../real", beside.join("up")).expect("the link through ..");
+    let opened_up = base.path().to_path_buf();
+    let meanwhile = Options {
+        mounts: mount_probe_that_changes_the_tree(beside.clone(), move || {
+            set_mode(&opened_up, 0o777);
+        }),
+        ..trusting(trusted_here())
+    };
+
+    let result = delete(&beside.join("up/second/inner"), &meanwhile);
+    set_mode(base.path(), 0o755);
+
+    assert_eq!(result, Err(reachable_link_refusal(&real.join("second"), &real)));
+    assert!(selected.exists(), "nothing was deleted");
+}
+
+/// `/` is judged like any other folder, not taken on trust because it
+/// is `/`. Where it is not trusted, no link below it is followed.
+///
+/// The probe leaves the first look alone, which is the one that reads
+/// which mount `/` is, and answers the second, which is the one that
+/// decides whether `/` is trusted. Were `/` trusted unconditionally,
+/// the folders below it would be judged on their own and the link
+/// followed.
+///
+/// Catches: `ParentWalk::root` setting `trusted` to `true` instead of
+/// asking.
+///
+/// parity: XFER-015
+#[test]
+fn the_root_folder_is_judged_like_any_other() {
+    let Some(base) = trusted_base() else { return };
+    let (real, selected) = tree_to_delete(base.path());
+    let link = base.path().join("link");
+    symlink(&real, &link).expect("the link is created");
+    let root_not_trusted = Options {
+        mounts: mount_of_one_path_after(PathBuf::from("/"), ANOTHER_DRIVE, 1),
+        ..trusting(trusted_here())
+    };
+
+    let result = delete(&link.join("selected"), &root_not_trusted);
+
+    assert_eq!(result, Err(reachable_link_refusal(&link, base.path())));
+    assert!(selected.exists(), "nothing was deleted");
+}
+
 // ---------------------------------------------------------------- //
 // Refusals. These need nothing of the machine and always run.       //
 // ---------------------------------------------------------------- //
@@ -565,8 +884,10 @@ fn an_untrusted_owner_stops_links_below_it_without_stopping_the_walk() {
     let (real, selected) = tree_to_delete(root.path());
     let link = real.join("link");
     symlink(&selected, &link).expect("the link is created");
-    // The test user owns every folder here and is not root, so with the
-    // rules a real deletion runs with nothing here is trusted.
+    // Run as an ordinary user this link already belongs to somebody who
+    // is not root; run as root it is given away, so that the rule being
+    // tested is the same one either way.
+    make_untrusted(&link);
     let as_root_would = trusting(TrustedOwner::ROOT);
 
     let through_a_link = delete(&link.join("inner"), &as_root_would);

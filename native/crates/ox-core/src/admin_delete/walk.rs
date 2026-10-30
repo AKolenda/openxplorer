@@ -793,17 +793,26 @@ mod tests {
 
     /// Both halves of the owner-and-mode test, each on its own: a folder
     /// is trusted only while a trusted user owns it and nobody else can
-    /// change it. The mount half has its own tests in `super::mounts`,
-    /// and is held out of the way here.
+    /// change it. The mount half is held out of the way here; the tests
+    /// in `super::tests::parent_path` cover it.
     ///
     /// parity: XFER-015
     #[test]
     fn a_folder_is_trusted_only_while_a_trusted_user_alone_can_change_it() {
-        let folder = temporary_folder();
-        let path = folder.path();
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("the mode is set");
+        let ours = temporary_folder();
+        let theirs = temporary_folder();
+        for folder in [ours.path(), theirs.path()] {
+            std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o755))
+                .expect("the mode is set");
+        }
+        // Run as root every fixture would belong to root, and the owner
+        // rule would never fire, so this one is given to `nobody`.
+        if rustix::process::getuid().as_raw() == 0 {
+            std::os::unix::fs::lchown(theirs.path(), Some(65534), None)
+                .expect("root can give the fixture away");
+        }
         let mine = rustix::process::getuid().as_raw();
-        let ask = |trusted: TrustedOwner| {
+        let ask = |trusted: TrustedOwner, folder: &Path| {
             let options = Options {
                 trusted,
                 mounts: Box::new(|_path, mount| mount),
@@ -811,14 +820,15 @@ mod tests {
             };
             ParentWalk::new(&options)
                 .expect("/ can be opened")
-                .is_trusted(&anchor(path), path)
+                .is_trusted(&anchor(folder), folder)
                 .expect("the folder can be inspected")
         };
 
-        let owned_by_a_trusted_user = ask(TrustedOwner::root_and(mine));
-        let owned_by_somebody_else = ask(TrustedOwner::ROOT);
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o775)).expect("the mode is set");
-        let group_writable = ask(TrustedOwner::root_and(mine));
+        let owned_by_a_trusted_user = ask(TrustedOwner::root_and(mine), ours.path());
+        let owned_by_somebody_else = ask(TrustedOwner::ROOT, theirs.path());
+        std::fs::set_permissions(ours.path(), std::fs::Permissions::from_mode(0o775))
+            .expect("the mode is set");
+        let group_writable = ask(TrustedOwner::root_and(mine), ours.path());
 
         assert!(owned_by_a_trusted_user);
         assert!(!owned_by_somebody_else, "the owner is not one the walk trusts");

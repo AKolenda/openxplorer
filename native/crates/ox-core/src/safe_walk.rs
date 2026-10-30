@@ -59,7 +59,7 @@ pub(crate) fn mount_of<P: rustix::path::Arg + Copy>(
                 device: (status.stx_dev_major, status.stx_dev_minor),
             })
         }
-        Err(rustix::io::Errno::NOSYS | rustix::io::Errno::PERM) => {
+        Err(errno) if has_no_statx(errno) => {
             let status = fs::statat(dir, name, flags)?;
             Ok(Mount {
                 id: None,
@@ -68,6 +68,20 @@ pub(crate) fn mount_of<P: rustix::path::Arg + Copy>(
         }
         Err(errno) => Err(errno.into()),
     }
+}
+
+/// Whether `errno` from `statx` means this kernel has no `statx` to
+/// ask, rather than that the question itself failed.
+///
+/// Only these two are a missing syscall: `ENOSYS` from a kernel before
+/// Linux 4.11, and `EPERM` from a seccomp filter that refuses it, which
+/// is how several container runtimes answer. Anything else — a bad
+/// descriptor, a refused lookup, an I/O error — is a real failure and
+/// is returned as one. Falling back on every error would quietly turn
+/// such a failure into a mount with no ID, and a caller comparing
+/// mounts would then compare device numbers alone without being told.
+fn has_no_statx(errno: rustix::io::Errno) -> bool {
+    matches!(errno, rustix::io::Errno::NOSYS | rustix::io::Errno::PERM)
 }
 
 /// The device and inode `stat` describes.
@@ -138,6 +152,25 @@ mod tests {
 
         assert_eq!(unchanged, Ok(()));
         assert_eq!(swapped, Err(folder_changed()));
+    }
+
+    /// `statx` is only given up on when the kernel has none to offer.
+    /// Any other failure is a failure, not a reason to fall back to
+    /// `statat` and report a mount without an ID.
+    ///
+    /// parity: XFER-015
+    #[test]
+    fn only_a_missing_statx_falls_back_to_statat() {
+        use rustix::io::Errno;
+
+        assert!(has_no_statx(Errno::NOSYS), "a kernel before Linux 4.11");
+        assert!(has_no_statx(Errno::PERM), "a seccomp filter that refuses statx");
+        for errno in [Errno::BADF, Errno::ACCESS, Errno::IO, Errno::NOENT, Errno::LOOP] {
+            assert!(
+                !has_no_statx(errno),
+                "{errno:?} is a failure, not a missing syscall"
+            );
+        }
     }
 
     /// parity: XFER-015
