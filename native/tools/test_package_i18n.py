@@ -79,20 +79,40 @@ class MetadataTests(unittest.TestCase):
                                   'msgstr "Test description"\n\n'
                                   '#, fuzzy\nmsgid "File Explorer"\nmsgstr "Do not ship"\n')
         with patch.object(i18n, 'PO_FOLDER', po):
+            channel = package_data.Channel.STABLE
             for layout in package_data.Layout:
                 with self.subTest(layout=layout.value):
-                    paths = package_data.installed_paths(package_data.Channel.STABLE, layout)
+                    paths = package_data.installed_paths(channel, layout)
                     staging = package_data.Staging(self.root / layout.value)
-                    package_data.install_desktop_data(staging, package_data.Channel.STABLE, paths)
-                    package_data.install_translations(staging, paths.share)
+                    package_data.install_desktop_data(staging, channel, paths)
+                    package_data.install_translations(staging, paths.share, channel.domain)
                     desktop = staging.path_of(paths.share / 'applications/io.winspace.Development.desktop')
                     self.assertIn('Name[fr]=Test settings', desktop.read_text())
                     self.assertNotIn('Do not ship', desktop.read_text())
                     metadata = staging.path_of(paths.share / 'metainfo/io.winspace.Development.metainfo.xml')
                     self.assertIn('<summary xml:lang="fr">Test description</summary>', metadata.read_text())
-                    catalogue = staging.path_of(paths.share / 'locale/fr/LC_MESSAGES/openxplorer.mo')
+                    catalogue = staging.path_of(
+                        paths.share / f'locale/fr/LC_MESSAGES/{channel.domain}.mo')
                     with catalogue.open('rb') as stream:
                         self.assertEqual(gettext.GNUTranslations(stream).gettext('Settings'), 'Test settings')
+
+    # parity: INT-031
+    def test_each_channel_names_its_catalogue_after_its_package(self) -> None:
+        po = self.root / 'po'
+        po.mkdir()
+        (po / 'fr.po').write_text('msgid ""\nmsgstr "Content-Type: text/plain; charset=UTF-8\\n"\n\n'
+                                  'msgid "Settings"\nmsgstr "Test settings"\n')
+        with patch.object(i18n, 'PO_FOLDER', po):
+            for channel in package_data.Channel:
+                with self.subTest(channel=channel.name):
+                    paths = package_data.installed_paths(channel, package_data.Layout.FHS)
+                    staging = package_data.Staging(self.root / channel.name)
+                    package_data.install_translations(staging, paths.share, channel.domain)
+                    catalogue = staging.path_of(
+                        paths.share / f'locale/fr/LC_MESSAGES/{channel.package}.mo')
+                    with catalogue.open('rb') as stream:
+                        self.assertEqual(gettext.GNUTranslations(stream).gettext('Settings'),
+                                         'Test settings')
 
 
 if __name__ == '__main__':

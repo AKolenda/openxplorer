@@ -6,12 +6,16 @@
 //! [`pgettext`], with its English text as the message id, as GNOME and
 //! KDE apps do. `native/tools/i18n.py` extracts those calls into the
 //! template `native/po/openxplorer.pot`; a translator's `<lang>.po` is
-//! compiled to `<prefix>/share/locale/<lang>/LC_MESSAGES/openxplorer.mo`
-//! by the package build.
+//! compiled by the package build to
+//! `<prefix>/share/locale/<lang>/LC_MESSAGES/<domain>.mo`, where the
+//! domain is the package's own name ([`install`] takes it from the
+//! caller, so the preview and the stable app never install a file both
+//! packages own).
 //!
 //! At start-up [`install`] picks the catalogue of the first language the
 //! desktop asks for that has one (`LANGUAGE`, then `LC_ALL`, `LC_MESSAGES`
-//! and `LANG`, as `g_get_language_names` orders them), searching the
+//! and `LANG`, as `g_get_language_names` orders them), stopping at English,
+//! the messages' own language, searching the
 //! `locale` folder of every XDG data directory, so `/usr/share`,
 //! `/usr/local/share` and a Flatpak's `/app/share` all work. Without one
 //! the interface stays in English. The catalogue is read by this module
@@ -26,7 +30,11 @@ use std::sync::OnceLock;
 
 use plural::Plural;
 
-/// The gettext domain: the catalogues' file name without `.mo`.
+/// The stable app's gettext domain: the catalogues' file name without
+/// `.mo`, and the template's name. The preview has its own
+/// (`openxplorer-native`, ox-app's `I18N_DOMAIN`), because both packages
+/// install into the same `share/locale` folder and no package format lets
+/// two packages own one file (native/packaging/README.md).
 pub const DOMAIN: &str = "openxplorer";
 
 /// What separates a message's context from its id in a catalogue.
@@ -59,14 +67,16 @@ impl Catalog {
 
     /// The catalogue of `domain` for the first of `languages` that has one
     /// in a `<dir>/<language>/LC_MESSAGES` folder of `locale_dirs`.
-    /// Languages are tried in order (`pt_BR` before `pt`); `C` and
-    /// `POSIX` stand for untranslated English and end the search.
+    /// Languages are tried in order (`pt_BR` before `pt`); `C`, `POSIX`
+    /// and plain `en` stand for untranslated English and end the search,
+    /// so a desktop that asks for English first (`LANGUAGE=en_US:zh_CN`)
+    /// stays in English while an `en_GB` catalogue is still found.
     pub fn find(domain: &str, locale_dirs: &[PathBuf], languages: &[String]) -> Option<Self> {
         let file = format!("{domain}.mo");
         let file = file.as_str();
         languages
             .iter()
-            .take_while(|language| !matches!(language.as_str(), "C" | "POSIX"))
+            .take_while(|language| !matches!(language.as_str(), "C" | "POSIX" | "en"))
             .flat_map(|language| {
                 locale_dirs
                     .iter()
@@ -133,10 +143,11 @@ pub fn locale_dirs() -> Vec<PathBuf> {
 
 /// Uses the catalogue of the desktop's language for the rest of the run,
 /// if one is installed; called once at start-up, before any text is
-/// shown. Returns whether a catalogue was found.
-pub fn install() -> bool {
+/// shown. `domain` is the running packaging channel's (ox-app passes its
+/// `I18N_DOMAIN`). Returns whether a catalogue was found.
+pub fn install(domain: &str) -> bool {
     let languages: Vec<String> = glib::language_names().iter().map(ToString::to_string).collect();
-    let Some(catalog) = Catalog::find(DOMAIN, &locale_dirs(), &languages) else {
+    let Some(catalog) = Catalog::find(domain, &locale_dirs(), &languages) else {
         return false;
     };
     INSTALLED.set(catalog).is_ok()
@@ -287,6 +298,11 @@ mod tests {
         );
         let english = ["C".to_owned(), "pl".to_owned()];
         assert_eq!(Catalog::find(DOMAIN, &[dir.path().to_owned()], &english), None);
+        let english_first = ["en_US", "en", "pl_PL", "pl", "C"].map(String::from);
+        assert_eq!(
+            Catalog::find(DOMAIN, &[dir.path().to_owned()], &english_first),
+            None
+        );
     }
 
     /// No message says a drive is read-only or guesses why: like Windows

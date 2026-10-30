@@ -484,9 +484,9 @@ fn software_rendering_notice(asks: bool, is_remote: bool, renderer: Option<&str>
 /// `OPENXPLORER_SNAPSHOT` set it saves a picture of one window and quits
 /// instead (see `snapshot.rs`); otherwise the launch guard runs first.
 /// The interface's translations are loaded before any text is made
-/// (INT-031).
+/// (INT-031), from this build channel's catalogue (`I18N_DOMAIN`).
 pub fn run() -> glib::ExitCode {
-    ox_core::i18n::install();
+    ox_core::i18n::install(crate::config::I18N_DOMAIN);
     let arguments: Vec<String> = std::env::args().collect();
     let launch = match SnapshotRequest::from_environment() {
         Ok(Some(request)) => Launch::Snapshot(request),

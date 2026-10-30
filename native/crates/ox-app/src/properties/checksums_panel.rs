@@ -151,10 +151,12 @@ impl Checksums {
     /// computed.
     fn calculate(self: &Rc<Self>, kind: ChecksumKind) {
         let row = &self.rows[&kind];
-        if self.computed.borrow().contains_key(&kind) || row.value.text() == CALCULATING {
+        if self.computed.borrow().contains_key(&kind)
+            || row.value.text() == ox_core::i18n::gettext_static(CALCULATING)
+        {
             return;
         }
-        row.value.set_text(CALCULATING);
+        row.value.set_text(ox_core::i18n::gettext_static(CALCULATING));
         row.button.set_sensitive(false);
         let computing = compute_in_background(self.uri.clone(), kind, self.cancel.clone());
         glib::spawn_future_local(glib::clone!(
@@ -206,7 +208,7 @@ impl Checksums {
             }
             Some(_) => self.verdict.set_text(ox_core::i18n::gettext_static(MISMATCH)),
             None => {
-                self.verdict.set_text(CALCULATING);
+                self.verdict.set_text(ox_core::i18n::gettext_static(CALCULATING));
                 self.calculate(kind);
             }
         }

@@ -41,7 +41,10 @@ fn catalogue() -> Vec<u8> {
 }
 
 fn check_localized_paths(root: &Path) {
-    assert!(ox_core::i18n::install(), "the synthetic language was selected");
+    assert!(
+        ox_core::i18n::install(ox_core::i18n::DOMAIN),
+        "the synthetic language was selected"
+    );
     assert_eq!(KnownFolder::Desktop.label(), "Translated desktop");
     let home = root.join("home");
     let locations = FolderLocations::new(home.clone(), &root.join("config"));

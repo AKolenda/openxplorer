@@ -119,16 +119,19 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
     let size = grid.add_row(
         &ox_core::i18n::gettext("Size"),
         &if has_folders {
-            CALCULATING.to_owned()
+            ox_core::i18n::gettext_static(CALCULATING).to_owned()
         } else {
             format::pretty_bytes(bytes)
         },
     );
-    let size_on_disk = grid.add_row(&ox_core::i18n::gettext("Size on disk"), CALCULATING);
+    let size_on_disk = grid.add_row(
+        &ox_core::i18n::gettext("Size on disk"),
+        ox_core::i18n::gettext_static(CALCULATING),
+    );
     let contains = grid.add_row(
         &ox_core::i18n::gettext("Contains"),
         &if has_folders {
-            CALCULATING.to_owned()
+            ox_core::i18n::gettext_static(CALCULATING).to_owned()
         } else {
             counts_text(files as u64, 0)
         },

@@ -14,9 +14,9 @@ use ox_core::format;
 use ox_core::sizes::{FolderSize, ScanStatus};
 
 /// The Size text while a folder is being measured.
-const SCANNING: &str = "Scanning…";
+const SCANNING: &str = crate::i18n::message_id("Scanning…");
 /// The Size text of a folder whose scan failed.
-const UNAVAILABLE: &str = "Unavailable";
+const UNAVAILABLE: &str = crate::i18n::message_id("Unavailable");
 /// The Size text of a folder never measured, in the details pane and
 /// Properties.
 pub(crate) const NOT_SCANNED: &str = crate::i18n::message_id("Not scanned");
@@ -39,12 +39,12 @@ impl FolderSizeState {
     /// for a lower bound (`folderSizeText`).
     pub(crate) fn size_text(&self) -> String {
         let size = match self {
-            FolderSizeState::Unavailable(_) => return UNAVAILABLE.to_owned(),
+            FolderSizeState::Unavailable(_) => return ox_core::i18n::gettext_static(UNAVAILABLE).to_owned(),
             FolderSizeState::Measured(size) => size,
         };
         let bytes = format::pretty_bytes(size.bytes);
         match size.status {
-            ScanStatus::Scanning => SCANNING.to_owned(),
+            ScanStatus::Scanning => ox_core::i18n::gettext_static(SCANNING).to_owned(),
             ScanStatus::Complete => bytes,
             ScanStatus::Partial(_) | ScanStatus::Cancelled => format!("≥ {bytes}"),
         }
@@ -55,7 +55,7 @@ impl FolderSizeState {
     /// report it, which Properties shows as "not provided".
     pub(crate) fn size_on_disk_text(&self) -> String {
         let size = match self {
-            FolderSizeState::Unavailable(_) => return UNAVAILABLE.to_owned(),
+            FolderSizeState::Unavailable(_) => return ox_core::i18n::gettext_static(UNAVAILABLE).to_owned(),
             FolderSizeState::Measured(size) => size,
         };
         let Some(allocated) = size.allocated else {
@@ -63,7 +63,7 @@ impl FolderSizeState {
         };
         let bytes = format::pretty_bytes(allocated);
         match size.status {
-            ScanStatus::Scanning => SCANNING.to_owned(),
+            ScanStatus::Scanning => ox_core::i18n::gettext_static(SCANNING).to_owned(),
             ScanStatus::Complete => bytes,
             ScanStatus::Partial(_) | ScanStatus::Cancelled => format!("≥ {bytes}"),
         }
@@ -73,12 +73,12 @@ impl FolderSizeState {
     /// for a lower bound, `Scanning…` or `Unavailable` (PROP-004).
     pub(crate) fn contains_text(&self) -> String {
         let size = match self {
-            FolderSizeState::Unavailable(_) => return UNAVAILABLE.to_owned(),
+            FolderSizeState::Unavailable(_) => return ox_core::i18n::gettext_static(UNAVAILABLE).to_owned(),
             FolderSizeState::Measured(size) => size,
         };
         let counts = counts_text(size.files, size.folders);
         match size.status {
-            ScanStatus::Scanning => SCANNING.to_owned(),
+            ScanStatus::Scanning => ox_core::i18n::gettext_static(SCANNING).to_owned(),
             ScanStatus::Complete => counts,
             ScanStatus::Partial(_) | ScanStatus::Cancelled => format!("≥ {counts}"),
         }
@@ -186,16 +186,16 @@ impl FolderSizes {
 /// of every Properties dialog says it.
 pub(super) fn counts_text(files: u64, folders: u64) -> String {
     let files = if files == 1 {
-        "1 file".to_owned()
+        ox_core::i18n::gettext_static("1 file").to_owned()
     } else {
         ox_core::i18n::format_message("{files} files", &[("files", &files.to_string())])
     };
     let folders = if folders == 1 {
-        "1 folder".to_owned()
+        ox_core::i18n::gettext_static("1 folder").to_owned()
     } else {
         ox_core::i18n::format_message("{folders} folders", &[("folders", &folders.to_string())])
     };
-    format!("{files}, {folders}")
+    ox_core::i18n::format_message("{files}, {folders}", &[("files", &files), ("folders", &folders)])
 }
 
 #[cfg(test)]

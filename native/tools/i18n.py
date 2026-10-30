@@ -14,7 +14,9 @@ gettext:
                     compiles a translator's .po into a .mo catalogue
 
 Translations live in native/po/<language>.po; package_data.py installs each
-one compiled. Machine translations are not accepted.
+one compiled, under the catalogue name of the channel it packages
+(Channel.domain), so the preview and the stable app never install one file
+both packages own. Machine translations are not accepted.
 """
 from __future__ import annotations
 
@@ -33,7 +35,6 @@ NATIVE = Path(__file__).resolve().parents[1]
 CRATES = NATIVE / 'crates'
 PO_FOLDER = NATIVE / 'po'
 TEMPLATE = PO_FOLDER / 'openxplorer.pot'
-DOMAIN = 'openxplorer'
 UI_FOLDER = CRATES / 'ox-app/resources/ui'
 UI_MESSAGES = CRATES / 'ox-app/src/i18n/template_messages.rs'
 

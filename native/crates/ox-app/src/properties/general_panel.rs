@@ -112,9 +112,10 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     }
     let size_on_disk = grid.add_row(&ox_core::i18n::gettext("Size on disk"), &size_on_disk_text(facts));
     let contains = entry.is_dir.then(|| {
-        let text = facts
-            .folder_size
-            .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::contains_text);
+        let text = facts.folder_size.map_or_else(
+            || ox_core::i18n::gettext_static(NOT_SCANNED).to_owned(),
+            FolderSizeState::contains_text,
+        );
         grid.add_row(&ox_core::i18n::gettext("Contains"), &text)
     });
     if let Some(target) = &properties.link_target {
@@ -268,9 +269,10 @@ fn size_text(facts: &GeneralFacts<'_>) -> String {
     if !entry.is_dir {
         return entry.size.map(format::pretty_bytes).unwrap_or_default();
     }
-    facts
-        .folder_size
-        .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::size_text)
+    facts.folder_size.map_or_else(
+        || ox_core::i18n::gettext_static(NOT_SCANNED).to_owned(),
+        FolderSizeState::size_text,
+    )
 }
 
 /// The Size on disk value: the space a file takes, or a folder's measured
@@ -283,9 +285,10 @@ fn size_on_disk_text(facts: &GeneralFacts<'_>) -> String {
             .map(format::pretty_bytes)
             .unwrap_or_default();
     }
-    facts
-        .folder_size
-        .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::size_on_disk_text)
+    facts.folder_size.map_or_else(
+        || ox_core::i18n::gettext_static(NOT_SCANNED).to_owned(),
+        FolderSizeState::size_on_disk_text,
+    )
 }
 
 /// Change app…, Copy full path and, for a folder, Calculate folder size.

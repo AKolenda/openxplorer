@@ -25,6 +25,7 @@ SPEC = PACKAGING / 'rpm' / 'openxplorer.spec'
 PKGBUILD = PACKAGING / 'arch' / 'PKGBUILD'
 PREVIEW_METAINFO = package_data.PACKAGING_DATA / 'io.winspace.Development.Native.metainfo.xml'
 STABLE_CONDITION = '%if "%{app_id}" == "io.winspace.Development"'
+CONFIG = package_data.NATIVE / 'crates' / 'ox-app' / 'src' / 'config.rs'
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,22 @@ class RecipeVersionTests(unittest.TestCase):
 
         assert newest is not None
         self.assertEqual(newest.group(1), build_deb.cargo_version())
+
+
+class CatalogueDomainTests(unittest.TestCase):
+    """The program searches for the catalogue its package installs.
+
+    Each channel is its own gettext domain so the preview and the stable app
+    never install one file both packages own; the Rust side chooses the
+    domain and package_data.py names the file, so the two must agree.
+    """
+
+    def test_each_channel_names_the_catalogue_after_its_package(self) -> None:
+        domains = dict(re.findall(r'const (PREVIEW|STABLE)_DOMAIN: &str = "([^"]+)";',
+                                  CONFIG.read_text(encoding='utf-8')))
+
+        expected = {channel.name: channel.package for channel in Channel}
+        self.assertEqual(domains, expected)
 
 
 class RpmFileListTests(unittest.TestCase):

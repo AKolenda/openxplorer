@@ -110,6 +110,9 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %{_datadir}/icons/hicolor/scalable/apps/%{app_id}.svg
 %{_datadir}/dbus-1/services/%{app_id}.service
 %{_datadir}/xdg-desktop-portal/portals/%{app_id}.portal
+# Each channel's catalogue is named after its package (the gettext
+# domain), so the preview and the stable app own one file each.
+%{_datadir}/locale/zh_CN/LC_MESSAGES/%{name}.mo
 %{_datadir}/licenses/%{name}/
 %if "%{app_id}" == "io.winspace.Development"
 # The Python package's command names and the persistent SMB mount helper.

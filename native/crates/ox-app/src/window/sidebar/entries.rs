@@ -19,6 +19,7 @@ use ox_core::places::{NetworkLocation, Place};
 use ox_core::search::SavedSearch;
 
 use crate::devices::Removal;
+use crate::i18n::message_id;
 use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
 use crate::places::Places;
@@ -243,13 +244,15 @@ fn network_entry(location: &NetworkLocation, locations: &LocationContext) -> Sid
 }
 
 /// A top-level row with a coloured glyph: Home, This PC or Network, in
-/// the colours of the `add(...)` calls in `renderSidebar`.
-fn fixed_entry(section: Section, label: &str, icon: Art, uri: &str) -> SidebarEntry {
+/// the colours of the `add(...)` calls in `renderSidebar`. `label` is a
+/// message id, translated here.
+fn fixed_entry(section: Section, label: &'static str, icon: Art, uri: &str) -> SidebarEntry {
     let level = if matches!(section, Section::Home | Section::RecentAndBin) {
         RowLevel::Place
     } else {
         RowLevel::Group
     };
+    let label = ox_core::i18n::gettext_static(label);
     SidebarEntry {
         section,
         level,
@@ -308,12 +311,12 @@ pub(in crate::window) fn sidebar_entries(
 ) -> Vec<SidebarEntry> {
     let home_uri = locations.home_uri();
     let home_icon = Art::TintedGlyph(Icon::Home, Tint::Home);
-    let mut home = fixed_entry(Section::Home, "Home", home_icon, &home_uri);
+    let mut home = fixed_entry(Section::Home, message_id("Home"), home_icon, &home_uri);
     home.tooltip = locations.display_location(&home_uri);
     let this_pc_icon = Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc);
-    let this_pc = fixed_entry(Section::ThisPc, "This PC", this_pc_icon, PC_URI);
+    let this_pc = fixed_entry(Section::ThisPc, message_id("This PC"), this_pc_icon, PC_URI);
     let network_icon = Art::TintedGlyph(Page::Network.icon(), Tint::Network);
-    let network = fixed_entry(Section::Network, "Network", network_icon, NETWORK_URI);
+    let network = fixed_entry(Section::Network, message_id("Network"), network_icon, NETWORK_URI);
     let quick_access = places
         .quick_access
         .iter()
@@ -347,7 +350,7 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
         menu: Some(PlaceMenu::RecentFiles),
         ..fixed_entry(
             Section::RecentAndBin,
-            "Recent files",
+            message_id("Recent files"),
             Art::Glyph(Icon::History),
             RECENT_URI,
         )
@@ -357,14 +360,17 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
         menu: Some(PlaceMenu::RecentLocations),
         ..fixed_entry(
             Section::RecentAndBin,
-            "Recent locations",
+            message_id("Recent locations"),
             Art::Glyph(Icon::Clock),
             RECENT_LOCATIONS_URI,
         )
     };
     let (icon, state) = match trash_items {
         0 => (Art::Glyph(Icon::Delete), ox_core::i18n::gettext("Empty")),
-        1 => (Art::TintedGlyph(Icon::Delete, Tint::Home), "1 item".to_owned()),
+        1 => (
+            Art::TintedGlyph(Icon::Delete, Tint::Home),
+            ox_core::i18n::gettext("1 item"),
+        ),
         count => (
             Art::TintedGlyph(Icon::Delete, Tint::Home),
             ox_core::i18n::format_message("{count} items", &[("count", &count.to_string())]),
@@ -375,7 +381,7 @@ pub(in crate::window) fn recent_and_bin_entries(trash_items: u32) -> [SidebarEnt
         menu: Some(PlaceMenu::RecycleBin {
             has_items: trash_items > 0,
         }),
-        ..fixed_entry(Section::RecentAndBin, "Recycle Bin", icon, TRASH_URI)
+        ..fixed_entry(Section::RecentAndBin, message_id("Recycle Bin"), icon, TRASH_URI)
     };
     [recent, recent_locations, bin]
 }

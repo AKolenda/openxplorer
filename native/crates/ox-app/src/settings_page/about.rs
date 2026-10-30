@@ -38,25 +38,25 @@ struct ActionGroup {
 }
 
 const UPDATES: ActionGroup = ActionGroup {
-    heading: "Updates",
+    heading: crate::i18n::message_id("Updates"),
     text: RowText {
         title: "Check for updates",
         description: "Look for a newer OpenXplorer release.",
         keywords: "update version release upgrade software updates install restart flatpak",
     },
-    button: "Check for updates",
+    button: crate::i18n::message_id("Check for updates"),
     action: WindowAction::CheckUpdates,
 };
 
 const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
-    heading: "License & source",
+    heading: crate::i18n::message_id("License & source"),
     text: RowText {
         title: "OpenXplorer · License & source",
         description: "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty.",
         keywords: "licence agpl source code copyright mit notice. Original component notices are \
                    preserved.",
     },
-    button: "Read license & source information",
+    button: crate::i18n::message_id("Read license & source information"),
     action: WindowAction::License,
 };
 
@@ -76,11 +76,13 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
 fn build_card() -> StatusCard {
     let about_build = parts::button(&ox_core::i18n::gettext("About this build"), ButtonStyle::Bordered);
     WindowAction::About.assign_to(&about_build);
+    let text = ox_core::i18n::gettext(
+        "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + GIO/GVfs.",
+    );
     let status = StatusText {
         glyph: Icon::Info,
         title: BUILD_NAME,
-        text: "An independent Windows 11–inspired file manager for Zorin. Desktop: GTK 4 + \
-               GIO/GVfs.",
+        text: &text,
         notice: None,
     };
     StatusCard::new(status, &[about_build.upcast()])
@@ -88,9 +90,9 @@ fn build_card() -> StatusCard {
 
 /// The group `spec` describes, and its row.
 fn action_group(spec: &ActionGroup) -> (SettingsGroup, SettingRow) {
-    let group = SettingsGroup::new(spec.heading);
+    let group = SettingsGroup::new(&ox_core::i18n::gettext(spec.heading));
     let row = SettingRow::new(spec.text);
-    let button = parts::button(spec.button, ButtonStyle::Bordered);
+    let button = parts::button(&ox_core::i18n::gettext(spec.button), ButtonStyle::Bordered);
     spec.action.assign_to(&button);
     row.add_control(&button, ControlName::OwnLabel);
     group.add_row(&row);

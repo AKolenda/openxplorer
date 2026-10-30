@@ -12,7 +12,10 @@ use ox_core::update::UpdateError;
 #[test]
 fn backend_errors_use_the_desktop_catalogue_and_preserve_inserted_paths() {
     if std::env::var_os("OX_I18N_ERROR_CHILD").is_some() {
-        assert!(ox_core::i18n::install(), "the requested catalogue is installed");
+        assert!(
+            ox_core::i18n::install(ox_core::i18n::DOMAIN),
+            "the requested catalogue is installed"
+        );
         assert_eq!(NetworkError::Cancelled.to_string(), "Test cancellation");
         assert_eq!(
             UpdateError::CheckRefused { status: 403 }.to_string(),

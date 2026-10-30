@@ -277,9 +277,9 @@ fn hide_place_item(entry: &SidebarEntry) -> Option<MenuEntry> {
 /// one, named `name` and saved as `key`.
 fn section_item(key: &str, name: &str, hidden: bool) -> MenuEntry {
     let (verb, action) = if hidden {
-        ("Show", WindowAction::ShowSection)
+        (ox_core::i18n::gettext_static("Show"), WindowAction::ShowSection)
     } else {
-        ("Hide", WindowAction::HideSection)
+        (ox_core::i18n::gettext_static("Hide"), WindowAction::HideSection)
     };
     let label = ox_core::i18n::format_message("{verb} section “{name}”", &[("verb", verb), ("name", name)]);
     MenuItem::with_text_target(&label, Icon::Eye, action, key).into()
