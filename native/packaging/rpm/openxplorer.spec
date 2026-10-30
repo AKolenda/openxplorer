@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.9
+Version:        2.0.10
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -122,6 +122,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Fri Oct 30 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.10-1
+- OpenXplorer 2.0.10: a Simplified Chinese translation, used when the
+  desktop's language is Chinese.
+
 * Thu Oct 29 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.9-1
 - OpenXplorer 2.0.9: a name being renamed in place stays open through its
   own right-click menu, item check boxes are off by default, and a search

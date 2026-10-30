@@ -1,3 +1,23 @@
+# 2.0.10 — 2026-10-30
+
+## What's Changed
+* feat(i18n): Add a Simplified Chinese translation, keeping English the default by @AKolenda in https://github.com/AKolenda/openxplorer/pull/166 (translation by @clansty, from https://github.com/AKolenda/openxplorer/pull/165)
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.10_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.10-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.10-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.10-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.10-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.9...v2.0.10
+
 # 2.0.9 — 2026-10-29
 
 ## What's Changed
