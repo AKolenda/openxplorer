@@ -829,9 +829,15 @@ mod tests {
         std::fs::set_permissions(ours.path(), std::fs::Permissions::from_mode(0o775))
             .expect("the mode is set");
         let group_writable = ask(TrustedOwner::root_and(mine), ours.path());
+        // Writable by others but not by the group: neither bit is the
+        // one that matters on its own.
+        std::fs::set_permissions(ours.path(), std::fs::Permissions::from_mode(0o757))
+            .expect("the mode is set");
+        let other_writable = ask(TrustedOwner::root_and(mine), ours.path());
 
         assert!(owned_by_a_trusted_user);
         assert!(!owned_by_somebody_else, "the owner is not one the walk trusts");
         assert!(!group_writable, "somebody in the group can change it");
+        assert!(!other_writable, "anybody can change it");
     }
 }

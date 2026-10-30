@@ -1,11 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The rules the privileged helper has to obey, checked on temporary
-//! folders as the ordinary test user.
+//! folders.
 //!
-//! Nothing here runs as root and nothing here touches a system path: the
-//! walk the helper runs is the walk these tests run, and the step that
-//! elevates is replaced. The matching test of the old behaviour, the walk
-//! by path that `gvfsd-admin` deletions used to take, is
+//! The walk the helper runs is the walk these tests run, and the step
+//! that elevates is replaced, so nothing here needs root and nothing
+//! here is ever started through `pkexec`. They are written to say the
+//! same thing whoever runs them: as an ordinary user every fixture is
+//! already somebody root does not trust, and as root the fixtures that
+//! stand for somebody else's are handed to `nobody`
+//! ([`parent_path::make_untrusted`]) so that the rule under test is
+//! still the one that fires.
+//!
+//! Nothing here writes outside the folder it made for itself.
+//! `parent_path` does read paths of this machine's own - `/`, a
+//! root-owned link such as `/bin`, and `/dev` - to measure the mount
+//! rules against real mounts rather than against a fixture that only
+//! claims to be one; it changes none of them, and it keeps its own
+//! fixtures out of `/tmp` for the reason `parent_path::trusted_base`
+//! gives.
+//!
+//! The matching test of the old behaviour, the walk by path that
+//! `gvfsd-admin` deletions used to take, is
 //! `gio_node::remote_delete::tests::a_folder_swapped_for_a_link_during_the_walk_is_followed`.
 
 use std::fs;
@@ -108,9 +123,10 @@ fn a_folder_swapped_for_a_link_during_the_walk_is_not_followed() {
         *swapped.lock().expect("the lock is not poisoned"),
         "the swap never happened"
     );
-    assert!(
-        result.is_err(),
-        "the walk finished on a tree that had been swapped under it: {result:?}"
+    assert_eq!(
+        result,
+        Err(crate::safe_walk::folder_changed()),
+        "the walk finished on a tree that had been swapped under it"
     );
     assert_eq!(
         fs::read(outside.join("bait")).expect("the link's target is untouched"),
@@ -235,8 +251,7 @@ fn a_mount_point_is_refused_and_nothing_is_deleted() {
 
     let (result, reported) = run(&selected, &Cancellation::new(), &options);
 
-    let message = result.expect_err("the mount point is refused").to_string();
-    assert!(message.contains(&selected.display().to_string()), "{message}");
+    assert_eq!(result, Err(walk::mount_point_refusal(&selected)));
     assert!(reported.records.is_empty(), "{:?}", reported.records);
     assert_eq!(
         fs::read(selected.join("on the drive.txt")).expect("the drive's item is kept"),
@@ -247,17 +262,25 @@ fn a_mount_point_is_refused_and_nothing_is_deleted() {
 /// parity: XFER-015
 #[test]
 fn a_filesystem_root_a_relative_path_and_a_path_through_dotdot_are_refused() {
+    // Each path gets the refusal that names what is wrong with it, so
+    // that a check which stopped working and let the path through to
+    // fail later, on a missing name or a kind it will not open, cannot
+    // be mistaken here for the check still doing its job.
     let refusals = [
-        Path::new("/"),
-        Path::new("relative/folder"),
-        Path::new("/tmp/a/../b"),
-        Path::new("/tmp/."),
+        (Path::new("/"), walk::filesystem_root_refusal()),
+        (Path::new("relative/folder"), walk::own_absolute_path_refusal()),
+        (Path::new("/srv/a/../b"), walk::own_absolute_path_refusal()),
+        (Path::new("/srv/."), walk::own_absolute_path_refusal()),
+        (
+            Path::new("/srv/data/"),
+            walk::trailing_slash_refusal(Path::new("/srv/data/")),
+        ),
     ];
 
-    for refused in refusals {
+    for (refused, expected) in refusals {
         let (result, reported) = run(refused, &Cancellation::new(), &Options::default());
 
-        assert!(result.is_err(), "{} was not refused", refused.display());
+        assert_eq!(result, Err(expected), "{}", refused.display());
         assert!(
             reported.records.is_empty(),
             "{} reported {:?}",
@@ -341,6 +364,128 @@ fn the_default_walk_asks_the_kernel_which_mount_a_folder_is_on() {
     };
 
     assert_eq!(kernel_mounts()(&selected, unchanged), unchanged);
+}
+
+/// The folder being emptied is looked at again between its items, so a
+/// folder whose name somebody takes over part way through stops the
+/// walk rather than carrying on inside whatever now answers to the
+/// name.
+///
+/// The hook fires while the walk is on the first item it found, which
+/// is before the check that sits at the top of each further item, and
+/// moves the folder away to put another one in its place. Everything
+/// the walk does still goes through the descriptor it holds, so the
+/// swap cannot redirect a deletion; what it must not do is leave the
+/// walk reporting a clean sweep of a tree that is no longer the one it
+/// was given.
+///
+/// parity: XFER-015
+#[test]
+fn a_folder_whose_name_is_taken_over_part_way_through_stops_the_walk() {
+    let root = temporary_folder();
+    let selected = root.path().join("selected");
+    fs::create_dir(&selected).expect("the folder is created");
+    for item in ["one.txt", "two.txt"] {
+        fs::write(selected.join(item), b"mine").expect("the item is written");
+    }
+    let stand_in = root.path().join("stand-in");
+    fs::create_dir(&stand_in).expect("the stand-in is created");
+    fs::write(stand_in.join("not yours.txt"), b"not yours").expect("its item is written");
+    let moved_to = root.path().join("moved");
+    let taken_over = Arc::new(Mutex::new(false));
+    let taking_over = Arc::clone(&taken_over);
+    let (selected_name, stand_in_name, moved_name) = (selected.clone(), stand_in.clone(), moved_to.clone());
+    let options = Options {
+        at_item: Some(Box::new(move |path| {
+            if path.parent() != Some(selected_name.as_path()) {
+                return;
+            }
+            let mut taken_over = taking_over.lock().expect("the lock is not poisoned");
+            if *taken_over {
+                return;
+            }
+            fs::rename(&selected_name, &moved_name).expect("the folder is moved aside");
+            fs::rename(&stand_in_name, &selected_name).expect("the stand-in takes the name");
+            *taken_over = true;
+        })),
+        ..Options::default()
+    };
+
+    let (result, _reported) = run(&selected, &Cancellation::new(), &options);
+
+    assert!(
+        *taken_over.lock().expect("the lock is not poisoned"),
+        "the name was never taken over"
+    );
+    assert_eq!(result, Err(crate::safe_walk::folder_changed()));
+    // The stand-in is untouched, and so is everything the walk had not
+    // reached inside the folder it was really given.
+    assert_eq!(
+        fs::read(selected.join("not yours.txt")).expect("the stand-in's item is kept"),
+        b"not yours"
+    );
+    assert_eq!(
+        fs::read_dir(&moved_to)
+            .expect("the folder the walk held is still there")
+            .count(),
+        1,
+        "the walk went on after the swap"
+    );
+}
+
+/// A bind mount of a single file inside the selected folder is left in
+/// place too. The mount check in front of every item is what stops it:
+/// the one in front of every folder cannot, because this is not a
+/// folder.
+///
+/// parity: XFER-015
+#[test]
+fn a_file_on_another_mount_inside_the_tree_is_not_removed() {
+    let root = temporary_folder();
+    let selected = root.path().join("selected");
+    fs::create_dir(&selected).expect("the folder is created");
+    let mounted = selected.join("mounted.txt");
+    fs::write(&mounted, b"keep me").expect("the mounted file is written");
+    fs::write(selected.join("mine.txt"), b"delete me").expect("the selected item is written");
+    let options = Options {
+        mounts: another_drive_at(mounted.clone()),
+        ..Options::default()
+    };
+
+    let (result, reported) = run(&selected, &Cancellation::new(), &options);
+
+    let totals = result.expect("the walk runs");
+    assert!(!totals.is_complete(), "{totals:?}");
+    assert_eq!(totals.skipped, 1);
+    assert_eq!(fs::read(&mounted).expect("the mounted file is kept"), b"keep me");
+    assert!(!selected.join("mine.txt").exists());
+    assert_eq!(reported.left_behind(), vec![&mounted, &selected]);
+}
+
+/// A tree deeper than the limit the engine uses everywhere else stops
+/// the walk, with the same refusal, rather than descending as far as
+/// the kernel will let it.
+///
+/// parity: XFER-015
+#[test]
+fn a_tree_deeper_than_the_limit_is_refused() {
+    let root = temporary_folder();
+    let selected = root.path().join("selected");
+    let deepest = selected.join("one").join("two");
+    fs::create_dir_all(&deepest).expect("the tree is created");
+    fs::write(deepest.join("deep.txt"), b"keep me").expect("the deep item is written");
+    let options = Options {
+        max_depth: 1,
+        ..Options::default()
+    };
+
+    let (result, _reported) = run(&selected, &Cancellation::new(), &options);
+
+    assert_eq!(result, Err(crate::transfer::nesting_error()));
+    assert!(
+        deepest.join("deep.txt").exists(),
+        "nothing below the limit was deleted"
+    );
 }
 
 mod parent_path;

@@ -173,6 +173,54 @@ mod tests {
         }
     }
 
+    /// `mount_of` asks `has_no_statx` which failures mean the kernel
+    /// has none, and reports every other failure as one. The dangerous
+    /// outcome it must never produce is `Ok` with no mount ID: a caller
+    /// comparing mounts reads that as "this kernel cannot tell me", and
+    /// falls back to comparing device numbers alone, without being told
+    /// that what really happened was an error.
+    ///
+    /// The limit of what can be checked here: on an ordinary kernel
+    /// there is no call for which `statx` fails and `statat` succeeds,
+    /// so the two arms cannot be told apart by their result: the
+    /// missing name below fails both ways. What this test pins is the
+    /// shape: a live `statx` on a real folder, an error and not a mount
+    /// for a failure, and the classification that decides which arm a
+    /// failure takes.
+    ///
+    /// parity: XFER-015
+    #[test]
+    fn mount_of_reports_a_failing_statx_instead_of_a_mount_without_an_id() {
+        use rustix::fs::{Mode, OFlags};
+        use rustix::io::Errno;
+
+        let folder = temporary_folder();
+        let open = fs::open(
+            folder.path(),
+            OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .expect("the folder is opened");
+
+        let real = mount_of(open.as_fd(), c"", AtFlags::EMPTY_PATH).expect("a real folder");
+        let missing = mount_of(open.as_fd(), c"not here", AtFlags::SYMLINK_NOFOLLOW);
+
+        assert!(
+            real.id.is_some(),
+            "statx reports no mount ID on this kernel, so this test cannot tell the two arms \
+             apart at all"
+        );
+        assert!(
+            missing.is_err(),
+            "a failing statx became a mount without an ID: {missing:?}"
+        );
+        assert!(
+            !has_no_statx(Errno::NOENT),
+            "a name that is not there is classified as a missing statx, so the error above \
+             would be turned into a mount without an ID on any kernel where statat succeeds"
+        );
+    }
+
     /// parity: XFER-015
     #[test]
     fn a_folder_is_on_the_same_mount_as_itself() {

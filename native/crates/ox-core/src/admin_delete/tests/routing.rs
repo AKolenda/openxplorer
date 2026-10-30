@@ -93,9 +93,21 @@ fn items_the_walk_left_behind_are_named_in_the_failure() {
         None,
     );
 
-    let message = result.expect_err("the deletion is incomplete").to_string();
-    assert!(message.contains("/etc/tree/mounted: another drive"), "{message}");
-    assert!(message.contains("/etc/tree: Directory not empty"), "{message}");
+    // The whole message, not a substring of it: one that quietly lost
+    // its heading, or named the item that did go, would still hold both
+    // of these lines.
+    let error = result.expect_err("the deletion is incomplete");
+    assert_eq!(
+        error,
+        TransferError::failed(super::super::incomplete_message(&[
+            "/etc/tree/mounted: another drive".to_owned(),
+            "/etc/tree: Directory not empty".to_owned(),
+        ]))
+    );
+    assert!(
+        !error.to_string().contains("gone"),
+        "what was deleted is named as left behind: {error}"
+    );
 }
 
 /// XFER-020: the engine's preflight has already asked the guard about
