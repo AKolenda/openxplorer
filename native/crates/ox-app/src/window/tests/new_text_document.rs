@@ -482,3 +482,74 @@ fn going_back_to_the_tab_shows_a_file_created_while_away() {
         test.names()
     );
 }
+
+/// Releases a held create and waits until the file is made and the create
+/// has ended.
+fn finish_held_text_document(test: &TestWindow, fixture: &Fixture, release: async_channel::Sender<()>) {
+    drop(release);
+    wait_until("the create to end", || {
+        fixture.path("New Text Document.txt").is_file() && !test.window.has_running_write()
+    });
+    wait_for(Duration::from_millis(500));
+}
+
+/// A search started and a result selected while the create ran is left
+/// as it is: no rename steals the keyboard and the selection stays.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn a_search_started_during_the_create_is_left_alone() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+    test.search_for("Notes");
+    select_names(&test, &["Notes 2.txt"]);
+
+    finish_held_text_document(&test, &fixture, release);
+
+    assert_eq!(test.window.search_box().entry().text().as_str(), "Notes");
+    assert_eq!(test.selected_names(), ["Notes 2.txt"], "the selection stays");
+    assert!(!is_renaming_in_place(&test), "nothing is renamed");
+}
+
+/// An item the user selected in the same folder while the create ran
+/// stays selected, nothing is renamed, and the folder shows the new file.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn a_selection_made_during_the_create_is_left_alone() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+    select_names(&test, &["Résumé.txt"]);
+
+    finish_held_text_document(&test, &fixture, release);
+
+    assert_eq!(test.selected_names(), ["Résumé.txt"], "the selection stays");
+    assert!(!is_renaming_in_place(&test), "nothing is renamed");
+    wait_until("the new file to be listed", || {
+        test.names().contains(&"New Text Document.txt".to_owned())
+    });
+}
+
+/// Typing in the address bar, which the user started while the create
+/// ran, keeps the keyboard: nothing is renamed and the typed address stays.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn typing_an_address_during_the_create_keeps_the_keyboard() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+    let address = test.window.address_bar();
+    address.edit("/example/typed");
+    let entry = address.entry();
+    let focused = || entry.has_focus() || entry.focus_child().is_some();
+    assert!(focused(), "the address is being typed");
+
+    finish_held_text_document(&test, &fixture, release);
+
+    assert!(!is_renaming_in_place(&test), "nothing is renamed");
+    assert!(focused(), "the keyboard stays in the address bar");
+    assert_eq!(entry.text().as_str(), "/example/typed");
+}

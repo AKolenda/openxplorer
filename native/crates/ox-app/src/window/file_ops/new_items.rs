@@ -15,6 +15,7 @@
 //! before ".txt" selected. Every other file of the New menu opens the
 //! template dialog ([`super::template_dialog`]) with its template chosen.
 
+use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::ops::{
     create_numbered_folder, create_numbered_starter, BuiltinTemplate, CreatedItem, OpsError, TemplateId,
@@ -27,6 +28,20 @@ use crate::window::BrowserWindow;
 
 /// The name a new folder starts with, as Windows names it.
 const NEW_FOLDER_NAME: &str = crate::i18n::message_id("New folder");
+
+/// What was in front when New ▸ Text document started, which renaming
+/// the new file in place must not disturb.
+#[derive(Debug, PartialEq, Eq)]
+struct FrontView {
+    /// The tab in front.
+    tab: TabId,
+    /// The folder it showed.
+    folder: String,
+    /// The search box's text.
+    search: String,
+    /// The selected items.
+    selected: Vec<String>,
+}
 
 /// What the panel of a slow New ▸ Text document says.
 const CREATING_TEXT_DOCUMENT: &str = crate::i18n::message_id("Creating a text document…");
@@ -87,12 +102,10 @@ impl BrowserWindow {
         if !self.allows(FileCommand::New) {
             return;
         }
-        let Some(origin) = self.imp().session.borrow().active_id() else {
+        let Some(front) = self.front_view() else {
             return;
         };
-        let Some(folder) = self.current_uri() else {
-            return;
-        };
+        let (origin, folder) = (front.tab, front.folder.clone());
         let (context, _writing) = match self.admit_write() {
             Ok(admitted) => admitted,
             Err(refusal) => {
@@ -111,7 +124,7 @@ impl BrowserWindow {
         self.end_quick_write(&write);
         match created {
             Err(error) if error.is_cancelled() => {}
-            Ok(created) if !self.shows_in_front(origin, &folder) => {
+            Ok(created) if !self.is_undisturbed_since(&front) => {
                 self.context().record_operation(created.undo_record());
                 let changed = changed_folders([folder.as_str()], [created.uri.as_str()]);
                 self.context().search_cache().folders_written(changed);
@@ -121,29 +134,46 @@ impl BrowserWindow {
         }
     }
 
-    /// Whether tab `id` is in front and still shows `folder`.
-    fn shows_in_front(&self, id: TabId, folder: &str) -> bool {
-        let session = self.imp().session.borrow();
-        session.is_active(id) && session.tab(id).is_some_and(|tab| tab.uri() == folder)
+    /// What is in front now, for [`Self::is_undisturbed_since`].
+    fn front_view(&self) -> Option<FrontView> {
+        let tab = self.imp().session.borrow().active_id()?;
+        Some(FrontView {
+            tab,
+            folder: self.current_uri()?,
+            search: self.search_box().query(),
+            selected: self.folder_pane().model().selected_uris(),
+        })
     }
 
-    /// Tells tab `id`, which is not in front, that `folder` changed, when
-    /// it still shows it: listed again at once beside the tab in front,
-    /// else when it is shown again, so a share that sends no change
-    /// notices shows the new item too. The tab in front is left alone.
+    /// Whether renaming the new item in place would disturb nothing the
+    /// user did since `before`: the same tab is in front on the same
+    /// folder, with the same search (none) and the same selection, the
+    /// keyboard is not in another text field, such as the address bar or
+    /// the search box, and no dialog is open over the window.
+    fn is_undisturbed_since(&self, before: &FrontView) -> bool {
+        let typing_elsewhere = GtkWindowExt::focus(self)
+            .is_some_and(|focus| focus.is::<gtk::Text>() || focus.is::<gtk::Editable>());
+        self.front_view().as_ref() == Some(before) && !typing_elsewhere && !self.has_open_dialog()
+    }
+
+    /// Tells tab `id` that `folder` changed, when it still shows it, as a
+    /// change notice would: a tab on screen is listed again at once,
+    /// keeping its selection and search; one in the background when it
+    /// is shown again, so a share that sends no change notices shows the
+    /// new item too. Nothing is selected or renamed.
     fn mark_changed(&self, id: TabId, folder: &str) {
-        let is_beside = {
+        let is_shown = {
             let mut session = self.imp().session.borrow_mut();
-            let is_beside = session.beside_active() == Some(id);
+            let is_shown = session.is_active(id) || session.beside_active() == Some(id);
             let Some(tab) = session.tab_mut(id).filter(|tab| tab.uri() == folder) else {
                 return;
             };
-            if !is_beside {
+            if !is_shown {
                 tab.changed_while_hidden = true;
             }
-            is_beside
+            is_shown
         };
-        if is_beside {
+        if is_shown {
             self.folder_changed(id);
         }
     }

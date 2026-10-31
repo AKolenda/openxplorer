@@ -189,6 +189,11 @@ impl SearchBox {
         self.imp().entry.set_text(text);
     }
 
+    /// The text in the search box.
+    pub(super) fn query(&self) -> String {
+        self.imp().entry.text().to_string()
+    }
+
     /// The field the user types in, for tests.
     #[cfg(test)]
     pub(super) fn entry(&self) -> gtk::SearchEntry {
