@@ -61,14 +61,6 @@ pub(super) enum TabMoveRefusal {
     /// The tab closed, or the destination is the window it is in.
     #[error("{}", ox_core::i18n::gettext("Choose a different, ready OpenXplorer window."))]
     NoDestination,
-    /// The drag ended without a place that takes the tab.
-    #[error(
-        "{}",
-        ox_core::i18n::gettext(
-            "Tab move cancelled. To detach, release below the tab strip or use Move tab to new window."
-        )
-    )]
-    Cancelled,
 }
 
 /// What a tab takes along when it moves to another window

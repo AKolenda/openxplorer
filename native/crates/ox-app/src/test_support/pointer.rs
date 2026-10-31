@@ -3,8 +3,9 @@
 //! through GTK's own event handling: which gesture claims a press, and in
 //! what order, is decided there and nowhere a test could call directly.
 //!
-//! [`Pointer`] moves the pointer and presses buttons with the X server's
-//! XTEST extension, so GTK receives the same device events a mouse makes.
+//! [`Pointer`] moves the pointer, presses buttons and taps keys with the X
+//! server's XTEST extension, so GTK receives the same device events a mouse
+//! and a keyboard make.
 //! It speaks the few X11 requests it needs over the display's socket
 //! itself, so the tests need no X library or crate beyond GTK. It refuses
 //! to run outside `native/tools/check.py`'s isolated session, so a test can
@@ -26,6 +27,8 @@ const STEP_SETTLE: Duration = Duration::from_millis(30);
 const QUERY_EXTENSION: u8 = 98;
 const GET_INPUT_FOCUS: u8 = 43;
 const XTEST_FAKE_INPUT: u8 = 2;
+const KEY_PRESS: u8 = 2;
+const KEY_RELEASE: u8 = 3;
 const BUTTON_PRESS: u8 = 4;
 const BUTTON_RELEASE: u8 = 5;
 const MOTION_NOTIFY: u8 = 6;
@@ -95,6 +98,17 @@ impl Pointer {
     /// Releases `button`.
     pub(crate) fn release(&mut self, button: Button) {
         self.fake(BUTTON_RELEASE, button as u8, 0, 0);
+    }
+
+    /// Presses and releases `key` on the private display's keyboard.
+    pub(crate) fn tap_key(&mut self, key: gdk::Key) {
+        let keycode = gdk::Display::default()
+            .and_then(|display| display.map_keyval(key))
+            .and_then(|keys| keys.first().map(gdk::KeymapKey::keycode))
+            .expect("the private display's keyboard has the key");
+        let keycode = u8::try_from(keycode).expect("an X11 keycode");
+        self.fake(KEY_PRESS, keycode, 0, 0);
+        self.fake(KEY_RELEASE, keycode, 0, 0);
     }
 
     /// Moves to (`x`, `y`) in `steps` even steps from (`from_x`, `from_y`),

@@ -12,6 +12,10 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+mod live;
+
+use live::{frame_time, slide_length, LiveTabs};
+
 use super::widget_tree::{laid_out_children, widest_minimum_width};
 
 /// A tab's width when there is room (`.tab{width:215px}`).
@@ -82,15 +86,15 @@ fn strip_width(tabs: &[gtk::Widget], shared: i32) -> i32 {
 }
 
 mod imp {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
     use super::{
-        laid_out_children, strip_width, tab_width, widest_minimum_width, width_of, TabWidths, MIN_TAB_WIDTH,
-        TAB_GAP, TAB_WIDTH,
+        laid_out_children, strip_width, tab_width, widest_minimum_width, width_of, LiveTabs, TabWidths,
+        MIN_TAB_WIDTH, TAB_GAP, TAB_WIDTH,
     };
 
     /// Private state of [`super::TabLayout`].
@@ -98,12 +102,18 @@ mod imp {
     pub(crate) struct TabLayout {
         /// A tab's width when there is room.
         pub(super) widest: Cell<i32>,
+        /// Where the tabs are while a tab is dragged over the strip.
+        pub(super) live: RefCell<Option<LiveTabs>>,
+        /// The width each tab got at the last allocation.
+        pub(super) each: Cell<i32>,
     }
 
     impl Default for TabLayout {
         fn default() -> Self {
             Self {
                 widest: Cell::new(TAB_WIDTH),
+                live: RefCell::new(None),
+                each: Cell::new(TAB_WIDTH),
             }
         }
     }
@@ -147,8 +157,17 @@ mod imp {
                 return (height, height, -1, -1);
             }
             let widths = self.widths(&tabs);
-            let minimum = strip_width(&tabs, widths.narrowest_allowed());
-            let natural = strip_width(&tabs, widths.widest_allowed());
+            // A gap for a tab from another window widens the row, as the
+            // tab will once it lands.
+            let extra = self
+                .live
+                .borrow()
+                .as_ref()
+                .map_or(0.0, |live| live.extra_width(f64::from(TAB_GAP)));
+            #[expect(clippy::cast_possible_truncation, reason = "a tab's width")]
+            let extra = extra.round() as i32;
+            let minimum = strip_width(&tabs, widths.narrowest_allowed()) + extra;
+            let natural = strip_width(&tabs, widths.widest_allowed()) + extra;
             (minimum, natural, -1, -1)
         }
 
@@ -156,6 +175,18 @@ mod imp {
             let tabs = laid_out_children(widget);
             let count = i32::try_from(tabs.len()).unwrap_or(i32::MAX);
             let each = tab_width(width, count, self.widths(&tabs));
+            self.each.set(each);
+            if let Some(live) = self.live.borrow().as_ref() {
+                let now = super::frame_time(widget);
+                let width_of_tab = |tab: &gtk::Widget| f64::from(width_of(tab, each));
+                for (tab, left) in live.placements(f64::from(TAB_GAP), f64::from(width), now, &width_of_tab) {
+                    #[expect(clippy::cast_possible_truncation, reason = "tab positions are small")]
+                    let x = left.round() as i32;
+                    let placement = gtk::Allocation::new(x, 0, width_of(&tab, each), height);
+                    tab.size_allocate(&placement, -1);
+                }
+                return;
+            }
             let mut x = 0;
             for tab in tabs {
                 let tab_width = width_of(&tab, each);
@@ -178,6 +209,207 @@ impl TabLayout {
     pub(crate) fn set_tab_width(&self, width: i32) {
         if self.imp().widest.replace(width) != width {
             self.layout_changed();
+        }
+    }
+
+    /// The width of the row the tabs are laid out in.
+    fn row(&self) -> f64 {
+        self.widget().map_or(0.0, |row| f64::from(row.width()))
+    }
+
+    /// The width `tab` got, padding and border included.
+    pub(crate) fn width_of(&self, tab: &gtk::Widget) -> f64 {
+        f64::from(width_of(tab, self.imp().each.get()))
+    }
+
+    /// The gap between tabs, the row's width, the frame time and how
+    /// long a slide lasts now.
+    fn frame(&self, row: &gtk::Widget) -> (f64, f64, i64, i64) {
+        (f64::from(TAB_GAP), self.row(), frame_time(row), slide_length(row))
+    }
+
+    /// Starts laying `order` out live, `dragged` following the pointer from
+    /// `left`. A drag of the same tab that is still sliding back resumes.
+    pub(crate) fn begin_drag(&self, order: Vec<gtk::Widget>, dragged: &gtk::Widget, left: f64) {
+        let resumes = self
+            .imp()
+            .live
+            .borrow()
+            .as_ref()
+            .is_some_and(|live| live.dragged() == Some(dragged));
+        if resumes {
+            if let Some(live) = self.imp().live.borrow_mut().as_mut() {
+                live.take_on_settled();
+            }
+            self.follow(left);
+            return;
+        }
+        self.end();
+        self.imp()
+            .live
+            .replace(Some(LiveTabs::dragging(order, dragged.clone(), left)));
+        // The others make room at once, also when a drop follows.
+        self.follow(left);
+    }
+
+    /// Lays `order` out live with a gap for a tab from another window.
+    pub(crate) fn begin_gap(&self, order: Vec<gtk::Widget>) {
+        if self.imp().live.borrow().as_ref().is_some_and(LiveTabs::is_gap) {
+            return;
+        }
+        self.end();
+        self.imp().live.replace(Some(LiveTabs::gap(order)));
+    }
+
+    /// The dragged tab's left edge follows the pointer to `left`.
+    pub(crate) fn follow(&self, left: f64) {
+        let Some(row) = self.widget() else { return };
+        let frame = self.frame(&row);
+        if let Some(live) = self.imp().live.borrow_mut().as_mut() {
+            live.follow(left, frame, &|tab| self.width_of(tab));
+        }
+        self.animate();
+    }
+
+    /// Opens the gap at `index`, `width` wide.
+    pub(crate) fn open_gap(&self, index: usize, width: f64) {
+        let Some(row) = self.widget() else { return };
+        let frame = self.frame(&row);
+        if let Some(live) = self.imp().live.borrow_mut().as_mut() {
+            live.open_gap(index, width, frame, &|tab| self.width_of(tab));
+        }
+        self.animate();
+    }
+
+    /// Slides every tab to its place in `order`, then runs `then`.
+    pub(crate) fn settle(&self, order: Vec<gtk::Widget>, then: impl FnOnce() + 'static) {
+        let Some(row) = self.widget() else {
+            then();
+            return;
+        };
+        let frame = self.frame(&row);
+        if let Some(live) = self.imp().live.borrow_mut().as_mut() {
+            live.settle(order, frame, &|tab| self.width_of(tab), Box::new(then));
+        } else {
+            then();
+            return;
+        }
+        self.animate();
+    }
+
+    /// Stops laying the tabs out live at once; they go back to their
+    /// order as children.
+    pub(crate) fn end(&self) {
+        let Some(mut live) = self.imp().live.take() else {
+            return;
+        };
+        if let Some(tick) = live.set_tick(None) {
+            tick.remove();
+        }
+        self.layout_changed();
+    }
+
+    /// The tabs in the order shown, while they are laid out live.
+    pub(crate) fn live_order(&self) -> Option<Vec<gtk::Widget>> {
+        self.imp()
+            .live
+            .borrow()
+            .as_ref()
+            .map(|live| live.order().to_vec())
+    }
+
+    /// The tab following the pointer, if one is.
+    pub(crate) fn following(&self) -> Option<gtk::Widget> {
+        self.imp().live.borrow().as_ref()?.following().cloned()
+    }
+
+    /// The dragged tab, following or settling.
+    pub(crate) fn dragged(&self) -> Option<gtk::Widget> {
+        self.imp().live.borrow().as_ref()?.dragged().cloned()
+    }
+
+    /// Whether the strip shows a gap for a tab from another window.
+    pub(crate) fn is_gap(&self) -> bool {
+        self.imp().live.borrow().as_ref().is_some_and(LiveTabs::is_gap)
+    }
+
+    /// Ends the live layout at once, first running what waits for a
+    /// released tab, as a new drag starts before it is in place.
+    pub(crate) fn finish_now(&self) {
+        let settled = self
+            .imp()
+            .live
+            .borrow_mut()
+            .as_mut()
+            .and_then(LiveTabs::take_on_settled);
+        self.end();
+        if let Some(settled) = settled {
+            settled.run();
+        }
+    }
+
+    /// Whether the tabs are laid out live.
+    pub(crate) fn is_live(&self) -> bool {
+        self.imp().live.borrow().is_some()
+    }
+
+    /// Lays the tabs out again now and on every frame while one slides;
+    /// once all are still, runs what waits for a released tab.
+    fn animate(&self) {
+        self.layout_changed();
+        let Some(row) = self.widget() else { return };
+        let now = frame_time(&row);
+        let (still, has_tick) = {
+            let live = self.imp().live.borrow();
+            let Some(live) = live.as_ref() else { return };
+            (live.is_still(now) || !row.is_mapped(), live.has_tick())
+        };
+        // Without animations every slide is over at once (`slide_length`).
+        if still || !row.settings().is_gtk_enable_animations() {
+            self.run_settled();
+            return;
+        }
+        if has_tick {
+            return;
+        }
+        let tick = row.add_tick_callback(glib::clone!(
+            #[weak(rename_to = layout)]
+            self,
+            #[upgrade_or]
+            glib::ControlFlow::Break,
+            move |_, clock| {
+                layout.layout_changed();
+                let still = layout
+                    .imp()
+                    .live
+                    .borrow()
+                    .as_ref()
+                    .is_none_or(|live| live.is_still(clock.frame_time()));
+                if !still {
+                    return glib::ControlFlow::Continue;
+                }
+                if let Some(live) = layout.imp().live.borrow_mut().as_mut() {
+                    live.set_tick(None);
+                }
+                layout.run_settled();
+                glib::ControlFlow::Break
+            }
+        ));
+        if let Some(live) = self.imp().live.borrow_mut().as_mut() {
+            live.set_tick(Some(tick));
+        }
+    }
+
+    /// Runs what waits for a released tab, once, after this frame.
+    fn run_settled(&self) {
+        let settled = self
+            .imp()
+            .live
+            .borrow_mut()
+            .as_mut()
+            .and_then(LiveTabs::take_on_settled);
+        if let Some(settled) = settled {
+            glib::idle_add_local_once(move || settled.run());
         }
     }
 }

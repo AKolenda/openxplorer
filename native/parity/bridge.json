@@ -90,7 +90,7 @@
     },
     "beginTabDrag": {
       "status": "native-tested",
-      "note": "The title bar's window handle is the GTK drag source of its tabs, in the capture phase, offering the tab as a process-local value; it claims a press on a tab once it passes the drag threshold, so the window drag never takes it. A busy window or a close button starts no drag.",
+      "note": "The title bar's window handle is the GTK drag source of its tabs, in the capture phase, offering the tab as a process-local value; it claims a press on a tab once it passes the drag threshold, so the window drag never takes it. Along the strip the tab follows the pointer live; GTK's drag and drop starts only once it leaves the strip. A busy window or a close button starts no drag.",
       "evidence": [
         "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy",
         "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_drag_offers_the_tab_to_this_process_only",
@@ -565,10 +565,10 @@
     },
     "tabDragLayout": {
       "status": "native-tested",
-      "note": "No layout is published: every window takes tab drops with one target that finds the strip, the insertion point and the tear-out area from its widgets.",
+      "note": "No layout is published: every window takes tab drops with one target that finds the strip and the spot from its widgets; a strip makes room for a dragged tab live, and anywhere outside a strip tears the tab out.",
       "evidence": [
-        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::only_the_source_window_well_below_its_strip_tears_a_tab_out",
-        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_drag_shows_where_the_tab_would_go"
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::outside_every_tab_row_a_dropped_tab_tears_out",
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_over_another_windows_strip_opens_a_gap_and_nothing_is_written"
       ]
     },
     "tabTransferReady": {

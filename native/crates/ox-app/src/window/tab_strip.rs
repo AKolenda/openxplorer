@@ -18,7 +18,9 @@
 //! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
 //! shows while tabs and files are dragged is [`drag_marks`]'s.
 
+mod carried_window;
 mod drag_marks;
+mod live_drag;
 
 use std::cell::Cell;
 
@@ -34,8 +36,6 @@ use super::session::TabId;
 use super::tab_menu::tab_menu;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
-
-pub(super) use drag_marks::TabInsertion;
 
 /// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
 const ICON_SIZE: i32 = 16;
@@ -75,7 +75,7 @@ pub(super) struct TabView {
 }
 
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
@@ -83,6 +83,7 @@ mod imp {
 
     use crate::window::gestures;
     use crate::window::menu_popover::MenuPopover;
+    use crate::window::session::TabId;
     use crate::window::tab_layout::TabLayout;
 
     use super::TabView;
@@ -107,6 +108,10 @@ mod imp {
         pub(super) menu: OnceCell<MenuPopover>,
         /// Each tab shown and its widget, left to right.
         pub(super) shown: RefCell<Vec<(TabView, gtk::Box)>>,
+        /// The tab last grabbed for a drag, and where along it.
+        pub(super) grab: Cell<Option<(TabId, f64)>>,
+        /// Tabs given while a drag lasts, shown once it is over.
+        pub(super) waiting_tabs: RefCell<Option<Vec<TabView>>>,
     }
 
     #[glib::object_subclass]
@@ -185,6 +190,12 @@ impl TabStrip {
     /// Replaces the tabs with `tabs` and scrolls the active one into view.
     pub(super) fn set_tabs(&self, tabs: &[TabView]) {
         let imp = self.imp();
+        // A drag keeps the tab widgets it moves until it is over.
+        if imp.layout.is_live() {
+            imp.waiting_tabs.replace(Some(tabs.to_vec()));
+            return;
+        }
+        imp.waiting_tabs.replace(None);
         // A tab being shown by the keyboard keeps focus in the strip.
         let had_focus = imp.tab_list.focus_child().is_some();
         remove_children(&*imp.tab_list);

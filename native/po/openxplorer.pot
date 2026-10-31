@@ -5624,16 +5624,8 @@ msgstr ""
 msgid "OpenXplorer window"
 msgstr ""
 
-#: crates/ox-app/src/window/tab_moves.rs
-msgid "Tab move cancelled. To detach, release below the tab strip or use Move tab to new window."
-msgstr ""
-
 #: crates/ox-app/src/window/tab_moves.rs crates/ox-core/src/ops/tab_transfer/messages.rs
 msgid "The destination was busy or closed. The original tab was kept."
-msgstr ""
-
-#: crates/ox-app/src/window/tab_moves/drag.rs
-msgid "Release to open this tab in a new window"
 msgstr ""
 
 #: crates/ox-app/src/window/tab_moves/drag.rs
