@@ -198,6 +198,10 @@ pub(crate) struct BrowserWindow {
     /// for the keyboard the isolated session cannot press.
     #[cfg(test)]
     pub(super) test_shift_held: Cell<bool>,
+    /// Counts the key presses, mouse presses and scrolls in the window,
+    /// so a slow New ▸ Text document renames in place only when the user
+    /// did nothing meanwhile.
+    pub(super) input_generation: Cell<u64>,
     /// In tests, a gate New ▸ Text document waits at before it creates
     /// the file, standing in for a slow share or phone.
     #[cfg(test)]

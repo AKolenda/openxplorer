@@ -41,7 +41,7 @@ const QUICK_WRITE_PANEL_DELAY: Duration = Duration::from_secs(1);
 /// A write [`BrowserWindow::begin_quick_write`] started.
 #[derive(Debug)]
 pub(super) struct QuickWrite {
-    /// The timer that shows its panel, until it fires.
+    /// The timer that shows its panel, until it has shown it.
     pending_panel: Rc<RefCell<Option<glib::SourceId>>>,
 }
 
@@ -171,7 +171,8 @@ impl BrowserWindow {
     /// operation (OPS-024, TAB-049). As in Windows, its panel, reading
     /// `label` with its Cancel button, shows only once it has run for
     /// [`QUICK_WRITE_PANEL_DELAY`], so a quick one looks instant, and
-    /// only while no other write holds the panel. `None`, as
+    /// once no other write holds the panel: it looks again each
+    /// [`QUICK_WRITE_PANEL_DELAY`] until the panel is free. `None`, as
     /// [`Self::begin_operation`] refuses, while any write runs, an
     /// extraction or compression on the panel included. End it with
     /// [`Self::end_quick_write`].
@@ -182,7 +183,7 @@ impl BrowserWindow {
         self.imp().file_operations.borrow_mut().running = Some(cancel.clone());
         self.update_file_commands();
         let pending_panel = Rc::new(RefCell::new(None));
-        let source = glib::timeout_add_local_once(
+        let source = glib::timeout_add_local(
             QUICK_WRITE_PANEL_DELAY,
             glib::clone!(
                 #[weak(rename_to = window)]
@@ -191,15 +192,20 @@ impl BrowserWindow {
                 pending_panel,
                 #[strong]
                 cancel,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
                 move || {
-                    // It fired, so there is nothing left to remove.
-                    pending_panel.take();
                     // An archive operation that checked before this write
-                    // began may hold the panel; it keeps it.
+                    // began may hold the panel; it keeps it, and the
+                    // panel shows this write once it is free.
                     let panel = window.transfer_panel();
-                    if !panel.is_busy() {
-                        panel.start(TransferKind::Create, label, cancel);
+                    if panel.is_busy() {
+                        return glib::ControlFlow::Continue;
                     }
+                    // Done, so there is nothing left to remove.
+                    pending_panel.take();
+                    panel.start(TransferKind::Create, label, cancel.clone());
+                    glib::ControlFlow::Break
                 }
             ),
         );

@@ -81,6 +81,7 @@ impl BrowserWindow {
     /// templates, and New ▸ Link.
     /// The templates are read now and whenever the New menu opens.
     fn install_new_actions(&self) {
+        self.watch_input();
         self.refresh_template_menu();
         if let Some(menu) = self.command_bar().new_menu_popover() {
             menu.connect_show(glib::clone!(

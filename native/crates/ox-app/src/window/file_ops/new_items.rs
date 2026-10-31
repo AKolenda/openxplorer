@@ -15,6 +15,7 @@
 //! before ".txt" selected. Every other file of the New menu opens the
 //! template dialog ([`super::template_dialog`]) with its template chosen.
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::ops::{
@@ -29,22 +30,11 @@ use crate::window::BrowserWindow;
 /// The name a new folder starts with, as Windows names it.
 const NEW_FOLDER_NAME: &str = crate::i18n::message_id("New folder");
 
-/// What was in front when New ▸ Text document started, which renaming
-/// the new file in place must not disturb.
-#[derive(Debug, PartialEq, Eq)]
-struct FrontView {
-    /// The tab in front.
-    tab: TabId,
-    /// The folder it showed.
-    folder: String,
-    /// The search box's text.
-    search: String,
-    /// The selected items.
-    selected: Vec<String>,
-}
-
 /// What the panel of a slow New ▸ Text document says.
 const CREATING_TEXT_DOCUMENT: &str = crate::i18n::message_id("Creating a text document…");
+
+/// The name of the controllers that count the window's input.
+const INPUT_WATCH: &str = "input-generation";
 
 /// The name, before ".txt", a new text document starts with, as Windows
 /// names it.
@@ -102,10 +92,13 @@ impl BrowserWindow {
         if !self.allows(FileCommand::New) {
             return;
         }
-        let Some(front) = self.front_view() else {
+        let Some(origin) = self.imp().session.borrow().active_id() else {
             return;
         };
-        let (origin, folder) = (front.tab, front.folder.clone());
+        let Some(folder) = self.current_uri() else {
+            return;
+        };
+        let generation = self.imp().input_generation.get();
         let (context, _writing) = match self.admit_write() {
             Ok(admitted) => admitted,
             Err(refusal) => {
@@ -124,7 +117,7 @@ impl BrowserWindow {
         self.end_quick_write(&write, &context.cancel);
         match created {
             Err(error) if error.is_cancelled() => {}
-            Ok(created) if !self.is_undisturbed_since(&front) => {
+            Ok(created) if !self.is_undisturbed_since(generation, origin, &folder) => {
                 self.context().record_operation(created.undo_record());
                 let changed = changed_folders([folder.as_str()], [created.uri.as_str()]);
                 self.context().search_cache().folders_written(changed);
@@ -134,26 +127,71 @@ impl BrowserWindow {
         }
     }
 
-    /// What is in front now, for [`Self::is_undisturbed_since`].
-    fn front_view(&self) -> Option<FrontView> {
-        let tab = self.imp().session.borrow().active_id()?;
-        Some(FrontView {
-            tab,
-            folder: self.current_uri()?,
-            search: self.search_box().query(),
-            selected: self.folder_pane().model().selected_uris(),
-        })
+    /// Whether renaming the new item in place would disturb nothing the
+    /// user did since the create started at input `generation` in tab
+    /// `id` on `folder`: no key, mouse button or wheel was used in the
+    /// window, no dialog is in front, and that tab is still in front on
+    /// the same folder, without a search.
+    fn is_undisturbed_since(&self, generation: u64, id: TabId, folder: &str) -> bool {
+        self.imp().input_generation.get() == generation
+            && !self.dialog_in_front()
+            && !self.is_searching()
+            && self.shows_in_front(id, folder)
     }
 
-    /// Whether renaming the new item in place would disturb nothing the
-    /// user did since `before`: the same tab is in front on the same
-    /// folder, with the same search (none) and the same selection, the
-    /// keyboard is not in another text field, such as the address bar or
-    /// the search box, and no dialog is open over the window.
-    fn is_undisturbed_since(&self, before: &FrontView) -> bool {
-        let typing_elsewhere = GtkWindowExt::focus(self)
-            .is_some_and(|focus| focus.is::<gtk::Text>() || focus.is::<gtk::Editable>());
-        self.front_view().as_ref() == Some(before) && !typing_elsewhere && !self.has_open_dialog()
+    /// Whether tab `id` is in front and still shows `folder`.
+    fn shows_in_front(&self, id: TabId, folder: &str) -> bool {
+        let session = self.imp().session.borrow();
+        session.is_active(id) && session.tab(id).is_some_and(|tab| tab.uri() == folder)
+    }
+
+    /// Counts every key press, mouse button press and scroll in the
+    /// window, before any widget handles it, for
+    /// [`Self::is_undisturbed_since`]. Nothing is stopped.
+    pub(super) fn watch_input(&self) {
+        let keys = gtk::EventControllerKey::new();
+        keys.connect_key_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, _, _, _| {
+                window.note_input();
+                glib::Propagation::Proceed
+            }
+        ));
+        let press = gtk::GestureClick::builder().button(0).build();
+        press.connect_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_, _, _, _| window.note_input()
+        ));
+        let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::BOTH_AXES);
+        wheel.connect_scroll(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, _, _| {
+                window.note_input();
+                glib::Propagation::Proceed
+            }
+        ));
+        for controller in [
+            keys.upcast::<gtk::EventController>(),
+            press.upcast(),
+            wheel.upcast(),
+        ] {
+            controller.set_name(Some(INPUT_WATCH));
+            controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+            self.add_controller(controller);
+        }
+    }
+
+    /// One more input for [`Self::watch_input`].
+    fn note_input(&self) {
+        let generation = &self.imp().input_generation;
+        generation.set(generation.get().wrapping_add(1));
     }
 
     /// Tells tab `id` that `folder` changed, when it still shows it, as a

@@ -483,6 +483,51 @@ fn going_back_to_the_tab_shows_a_file_created_while_away() {
     );
 }
 
+/// Something the user does in the window, as its own input controllers
+/// see it.
+#[derive(Clone, Copy)]
+enum Input {
+    /// A key press.
+    Key,
+    /// A mouse button press.
+    Press,
+    /// A turn of the mouse wheel.
+    Scroll,
+}
+
+/// Plays `input` to the window's input watch, as GTK delivers it: the
+/// isolated session cannot press keys or move a mouse.
+fn touch(test: &TestWindow, input: Input) {
+    let controllers = test.window.observe_controllers();
+    let watching = controllers
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::EventController>().ok())
+        .filter(|controller| controller.name().as_deref() == Some("input-generation"));
+    for controller in watching {
+        match input {
+            Input::Key => {
+                if let Some(keys) = controller.downcast_ref::<gtk::EventControllerKey>() {
+                    let _: bool = keys.emit_by_name(
+                        "key-pressed",
+                        &[&gdk::Key::a.into_glib(), &0_u32, &gdk::ModifierType::empty()],
+                    );
+                }
+            }
+            Input::Press => {
+                if let Some(press) = controller.downcast_ref::<gtk::GestureClick>() {
+                    press.emit_by_name::<()>("pressed", &[&1_i32, &10.0_f64, &10.0_f64]);
+                }
+            }
+            Input::Scroll => {
+                if let Some(wheel) = controller.downcast_ref::<gtk::EventControllerScroll>() {
+                    let _: bool = wheel.emit_by_name("scroll", &[&0.0_f64, &3.0_f64]);
+                }
+            }
+        }
+    }
+}
+
 /// Releases a held create and waits until the file is made and the create
 /// has ended.
 fn finish_held_text_document(test: &TestWindow, fixture: &Fixture, release: async_channel::Sender<()>) {
@@ -502,7 +547,9 @@ fn a_search_started_during_the_create_is_left_alone() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let release = start_held_text_document(&test);
+    touch(&test, Input::Key);
     test.search_for("Notes");
+    touch(&test, Input::Press);
     select_names(&test, &["Notes 2.txt"]);
 
     finish_held_text_document(&test, &fixture, release);
@@ -521,6 +568,7 @@ fn a_selection_made_during_the_create_is_left_alone() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let release = start_held_text_document(&test);
+    touch(&test, Input::Press);
     select_names(&test, &["Résumé.txt"]);
 
     finish_held_text_document(&test, &fixture, release);
@@ -542,6 +590,7 @@ fn typing_an_address_during_the_create_keeps_the_keyboard() {
     let test = TestWindow::open(&fixture.uri());
     let release = start_held_text_document(&test);
     let address = test.window.address_bar();
+    touch(&test, Input::Key);
     address.edit("/example/typed");
     let entry = address.entry();
     let focused = || entry.has_focus() || entry.focus_child().is_some();
@@ -646,4 +695,75 @@ fn a_slow_creates_panel_is_its_own_until_it_ends() {
         !panel.is_visible() && !panel.is_busy(),
         "the create hid its panel"
     );
+}
+
+/// Properties opened over the items while the create ran stays in front:
+/// nothing is renamed underneath it and the selection is left as it was.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn properties_opened_during_the_create_is_left_alone() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Résumé.txt"]);
+    let release = start_held_text_document(&test);
+    test.activate("properties", None);
+    test.wait_for_dialog("Properties");
+
+    finish_held_text_document(&test, &fixture, release);
+
+    assert!(test.window.dialog_layer().shown().is_some(), "Properties stays");
+    assert!(!is_renaming_in_place(&test), "nothing is renamed underneath");
+    assert_eq!(test.selected_names(), ["Résumé.txt"]);
+}
+
+/// Scrolling through a long folder while the create ran is not undone:
+/// the view stays where the user scrolled and nothing is renamed.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn scrolling_during_the_create_is_left_alone() {
+    let fixture = Fixture::with_files(400);
+    let test = TestWindow::open(&fixture.uri());
+    let pane = test.window.folder_pane();
+    let release = start_held_text_document(&test);
+    touch(&test, Input::Scroll);
+    pane.restore_scroll_position(2000.0);
+    wait_until("the view to scroll", || pane.scroll_position() > 1000.0);
+    let scrolled = pane.scroll_position();
+
+    finish_held_text_document(&test, &fixture, release);
+
+    assert!(!is_renaming_in_place(&test), "nothing is renamed");
+    assert!(
+        (pane.scroll_position() - scrolled).abs() < 1.0,
+        "the view stays where it was scrolled"
+    );
+}
+
+/// A slow create whose panel was taken by another write when its moment
+/// came shows its own panel once that write ends, so it can still be
+/// cancelled without closing the window.
+///
+/// parity: OPS-002, OPS-022
+#[gtk::test]
+fn a_slow_create_shows_its_panel_once_another_write_lets_it_go() {
+    let fixture = Fixture::standard();
+    let before = names_on_disk(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.transfer_panel();
+    let release = start_held_text_document(&test);
+    let _archive = start_archive_on_panel(&test);
+    wait_for(Duration::from_millis(1500));
+
+    test.window.finish_archive_operation();
+    wait_until("the create's panel", || {
+        panel.is_visible() && panel.status_text() == "Creating a text document…"
+    });
+    panel.press_cancel();
+    drop(release);
+    wait_until("the create to stop", || !test.window.has_running_write());
+
+    assert_eq!(names_on_disk(&fixture), before, "nothing is left behind");
+    assert!(!panel.is_visible());
 }
