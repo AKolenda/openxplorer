@@ -4650,6 +4650,10 @@ msgid "Use a name without slashes or control characters."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a text document…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
 msgid "New Text Document"
 msgstr ""
 

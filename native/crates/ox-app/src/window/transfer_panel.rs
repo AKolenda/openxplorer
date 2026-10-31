@@ -49,6 +49,9 @@ pub(crate) enum TransferKind {
     Files,
     /// Extracting or compressing a ZIP archive.
     Archive,
+    /// Creating a new item, such as New ▸ Text document on a slow share,
+    /// which cannot pause.
+    Create,
 }
 
 impl TransferKind {
@@ -57,6 +60,7 @@ impl TransferKind {
         match self {
             TransferKind::Files => Icon::Copy,
             TransferKind::Archive => Icon::FolderZip,
+            TransferKind::Create => Icon::DocumentAdd,
         }
     }
 }

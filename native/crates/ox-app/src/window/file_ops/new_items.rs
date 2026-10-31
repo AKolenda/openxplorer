@@ -28,6 +28,9 @@ use crate::window::BrowserWindow;
 /// The name a new folder starts with, as Windows names it.
 const NEW_FOLDER_NAME: &str = crate::i18n::message_id("New folder");
 
+/// What the panel of a slow New ▸ Text document says.
+const CREATING_TEXT_DOCUMENT: &str = crate::i18n::message_id("Creating a text document…");
+
 /// The name, before ".txt", a new text document starts with, as Windows
 /// names it.
 const NEW_TEXT_DOCUMENT_NAME: &str = crate::i18n::message_id("New Text Document");
@@ -97,20 +100,22 @@ impl BrowserWindow {
                 return;
             }
         };
-        if !self.begin_write_without_panel(&context.cancel) {
+        let label = ox_core::i18n::gettext_static(CREATING_TEXT_DOCUMENT);
+        let Some(write) = self.begin_quick_write(label, &context.cancel) else {
             return;
-        }
+        };
         #[cfg(test)]
         self.wait_at_text_document_gate().await;
         let name = format!("{}.txt", ox_core::i18n::gettext_static(NEW_TEXT_DOCUMENT_NAME));
         let created = create_numbered_starter(&folder, &name, BuiltinTemplate::Text, &context).await;
-        self.end_write_without_panel();
+        self.end_quick_write(&write);
         match created {
             Err(error) if error.is_cancelled() => {}
             Ok(created) if !self.shows_in_front(origin, &folder) => {
                 self.context().record_operation(created.undo_record());
                 let changed = changed_folders([folder.as_str()], [created.uri.as_str()]);
                 self.context().search_cache().folders_written(changed);
+                self.mark_changed(origin, &folder);
             }
             created => self.rename_created(created),
         }
@@ -120,6 +125,27 @@ impl BrowserWindow {
     fn shows_in_front(&self, id: TabId, folder: &str) -> bool {
         let session = self.imp().session.borrow();
         session.is_active(id) && session.tab(id).is_some_and(|tab| tab.uri() == folder)
+    }
+
+    /// Tells tab `id`, which is not in front, that `folder` changed, when
+    /// it still shows it: listed again at once beside the tab in front,
+    /// else when it is shown again, so a share that sends no change
+    /// notices shows the new item too. The tab in front is left alone.
+    fn mark_changed(&self, id: TabId, folder: &str) {
+        let is_beside = {
+            let mut session = self.imp().session.borrow_mut();
+            let is_beside = session.beside_active() == Some(id);
+            let Some(tab) = session.tab_mut(id).filter(|tab| tab.uri() == folder) else {
+                return;
+            };
+            if !is_beside {
+                tab.changed_while_hidden = true;
+            }
+            is_beside
+        };
+        if is_beside {
+            self.folder_changed(id);
+        }
     }
 
     /// Holds New ▸ Text document before it creates the file until the

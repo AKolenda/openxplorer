@@ -13,6 +13,11 @@
 //! Explorer, nothing more is said when every item succeeded; otherwise
 //! the "Operation result" dialog says what happened.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Duration;
+
+use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::ops::{
     run_transfer, starting_label, summarize, OperationContext, OperationSummary, OpsError, TransferOutcome,
@@ -28,6 +33,17 @@ use crate::search::changed_folders;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::{TransferKind, TransferPanel};
 use crate::window::BrowserWindow;
+
+/// How long a quick write runs before its panel shows, as Windows shows
+/// progress only for an operation that takes a while.
+const QUICK_WRITE_PANEL_DELAY: Duration = Duration::from_secs(1);
+
+/// A write [`BrowserWindow::begin_quick_write`] started.
+#[derive(Debug)]
+pub(super) struct QuickWrite {
+    /// The timer that shows its panel, until it fires.
+    pending_panel: Rc<RefCell<Option<glib::SourceId>>>,
+}
 
 /// Why files are not written while a drive is formatted.
 const FORMATTING_A_DRIVE: &str =
@@ -149,25 +165,51 @@ impl BrowserWindow {
         Some(context)
     }
 
-    /// Counts a short write that shows no panel, New ▸ Text document, as
-    /// the window's running operation, which `cancel` stops: other file
-    /// commands wait, Cancel stops it, and closing or Quit asks or waits
-    /// as for any running operation (OPS-024, TAB-049). False when an
-    /// operation runs already. End it with [`Self::end_write_without_panel`].
-    pub(super) fn begin_write_without_panel(&self, cancel: &Cancellation) -> bool {
+    /// Counts a short write, New ▸ Text document, as the window's running
+    /// operation, which `cancel` stops: other file commands wait, Cancel
+    /// stops it, and closing or Quit asks or waits as for any running
+    /// operation (OPS-024, TAB-049). As in Windows, its panel, reading
+    /// `label` with its Cancel button, shows only once it has run for
+    /// [`QUICK_WRITE_PANEL_DELAY`], so a quick one looks instant. `None`
+    /// when an operation runs already. End it with
+    /// [`Self::end_quick_write`].
+    pub(super) fn begin_quick_write(&self, label: &'static str, cancel: &Cancellation) -> Option<QuickWrite> {
         {
             let mut operations = self.imp().file_operations.borrow_mut();
             if operations.is_busy() {
-                return false;
+                return None;
             }
             operations.running = Some(cancel.clone());
         }
         self.update_file_commands();
-        true
+        let pending_panel = Rc::new(RefCell::new(None));
+        let source = glib::timeout_add_local_once(
+            QUICK_WRITE_PANEL_DELAY,
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[strong]
+                pending_panel,
+                #[strong]
+                cancel,
+                move || {
+                    // It fired, so there is nothing left to remove.
+                    pending_panel.take();
+                    window.transfer_panel().start(TransferKind::Create, label, cancel);
+                }
+            ),
+        );
+        pending_panel.replace(Some(source));
+        Some(QuickWrite { pending_panel })
     }
 
-    /// Forgets the write of [`Self::begin_write_without_panel`].
-    pub(super) fn end_write_without_panel(&self) {
+    /// Forgets the write of [`Self::begin_quick_write`] and hides its
+    /// panel, if it showed.
+    pub(super) fn end_quick_write(&self, write: &QuickWrite) {
+        match write.pending_panel.take() {
+            Some(source) => source.remove(),
+            None => self.transfer_panel().finish(),
+        }
         self.imp().file_operations.borrow_mut().running = None;
         self.update_file_commands();
     }

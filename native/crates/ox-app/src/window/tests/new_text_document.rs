@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{
@@ -396,4 +397,88 @@ fn a_create_that_ends_back_in_its_own_tab_renames_there() {
 
     assert_eq!(field.text(), "New Text Document.txt");
     assert_eq!(test.selected_names(), ["New Text Document.txt"]);
+}
+
+/// A create still running after a moment, as on a slow share or phone,
+/// shows the transfer panel, whose Cancel stops it: no file is left and
+/// nothing is said. Nothing shows at first, so a quick create looks
+/// instant.
+///
+/// parity: OPS-002, OPS-022
+#[gtk::test]
+fn a_slow_create_shows_the_cancellable_panel_after_a_moment() {
+    let fixture = Fixture::standard();
+    let before = names_on_disk(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.transfer_panel();
+    let release = start_held_text_document(&test);
+    let shown_at_once = panel.is_visible();
+
+    wait_until("the panel to show", || panel.is_visible());
+    panel.press_cancel();
+    drop(release);
+    wait_until("the create to stop", || !test.window.has_running_write());
+    wait_for(Duration::from_millis(300));
+
+    assert!(!shown_at_once, "nothing shows at first");
+    assert!(!panel.is_visible(), "the panel goes once the create stopped");
+    assert_eq!(names_on_disk(&fixture), before, "nothing is left behind");
+    assert_eq!(test.window.shown_message(), "", "a cancel says nothing");
+    assert!(!is_renaming_in_place(&test));
+}
+
+/// A create that ends before the moment passes never shows the panel,
+/// even once that moment has gone by.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn a_quick_create_never_shows_the_panel() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+
+    drop(release);
+    let field = name_editor(&test);
+    wait_for(Duration::from_millis(1500));
+
+    assert!(!test.window.transfer_panel().is_visible());
+    assert_eq!(field.text(), "New Text Document.txt");
+}
+
+/// A file created while its tab was in the background shows when the
+/// user goes back to that tab, even where the folder sends no change
+/// notices, as on some shares. The tab in front is not listed again.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn going_back_to_the_tab_shows_a_file_created_while_away() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let first = test.active_tab().expect("a tab");
+    let release = start_held_text_document(&test);
+    // As on a share that sends no change notices.
+    if let Some(tab) = test.window.imp().session.borrow_mut().tab_mut(first) {
+        tab.watch = None;
+    }
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a valid folder");
+    test.wait_for_listing("the second tab");
+
+    drop(release);
+    wait_until("the create to end", || {
+        fixture.path("New Text Document.txt").is_file() && !test.window.has_running_write()
+    });
+    wait_for(Duration::from_millis(300));
+    let in_front = test.names();
+    test.activate_tab(first);
+    test.wait_for_listing("the first tab");
+    wait_for(Duration::from_millis(500));
+
+    assert!(in_front.is_empty(), "the tab in front still shows its own folder");
+    assert!(
+        test.names().contains(&"New Text Document.txt".to_owned()),
+        "{:?}",
+        test.names()
+    );
 }
