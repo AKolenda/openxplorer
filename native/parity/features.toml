@@ -8655,7 +8655,7 @@ native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (paste_during_
 id = "CLIP-012"
 area = "CLIP"
 title = "Copy path"
-behaviour = "'Copy as path' in the context menu (Windows' name; the Python app's 'Copy path', which its command bar also had) copies the display path of the single selected item, or of the current folder when nothing is selected, as text: a POSIX path, a UNC \\\\server\\share\\… for SMB, or '<device> / path'. It shows no message. On pseudo-pages it reads 'Open a folder first.'. If the clipboard write fails, a dialog 'Location' shows the text. The command bar button with the share glyph is Share now (CMD-037), as in Windows 11; the command keeps its keys (CLIP-013)."
+behaviour = "'Copy as path' in the context menu (Windows' name; the Python app's 'Copy path', which its command bar also had) copies the display path of the single selected item, or of the current folder when nothing is selected, as text in double quotes, as Windows does, whether or not it has spaces: a POSIX path, a UNC \\\\server\\share\\… for SMB, or '<device> / path', each quoted whole (\"/home/sam/Plan Q3.txt\"). It shows no message. On pseudo-pages it reads 'Open a folder first.'. If the clipboard write fails, a dialog 'Location' shows the text. The command bar button with the share glyph is Share now (CMD-037), as in Windows 11; the command keeps its keys (CLIP-013)."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -8669,7 +8669,7 @@ python_tests = []
 bridge = ["clipboardText"]
 dolphin = "Copy Location (Ctrl+Alt+C)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_copies_the_selected_items_address_or_the_folders, copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most); native/crates/ox-app/src/window/copy_path.rs (local_smb_and_device_items_copy_their_display_path, without_one_selected_item_the_folder_is_copied_and_a_page_has_none). Setting the display clipboard's text cannot fail in GTK 4, so the 'Location' fallback dialog has no trigger. The owner removed the success message to match Windows Explorer, which shows none: only failures and refusals are shown."
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_copies_the_selected_items_address_or_the_folders, copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most); native/crates/ox-app/src/window/copy_path.rs (a_local_path_with_a_space_is_copied_in_quotes, a_path_without_spaces_is_quoted_too, an_smb_item_copies_its_unc_path_in_quotes, a_phone_item_copies_its_device_path_in_quotes, without_a_selection_the_folder_is_copied_and_a_page_has_none, copied_location_itself_stays_unquoted). Copy as path wraps each address in straight double quotes, as Windows does; the address bar's Copy address and the Properties copy button keep the plain address. Setting the display clipboard's text cannot fail in GTK 4, so the 'Location' fallback dialog has no trigger. The owner removed the success message to match Windows Explorer, which shows none: only failures and refusals are shown."
 
 [[feature]]
 id = "CLIP-013"
@@ -8708,7 +8708,7 @@ sources = [
 python_tests = []
 bridge = ["clipboardText"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/copy_path.rs: Copy path (command bar, item menus, Ctrl+Shift+C, Ctrl+Alt+C) copies the display path of every selected item, one per line, and the folder's without a selection; it is no longer disabled for several items. Tests: copy_path.rs (several_selected_items_copy_one_path_per_line); native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_asks_for_a_folder_on_a_page_and_copies_every_selected_item)."
+native_note = "native/crates/ox-app/src/window/copy_path.rs: Copy path (command bar, item menus, Ctrl+Shift+C, Ctrl+Alt+C) copies the display path of every selected item in double quotes, one per line, and the folder's without a selection; it is no longer disabled for several items. Tests: copy_path.rs (several_selected_items_copy_one_quoted_path_per_line); native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_asks_for_a_folder_on_a_page_and_copies_every_selected_item)."
 
 [[feature]]
 id = "CLIP-015"

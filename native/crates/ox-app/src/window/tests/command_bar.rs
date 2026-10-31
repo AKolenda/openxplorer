@@ -448,7 +448,7 @@ fn copy_path_copies_the_selected_items_address_or_the_folders() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     test.activate("copy-path", None);
-    let folder = fixture.root().display().to_string();
+    let folder = format!("\"{}\"", fixture.root().display());
     assert_eq!(
         clipboard_text(&test).as_deref(),
         Some(folder.as_str()),
@@ -462,7 +462,7 @@ fn copy_path_copies_the_selected_items_address_or_the_folders() {
     );
     test.window.folder_model().select_only(1);
     test.activate("copy-path", None);
-    let file = fixture.path("Notes 2.txt").display().to_string();
+    let file = format!("\"{}\"", fixture.path("Notes 2.txt").display());
     assert_eq!(
         clipboard_text(&test).as_deref(),
         Some(file.as_str()),
@@ -502,8 +502,8 @@ fn copy_path_runs_on_explorers_and_dolphins_keys() {
     select_names(&test, &["Notes 10.txt"]);
     press_shortcut(&test, gdk::Key::c, control | gdk::ModifierType::ALT_MASK);
 
-    let first = fixture.path("Notes 2.txt").display().to_string();
-    let second = fixture.path("Notes 10.txt").display().to_string();
+    let first = format!("\"{}\"", fixture.path("Notes 2.txt").display());
+    let second = format!("\"{}\"", fixture.path("Notes 10.txt").display());
     assert_eq!(explorer_copy, Some(first));
     assert_eq!(clipboard_text(&test), Some(second));
     assert_eq!(test.window.shown_message().as_str(), "", "and says nothing");
