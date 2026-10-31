@@ -439,6 +439,27 @@ fn a_numbered_starter_takes_the_next_free_name_before_the_extension() {
     );
 }
 
+/// A cancelled numbered starter stops before anything is written: no
+/// file and no stage file is left.
+///
+/// parity: OPS-002, OPS-022
+#[test]
+fn a_cancelled_numbered_starter_leaves_nothing() {
+    let temp = tempfile::tempdir().unwrap();
+    let context = OperationContext::default();
+    context.cancel.cancel();
+
+    let created = block_on(create_numbered_starter(
+        &file_uri(temp.path()),
+        "New Text Document.txt",
+        BuiltinTemplate::Text,
+        &context,
+    ));
+
+    assert_eq!(created.map(|created| created.uri), Err(OpsError::Cancelled));
+    assert!(names_in(temp.path()).is_empty());
+}
+
 /// A numbered starter is refused where any New file is: in a server
 /// listing, with the template's own message, and nothing is created.
 #[test]

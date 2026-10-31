@@ -21,6 +21,8 @@ use ox_core::ops::{
 };
 
 use super::FileCommand;
+use crate::search::changed_folders;
+use crate::window::session::TabId;
 use crate::window::BrowserWindow;
 
 /// The name a new folder starts with, as Windows names it.
@@ -73,11 +75,18 @@ impl BrowserWindow {
     /// free numbered name) from the Text document starter at once, then
     /// selects it and renames it in place, as Windows Explorer does.
     /// Does nothing where New is disabled, as New folder; a file that
-    /// cannot be made says why in the toast.
+    /// cannot be made says why in the toast. While the file is made, on a
+    /// slow share or phone, it is the window's running operation, with no
+    /// panel; a cancelled one says nothing. When it ends after the user
+    /// went to another tab or folder, the file stays and what is shown
+    /// is left alone, as in Windows.
     pub(crate) async fn create_text_document(&self) {
         if !self.allows(FileCommand::New) {
             return;
         }
+        let Some(origin) = self.imp().session.borrow().active_id() else {
+            return;
+        };
         let Some(folder) = self.current_uri() else {
             return;
         };
@@ -88,9 +97,56 @@ impl BrowserWindow {
                 return;
             }
         };
+        if !self.begin_write_without_panel(&context.cancel) {
+            return;
+        }
+        #[cfg(test)]
+        self.wait_at_text_document_gate().await;
         let name = format!("{}.txt", ox_core::i18n::gettext_static(NEW_TEXT_DOCUMENT_NAME));
         let created = create_numbered_starter(&folder, &name, BuiltinTemplate::Text, &context).await;
-        self.rename_created(created);
+        self.end_write_without_panel();
+        match created {
+            Err(error) if error.is_cancelled() => {}
+            Ok(created) if !self.shows_in_front(origin, &folder) => {
+                self.context().record_operation(created.undo_record());
+                let changed = changed_folders([folder.as_str()], [created.uri.as_str()]);
+                self.context().search_cache().folders_written(changed);
+            }
+            created => self.rename_created(created),
+        }
+    }
+
+    /// Whether tab `id` is in front and still shows `folder`.
+    fn shows_in_front(&self, id: TabId, folder: &str) -> bool {
+        let session = self.imp().session.borrow();
+        session.is_active(id) && session.tab(id).is_some_and(|tab| tab.uri() == folder)
+    }
+
+    /// Holds New ▸ Text document before it creates the file until the
+    /// gate's sender sends or is dropped, as a slow location would.
+    /// Returns the sender that releases it.
+    #[cfg(test)]
+    pub(crate) fn hold_text_documents(&self) -> async_channel::Sender<()> {
+        let (release, gate) = async_channel::bounded(1);
+        self.imp().text_document_gate.replace(Some(gate));
+        release
+    }
+
+    /// Whether New ▸ Text document has reached the gate of
+    /// [`Self::hold_text_documents`].
+    #[cfg(test)]
+    pub(crate) fn reached_text_document_gate(&self) -> bool {
+        self.imp().text_document_gate.borrow().is_none()
+    }
+
+    /// Waits at the gate of [`Self::hold_text_documents`], if one is set.
+    #[cfg(test)]
+    async fn wait_at_text_document_gate(&self) {
+        let gate = self.imp().text_document_gate.take();
+        if let Some(gate) = gate {
+            // A dropped sender releases it too.
+            let _ = gate.recv().await;
+        }
     }
 
     /// Remembers the item New folder or New ▸ Text document made for

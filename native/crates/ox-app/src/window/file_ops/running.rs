@@ -149,6 +149,29 @@ impl BrowserWindow {
         Some(context)
     }
 
+    /// Counts a short write that shows no panel, New ▸ Text document, as
+    /// the window's running operation, which `cancel` stops: other file
+    /// commands wait, Cancel stops it, and closing or Quit asks or waits
+    /// as for any running operation (OPS-024, TAB-049). False when an
+    /// operation runs already. End it with [`Self::end_write_without_panel`].
+    pub(super) fn begin_write_without_panel(&self, cancel: &Cancellation) -> bool {
+        {
+            let mut operations = self.imp().file_operations.borrow_mut();
+            if operations.is_busy() {
+                return false;
+            }
+            operations.running = Some(cancel.clone());
+        }
+        self.update_file_commands();
+        true
+    }
+
+    /// Forgets the write of [`Self::begin_write_without_panel`].
+    pub(super) fn end_write_without_panel(&self) {
+        self.imp().file_operations.borrow_mut().running = None;
+        self.update_file_commands();
+    }
+
     /// Forgets the running operation and hides its panel.
     pub(crate) fn end_operation(&self) {
         self.imp().file_operations.borrow_mut().running = None;
@@ -170,7 +193,12 @@ impl BrowserWindow {
     /// button stops only its own job. Finished work remains (OPS-022).
     pub(in crate::window) fn cancel_operation(&self) {
         self.transfer_panel().cancel();
-        for job in &self.imp().file_operations.borrow().jobs {
+        let operations = self.imp().file_operations.borrow();
+        // A write without a panel has only its token.
+        if let Some(running) = &operations.running {
+            running.cancel();
+        }
+        for job in &operations.jobs {
             job.panel.cancel();
         }
     }

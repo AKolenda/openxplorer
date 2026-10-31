@@ -198,6 +198,10 @@ pub(crate) struct BrowserWindow {
     /// for the keyboard the isolated session cannot press.
     #[cfg(test)]
     pub(super) test_shift_held: Cell<bool>,
+    /// In tests, a gate New ▸ Text document waits at before it creates
+    /// the file, standing in for a slow share or phone.
+    #[cfg(test)]
+    pub(super) text_document_gate: RefCell<Option<async_channel::Receiver<()>>>,
     /// Set while the window swaps or reloads the model, so the
     /// selection it restores is not saved over the tab's selection.
     pub(super) changing_model: Cell<bool>,

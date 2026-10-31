@@ -13,8 +13,8 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{
-    dialog_over, is_renaming_in_place, name_editor, open_dialog, require_private_trash, text_field,
-    wait_for_no_dialog,
+    dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
+    select_names, text_field, wait_for_no_dialog,
 };
 use crate::test_support::harness::{settle, wait_for, wait_until, Fixture, TestWindow};
 
@@ -228,4 +228,172 @@ fn the_other_new_items_still_open_their_dialogs() {
     }
 
     assert_eq!(test.names(), before, "nothing was created");
+}
+
+/// The names in `fixture`'s folder on disk, sorted, hidden ones included,
+/// so a stage file left behind would show.
+fn names_on_disk(fixture: &Fixture) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(fixture.root())
+        .expect("the fixture folder")
+        .map(|entry| {
+            entry
+                .expect("a folder entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Runs New ▸ Text document held before it creates the file, as on a
+/// slow share or phone, and waits until it reaches the hold. Dropping or
+/// sending on the returned sender lets it go on.
+fn start_held_text_document(test: &TestWindow) -> async_channel::Sender<()> {
+    let release = test.window.hold_text_documents();
+    test.activate("new-text-document", None);
+    wait_until("the create to reach the hold", || {
+        test.window.reached_text_document_gate()
+    });
+    release
+}
+
+/// While the file is being created, as on a slow share, it is the
+/// window's running write: the other file commands wait, closing asks
+/// first and cancels it, and the cancelled create leaves nothing behind.
+/// No busy panel shows for it.
+///
+/// parity: OPS-002, TAB-049
+#[gtk::test]
+fn closing_during_a_slow_create_asks_and_cancels_it() {
+    let fixture = Fixture::standard();
+    let before = names_on_disk(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+
+    let running = test.window.has_running_write();
+    let panel_shown = test.window.transfer_panel().is_visible();
+    let others_enabled =
+        ["new-folder", "new-text-document", "new-file", "undo"].map(|name| is_enabled(&test, name));
+    let can_cancel = is_enabled(&test, "cancel-operation");
+    test.window.close();
+    let question = open_dialog(&test);
+    let title = question.title_text();
+    question.press("Cancel and close");
+    wait_for(Duration::from_millis(200));
+    let open_while_running = test.window.is_visible();
+    drop(release);
+    wait_until("the window to close", || !test.window.is_visible());
+
+    assert!(running, "the create counts as a running write");
+    assert!(!panel_shown, "no busy panel");
+    assert_eq!(others_enabled, [false; 4], "the other file commands wait");
+    assert!(can_cancel);
+    assert_eq!(title, "A file operation is running");
+    assert!(open_while_running, "the window waits for the create to stop");
+    assert_eq!(names_on_disk(&fixture), before, "nothing is left behind");
+}
+
+/// Cancel stops a slow create as it stops any file operation: no file, no
+/// message, no rename, and the commands come back.
+///
+/// parity: OPS-002, OPS-022
+#[gtk::test]
+fn cancelling_a_slow_create_leaves_no_file_and_says_nothing() {
+    let fixture = Fixture::standard();
+    let before = names_on_disk(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+    let running = test.window.has_running_write();
+
+    test.activate("cancel-operation", None);
+    drop(release);
+    wait_until("the create to stop", || !test.window.has_running_write());
+    wait_for(Duration::from_millis(300));
+
+    assert!(running, "the create counts as a running write");
+    assert_eq!(names_on_disk(&fixture), before, "nothing is left behind");
+    assert_eq!(test.window.shown_message(), "", "a cancel says nothing");
+    assert!(!is_renaming_in_place(&test));
+    assert!(is_enabled(&test, "new-text-document"));
+}
+
+/// A create that ends after the user went to another tab leaves that tab
+/// alone, as Windows does: no listing, no selection change, no rename.
+/// The file is still made in the folder it was asked for.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn a_create_that_ends_in_another_tab_leaves_that_tab_alone() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+    test.window.add_tab(&fixture.uri()).expect("a valid folder");
+    test.wait_for_listing("the second tab");
+    select_names(&test, &["Notes 2.txt"]);
+    let shown = test.names();
+
+    drop(release);
+    wait_until("the create to end", || {
+        fixture.path("New Text Document.txt").is_file() && !test.window.has_running_write()
+    });
+    wait_for(Duration::from_millis(300));
+
+    assert!(fixture.path("New Text Document.txt").is_file());
+    assert_eq!(test.selected_names(), ["Notes 2.txt"], "the selection stays");
+    assert!(!is_renaming_in_place(&test), "nothing is renamed there");
+    assert_eq!(test.names(), shown, "the tab is not listed again by the create");
+}
+
+/// A create that ends after the tab went to another folder leaves that
+/// folder alone; the file is still made where it was asked for.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn a_create_that_ends_after_navigating_away_leaves_the_new_folder_alone() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/Letter.txt");
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a valid folder");
+    wait_until("the other folder", || test.names() == ["Letter.txt"]);
+    select_names(&test, &["Letter.txt"]);
+
+    drop(release);
+    wait_until("the create to end", || {
+        fixture.path("New Text Document.txt").is_file() && !test.window.has_running_write()
+    });
+    wait_for(Duration::from_millis(300));
+
+    assert!(fixture.path("New Text Document.txt").is_file());
+    assert!(!fixture.path("Documents/New Text Document.txt").exists());
+    assert_eq!(test.selected_names(), ["Letter.txt"], "the selection stays");
+    assert!(!is_renaming_in_place(&test));
+}
+
+/// Back in the tab it was asked in, still on the same folder, the create
+/// finishes there: the file is selected and renamed in place.
+///
+/// parity: OPS-002, OPS-010
+#[gtk::test]
+fn a_create_that_ends_back_in_its_own_tab_renames_there() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let first = test.active_tab().expect("a tab");
+    let release = start_held_text_document(&test);
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a valid folder");
+    test.wait_for_listing("the second tab");
+    test.activate_tab(first);
+    test.wait_for_listing("the first tab");
+
+    drop(release);
+    let field = name_editor(&test);
+
+    assert_eq!(field.text(), "New Text Document.txt");
+    assert_eq!(test.selected_names(), ["New Text Document.txt"]);
 }
