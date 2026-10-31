@@ -8,10 +8,12 @@
 //!
 //! Ports `copyPath` in `v2.0.0:desktop/ui/app.js` and the text it copies,
 //! `displayUri`: a plain path for local items, `\\server\share\…` for SMB
-//! and `<device> / path` for phones and cameras, each quoted whole. Only
-//! the quotes are added here: other users of the display address, such as
-//! the Properties copy button, keep it plain. Only text is copied, so
-//! the command changes no file and no sharing permission, and it needs
+//! and `<device> / path` for phones and cameras, each quoted whole. An SMB
+//! server or share root loses its trailing backslash, which would escape
+//! the closing quote in a shell. Only the quotes and that trim are made
+//! here: other users of the display address, such as the Properties copy
+//! button, keep it plain. Only text is copied, so the command changes no
+//! file and no sharing permission, and it needs
 //! none of the file-operation workflows. Ctrl+Shift+C and Ctrl+Alt+C run
 //! it too (CLIP-013, in `file_ops::shortcuts`).
 //!
@@ -21,7 +23,7 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::LocationContext;
+use ox_core::location::{is_smb_location, LocationContext};
 
 use crate::locations::Page;
 
@@ -49,12 +51,26 @@ fn copied_path(selected: &[String], folder_uri: Option<&str>, locations: &Locati
     let addresses: Vec<String> = uris
         .into_iter()
         .filter(|uri| Page::from_uri(uri).is_none())
-        .map(|uri| format!("\"{}\"", locations.copied_location(uri)))
+        .map(|uri| format!("\"{}\"", quotable_address(uri, locations)))
         .collect();
     if addresses.is_empty() {
         return CopiedPath::NoFolder;
     }
     CopiedPath::Address(addresses.join("\n"))
+}
+
+/// The address of `uri` to put between quotes. An SMB server or share root
+/// (`\\server\`) drops its trailing backslash, which a shell would read
+/// as escaping the closing quote; the backslash is not doubled.
+fn quotable_address(uri: &str, locations: &LocationContext) -> String {
+    let address = locations.copied_location(uri);
+    if !is_smb_location(uri) {
+        return address;
+    }
+    match address.strip_suffix('\\') {
+        Some(trimmed) => trimmed.to_owned(),
+        None => address,
+    }
 }
 
 impl BrowserWindow {
@@ -114,6 +130,33 @@ mod tests {
         assert_eq!(smb, address(r#""\\studio-nas\projects\Plan Q3.txt""#));
     }
 
+    /// A server or share root drops its trailing backslash before the
+    /// closing quote, which a shell would otherwise read as escaping it.
+    ///
+    /// parity: CLIP-012
+    #[test]
+    fn an_smb_server_or_share_root_ends_without_a_backslash() {
+        let locations = LocationContext::default();
+
+        let server = copied_path(&[], Some("smb://studio-nas/"), &locations);
+        let share = copied_path(&[], Some("smb://studio-nas/projects/"), &locations);
+        let share_without_slash = copied_path(&[], Some("smb://studio-nas/projects"), &locations);
+
+        assert_eq!(server, address(r#""\\studio-nas""#));
+        assert_eq!(share, address(r#""\\studio-nas\projects""#));
+        assert_eq!(share_without_slash, address(r#""\\studio-nas\projects""#));
+    }
+
+    /// parity: CLIP-012
+    #[test]
+    fn the_local_root_stays_a_slash() {
+        let locations = LocationContext::default();
+
+        let root = copied_path(&[], Some("file:///"), &locations);
+
+        assert_eq!(root, address(r#""/""#));
+    }
+
     /// The device name and the path inside it are quoted once, together.
     ///
     /// parity: CLIP-012
@@ -153,6 +196,7 @@ mod tests {
         let plain = locations.copied_location("file:///home/sam/Plan%20Q3.txt");
 
         assert_eq!(plain, "/home/sam/Plan Q3.txt");
+        assert_eq!(locations.copied_location("smb://studio-nas/"), r"\\studio-nas\");
     }
 
     /// parity: CLIP-012
