@@ -497,6 +497,51 @@ fn nothing_is_extracted_while_a_file_operation_runs() {
     test.window.end_operation();
 }
 
+/// Extract all… checks the window before it looks at the destination,
+/// so an operation such as Duplicate may claim the transfer panel in that
+/// gap. The extraction then must not take the panel over: its Cancel
+/// would stop the wrong work, and whichever ends first would hide the
+/// panel and let the window close on the other with no warning.
+///
+/// parity: OPS-024
+#[gtk::test]
+fn extract_all_never_takes_the_panel_from_an_operation_started_meanwhile() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.wait_for_dialog("the Extract dialog");
+    wait_until("the check", || {
+        texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+    });
+
+    press(&frame, "Extract");
+    let running = test
+        .window
+        .begin_operation("Preparing copy…")
+        .expect("the extraction has not claimed the window yet");
+    wait_until("the extraction to end", || {
+        test.shown_dialog().is_some() || fixture.path("Bundle/readme.txt").exists()
+    });
+
+    assert!(!fixture.path("Bundle").exists(), "nothing extracted beside it");
+    let refusal = test.wait_for_dialog("why the extraction stopped");
+    assert!(texts(&refusal)
+        .iter()
+        .any(|text| text == "Finish the current file operation before extracting."));
+    assert!(
+        test.window.transfer_panel().is_busy(),
+        "the panel stays the operation's"
+    );
+    test.window.transfer_panel().cancel();
+    assert!(
+        running.cancel.is_cancelled(),
+        "Cancel stops the operation that claimed the panel"
+    );
+    assert!(test.window.is_writing_files(), "closing still warns");
+    test.window.end_operation();
+}
+
 /// Writes `Site.tar.gz` holding `Docs/a.txt` into `fixture`, with
 /// Python's `tarfile`.
 fn write_tar_gz(fixture: &Fixture) {
