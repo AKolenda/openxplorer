@@ -77,7 +77,8 @@ impl BrowserWindow {
         [journal, clipboard]
     }
 
-    /// New ▸ Folder, the New menu's files and templates, and New ▸ Link.
+    /// New ▸ Folder and Text document, the New menu's other files and
+    /// templates, and New ▸ Link.
     /// The templates are read now and whenever the New menu opens.
     fn install_new_actions(&self) {
         self.refresh_template_menu();
@@ -93,7 +94,9 @@ impl BrowserWindow {
             task_action(WindowAction::NewFolder, |window| async move {
                 window.create_folder().await;
             }),
-            new_file_action(WindowAction::NewTextDocument, starter(BuiltinTemplate::Text)),
+            task_action(WindowAction::NewTextDocument, |window| async move {
+                window.create_text_document().await;
+            }),
             new_file_action(WindowAction::NewFile, NewFileKind::Empty),
             new_file_action(
                 WindowAction::NewMarkdownDocument,

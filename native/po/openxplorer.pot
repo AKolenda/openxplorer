@@ -4649,6 +4649,10 @@ msgstr ""
 msgid "Use a name without slashes or control characters."
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New Text Document"
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/new_items.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "New folder"
 msgstr ""
@@ -7122,6 +7126,11 @@ msgstr ""
 
 #: crates/ox-core/src/ops/new_from_template.rs
 msgid "This template is unavailable, too large, or not a regular template file."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/new_from_template.rs
+msgid "Too many files are called “{base_name}”. Rename some of them, then try again."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

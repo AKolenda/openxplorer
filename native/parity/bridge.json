@@ -260,7 +260,7 @@
     },
     "createTemplate": {
       "status": "native-tested",
-      "note": "ox_core::ops::create_from_template ports create_from_template in v2.0.0:desktop/file_services.py with the OPS-048 rules: the template must be in a fresh list, it is opened without following links or blocking and checked on the descriptor, read in bounded, cancellable blocks, staged in a private file that is published without overwriting and deleted when it is not published. Native: Create in the New from template dialog runs it; the new file is selected.",
+      "note": "ox_core::ops::create_from_template ports create_from_template in v2.0.0:desktop/file_services.py with the OPS-048 rules: the template must be in a fresh list, it is opened without following links or blocking and checked on the descriptor, read in bounded, cancellable blocks, staged in a private file that is published without overwriting and deleted when it is not published. Native: Create in the New from template dialog runs it; the new file is selected. New > Text document runs it through create_numbered_starter without a dialog, under 'New Text Document.txt' or the next free numbered name, then renames the file in place.",
       "evidence": [
         "native/crates/ox-core/tests/ops_create.rs::a_starter_writes_its_content_to_a_private_new_file",
         "native/crates/ox-core/tests/ops_create.rs::a_user_template_is_copied_without_its_permissions",
@@ -268,7 +268,10 @@
         "native/crates/ox-core/tests/ops_create.rs::a_template_never_overwrites_and_never_goes_to_a_server_listing",
         "native/crates/ox-core/src/ops/new_from_template.rs::a_template_swapped_for_a_link_or_a_fifo_is_refused_without_blocking",
         "native/crates/ox-core/src/ops/new_from_template.rs::a_name_taken_while_publishing_is_kept_and_the_stage_file_is_deleted",
-        "native/crates/ox-app/src/window/tests/file_operations.rs::a_new_menu_file_starts_from_its_template_and_is_created_from_it"
+        "native/crates/ox-app/src/window/tests/file_operations.rs::a_new_menu_file_starts_from_its_template_and_is_created_from_it",
+        "native/crates/ox-core/tests/ops_create.rs::a_numbered_starter_takes_the_next_free_name_before_the_extension",
+        "native/crates/ox-core/src/ops/new_from_template.rs::a_name_taken_at_the_last_moment_moves_to_the_next_number",
+        "native/crates/ox-app/src/window/tests/new_text_document.rs::new_text_document_makes_the_file_at_once_and_renames_its_name_in_place"
       ]
     },
     "desktopDefault": {
