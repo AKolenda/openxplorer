@@ -178,6 +178,15 @@ impl TransferPanel {
         self.imp().cancel.borrow().is_some()
     }
 
+    /// True while the operation `cancel` stops is the one shown.
+    pub(crate) fn runs(&self, cancel: &Cancellation) -> bool {
+        self.imp()
+            .cancel
+            .borrow()
+            .as_ref()
+            .is_some_and(|shown| shown.cancellable() == cancel.cancellable())
+    }
+
     /// Shows the worker's report: its label, and its fraction, clamped to
     /// 0–1 as `updateTransfer` does, on the batch bar or the file bar.
     /// After Cancel the label keeps saying "Cancelling…".

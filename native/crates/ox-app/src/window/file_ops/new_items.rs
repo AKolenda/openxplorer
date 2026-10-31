@@ -121,7 +121,7 @@ impl BrowserWindow {
         self.wait_at_text_document_gate().await;
         let name = format!("{}.txt", ox_core::i18n::gettext_static(NEW_TEXT_DOCUMENT_NAME));
         let created = create_numbered_starter(&folder, &name, BuiltinTemplate::Text, &context).await;
-        self.end_quick_write(&write);
+        self.end_quick_write(&write, &context.cancel);
         match created {
             Err(error) if error.is_cancelled() => {}
             Ok(created) if !self.is_undisturbed_since(&front) => {

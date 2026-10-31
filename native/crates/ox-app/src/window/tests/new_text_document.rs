@@ -553,3 +553,97 @@ fn typing_an_address_during_the_create_keeps_the_keyboard() {
     assert!(focused(), "the keyboard stays in the address bar");
     assert_eq!(entry.text().as_str(), "/example/typed");
 }
+
+/// Stands in for an extraction or compression, which runs on the
+/// transfer panel without being a file operation (`archive_actions.rs`).
+fn start_archive_on_panel(test: &TestWindow) -> ox_core::transfer::Cancellation {
+    let cancel = ox_core::transfer::Cancellation::new();
+    test.window.transfer_panel().start(
+        crate::window::transfer_panel::TransferKind::Archive,
+        "Preparing extraction…",
+        cancel.clone(),
+    );
+    cancel
+}
+
+/// While an extraction or compression runs, New ▸ Text document does
+/// nothing, as the other file operations do then: no file, no rename, and
+/// the archive keeps its panel and stays cancellable.
+///
+/// parity: OPS-002, OPS-024
+#[gtk::test]
+fn new_text_document_waits_while_an_archive_runs() {
+    let fixture = Fixture::standard();
+    let before = names_on_disk(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let archive = start_archive_on_panel(&test);
+
+    test.activate("new-text-document", None);
+    wait_for(Duration::from_millis(1500));
+    let panel = test.window.transfer_panel();
+    let status = panel.status_text();
+    let still_writing = test.window.is_writing_files();
+    panel.press_cancel();
+    let cancelled = archive.is_cancelled();
+    test.window.finish_archive_operation();
+
+    assert_eq!(names_on_disk(&fixture), before, "nothing is created");
+    assert!(!is_renaming_in_place(&test));
+    assert_eq!(status, "Preparing extraction…", "the archive keeps its panel");
+    assert!(still_writing, "the window still writes");
+    assert!(cancelled, "the panel's Cancel still stops the archive");
+}
+
+/// When the panel is taken by another write while a slow create runs, the
+/// create neither replaces that panel when its moment passes nor hides it
+/// when it ends.
+///
+/// parity: OPS-002, OPS-024
+#[gtk::test]
+fn a_slow_create_never_takes_or_ends_another_writes_panel() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.transfer_panel();
+    let release = start_held_text_document(&test);
+    let archive = start_archive_on_panel(&test);
+
+    wait_for(Duration::from_millis(1500));
+    let status_after_the_moment = panel.status_text();
+    drop(release);
+    // The other write still runs, so only the create's own state ends.
+    wait_until("the create to end", || {
+        fixture.path("New Text Document.txt").is_file()
+            && test.window.imp().file_operations.borrow().is_idle()
+    });
+    wait_for(Duration::from_millis(300));
+    let busy_after_the_create = panel.is_busy() && panel.is_visible();
+    panel.press_cancel();
+    let cancelled = archive.is_cancelled();
+    test.window.finish_archive_operation();
+
+    assert_eq!(status_after_the_moment, "Preparing extraction…");
+    assert!(busy_after_the_create, "the other write keeps its panel");
+    assert!(cancelled, "the panel's Cancel still stops the other write");
+}
+
+/// The create's own panel, once shown, is not hidden by another write's
+/// end, and the create still hides it when it ends.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn a_slow_creates_panel_is_its_own_until_it_ends() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.transfer_panel();
+    let release = start_held_text_document(&test);
+    wait_until("the panel to show", || panel.is_visible());
+    let status = panel.status_text();
+
+    finish_held_text_document(&test, &fixture, release);
+
+    assert_eq!(status, "Creating a text document…");
+    assert!(
+        !panel.is_visible() && !panel.is_busy(),
+        "the create hid its panel"
+    );
+}

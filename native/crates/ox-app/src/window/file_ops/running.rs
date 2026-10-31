@@ -170,17 +170,16 @@ impl BrowserWindow {
     /// stops it, and closing or Quit asks or waits as for any running
     /// operation (OPS-024, TAB-049). As in Windows, its panel, reading
     /// `label` with its Cancel button, shows only once it has run for
-    /// [`QUICK_WRITE_PANEL_DELAY`], so a quick one looks instant. `None`
-    /// when an operation runs already. End it with
+    /// [`QUICK_WRITE_PANEL_DELAY`], so a quick one looks instant, and
+    /// only while no other write holds the panel. `None`, as
+    /// [`Self::begin_operation`] refuses, while any write runs, an
+    /// extraction or compression on the panel included. End it with
     /// [`Self::end_quick_write`].
     pub(super) fn begin_quick_write(&self, label: &'static str, cancel: &Cancellation) -> Option<QuickWrite> {
-        {
-            let mut operations = self.imp().file_operations.borrow_mut();
-            if operations.is_busy() {
-                return None;
-            }
-            operations.running = Some(cancel.clone());
+        if self.is_writing_files() {
+            return None;
         }
+        self.imp().file_operations.borrow_mut().running = Some(cancel.clone());
         self.update_file_commands();
         let pending_panel = Rc::new(RefCell::new(None));
         let source = glib::timeout_add_local_once(
@@ -195,7 +194,12 @@ impl BrowserWindow {
                 move || {
                     // It fired, so there is nothing left to remove.
                     pending_panel.take();
-                    window.transfer_panel().start(TransferKind::Create, label, cancel);
+                    // An archive operation that checked before this write
+                    // began may hold the panel; it keeps it.
+                    let panel = window.transfer_panel();
+                    if !panel.is_busy() {
+                        panel.start(TransferKind::Create, label, cancel);
+                    }
                 }
             ),
         );
@@ -204,11 +208,12 @@ impl BrowserWindow {
     }
 
     /// Forgets the write of [`Self::begin_quick_write`] and hides its
-    /// panel, if it showed.
-    pub(super) fn end_quick_write(&self, write: &QuickWrite) {
-        match write.pending_panel.take() {
-            Some(source) => source.remove(),
-            None => self.transfer_panel().finish(),
+    /// panel, if it showed and is still its own.
+    pub(super) fn end_quick_write(&self, write: &QuickWrite, cancel: &Cancellation) {
+        if let Some(source) = write.pending_panel.take() {
+            source.remove();
+        } else if self.transfer_panel().runs(cancel) {
+            self.transfer_panel().finish();
         }
         self.imp().file_operations.borrow_mut().running = None;
         self.update_file_commands();
