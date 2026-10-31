@@ -90,11 +90,12 @@
     },
     "beginTabDrag": {
       "status": "native-tested",
-      "note": "The tab strip is a GTK drag source offering the tab as a process-local value; a busy window or a close button starts no drag.",
+      "note": "The title bar's window handle is the GTK drag source of its tabs, in the capture phase, offering the tab as a process-local value; it claims a press on a tab once it passes the drag threshold, so the window drag never takes it. A busy window or a close button starts no drag.",
       "evidence": [
         "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy",
         "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_drag_offers_the_tab_to_this_process_only",
-        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer"
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer",
+        "native/crates/ox-app/src/window/tests/tab_dragging.rs::a_tab_dragged_along_the_row_reorders_and_never_moves_the_window"
       ]
     },
     "bookmark": {

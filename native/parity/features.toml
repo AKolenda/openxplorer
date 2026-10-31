@@ -1346,7 +1346,7 @@ python_tests = [
 ]
 bridge = ["list"]
 native = "done"
-native_note = "A primary click (on release, so a tab drag cancels it and no click delay is needed) or Enter/Space on a focused tab runs win.select-tab; switching resets type-to-select, suspends the previous tab's Properties dialog, shows the new tab's and returns the address bar to breadcrumbs. Popover menus are modal, so a click that closes a menu never reaches the tab. Test: native/crates/ox-app/src/window/tests/tabs.rs (a_click_or_enter_on_a_tab_shows_it). Ctrl+Page Up/Down are bound as well (TAB-006)."
+native_note = "A primary click (on release, so a tab drag cancels it and no click delay is needed) or Enter/Space on a focused tab runs win.select-tab; switching resets type-to-select, suspends the previous tab's Properties dialog, shows the new tab's and returns the address bar to breadcrumbs. Popover menus are modal, so a click that closes a menu never reaches the tab. Tests: native/crates/ox-app/src/window/tests/tabs.rs (a_click_or_enter_on_a_tab_shows_it); native/crates/ox-app/src/window/tests/tab_dragging.rs (clicks_on_a_tab_show_or_close_it_and_drag_nothing, with a real pointer that slips by less than the drag threshold). Ctrl+Page Up/Down are bound as well (TAB-006)."
 
 [[feature]]
 id = "TAB-005"
@@ -2010,7 +2010,7 @@ bridge = ["tabDragLayout", "beginTabDrag"]
 dolphin = "QTabBar::setMovable(true); Dolphin tab bar drag reorder"
 gnome = "Adw.TabBar/Adw.TabView provide reorder, cross-window drag and tear-out natively (create-window signal)."
 native = "done"
-native_note = "native/crates/ox-app/src/window/session.rs (a_reordered_tab_goes_before_the_named_tab_or_to_the_end); native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a tab dragged along its strip moved to the end. A tab shows on release, as in app.js, so pressing an inactive tab can drag it."
+native_note = "native/crates/ox-app/src/window/session.rs (a_reordered_tab_goes_before_the_named_tab_or_to_the_end); native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer, a_tab_drag_shows_where_the_tab_would_go); native/crates/ox-app/src/window/tests/tab_dragging.rs (a_tab_dragged_along_the_row_reorders_and_never_moves_the_window), which presses and drags a real XTEST pointer on the private display, briskly and after a hold. The tabs are inside the title bar's GtkWindowHandle, whose drag gesture moves the window once a press passes the drag threshold; GtkDragSource never claims a press, starts no drag in its first 100 ms and resets its widget's gestures when it does, so on KDE Plasma (Wayland) dragging a tab moved the window. The drag source is therefore on the window handle, in the capture phase, and claims a press on a tab at the threshold, which denies it to the handle's own gestures. Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a tab dragged along its strip moved to the end. A tab shows on release, as in app.js, so pressing an inactive tab can drag it."
 
 [[feature]]
 id = "TAB-033"
@@ -2050,7 +2050,7 @@ python_tests = [
 ]
 bridge = ["beginTabDrag", "tabDragLayout", "tabTransferReady"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag); native/crates/ox-app/src/window/session.rs (a_moved_tab_keeps_its_history_and_goes_in_front_where_it_was_dropped). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: the only tab of one window dropped on another window's strip moved there and its window closed."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag); native/crates/ox-app/src/window/tests/tab_dragging.rs (a_tab_dropped_on_another_windows_row_moves_there_where_it_was_dropped, with a real pointer); native/crates/ox-app/src/window/session.rs (a_moved_tab_keeps_its_history_and_goes_in_front_where_it_was_dropped). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: the only tab of one window dropped on another window's strip moved there and its window closed."
 
 [[feature]]
 id = "TAB-034"
@@ -2115,7 +2115,7 @@ bridge = ["beginTabDrag", "detachTab", "handoffReady", "tabDragLayout", "tabTran
 dolphin = "Detach tab; Drag tab out to detach; drag between windows"
 gnome = "AdwTabBar/AdwTabView drag and detach"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: releasing below the strip and over the desktop each opened one window. GTK 4 cannot place a window, so the compositor places it."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_shows_where_the_tab_would_go); native/crates/ox-app/src/window/tests/tab_dragging.rs (a_tab_dragged_down_into_the_file_list_opens_in_a_new_window, with a real pointer). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: releasing below the strip and over the desktop each opened one window. GTK 4 cannot place a window, so the compositor places it."
 
 [[feature]]
 id = "TAB-035"
@@ -2539,7 +2539,7 @@ python_tests = [
 bridge = ["chrome", "window"]
 gnome = "Gtk.WindowHandle / HeaderBar honour org.gnome.desktop.wm.preferences action-double-click-titlebar and action-middle-click-titlebar; the Python app hard-codes toggle-maximize.; gtk_window_begin_move_drag (client-side decorations)"
 native = "done"
-native_note = "The whole title bar is a GtkWindowHandle with the hexpanding .title-drag area right of the tabs, so the compositor moves the window on a drag and the desktop's titlebar actions (double-click maximize, middle and right-click menu) apply; buttons claim their own clicks, and the tab strip claims a double-click on a tab (TAB-014), so it opens a copy of the tab instead of maximizing. Test: native/crates/ox-app/src/window/title_bar.rs (the_blank_title_bar_is_the_window_handle)."
+native_note = "The whole title bar is a GtkWindowHandle with the hexpanding .title-drag area right of the tabs, so the compositor moves the window on a drag and the desktop's titlebar actions (double-click maximize, middle and right-click menu) apply; buttons claim their own clicks, and the tab strip claims a double-click on a tab (TAB-014), so it opens a copy of the tab instead of maximizing. The tabs' drag source sits on the window handle in the capture phase and claims a press on a tab once it passes the drag threshold, so dragging a tab never moves the window (TAB-032). Tests: native/crates/ox-app/src/window/title_bar.rs (the_blank_title_bar_is_the_window_handle); native/crates/ox-app/src/window/tests/tab_dragging.rs (a_tab_dropped_on_another_windows_row_moves_there_where_it_was_dropped drags the blank bar with a real pointer and checks that the window moved)."
 
 [[feature]]
 id = "TAB-049"

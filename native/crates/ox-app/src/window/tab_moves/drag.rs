@@ -4,7 +4,10 @@
 //! (TAB-032 to TAB-035, TAB-040).
 //!
 //! Ports `NativeTabDrag` of `v2.0.0:desktop/native_tab_drag.py` on GTK 4's drag
-//! and drop. The tab strip is the drag source; every window takes tab
+//! and drop. The drag source is on the title bar's window handle, around
+//! the tab strip, and takes a press on a tab from the handle once it
+//! passes the drag threshold, so dragging a tab never moves the window
+//! ([`source`] says why it must sit there). Every window takes tab
 //! drops with one target over the whole window, which finds the spot
 //! itself: the title bar from the first tab to the open-windows button
 //! places the tab before the tab whose middle is right of the pointer, and

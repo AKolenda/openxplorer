@@ -2,6 +2,9 @@
 //! The dragging window's side of a tab drag: starting it, following what
 //! became of the tab, and finishing the move once GTK is done.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
@@ -12,15 +15,26 @@ use crate::window::tab_moves::TabMoveRefusal;
 use crate::window::BrowserWindow;
 
 impl BrowserWindow {
+    /// Makes the title bar the drag source of its tabs; see
+    /// [`take_tab_presses_from_the_window_handle`] for why it is the
+    /// title bar's window handle and not the tab strip.
     pub(super) fn attach_tab_drag_source(&self) {
+        let Some(handle) = self.titlebar().and_downcast::<gtk::WindowHandle>() else {
+            return;
+        };
         let source = gtk::DragSource::new();
         source.set_actions(gdk::DragAction::MOVE);
+        source.set_propagation_phase(gtk::PropagationPhase::Capture);
+        take_tab_presses_from_the_window_handle(self, &source);
         source.connect_prepare(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[upgrade_or]
             None,
-            move |_, x, y| window.prepare_tab_drag(x, y)
+            move |source, x, y| {
+                let (x, y) = window.title_bar_point_in_strip(source, x, y)?;
+                window.prepare_tab_drag(x, y)
+            }
         ));
         source.connect_drag_begin(glib::clone!(
             #[weak(rename_to = window)]
@@ -42,7 +56,17 @@ impl BrowserWindow {
             self,
             move |_, _, _| window.end_tab_drag()
         ));
-        self.tab_strip().add_controller(source);
+        handle.add_controller(source);
+    }
+
+    /// (`x`, `y`) of the drag source `source`'s widget, the title bar, in
+    /// the tab strip's coordinates.
+    fn title_bar_point_in_strip(&self, source: &gtk::DragSource, x: f64, y: f64) -> Option<(f64, f64)> {
+        let bar = source.widget()?;
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let point = gtk::graphene::Point::new(x as f32, y as f32);
+        let in_strip = bar.compute_point(self.tab_strip(), &point)?;
+        Some((f64::from(in_strip.x()), f64::from(in_strip.y())))
     }
 
     /// What dragging the tab at (`x`, `y`) of the strip offers; `None`
@@ -171,4 +195,69 @@ impl BrowserWindow {
         }
         true
     }
+}
+
+/// Makes `source` take a press on a tab for itself once the pointer has
+/// moved past the drag threshold, so the title bar's window handle never
+/// moves the window for it.
+///
+/// The title bar is a `GtkWindowHandle` with the tab strip inside it. Its
+/// drag gesture moves the window (`gdk_toplevel_begin_move`) as soon as a
+/// press it sees passes the drag threshold, and GTK lets it see every
+/// press no other gesture has claimed. `GtkDragSource` never claims one:
+/// it starts no drag in the first 100 milliseconds after a press, so a
+/// brisk drag reaches the handle first, and when it does start a drag it
+/// resets its widget's gestures (`gtk_widget_reset_controllers`), so the
+/// motion that started it goes on to the handle, which asks to move the
+/// window as well. Either way the window moved instead of the tab, on
+/// X11 and on Wayland alike.
+///
+/// So the drag source sits on the handle itself, in the capture phase,
+/// where it sees each event before the handle's own gestures, and claims a
+/// press that started on a tab when the pointer passes the threshold GTK
+/// uses (`gtk_drag_check_threshold_double`). A gesture that claims denies
+/// the press to the other gestures of its widget, the handle's among them,
+/// and cancels it for the widgets inside, so the tab's own click does not
+/// show a dragged tab. When the drag then starts, the reset clears the
+/// handle's gestures too. A press that has not moved that far stays a
+/// click, and a press beside the tabs stays the handle's, which drags or
+/// maximizes the window.
+fn take_tab_presses_from_the_window_handle(window: &BrowserWindow, source: &gtk::DragSource) {
+    // Where the press was, until the source has claimed it. A mouse's
+    // events have no sequence, so the press is followed here.
+    let pending = Rc::new(Cell::new(None));
+    source.connect_begin(glib::clone!(
+        #[strong]
+        pending,
+        move |source, sequence| pending.set(source.point(sequence))
+    ));
+    source.connect_update(glib::clone!(
+        #[weak]
+        window,
+        move |source, sequence| {
+            let Some(start) = pending.get() else {
+                return;
+            };
+            let Some(point) = source.point(sequence) else {
+                return;
+            };
+            if !is_past_drag_threshold(&window, start, point) {
+                return;
+            }
+            pending.set(None);
+            let on_tab = window
+                .title_bar_point_in_strip(source, start.0, start.1)
+                .and_then(|(x, y)| window.tab_strip().draggable_tab_at(x, y));
+            if on_tab.is_some() {
+                source.set_state(gtk::EventSequenceState::Claimed);
+            }
+        }
+    ));
+}
+
+/// Whether `point` is past the desktop's drag threshold from `start`, as
+/// GTK's own drag gestures judge it (`gtk_drag_check_threshold_double`).
+fn is_past_drag_threshold(widget: &impl IsA<gtk::Widget>, start: (f64, f64), point: (f64, f64)) -> bool {
+    let threshold = f64::from(widget.settings().gtk_dnd_drag_threshold());
+    (point.0 - start.0).abs() > threshold || (point.1 - start.1).abs() > threshold
 }

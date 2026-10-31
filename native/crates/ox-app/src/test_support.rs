@@ -3,13 +3,15 @@
 //! conversion, so they carry every field a real listing does, rows of the
 //! Network list and of the volume monitor, [`desktop_setting`], which
 //! changes a GNOME setting only in memory, the GTK [`harness`] for tests
-//! that open windows, [`portal`], which exports fake desktop portals,
+//! that open windows, [`pointer`], a real pointer on the private display,
+//! [`portal`], which exports fake desktop portals,
 //! [`python`], which runs the Python app's settings code, [`search`],
 //! which starts the search cache beside a window, and [`test_opener`],
 //! an application for the file types the window tests open.
 
 pub(crate) mod desktop_setting;
 pub(crate) mod harness;
+pub(crate) mod pointer;
 pub(crate) mod portal;
 pub(crate) mod python;
 pub(crate) mod search;

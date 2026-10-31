@@ -66,6 +66,7 @@ mod split_view;
 mod stopping;
 mod support;
 mod tab_commands;
+mod tab_dragging;
 mod tabs;
 pub(super) mod view_styles;
 mod views;
