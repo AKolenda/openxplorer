@@ -230,11 +230,13 @@
     },
     "clipboardText": {
       "status": "native-tested",
-      "note": "Native: Copy as path (its menu item and Ctrl+Shift+C or Ctrl+Alt+C; the Python app's command bar button is Share now) puts the display path on the display clipboard as text with gdk::Clipboard::set_text, which cannot fail, so the Python fallback dialog has no trigger. The copy buttons of Properties and the mount setup are proven with their own features.",
+      "note": "Native: Copy as path (its menu item and Ctrl+Shift+C or Ctrl+Alt+C; the Python app's command bar button is Share now) puts the display path, in double quotes as Windows writes it, on the display clipboard as text with gdk::Clipboard::set_text, which cannot fail, so the Python fallback dialog has no trigger. The copy buttons of Properties and the mount setup are proven with their own features.",
       "evidence": [
         "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_copies_the_selected_items_address_or_the_folders",
         "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_runs_on_explorers_and_dolphins_keys",
-        "native/crates/ox-app/src/window/copy_path.rs::local_smb_and_device_items_copy_their_display_path"
+        "native/crates/ox-app/src/window/copy_path.rs::a_local_path_with_a_space_is_copied_in_quotes",
+        "native/crates/ox-app/src/window/copy_path.rs::an_smb_item_copies_its_unc_path_in_quotes",
+        "native/crates/ox-app/src/window/copy_path.rs::a_phone_item_copies_its_device_path_in_quotes"
       ]
     },
     "connect": {

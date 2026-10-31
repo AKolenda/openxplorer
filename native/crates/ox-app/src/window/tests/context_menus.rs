@@ -636,7 +636,7 @@ fn a_formats_result_outlives_its_window() {
 }
 
 /// Windows' "Copy as path", with its Ctrl+Shift+C, copies the selected
-/// item's path; the command bar's Share no longer does.
+/// item's path in double quotes; the command bar's Share no longer does.
 ///
 /// parity: CLIP-012, CLIP-013
 #[gtk::test]
@@ -657,6 +657,6 @@ fn copy_as_path_in_the_menu_copies_the_items_path() {
     let clipboard = test.window.clipboard();
     let copied = gtk::glib::MainContext::default().block_on(clipboard.read_text_future());
     let copied = copied.ok().flatten().map(|text| text.to_string());
-    let expected = fixture.path("Notes 2.txt").display().to_string();
+    let expected = format!("\"{}\"", fixture.path("Notes 2.txt").display());
     assert_eq!(copied, Some(expected));
 }
