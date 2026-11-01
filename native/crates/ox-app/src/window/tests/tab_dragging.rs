@@ -849,6 +849,35 @@ fn border_width(widget: &gtk::Widget) -> i32 {
     width
 }
 
+/// A tab flicked out of its row and released before GTK may start a drag
+/// and drop (100 ms after the press) tears out as a release out there does
+/// once it has started, and the strip does not stay live.
+///
+/// parity: TAB-032, TAB-034
+#[gtk::test]
+fn a_tab_released_out_of_its_row_before_drag_and_drop_starts_tears_out() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = two_tabs(&fixture);
+    let tab = tab_widget(&test.window, 1);
+    let from = middle_on_screen(&mut pointer, &tab);
+    let strip_height = test.window.tab_strip().height();
+
+    pointer.move_to(from.0, from.1);
+    pointer.press(Button::Primary);
+    // Past the drag threshold, then well below the strip, at once.
+    pointer.move_to(from.0 + 12, from.1);
+    pointer.move_to(from.0 + 14, from.1 + strip_height + 40);
+    let started = drags_and_drops(&test.window);
+    pointer.release(Button::Primary);
+    let opened = OpenedWindows::only(&[&test.window]);
+
+    assert!(!started, "released before drag and drop could start");
+    assert_eq!(opened.window().current_uri(), Some(fixture.uri_of("Documents")));
+    assert_eq!(test.window.tab_count(), 1, "the tab left this window");
+    assert_eq!(test.window.tab_strip().live_tab(), None, "the strip is still");
+}
+
 /// The only tab of a window, dragged out of its row, takes the window
 /// itself along, as Chrome moves a window by its only tab.
 ///

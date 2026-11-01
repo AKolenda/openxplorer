@@ -314,6 +314,30 @@ fn a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays() {
     }
 }
 
+/// A drag that starts with the pointer already outside every window of
+/// this app, as when a tab leaves a strip at the top of the screen
+/// upwards, is outside until a window reports it over itself: released
+/// where nothing takes it, the tab tears out.
+///
+/// parity: TAB-034
+#[gtk::test]
+fn a_drag_no_window_reported_over_tears_out_when_nothing_takes_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the second tab");
+    start_dragging(&test.window, 1);
+
+    test.window.cancel_tab_drag(gdk::DragCancelReason::NoTarget);
+    test.window.end_tab_drag();
+    let opened = OpenedWindows::only(&[&test.window]);
+
+    assert_eq!(opened.window().current_uri(), Some(fixture.uri_of("Documents")));
+    assert_eq!(test.window.tab_count(), 1);
+}
+
 /// parity: TAB-003
 #[gtk::test]
 fn a_dragged_tab_neither_closes_nor_navigates() {

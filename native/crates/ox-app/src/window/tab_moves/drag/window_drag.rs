@@ -206,6 +206,20 @@ impl Session {
         SESSION.with_borrow(Clone::clone)
     }
 
+    /// Whether this drag is still the one in progress.
+    fn is_current(&self) -> bool {
+        SESSION.with_borrow(|session| {
+            session
+                .as_ref()
+                .is_some_and(|session| std::ptr::eq(Rc::as_ptr(session), self))
+        })
+    }
+
+    /// Whether `window`'s row shows the stand-in for the tab.
+    fn is_host(&self, window: &BrowserWindow) -> bool {
+        self.host.borrow().upgrade().as_ref() == Some(window)
+    }
+
     /// A drag of tab `tabs.0` of `origin`, which is `tabs.1` of `dragged`:
     /// its data source, offering only [`WINDOW_DRAG_MIME`] and a move, its
     /// window drag and the device that starts it.
@@ -296,7 +310,11 @@ impl Session {
         let session = Rc::clone(self);
         let hide = move || {
             session.hide_pending.set(false);
-            if session.host.borrow().upgrade().is_none() || session.hidden.replace(true) {
+            // A release may end the drag first: the window then stays.
+            if !session.is_current()
+                || session.host.borrow().upgrade().is_none()
+                || session.hidden.replace(true)
+            {
                 return;
             }
             if let Some(window) = session.dragged.upgrade() {
@@ -423,12 +441,7 @@ impl Session {
 
     /// Ends the session and releases its objects; false when it was over.
     fn finish(&self) -> bool {
-        let is_current = SESSION.with_borrow(|session| {
-            session
-                .as_ref()
-                .is_some_and(|session| std::ptr::eq(Rc::as_ptr(session), self))
-        });
-        if !is_current {
+        if !self.is_current() {
             return false;
         }
         SESSION.set(None);
@@ -605,11 +618,7 @@ impl BrowserWindow {
         let dragged = session.dragged.upgrade();
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let point = graphene::Point::new(x as f32, y as f32);
-        // A row that took the tab keeps it until the pointer is Chrome's 15
-        // pixels below it, as its own tabs do.
-        let is_host = session.host.borrow().upgrade().as_ref() == Some(self);
-        let held = is_host && self.is_in_tab_row(graphene::Point::new(point.x(), point.y() - MAGNETISM));
-        let takes = !self.is_busy_for_tab_moves() && (self.is_in_tab_row(point) || held);
+        let takes = self.row_takes_tab(session.is_host(self), point);
         let view = dragged
             .as_ref()
             .and_then(|window| window.tab_strip().tab_view(session.tab));
@@ -635,6 +644,14 @@ impl BrowserWindow {
         // Every window takes the drop, so the desktop leaves the dragged
         // window where it is released, as over Chrome's windows.
         gdk::DragAction::MOVE
+    }
+
+    /// Whether this window's row takes the dragged window's tab at `point`:
+    /// over the row, and for the row that took it already (`is_host`) down
+    /// to Chrome's 15 pixels below it, as its own tabs do.
+    fn row_takes_tab(&self, is_host: bool, point: graphene::Point) -> bool {
+        let held = is_host && self.is_in_tab_row(graphene::Point::new(point.x(), point.y() - MAGNETISM));
+        !self.is_busy_for_tab_moves() && (self.is_in_tab_row(point) || held)
     }
 
     /// The pointer left this window during a window drag: its row lets the
@@ -671,8 +688,10 @@ impl BrowserWindow {
         };
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let point = graphene::Point::new(x as f32, y as f32);
+        // Where the hover showed the tab in this row, also in the band below
+        // a row that took it.
         let landing = self
-            .is_in_tab_row(point)
+            .row_takes_tab(session.is_host(self), point)
             .then(|| self.tab_strip().land_guest())
             .flatten();
         if let (Some(landing), Some(dragged)) = (landing, session.dragged.upgrade()) {
@@ -834,5 +853,33 @@ mod tests {
         }
         assert_eq!(test.window.tab_after(ids[0]), Some(ids[1]));
         assert_eq!(test.window.tab_after(ids[1]), None);
+    }
+
+    /// A row takes the dragged window's tab over itself, and the row that
+    /// took it keeps it down to 15 pixels below, for a hover and a release
+    /// alike, so a release in that band lands the tab where it was shown.
+    ///
+    /// parity: TAB-033
+    #[gtk::test]
+    fn a_row_that_took_the_tab_keeps_it_15_pixels_below_itself() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        wait_for_frames(&test.window, 3);
+        let strip = test
+            .window
+            .tab_strip()
+            .compute_bounds(&test.window)
+            .expect("a strip");
+        let bottom = test.window.title_bar_bottom().expect("a title bar");
+        let at = |below: f32| graphene::Point::new(strip.x() + 10.0, bottom + below);
+
+        assert!(test.window.row_takes_tab(false, at(-5.0)));
+        assert!(test.window.row_takes_tab(true, at(-5.0)));
+        assert!(
+            !test.window.row_takes_tab(false, at(8.0)),
+            "a row that did not take it"
+        );
+        assert!(test.window.row_takes_tab(true, at(8.0)), "the row that took it");
+        assert!(!test.window.row_takes_tab(true, at(20.0)), "past the band");
     }
 }

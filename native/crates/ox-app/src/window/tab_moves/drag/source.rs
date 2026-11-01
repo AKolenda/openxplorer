@@ -137,10 +137,16 @@ impl BrowserWindow {
             self,
             #[strong]
             press,
-            move |_, _| {
-                if let Press::Live(_) = press.replace(Press::Idle) {
-                    window.let_go_of_tab(true);
+            move |_, _| match press.replace(Press::Idle) {
+                Press::Live(_) => window.let_go_of_tab(true),
+                // Released past the strip before GTK's drag and drop could
+                // start: the tab tears out, as a release there does once it
+                // has started.
+                Press::Leaving(tab) => {
+                    window.tab_strip().end_drag_now();
+                    window.move_tab_to_new_window(tab);
                 }
+                _ => {}
             }
         ));
         source.connect_cancel(glib::clone!(
@@ -149,7 +155,7 @@ impl BrowserWindow {
             #[strong]
             press,
             move |_, _| {
-                if let Press::Live(_) = press.replace(Press::Idle) {
+                if let Press::Live(_) | Press::Leaving(_) = press.replace(Press::Idle) {
                     window.let_go_of_tab(false);
                 }
             }
@@ -363,7 +369,10 @@ impl BrowserWindow {
         self.imp().outgoing_tab.replace(Some(OutgoingTabDrag {
             tab,
             outcome: TabDragOutcome::Pending,
-            over: Some(Hover::Takes),
+            // Outside every window of this app until one says the drag is
+            // over it: the drag may start with the pointer already outside,
+            // where no window ever reports it.
+            over: None,
             carried: None,
             over_own_strip: false,
             stepped_back: false,
@@ -648,7 +657,7 @@ fn escape_puts_tabs_back(window: &BrowserWindow, press: &Rc<Cell<Press>>) -> gtk
         #[upgrade_or]
         glib::Propagation::Proceed,
         move |_, key, _, _| {
-            let is_live = matches!(press.get(), Press::Live(_));
+            let is_live = matches!(press.get(), Press::Live(_) | Press::Leaving(_));
             if key != gdk::Key::Escape || !is_live {
                 return glib::Propagation::Proceed;
             }
