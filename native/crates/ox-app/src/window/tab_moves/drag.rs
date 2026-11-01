@@ -9,9 +9,11 @@
 //! tab never moves the window ([`source`] says why it must sit there).
 //! Along the strip the tab itself follows the pointer and the other tabs
 //! slide aside (`tab_strip::live_drag`), with no drag and drop at all.
-//! Once the pointer leaves the strip by more than Chrome's 15 pixels, GTK's
-//! drag and drop takes over, carrying the tab itself, drawn as in its strip,
-//! and the tab beside it comes to the front, as in Chrome. Every window
+//! Once the pointer leaves the strip by more than Chrome's 15 pixels, the tab
+//! becomes its own window that the desktop moves with the pointer where the
+//! desktop and GTK allow it ([`window_drag`], as Chrome on Wayland);
+//! elsewhere GTK's drag and drop takes over, carrying the tab itself, drawn
+//! as in its strip, and the tab beside it comes to the front, as in Chrome. Every window
 //! takes tab drops with one target over the whole window, which finds the
 //! spot itself: the title bar from the first tab to the open-windows button
 //! places the tab where the tabs made room for it, and anywhere else in a
@@ -39,6 +41,7 @@ mod source;
 mod target;
 #[cfg(test)]
 mod tests;
+mod window_drag;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -160,6 +163,7 @@ impl BrowserWindow {
     pub(in crate::window) fn connect_tab_drag_and_drop(&self) {
         self.attach_tab_drag_source();
         self.attach_tab_drop_target();
+        self.connect_window_drags();
     }
 
     /// True, after saying so, while tab `id` is being dragged: it cannot

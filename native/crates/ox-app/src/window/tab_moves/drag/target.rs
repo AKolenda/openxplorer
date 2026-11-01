@@ -120,7 +120,7 @@ impl BrowserWindow {
 
     /// True for a point of the title bar from the first tab to the
     /// open-windows button: the tabs, "+" and the empty drag area.
-    fn is_in_tab_row(&self, point: graphene::Point) -> bool {
+    pub(super) fn is_in_tab_row(&self, point: graphene::Point) -> bool {
         let strip = self.tab_strip().compute_bounds(self);
         let windows_button = self.imp().open_windows_button.compute_bounds(self);
         let (Some(strip), Some(windows_button), Some(bottom)) =

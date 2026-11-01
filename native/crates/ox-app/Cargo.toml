@@ -20,6 +20,9 @@ gio.workspace = true
 glib.workspace = true
 ox-core.workspace = true
 thiserror.workspace = true
+wayland-backend.workspace = true
+wayland-client.workspace = true
+wayland-protocols.workspace = true
 
 [lints]
 workspace = true

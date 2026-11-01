@@ -35,6 +35,7 @@ Source1:        openxplorer-%{version}-vendor.tar.gz
 BuildRequires:  cargo >= 1.92
 BuildRequires:  rust >= 1.92
 BuildRequires:  pkgconfig(gtk4) >= 4.14
+BuildRequires:  pkgconfig(wayland-client)
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(libsoup-3.0)
 BuildRequires:  /usr/bin/glib-compile-resources

@@ -317,9 +317,8 @@ impl TabStrip {
         shown.get(target).map(|(tab, _)| tab.id)
     }
 
-    /// The tab list, for tests.
-    #[cfg(test)]
-    pub(super) fn tab_list(&self) -> gtk::Box {
+    /// The row the tabs are laid out in.
+    pub(in crate::window) fn tab_list(&self) -> gtk::Box {
         self.imp().tab_list.get()
     }
 

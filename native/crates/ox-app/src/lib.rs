@@ -23,6 +23,7 @@ mod devices;
 mod dialog;
 mod dialogs;
 mod folder_view;
+mod gtk_xdg_toplevel;
 mod history;
 mod i18n;
 mod icons;

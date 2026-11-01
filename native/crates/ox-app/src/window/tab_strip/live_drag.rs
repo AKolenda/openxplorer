@@ -284,6 +284,15 @@ impl TabStrip {
         before
     }
 
+    /// The border box of tab `id`, in `target`'s coordinates.
+    pub(in crate::window) fn tab_bounds_in(
+        &self,
+        id: TabId,
+        target: &impl IsA<gtk::Widget>,
+    ) -> Option<gtk::graphene::Rect> {
+        self.widget_of(id)?.compute_bounds(target)
+    }
+
     /// The width of tab `id`.
     pub(in crate::window) fn tab_width(&self, id: TabId) -> Option<f64> {
         self.widget_of(id).map(|widget| self.layout().width_of(&widget))

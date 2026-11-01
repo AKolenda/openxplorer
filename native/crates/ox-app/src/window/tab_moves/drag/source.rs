@@ -33,7 +33,7 @@ const CARRIED_AWAY: i32 = 100_000;
 
 /// How far above or below its strip the pointer may go before a dragged tab
 /// leaves the strip: Chrome's `kVerticalDetachMagnetism`.
-const DETACH_MAGNETISM: f64 = 15.0;
+pub(super) const DETACH_MAGNETISM: f64 = 15.0;
 
 /// What a primary press on the title bar is doing.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -178,7 +178,11 @@ impl BrowserWindow {
                 self.tab_strip().follow_pointer(tab, x);
             }
             Press::Live(tab) if self.is_off_the_strip(y) => {
-                if self.tab_count() <= 1 && !self.has_other_windows() {
+                let grab = self.tab_strip().grab_offset(tab);
+                if grab.is_some_and(|grab| self.drag_tab_out_as_window(tab, grab)) {
+                    // The desktop has the pointer now, and moves the window.
+                    press.set(Press::Handed);
+                } else if self.tab_count() <= 1 && !self.has_other_windows() {
                     press.set(Press::Handed);
                     self.move_window_by_its_tab(source, tab);
                 } else {
