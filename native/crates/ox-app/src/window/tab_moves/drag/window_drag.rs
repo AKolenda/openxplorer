@@ -4,9 +4,10 @@
 //! TAB-034): xdg-toplevel-drag-v1, in the order of Chromium's
 //! `WaylandWindowDragController`.
 //!
-//! When the tab leaves its row, a drag and drop starts with a data source
-//! that offers only [`WINDOW_DRAG_MIME`], with no drag icon, and the window
-//! the tab now has is attached to the drag before it is first drawn, held
+//! When a tab pressed with the mouse leaves its row, a drag and drop starts
+//! with the press's serial and a data source that offers only
+//! [`WINDOW_DRAG_MIME`], with no drag icon, and the window the tab now has
+//! is attached to the drag before it is first drawn, held
 //! where the tab was grabbed. The desktop then moves that window with the
 //! pointer, and leaves it where the pointer is released. Every window of
 //! this app takes drops of that format: over a tab row the dragged window
@@ -19,8 +20,8 @@
 //! Wayland connection, in a queue of their own; the window's `xdg_toplevel`
 //! comes from [`crate::gtk_xdg_toplevel`], the one place that reads GTK's
 //! private structures. Where any of it is missing (X11, a GTK release that
-//! was not checked, a desktop without the protocol) the tab is carried as
-//! before.
+//! was not checked, a desktop without the protocol, a touch or a pen) the
+//! tab is carried as before.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -66,11 +67,80 @@ const WINDOW_DRAWN_AT_LATEST: Duration = Duration::from_millis(800);
 /// What the desktop told this process's own Wayland objects.
 #[derive(Debug, Default)]
 struct Events {
-    /// The serial of the last primary press on a window of this app, which
-    /// a drag must start with.
-    press: Option<u32>,
-    /// What happened to the drag's data source, oldest first.
-    source: Vec<SourceEvent>,
+    /// The primary press held on a window of this app, as this process's
+    /// pointer saw it: a drag must start with its serial.
+    press: Option<PointerPress>,
+    /// How many primary releases this process's pointer saw.
+    releases: u64,
+    /// What happened to each drag's data source, oldest first, by drag.
+    source: Vec<(u64, SourceEvent)>,
+}
+
+/// A primary press, as this process's pointer saw it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PointerPress {
+    serial: u32,
+    /// When, in the desktop's milliseconds.
+    time: u32,
+}
+
+/// A press of the mouse's primary button that began a tab's drag, as GTK
+/// saw it: when it was, in the desktop's milliseconds, which GTK passes on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct MousePress(u32);
+
+impl MousePress {
+    /// The press `controller` handles now, when it is one of the primary button
+    /// of the seat's pointer: not a touch, nor a pen, whose drag the desktop
+    /// starts only with a serial of their own, which GTK keeps to itself.
+    pub(super) fn of(controller: &impl IsA<gtk::EventController>) -> Option<Self> {
+        let event = controller.current_event()?;
+        let is_primary = event
+            .downcast_ref::<gdk::ButtonEvent>()
+            .is_some_and(|press| press.button() == gdk::BUTTON_PRIMARY);
+        let from_pointer = event
+            .device()
+            .is_some_and(|device| event.seat().and_then(|seat| seat.pointer()).as_ref() == Some(&device));
+        let is_press = event.event_type() == gdk::EventType::ButtonPress;
+        (is_press && is_primary && from_pointer && event.device_tool().is_none()).then(|| Self(event.time()))
+    }
+}
+
+impl Events {
+    /// The primary button went down (`pressed`) or up.
+    fn on_primary_button(&mut self, serial: u32, time: u32, pressed: bool) {
+        if pressed {
+            self.press = Some(PointerPress { serial, time });
+        } else {
+            self.press = None;
+            self.releases += 1;
+        }
+    }
+
+    /// The serial of `press`, when this process's pointer saw it and it is
+    /// still held.
+    fn serial_of(&self, press: MousePress) -> Option<u32> {
+        self.press
+            .filter(|seen| seen.time == press.0)
+            .map(|seen| seen.serial)
+    }
+
+    /// The serial of `press`, as [`Self::serial_of`], for a drag to start
+    /// with: one serial starts one drag.
+    fn take_serial(&mut self, press: MousePress) -> Option<u32> {
+        let serial = self.serial_of(press)?;
+        self.press = None;
+        Some(serial)
+    }
+
+    /// What happened to the data source of drag `drag`, oldest first. What
+    /// earlier drags' sources said is let go: those drags are over.
+    fn take_source_events(&mut self, drag: u64) -> Vec<SourceEvent> {
+        std::mem::take(&mut self.source)
+            .into_iter()
+            .filter_map(|(of, event)| (of == drag).then_some(event))
+            .collect()
+    }
 }
 
 /// What happened to a drag's data source.
@@ -96,31 +166,37 @@ struct Protocol {
     toplevel_drags: xdg_toplevel_drag_manager_v1::XdgToplevelDragManagerV1,
     seat: wl_seat::WlSeat,
     /// This process's own pointer, which sees the serial of each press.
-    _pointer: wl_pointer::WlPointer,
+    pointer: RefCell<wl_pointer::WlPointer>,
+    /// How many drags started, which numbers each drag's data source.
+    drags: Cell<u64>,
 }
 
 thread_local! {
-    /// The protocol objects, once a window of this app is shown on a
-    /// desktop that has them.
-    static PROTOCOL: RefCell<Option<Rc<Protocol>>> = const { RefCell::new(None) };
-    /// Whether making them was tried, so a desktop without them is asked
-    /// once.
-    static TRIED: Cell<bool> = const { Cell::new(false) };
+    /// The display the protocol objects were made for, once a window of
+    /// this app was shown, and the objects, `None` where it has none: a
+    /// display is asked once.
+    static PROTOCOL: RefCell<Option<(gdk::Display, Option<Rc<Protocol>>)>> = const { RefCell::new(None) };
     /// The window drag in progress.
     static SESSION: RefCell<Option<Rc<Session>>> = const { RefCell::new(None) };
 }
 
 impl Protocol {
     /// The protocol objects of `display`, made the first time: `None` off
-    /// Wayland, on a GTK release whose window objects cannot be read, or on
-    /// a desktop without xdg-toplevel-drag-v1.
+    /// Wayland, on a GTK release whose window objects cannot be read, on a
+    /// desktop without xdg-toplevel-drag-v1, or on another display than the
+    /// first, whose windows are on another connection.
     fn of(display: &gdk::Display) -> Option<Rc<Self>> {
-        if TRIED.replace(true) {
-            return PROTOCOL.with_borrow(Clone::clone);
+        if let Some((made_for, protocol)) = PROTOCOL.with_borrow(Clone::clone) {
+            return protocol.filter(|_| made_for == *display);
         }
-        let protocol = Rc::new(Self::new(display)?);
-        PROTOCOL.set(Some(Rc::clone(&protocol)));
-        Some(protocol)
+        let protocol = Self::new(display).map(Rc::new);
+        PROTOCOL.set(Some((display.clone(), protocol.clone())));
+        protocol
+    }
+
+    /// The protocol objects, when they were made.
+    fn made() -> Option<Rc<Self>> {
+        PROTOCOL.with_borrow(|made| made.as_ref().and_then(|(_, protocol)| protocol.clone()))
     }
 
     fn new(display: &gdk::Display) -> Option<Self> {
@@ -147,7 +223,8 @@ impl Protocol {
             data_devices,
             toplevel_drags,
             seat,
-            _pointer: pointer,
+            pointer: RefCell::new(pointer),
+            drags: Cell::new(0),
         })
     }
 
@@ -161,11 +238,35 @@ impl Protocol {
     fn handle(&self) -> QueueHandle<Events> {
         self.queue.borrow().handle()
     }
+
+    /// Replaces this process's pointer, which missed a press GTK saw: the
+    /// desktop leaves a pointer behind when the seat loses its pointer, as
+    /// when the only mouse is unplugged, and the next press reaches only a
+    /// new one.
+    fn renew_pointer(&self) {
+        let pointer = self.seat.get_pointer(&self.handle(), ());
+        let old = self.pointer.replace(pointer);
+        // A pointer can be released from version 3 of the seat on.
+        if old.version() >= 3 {
+            old.release();
+        }
+        let _ = self.connection.flush();
+    }
+
+    /// The number of a new drag.
+    fn next_drag(&self) -> u64 {
+        self.drags.set(self.drags.get() + 1);
+        self.drags.get()
+    }
 }
 
 /// A window drag in progress.
 struct Session {
     protocol: Rc<Protocol>,
+    /// Which drag this is, as its data source's events say.
+    drag: u64,
+    /// The releases this process's pointer had seen when the drag started.
+    releases_at_start: u64,
     source: wl_data_source::WlDataSource,
     toplevel_drag: xdg_toplevel_drag_v1::XdgToplevelDragV1,
     device: wl_data_device::WlDataDevice,
@@ -233,7 +334,8 @@ impl Session {
         grab_x: f64,
     ) -> Rc<Self> {
         let handle = protocol.handle();
-        let source = protocol.data_devices.create_data_source(&handle, ());
+        let drag = protocol.next_drag();
+        let source = protocol.data_devices.create_data_source(&handle, drag);
         source.offer(WINDOW_DRAG_MIME.to_owned());
         source.set_actions(wl_data_device_manager::DndAction::Move);
         let toplevel_drag = protocol
@@ -242,6 +344,8 @@ impl Session {
         let device = protocol.data_devices.get_data_device(&protocol.seat, &handle, ());
         Rc::new(Self {
             protocol: Rc::clone(protocol),
+            drag,
+            releases_at_start: protocol.events.borrow().releases,
             source,
             toplevel_drag,
             device,
@@ -326,9 +430,11 @@ impl Session {
 
     /// Shows the dragged window again under the pointer, attached anew
     /// before it is drawn, once its tab is off every row; `drawn` runs once
-    /// it is on screen, or at once when it never hid.
+    /// it is on screen, or at once when it never hid or the drag is over.
     fn show_window(self: &Rc<Self>, drawn: impl Fn() + 'static) {
-        if !self.hidden.replace(false) {
+        // Once the drag is over its window is where the drag's end left it:
+        // shown, or gone with its tab moved into another window.
+        if !self.is_current() || !self.hidden.replace(false) {
             drawn();
             return;
         }
@@ -377,7 +483,13 @@ impl Session {
     /// Handles what happened to the drag's data source.
     fn on_source_events(self: &Rc<Self>) {
         self.protocol.pump();
-        let events = std::mem::take(&mut self.protocol.events.borrow_mut().source);
+        let (events, released) = {
+            let mut seen = self.protocol.events.borrow_mut();
+            (
+                seen.take_source_events(self.drag),
+                seen.releases != self.releases_at_start,
+            )
+        };
         for event in events {
             match event {
                 SourceEvent::Dropped => {
@@ -393,6 +505,13 @@ impl Session {
                 SourceEvent::Cancelled if self.dropped.get() => self.end(),
                 SourceEvent::Cancelled => self.cancel(),
             }
+        }
+        // The release reached this process's pointer, so the desktop never
+        // took the drag and did not say so, as when the button was up
+        // before the drag could start (KWin cancels a drag it refuses, other
+        // desktops may not). The tab stays in its window, where it is.
+        if released {
+            self.end();
         }
     }
 
@@ -464,7 +583,7 @@ impl BrowserWindow {
         let pump = gtk::EventControllerLegacy::new();
         pump.set_propagation_phase(gtk::PropagationPhase::Capture);
         pump.connect_event(|_, _| {
-            if let Some(protocol) = PROTOCOL.with_borrow(Clone::clone) {
+            if let Some(protocol) = Protocol::made() {
                 protocol.pump();
             }
             glib::Propagation::Proceed
@@ -475,20 +594,36 @@ impl BrowserWindow {
 
     /// Drags tab `id`, which just left its row, out as a window the desktop
     /// moves with the pointer, held at `grab`, where it was grabbed on the
-    /// tab: true when it started. Without what that needs, nothing changes
-    /// and the caller carries the tab as before.
-    pub(super) fn drag_tab_out_as_window(&self, id: TabId, grab: (f64, f64)) -> bool {
+    /// tab: true when it started. It starts only with the press of the
+    /// mouse's primary button that began the tab's drag, `pressed_with`,
+    /// still held. Without what that needs, nothing changes and the caller
+    /// carries the tab as before.
+    pub(super) fn drag_tab_out_as_window(
+        &self,
+        id: TabId,
+        grab: (f64, f64),
+        pressed_with: Option<MousePress>,
+    ) -> bool {
+        // A touch or a pen: GTK's drag and drop carries the tab.
+        let Some(pressed_with) = pressed_with else {
+            return false;
+        };
         let Some(protocol) = Protocol::of(&WidgetExt::display(self)) else {
             return false;
         };
         protocol.pump();
-        let serial = protocol.events.borrow().press;
+        if protocol.events.borrow().serial_of(pressed_with).is_none() {
+            // A press GTK saw and this process's pointer did not, or one
+            // already released: a new pointer sees the next press.
+            protocol.renew_pointer();
+            return false;
+        }
         let origin_surface = self
             .surface()
             .and_downcast::<gdk_wayland::WaylandSurface>()
             .and_then(|surface| surface.wl_surface());
-        let (Some(serial), Some(origin_surface), Some(offset)) =
-            (serial, origin_surface, self.window_offset_of_first_tab(id, grab))
+        let (Some(origin_surface), Some(offset)) =
+            (origin_surface, self.window_offset_of_first_tab(id, grab))
         else {
             return false;
         };
@@ -496,8 +631,10 @@ impl BrowserWindow {
             return false;
         }
         // A new press means any earlier drag is over, even if the desktop
-        // never said so, as Chrome resets a drag it was not told ended.
+        // never said so, as Chrome resets a drag it was not told ended:
+        // what its source said last is its own, then it ends.
         if let Some(stale) = Session::current() {
+            stale.on_source_events();
             stale.end();
         }
         let single = self.tab_count() <= 1;
@@ -505,7 +642,6 @@ impl BrowserWindow {
             before: self.tab_after(id),
         });
         let dragged = if single {
-            self.tab_strip().end_drag_now();
             self.clone()
         } else {
             match self.window_for_tab(id) {
@@ -515,15 +651,20 @@ impl BrowserWindow {
         };
         let tab = dragged.imp().session.borrow().active_id().unwrap_or(id);
         let session = Session::new(&protocol, self, &dragged, (id, tab), back, offset, grab.0);
-        // Attached before it is drawn, then dragged with the press, as the
+        // The press may have ended meanwhile; with it, the window is
+        // attached before it is drawn, then dragged with the press, as the
         // protocol and Chrome do.
-        if !session.attach(&dragged) {
+        let serial = protocol.events.borrow_mut().take_serial(pressed_with);
+        let Some(serial) = serial.filter(|_| session.attach(&dragged)) else {
             session.release();
             if !single {
                 // This window still has the tab.
                 dragged.close();
             }
             return false;
+        };
+        if single {
+            self.tab_strip().end_drag_now();
         }
         session
             .device
@@ -731,33 +872,38 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Events {
     ) {
         if let wl_pointer::Event::Button {
             serial,
+            time,
             button: PRIMARY_BUTTON,
-            state: WEnum::Value(wl_pointer::ButtonState::Pressed),
-            ..
+            state: WEnum::Value(state),
         } = event
         {
-            events.press = Some(serial);
+            events.on_primary_button(serial, time, state == wl_pointer::ButtonState::Pressed);
         }
     }
 }
 
-impl Dispatch<wl_data_source::WlDataSource, ()> for Events {
+/// A data source's events, for drag `drag`, its user data.
+impl Dispatch<wl_data_source::WlDataSource, u64> for Events {
     fn event(
         events: &mut Self,
         _: &wl_data_source::WlDataSource,
         event: wl_data_source::Event,
-        (): &(),
+        drag: &u64,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        match event {
+        let event = match event {
             // Nothing is sent: closing the file ends the transfer.
-            wl_data_source::Event::Send { fd, .. } => drop(fd),
-            wl_data_source::Event::DndDropPerformed => events.source.push(SourceEvent::Dropped),
-            wl_data_source::Event::DndFinished => events.source.push(SourceEvent::Finished),
-            wl_data_source::Event::Cancelled => events.source.push(SourceEvent::Cancelled),
-            _ => {}
-        }
+            wl_data_source::Event::Send { fd, .. } => {
+                drop(fd);
+                return;
+            }
+            wl_data_source::Event::DndDropPerformed => SourceEvent::Dropped,
+            wl_data_source::Event::DndFinished => SourceEvent::Finished,
+            wl_data_source::Event::Cancelled => SourceEvent::Cancelled,
+            _ => return,
+        };
+        events.source.push((*drag, event));
     }
 }
 
@@ -795,6 +941,7 @@ delegate_noop!(Events: xdg_toplevel_drag_v1::XdgToplevelDragV1);
 mod tests {
     use super::*;
     use crate::test_support::harness::{wait_for_frames, Fixture, TestWindow};
+    use crate::test_support::pointer::{screen_point, Button, Pointer};
 
     /// Off Wayland, as on the tests' X11 display, no window drag is readied
     /// and none starts: a tab dragged out of its row is carried as before.
@@ -808,7 +955,9 @@ mod tests {
         let id = test.window.imp().session.borrow().active_id().expect("a tab");
 
         assert!(Protocol::of(&WidgetExt::display(&test.window)).is_none());
-        assert!(!test.window.drag_tab_out_as_window(id, (40.0, 10.0)));
+        assert!(!test
+            .window
+            .drag_tab_out_as_window(id, (40.0, 10.0), Some(MousePress(0))));
         assert!(Session::current().is_none());
     }
 
@@ -853,6 +1002,83 @@ mod tests {
         }
         assert_eq!(test.window.tab_after(ids[0]), Some(ids[1]));
         assert_eq!(test.window.tab_after(ids[1]), None);
+    }
+
+    /// A window drag starts only with the press GTK began the tab's drag
+    /// with, while it is held: not with an earlier click, a released press
+    /// or one a drag already started with, whose serial the desktop would
+    /// refuse. Each release is counted.
+    ///
+    /// parity: TAB-034
+    #[test]
+    fn a_window_drag_starts_only_with_the_held_press_that_began_it() {
+        let mut events = Events::default();
+
+        events.on_primary_button(7, 100, true);
+        assert_eq!(events.serial_of(MousePress(100)), Some(7));
+        assert_eq!(events.serial_of(MousePress(90)), None, "an earlier press");
+        assert_eq!(events.take_serial(MousePress(100)), Some(7));
+        assert_eq!(events.serial_of(MousePress(100)), None, "used by a drag");
+
+        events.on_primary_button(8, 200, true);
+        events.on_primary_button(9, 250, false);
+        assert_eq!(events.serial_of(MousePress(200)), None, "released");
+        assert_eq!(events.releases, 1);
+    }
+
+    /// A drag handles only what happened to its own data source: what an
+    /// earlier drag's source said, not handled when the next drag started,
+    /// is let go, not taken for the new drag's drop, end or cancel.
+    ///
+    /// parity: TAB-034
+    #[test]
+    fn a_drag_handles_only_what_its_own_source_said() {
+        let mut events = Events::default();
+        events.source.push((1, SourceEvent::Dropped));
+        events.source.push((1, SourceEvent::Cancelled));
+        events.source.push((2, SourceEvent::Dropped));
+
+        assert_eq!(events.take_source_events(2), vec![SourceEvent::Dropped]);
+        assert!(events.source.is_empty(), "the earlier drag's events are let go");
+    }
+
+    /// A press of the mouse's primary button is one a window drag may start
+    /// with, at the time GTK gives it, which is the desktop's; another
+    /// button is not.
+    ///
+    /// parity: TAB-034
+    #[gtk::test]
+    fn a_primary_mouse_press_may_start_a_window_drag() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        wait_for_frames(&test.window, 3);
+        let mut pointer = Pointer::connect();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let click = gtk::GestureClick::new();
+        click.set_button(0);
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        click.connect_pressed(glib::clone!(
+            #[strong]
+            seen,
+            move |click, _, _, _| {
+                seen.borrow_mut()
+                    .push((MousePress::of(click), click.current_event_time()));
+            }
+        ));
+        test.window.add_controller(click);
+        let height = f64::from(test.window.height());
+        let at = screen_point(&mut pointer, &test.window, (40.0, height - 6.0), (8, 8));
+
+        pointer.move_to(at.0, at.1);
+        for button in [Button::Primary, Button::Middle] {
+            pointer.press(button);
+            pointer.release(button);
+        }
+
+        let seen = seen.borrow();
+        assert_eq!(seen.len(), 2, "both presses reached the window");
+        assert_eq!(seen[0].0, Some(MousePress(seen[0].1)), "the primary button");
+        assert_eq!(seen[1].0, None, "the middle button");
     }
 
     /// A row takes the dragged window's tab over itself, and the row that

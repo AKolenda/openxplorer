@@ -11,6 +11,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
+use super::window_drag::MousePress;
 use super::{
     tab_drag_content, Carried, CarriedLook, DraggedTab, Hover, OutgoingTabDrag, TabDragOutcome, TabDropSpot,
 };
@@ -67,7 +68,8 @@ impl BrowserWindow {
         source.set_actions(gdk::DragAction::MOVE);
         source.set_propagation_phase(gtk::PropagationPhase::Capture);
         let press = Rc::new(Cell::new(Press::Idle));
-        self.follow_tab_presses(&source, &press);
+        let pressed_with = Rc::new(Cell::new(None));
+        self.follow_tab_presses(&source, &press, &pressed_with);
         source.connect_prepare(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -110,12 +112,21 @@ impl BrowserWindow {
     /// Follows each primary press on the title bar through `source`: past
     /// the drag threshold on a tab it becomes the tab's live drag, which
     /// [`take_tab_presses_from_the_window_handle`] explains, and a release
-    /// leaves the tab where it was shown.
-    fn follow_tab_presses(&self, source: &gtk::DragSource, press: &Rc<Cell<Press>>) {
+    /// leaves the tab where it was shown. `pressed_with` is the press when
+    /// it is one of the mouse, which may drag the tab out as a window.
+    fn follow_tab_presses(
+        &self,
+        source: &gtk::DragSource,
+        press: &Rc<Cell<Press>>,
+        pressed_with: &Rc<Cell<Option<MousePress>>>,
+    ) {
         source.connect_begin(glib::clone!(
             #[strong]
             press,
+            #[strong]
+            pressed_with,
             move |source, sequence| {
+                pressed_with.set(MousePress::of(source));
                 if let Some(point) = source.point(sequence) {
                     press.set(Press::Pending(point));
                 }
@@ -126,9 +137,11 @@ impl BrowserWindow {
             self,
             #[strong]
             press,
+            #[strong]
+            pressed_with,
             move |source, sequence| {
                 if let Some(point) = source.point(sequence) {
-                    window.move_tab_press(source, &press, point);
+                    window.move_tab_press(source, &press, pressed_with.get(), point);
                 }
             }
         ));
@@ -162,8 +175,15 @@ impl BrowserWindow {
         ));
     }
 
-    /// The pointer of a primary press moved to `point` of the title bar.
-    fn move_tab_press(&self, source: &gtk::DragSource, press: &Cell<Press>, point: (f64, f64)) {
+    /// The pointer of a primary press, `pressed_with` when it is the
+    /// mouse's, moved to `point` of the title bar.
+    fn move_tab_press(
+        &self,
+        source: &gtk::DragSource,
+        press: &Cell<Press>,
+        pressed_with: Option<MousePress>,
+        point: (f64, f64),
+    ) {
         let Some((x, y)) = self.title_bar_point_in_strip(source, point.0, point.1) else {
             return;
         };
@@ -185,7 +205,7 @@ impl BrowserWindow {
             }
             Press::Live(tab) if self.is_off_the_strip(y) => {
                 let grab = self.tab_strip().grab_offset(tab);
-                if grab.is_some_and(|grab| self.drag_tab_out_as_window(tab, grab)) {
+                if grab.is_some_and(|grab| self.drag_tab_out_as_window(tab, grab, pressed_with)) {
                     // The desktop has the pointer now, and moves the window.
                     press.set(Press::Handed);
                 } else if self.tab_count() <= 1 && !self.has_other_windows() {

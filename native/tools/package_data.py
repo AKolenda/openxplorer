@@ -327,7 +327,7 @@ def install_crate_licences(staging: Staging, destination: PurePosixPath,
                            crates: Sequence[Crate]) -> None:
     """Install each linked crate's licence files and an index of their licences.
 
-    MIT and Apache-2.0 require their notices to travel with the binary.
+    MIT, Apache-2.0 and ISC require their notices to travel with the binary.
     """
     index = [f'{crate.name} {crate.version}: {crate.licence}' for crate in crates]
     staging.write('\n'.join(index) + '\n', destination / 'INDEX.txt', DATA_MODE)

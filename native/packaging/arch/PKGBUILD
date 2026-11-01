@@ -20,8 +20,9 @@ pkgrel=1
 arch=('x86_64' 'aarch64')
 url='https://openxplorer.app'
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
-# Apache-2.0 or both, and their licences are installed beside it.
-license=('AGPL-3.0-only AND MIT AND Apache-2.0')
+# Apache-2.0 or both, or ISC (libloading, with which the Wayland crates load
+# libwayland), and their licences are installed beside it.
+license=('AGPL-3.0-only AND MIT AND Apache-2.0 AND ISC')
 # Arch lists the libraries a program links by hand. SQLite and libsoup are
 # the search cache's and the updater's; the program links them as soon as
 # the interface uses those services.
