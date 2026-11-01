@@ -1363,6 +1363,11 @@ struct ServiceFixture {
 
 impl ServiceFixture {
     fn new() -> Self {
+        Self::preparing(|_| {})
+    }
+
+    /// A fixture whose backend `prepare` sets up before it is exported.
+    fn preparing(prepare: impl FnOnce(&mut FileChooserBus)) -> Self {
         let context = glib::MainContext::new();
         let bus = PrivateBus::start();
         let received: Rc<RefCell<Vec<ChooserCall>>> = Rc::default();
@@ -1378,6 +1383,7 @@ impl ServiceFixture {
                     recorded.borrow_mut().push(call);
                     Ok::<(), ChooserNotShown>(())
                 });
+                prepare(&mut service);
                 service.export().expect("export");
                 service
             })
@@ -1551,6 +1557,66 @@ fn the_caller_is_named_by_its_app_id_or_its_program() {
         call.reply.send(&ChooserAnswer::Cancelled);
         fixture.finish(reply).expect("joined").expect("answered");
     }
+}
+
+/// A request the portal closes while the backend is still finding out
+/// which program asked is answered "other" and never reaches the window,
+/// which would otherwise show a dialog nobody can answer.
+///
+/// parity: INT-035
+#[test]
+fn a_request_closed_while_its_caller_is_looked_up_is_not_shown() {
+    let (release, released) = futures_channel::oneshot::channel::<()>();
+    let released = Rc::new(RefCell::new(Some(released)));
+    let asked = Rc::new(std::cell::Cell::new(false));
+    let lookup_asked = Rc::clone(&asked);
+    let fixture = ServiceFixture::preparing(move |service| {
+        service.set_caller_lookup(move |_, _| {
+            lookup_asked.set(true);
+            let released = released.borrow_mut().take();
+            Box::pin(async move {
+                if let Some(released) = released {
+                    let _ = released.await;
+                }
+                Some("example-browser".to_owned())
+            })
+        });
+    });
+    let handle = "/org/freedesktop/portal/desktop/request/1_1/closing";
+    let pending = fixture.start_call_for(
+        &fixture.frontend,
+        "",
+        "SaveFile",
+        handle,
+        &options_from_entries(&[]),
+    );
+    let reply = fixture.context.spawn_local(pending);
+    fixture.run_until("the caller lookup", || asked.get());
+
+    let closing = fixture.frontend.call_future(
+        Some(&fixture.service_name),
+        handle,
+        "org.freedesktop.impl.portal.Request",
+        "Close",
+        None,
+        None,
+        gio::DBusCallFlags::NO_AUTO_START,
+        5000,
+    );
+    fixture.finish(closing).expect("the portal may close its request");
+    let _ = release.send(());
+    let reply = fixture.finish(reply).expect("joined").expect("answered");
+    // Give a dispatch that should not happen the chance to run.
+    for _ in 0..20 {
+        fixture.context.iteration(false);
+    }
+
+    let (response, _) = reply.get::<(u32, glib::VariantDict)>().expect("(ua{sv})");
+    assert_eq!(response, RESPONSE_OTHER);
+    assert!(
+        fixture.received.borrow().is_empty(),
+        "no dialog for a closed request"
+    );
 }
 
 /// Safety rule "only the portal may ask".

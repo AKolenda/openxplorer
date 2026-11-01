@@ -183,10 +183,11 @@ pub fn remembered_location(location: &str) -> Option<String> {
     }
     let (scheme, rest) = location.split_once("://")?;
     let scheme = scheme.to_ascii_lowercase();
-    // The app's own pages (This PC, Network, a search) are not folders.
+    // The app's own pages (This PC, Network, a search) are not folders;
+    // phones, cameras and iPhones GVfs mounts (mtp, gphoto2, afc) are.
     if !matches!(
         scheme.as_str(),
-        "file" | "smb" | "sftp" | "ftp" | "ftps" | "dav" | "davs" | "nfs" | "afp"
+        "file" | "smb" | "sftp" | "ftp" | "ftps" | "dav" | "davs" | "nfs" | "afp" | "mtp" | "gphoto2" | "afc"
     ) {
         return None;
     }
@@ -400,6 +401,21 @@ mod tests {
         );
         assert_eq!(remembered_location("search:///?q=report"), None);
         assert_eq!(remembered_location("not a location"), None);
+    }
+
+    /// A phone, camera or iPhone that `GVfs` mounts is a folder the
+    /// dialog opens like any other, so it is remembered too.
+    ///
+    /// parity: INT-035
+    #[test]
+    fn a_connected_device_folder_is_remembered() {
+        for location in [
+            "mtp://Example_Phone/Internal%20storage/DCIM",
+            "gphoto2://Example_Camera/DCIM",
+            "afc://00008030-example/Documents",
+        ] {
+            assert!(remembered_location(location).is_some(), "{location}");
+        }
     }
 
     /// One folder per application, persisted privately, with no password;

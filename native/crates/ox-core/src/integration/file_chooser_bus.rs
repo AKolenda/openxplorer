@@ -35,6 +35,8 @@
 
 use std::cell::RefCell;
 use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread::JoinHandle;
@@ -119,6 +121,11 @@ pub struct ChooserCall {
 
 /// What the app does with a call: shows it, or refuses at once.
 type CallHandler = dyn Fn(ChooserCall) -> Result<(), ChooserNotShown>;
+
+/// Finds the program of a caller the portal gives no application ID, from
+/// the bus connection and the request handle: [`caller_program`], or a
+/// test's own.
+type CallerLookup = dyn Fn(gio::DBusConnection, String) -> Pin<Box<dyn Future<Output = Option<String>>>>;
 
 /// A method call's outcome on its way back to the dispatch thread: the
 /// reply's body, or a D-Bus error's name and message.
@@ -228,6 +235,7 @@ struct Dispatch {
 pub struct FileChooserBus {
     connection: gio::DBusConnection,
     handler: Rc<CallHandler>,
+    caller_lookup: Rc<CallerLookup>,
     dispatch: Option<Dispatch>,
 }
 
@@ -252,8 +260,21 @@ impl FileChooserBus {
         Self {
             connection,
             handler: Rc::new(handler),
+            caller_lookup: Rc::new(|connection, handle| {
+                Box::pin(async move { caller_program(&connection, &handle).await })
+            }),
             dispatch: None,
         }
+    }
+
+    /// Lets a test find the caller's program its own way, such as
+    /// slowly. Set it before [`Self::export`].
+    #[doc(hidden)]
+    pub fn set_caller_lookup(
+        &mut self,
+        lookup: impl Fn(gio::DBusConnection, String) -> Pin<Box<dyn Future<Output = Option<String>>>> + 'static,
+    ) {
+        self.caller_lookup = Rc::new(lookup);
     }
 
     /// Whether the object is exported.
@@ -276,10 +297,16 @@ impl FileChooserBus {
         let (calls, mut incoming) = call_queue::unbounded::<IncomingCall>();
         let dispatch = start_dispatch(&self.connection, calls)?;
         let handler = Rc::clone(&self.handler);
+        let caller_lookup = Rc::clone(&self.caller_lookup);
         let connection = self.connection.clone();
         glib::spawn_future_local(async move {
             while let Some(call) = incoming.next().await {
-                glib::spawn_future_local(answer(connection.clone(), call, Rc::clone(&handler)));
+                glib::spawn_future_local(answer(
+                    connection.clone(),
+                    call,
+                    Rc::clone(&handler),
+                    Rc::clone(&caller_lookup),
+                ));
             }
         });
         self.dispatch = Some(dispatch);
@@ -387,7 +414,12 @@ fn register_forwarding(
 
 /// Checks the sender and the arguments of `call`, exports its handle
 /// object and hands it to `handler`; refuses with a D-Bus error otherwise.
-async fn answer(connection: gio::DBusConnection, call: IncomingCall, handler: Rc<CallHandler>) {
+async fn answer(
+    connection: gio::DBusConnection,
+    call: IncomingCall,
+    handler: Rc<CallHandler>,
+    caller_lookup: Rc<CallerLookup>,
+) {
     let IncomingCall {
         sender,
         method,
@@ -446,10 +478,15 @@ async fn answer(connection: gio::DBusConnection, call: IncomingCall, handler: Rc
         }
     }
     let program = if app_id.is_empty() {
-        caller_program(&connection, handle.as_str()).await
+        caller_lookup(connection.clone(), handle.as_str().to_owned()).await
     } else {
         None
     };
+    // The portal may have closed the request meanwhile: it was answered
+    // "other" then, and a window shown now could never answer.
+    if state.responder.borrow().is_none() {
+        return;
+    }
     let call = ChooserCall {
         request,
         caller: super::caller_key(&app_id, program.as_deref()),

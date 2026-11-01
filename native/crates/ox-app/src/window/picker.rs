@@ -50,7 +50,7 @@ use super::{BrowserWindow, ButtonStyle, WindowAction};
 use crate::dialog::{DialogFrame, DialogWidth};
 use crate::folder_view::filter::ChooserListing;
 use local_paths::{ask_for_path, path_at_once, Known, LocalPaths};
-use probe::{all_writable, probe, probe_within, test_write, Probe, WriteTest};
+use probe::{all_writable, probe, test_folder, test_replace, test_write, Probe, WriteTest};
 
 mod local_paths;
 mod probe;
@@ -206,14 +206,26 @@ fn not_answering(path: &Path) -> String {
 /// folder is on a share that stopped answering opens at once elsewhere.
 #[cfg(not(test))]
 const START_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1500);
+/// Shorter than [`probe::PROBE_TIMEOUT`] in tests too, so they tell the
+/// two apart.
 #[cfg(test)]
-const START_TIMEOUT: std::time::Duration = probe::PROBE_TIMEOUT;
+const START_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// The location to open for `folder` when it is a folder that answers in
 /// time; `None` otherwise. A network location is used only while `GVfs`
 /// has it mounted: the dialog never mounts a share or asks for a password
 /// on its own.
 async fn start_location(folder: StartFolder) -> Option<String> {
+    // One deadline for the whole check, asking GVfs for a share's path
+    // included, which waits longer on its own.
+    glib::future_with_timeout(START_TIMEOUT, start_location_now(folder))
+        .await
+        .ok()
+        .flatten()
+}
+
+/// [`start_location`] without its deadline.
+async fn start_location_now(folder: StartFolder) -> Option<String> {
     let (uri, path) = match folder {
         StartFolder::Path(path) => (gio::File::for_path(&path).uri().to_string(), path),
         StartFolder::Location(uri) => {
@@ -225,7 +237,7 @@ async fn start_location(folder: StartFolder) -> Option<String> {
             (uri, path)
         }
     };
-    (probe_within(&path, START_TIMEOUT).await == Probe::Folder).then_some(uri)
+    (probe(&path).await == Probe::Folder).then_some(uri)
 }
 
 /// The dialog's message when the caller could not write `name` in
@@ -233,7 +245,8 @@ async fn start_location(folder: StartFolder) -> Option<String> {
 fn write_refusal(test: WriteTest, folder: &Path, name: &str) -> Result<(), String> {
     let folder_text = folder.display().to_string();
     match test {
-        WriteTest::Writable => Ok(()),
+        // The caller looks again and asks before replacing it.
+        WriteTest::Writable | WriteTest::Appeared => Ok(()),
         WriteTest::Denied => Err(ox_core::i18n::gettext(
             "You don't have permission to save in this location. Contact the administrator to obtain \
              permission.",
@@ -781,11 +794,6 @@ impl BrowserWindow {
             ChooserMode::Save { .. } => self.chosen_save(picker).await,
             ChooserMode::SaveFiles { names } => {
                 let folder = self.chosen_folder(&selected).await?;
-                // A hidden file of the dialog's own, as for a file replaced.
-                if let Some(first) = names.first() {
-                    let test = test_write(&folder, first, true).await;
-                    write_refusal(test, &folder, &first.to_string_lossy())?;
-                }
                 let mut existing = Vec::new();
                 for name in names {
                     match probe(&folder.join(name)).await {
@@ -793,6 +801,13 @@ impl BrowserWindow {
                         found if found.exists() => existing.push(name.to_string_lossy().into_owned()),
                         _ => {}
                     }
+                }
+                // The folder takes new files (a hidden file of the dialog's
+                // own), and every file to be replaced may be written.
+                let first = names.first().map(|name| name.to_string_lossy().into_owned());
+                write_refusal(test_folder(&folder).await, &folder, &first.unwrap_or_default())?;
+                for name in &existing {
+                    write_refusal(test_replace(&folder.join(name)).await, &folder, name)?;
                 }
                 if existing.is_empty() {
                     return Ok(vec![folder]);
@@ -918,12 +933,26 @@ impl BrowserWindow {
             self.navigate_or_report(&gio::File::for_path(&target).uri());
             return Ok(Vec::new());
         }
-        write_refusal(
-            test_write(&folder, name.as_ref(), found.exists()).await,
-            &folder,
-            &name,
-        )?;
-        if found.exists() {
+        let mut exists = found.exists();
+        let mut test = test_write(&folder, name.as_ref(), exists).await;
+        if test == WriteTest::Appeared {
+            // Another program created the file while the folder was tested:
+            // look again, and never answer it as a new file.
+            match probe(&target).await {
+                Probe::NoAnswer => return Err(not_answering(&folder)),
+                Probe::Folder => {
+                    name_box.set_text("");
+                    self.navigate_or_report(&gio::File::for_path(&target).uri());
+                    return Ok(Vec::new());
+                }
+                Probe::File | Probe::Missing => {
+                    exists = true;
+                    test = test_write(&folder, name.as_ref(), true).await;
+                }
+            }
+        }
+        write_refusal(test, &folder, &name)?;
+        if exists {
             self.confirm_replace(picker, vec![target], &[name]);
             return Ok(Vec::new());
         }
@@ -2012,6 +2041,101 @@ mod tests {
         );
         offline.test.window.cancel_picking();
         Portal::finish(&answer);
+    }
+
+    /// A file another program creates while Save checks the folder is
+    /// replaced only after asking, as any file that was there already.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_file_that_appears_while_saving_is_replaced_only_after_asking() {
+        let fixture = Fixture::empty();
+        let target = fixture.path("report.txt");
+        let portal = Portal::new();
+        let answer = portal.call(
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("current_name", "report.txt".to_variant()),
+            ],
+        );
+        super::probe::appear_when_tested(&target);
+        let window = &portal.test.window;
+        window.picker().expect("a picker").accept.emit_clicked();
+
+        let question = replace_question(&portal.test);
+        assert!(
+            answer.borrow().is_none(),
+            "nothing is answered before the user says so"
+        );
+        assert_eq!(
+            fs::read_to_string(&target).expect("the other program's file"),
+            "written by another program"
+        );
+        press_in(&question, "Cancel");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// Save files checks every file it would replace before asking, so a
+    /// read-only one among them is reported, not found out by the caller
+    /// halfway through saving.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn saving_files_checks_every_file_it_would_replace() {
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = Fixture::empty();
+        let second = fixture.path("two.txt");
+        fs::write(&second, "signed").expect("a file");
+        fs::set_permissions(&second, fs::Permissions::from_mode(0o444)).expect("read-only");
+        let portal = Portal::new();
+        let names: Vec<Vec<u8>> = vec![b"one.txt\0".to_vec(), b"two.txt\0".to_vec()];
+        let answer = portal.call(
+            "SaveFiles",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("files", names.to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        window.picker().expect("a picker").accept.emit_clicked();
+        wait_until("the dialog to say so", || {
+            window.shown_message().contains("“two.txt” is set to read-only")
+        });
+        assert!(answer.borrow().is_none(), "nothing is answered");
+        assert!(window.dialog_layer().shown().is_none(), "no replace question");
+        fs::set_permissions(&second, fs::Permissions::from_mode(0o644)).expect("writable again");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// A remembered share whose local path `GVfs` is slow to give is
+    /// passed over within the start timeout, not after `GVfs`'s own wait.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_slow_share_lookup_is_bounded_by_the_start_timeout() {
+        let uri = format!("{}projects/Reports", super::local_paths::NEVER_ANSWERS);
+        let started = std::time::Instant::now();
+
+        let found = glib::MainContext::default().block_on(super::start_location(
+            ox_core::integration::StartFolder::Location(uri),
+        ));
+
+        assert_eq!(found, None);
+        let waited = started.elapsed();
+        assert!(
+            waited < super::START_TIMEOUT + std::time::Duration::from_millis(150),
+            "waited {waited:?}, more than the start timeout {:?}",
+            super::START_TIMEOUT
+        );
     }
 
     /// Saving where the caller cannot create the file, as on a share the

@@ -85,6 +85,10 @@ pub(super) async fn all_writable(locations: &[PathBuf]) -> bool {
 pub(super) enum WriteTest {
     /// The file can be created there.
     Writable,
+    /// A file of that name appeared while the test ran, created by
+    /// another program: the dialog must look again and ask before
+    /// replacing it, never take it for room to save.
+    Appeared,
     /// The folder refuses new files: no permission, or a read-only share
     /// or drive.
     Denied,
@@ -102,44 +106,103 @@ pub(super) enum WriteTest {
 /// Whether `name` can be saved in `folder`, through the local path the
 /// caller gets, as Windows' Save dialog tests it unless the caller asks it
 /// not to (`OFN_NOTESTFILECREATE`): it creates the file and removes it.
-/// A file that already exists is never opened for writing, which on some
-/// FUSE filesystems would change it: it must not be read-only, and a
-/// hidden file of the dialog's own is created beside it instead.
+/// A file that already exists (`replacing`) is never opened for writing,
+/// which on some FUSE filesystems would change it: it is checked with
+/// [`test_replace`], and a hidden file of the dialog's own is created
+/// beside it instead ([`test_folder`]).
 ///
 /// It runs on a worker thread and waits at most [`PROBE_TIMEOUT`]. The
 /// permission bits alone do not tell: `GVfs`'s FUSE export reports every
 /// share writable, also one the server shares read-only.
 pub(super) async fn test_write(folder: &Path, name: &std::ffi::OsStr, replacing: bool) -> WriteTest {
+    let target = folder.join(name);
+    if replacing {
+        match test_replace(&target).await {
+            WriteTest::Writable => test_folder(folder).await,
+            refused => refused,
+        }
+    } else {
+        on_a_worker(folder, move || create_and_remove(&target)).await
+    }
+}
+
+/// Whether `folder` takes new files: a hidden file of the dialog's own is
+/// created there and removed again.
+pub(super) async fn test_folder(folder: &Path) -> WriteTest {
+    let inside = folder.to_path_buf();
+    on_a_worker(folder, move || {
+        // A name that is taken already is another program's file: try another.
+        for _ in 0..3 {
+            let unique = glib::uuid_string_random();
+            match create_and_remove(&inside.join(format!(".openxplorer-save-test-{unique}"))) {
+                WriteTest::Appeared => {}
+                test => return test,
+            }
+        }
+        WriteTest::Unavailable
+    })
+    .await
+}
+
+/// Whether the existing file `target` may be replaced: it is not
+/// read-only, by its permission bits or as the system answers for this
+/// user (`access::can-write`, which also follows ACLs).
+pub(super) async fn test_replace(target: &Path) -> WriteTest {
+    let file = target.to_path_buf();
+    let folder = target.parent().unwrap_or(target);
+    on_a_worker(folder, move || {
+        let read_only = std::fs::metadata(&file).is_ok_and(|metadata| metadata.permissions().readonly());
+        let can_write = gio::File::for_path(&file)
+            .query_info(
+                gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
+                gio::FileQueryInfoFlags::NONE,
+                gio::Cancellable::NONE,
+            )
+            .map_or(true, |info| info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE));
+        if read_only || !can_write {
+            WriteTest::ReadOnlyFile
+        } else {
+            WriteTest::Writable
+        }
+    })
+    .await
+}
+
+/// Runs `test` on a worker thread, waiting at most [`PROBE_TIMEOUT`]; a
+/// test of a path in `folder` that never answers, in tests, does not run.
+async fn on_a_worker(folder: &Path, test: impl FnOnce() -> WriteTest + Send + 'static) -> WriteTest {
     #[cfg(test)]
     if never_answers(folder) {
         glib::timeout_future(PROBE_TIMEOUT).await;
         return WriteTest::NoAnswer;
     }
-    let target = folder.join(name);
-    let folder = folder.to_path_buf();
-    let testing = gio::spawn_blocking(move || {
-        if replacing {
-            let read_only =
-                std::fs::metadata(&target).is_ok_and(|metadata| metadata.permissions().readonly());
-            if read_only {
-                return WriteTest::ReadOnlyFile;
-            }
-            let unique = glib::uuid_string_random();
-            create_and_remove(&folder.join(format!(".openxplorer-save-test-{unique}")))
-        } else {
-            create_and_remove(&target)
-        }
-    });
-    match glib::future_with_timeout(PROBE_TIMEOUT, testing).await {
+    #[cfg(not(test))]
+    let _ = folder;
+    match glib::future_with_timeout(PROBE_TIMEOUT, gio::spawn_blocking(test)).await {
         Ok(Ok(test)) => test,
         Ok(Err(_)) => WriteTest::Unavailable,
         Err(_) => WriteTest::NoAnswer,
     }
 }
 
-/// Creates the new file `path` and removes it again.
+/// Creates the new file `path` and removes it again. A file that is
+/// there when it is created is another program's and is left alone
+/// ([`WriteTest::Appeared`]). Where the file cannot be removed again, the
+/// caller could not replace or rename its own file there either, so that
+/// is a refusal, not room to save; the removal is tried twice first, so a
+/// passing hiccup does not leave the file behind.
 fn create_and_remove(path: &Path) -> WriteTest {
     use std::io::ErrorKind;
+    #[cfg(test)]
+    if is_listed(&APPEARING, path) {
+        // Another program, such as a sync client, creates it first.
+        let _ = std::fs::write(path, "written by another program");
+    }
+    let refusal = |error: &std::io::Error| match error.kind() {
+        ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem => WriteTest::Denied,
+        ErrorKind::StorageFull | ErrorKind::QuotaExceeded => WriteTest::NoSpace,
+        _ => WriteTest::Unavailable,
+    };
     match std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -149,16 +212,55 @@ fn create_and_remove(path: &Path) -> WriteTest {
             drop(file);
             // The file is empty and the dialog's own; the caller creates it
             // again when it saves.
-            let _ = std::fs::remove_file(path);
-            WriteTest::Writable
+            match remove(path).or_else(|_| remove(path)) {
+                Ok(()) => WriteTest::Writable,
+                Err(error) => refusal(&error),
+            }
         }
-        // Something appeared there meanwhile: the folder takes files.
-        Err(error) if error.kind() == ErrorKind::AlreadyExists => WriteTest::Writable,
-        Err(error) => match error.kind() {
-            ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem => WriteTest::Denied,
-            ErrorKind::StorageFull | ErrorKind::QuotaExceeded => WriteTest::NoSpace,
-            _ => WriteTest::Unavailable,
-        },
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => WriteTest::Appeared,
+        Err(error) => refusal(&error),
+    }
+}
+
+/// Removes the write test's file `path`.
+fn remove(path: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if is_listed(&UNREMOVABLE, path) {
+        // A share that lets files be created but not deleted.
+        return Err(std::io::ErrorKind::PermissionDenied.into());
+    }
+    std::fs::remove_file(path)
+}
+
+/// Paths another program creates just before the write test does, for
+/// tests. Shared by every thread, as the test runs on GIO's workers.
+#[cfg(test)]
+static APPEARING: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Paths whose removal fails, for tests.
+#[cfg(test)]
+static UNREMOVABLE: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(test)]
+fn is_listed(list: &std::sync::Mutex<Vec<PathBuf>>, path: &Path) -> bool {
+    list.lock()
+        .is_ok_and(|paths| paths.iter().any(|listed| path.starts_with(listed)))
+}
+
+/// Makes another program create `path` just before the write test does.
+#[cfg(test)]
+pub(super) fn appear_when_tested(path: &Path) {
+    if let Ok(mut paths) = APPEARING.lock() {
+        paths.push(path.to_path_buf());
+    }
+}
+
+/// Makes removing anything in `folder` fail, as on a share that lets
+/// files be created but not deleted.
+#[cfg(test)]
+pub(super) fn fail_removal_in(folder: &Path) {
+    if let Ok(mut paths) = UNREMOVABLE.lock() {
+        paths.push(folder.to_path_buf());
     }
 }
 
@@ -218,6 +320,53 @@ mod tests {
 
     fn run<T>(future: impl std::future::Future<Output = T>) -> T {
         glib::MainContext::default().block_on(future)
+    }
+
+    /// A file another program creates while the Save dialog tests the
+    /// folder is not taken for room to save: it is left as it is, and the
+    /// dialog is told it appeared, so it asks before replacing it.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_file_that_appears_during_the_write_test_is_not_called_writable() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        let target = folder.path().join("report.txt");
+        appear_when_tested(&target);
+
+        let test = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+
+        assert_ne!(test, WriteTest::Writable);
+        assert_eq!(
+            fs::read_to_string(&target).expect("the other program's file"),
+            "written by another program"
+        );
+    }
+
+    /// Where the test file can be created but not removed again, as on a
+    /// share that lets files be created but not deleted, the caller could
+    /// not replace or rename its file either: the test says so rather than
+    /// calling the folder writable.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_test_file_that_cannot_be_removed_is_a_refusal() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        fs::write(folder.path().join("old.txt"), "x").expect("a file");
+        fail_removal_in(folder.path());
+
+        let new_file = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+        let replaced = run(test_write(folder.path(), std::ffi::OsStr::new("old.txt"), true));
+
+        assert_eq!(new_file, WriteTest::Denied);
+        assert_eq!(replaced, WriteTest::Denied);
     }
 
     /// parity: INT-032
