@@ -2,7 +2,8 @@
 //! Dragging a tab live along the strip, as Windows Explorer and Chrome do
 //! (TAB-032, TAB-033): the tab itself follows the pointer and the others
 //! slide aside, with no drag icon or drop mark. A strip that a tab from
-//! another window hovers opens a gap where it would land.
+//! another window hovers takes a stand-in for it, which follows the pointer
+//! the same way, where the tab lands on release.
 //!
 //! The strip only shows the drag; [`TabLayout`]'s live layout places the
 //! tabs, and the window decides what a release does. While a drag lasts
@@ -22,6 +23,13 @@ const DRAGGING_CLASS: &str = "tab-dragging";
 /// Where a released tab went: the tab, and the tab it now comes before, or
 /// `None` at the end.
 pub(in crate::window) type LiveMove = (TabId, Option<TabId>);
+
+/// Where a tab of another window dropped on the strip lands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::window) struct Landing {
+    /// The tab it comes before, or `None` at the end.
+    pub(in crate::window) before: Option<TabId>,
+}
 
 impl TabStrip {
     fn layout(&self) -> TabLayout {
@@ -83,21 +91,26 @@ impl TabStrip {
             .collect()
     }
 
-    /// Remembers where tab `id` was grabbed: `x` of the strip, from the
-    /// tab's left edge.
-    pub(in crate::window) fn grab_tab(&self, id: TabId, x: f64) {
+    /// Remembers where tab `id` was grabbed: (`x`, `y`) of the strip, from
+    /// the tab's top left corner.
+    pub(in crate::window) fn grab_tab(&self, id: TabId, (x, y): (f64, f64)) {
         let row_x = self.in_row(x);
         let left = self
             .tab_slots()
             .into_iter()
             .find_map(|(tab, left, _)| (tab == id).then_some(left));
+        let top = self
+            .widget_of(id)
+            .and_then(|widget| widget.compute_bounds(self))
+            .map_or(0.0, |bounds| f64::from(bounds.y()));
         if let Some(left) = left {
-            self.imp().grab.set(Some((id, row_x - left)));
+            self.imp().grab.set(Some((id, (row_x - left, y - top))));
         }
     }
 
-    /// Where along itself tab `id` was grabbed, if it was the last one.
-    pub(in crate::window) fn grab_offset(&self, id: TabId) -> Option<f64> {
+    /// Where on itself tab `id` was grabbed, from its top left corner, if
+    /// it was the last one.
+    pub(in crate::window) fn grab_offset(&self, id: TabId) -> Option<(f64, f64)> {
         let (grabbed, offset) = self.imp().grab.get()?;
         (grabbed == id).then_some(offset)
     }
@@ -114,7 +127,7 @@ impl TabStrip {
         if grabbed != id {
             return;
         }
-        let left = self.in_row(x) - offset;
+        let left = self.in_row(x) - offset.0;
         let layout = self.layout();
         if layout.dragged().as_ref() == Some(&widget) {
             layout.follow(left);
@@ -191,26 +204,60 @@ impl TabStrip {
         self.stop_live();
     }
 
-    /// Opens a gap `width` wide where a tab dropped at `x` of the strip
-    /// would go, for a tab from another window.
-    pub(in crate::window) fn open_gap(&self, x: f64, width: f64) {
+    /// A tab `view` of another window, grabbed `grab_x` along itself, is
+    /// over this strip at `x`: a stand-in for it follows the pointer here as
+    /// this strip's own tabs do, and the others make room, as Chrome takes a
+    /// tab into the strip it is dragged over.
+    pub(in crate::window) fn host_guest(&self, view: &super::TabView, x: f64, grab_x: f64) {
         let layout = self.layout();
-        if layout.dragged().is_some() {
-            return;
+        let left = self.in_row(x) - grab_x;
+        let guest = self.imp().guest.borrow().clone();
+        if let Some(guest) = guest {
+            if layout.dragged().as_ref() == Some(&guest) {
+                layout.follow(left);
+                return;
+            }
         }
-        layout.begin_gap(self.widgets());
-        let before = self.tab_after(x);
-        let shown = self.tab_slots();
-        let index = before
-            .and_then(|before| shown.iter().position(|(tab, _, _)| *tab == before))
-            .unwrap_or(shown.len());
-        layout.open_gap(index, width);
+        // A tab released or let go a moment ago takes its place first.
+        layout.finish_now();
+        self.stop_live();
+        let guest = super::carried_tab::carried_tab(view, None, self.strip_title_font().as_ref(), 0);
+        let list = self.imp().tab_list.get();
+        // Drawn last, so it slides over the others.
+        list.append(&guest);
+        let mut order = self.widgets();
+        let at = self
+            .tab_after(x)
+            .and_then(|before| self.tab_slots().iter().position(|(tab, _, _)| *tab == before))
+            .unwrap_or(order.len());
+        order.insert(at, guest.clone());
+        for tab in &order {
+            tab.set_has_tooltip(false);
+        }
+        // The tab dragged in is the one shown in front, as in Chrome.
+        self.show_own_front(false);
+        self.imp().guest.replace(Some(guest.clone()));
+        layout.begin_drag(order, &guest, left);
     }
 
-    /// Closes the gap of [`Self::open_gap`]: the tabs slide back.
-    pub(in crate::window) fn close_gap(&self) {
+    /// Shows this strip's tab in front as in front, or with `shown` false
+    /// as any other while a stand-in is.
+    pub(super) fn show_own_front(&self, shown: bool) {
+        for (view, widget) in self.imp().shown.borrow().iter() {
+            crate::window::widget_tree::toggle_class(widget, "active", view.active && shown);
+        }
+    }
+
+    /// The tab of another window left this strip: its stand-in goes and the
+    /// tabs close up.
+    pub(in crate::window) fn dismiss_guest(&self) {
+        let Some(guest) = self.imp().guest.take() else {
+            return;
+        };
+        self.imp().tab_list.remove(&guest);
+        self.show_own_front(true);
         let layout = self.layout();
-        if !layout.is_gap() {
+        if layout.dragged().as_ref() != Some(&guest) {
             return;
         }
         let strip = self.downgrade();
@@ -221,11 +268,20 @@ impl TabStrip {
         });
     }
 
-    /// Ends a gap at once, as a tab lands in it.
-    pub(in crate::window) fn end_gap(&self) {
-        if self.layout().is_gap() {
-            self.stop_live();
-        }
+    /// The tab of another window is dropped here: its stand-in goes, and
+    /// where it was is where the tab lands; `None` without a stand-in.
+    pub(in crate::window) fn land_guest(&self) -> Option<Landing> {
+        let guest = self.imp().guest.take()?;
+        let layout = self.layout();
+        let order = layout.live_order().unwrap_or_default();
+        let before = order.iter().position(|tab| *tab == guest).map(|at| Landing {
+            before: order.get(at + 1).and_then(|next| self.id_of(next)),
+        });
+        self.imp().tab_list.remove(&guest);
+        self.show_own_front(true);
+        layout.end();
+        self.stop_live();
+        before
     }
 
     /// The width of tab `id`.

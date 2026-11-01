@@ -52,8 +52,10 @@ window.ox .dim { color: @ox_muted; }
 window.ox entry > text > placeholder { color: @ox_placeholder; opacity: 1; }
 
 /* ---- Buttons (§4.14 "Subtle button") ---- */
-/* Reset GTK's button look: Explorer buttons are flat until hovered. */
-window.ox button {
+/* Reset GTK's button look: Explorer buttons are flat until hovered. A tab
+   carried out of its strip is drawn by GTK's drag icon (`dnd`), outside
+   the window, and its close button stays flat there too. */
+window.ox button, dnd .tab button {
   background: none;
   border: none;
   box-shadow: none;

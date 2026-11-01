@@ -18,7 +18,7 @@
 //! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
 //! shows while tabs and files are dragged is [`drag_marks`]'s.
 
-mod carried_window;
+mod carried_tab;
 mod drag_marks;
 mod live_drag;
 
@@ -35,6 +35,9 @@ use super::menu_popover::MenuEntry;
 use super::session::TabId;
 use super::tab_menu::tab_menu;
 use super::window_action::WindowAction;
+
+pub(in crate::window) use carried_tab::MARGIN as CARRIED_MARGIN;
+pub(in crate::window) use live_drag::Landing;
 
 /// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
 const ICON_SIZE: i32 = 16;
@@ -108,9 +111,11 @@ mod imp {
         /// Each tab shown and its widget, left to right.
         pub(super) shown: RefCell<Vec<(TabView, gtk::Box)>>,
         /// The tab last grabbed for a drag, and where along it.
-        pub(super) grab: Cell<Option<(TabId, f64)>>,
+        pub(super) grab: Cell<Option<(TabId, (f64, f64))>>,
         /// Tabs given while a drag lasts, shown once it is over.
         pub(super) waiting_tabs: RefCell<Option<Vec<TabView>>>,
+        /// A stand-in for a tab dragged here from another window.
+        pub(super) guest: RefCell<Option<gtk::Widget>>,
     }
 
     #[glib::object_subclass]
@@ -189,9 +194,15 @@ impl TabStrip {
     /// Replaces the tabs with `tabs` and scrolls the active one into view.
     pub(super) fn set_tabs(&self, tabs: &[TabView]) {
         let imp = self.imp();
-        // A drag keeps the tab widgets it moves until it is over.
+        // A drag keeps the tab widgets it moves until it is over; which tab
+        // is in front shows at once.
         if imp.layout.is_live() {
-            imp.waiting_tabs.replace(Some(tabs.to_vec()));
+            let is_front_only = self.show_front_only(tabs);
+            imp.waiting_tabs.replace((!is_front_only).then(|| tabs.to_vec()));
+            // A stand-in for a tab dragged in stays the one in front.
+            if is_front_only && imp.guest.borrow().is_some() {
+                self.show_own_front(false);
+            }
             return;
         }
         imp.waiting_tabs.replace(None);
@@ -244,6 +255,25 @@ impl TabStrip {
             viewport,
             move || viewport.scroll_to(&active, None)
         ));
+    }
+
+    /// Shows which of `tabs` is in front, when that is all that changed
+    /// from the tabs shown; true when it was.
+    fn show_front_only(&self, tabs: &[TabView]) -> bool {
+        let mut shown = self.imp().shown.borrow_mut();
+        let is_front_only = shown.len() == tabs.len()
+            && shown
+                .iter()
+                .zip(tabs)
+                .all(|((view, _), tab)| is_same_but_for_front(view, tab));
+        if !is_front_only {
+            return false;
+        }
+        for ((view, widget), tab) in shown.iter_mut().zip(tabs) {
+            show_in_front(widget, tab.active);
+            *view = tab.clone();
+        }
+        true
     }
 
     /// The tab at (`x`, `y`) in the strip, if any: where a file drop

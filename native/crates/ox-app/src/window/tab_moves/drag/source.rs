@@ -16,17 +16,19 @@ use super::{
 };
 use crate::window::session::TabId;
 use crate::window::tab_moves::TabMoveRefusal;
+use crate::window::tab_strip::CARRIED_MARGIN;
 use crate::window::BrowserWindow;
 
-/// Where the picture of a carried tab's window is held, from its top left
-/// corner: on its title bar.
-const CARRIED_HOLD_Y: i32 = 16;
+/// How long a dragged tab stays in its strip, at most, waiting for the
+/// tab GTK's drag and drop carries to be drawn.
+const CARRIED_DRAWN_AT_LATEST: std::time::Duration = std::time::Duration::from_millis(250);
 
-/// How far below the pointer the carried picture hangs over another
-/// window's strip.
-const CARRIED_BELOW: i32 = 48;
+/// The carried tab's title, classes and drawn width, and where it is held,
+/// from its top left corner; for tests.
+#[cfg(test)]
+pub(in crate::window) type CarriedTabLook = (String, Vec<String>, i32, (i32, i32));
 
-/// How far the carried picture goes away, past the screen, while hidden.
+/// How far the carried tab goes away, past the screen, while hidden.
 const CARRIED_AWAY: i32 = 100_000;
 
 /// How far above or below its strip the pointer may go before a dragged tab
@@ -169,19 +171,21 @@ impl BrowserWindow {
                     press.set(Press::Ignored);
                     return;
                 }
-                if let Some((start_x, _)) = self.title_bar_point_in_strip(source, start.0, start.1) {
-                    self.tab_strip().grab_tab(tab, start_x);
+                if let Some(start) = self.title_bar_point_in_strip(source, start.0, start.1) {
+                    self.tab_strip().grab_tab(tab, start);
                 }
                 press.set(Press::Live(tab));
                 self.tab_strip().follow_pointer(tab, x);
             }
             Press::Live(tab) if self.is_off_the_strip(y) => {
-                if self.has_other_windows() {
-                    press.set(Press::Leaving(tab));
-                    self.carry_tab_out(tab);
-                } else {
+                if self.tab_count() <= 1 && !self.has_other_windows() {
                     press.set(Press::Handed);
-                    self.hand_tab_to_a_window(source, tab);
+                    self.move_window_by_its_tab(source, tab);
+                } else {
+                    // GTK's drag and drop starts with the next motion it
+                    // allows, and the tab leaves its strip once the tab it
+                    // carries is on screen.
+                    press.set(Press::Leaving(tab));
                 }
             }
             Press::Live(tab) => self.tab_strip().follow_pointer(tab, x),
@@ -210,76 +214,103 @@ impl BrowserWindow {
             .any(|window| &window != self && window.is_visible())
     }
 
-    /// Tab `tab` leaves its strip with no other window of this app to drop
-    /// it on, so a real window follows the pointer, as in Chrome: this
-    /// window when it is the only tab, else a new window with the tab, as
-    /// large as this one. The desktop moves it with the press itself
+    /// The only tab of this window, `tab`, leaves its strip while no other
+    /// window of this app is open to drop it on: the window itself follows
+    /// the pointer, held by its tab, as Chrome moves a window by its only
+    /// tab. The desktop moves it with the press itself
     /// (`gdk_toplevel_begin_move` with the press's button and time; on
-    /// Wayland the press's serial), and the release leaves it there. A new
-    /// window opens where the desktop places it and moves from there.
-    fn hand_tab_to_a_window(&self, source: &gtk::DragSource, tab: TabId) {
+    /// Wayland its serial), and the release leaves it there.
+    ///
+    /// A tab of a window with others cannot be held this way: GTK cannot
+    /// place a new window under the pointer, nor move one with a drag
+    /// (it has no `xdg-toplevel-drag-v1`), and a window the desktop moves
+    /// first goes wherever the desktop places it.
+    fn move_window_by_its_tab(&self, source: &gtk::DragSource, tab: TabId) {
         let Some(device) = source.device() else {
             return;
         };
         let (button, time) = (source.current_button(), source.current_event_time());
-        let hold = self.tab_strip().grab_offset(tab).unwrap_or(0.0);
+        let hold = self.tab_strip().grab_offset(tab).map_or(0.0, |(x, _)| x);
         self.tab_strip().end_drag_now();
-        if self.tab_count() <= 1 {
-            hand_press_to_window_move(self, &device, button, time, hold);
-            return;
-        }
-        let window = match self.detach_tab(tab) {
-            Ok(window) => window,
-            Err(refusal) => {
-                self.show_message(&refusal.to_string());
-                return;
-            }
-        };
-        window.set_default_size(self.width(), self.height());
-        let handler = Rc::new(Cell::new(None));
-        let id = window.connect_map(glib::clone!(
+        hand_press_to_window_move(self, &device, button, time, hold);
+    }
+
+    /// Tab `tab` leaves its strip once `carried`, the tab GTK's drag and
+    /// drop carries, is on screen, so the tab is never nowhere: a new drag
+    /// surface can take a while to draw its first frame. It vanishes from
+    /// the strip, which closes up, as Chrome takes a dragged-out tab off its
+    /// strip, unless the pointer came back over the strip by then.
+    fn leave_strip_when_carried(&self, tab: TabId, carried: &gtk::Widget) {
+        let left = Rc::new(Cell::new(false));
+        let leave = Rc::new(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
             #[strong]
-            handler,
-            #[strong]
-            device,
-            move |window| {
-                if let Some(id) = handler.take() {
-                    window.disconnect(id);
+            left,
+            move || {
+                if !left.replace(true) {
+                    window.leave_strip(tab);
                 }
-                // Once the desktop shows it.
-                glib::idle_add_local_once(glib::clone!(
-                    #[weak]
-                    window,
-                    #[strong]
-                    device,
-                    move || hand_press_to_window_move(&window, &device, button, time, hold)
-                ));
             }
         ));
-        handler.set(Some(id));
-        window.present_as_torn_out();
-        self.release_moved_tab(tab);
+        when_drawn(carried, leave.clone());
+        // Should the drag surface never report its first frame.
+        glib::timeout_add_local_once(CARRIED_DRAWN_AT_LATEST, move || leave());
     }
 
-    /// Tab `tab` leaves its strip while another window of this app is
-    /// open: it vanishes from the strip, which closes up, as Chrome takes a
-    /// dragged-out tab off its strip, and GTK's drag and drop carries a
-    /// picture of this window, which shows the tab, so it can be dropped on
-    /// another window's strip.
-    fn carry_tab_out(&self, tab: TabId) {
-        self.tab_strip().detach_tab(tab);
-    }
-
-    /// Fades the tab drag and drop carries, if it still does.
-    fn mark_carried_tab(&self) {
-        let carried = self
+    /// Tab `tab`, carried by this window's drag and drop, leaves its strip,
+    /// unless the pointer is over the strip.
+    fn leave_strip(&self, tab: TabId) {
+        let is_away = self
             .imp()
             .outgoing_tab
             .borrow()
             .as_ref()
-            .map(|outgoing| outgoing.tab);
-        if carried.is_some() && !self.tab_strip().is_following() {
-            self.tab_strip().show_dragged_tab(carried);
+            .is_some_and(|outgoing| outgoing.tab == tab && !outgoing.over_own_strip);
+        if is_away {
+            self.take_tab_off_strip(tab);
+        }
+    }
+
+    /// Tab `tab`, carried by this window's drag and drop, leaves its strip:
+    /// it vanishes there, the others close up, and when it was in front the
+    /// tab beside it comes to the front, the one closing it would show, as
+    /// Chrome shows another tab while one is dragged out of a window.
+    pub(super) fn take_tab_off_strip(&self, tab: TabId) {
+        self.tab_strip().detach_tab(tab);
+        let successor = {
+            let session = self.imp().session.borrow();
+            session.is_active(tab).then(|| session.successor(tab)).flatten()
+        };
+        let Some(successor) = successor else {
+            return;
+        };
+        if let Some(outgoing) = self.imp().outgoing_tab.borrow_mut().as_mut() {
+            outgoing.stepped_back = true;
+        }
+        self.switch_tab(successor);
+    }
+
+    /// Tab `tab`, carried out of this window's strip, is back over it or
+    /// stays: it comes to the front again when it was there.
+    pub(super) fn bring_carried_tab_forward(&self, tab: TabId) {
+        let stepped_back = self
+            .imp()
+            .outgoing_tab
+            .borrow_mut()
+            .as_mut()
+            .filter(|outgoing| outgoing.tab == tab)
+            .is_some_and(|outgoing| std::mem::take(&mut outgoing.stepped_back));
+        if stepped_back {
+            self.switch_tab(tab);
+        }
+    }
+
+    /// Records whether the pointer of this window's drag and drop is over
+    /// its own strip.
+    pub(super) fn note_over_own_strip(&self, is_over: bool) {
+        if let Some(outgoing) = self.imp().outgoing_tab.borrow_mut().as_mut() {
+            outgoing.over_own_strip = is_over;
         }
     }
 
@@ -295,7 +326,6 @@ impl BrowserWindow {
                     if let Some((tab, before)) = moved {
                         window.reorder_tab(tab, before);
                     }
-                    window.mark_carried_tab();
                 }
             ),
         );
@@ -331,6 +361,8 @@ impl BrowserWindow {
             outcome: TabDragOutcome::Pending,
             over: Some(Hover::Takes),
             carried: None,
+            over_own_strip: false,
+            stepped_back: false,
         }));
         let dragged = DraggedTab {
             source: self.downgrade(),
@@ -339,9 +371,8 @@ impl BrowserWindow {
         Some(tab_drag_content(&dragged))
     }
 
-    /// The drag and drop started: the tab fades and a small live picture
-    /// of its window follows the pointer, held by its title bar where the
-    /// tab was grabbed.
+    /// The drag and drop started: the tab itself follows the pointer,
+    /// held where it was grabbed.
     fn begin_tab_drag(&self, drag: &gdk::Drag) {
         let Some(tab) = self
             .imp()
@@ -352,37 +383,77 @@ impl BrowserWindow {
         else {
             return;
         };
-        self.mark_carried_tab();
-        let Some(picture) = self.tab_strip().drag_icon(tab, self.upcast_ref()) else {
+        let Some(carried) = self.tab_strip().carried_tab(tab) else {
             return;
         };
-        gtk::DragIcon::for_drag(drag).set_child(Some(&picture));
-        let along = self.tab_strip().grab_offset(tab).unwrap_or(0.0);
+        gtk::DragIcon::for_drag(drag).set_child(Some(&carried));
+        self.leave_strip_when_carried(tab, &carried);
+        let (along, down) = self.tab_strip().grab_offset(tab).unwrap_or((0.0, 0.0));
         #[expect(clippy::cast_possible_truncation, reason = "a point on a tab")]
-        let hold_x = (along.round() as i32).clamp(CARRIED_HOLD_Y, picture.width_request() - CARRIED_HOLD_Y);
-        drag.set_hotspot(hold_x, CARRIED_HOLD_Y);
+        let hold = (
+            CARRIED_MARGIN + along.round() as i32,
+            CARRIED_MARGIN + down.round() as i32,
+        );
+        drag.set_hotspot(hold.0, hold.1);
         if let Some(outgoing) = self.imp().outgoing_tab.borrow_mut().as_mut() {
             outgoing.carried = Some(Carried {
                 drag: drag.clone(),
-                hold: (hold_x, CARRIED_HOLD_Y),
-                height: picture.height_request(),
+                #[cfg(test)]
+                tab: carried,
+                hold,
+                at: Cell::new(hold),
             });
         }
     }
 
-    /// Puts the carried picture at `look`, by its hotspot alone.
+    /// Shows the carried tab under the pointer, or hides it while the tab
+    /// follows the pointer along its own strip again, by the drag's hotspot
+    /// alone: `KWin` shows a drag icon's first look but no later redraw,
+    /// while it does follow a moved hotspot.
     pub(super) fn show_carried(&self, look: CarriedLook) {
         let outgoing = self.imp().outgoing_tab.borrow();
         let Some(carried) = outgoing.as_ref().and_then(|outgoing| outgoing.carried.as_ref()) else {
             return;
         };
         let (x, y) = carried.hold;
-        let (x, y) = match look {
-            CarriedLook::Window => (x, y),
-            CarriedLook::Below => (x, -CARRIED_BELOW),
-            CarriedLook::Hidden => (x, carried.height + CARRIED_AWAY),
+        let at = match look {
+            CarriedLook::Shown => (x, y),
+            CarriedLook::Hidden => (x, y + CARRIED_AWAY),
         };
-        carried.drag.set_hotspot(x, y);
+        if carried.at.replace(at) != at {
+            carried.drag.set_hotspot(at.0, at.1);
+        }
+    }
+
+    /// The carried tab's title, classes and drawn width, and where it is
+    /// held, from its top left corner; for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn carried_look_for_test(&self) -> Option<CarriedTabLook> {
+        let outgoing = self.imp().outgoing_tab.borrow();
+        let carried = outgoing.as_ref()?.carried.as_ref()?;
+        let title = crate::window::widget_tree::descendants::<gtk::Label>(&carried.tab)
+            .into_iter()
+            .find(|label| label.has_css_class("tab-title"))?
+            .text()
+            .to_string();
+        let classes = carried
+            .tab
+            .css_classes()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        let bounds = carried.tab.compute_bounds(&carried.tab)?;
+        #[expect(clippy::cast_possible_truncation, reason = "a tab's width")]
+        let width = bounds.width().round() as i32;
+        let (x, y) = carried.at.get();
+        Some((title, classes, width, (x - CARRIED_MARGIN, y - CARRIED_MARGIN)))
+    }
+
+    /// The carried tab, as GTK's drag icon shows it; for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn carried_tab_for_test(&self) -> Option<gtk::Widget> {
+        let outgoing = self.imp().outgoing_tab.borrow();
+        Some(outgoing.as_ref()?.carried.as_ref()?.tab.clone())
     }
 
     /// The drag was cancelled: released where no window took it, refused,
@@ -434,7 +505,13 @@ impl BrowserWindow {
         let finish: fn(&BrowserWindow, TabId) = match outgoing.outcome {
             TabDragOutcome::Pending | TabDragOutcome::TornOut => BrowserWindow::move_tab_to_new_window,
             TabDragOutcome::MovedAway => BrowserWindow::release_moved_tab,
-            TabDragOutcome::Reordered | TabDragOutcome::Cancelled => return,
+            TabDragOutcome::Reordered | TabDragOutcome::Cancelled => {
+                // The tab stays, in front again when it was.
+                if outgoing.stepped_back {
+                    self.switch_tab(tab);
+                }
+                return;
+            }
         };
         // After the drag's own signal handlers, so a window that closes
         // with its last tab is not destroyed in the middle of them.
@@ -589,6 +666,49 @@ fn is_past_drag_threshold(widget: &impl IsA<gtk::Widget>, start: (f64, f64), poi
 /// The desktop moves `window` with the press of `button` on `device` at
 /// `time`, held where its tab strip would show a tab grabbed `hold`
 /// pixels along it.
+/// Runs `then` once `widget` is drawn: after the first frame its window
+/// paints while it is mapped. A widget may be mapped already, as GTK's
+/// drag icon maps the child it is given at once.
+pub(super) fn when_drawn(widget: &gtk::Widget, then: Rc<dyn Fn()>) {
+    let after_next_frame = move |widget: &gtk::Widget| {
+        let Some(clock) = widget.frame_clock() else {
+            return;
+        };
+        let handler = Rc::new(Cell::new(None));
+        let id = clock.connect_after_paint(glib::clone!(
+            #[strong]
+            handler,
+            #[strong]
+            then,
+            move |clock| {
+                if let Some(id) = handler.take() {
+                    clock.disconnect(id);
+                }
+                then();
+            }
+        ));
+        handler.set(Some(id));
+        // A frame comes even if nothing else changes.
+        widget.queue_draw();
+    };
+    if widget.is_mapped() {
+        after_next_frame(widget);
+        return;
+    }
+    let handler = Rc::new(Cell::new(None));
+    let id = widget.connect_map(glib::clone!(
+        #[strong]
+        handler,
+        move |widget| {
+            if let Some(id) = handler.take() {
+                widget.disconnect(id);
+            }
+            after_next_frame(widget);
+        }
+    ));
+    handler.set(Some(id));
+}
+
 fn hand_press_to_window_move(
     window: &BrowserWindow,
     device: &gdk::Device,

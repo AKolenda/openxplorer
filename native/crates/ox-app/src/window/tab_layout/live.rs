@@ -68,25 +68,18 @@ impl Slide {
     }
 }
 
-/// What the strip is showing.
-#[derive(Debug, Clone, PartialEq)]
-enum Shape {
-    /// A tab of this strip, `order[dragged]` when it is not settling,
-    /// follows the pointer.
-    Dragging {
-        dragged: gtk::Widget,
-        /// Where the dragged tab's left edge would be, unclamped.
-        left: f64,
-        /// Where it was when the order last changed.
-        reordered_at: f64,
-        /// Released: the dragged tab slides into its place like the others.
-        settling: bool,
-        /// Out of the strip: the others close up where it was.
-        detached: bool,
-    },
-    /// A tab from another window would go in at `index`, so a gap of
-    /// `width` opens there.
-    Gap { index: usize, width: f64 },
+/// The tab that is dragged.
+#[derive(Debug)]
+struct Dragged {
+    tab: gtk::Widget,
+    /// Where its left edge would be, unclamped.
+    left: f64,
+    /// Where it was when the order last changed.
+    reordered_at: f64,
+    /// Released: it slides into its place like the others.
+    settling: bool,
+    /// Out of the strip: the others close up where it was.
+    detached: bool,
 }
 
 /// What runs once a released tab is in place.
@@ -109,7 +102,7 @@ impl Settled {
 pub(super) struct LiveTabs {
     /// The tabs, left to right, in the order shown.
     order: Vec<gtk::Widget>,
-    shape: Shape,
+    dragged: Dragged,
     /// The tabs still sliding.
     slides: Vec<(gtk::Widget, Slide)>,
     /// The frame clock callback that moves them, while one runs.
@@ -119,25 +112,12 @@ pub(super) struct LiveTabs {
 }
 
 /// The left edge of each of `order`'s tabs when packed from 0 with `gap`
-/// pixels between them, the `extra` gap of a [`Shape::Gap`], and no room
-/// for a `skipped` tab.
-fn packed(
-    order: &[gtk::Widget],
-    gap: f64,
-    extra: Option<(usize, f64)>,
-    skipped: Option<&gtk::Widget>,
-    width: Width,
-) -> Vec<f64> {
+/// pixels between them and no room for a `skipped` tab.
+fn packed(order: &[gtk::Widget], gap: f64, skipped: Option<&gtk::Widget>, width: Width) -> Vec<f64> {
     let mut x = 0.0;
     order
         .iter()
-        .enumerate()
-        .map(|(index, tab)| {
-            if let Some((at, width)) = extra {
-                if at == index {
-                    x += width + gap;
-                }
-            }
+        .map(|tab| {
             let left = x;
             if skipped != Some(tab) {
                 x += width(tab) + gap;
@@ -152,10 +132,11 @@ impl LiveTabs {
     pub(super) fn dragging(order: Vec<gtk::Widget>, dragged: gtk::Widget, left: f64) -> Self {
         Self {
             order,
-            shape: Shape::Dragging {
-                dragged,
+            dragged: Dragged {
+                tab: dragged,
                 left,
-                reordered_at: left,
+                // The first place is never held back.
+                reordered_at: f64::NEG_INFINITY,
                 settling: false,
                 detached: false,
             },
@@ -165,51 +146,15 @@ impl LiveTabs {
         }
     }
 
-    /// A gap of `width` opens at `index` of `order`.
-    pub(super) fn gap(order: Vec<gtk::Widget>) -> Self {
-        Self {
-            order,
-            shape: Shape::Gap {
-                index: usize::MAX,
-                width: 0.0,
-            },
-            slides: Vec::new(),
-            tick: None,
-            on_settled: None,
-        }
-    }
-
-    /// The dragged tab, while one of this strip follows the pointer.
+    /// The dragged tab, while it follows the pointer in the strip.
     pub(super) fn following(&self) -> Option<&gtk::Widget> {
-        match &self.shape {
-            Shape::Dragging {
-                dragged,
-                settling: false,
-                detached: false,
-                ..
-            } => Some(dragged),
-            _ => None,
-        }
+        let dragged = &self.dragged;
+        (!dragged.settling && !dragged.detached).then_some(&dragged.tab)
     }
 
-    /// The dragged tab, following or settling.
-    pub(super) fn dragged(&self) -> Option<&gtk::Widget> {
-        match &self.shape {
-            Shape::Dragging { dragged, .. } => Some(dragged),
-            Shape::Gap { .. } => None,
-        }
-    }
-
-    /// How much wider the row is for a gap: the gap and the space after it.
-    pub(super) fn extra_width(&self, gap: f64) -> f64 {
-        match self.shape {
-            Shape::Gap { index, width } if index <= self.order.len() => width + gap,
-            _ => 0.0,
-        }
-    }
-
-    pub(super) fn is_gap(&self) -> bool {
-        matches!(self.shape, Shape::Gap { .. })
+    /// The dragged tab, following, out of the strip or settling.
+    pub(super) fn dragged(&self) -> &gtk::Widget {
+        &self.dragged.tab
     }
 
     /// The tabs in the order shown.
@@ -219,18 +164,9 @@ impl LiveTabs {
 
     /// Where `tab` is drawn at frame time `now` in a row `row` pixels wide.
     fn shown_left(&self, tab: &gtk::Widget, slots: &[f64], row: f64, now: i64, width: Width) -> f64 {
-        if let Shape::Dragging {
-            dragged,
-            left,
-            settling: false,
-            detached: false,
-            ..
-        } = &self.shape
-        {
-            if dragged == tab {
-                let widest = (row - width(tab)).max(0.0);
-                return left.clamp(0.0, widest);
-            }
+        if self.following() == Some(tab) {
+            let widest = (row - width(tab)).max(0.0);
+            return self.dragged.left.clamp(0.0, widest);
         }
         let index = self.order.iter().position(|shown| shown == tab).unwrap_or(0);
         let slide = self
@@ -242,19 +178,8 @@ impl LiveTabs {
     }
 
     fn slots(&self, gap: f64, width: Width) -> Vec<f64> {
-        let extra = match self.shape {
-            Shape::Gap { index, width } if index <= self.order.len() => Some((index, width)),
-            _ => None,
-        };
-        let skipped = match &self.shape {
-            Shape::Dragging {
-                dragged,
-                detached: true,
-                ..
-            } => Some(dragged),
-            _ => None,
-        };
-        packed(&self.order, gap, extra, skipped, width)
+        let skipped = self.dragged.detached.then_some(&self.dragged.tab);
+        packed(&self.order, gap, skipped, width)
     }
 
     /// Each tab and its left edge at frame time `now`, for the layout.
@@ -266,8 +191,8 @@ impl LiveTabs {
             .collect()
     }
 
-    /// Changes the order or the gap with `change`, and slides every tab
-    /// whose place moved from where it is drawn now.
+    /// Changes the order or the dragged tab with `change`, and slides every
+    /// tab whose place moved from where it is drawn now.
     fn rearrange(
         &mut self,
         (gap, row, now, length): (f64, f64, i64, i64),
@@ -311,33 +236,19 @@ impl LiveTabs {
     /// changed.
     pub(super) fn follow(&mut self, left: f64, frame: (f64, f64, i64, i64), width: Width) -> bool {
         let (gap, row, _, _) = frame;
-        let Shape::Dragging {
-            dragged,
-            left: shown_left,
-            reordered_at,
-            settling,
-            detached,
-        } = &mut self.shape
-        else {
-            return false;
-        };
-        *shown_left = left;
-        let reordered_at = *reordered_at;
-        let was_away = *detached;
-        if *settling {
+        self.dragged.left = left;
+        let reordered_at = self.dragged.reordered_at;
+        let was_away = self.dragged.detached;
+        if self.dragged.settling {
             // Back in the strip before it slid back: it follows again.
-            *settling = false;
+            self.dragged.settling = false;
             self.on_settled = None;
         }
-        let dragged = dragged.clone();
         if was_away {
             // Back in the strip: the others open up for it again.
-            self.rearrange(frame, width, |live| {
-                if let Shape::Dragging { detached, .. } = &mut live.shape {
-                    *detached = false;
-                }
-            });
+            self.rearrange(frame, width, |live| live.dragged.detached = false);
         }
+        let dragged = self.dragged.tab.clone();
         let dragged_width = width(&dragged);
         let left = left.clamp(0.0, (row - dragged_width).max(0.0));
         let mut order = self.order.clone();
@@ -345,7 +256,7 @@ impl LiveTabs {
             return false;
         };
         loop {
-            let slots = packed(&order, gap, None, None, width);
+            let slots = packed(&order, gap, None, width);
             let middle = |index: usize| slots[index] + width(&order[index]) / 2.0;
             if at + 1 < order.len() && left + dragged_width > middle(at + 1) {
                 order.swap(at, at + 1);
@@ -366,44 +277,14 @@ impl LiveTabs {
         }
         self.rearrange(frame, width, |live| {
             live.order = order;
-            if let Shape::Dragging { reordered_at, .. } = &mut live.shape {
-                *reordered_at = left;
-            }
+            live.dragged.reordered_at = left;
         });
         true
     }
 
     /// The dragged tab leaves the strip: the others close up where it was.
     pub(super) fn detach(&mut self, frame: (f64, f64, i64, i64), width: Width) {
-        self.rearrange(frame, width, |live| {
-            if let Shape::Dragging { detached, .. } = &mut live.shape {
-                *detached = true;
-            }
-        });
-    }
-
-    /// Opens the gap at `index`, `width` wide.
-    pub(super) fn open_gap(
-        &mut self,
-        index: usize,
-        gap_width: f64,
-        frame: (f64, f64, i64, i64),
-        width: Width,
-    ) {
-        if self.shape
-            == (Shape::Gap {
-                index,
-                width: gap_width,
-            })
-        {
-            return;
-        }
-        self.rearrange(frame, width, |live| {
-            live.shape = Shape::Gap {
-                index,
-                width: gap_width,
-            };
-        });
+        self.rearrange(frame, width, |live| live.dragged.detached = true);
     }
 
     /// The dragged tab is released: every tab, the dragged one too,
@@ -417,15 +298,8 @@ impl LiveTabs {
     ) {
         self.rearrange(frame, width, |live| {
             live.order = order;
-            match &mut live.shape {
-                Shape::Dragging {
-                    settling, detached, ..
-                } => {
-                    *settling = true;
-                    *detached = false;
-                }
-                Shape::Gap { index, .. } => *index = usize::MAX,
-            }
+            live.dragged.settling = true;
+            live.dragged.detached = false;
         });
         self.on_settled = Some(Settled(then));
     }

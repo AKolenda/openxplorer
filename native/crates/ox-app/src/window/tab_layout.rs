@@ -157,17 +157,8 @@ mod imp {
                 return (height, height, -1, -1);
             }
             let widths = self.widths(&tabs);
-            // A gap for a tab from another window widens the row, as the
-            // tab will once it lands.
-            let extra = self
-                .live
-                .borrow()
-                .as_ref()
-                .map_or(0.0, |live| live.extra_width(f64::from(TAB_GAP)));
-            #[expect(clippy::cast_possible_truncation, reason = "a tab's width")]
-            let extra = extra.round() as i32;
-            let minimum = strip_width(&tabs, widths.narrowest_allowed()) + extra;
-            let natural = strip_width(&tabs, widths.widest_allowed()) + extra;
+            let minimum = strip_width(&tabs, widths.narrowest_allowed());
+            let natural = strip_width(&tabs, widths.widest_allowed());
             (minimum, natural, -1, -1)
         }
 
@@ -180,9 +171,10 @@ mod imp {
                 let now = super::frame_time(widget);
                 let width_of_tab = |tab: &gtk::Widget| f64::from(width_of(tab, each));
                 for (tab, left) in live.placements(f64::from(TAB_GAP), f64::from(width), now, &width_of_tab) {
-                    // At sub-pixel positions, so slides glide.
+                    // On whole pixels, as Chrome places tabs: between them
+                    // an icon blurs and sharpens again as its tab moves.
                     #[expect(clippy::cast_possible_truncation, reason = "tab positions are small")]
-                    let at = gtk::graphene::Point::new(left as f32, 0.0);
+                    let at = gtk::graphene::Point::new(left.round() as f32, 0.0);
                     let transform = gtk::gsk::Transform::new().translate(&at);
                     tab.allocate(width_of(&tab, each), height, -1, Some(transform));
                 }
@@ -237,7 +229,7 @@ impl TabLayout {
             .live
             .borrow()
             .as_ref()
-            .is_some_and(|live| live.dragged() == Some(dragged));
+            .is_some_and(|live| live.dragged() == dragged);
         if resumes {
             if let Some(live) = self.imp().live.borrow_mut().as_mut() {
                 live.take_on_settled();
@@ -251,15 +243,6 @@ impl TabLayout {
             .replace(Some(LiveTabs::dragging(order, dragged.clone(), left)));
         // The others make room at once, also when a drop follows.
         self.follow(left);
-    }
-
-    /// Lays `order` out live with a gap for a tab from another window.
-    pub(crate) fn begin_gap(&self, order: Vec<gtk::Widget>) {
-        if self.imp().live.borrow().as_ref().is_some_and(LiveTabs::is_gap) {
-            return;
-        }
-        self.end();
-        self.imp().live.replace(Some(LiveTabs::gap(order)));
     }
 
     /// The dragged tab's left edge follows the pointer to `left`.
@@ -278,16 +261,6 @@ impl TabLayout {
         let frame = self.frame(&row);
         if let Some(live) = self.imp().live.borrow_mut().as_mut() {
             live.detach(frame, &|tab| self.width_of(tab));
-        }
-        self.animate();
-    }
-
-    /// Opens the gap at `index`, `width` wide.
-    pub(crate) fn open_gap(&self, index: usize, width: f64) {
-        let Some(row) = self.widget() else { return };
-        let frame = self.frame(&row);
-        if let Some(live) = self.imp().live.borrow_mut().as_mut() {
-            live.open_gap(index, width, frame, &|tab| self.width_of(tab));
         }
         self.animate();
     }
@@ -336,12 +309,11 @@ impl TabLayout {
 
     /// The dragged tab, following or settling.
     pub(crate) fn dragged(&self) -> Option<gtk::Widget> {
-        self.imp().live.borrow().as_ref()?.dragged().cloned()
-    }
-
-    /// Whether the strip shows a gap for a tab from another window.
-    pub(crate) fn is_gap(&self) -> bool {
-        self.imp().live.borrow().as_ref().is_some_and(LiveTabs::is_gap)
+        self.imp()
+            .live
+            .borrow()
+            .as_ref()
+            .map(|live| live.dragged().clone())
     }
 
     /// Ends the live layout at once, first running what waits for a
@@ -464,6 +436,40 @@ mod tests {
         assert_eq!(width_of(&plain, MIN_TAB_WIDTH), MIN_TAB_WIDTH);
         assert_eq!(width_of(&snapshot, MIN_TAB_WIDTH), 285);
         assert_eq!(strip_width(&[plain, snapshot], MIN_TAB_WIDTH), 100 + 2 + 285);
+    }
+
+    /// A tab that follows the pointer, which on a touchpad stops between
+    /// pixels, is drawn on whole pixels, as Chrome keeps tabs on whole
+    /// pixels, so its icon and title stay as sharp as when it is still.
+    ///
+    /// parity: TAB-032
+    #[gtk::test]
+    fn a_moving_tab_is_drawn_on_whole_pixels() {
+        let layout = glib::Object::new::<TabLayout>();
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        row.set_layout_manager(Some(layout.clone()));
+        let tabs: Vec<gtk::Widget> = (0..2)
+            .map(|_| gtk::Box::new(gtk::Orientation::Horizontal, 0).upcast())
+            .collect();
+        for tab in &tabs {
+            row.append(tab);
+        }
+        let lay_out = || {
+            row.measure(gtk::Orientation::Horizontal, -1);
+            row.measure(gtk::Orientation::Vertical, -1);
+            row.allocate(600, 30, -1, None);
+        };
+        lay_out();
+
+        layout.begin_drag(tabs.clone(), &tabs[0], 40.4);
+        lay_out();
+        let at = tabs[0].compute_bounds(&row).expect("a laid out tab").x();
+        layout.follow(41.6);
+        lay_out();
+        let then = tabs[0].compute_bounds(&row).expect("a laid out tab").x();
+
+        assert!((at - 40.0).abs() < 1e-6, "on the nearest pixel: {at}");
+        assert!((then - 42.0).abs() < 1e-6, "on the nearest pixel: {then}");
     }
 
     #[test]

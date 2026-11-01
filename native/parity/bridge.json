@@ -565,10 +565,10 @@
     },
     "tabDragLayout": {
       "status": "native-tested",
-      "note": "No layout is published: every window takes tab drops with one target that finds the strip and the spot from its widgets; a strip makes room for a dragged tab live, and anywhere outside a strip tears the tab out.",
+      "note": "No layout is published: every window takes tab drops with one target that finds the strip and the spot from its widgets; a strip makes room for a dragged tab live, for a tab of another window behind a stand-in drawn as the tab, and anywhere outside a strip tears the tab out.",
       "evidence": [
         "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::outside_every_tab_row_a_dropped_tab_tears_out",
-        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_over_another_windows_strip_opens_a_gap_and_nothing_is_written"
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_over_another_windows_strip_takes_its_place_there_and_nothing_is_written"
       ]
     },
     "tabTransferReady": {

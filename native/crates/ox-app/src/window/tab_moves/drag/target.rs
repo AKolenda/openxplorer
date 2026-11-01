@@ -2,10 +2,10 @@
 //! The receiving window's side of a tab drag: where a dropped tab goes,
 //! what the window shows while the tab is over it, and taking the drop.
 //!
-//! Nothing is written over the window: over its own strip the tab itself
-//! follows the pointer again, over another window's strip the tab follows
-//! the pointer while that strip makes room for it, and anywhere else the
-//! small picture of the tab's window says enough.
+//! Nothing is written over the window: over its own strip the tab there
+//! follows the pointer again, over another window's strip a stand-in for
+//! it does, as Chrome takes the tab into that strip, and anywhere else the
+//! carried tab does.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -13,6 +13,7 @@ use gtk::{gdk, glib, graphene};
 
 use super::{dragged_tab, CarriedLook, DraggedTab, TabDropSpot};
 use crate::window::session::TabId;
+use crate::window::tab_strip::Landing;
 use crate::window::BrowserWindow;
 
 impl BrowserWindow {
@@ -71,7 +72,7 @@ impl BrowserWindow {
             source.note_tab_hover(None);
             self.show_tab_away(&source);
         } else {
-            self.tab_strip().close_gap();
+            self.tab_strip().dismiss_guest();
         }
     }
 
@@ -91,8 +92,11 @@ impl BrowserWindow {
         if is_in_own_strip && self.tab_strip().is_following() {
             return self.settle_live_drop(dragged.tab);
         }
-        // The tab lands in the gap its strip opened.
-        self.tab_strip().end_gap();
+        // A tab from another window lands where its stand-in was.
+        let spot = match (spot, self.tab_strip().land_guest()) {
+            (TabDropSpot::Strip { .. }, Some(Landing { before })) => TabDropSpot::Strip { before },
+            (spot, _) => spot,
+        };
         source.settle_tab_drag(dragged.tab, self, spot)
     }
 
@@ -136,9 +140,9 @@ impl BrowserWindow {
     }
 
     /// Shows tab `tab` of `source` at `spot`, `x` of this window: in its
-    /// own strip it follows the pointer again and the picture of its window
-    /// hides; another window's strip opens a gap for it; anywhere else the
-    /// picture shows and the strips are as they were.
+    /// own strip it follows the pointer there again, and another window's
+    /// strip takes a stand-in for it that follows the pointer, while the
+    /// carried tab hides; anywhere else the strips are as they were.
     pub(super) fn show_tab_drop_spot(
         &self,
         source: &BrowserWindow,
@@ -154,28 +158,35 @@ impl BrowserWindow {
         let is_own = source == self;
         match spot {
             Some(TabDropSpot::Strip { .. }) if is_own => {
+                source.note_over_own_strip(true);
                 strip.show_dragged_tab(None);
                 strip.follow_pointer(tab, in_strip);
+                source.bring_carried_tab_forward(tab);
                 source.show_carried(CarriedLook::Hidden);
             }
             Some(TabDropSpot::Strip { .. }) => {
-                if let Some(width) = source.tab_strip().tab_width(tab) {
-                    strip.open_gap(in_strip, width);
+                let grab_x = source.tab_strip().grab_offset(tab).map_or(0.0, |(x, _)| x);
+                if let Some(view) = source.tab_strip().tab_view(tab) {
+                    strip.host_guest(&view, in_strip, grab_x);
                 }
-                source.show_carried(CarriedLook::Below);
+                source.show_carried(CarriedLook::Hidden);
             }
             Some(TabDropSpot::TearOut) | None => self.show_tab_away(source),
         }
     }
 
     /// Shows the tab `source` drags away from this window's strip: the
-    /// strip as it was, and the picture of the tab's window.
+    /// strip as it was, and the carried tab under the pointer.
     fn show_tab_away(&self, source: &BrowserWindow) {
         let strip = self.tab_strip();
-        if source == self && strip.is_following() {
-            source.let_go_of_tab(false);
+        if source == self {
+            source.note_over_own_strip(false);
+            // Out of its strip again: the tab leaves it, which closes up.
+            if let Some(tab) = strip.live_tab().filter(|_| strip.is_following()) {
+                source.take_tab_off_strip(tab);
+            }
         }
-        strip.close_gap();
-        source.show_carried(CarriedLook::Window);
+        strip.dismiss_guest();
+        source.show_carried(CarriedLook::Shown);
     }
 }

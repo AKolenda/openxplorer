@@ -39,6 +39,42 @@ fn tab_ids(window: &BrowserWindow) -> Vec<TabId> {
     session.tabs().iter().map(|tab| tab.id).collect()
 }
 
+/// A dragged tab leaves its strip once the carried tab is drawn, which
+/// GTK's drag icon shows the moment it gets it, so waiting for a widget to
+/// be drawn ends with its window's next frame also when the widget was
+/// shown before the wait began, and not only after the 250 ms fallback.
+///
+/// parity: TAB-034
+#[gtk::test]
+fn waiting_for_a_widget_to_be_drawn_ends_with_its_next_frame_even_if_already_shown() {
+    let drawn = |widget: &gtk::Widget| {
+        let is_drawn = std::rc::Rc::new(std::cell::Cell::new(false));
+        let mark = std::rc::Rc::clone(&is_drawn);
+        source::when_drawn(widget, std::rc::Rc::new(move || mark.set(true)));
+        is_drawn
+    };
+    let shown = gtk::Window::new();
+    let already = gtk::Label::new(Some("Documents"));
+    shown.set_child(Some(&already));
+    shown.present();
+    wait_until("the window to be shown", || already.is_mapped());
+    let later_window = gtk::Window::new();
+    let later = gtk::Label::new(Some("Pictures"));
+    later_window.set_child(Some(&later));
+
+    let already_drawn = drawn(already.upcast_ref());
+    let later_drawn = drawn(later.upcast_ref());
+    wait_for_frames(&shown, 2);
+    let later_before_shown = later_drawn.get();
+    later_window.present();
+
+    wait_until("the shown label to be drawn", || already_drawn.get());
+    wait_until("the label shown later to be drawn", || later_drawn.get());
+    assert!(!later_before_shown, "not drawn before it is shown");
+    shown.destroy();
+    later_window.destroy();
+}
+
 /// The tab widget at `index` of `window`'s strip.
 fn tab_widget(window: &BrowserWindow, index: usize) -> gtk::Widget {
     crate::window::widget_tree::children(&window.tab_strip().tab_list())
@@ -329,13 +365,15 @@ fn no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy() {
     );
 }
 
-/// Over another window's strip the tabs open a gap as wide as the dragged
-/// tab where it would land; nothing is written over the window, and
-/// away from the strip the gap closes.
+/// Over another window's strip a stand-in for the dragged tab follows the
+/// pointer and the tabs make room for it where it would land, the one tab
+/// shown in front there, as in Chrome; nothing is written over the window,
+/// and away from the strip the stand-in goes, the tabs close up and the
+/// window's own tab is shown in front again.
 ///
 /// parity: TAB-033, TAB-034
 #[gtk::test]
-fn a_tab_over_another_windows_strip_opens_a_gap_and_nothing_is_written() {
+fn a_tab_over_another_windows_strip_takes_its_place_there_and_nothing_is_written() {
     let fixture = Fixture::standard();
     let test = three_tabs(&fixture);
     let other = test.open_beside(&fixture.uri());
@@ -346,7 +384,11 @@ fn a_tab_over_another_windows_strip_opens_a_gap_and_nothing_is_written() {
     other.wait_for_listing("the other window's second tab");
     wait_for_frames(&other.window, 3);
     let dragged = start_dragging(&test.window, 0);
-    let width = test.window.tab_strip().tab_width(dragged).expect("a shown tab");
+    let width = other
+        .window
+        .tab_strip()
+        .tab_width(tab_ids(&other.window)[0])
+        .expect("a shown tab");
     let second = tab_widget(&other.window, 1);
     let second_left = left_in_row(&other.window, &second);
     let (x, _) = middle_in(&second, other.window.tab_strip());
@@ -359,21 +401,39 @@ fn a_tab_over_another_windows_strip_opens_a_gap_and_nothing_is_written() {
     );
     wait_for(std::time::Duration::from_millis(300));
     let opened_left = left_in_row(&other.window, &second);
+    let stand_ins = crate::window::widget_tree::children(&other.window.tab_strip().tab_list()).count();
+    let in_front_over = shown_in_front(&other.window);
     other
         .window
         .show_tab_drop_spot(&test.window, dragged, Some(TabDropSpot::TearOut), 300.0);
     let hint_away = other.window.folder_pane().drag_hint();
     wait_for(std::time::Duration::from_millis(300));
     let closed_left = left_in_row(&other.window, &second);
+    let after_leaving = crate::window::widget_tree::children(&other.window.tab_strip().tab_list()).count();
+    let in_front_after = shown_in_front(&other.window);
     test.window.cancel_tab_drag(gdk::DragCancelReason::UserCancelled);
     test.window.end_tab_drag();
 
     assert!(
         (opened_left - (second_left + width + 2.0)).abs() < 1.0,
-        "the tab after the gap moved by the dragged tab's width: {second_left} -> {opened_left}"
+        "the tab after the stand-in moved by a tab's width: {second_left} -> {opened_left}"
     );
+    assert_eq!(stand_ins, 3, "the stand-in is in the strip");
+    assert_eq!(after_leaving, 2, "the stand-in left with the tab");
+    assert_eq!(in_front_over, [2], "only the stand-in is shown in front");
+    assert_eq!(in_front_after, [1], "the window's own tab is in front again");
     assert_eq!(hint_away, None, "no text over the file list");
-    assert!((closed_left - second_left).abs() < 1.0, "the gap closed");
+    assert!((closed_left - second_left).abs() < 1.0, "the tabs closed up");
+}
+
+/// Where the tabs shown in front are among the children of `window`'s
+/// strip, a stand-in last.
+fn shown_in_front(window: &BrowserWindow) -> Vec<usize> {
+    crate::window::widget_tree::children(&window.tab_strip().tab_list())
+        .enumerate()
+        .filter(|(_, tab)| tab.has_css_class("active"))
+        .map(|(at, _)| at)
+        .collect()
 }
 
 /// The left edge of `tab` in `window`'s row of tabs, where it is drawn.
@@ -384,10 +444,10 @@ fn left_in_row(window: &BrowserWindow, tab: &gtk::Widget) -> f64 {
     f64::from(bounds.x())
 }
 
-/// With `OX_NATIVE_CAPTURE_DIR` set, saves a strip that opened a gap for a
-/// tab from another window, in both themes.
+/// With `OX_NATIVE_CAPTURE_DIR` set, saves a strip that took in a tab
+/// dragged from another window, in both themes.
 #[gtk::test]
-fn a_tab_drags_gap_is_captured_light_and_dark() {
+fn a_tab_from_another_window_is_captured_light_and_dark() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = three_tabs(&fixture);
@@ -404,7 +464,7 @@ fn a_tab_drags_gap_is_captured_light_and_dark() {
             10.0,
         );
         wait_for(std::time::Duration::from_millis(300));
-        capture(&other.window, &format!("native-tab-drag-gap-{theme}.png"));
+        capture(&other.window, &format!("native-tab-drag-guest-{theme}.png"));
         other
             .window
             .show_tab_drop_spot(&test.window, dragged, Some(TabDropSpot::TearOut), 10.0);

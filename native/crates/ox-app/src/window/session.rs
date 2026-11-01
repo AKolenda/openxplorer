@@ -443,14 +443,23 @@ impl Session {
     /// active, or the new last tab (`Math.min(i, tabs.length - 1)` in
     /// app.js, as in Windows Explorer and browsers).
     pub(super) fn remove(&mut self, id: TabId) {
+        let successor = self.successor(id);
         let Some(index) = self.tabs.iter().position(|tab| tab.id == id) else {
             return;
         };
         self.tabs.remove(index);
         if self.active == Some(id) {
-            let next = self.tabs.get(index).or_else(|| self.tabs.last());
-            self.active = next.map(|tab| tab.id);
+            self.active = successor;
         }
+    }
+
+    /// The tab that comes to the front when tab `id` leaves the strip
+    /// while in front: the tab to its right, or to its left at the end.
+    pub(super) fn successor(&self, id: TabId) -> Option<TabId> {
+        let index = self.tabs.iter().position(|tab| tab.id == id)?;
+        let next = self.tabs.get(index + 1);
+        let next = next.or_else(|| index.checked_sub(1).and_then(|before| self.tabs.get(before)));
+        next.map(|tab| tab.id)
     }
 
     /// The tab next to the active one in `direction`, wrapping around at
@@ -513,6 +522,22 @@ mod tests {
         let (mut session, [_, second, third]) = three_tabs();
         session.remove(third);
         assert_eq!(session.active_id(), Some(second));
+    }
+
+    /// The tab that takes a dragged-out tab's place in front is the one
+    /// closing it would show, and nothing changes until it is shown.
+    ///
+    /// parity: TAB-002, TAB-034
+    #[test]
+    fn a_tab_leaving_the_strip_is_succeeded_by_the_tab_closing_it_would_show() {
+        let (session, [first, second, third]) = three_tabs();
+        assert_eq!(session.successor(first), Some(second));
+        assert_eq!(session.successor(second), Some(third));
+        assert_eq!(session.successor(third), Some(second));
+        assert_eq!(session.active_id(), Some(third));
+        let mut alone = Session::default();
+        let only = alone.add("file:///one", TabPlacement::Foreground);
+        assert_eq!(alone.successor(only), None);
     }
 
     #[test]

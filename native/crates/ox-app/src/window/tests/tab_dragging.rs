@@ -343,9 +343,10 @@ fn without_animations_tabs_jump_into_place_while_the_dragged_tab_follows() {
 
 /// With another window open, a tab dragged out of its row is carried by
 /// GTK's drag and drop, so it could land on that window's strip: it is gone
-/// from its own strip, which closes up, and nothing is written over the
-/// file list. Brought back into its row it follows the pointer again, the
-/// other tab sliding aside, and lands where it was shown.
+/// from its own strip, which closes up, the tab beside it comes to the
+/// front, as Chrome shows the next tab, and nothing is written over the
+/// file list. Brought back into its row it follows the pointer again, in
+/// front again, the other tab sliding aside, and lands where it was shown.
 ///
 /// parity: TAB-032, TAB-034
 #[gtk::test]
@@ -370,8 +371,11 @@ fn a_tab_dragged_out_and_back_into_its_row_lands_where_it_was_shown() {
     let hint = test.window.folder_pane().drag_hint();
     let closed_up = left_in_row(&test.window, &second_tab);
     let gone = first_tab.has_css_class("tab-drag-source");
+    let front_while_away = active_tab(&test.window);
+    let shown_in_front_while_away = second_tab.has_css_class("active");
     pointer.glide(away, past, 12);
     wait_for(HOLD);
+    let front_back_in_row = active_tab(&test.window);
     // The strip drew the tabs anew when the dragged one came to the front.
     let second_tab = test
         .window
@@ -386,6 +390,18 @@ fn a_tab_dragged_out_and_back_into_its_row_lands_where_it_was_shown() {
 
     assert!(carried, "away from the row the tab is carried by drag and drop");
     assert!(gone, "out of its strip the tab is gone from it");
+    assert_eq!(
+        front_while_away,
+        Some(second),
+        "the tab beside it comes to the front"
+    );
+    assert!(shown_in_front_while_away, "and the strip shows it in front");
+    assert_eq!(
+        front_back_in_row,
+        Some(first),
+        "back in its row the tab is in front again"
+    );
+    assert_eq!(active_tab(&test.window), Some(first));
     assert!(
         (closed_up - first_left).abs() <= 0.5,
         "the strip closed up where it was: {closed_up}"
@@ -399,6 +415,59 @@ fn a_tab_dragged_out_and_back_into_its_row_lands_where_it_was_shown() {
         windows_besides(&[&test.window, &other.window]).is_empty(),
         "no window opens"
     );
+}
+
+/// A carried tab whose drag is called off, as Escape does, stays where it
+/// was, in front again.
+///
+/// parity: TAB-034, ACC-010
+#[gtk::test]
+fn a_carried_tab_whose_drag_is_called_off_is_in_front_again() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = two_tabs(&fixture);
+    let [first, second] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    let from = middle_on_screen(&mut pointer, &tab_widget(&test.window, 0));
+    let away = (from.0 + 40, from.1 + 90);
+
+    press_and_glide(&mut pointer, from, away, Pace::Held);
+    let front_while_away = active_tab(&test.window);
+    tab_drag_source(&test.window).drag_cancel();
+    wait_until("the drag to end", || !drags_and_drops(&test.window));
+    pointer.release(Button::Primary);
+    wait_for(HOLD);
+
+    assert_eq!(front_while_away, Some(second));
+    assert_eq!(
+        tab_ids(&test.window),
+        [first, second],
+        "the tab stays where it was"
+    );
+    assert_eq!(active_tab(&test.window), Some(first), "in front again");
+    assert!(
+        tab_widget(&test.window, 0).has_css_class("active"),
+        "and shown in front"
+    );
+    assert!(windows_besides(&[&test.window]).is_empty(), "no window opens");
+}
+
+/// The drag source of `window`'s tabs, on its title bar.
+fn tab_drag_source(window: &BrowserWindow) -> gtk::DragSource {
+    let bar = window.titlebar().expect("a title bar");
+    std::iter::once(bar.clone())
+        .chain(crate::test_support::harness::descendants::<gtk::Widget>(&bar))
+        .flat_map(|widget| {
+            widget
+                .observe_controllers()
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|controller| controller.downcast::<gtk::DragSource>().ok())
+                .collect::<Vec<_>>()
+        })
+        .next()
+        .expect("the title bar has the tabs' drag source")
 }
 
 /// The desktop's drag threshold, in pixels.
@@ -532,15 +601,42 @@ fn a_tab_dropped_on_another_windows_row_moves_there_where_it_was_dropped() {
     let width = tab_widget(&test.window, 1)
         .compute_bounds(&test.window)
         .map_or(0.0, |bounds| f64::from(bounds.width()));
-    let to = on_screen(&mut pointer, &target, (12.0, f64::from(target.height()) / 2.0));
+    // Past the middle of the other window's tab, so the tab's left edge,
+    // held where it was grabbed, comes before that middle.
+    let to = on_screen(
+        &mut pointer,
+        &target,
+        (f64::from(target.width()) * 0.7, f64::from(target.height()) / 2.0),
+    );
+    let tab_corner = border_corner_on_screen(&mut pointer, &tab_widget(&test.window, 1));
     press_and_glide(&mut pointer, from, to, Pace::Brisk);
     let made_room = left_in_row(&other.window, &target) - target_left;
+    let held_at = test
+        .window
+        .carried_look_for_test()
+        .map(|(_, _, _, held_at)| held_at);
+    let stand_in = other
+        .window
+        .tab_strip()
+        .tab_list()
+        .last_child()
+        .expect("the stand-in, drawn last");
+    let stand_in_left = border_left_in(other_after, &stand_in);
     pointer.release(Button::Primary);
     wait_until("the tab to leave", || test.window.tab_count() == 1);
 
     assert!(
         (made_room - (width + 2.0)).abs() <= 0.5,
         "the other window's tabs made room for the tab: {made_room}"
+    );
+    assert!(
+        held_at.is_some_and(|(_, y)| y > 10_000),
+        "over the other strip the carried tab hides: {held_at:?}"
+    );
+    assert_eq!(
+        stand_in_left,
+        to.0 - (from.0 - tab_corner.0),
+        "a stand-in for the tab follows the pointer in that strip, held where it was grabbed"
     );
     assert_eq!(other.window.tab_count(), 2);
     assert_eq!(other.window.current_uri(), Some(fixture.uri_of("Documents")));
@@ -652,48 +748,105 @@ fn a_press_shows_the_tab_at_once_and_keeps_its_widget() {
     assert_eq!(fronts, [true, false], "only the pressed tab looks in front");
 }
 
-/// With no other window to drop it on, a tab dragged out of the row opens
-/// in a real window of its own, which the desktop moves with the same
-/// press while it lasts, as Chrome's torn-out window follows the pointer;
-/// the release leaves it there.
+/// A tab dragged out of its row is carried as itself, as Chromium carries
+/// it where the desktop cannot move a real window with it: the tab, as it
+/// looks in front, follows the pointer held where it was grabbed, and no
+/// window opens until the release, which opens one with the tab.
 ///
 /// parity: TAB-034
 #[gtk::test]
-fn a_tab_dragged_out_of_its_row_becomes_a_window_that_follows_the_pointer() {
+fn a_tab_dragged_out_of_its_row_is_carried_as_itself_until_released() {
     let fixture = Fixture::standard();
     let mut pointer = Pointer::connect();
     let test = two_tabs(&fixture);
-    let before = origin(&mut pointer, &test.window);
-    let from = middle_on_screen(&mut pointer, &tab_widget(&test.window, 1));
+    let tab = tab_widget(&test.window, 1);
+    let tab_corner = border_corner_on_screen(&mut pointer, &tab);
+    let tab_width = border_width(&tab);
+    let from = middle_on_screen(&mut pointer, &tab);
     let out = (from.0 + 20, from.1 + 80);
 
     press_and_glide(&mut pointer, from, out, Pace::Held);
-    let opened = OpenedWindows::only(&[&test.window]);
-    wait_for_frames_of(opened.window());
-    let at_first = origin_under(opened.window(), out);
-    let further = (out.0 + 90, out.1 + 60);
-    pointer.glide(out, further, 6);
-    wait_for(HOLD);
-    let at_last = origin_under(opened.window(), further);
+    let carried = drags_and_drops(&test.window);
+    let opened_while_pressed = windows_besides(&[&test.window]).len();
+    let look = test.window.carried_look_for_test();
+    let carried_tab = test.window.carried_tab_for_test().expect("a carried tab");
+    let (carried_close, close) = (close_button_of(&carried_tab), close_button_of(&tab));
+    let close_drawn_alike = drawn(&test.window, &carried_close) == drawn(&test.window, &close);
     pointer.release(Button::Primary);
-    wait_for(HOLD);
+    let opened = OpenedWindows::only(&[&test.window]);
 
-    let (Some(first), Some(last)) = (at_first, at_last) else {
-        panic!("the new window is under the pointer: {at_first:?} {at_last:?}");
-    };
+    assert!(carried, "the tab is carried by drag and drop");
+    assert_eq!(opened_while_pressed, 0, "no window opens before the release");
+    let (title, classes, width, held_at) = look.expect("the tab itself follows the pointer");
+    assert_eq!(title, "Documents");
+    assert!(
+        classes.contains(&"tab".to_owned()) && classes.contains(&"active".to_owned()),
+        "{classes:?}"
+    );
+    assert_eq!(width, tab_width, "as wide as the tab");
     assert_eq!(
-        (last.0 - first.0, last.1 - first.1),
-        (90, 60),
-        "it moved with the pointer"
+        held_at,
+        (from.0 - tab_corner.0, from.1 - tab_corner.1),
+        "held where it was grabbed"
+    );
+    assert!(
+        close_drawn_alike,
+        "its close button is drawn as the tab's, though GTK's drag icon is no window"
     );
     assert_eq!(opened.window().current_uri(), Some(fixture.uri_of("Documents")));
     assert_eq!(test.window.tab_count(), 1, "the tab left this window");
-    assert!(!drags_and_drops(&test.window), "no drag and drop: a real window");
-    assert_eq!(
-        origin(&mut pointer, &test.window),
-        before,
-        "this window stays where it was"
-    );
+}
+
+/// The close button of `tab`.
+fn close_button_of(tab: &gtk::Widget) -> gtk::Button {
+    crate::test_support::harness::descendants::<gtk::Button>(tab)
+        .into_iter()
+        .find(|button| button.has_css_class("tab-close"))
+        .expect("a tab has a close button")
+}
+
+/// The size and pixels of `widget` as it draws itself, rendered by
+/// `window`'s renderer.
+fn drawn(window: &BrowserWindow, widget: &impl IsA<gtk::Widget>) -> (i32, i32, Vec<u8>) {
+    let (width, height) = (widget.width(), widget.height());
+    let paintable = gtk::WidgetPaintable::new(Some(widget));
+    let snapshot = gtk::Snapshot::new();
+    paintable.snapshot(&snapshot, f64::from(width), f64::from(height));
+    let Some(node) = snapshot.to_node() else {
+        return (width, height, Vec::new());
+    };
+    let renderer = window.renderer().expect("a drawn window");
+    let texture = renderer.render_texture(&node, None::<&gtk::graphene::Rect>);
+    let stride = usize::try_from(texture.width()).unwrap_or(0) * 4;
+    let mut pixels = vec![0; stride * usize::try_from(texture.height()).unwrap_or(0)];
+    texture.download(&mut pixels, stride);
+    (width, height, pixels)
+}
+
+/// The top left corner of `widget`'s border box on the screen: widget
+/// coordinates start inside its padding.
+fn border_corner_on_screen(pointer: &mut Pointer, widget: &gtk::Widget) -> (i32, i32) {
+    let bounds = widget.compute_bounds(widget).expect("a shown widget");
+    on_screen(pointer, widget, (f64::from(bounds.x()), f64::from(bounds.y())))
+}
+
+/// The left edge of `widget`'s border box on the screen, its window being
+/// at `origin`, found without moving the pointer, which moves a drag.
+fn border_left_in(origin: (i32, i32), widget: &gtk::Widget) -> i32 {
+    let native = widget.native().expect("a shown widget is in a window");
+    let bounds = widget.compute_bounds(&native).expect("a laid out widget");
+    let (shadow_x, _) = native.surface_transform();
+    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+    let left = (f64::from(bounds.x()) + shadow_x).round() as i32;
+    origin.0 + left
+}
+
+/// The width of `widget`'s border box, as drawn.
+fn border_width(widget: &gtk::Widget) -> i32 {
+    let bounds = widget.compute_bounds(widget).expect("a shown widget");
+    #[expect(clippy::cast_possible_truncation, reason = "a tab's width")]
+    let width = bounds.width().round() as i32;
+    width
 }
 
 /// The only tab of a window, dragged out of its row, takes the window
@@ -731,9 +884,4 @@ fn the_only_tab_dragged_out_of_its_row_moves_its_window() {
         "no other window opens"
     );
     assert_eq!(test.window.tab_count(), 1);
-}
-
-/// Waits until `window` has drawn a few frames.
-fn wait_for_frames_of(window: &BrowserWindow) {
-    crate::test_support::harness::wait_for_frames(window, 3);
 }

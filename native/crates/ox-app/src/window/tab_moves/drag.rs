@@ -9,14 +9,15 @@
 //! tab never moves the window ([`source`] says why it must sit there).
 //! Along the strip the tab itself follows the pointer and the other tabs
 //! slide aside (`tab_strip::live_drag`), with no drag and drop at all.
-//! Once the pointer leaves the strip by more than a tab's height, GTK's drag
-//! and drop takes over, carrying a small live picture of the tab's window.
-//! Every window takes tab drops with one target over the whole window,
-//! which finds the spot itself: the title bar from the first tab to the
-//! open-windows button places the tab where the tabs made room for it, and
-//! anywhere else in a window tears it out, as Chrome does. Back over its own
-//! strip the tab follows the pointer again and the picture hides; over
-//! another window's strip, that strip opens a gap where the tab would land.
+//! Once the pointer leaves the strip by more than Chrome's 15 pixels, GTK's
+//! drag and drop takes over, carrying the tab itself, drawn as in its strip,
+//! and the tab beside it comes to the front, as in Chrome. Every window
+//! takes tab drops with one target over the whole window, which finds the
+//! spot itself: the title bar from the first tab to the open-windows button
+//! places the tab where the tabs made room for it, and anywhere else in a
+//! window tears it out, as Chrome does. Back over its own strip the tab
+//! follows the pointer again, in front, and the carried tab hides; over
+//! another window's strip a stand-in for it follows the pointer there.
 //!
 //! Safety rules:
 //! - "Tab drags stay in the process" (TAB-040): the drag offers the tab as
@@ -98,32 +99,34 @@ pub(in crate::window) struct OutgoingTabDrag {
     over: Option<Hover>,
     /// What follows the pointer, once the drag and drop started.
     carried: Option<Carried>,
+    /// The pointer is over this window's own strip.
+    over_own_strip: bool,
+    /// The tab was in front when it left the strip, and the tab beside it
+    /// came to the front meanwhile.
+    stepped_back: bool,
 }
 
-/// What follows the pointer while GTK's drag and drop carries a tab: one
-/// picture, drawn once, which the drag shows, moves or hides by its
-/// hotspot alone. `KWin` shows a drag icon's first look but no later redraw,
-/// while it does follow a moved hotspot.
+/// What follows the pointer while GTK's drag and drop carries a tab: the
+/// tab itself, which the drag shows or hides by its hotspot alone.
 #[derive(Debug)]
 struct Carried {
     /// The drag.
     drag: gdk::Drag,
-    /// Where the picture is held: on its title bar, where the tab was
-    /// grabbed.
+    /// The tab that follows the pointer, for tests.
+    #[cfg(test)]
+    tab: gtk::Widget,
+    /// Where it is held: where the tab was grabbed.
     hold: (i32, i32),
-    /// The picture's height.
-    height: i32,
+    /// The drag's hotspot now.
+    at: std::cell::Cell<(i32, i32)>,
 }
 
-/// Where the carried picture is.
+/// Whether the carried tab shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CarriedLook {
-    /// Held by its title bar under the pointer.
-    Window,
-    /// Hanging below the pointer, over another window's strip, so the gap
-    /// that strip opens for the tab shows.
-    Below,
-    /// Away: back in its own strip, the tab itself follows the pointer.
+    /// Under the pointer, held where it was grabbed.
+    Shown,
+    /// Away: back in its own strip, the tab there follows the pointer.
     Hidden,
 }
 

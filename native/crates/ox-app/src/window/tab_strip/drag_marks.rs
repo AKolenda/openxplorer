@@ -13,7 +13,7 @@ use gtk::graphene;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::TabStrip;
+use super::{TabStrip, TabView};
 use crate::window::menu_popover::MenuEntry;
 use crate::window::session::TabId;
 use crate::window::widget_tree::toggle_class;
@@ -65,11 +65,36 @@ impl TabStrip {
         }
     }
 
-    /// What follows the pointer once tab `id` leaves the strip: a picture
-    /// of `window`, which shows the tab.
-    pub(in crate::window) fn drag_icon(&self, id: TabId, window: &gtk::Widget) -> Option<gtk::Widget> {
-        self.tab_width(id)?;
-        Some(super::carried_window::carried_window(window))
+    /// Tab `id` as it follows the pointer out of the strip: the tab in
+    /// front, as wide as it is here, its title in the font drawn here.
+    pub(in crate::window) fn carried_tab(&self, id: TabId) -> Option<gtk::Widget> {
+        let width = self.tab_width(id)?;
+        let shown = self.imp().shown.borrow();
+        let (view, widget) = shown.iter().find(|(tab, _)| tab.id == id)?;
+        let font = title_font(widget);
+        #[expect(clippy::cast_possible_truncation, reason = "a tab's width")]
+        let width = width.round() as i32;
+        Some(super::carried_tab::carried_tab(
+            view,
+            Some(width),
+            font.as_ref(),
+            super::CARRIED_MARGIN,
+        ))
+    }
+
+    /// What the strip shows of tab `id`.
+    pub(in crate::window) fn tab_view(&self, id: TabId) -> Option<TabView> {
+        let shown = self.imp().shown.borrow();
+        shown
+            .iter()
+            .find(|(tab, _)| tab.id == id)
+            .map(|(tab, _)| tab.clone())
+    }
+
+    /// The font this strip draws tab titles in.
+    pub(super) fn strip_title_font(&self) -> Option<gtk::pango::FontDescription> {
+        let shown = self.imp().shown.borrow();
+        shown.first().and_then(|(_, widget)| title_font(widget))
     }
 
     /// Opens `entries` as a menu under tab `id` (`moveTabMenu` opens at
@@ -89,4 +114,12 @@ impl TabStrip {
         );
         self.show_menu(entries, corner);
     }
+}
+
+/// The font the title of the tab `widget` is drawn in.
+fn title_font(widget: &gtk::Box) -> Option<gtk::pango::FontDescription> {
+    crate::window::widget_tree::descendants::<gtk::Label>(widget)
+        .into_iter()
+        .find(|label| label.has_css_class("tab-title"))
+        .and_then(|label| label.pango_context().font_description())
 }
