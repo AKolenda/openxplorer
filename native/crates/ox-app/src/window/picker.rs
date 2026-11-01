@@ -115,6 +115,15 @@ impl ChoiceControl {
     }
 }
 
+/// How a dialog's choice is being made ([`BrowserWindow::run_choice`]).
+#[derive(Debug)]
+enum Choosing {
+    /// The accept button, Enter in File name, or Open with several items.
+    Accept,
+    /// A file activated by double-click, Enter or the address bar.
+    Activated(Box<Entry>),
+}
+
 /// A window's file dialog: the call and the bar's controls.
 #[derive(Debug)]
 pub(crate) struct Picker {
@@ -545,36 +554,11 @@ impl BrowserWindow {
     }
 
     /// A file was activated (double-click, Enter or typed in the address
-    /// bar): it is the choice in an Open dialog, and the file to replace,
-    /// after asking, in a Save dialog.
+    /// bar): it is the choice in an Open dialog, and the file to save in
+    /// a Save dialog, checked as the Save button checks it and replaced
+    /// only after asking ([`Self::run_choice`]).
     pub(super) fn pick_activated(&self, entry: &Entry) {
-        let Some(picker) = self.picker() else {
-            return;
-        };
-        match &picker.request.mode {
-            ChooserMode::Open { directory: false, .. } => {
-                // The activated file is the choice, selected or not.
-                match self.local_path(&entry.uri) {
-                    Some(path) if !picker.is_busy() && !picker.reply.is_answered() => {
-                        self.finish_picking(&picker, vec![path]);
-                    }
-                    Some(_) => {}
-                    None => self.show_message(&not_local()),
-                }
-            }
-            ChooserMode::Save { .. } => {
-                let Some(path) = self.local_path(&entry.uri) else {
-                    return self.show_message(&not_local());
-                };
-                if let Some(name) = &picker.name {
-                    name.set_text(&entry.name);
-                }
-                if !picker.is_busy() && !picker.reply.is_answered() {
-                    self.confirm_replace(&picker, vec![path], std::slice::from_ref(&entry.name));
-                }
-            }
-            ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => {}
-        }
+        self.run_choice(Choosing::Activated(Box::new(entry.clone())));
     }
 
     /// Open with several items selected accepts them in an Open dialog.
@@ -592,11 +576,23 @@ impl BrowserWindow {
     /// window that then refused to close (an update installing, files
     /// being written) kept a dead dialog whose Save, Cancel and Escape
     /// did nothing.
+    ///
+    /// This is the one place a dialog sends its answer (the portal's own
+    /// Close aside, which ox-core answers), and so the one place its folder
+    /// is remembered: only for a choice really sent, never for a close
+    /// that was refused or a dialog the portal closed first.
     pub(super) fn end_picking_on_close(&self) {
-        if let Some(picker) = self.imp().picker.borrow().as_ref() {
-            let answer = picker.pending.take().unwrap_or(ChooserAnswer::Cancelled);
-            picker.reply.send(&answer);
+        let Some(picker) = self.picker() else {
+            return;
+        };
+        if picker.reply.is_answered() {
+            return;
         }
+        let answer = picker.pending.take().unwrap_or(ChooserAnswer::Cancelled);
+        if let ChooserAnswer::Chosen { locations, .. } = &answer {
+            self.remember_folder(&picker, locations);
+        }
+        picker.reply.send(&answer);
     }
 
     /// The window refused to close: the dialog stays usable, its choice
@@ -743,13 +739,22 @@ impl BrowserWindow {
             .set_tooltip_text(has_no_path.then(not_local).as_deref());
     }
 
-    /// The accept button: works out the choice and answers, asking first
-    /// before replacing files.
-    ///
-    /// What is on disk is checked off the main thread ([`probe`]), and
-    /// the accept button waits meanwhile, so a share that stopped
-    /// answering cannot freeze the app.
+    /// The accept button, Enter in File name, and Open with several
+    /// items selected: works out the choice and answers, asking first
+    /// before replacing files ([`Self::run_choice`]).
     fn accept_choice(&self) {
+        self.run_choice(Choosing::Accept);
+    }
+
+    /// Every way a dialog's choice is made goes through here: the accept
+    /// button, Enter in File name, Open with several items, and a file
+    /// activated by double-click, Enter or the address bar. The choice is
+    /// worked out off the main thread with the same checks, a Save's
+    /// write test included, while the accept button waits, so a share
+    /// that stopped answering cannot freeze the app; then the dialog
+    /// answers ([`Self::finish_picking`]), asks before replacing, or says
+    /// why it cannot.
+    fn run_choice(&self, choosing: Choosing) {
         let Some(picker) = self.picker() else {
             return;
         };
@@ -762,9 +767,15 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                let outcome = window.work_out_choice(&picker).await;
+                let outcome = match &choosing {
+                    Choosing::Accept => window.work_out_choice(&picker).await,
+                    Choosing::Activated(entry) => window.activated_choice(&picker, entry).await,
+                };
                 picker.checking.set(false);
                 window.update_picker();
+                if picker.reply.is_answered() {
+                    return;
+                }
                 match outcome {
                     Ok(locations) if !locations.is_empty() => window.finish_picking(&picker, locations),
                     Err(message) if !message.is_empty() => window.show_message(&message),
@@ -773,6 +784,28 @@ impl BrowserWindow {
                 }
             }
         ));
+    }
+
+    /// The locations an activated file chooses: the file itself in an
+    /// Open dialog; in a Save dialog the file to replace, checked as
+    /// [`Self::checked_save_target`] checks a typed name.
+    async fn activated_choice(&self, picker: &Rc<Picker>, entry: &Entry) -> Result<Vec<PathBuf>, String> {
+        match &picker.request.mode {
+            ChooserMode::Open { directory: false, .. } => {
+                // The activated file is the choice, selected or not.
+                let path = self.local_path_now(&entry.uri).await.ok_or_else(not_local)?;
+                Ok(vec![path])
+            }
+            ChooserMode::Save { .. } => {
+                let path = self.local_path_now(&entry.uri).await.ok_or_else(not_local)?;
+                if let Some(name) = &picker.name {
+                    name.set_text(&entry.name);
+                }
+                let folder = path.parent().map(Path::to_path_buf).ok_or_else(not_local)?;
+                self.checked_save_target(picker, folder, entry.name.clone()).await
+            }
+            ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => Ok(Vec::new()),
+        }
     }
 
     /// The locations the accept button chooses, as [`Self::accept_choice`]
@@ -794,11 +827,13 @@ impl BrowserWindow {
             ChooserMode::Save { .. } => self.chosen_save(picker).await,
             ChooserMode::SaveFiles { names } => {
                 let folder = self.chosen_folder(&selected).await?;
+                // The names as the caller gave them, bytes and all; their
+                // text is only for what the dialog says.
                 let mut existing = Vec::new();
                 for name in names {
                     match probe(&folder.join(name)).await {
                         Probe::NoAnswer => return Err(not_answering(&folder)),
-                        found if found.exists() => existing.push(name.to_string_lossy().into_owned()),
+                        found if found.exists() => existing.push(name),
                         _ => {}
                     }
                 }
@@ -807,8 +842,13 @@ impl BrowserWindow {
                 let first = names.first().map(|name| name.to_string_lossy().into_owned());
                 write_refusal(test_folder(&folder).await, &folder, &first.unwrap_or_default())?;
                 for name in &existing {
-                    write_refusal(test_replace(&folder.join(name)).await, &folder, name)?;
+                    let test = test_replace(&folder.join(name)).await;
+                    write_refusal(test, &folder, &name.to_string_lossy())?;
                 }
+                let existing: Vec<String> = existing
+                    .iter()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .collect();
                 if existing.is_empty() {
                     return Ok(vec![folder]);
                 }
@@ -923,6 +963,23 @@ impl BrowserWindow {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         let name = checked_name(&saved_name(&written, picker.chosen_type())).map_err(|_| bad_name())?;
+        self.checked_save_target(picker, folder, name).await
+    }
+
+    /// The file `name` in `folder` a Save dialog answers with, by the same
+    /// checks whether it was typed or activated: a folder of that name
+    /// opens; the caller must be able to write there ([`test_write`],
+    /// which also finds a file another program creates meanwhile); an
+    /// existing file is replaced only after asking.
+    async fn checked_save_target(
+        &self,
+        picker: &Rc<Picker>,
+        folder: PathBuf,
+        name: String,
+    ) -> Result<Vec<PathBuf>, String> {
+        let Some(name_box) = &picker.name else {
+            return Ok(Vec::new());
+        };
         let target = folder.join(&name);
         let found = probe(&target).await;
         if found == Probe::NoAnswer {
@@ -1116,7 +1173,10 @@ impl BrowserWindow {
             self,
             async move {
                 let writable = is_open && all_writable(&locations).await;
-                window.remember_folder(&picker, &locations);
+                // The portal may have closed the dialog meanwhile.
+                if picker.reply.is_answered() {
+                    return;
+                }
                 // The answer waits for the window to close
                 // ([`BrowserWindow::end_picking_on_close`]).
                 picker.pending.replace(Some(ChooserAnswer::Chosen {
@@ -1132,7 +1192,8 @@ impl BrowserWindow {
 
     /// Remembers where the user chose `locations` as the caller's last
     /// folder, shared by its Open and Save dialogs, as Windows does when a
-    /// dialog is answered (never when it is cancelled): the folder of the
+    /// dialog is answered (never when it is cancelled; called only as the
+    /// choice is sent, [`Self::end_picking_on_close`]): the folder of the
     /// file chosen, the folder chosen, or for a folder dialog the folder
     /// shown. A folder is kept by its own location, so a share is
     /// remembered as `smb://…` rather than its FUSE path, and without any
@@ -2041,6 +2102,117 @@ mod tests {
         );
         offline.test.window.cancel_picking();
         Portal::finish(&answer);
+    }
+
+    /// A file chosen in a Save dialog by double-click, Enter or the
+    /// address bar goes through the same check as the Save button: a
+    /// read-only file is reported, not offered for replacing.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn activating_a_read_only_file_in_a_save_dialog_says_so() {
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = Fixture::empty();
+        fixture.write("signed.txt");
+        let signed = fixture.path("signed.txt");
+        fs::set_permissions(&signed, fs::Permissions::from_mode(0o444)).expect("read-only");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "SaveFile", Vec::new());
+        let test = &portal.test;
+        let window = &test.window;
+
+        window.activate_item(test.position_of("signed.txt"));
+        wait_until("the dialog to say so", || {
+            window
+                .shown_message()
+                .contains("“signed.txt” is set to read-only")
+        });
+        assert!(window.dialog_layer().shown().is_none(), "no replace question");
+        window.submit_address(&signed.display().to_string());
+        wait_until("the check of the typed file", || {
+            window.picker().is_some_and(|picker| !picker.checking.get())
+        });
+        settle();
+        assert!(window.dialog_layer().shown().is_none(), "nor for the address bar");
+        assert!(answer.borrow().is_none(), "nothing is answered");
+
+        fs::set_permissions(&signed, fs::Permissions::from_mode(0o644)).expect("writable again");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// Save files checks the file it would replace by its own name, also
+    /// one that is not UTF-8.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn saving_files_checks_a_name_that_is_not_utf8() {
+        use std::os::unix::ffi::OsStrExt;
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = Fixture::empty();
+        let name = std::ffi::OsStr::from_bytes(b"caf\xe9.txt");
+        let existing = fixture.root().join(name);
+        fs::write(&existing, "signed").expect("a file");
+        fs::set_permissions(&existing, fs::Permissions::from_mode(0o444)).expect("read-only");
+        let portal = Portal::new();
+        let names: Vec<Vec<u8>> = vec![b"caf\xe9.txt\0".to_vec()];
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFiles",
+            vec![("files", names.to_variant())],
+        );
+        let window = &portal.test.window;
+
+        window.picker().expect("a picker").accept.emit_clicked();
+        wait_until("the dialog to say so", || {
+            window.shown_message().contains("is set to read-only")
+        });
+        assert!(window.dialog_layer().shown().is_none(), "no replace question");
+        assert!(answer.borrow().is_none(), "nothing is answered");
+
+        fs::set_permissions(&existing, fs::Permissions::from_mode(0o644)).expect("writable again");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// The folder is remembered only when the choice is really sent: a
+    /// dialog the portal closes while it still checks the file chosen
+    /// remembers nothing.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_dialog_closed_before_it_answers_remembers_nothing() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        // The check of whether the caller may write the file waits.
+        super::probe::stop_answering(&fixture.path("notes.txt"));
+
+        test.window.activate_item(test.position_of("notes.txt"));
+        let closing = portal.frontend.call_future(
+            Some(&portal.backend_name),
+            "/org/freedesktop/portal/desktop/request/1_1/picker",
+            "org.freedesktop.impl.portal.Request",
+            "Close",
+            None,
+            None,
+            gio::DBusCallFlags::NO_AUTO_START,
+            5000,
+        );
+        wait_for("the portal's Close", closing).expect("the portal may close it");
+        assert_eq!(Portal::finish(&answer).0, ox_core::integration::RESPONSE_OTHER);
+        wait_for(
+            "the write check to end",
+            glib::timeout_future(super::probe::PROBE_TIMEOUT * 3),
+        );
+
+        let memory = test
+            .settings_directory()
+            .join(ox_core::integration::DIALOG_FOLDERS_FILE);
+        assert!(!memory.exists(), "a dialog that did not answer remembers nothing");
     }
 
     /// A file another program creates while Save checks the folder is
