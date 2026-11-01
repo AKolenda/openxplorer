@@ -33,6 +33,14 @@ const DEFAULT_SIZE: WindowSize = WindowSize {
 };
 
 impl BrowserWindow {
+    /// Shows a window a dragged tab was torn out into, at the size it was
+    /// given, remembering its size and session like any new window.
+    pub(crate) fn present_as_torn_out(&self) {
+        self.present();
+        self.remember_size(false);
+        self.imp().remembers_session.set(true);
+    }
+
     /// Shows a new window at the saved size and saves its size from now
     /// on.
     pub(crate) fn present_as_new_window(&self) {

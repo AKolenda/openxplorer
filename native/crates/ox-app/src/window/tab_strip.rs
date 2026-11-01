@@ -7,7 +7,7 @@
 //! ([`TabLayout`](super::tab_layout::TabLayout)), so opening many tabs
 //! never widens the window. The whole tab is the click target, as in
 //! app.js: it is one widget announced as a tab of the "Folder tabs" list
-//! with its selected state; a click or Enter shows it, a double-click
+//! with its selected state; a press or Enter shows it, a double-click
 //! opens a copy of it and a middle-click closes it; a right-click opens
 //! the tab's menu ([`super::tab_menu`]). The close button inside claims
 //! its own clicks. Only the tab in front takes keyboard focus (a roving
@@ -34,7 +34,6 @@ use super::gestures;
 use super::menu_popover::MenuEntry;
 use super::session::TabId;
 use super::tab_menu::tab_menu;
-use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
 
 /// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
@@ -198,16 +197,38 @@ impl TabStrip {
         imp.waiting_tabs.replace(None);
         // A tab being shown by the keyboard keeps focus in the strip.
         let had_focus = imp.tab_list.focus_child().is_some();
-        remove_children(&*imp.tab_list);
+        // A tab that only came to the front or moved keeps its widget, so a
+        // press on it, which shows it (as Chrome does), is not ended by
+        // drawing the strip anew.
+        let mut old: Vec<(TabView, gtk::Box)> = imp.shown.take();
         let mut active = None;
         let mut shown = Vec::with_capacity(tabs.len());
+        let mut previous: Option<gtk::Widget> = None;
         for tab in tabs {
-            let widget = tab_widget(tab);
-            imp.tab_list.append(&widget);
+            let kept = old
+                .iter()
+                .position(|(view, _)| is_same_but_for_front(view, tab))
+                .map(|at| old.remove(at).1);
+            let widget = match kept {
+                Some(widget) => {
+                    show_in_front(&widget, tab.active);
+                    widget
+                }
+                None => tab_widget(tab),
+            };
+            if widget.parent().is_some() {
+                imp.tab_list.reorder_child_after(&widget, previous.as_ref());
+            } else {
+                imp.tab_list.insert_child_after(&widget, previous.as_ref());
+            }
+            previous = Some(widget.clone().upcast());
             if tab.active {
                 active = Some(widget.clone());
             }
             shown.push((tab.clone(), widget));
+        }
+        for (_, gone) in old {
+            imp.tab_list.remove(&gone);
         }
         imp.shown.replace(shown);
         let Some(active) = active else {
@@ -281,6 +302,23 @@ impl TabStrip {
             .expect("constructed builds the menu")
             .clone()
     }
+}
+
+/// Whether `old` shows `new` but for which tab is in front: its widget can
+/// stay.
+fn is_same_but_for_front(old: &TabView, new: &TabView) -> bool {
+    TabView {
+        active: new.active,
+        ..old.clone()
+    } == *new
+}
+
+/// Marks the tab `widget` as in front, or not: its look, its keyboard
+/// focus (a roving tab stop) and its selected state.
+fn show_in_front(widget: &gtk::Box, active: bool) {
+    super::widget_tree::toggle_class(widget, "active", active);
+    widget.set_focusable(active);
+    widget.update_state(&[gtk::accessible::State::Selected(Some(active))]);
 }
 
 fn tab_icon(icon: Art) -> ArtImage {
@@ -378,23 +416,23 @@ fn run_on(widget: Option<gtk::Widget>, action: WindowAction, id: &glib::Variant)
     }
 }
 
-/// A primary click anywhere on the tab shows it, on release as `click` in
-/// app.js. Showing a tab draws the strip anew, which on the press would
-/// cancel a drag of the tab before it starts; a drag cancels the click, so
-/// a dragged tab is not shown (TAB-004).
+/// A primary press anywhere on the tab shows it at once, as Chrome and
+/// Windows Explorer do, so a tab that is dragged is the one in front from
+/// the start (TAB-004). Showing it keeps the tab widgets (`set_tabs`), so
+/// the press goes on into a drag.
 fn select_on_click(id: glib::Variant) -> gtk::GestureClick {
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_PRIMARY);
-    click.connect_released(move |gesture, _, _, _| {
+    click.connect_pressed(move |gesture, _, _, _| {
         run_on(gesture.widget(), WindowAction::SelectTab, &id);
     });
     click
 }
 
 /// A double-click on a tab opens a copy of it in front, as in Dolphin
-/// (TAB-014). The strip counts the clicks itself: the first click shows
-/// the tab, which builds the tabs anew under the pointer, and GTK then
-/// counts the second press as a first one. Claiming the second press keeps
+/// (TAB-014). The strip counts the clicks itself: the first press shows
+/// the tab, and when that draws a tab anew under the pointer, GTK counts
+/// the second press as a first one. Claiming the second press keeps
 /// it from the title bar, whose double-click maximizes the window, and
 /// from the tab's own click. The close button claims its own presses, so
 /// a double-click on it never reaches the strip.

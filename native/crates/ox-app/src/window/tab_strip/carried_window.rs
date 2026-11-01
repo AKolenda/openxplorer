@@ -1,141 +1,108 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The small window that follows a tab dragged out of its strip, as in
-//! Chrome (TAB-034): the tab's icon and title over a live picture of the
-//! window's contents, a quarter of its size or so. Over another window's
-//! strip the tab itself follows the pointer instead ([`carried_tab`]).
+//! What follows the pointer while GTK's drag and drop carries a tab out of
+//! its strip, as Chrome's drag does where the desktop cannot move a real
+//! window with it (TAB-034): a picture of the whole window, title bar and
+//! all, [`HEIGHT`] pixels tall, Chrome's being 200 (`kTargetHeightDip`).
+//! Over its own strip it goes away, and over another window's strip it hangs
+//! below the pointer, by the drag's hotspot alone.
 //!
-//! GTK cannot move a real window with the pointer during a drag on Wayland
-//! (it has no `xdg-toplevel-drag-v1`), so the drag icon stands in for it.
-//! [`Scaled`] gives the picture its reduced size: a `GtkPicture` asks for
-//! its paintable's own size, which a window's contents would make as large
-//! as the window.
+//! The picture is drawn once, into a texture, when the drag starts: the
+//! window shows the dragged tab then, and a texture draws the same on any
+//! renderer, where a live picture of a widget in another window did not.
 
 use gtk::prelude::*;
-use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
 
-use super::{tab_icon, TabView};
+/// How tall the picture of the window is.
+const HEIGHT: f64 = 240.0;
 
-/// How wide the window that follows a dragged tab is.
-const WIDTH: i32 = 320;
-
-mod imp {
-    use std::cell::{Cell, RefCell};
-
-    use gtk::gdk;
-    use gtk::prelude::*;
-    use gtk::subclass::prelude::*;
-
-    /// Private state of [`super::Scaled`].
-    #[derive(Debug, Default)]
-    pub(crate) struct Scaled {
-        /// What is drawn, at any size.
-        pub(super) inner: RefCell<Option<gdk::Paintable>>,
-        /// The size it asks for.
-        pub(super) size: Cell<(i32, i32)>,
+/// The picture of `window` that follows a tab carried out of its strip:
+/// its title bar over its contents, drawn now. (A picture of the toplevel
+/// itself draws nothing, and one of a widget only shows its last drawing,
+/// which a change throws away.)
+pub(super) fn carried_window(window: &gtk::Widget) -> gtk::Widget {
+    let Some(window) = window.downcast_ref::<gtk::Window>() else {
+        return gtk::Box::new(gtk::Orientation::Vertical, 0).upcast();
+    };
+    let parts: Vec<gtk::Widget> = [window.titlebar(), window.child()]
+        .into_iter()
+        .flatten()
+        .collect();
+    let width = parts.iter().map(WidgetExt::width).max().unwrap_or(1).max(1);
+    let height = parts.iter().map(WidgetExt::height).sum::<i32>().max(1);
+    let scale = (HEIGHT / f64::from(height)).min(1.0);
+    let snapshot = gtk::Snapshot::new();
+    #[expect(clippy::cast_possible_truncation, reason = "a scale near 1")]
+    snapshot.scale(scale as f32, scale as f32);
+    // Drawn afresh: a widget's last drawing is gone once it changed, as
+    // the contents just did for the tab that came to the front.
+    for part in &parts {
+        window.snapshot_child(part, &snapshot);
     }
-
-    #[gtk::glib::object_subclass]
-    impl ObjectSubclass for Scaled {
-        const NAME: &'static str = "OxScaledPaintable";
-        type Type = super::Scaled;
-        type Interfaces = (gdk::Paintable,);
-    }
-
-    impl ObjectImpl for Scaled {}
-
-    impl gdk::subclass::paintable::PaintableImpl for Scaled {
-        fn intrinsic_width(&self) -> i32 {
-            self.size.get().0
-        }
-
-        fn intrinsic_height(&self) -> i32 {
-            self.size.get().1
-        }
-
-        fn flags(&self) -> gdk::PaintableFlags {
-            gdk::PaintableFlags::STATIC_SIZE
-        }
-
-        fn snapshot(&self, snapshot: &gdk::Snapshot, width: f64, height: f64) {
-            if let Some(inner) = self.inner.borrow().as_ref() {
-                inner.snapshot(snapshot, width, height);
-            }
-        }
-    }
-}
-
-glib::wrapper! {
-    /// A paintable drawn at a fixed size of its own, scaling another one,
-    /// whose changes it passes on.
-    pub(crate) struct Scaled(ObjectSubclass<imp::Scaled>)
-        @implements gdk::Paintable;
-}
-
-impl Scaled {
-    /// `inner`, asking for `width` × `height` pixels.
-    fn new(inner: &impl IsA<gdk::Paintable>, width: i32, height: i32) -> Self {
-        let scaled: Self = glib::Object::new();
-        scaled.imp().inner.replace(Some(inner.clone().upcast()));
-        scaled.imp().size.set((width, height));
-        inner.connect_invalidate_contents(glib::clone!(
-            #[weak]
-            scaled,
-            move |_| scaled.invalidate_contents()
-        ));
-        scaled
-    }
-}
-
-/// The tab `tab` itself, `width` wide, as it follows the pointer over
-/// another window's strip, which opens a gap for it.
-pub(super) fn carried_tab(tab: &TabView, width: i32) -> gtk::Widget {
-    let carried = gtk::Box::builder()
-        .spacing(super::ICON_TO_TITLE)
-        .width_request(width)
-        .css_classes(["tab", "active", "tab-drag-tab"])
-        .build();
-    carried.append(&tab_icon(tab.icon));
-    carried.append(
-        &gtk::Label::builder()
-            .label(&tab.title)
-            .xalign(0.0)
-            .hexpand(true)
-            .max_width_chars(1)
-            .ellipsize(gtk::pango::EllipsizeMode::End)
-            .css_classes(["tab-title"])
-            .build(),
+    let texture = snapshot.to_node().and_then(|node| {
+        let renderer = window.renderer()?;
+        Some(renderer.render_texture(&node, None))
+    });
+    #[expect(clippy::cast_possible_truncation, reason = "a picture's size")]
+    let size = (
+        (f64::from(width) * scale).round() as i32,
+        (f64::from(height) * scale).round() as i32,
     );
-    carried.upcast()
-}
-
-/// The window that follows tab `tab` out of its strip: its icon and title
-/// over a live picture of `content`, the window's contents.
-pub(super) fn carried_window(tab: &TabView, content: &gtk::Widget) -> gtk::Widget {
-    let window = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
+    let frame = gtk::Box::builder()
+        .width_request(size.0)
+        .height_request(size.1)
         .overflow(gtk::Overflow::Hidden)
         .css_classes(["tab-drag-window"])
         .build();
-    let header = gtk::Box::builder()
-        .spacing(super::ICON_TO_TITLE)
-        .css_classes(["tab-drag-header"])
-        .build();
-    header.append(&tab_icon(tab.icon));
-    header.append(
-        &gtk::Label::builder()
-            .label(&tab.title)
-            .xalign(0.0)
-            .hexpand(true)
-            .max_width_chars(1)
-            .ellipsize(gtk::pango::EllipsizeMode::End)
-            .build(),
-    );
-    window.append(&header);
-    let (width, height) = (content.width().max(1), content.height().max(1));
-    let live = gtk::WidgetPaintable::new(Some(content));
-    let picture = gtk::Picture::for_paintable(&Scaled::new(&live, WIDTH, WIDTH * height / width));
-    picture.set_can_shrink(false);
-    window.append(&picture);
-    window.upcast()
+    if let Some(texture) = texture {
+        let picture = gtk::Picture::for_paintable(&texture);
+        picture.set_can_shrink(true);
+        picture.set_hexpand(true);
+        frame.append(&picture);
+    }
+    frame.upcast()
+}
+
+#[cfg(test)]
+mod tests {
+    use gtk::gdk;
+    use gtk::prelude::*;
+
+    use crate::test_support::harness::{wait_for_frames, Fixture, TestWindow};
+
+    /// The picture carried out of the strip is the window as drawn now,
+    /// title bar and contents, about 240 pixels tall, not an empty box:
+    /// a picture of the toplevel, or of a widget that just changed, drew
+    /// nothing.
+    ///
+    /// parity: TAB-034
+    #[gtk::test]
+    fn the_carried_picture_shows_the_whole_window() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        wait_for_frames(&test.window, 3);
+
+        let frame = super::carried_window(test.window.upcast_ref());
+        let texture = frame
+            .first_child()
+            .and_downcast::<gtk::Picture>()
+            .and_then(|picture| picture.paintable())
+            .and_downcast::<gdk::Texture>()
+            .expect("the picture is drawn into a texture");
+        let (width, height) = (texture.width(), texture.height());
+        let mut pixels = vec![0_u8; usize::try_from(width * height * 4).expect("a small picture")];
+        texture.download(&mut pixels, usize::try_from(width * 4).expect("a small picture"));
+        let colours: std::collections::BTreeSet<[u8; 3]> = pixels
+            .chunks(4)
+            .step_by(7)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2]])
+            .collect();
+
+        assert!((235..=245).contains(&height), "about 240 pixels tall: {height}");
+        assert!(width > height, "window-shaped: {width}x{height}");
+        assert!(
+            colours.len() > 40,
+            "it shows the window, not a blank box: {} colours",
+            colours.len()
+        );
+    }
 }

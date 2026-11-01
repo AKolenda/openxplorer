@@ -162,7 +162,7 @@ impl BrowserWindow {
                 if let Some(width) = source.tab_strip().tab_width(tab) {
                     strip.open_gap(in_strip, width);
                 }
-                source.show_carried(CarriedLook::Tab);
+                source.show_carried(CarriedLook::Below);
             }
             Some(TabDropSpot::TearOut) | None => self.show_tab_away(source),
         }

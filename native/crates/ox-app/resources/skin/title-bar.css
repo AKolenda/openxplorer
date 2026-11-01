@@ -45,27 +45,23 @@ window.ox:backdrop .tab:not(.active),
 window.ox:backdrop .ox-titlebar button.caption { color: @ox_text_tertiary; }
 
 /* ---- Dragging tabs and dropping files on them (TAB-018, TAB-032 to
-   TAB-034; style.css .tab-drag-source). Along a strip the tabs make room
-   for a dragged tab, so there is no insertion mark. ---- */
-.tab.tab-drag-source { opacity: 0.6; }
+   TAB-034). Along a strip the tabs make room for a dragged tab, so there is
+   no insertion mark. ---- */
+/* The dragged tab is lifted over the others it slides across. */
+.tab.tab-dragging { box-shadow: 0 -1px 2px @ox_tab_shadow, 0 2px 10px @ox_shadow_key; }
+/* Out of its strip, the tab is gone from it, as in Chrome. */
+.tab.tab-drag-source { opacity: 0; }
 .tab.file-drop-active { outline: 2px solid @ox_accent; outline-offset: -2px; }
-/* The small window that follows a tab dragged out of its strip, fading in
+/* The picture of the window that follows a tab out of its strip, fading in
    (no fade while the desktop turns animations off). */
 .tab-drag-window {
   border: 1px solid @ox_border;
-  border-radius: 8px;
+  border-radius: 6px;
   background-color: @ox_bg;
-  color: @ox_text;
-  animation: tab-drag-window-appears 120ms ease-out;
-}
-.tab-drag-window > .tab-drag-header {
-  min-height: 32px;
-  padding: 0 12px;
-  background-color: @ox_chrome;
+  box-shadow: 0 4px 16px @ox_shadow_ambient;
+  animation: tab-drag-window-appears 100ms ease-out;
 }
 @keyframes tab-drag-window-appears { from { opacity: 0; } to { opacity: 1; } }
-/* The tab itself, over another window's strip. */
-.tab.tab-drag-tab { border-radius: 8px; border: 1px solid @ox_border; }
 
 /* ---- New tab, drag area, open windows ---- */
 .ox-titlebar button.newtab { min-width: 38px; min-height: 34px; margin: 0 3px 0 5px; }

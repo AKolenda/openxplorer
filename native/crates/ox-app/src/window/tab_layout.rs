@@ -180,10 +180,11 @@ mod imp {
                 let now = super::frame_time(widget);
                 let width_of_tab = |tab: &gtk::Widget| f64::from(width_of(tab, each));
                 for (tab, left) in live.placements(f64::from(TAB_GAP), f64::from(width), now, &width_of_tab) {
+                    // At sub-pixel positions, so slides glide.
                     #[expect(clippy::cast_possible_truncation, reason = "tab positions are small")]
-                    let x = left.round() as i32;
-                    let placement = gtk::Allocation::new(x, 0, width_of(&tab, each), height);
-                    tab.size_allocate(&placement, -1);
+                    let at = gtk::graphene::Point::new(left as f32, 0.0);
+                    let transform = gtk::gsk::Transform::new().translate(&at);
+                    tab.allocate(width_of(&tab, each), height, -1, Some(transform));
                 }
                 return;
             }
@@ -267,6 +268,16 @@ impl TabLayout {
         let frame = self.frame(&row);
         if let Some(live) = self.imp().live.borrow_mut().as_mut() {
             live.follow(left, frame, &|tab| self.width_of(tab));
+        }
+        self.animate();
+    }
+
+    /// The dragged tab leaves the strip: the others close up.
+    pub(crate) fn detach(&self) {
+        let Some(row) = self.widget() else { return };
+        let frame = self.frame(&row);
+        if let Some(live) = self.imp().live.borrow_mut().as_mut() {
+            live.detach(frame, &|tab| self.width_of(tab));
         }
         self.animate();
     }

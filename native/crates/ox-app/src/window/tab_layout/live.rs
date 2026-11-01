@@ -11,10 +11,15 @@
 //! other positions. A release slides the dragged tab into its place before
 //! the strip takes the new order.
 //!
-//! The slides last [`SLIDE`] and ease out, driven by the widget's frame
-//! clock. While the desktop turns animations off
-//! (`gtk-enable-animations`), tabs move into place at once; the dragged tab
-//! still follows the pointer.
+//! The slides last [`SLIDE`] and ease out as Chrome's tab strip does
+//! (`BoundsAnimator`: 200 ms, `gfx::Tween::EASE_OUT`), driven by the
+//! widget's frame clock and drawn at sub-pixel positions. A tab moves to
+//! another place only after the pointer went [`REORDER_HYSTERESIS`] since
+//! the last move (Chrome's `kHorizontalMoveThreshold`), so the order does
+//! not flicker. Once the tab leaves the strip it vanishes there and the
+//! others close up, as Chrome takes a dragged-out tab off its strip. While
+//! the desktop turns animations off (`gtk-enable-animations`), tabs move
+//! into place at once; the dragged tab still follows the pointer.
 
 use std::time::Duration;
 
@@ -25,7 +30,14 @@ use gtk::prelude::*;
 pub(super) type Width<'a> = &'a dyn Fn(&gtk::Widget) -> f64;
 
 /// How long a tab takes to slide into its place.
-pub(super) const SLIDE: Duration = Duration::from_millis(180);
+pub(super) const SLIDE: Duration = Duration::from_millis(200);
+
+/// How far the pointer must go after one move of the order before the
+/// next, for a tab 215 pixels wide; narrower tabs need less.
+const REORDER_HYSTERESIS: f64 = 16.0;
+
+/// A tab's width when there is room, which [`REORDER_HYSTERESIS`] is for.
+const STANDARD_WIDTH: f64 = 215.0;
 
 /// One tab sliding into its place: its offset from there, shrinking to
 /// nothing.
@@ -40,14 +52,15 @@ struct Slide {
 }
 
 impl Slide {
-    /// The offset at frame time `now`, easing out (a cubic ease-out).
+    /// The offset at frame time `now`, easing out as Chrome's
+    /// `EASE_OUT` (1 - (1 - t)²).
     fn offset(self, now: i64) -> f64 {
         if self.is_done(now) {
             return 0.0;
         }
         #[expect(clippy::cast_precision_loss, reason = "a slide lasts a fraction of a second")]
         let progress = ((now - self.start) as f64 / self.length as f64).clamp(0.0, 1.0);
-        self.from * (1.0 - progress).powi(3)
+        self.from * (1.0 - progress).powi(2)
     }
 
     fn is_done(self, now: i64) -> bool {
@@ -64,8 +77,12 @@ enum Shape {
         dragged: gtk::Widget,
         /// Where the dragged tab's left edge would be, unclamped.
         left: f64,
+        /// Where it was when the order last changed.
+        reordered_at: f64,
         /// Released: the dragged tab slides into its place like the others.
         settling: bool,
+        /// Out of the strip: the others close up where it was.
+        detached: bool,
     },
     /// A tab from another window would go in at `index`, so a gap of
     /// `width` opens there.
@@ -102,8 +119,15 @@ pub(super) struct LiveTabs {
 }
 
 /// The left edge of each of `order`'s tabs when packed from 0 with `gap`
-/// pixels between them, and the `extra` gap of a [`Shape::Gap`].
-fn packed(order: &[gtk::Widget], gap: f64, extra: Option<(usize, f64)>, width: Width) -> Vec<f64> {
+/// pixels between them, the `extra` gap of a [`Shape::Gap`], and no room
+/// for a `skipped` tab.
+fn packed(
+    order: &[gtk::Widget],
+    gap: f64,
+    extra: Option<(usize, f64)>,
+    skipped: Option<&gtk::Widget>,
+    width: Width,
+) -> Vec<f64> {
     let mut x = 0.0;
     order
         .iter()
@@ -115,7 +139,9 @@ fn packed(order: &[gtk::Widget], gap: f64, extra: Option<(usize, f64)>, width: W
                 }
             }
             let left = x;
-            x += width(tab) + gap;
+            if skipped != Some(tab) {
+                x += width(tab) + gap;
+            }
             left
         })
         .collect()
@@ -129,7 +155,9 @@ impl LiveTabs {
             shape: Shape::Dragging {
                 dragged,
                 left,
+                reordered_at: left,
                 settling: false,
+                detached: false,
             },
             slides: Vec::new(),
             tick: None,
@@ -157,6 +185,7 @@ impl LiveTabs {
             Shape::Dragging {
                 dragged,
                 settling: false,
+                detached: false,
                 ..
             } => Some(dragged),
             _ => None,
@@ -194,6 +223,8 @@ impl LiveTabs {
             dragged,
             left,
             settling: false,
+            detached: false,
+            ..
         } = &self.shape
         {
             if dragged == tab {
@@ -215,7 +246,15 @@ impl LiveTabs {
             Shape::Gap { index, width } if index <= self.order.len() => Some((index, width)),
             _ => None,
         };
-        packed(&self.order, gap, extra, width)
+        let skipped = match &self.shape {
+            Shape::Dragging {
+                dragged,
+                detached: true,
+                ..
+            } => Some(dragged),
+            _ => None,
+        };
+        packed(&self.order, gap, extra, skipped, width)
     }
 
     /// Each tab and its left edge at frame time `now`, for the layout.
@@ -275,18 +314,30 @@ impl LiveTabs {
         let Shape::Dragging {
             dragged,
             left: shown_left,
+            reordered_at,
             settling,
+            detached,
         } = &mut self.shape
         else {
             return false;
         };
         *shown_left = left;
+        let reordered_at = *reordered_at;
+        let was_away = *detached;
         if *settling {
             // Back in the strip before it slid back: it follows again.
             *settling = false;
             self.on_settled = None;
         }
         let dragged = dragged.clone();
+        if was_away {
+            // Back in the strip: the others open up for it again.
+            self.rearrange(frame, width, |live| {
+                if let Shape::Dragging { detached, .. } = &mut live.shape {
+                    *detached = false;
+                }
+            });
+        }
         let dragged_width = width(&dragged);
         let left = left.clamp(0.0, (row - dragged_width).max(0.0));
         let mut order = self.order.clone();
@@ -294,7 +345,7 @@ impl LiveTabs {
             return false;
         };
         loop {
-            let slots = packed(&order, gap, None, width);
+            let slots = packed(&order, gap, None, None, width);
             let middle = |index: usize| slots[index] + width(&order[index]) / 2.0;
             if at + 1 < order.len() && left + dragged_width > middle(at + 1) {
                 order.swap(at, at + 1);
@@ -309,8 +360,26 @@ impl LiveTabs {
         if order == self.order {
             return false;
         }
-        self.rearrange(frame, width, |live| live.order = order);
+        let hysteresis = REORDER_HYSTERESIS * dragged_width / STANDARD_WIDTH;
+        if (left - reordered_at).abs() <= hysteresis && !was_away {
+            return false;
+        }
+        self.rearrange(frame, width, |live| {
+            live.order = order;
+            if let Shape::Dragging { reordered_at, .. } = &mut live.shape {
+                *reordered_at = left;
+            }
+        });
         true
+    }
+
+    /// The dragged tab leaves the strip: the others close up where it was.
+    pub(super) fn detach(&mut self, frame: (f64, f64, i64, i64), width: Width) {
+        self.rearrange(frame, width, |live| {
+            if let Shape::Dragging { detached, .. } = &mut live.shape {
+                *detached = true;
+            }
+        });
     }
 
     /// Opens the gap at `index`, `width` wide.
@@ -349,7 +418,12 @@ impl LiveTabs {
         self.rearrange(frame, width, |live| {
             live.order = order;
             match &mut live.shape {
-                Shape::Dragging { settling, .. } => *settling = true,
+                Shape::Dragging {
+                    settling, detached, ..
+                } => {
+                    *settling = true;
+                    *detached = false;
+                }
                 Shape::Gap { index, .. } => *index = usize::MAX,
             }
         });
@@ -390,4 +464,30 @@ pub(super) fn frame_time(widget: &impl IsA<gtk::Widget>) -> i64 {
     widget
         .frame_clock()
         .map_or_else(glib::monotonic_time, |clock| clock.frame_time())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A tab slides as Chrome's tab strip slides tabs: 200 ms, easing out
+    /// as `gfx::Tween::EASE_OUT` (1 - (1 - t)²), so halfway through it has
+    /// three quarters of the way behind it.
+    ///
+    /// parity: TAB-032
+    #[test]
+    fn a_tab_slides_for_200_ms_easing_out_as_chrome() {
+        let length = i64::try_from(SLIDE.as_micros()).expect("a short slide");
+        let slide = Slide {
+            from: 100.0,
+            start: 0,
+            length,
+        };
+
+        assert_eq!(SLIDE, Duration::from_millis(200));
+        assert!((slide.offset(0) - 100.0).abs() < 1e-9);
+        assert!((slide.offset(length / 2) - 25.0).abs() < 1e-9);
+        assert!(slide.offset(length).abs() < 1e-9);
+        assert!(slide.is_done(length));
+    }
 }

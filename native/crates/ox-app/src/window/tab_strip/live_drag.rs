@@ -16,6 +16,9 @@ use super::TabStrip;
 use crate::window::session::TabId;
 use crate::window::tab_layout::{TabLayout, TAB_GAP};
 
+/// The class of the tab that follows the pointer, which lifts it.
+const DRAGGING_CLASS: &str = "tab-dragging";
+
 /// Where a released tab went: the tab, and the tab it now comes before, or
 /// `None` at the end.
 pub(in crate::window) type LiveMove = (TabId, Option<TabId>);
@@ -46,14 +49,6 @@ impl TabStrip {
     #[cfg(test)]
     pub(in crate::window) fn tab_widget_of(&self, id: TabId) -> Option<gtk::Widget> {
         self.widget_of(id)
-    }
-
-    /// Draws tab `id` as the active tab and the others as not, while a
-    /// drag keeps the tab widgets.
-    pub(in crate::window) fn mark_active(&self, id: TabId) {
-        for (tab, widget) in self.imp().shown.borrow().iter() {
-            crate::window::widget_tree::toggle_class(widget, "active", tab.id == id);
-        }
     }
 
     /// The tab whose widget is `widget`.
@@ -132,6 +127,7 @@ impl TabStrip {
         for tab in &order {
             tab.set_has_tooltip(false);
         }
+        widget.add_css_class(DRAGGING_CLASS);
         // Drawn last, so it slides over the others.
         let list = self.imp().tab_list.get();
         list.reorder_child_after(&widget, list.last_child().as_ref());
@@ -179,6 +175,20 @@ impl TabStrip {
             }
             done(moved);
         });
+    }
+
+    /// The dragged tab `id` leaves the strip: it vanishes there and the
+    /// others close up.
+    pub(in crate::window) fn detach_tab(&self, id: TabId) {
+        self.layout().detach();
+        self.show_dragged_tab(Some(id));
+    }
+
+    /// Ends a drag along the strip at once: the tabs are drawn as the
+    /// session has them.
+    pub(in crate::window) fn end_drag_now(&self) {
+        self.layout().finish_now();
+        self.stop_live();
     }
 
     /// Opens a gap `width` wide where a tab dropped at `x` of the strip
@@ -231,6 +241,7 @@ impl TabStrip {
         let mut previous: Option<gtk::Widget> = None;
         for widget in self.widgets() {
             widget.set_has_tooltip(true);
+            widget.remove_css_class(DRAGGING_CLASS);
             list.reorder_child_after(&widget, previous.as_ref());
             previous = Some(widget);
         }

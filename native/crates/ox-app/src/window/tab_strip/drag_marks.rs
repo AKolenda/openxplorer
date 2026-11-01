@@ -65,23 +65,11 @@ impl TabStrip {
         }
     }
 
-    /// What follows the pointer once tab `id` leaves the strip, as in
-    /// Chrome: a small window with the tab's icon and title over a live
-    /// picture of `content`, the window's contents, which show the tab.
-    pub(in crate::window) fn drag_icon(&self, id: TabId, content: &gtk::Widget) -> Option<gtk::Widget> {
-        let shown = self.imp().shown.borrow();
-        let (tab, _) = shown.iter().find(|(tab, _)| tab.id == id)?;
-        Some(super::carried_window::carried_window(tab, content))
-    }
-
-    /// Tab `id` as it follows the pointer over another window's strip,
-    /// as wide as it is here.
-    pub(in crate::window) fn carried_tab(&self, id: TabId) -> Option<gtk::Widget> {
-        let width = self.tab_width(id)?;
-        let shown = self.imp().shown.borrow();
-        let (tab, _) = shown.iter().find(|(tab, _)| tab.id == id)?;
-        #[expect(clippy::cast_possible_truncation, reason = "a tab's width")]
-        Some(super::carried_window::carried_tab(tab, width.round() as i32))
+    /// What follows the pointer once tab `id` leaves the strip: a picture
+    /// of `window`, which shows the tab.
+    pub(in crate::window) fn drag_icon(&self, id: TabId, window: &gtk::Widget) -> Option<gtk::Widget> {
+        self.tab_width(id)?;
+        Some(super::carried_window::carried_window(window))
     }
 
     /// Opens `entries` as a menu under tab `id` (`moveTabMenu` opens at
