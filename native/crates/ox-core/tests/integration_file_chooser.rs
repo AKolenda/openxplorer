@@ -170,7 +170,20 @@ fn save_file_takes_the_name_and_folder_of_the_current_file() {
         request.current_folder.as_deref(),
         Some(Path::new("/home/someone/Documents"))
     );
+    assert!(request.folder_of_file, "the folder of a full path");
     assert_eq!(request.accept_label(), "Save");
+    let suggested = self::request(
+        "SaveFile",
+        &[
+            ("current_folder", path_variant("/home/someone/Downloads")),
+            ("current_name", "page.html".to_variant()),
+        ],
+    )
+    .expect("a valid call");
+    assert!(
+        !suggested.folder_of_file,
+        "a suggested folder, as Chrome sends it"
+    );
     let named =
         self::request("SaveFile", &[("current_name", "download.zip".to_variant())]).expect("a valid call");
     assert_eq!(
@@ -1409,10 +1422,22 @@ impl ServiceFixture {
         handle: &str,
         options: &glib::VariantDict,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<glib::Variant, glib::Error>>>> {
+        self.start_call_for(caller, "org.example.App", method, handle, options)
+    }
+
+    /// [`Self::start_call`] for the application the portal names `app_id`.
+    fn start_call_for(
+        &self,
+        caller: &gio::DBusConnection,
+        app_id: &str,
+        method: &str,
+        handle: &str,
+        options: &glib::VariantDict,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<glib::Variant, glib::Error>>>> {
         let handle = glib::variant::ObjectPath::try_from(handle).expect("path");
         let parameters = glib::Variant::tuple_from_iter([
             handle.to_variant(),
-            "org.example.App".to_variant(),
+            app_id.to_variant(),
             "".to_variant(),
             "Pick".to_variant(),
             options.end(),
@@ -1479,6 +1504,53 @@ fn the_portal_gets_the_users_choice() {
     assert_eq!(response, RESPONSE_SUCCESS);
     let uris: Vec<String> = results.lookup("uris").expect("typed").expect("uris");
     assert_eq!(uris, ["file:///tmp/one", "file:///tmp/two"]);
+}
+
+/// The calling application is named for the folder its dialogs
+/// remember: by the portal's application ID, else, for an unsandboxed
+/// program the portal could not name, by the program's file name, found
+/// from the connection the request handle names; else not at all.
+///
+/// parity: INT-035
+#[test]
+fn the_caller_is_named_by_its_app_id_or_its_program() {
+    let fixture = ServiceFixture::new();
+    let app = fixture.bus.connect();
+    let sender = app
+        .unique_name()
+        .expect("a name")
+        .trim_start_matches(':')
+        .replace('.', "_");
+    let handle = format!("/org/freedesktop/portal/desktop/request/{sender}/t1");
+    let program = ox_core::integration::program_of(std::process::id()).expect("this test's program");
+    let mut cases = vec![
+        (
+            "org.example.App",
+            handle.clone(),
+            Some("org.example.App".to_owned()),
+        ),
+        ("", handle, Some(format!("exe:{program}"))),
+        (
+            "",
+            "/org/freedesktop/portal/desktop/request/1_999/t3".to_owned(),
+            None,
+        ),
+    ];
+    for (app_id, handle, expected) in cases.drain(..) {
+        let pending = fixture.start_call_for(
+            &fixture.frontend,
+            app_id,
+            "OpenFile",
+            &handle,
+            &options_from_entries(&[]),
+        );
+        let reply = fixture.context.spawn_local(pending);
+        fixture.run_until("the call", || !fixture.received.borrow().is_empty());
+        let call = fixture.received.borrow_mut().remove(0);
+        assert_eq!(call.caller, expected, "{app_id:?} {handle}");
+        call.reply.send(&ChooserAnswer::Cancelled);
+        fixture.finish(reply).expect("joined").expect("answered");
+    }
 }
 
 /// Safety rule "only the portal may ask".

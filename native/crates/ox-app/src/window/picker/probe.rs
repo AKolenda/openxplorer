@@ -45,7 +45,12 @@ impl Probe {
 
 /// What is at `path`, asked on GIO's worker threads.
 pub(super) async fn probe(path: &Path) -> Probe {
-    match query(path, gio::FILE_ATTRIBUTE_STANDARD_TYPE).await {
+    probe_within(path, PROBE_TIMEOUT).await
+}
+
+/// [`probe`], waiting at most `timeout`.
+pub(super) async fn probe_within(path: &Path, timeout: Duration) -> Probe {
+    match query_within(path, gio::FILE_ATTRIBUTE_STANDARD_TYPE, timeout).await {
         Answer::Info(info) if info.file_type() == gio::FileType::Directory => Probe::Folder,
         Answer::Info(_) => Probe::File,
         Answer::Failed => Probe::Missing,
@@ -73,6 +78,90 @@ pub(super) async fn all_writable(locations: &[PathBuf]) -> bool {
     true
 }
 
+/// Whether a Save dialog's caller can write its file, found out as
+/// Windows' dialog does before it closes: by creating the file, then
+/// removing it again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum WriteTest {
+    /// The file can be created there.
+    Writable,
+    /// The folder refuses new files: no permission, or a read-only share
+    /// or drive.
+    Denied,
+    /// The file to replace is read-only.
+    ReadOnlyFile,
+    /// The drive or share is full.
+    NoSpace,
+    /// The folder cannot be reached through its local path: a `GVfs`
+    /// FUSE export that went away, or a share that disconnected.
+    Unavailable,
+    /// No answer within [`PROBE_TIMEOUT`].
+    NoAnswer,
+}
+
+/// Whether `name` can be saved in `folder`, through the local path the
+/// caller gets, as Windows' Save dialog tests it unless the caller asks it
+/// not to (`OFN_NOTESTFILECREATE`): it creates the file and removes it.
+/// A file that already exists is never opened for writing, which on some
+/// FUSE filesystems would change it: it must not be read-only, and a
+/// hidden file of the dialog's own is created beside it instead.
+///
+/// It runs on a worker thread and waits at most [`PROBE_TIMEOUT`]. The
+/// permission bits alone do not tell: `GVfs`'s FUSE export reports every
+/// share writable, also one the server shares read-only.
+pub(super) async fn test_write(folder: &Path, name: &std::ffi::OsStr, replacing: bool) -> WriteTest {
+    #[cfg(test)]
+    if never_answers(folder) {
+        glib::timeout_future(PROBE_TIMEOUT).await;
+        return WriteTest::NoAnswer;
+    }
+    let target = folder.join(name);
+    let folder = folder.to_path_buf();
+    let testing = gio::spawn_blocking(move || {
+        if replacing {
+            let read_only =
+                std::fs::metadata(&target).is_ok_and(|metadata| metadata.permissions().readonly());
+            if read_only {
+                return WriteTest::ReadOnlyFile;
+            }
+            let unique = glib::uuid_string_random();
+            create_and_remove(&folder.join(format!(".openxplorer-save-test-{unique}")))
+        } else {
+            create_and_remove(&target)
+        }
+    });
+    match glib::future_with_timeout(PROBE_TIMEOUT, testing).await {
+        Ok(Ok(test)) => test,
+        Ok(Err(_)) => WriteTest::Unavailable,
+        Err(_) => WriteTest::NoAnswer,
+    }
+}
+
+/// Creates the new file `path` and removes it again.
+fn create_and_remove(path: &Path) -> WriteTest {
+    use std::io::ErrorKind;
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(file) => {
+            drop(file);
+            // The file is empty and the dialog's own; the caller creates it
+            // again when it saves.
+            let _ = std::fs::remove_file(path);
+            WriteTest::Writable
+        }
+        // Something appeared there meanwhile: the folder takes files.
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => WriteTest::Writable,
+        Err(error) => match error.kind() {
+            ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem => WriteTest::Denied,
+            ErrorKind::StorageFull | ErrorKind::QuotaExceeded => WriteTest::NoSpace,
+            _ => WriteTest::Unavailable,
+        },
+    }
+}
+
 /// GIO's answer about one path.
 enum Answer {
     Info(gio::FileInfo),
@@ -84,14 +173,19 @@ enum Answer {
 /// Giving up cancels the query; a worker stuck in the kernel finishes on
 /// its own.
 async fn query(path: &Path, attributes: &str) -> Answer {
+    query_within(path, attributes, PROBE_TIMEOUT).await
+}
+
+/// [`query`], waiting at most `timeout`.
+async fn query_within(path: &Path, attributes: &str, timeout: Duration) -> Answer {
     #[cfg(test)]
     if never_answers(path) {
-        glib::timeout_future(PROBE_TIMEOUT).await;
+        glib::timeout_future(timeout).await;
         return Answer::TimedOut;
     }
     let file = gio::File::for_path(path);
     let asking = file.query_info_future(attributes, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT);
-    match glib::future_with_timeout(PROBE_TIMEOUT, asking).await {
+    match glib::future_with_timeout(timeout, asking).await {
         Ok(Ok(info)) => Answer::Info(info),
         Ok(Err(_)) => Answer::Failed,
         Err(_) => Answer::TimedOut,

@@ -179,6 +179,10 @@ pub struct ChooserRequest {
     pub current_filter: Option<usize>,
     /// The folder to start in, when the caller named an absolute one.
     pub current_folder: Option<PathBuf>,
+    /// Whether [`Self::current_folder`] is the folder of a file the caller
+    /// named with its full path (`current_file`), rather than the folder
+    /// it suggested (`current_folder`).
+    pub folder_of_file: bool,
     /// The caller's extra choices.
     pub choices: Vec<Choice>,
 }
@@ -232,12 +236,14 @@ impl ChooserRequest {
                 names: file_names(options)?,
             },
         };
-        let current_folder = match method {
-            ChooserMethod::SaveFile => lookup_path(options, "current_file")
-                .and_then(|file| file.parent().map(Path::to_path_buf))
-                .or_else(|| lookup_path(options, "current_folder")),
-            ChooserMethod::OpenFile | ChooserMethod::SaveFiles => lookup_path(options, "current_folder"),
+        let file_folder = match method {
+            ChooserMethod::SaveFile => {
+                lookup_path(options, "current_file").and_then(|file| file.parent().map(Path::to_path_buf))
+            }
+            ChooserMethod::OpenFile | ChooserMethod::SaveFiles => None,
         };
+        let folder_of_file = file_folder.is_some();
+        let current_folder = file_folder.or_else(|| lookup_path(options, "current_folder"));
         Ok(Self {
             method,
             title: bounded(title),
@@ -248,6 +254,7 @@ impl ChooserRequest {
             filters,
             current_filter,
             current_folder,
+            folder_of_file,
             choices: read_choices(options)?,
         })
     }
@@ -382,9 +389,20 @@ pub enum ChooserAnswer {
     Ended,
 }
 
-/// The `file://` URI of an absolute path.
+/// The `file://` URI of an absolute path, written from the path alone.
+///
+/// Never `gio::File::for_path(path).uri()`: under `GVfs` a path inside its
+/// FUSE export (`$XDG_RUNTIME_DIR/gvfs/smb-share:…`) is the remote file,
+/// whose URI is `smb://…`. The portal passes an unsandboxed caller's URIs
+/// on unchanged, and Chromium takes only `file://` ones: it ignored the
+/// `smb://` answer and treated the dialog as cancelled, so a page saved to
+/// a network folder was never written and nothing said so.
 fn file_uri_of(path: &Path) -> String {
-    gio::File::for_path(path).uri().to_string()
+    glib::filename_to_uri(path, None).map_or_else(
+        // Only a relative path fails, and every location here is absolute.
+        |_| gio::File::for_path(path).uri().to_string(),
+        |uri| uri.to_string(),
+    )
 }
 
 /// `text` cut to [`MAX_TEXT_CHARS`].

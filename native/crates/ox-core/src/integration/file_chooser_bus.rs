@@ -108,6 +108,11 @@ pub struct ChooserCall {
     /// The caller's window, `x11:<id>` or `wayland:<handle>`, possibly
     /// empty.
     pub parent_window: String,
+    /// The calling application, as the dialog remembers its folder
+    /// ([`caller_key`](super::caller_key)): the portal's application ID,
+    /// else `exe:` and the file name of the program that asked. `None`
+    /// when neither could be found out.
+    pub caller: Option<String>,
     /// Where the window sends the answer.
     pub reply: ChooserReply,
 }
@@ -440,8 +445,14 @@ async fn answer(connection: gio::DBusConnection, call: IncomingCall, handler: Rc
             return;
         }
     }
+    let program = if app_id.is_empty() {
+        caller_program(&connection, handle.as_str()).await
+    } else {
+        None
+    };
     let call = ChooserCall {
         request,
+        caller: super::caller_key(&app_id, program.as_deref()),
         app_id: app_id.chars().take(MAX_ID_CHARS).collect(),
         parent_window: parent_window.chars().take(MAX_ID_CHARS).collect(),
         reply: ChooserReply {
@@ -456,6 +467,30 @@ async fn answer(connection: gio::DBusConnection, call: IncomingCall, handler: Rc
             let _ = connection.unregister_object(handle);
         }
     }
+}
+
+/// The file name of the program that asked the portal for a dialog, for
+/// a caller the portal gives no application ID: the request handle names
+/// the caller's bus connection, and the bus daemon its process. `None`
+/// when the caller is gone, or its process is not visible from here (as
+/// inside a Flatpak sandbox).
+async fn caller_program(connection: &gio::DBusConnection, handle: &str) -> Option<String> {
+    let name = super::caller_bus_name(handle)?;
+    let reply = connection
+        .call_future(
+            Some("org.freedesktop.DBus"),
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "GetConnectionUnixProcessID",
+            Some(&(name,).to_variant()),
+            None,
+            gio::DBusCallFlags::NO_AUTO_START,
+            OWNER_TIMEOUT_MS,
+        )
+        .await
+        .ok()?;
+    let (pid,) = reply.get::<(u32,)>()?;
+    super::program_of(pid)
 }
 
 /// Whether `sender` owns `org.freedesktop.portal.Desktop`, asked of the
