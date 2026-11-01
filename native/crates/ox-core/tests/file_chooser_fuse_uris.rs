@@ -84,7 +84,7 @@ mod fuse_vfs {
 #[test]
 fn a_file_on_a_mounted_share_is_answered_with_its_fuse_path() {
     // Registered here, before GIO registers its own and picks the default.
-    gio::IOExtensionPoint::builder("gio-vfs")
+    let _ = gio::IOExtensionPoint::builder("gio-vfs")
         .required_type(gio::Vfs::static_type())
         .build();
     gio::IOExtensionPoint::implement("gio-vfs", fuse_vfs::FuseVfs::static_type(), "ox-test-fuse", 1000)
