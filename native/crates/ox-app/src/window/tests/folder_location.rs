@@ -175,10 +175,13 @@ fn a_ticked_brave_follow_up_opens_brave_s_dialog_after_moving_downloads() {
     brave_dialog(&test).expect("it is open").close();
 }
 
-/// The Location tab of the Properties dialog `test` shows.
+/// The Location tab of the Properties window `test` opened.
 fn location_panel(test: &TestWindow) -> LocationPanel {
-    let frame = test.wait_for_dialog("the Properties dialog");
-    let panels = descendants::<LocationPanel>(&frame);
+    wait_until("the Properties window", || {
+        !test.window.properties_windows().is_empty()
+    });
+    let window = test.window.properties_windows().remove(0);
+    let panels = descendants::<LocationPanel>(&window);
     panels
         .into_iter()
         .next()

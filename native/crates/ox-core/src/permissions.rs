@@ -175,6 +175,10 @@ pub enum ModeChange {
     /// `rwx` bits and keeps its own special bits, and a file inside gets
     /// `x` only where it had some before, as `chmod -R a=rwX` does.
     Advanced(u32),
+    /// Explorer's Read-only attribute: files lose every write bit, or the
+    /// owner gets write back; folders, inside a change or asked for,
+    /// keep their bits, as "Only applies to files in folder" says.
+    ReadOnlyFiles(bool),
 }
 
 impl ModeChange {
@@ -183,6 +187,7 @@ impl ModeChange {
         match self {
             Self::Simple(change) => change.apply_to(mode, is_folder),
             Self::Advanced(bits) => bits & PERMISSION_BITS,
+            Self::ReadOnlyFiles(read_only) => read_only_mode(mode, is_folder, read_only),
         }
     }
 
@@ -205,7 +210,20 @@ impl ModeChange {
                     special | (access & !0o111)
                 }
             }
+            Self::ReadOnlyFiles(read_only) => read_only_mode(mode, is_folder, read_only),
         }
+    }
+}
+
+/// `mode` of a file made read-only, or writable by its owner again; a
+/// folder's stays as it is.
+fn read_only_mode(mode: u32, is_folder: bool, read_only: bool) -> u32 {
+    if is_folder {
+        mode
+    } else if read_only {
+        mode & !0o222
+    } else {
+        mode | 0o200
     }
 }
 
@@ -523,5 +541,36 @@ mod tests {
             matches!(refusal, Err(EntryError::PermissionDenied(_))),
             "{refusal:?}"
         );
+    }
+    /// Read-only takes every write bit from a file, and from every file
+    /// inside a folder while the folders keep theirs; clearing it gives
+    /// the owner write again.
+    ///
+    /// parity: PROP-003
+    #[test]
+    fn read_only_reaches_files_only_and_clearing_it_gives_the_owner_write() {
+        let root = tempfile::tempdir().expect("a folder");
+        let folder = root.path().join("Album");
+        fs::create_dir_all(folder.join("Sub")).expect("folders");
+        fs::write(folder.join("Sub/photo.png"), b"p").expect("file");
+        fs::set_permissions(folder.join("Sub/photo.png"), fs::Permissions::from_mode(0o664)).expect("mode");
+        fs::set_permissions(folder.join("Sub"), fs::Permissions::from_mode(0o775)).expect("mode");
+        let read_only = |value| PermissionRequest {
+            mode: ModeChange::ReadOnlyFiles(value),
+            owner: None,
+            group: None,
+            recursive: true,
+        };
+
+        apply(&file_uri(&folder), &read_only(true), &Cancellation::new()).expect("applies");
+        assert_eq!(mode_of(&folder.join("Sub/photo.png")), 0o444);
+        assert_eq!(
+            mode_of(&folder.join("Sub")),
+            0o775,
+            "a folder keeps its write bits"
+        );
+
+        apply(&file_uri(&folder), &read_only(false), &Cancellation::new()).expect("applies");
+        assert_eq!(mode_of(&folder.join("Sub/photo.png")), 0o644);
     }
 }

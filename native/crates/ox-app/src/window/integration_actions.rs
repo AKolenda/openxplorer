@@ -164,9 +164,6 @@ impl BrowserWindow {
     /// Change app… in Properties: closes Properties and opens the Open
     /// with dialog for the file at `uri` (`propertiesDialog` in app.js).
     fn change_app(&self, uri: &str) {
-        if let Some(properties) = self.dialog_layer().shown() {
-            properties.close();
-        }
         let name = self.imp().locations.borrow().base_name(uri);
         let subject = OpenWithSubject {
             uri: uri.to_owned(),

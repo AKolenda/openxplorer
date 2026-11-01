@@ -66,7 +66,11 @@ The full list of keys is in More options > Keyboard shortcuts (Ctrl+?).
 
 ## Previous versions
 
-- Properties > Previous versions lists snapshots that your file system or server already exposes. Browse opens one read-only; Restore a copy writes a separate copy and never replaces the original.
+- Properties > Previous Versions lists snapshots that your file system or server already exposes. Select one: Open shows it read-only in a new tab; Restore writes a separate copy and never replaces the original.
+
+## Properties
+
+- Properties opens in a window of its own, as in Windows 11, with OK, Cancel and Apply. Changes to the name, Read-only, Hidden and a folder's icon wait for OK or Apply; Cancel discards them.
 
 ## Administrator access
 

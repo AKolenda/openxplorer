@@ -8,74 +8,78 @@
 //! `v2.0.0:desktop/file_services.py`, `v2.0.0:desktop/previous_versions.py` and
 //! `v2.0.0:desktop/folder_sizes.py`.
 //!
-//! The dialog belongs to the tab that opened it (PROP-008): the window
-//! shows it on an in-window [`DialogLayer`](crate::dialog::DialogLayer),
-//! withdraws it when another tab comes to the front and shows it again,
-//! as it was, when its tab returns. What the dialog asks of the window
-//! (open a snapshot in a tab, restore a copy, measure a folder) it asks
-//! through window actions, so it never reaches into the window.
+//! Each Properties is a top-level window of its own, as in Windows 11
+//! ([`window`]): it never blocks the browser window or another Properties
+//! window, and has OK, Cancel and Apply. What it asks of the browser window
+//! (open a snapshot in a tab, restore a copy, Open with, rename) it asks
+//! through that window's actions and methods, which stay reachable while
+//! the browser window is open.
 //!
 //! | Module | Responsibility |
 //! |---|---|
-//! | `view` | [`PropertiesView`]: the tabs and their panels |
-//! | `tabs` | The tab row and panels every Properties dialog shares |
-//! | `selection_view` | [`SelectionProperties`]: Properties of several items |
+//! | `window` | [`PropertiesWindow`]: the window, its tabs and OK, Cancel and Apply |
+//! | `item_window` | The Properties window of one item |
+//! | `selection_view` | Properties of several items |
 //! | `metadata` | Reading an item's properties off the main thread |
-//! | `general_panel` | The General and Permissions tabs |
-//! | `permissions_editor` | Changing permissions on the Permissions tab |
-//! | `checksums_panel` | The Checksums tab of a file |
-//! | `custom_icon` | Change icon… and Restore default icon |
+//! | `general_tab` | The General tab: name, type, sizes, dates and attributes |
+//! | `folder_count` | A folder's size and content, counting up |
+//! | `security_tab` | The Security tab and its Edit and Advanced dialogs |
+//! | `security_model` | Windows' permission names over Linux bits |
+//! | `permissions_editor` | Changing several items' permissions together |
+//! | `custom_icon` | The Customize tab: Change Icon... |
 //! | `location_panel` | [`LocationPanel`](location_panel::LocationPanel): the Location tab of a standard folder |
 //! | `mount_assistant` | The network mount assistant of the Location tab |
 //! | `sharing_panel` | The Sharing tab: Samba user shares of a local folder |
-//! | `versions_panel` | [`VersionsPanel`]: the Previous versions tab |
-//! | `version_row` | One row of the versions list |
+//! | `versions_panel` | [`VersionsPanel`]: the Previous Versions tab |
+//! | `version_row` | One row of the versions list and its date heading |
 //! | `snapshot_source` | The Snapshot source form |
 //! | `restore` | The Restore a copy dialog |
 //! | `snapshot_banner` | [`SnapshotBanner`]: the banner of a tab inside a snapshot |
 //! | `folder_sizes` | [`FolderSizeState`] and [`FolderSizes`]: measured sizes and their text |
 //! | `size_scan_strip` | [`SizeScanStrip`]: the bar of a running folder-size scan |
 
-mod checksums_panel;
 mod custom_icon;
+mod folder_count;
 mod folder_sizes;
-mod general_panel;
+mod general_tab;
+mod item_window;
 mod location_panel;
 mod metadata;
 mod mount_assistant;
 mod permissions_editor;
 mod restore;
+mod security_model;
+mod security_tab;
 mod selection_view;
 mod sharing_panel;
 mod size_scan_strip;
 mod snapshot_banner;
 mod snapshot_source;
-mod tabs;
 mod version_row;
 mod versions_panel;
-mod view;
+mod window;
 
 use ox_core::location::ItemKind;
 use ox_core::places::KnownFolder;
 
 /// Shown while the properties are read.
 const READING: &str = crate::i18n::message_id("Reading file properties…");
-/// Shown for a value being calculated: a size, a content count or a
-/// checksum.
-const CALCULATING: &str = crate::i18n::message_id("Calculating…");
 
 #[cfg(test)]
 pub(crate) use custom_icon::set_custom_icon;
 pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes, NOT_SCANNED};
+pub(crate) use item_window::{open_item_properties, PropertiesContext};
 #[cfg(test)]
 pub(crate) use location_panel::LocationPanel;
 pub(crate) use restore::RestoreRequest;
-pub(crate) use selection_view::SelectionProperties;
+pub(crate) use selection_view::open_selection_properties;
 pub(crate) use sharing_panel::system_usershares;
 pub(crate) use size_scan_strip::{progress_text, RunEnd, RunPosition, SizeScanStrip};
 pub(crate) use snapshot_banner::SnapshotBanner;
 pub(crate) use version_row::SnapshotTarget;
-pub(crate) use view::{PropertiesContext, PropertiesView};
+#[cfg(test)]
+pub(crate) use versions_panel::VersionsPanel;
+pub(crate) use window::PropertiesWindow;
 
 /// The item a Properties dialog describes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,59 +104,45 @@ impl PropertiesTarget {
     }
 }
 
-/// A tab of the Properties dialog, as the dialog opens on it.
+/// A tab of the Properties window, as the window opens on it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PropertiesTab {
-    /// Type, location, size, dates and the default application.
+    /// Name, type, location, sizes, dates and attributes.
     General,
     /// Sharing a local folder on the network (local folders only).
     Sharing,
+    /// Owner, group and others, and what each may do.
+    Security,
     /// Where a standard folder is stored (standard folders only).
     Location,
-    /// Owner, group, mode and access.
-    Permissions,
-    /// MD5, SHA1, SHA256 and SHA512 of a file (files only).
-    Checksums,
     /// Snapshots and backups of the item.
     PreviousVersions,
+    /// The folder's icon (local folders only).
+    Customize,
 }
 
 impl PropertiesTab {
-    /// The tab's label.
+    /// The tab's label, as Windows 11 names it.
     pub(crate) fn label(self) -> &'static str {
         match self {
             PropertiesTab::General => ox_core::i18n::gettext_static("General"),
             PropertiesTab::Sharing => ox_core::i18n::gettext_static("Sharing"),
+            PropertiesTab::Security => ox_core::i18n::gettext_static("Security"),
             PropertiesTab::Location => ox_core::i18n::gettext_static("Location"),
-            PropertiesTab::Permissions => ox_core::i18n::gettext_static("Permissions"),
-            PropertiesTab::Checksums => ox_core::i18n::gettext_static("Checksums"),
-            PropertiesTab::PreviousVersions => ox_core::i18n::gettext_static("Previous versions"),
+            PropertiesTab::PreviousVersions => ox_core::i18n::gettext_static("Previous Versions"),
+            PropertiesTab::Customize => ox_core::i18n::gettext_static("Customize"),
         }
     }
 
-    /// The name of the tab's page in the dialog's stack.
+    /// The name of the tab's page in the window.
     pub(crate) const fn page_name(self) -> &'static str {
         match self {
             PropertiesTab::General => "general",
             PropertiesTab::Sharing => "sharing",
+            PropertiesTab::Security => "security",
             PropertiesTab::Location => "location",
-            PropertiesTab::Permissions => "permissions",
-            PropertiesTab::Checksums => "checksums",
             PropertiesTab::PreviousVersions => "versions",
+            PropertiesTab::Customize => "customize",
         }
-    }
-
-    /// The tab whose page is named `name`.
-    pub(crate) fn from_page_name(name: &str) -> Option<Self> {
-        [
-            PropertiesTab::General,
-            PropertiesTab::Sharing,
-            PropertiesTab::Location,
-            PropertiesTab::Permissions,
-            PropertiesTab::Checksums,
-            PropertiesTab::PreviousVersions,
-        ]
-        .into_iter()
-        .find(|tab| tab.page_name() == name)
     }
 }

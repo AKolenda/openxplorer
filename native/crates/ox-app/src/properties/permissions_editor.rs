@@ -10,7 +10,7 @@
 //! has it (PROP-002).
 
 mod advanced;
-mod choices;
+pub(super) mod choices;
 
 use std::sync::Arc;
 
@@ -23,10 +23,11 @@ use ox_core::permissions::{
 use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
 
-use super::general_panel::glyph_button;
+use super::window::glyph_button;
 use crate::dialog::{check_row, DialogFrame, PropertyGrid};
 use crate::icons::Icon;
 use advanced::AdvancedBits;
+pub(super) use choices::AccountChoice as SharedAccountChoice;
 use choices::{AccessChoice, AccountChoice, StateCheck};
 
 /// An item the editor changes.
@@ -130,7 +131,7 @@ impl Controls {
         let mode_changes = match (request.mode, self.open_advanced()) {
             (ModeChange::Advanced(bits), Some((_, mode))) => bits != mode || request.recursive,
             (ModeChange::Simple(change), _) => !change.is_empty(),
-            (ModeChange::Advanced(_), None) => true,
+            (ModeChange::Advanced(_), None) | (ModeChange::ReadOnlyFiles(_), _) => true,
         };
         mode_changes || request.owner.is_some() || request.group.is_some()
     }

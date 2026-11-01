@@ -11,6 +11,7 @@ use ox_core::transfer::TransferResult;
 
 use super::{LocationPanel, Tone};
 use crate::integration::BraveDialog;
+use crate::properties::PropertiesWindow;
 use crate::window::BrowserWindow;
 
 /// The status after a change, before any file moves.
@@ -125,7 +126,9 @@ impl LocationPanel {
         self.consent().set_active(false);
         self.imp().checked.replace(None);
         self.set_status(ox_core::i18n::gettext_static(UPDATED), Tone::Valid);
-        let Some(window) = self.root().and_downcast::<BrowserWindow>() else {
+        // The browser window that opened the Properties window asks about
+        // moving the files and moves them.
+        let Some(window) = PropertiesWindow::of(self).and_then(|properties| properties.opener()) else {
             return;
         };
         if matches!(applied.change, LocationChange::Changed { .. }) {

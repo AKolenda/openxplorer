@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Properties lookups that answer late: a closed dialog or a newer lookup
+//! Properties lookups that answer late: a closed window or a newer lookup
 //! is never overwritten (SAFE-013).
 
-use ox_core::entry::EntryError;
+use gtk::prelude::*;
 use ox_core::versions::VersionList;
 
-use super::item_dialogs::{fixture_with_snapshot, press, properties_view, texts, value_after, SNAPSHOT_NAME};
-use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use super::item_dialogs::{fixture_with_snapshot, tab, texts, versions_of, SNAPSHOT_NAME};
+use crate::test_support::harness::{settle, wait_for, wait_until, Fixture, TestWindow};
 
-/// A properties read that answers after Close changes nothing in the
-/// closed dialog.
+/// A properties read that answers after the window closed fills nothing
+/// in it.
 ///
 /// parity: SAFE-013
 #[gtk::test]
@@ -18,21 +18,18 @@ fn a_properties_read_after_close_changes_nothing() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let frame = test.wait_for_dialog("the Properties dialog");
-    let view = properties_view(&frame);
-    let general = view.general_panel();
-    wait_until("the properties to be read", || {
-        value_after(&general, "Type").is_some()
-    });
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let general = tab(&window, "general");
     let shown = texts(&general);
 
-    press(&frame, "Close");
-    view.deliver_properties(Err(EntryError::NotFound("The item is gone.".into())));
+    window.close();
+    wait_for(std::time::Duration::from_millis(300));
+    settle();
 
-    assert_eq!(texts(&general), shown);
+    assert_eq!(texts(&general), shown, "the late read filled nothing");
 }
 
-/// A Previous versions lookup overtaken by Refresh is dropped when it
+/// A Previous Versions lookup overtaken by F5 is dropped when it
 /// answers after the newer one.
 ///
 /// parity: SAFE-013
@@ -42,8 +39,8 @@ fn a_versions_lookup_overtaken_by_refresh_is_dropped() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Documents");
     test.activate("previous-versions", None);
-    let frame = test.wait_for_dialog("the Previous versions tab");
-    let versions = properties_view(&frame).versions();
+    let window = test.wait_for_properties("Documents Properties");
+    let versions = versions_of(&window);
     wait_until("the versions", || !versions.version_labels().is_empty());
     let first = versions.lookup_number();
 

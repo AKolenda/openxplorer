@@ -18,9 +18,6 @@ use super::session::{TabId, TabPlacement};
 use super::tab_strip::TabView;
 use super::BrowserWindow;
 
-/// Added to the tooltip of a tab whose Properties dialog is open.
-const PROPERTIES_OPEN: &str = crate::i18n::message_id(" · Properties open");
-
 impl BrowserWindow {
     /// Opens a snapshot folder in a new tab, tagged with its snapshot
     /// (Browse).
@@ -60,9 +57,8 @@ impl BrowserWindow {
         tagged.or_else(|| snapshot_location(uri, &self.imp().locations.borrow().snapshot_roots))
     }
 
-    /// Adds `· Properties open` to the tooltips of tabs with Properties,
-    /// and marks the tabs that show a previous version.
-    pub(super) fn mark_tabs_with_dialogs_and_snapshots(&self, views: &mut [TabView]) {
+    /// Marks the tabs that show a previous version.
+    pub(super) fn mark_snapshot_tabs(&self, views: &mut [TabView]) {
         let uris: Vec<(TabId, String)> = {
             let session = self.imp().session.borrow();
             session
@@ -72,10 +68,6 @@ impl BrowserWindow {
                 .collect()
         };
         for view in views.iter_mut() {
-            if self.has_properties(view.id) {
-                view.tooltip
-                    .push_str(ox_core::i18n::gettext_static(PROPERTIES_OPEN));
-            }
             let uri = uris
                 .iter()
                 .find(|(id, _)| *id == view.id)

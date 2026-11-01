@@ -12,7 +12,7 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use ox_core::network::{mount_plan, DesktopUser, MountPlan};
 
-use super::general_panel::glyph_button;
+use super::window::glyph_button;
 use crate::dialog::{labelled_entry, note, quiet_text};
 use crate::icons::Icon;
 

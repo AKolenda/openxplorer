@@ -233,7 +233,7 @@ impl BrowserWindow {
                 .map(|tab| tab_view(tab, &session, &locations, &network));
             tab_views.collect()
         };
-        self.mark_tabs_with_dialogs_and_snapshots(&mut views);
+        self.mark_snapshot_tabs(&mut views);
         self.tab_strip().set_tabs(&views);
     }
 

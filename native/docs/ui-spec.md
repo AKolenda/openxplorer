@@ -601,7 +601,7 @@ TT#L52, TT#L76–77). Tag: safe.
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
 | Scrim | `@ox_smoke` over the window (tab-scoped dialogs cover only the tab's content, as now) | SmokeFillColorDefault (CT#L263) | safe |
-| Surface | width 510 (settings 790, properties 600, versions 860, archive 720, auth 535) within `calc(100vw − 30px)`; radius **8** (9); 1 px `@ox_dialog_stroke`; shadow E02 | ContentDialog width 320–548, height 184–756, border 1, SurfaceStrokeColorDefault (CD#L43–49) | safe |
+| Surface | width 510 (settings 790, archive 720, auth 535; Properties is a window of its own, 400 wide, see `resources/skin/properties.css`) within `calc(100vw − 30px)`; radius **8** (9); 1 px `@ox_dialog_stroke`; shadow E02 | ContentDialog width 320–548, height 184–756, border 1, SurfaceStrokeColorDefault (CD#L43–49) | safe |
 | Layout | content padding **24** (28); title 20 / 600 (T10), 12 px below; body 12 px `@ox_muted`, line height 1.75 | ContentDialogPadding 24, title margin 12 (CD#L51–52); title 20 SemiBold (CD#L238) | padding visible (P3) |
 | Footer (P3) | the auth dialog's footer applied to every dialog: 1 px top border `@ox_border`, background `@ox_chrome` (`#f3f3f3` / `#202020` if WinUI-exact), padding `18 24`, buttons right-aligned | ContentDialog command space: Background = SolidBackgroundFillColorBase under a LayerFillColorAlt content area with a 1 px separator (CD#L40–45, CD#L233, CD#L248) | visible, P3 |
 | Buttons | 32 high (33), min width 92, padding `5 17`, 8 apart (9), E06 border, background `@ox_control_fill`; hover `@ox_control_fill_hover`; pressed `@ox_control_fill_pressed` with `@ox_muted` text | ButtonPadding `11,5,11,6`; button fills (BT#L30–31, BT#L152); spacing 8 (CD#L50) | safe |

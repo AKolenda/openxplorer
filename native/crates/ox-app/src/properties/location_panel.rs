@@ -30,8 +30,8 @@ use ox_core::integration::BraveIntegration;
 use ox_core::network::{read_mount_table, MountEntry};
 use ox_core::places::KnownFolder;
 
-use super::general_panel::glyph_button;
 use super::mount_assistant::mount_assistant;
+use super::window::glyph_button;
 use crate::dialog::{check_row, labelled_entry, quiet_text};
 use crate::icons::{self, Icon};
 use crate::window::ButtonStyle;

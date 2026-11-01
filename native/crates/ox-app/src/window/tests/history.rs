@@ -107,10 +107,8 @@ fn the_history_keys_leave_text_fields_and_dialogs_alone() {
         "so does the address"
     );
     test.window.folder_pane().focus_view();
-    test.activate("properties", None);
-    wait_until("the Properties dialog", || {
-        test.window.dialog_layer().shown().is_some()
-    });
+    test.window.show_result_dialog("Operation result", "Done.");
+    wait_until("the dialog", || test.window.dialog_layer().shown().is_some());
 
     let in_dialog = press_shortcut_where_focused(&test, gdk::Key::Left, ALT);
 
@@ -138,10 +136,8 @@ fn the_mouse_side_buttons_step_through_history_unless_a_dialog_is_open() {
         });
     assert!(listens_first, "the window hears every mouse button first");
     test.window.folder_pane().focus_view();
-    test.activate("properties", None);
-    wait_until("the Properties dialog", || {
-        test.window.dialog_layer().shown().is_some()
-    });
+    test.window.show_result_dialog("Operation result", "Done.");
+    wait_until("the dialog", || test.window.dialog_layer().shown().is_some());
 
     test.window.go_history_from_mouse(Direction::Backward);
 

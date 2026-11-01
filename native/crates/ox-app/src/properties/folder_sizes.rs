@@ -50,68 +50,6 @@ impl FolderSizeState {
         }
     }
 
-    /// The Size on disk text of Properties: like [`size_text`](Self::size_text)
-    /// for the space the counted files take; empty when the backend did not
-    /// report it, which Properties shows as "not provided".
-    pub(crate) fn size_on_disk_text(&self) -> String {
-        let size = match self {
-            FolderSizeState::Unavailable(_) => return ox_core::i18n::gettext_static(UNAVAILABLE).to_owned(),
-            FolderSizeState::Measured(size) => size,
-        };
-        let Some(allocated) = size.allocated else {
-            return String::new();
-        };
-        let bytes = format::pretty_bytes(allocated);
-        match size.status {
-            ScanStatus::Scanning => ox_core::i18n::gettext_static(SCANNING).to_owned(),
-            ScanStatus::Complete => bytes,
-            ScanStatus::Partial(_) | ScanStatus::Cancelled => format!("≥ {bytes}"),
-        }
-    }
-
-    /// The Contains text of Properties: `12 files, 1 folder`, with `≥`
-    /// for a lower bound, `Scanning…` or `Unavailable` (PROP-004).
-    pub(crate) fn contains_text(&self) -> String {
-        let size = match self {
-            FolderSizeState::Unavailable(_) => return ox_core::i18n::gettext_static(UNAVAILABLE).to_owned(),
-            FolderSizeState::Measured(size) => size,
-        };
-        let counts = counts_text(size.files, size.folders);
-        match size.status {
-            ScanStatus::Scanning => ox_core::i18n::gettext_static(SCANNING).to_owned(),
-            ScanStatus::Complete => counts,
-            ScanStatus::Partial(_) | ScanStatus::Cancelled => format!("≥ {counts}"),
-        }
-    }
-
-    /// The tooltip of a Size value in the details pane and Properties:
-    /// `partial · 3 files · 1 skipped · 0 unreadable. <reason> <time>`
-    /// (`updateSizeLabels`).
-    pub(crate) fn summary_tooltip(&self) -> String {
-        match self {
-            FolderSizeState::Unavailable(reason) => ox_core::i18n::format_message(
-                "{ERROR_STATUS} · 0 files · 0 skipped · 0 unreadable. {reason} ",
-                &[("ERROR_STATUS", ERROR_STATUS), ("reason", reason)],
-            ),
-            FolderSizeState::Measured(size) => {
-                let status = size.status.as_str();
-                let reason = size.status.reason();
-                let finished = finished_text(size);
-                ox_core::i18n::format_message(
-                    "{status} · {files} files · {skipped} skipped · {errors} unreadable. {reason} {finished}",
-                    &[
-                        ("status", status),
-                        ("files", &size.files.to_string()),
-                        ("skipped", &size.skipped.to_string()),
-                        ("errors", &size.errors.to_string()),
-                        ("reason", reason),
-                        ("finished", &finished),
-                    ],
-                )
-            }
-        }
-    }
-
     /// The tooltip of a Size cell in the details view:
     /// `complete · Logical file bytes · <time>` (`renderRows`).
     pub(crate) fn cell_tooltip(&self) -> String {
@@ -182,22 +120,6 @@ impl FolderSizes {
     }
 }
 
-/// How many files and folders: `3 files, 1 folder`, as the Contains row
-/// of every Properties dialog says it.
-pub(super) fn counts_text(files: u64, folders: u64) -> String {
-    let files = if files == 1 {
-        ox_core::i18n::gettext_static("1 file").to_owned()
-    } else {
-        ox_core::i18n::format_message("{files} files", &[("files", &files.to_string())])
-    };
-    let folders = if folders == 1 {
-        ox_core::i18n::gettext_static("1 folder").to_owned()
-    } else {
-        ox_core::i18n::format_message("{folders} folders", &[("folders", &folders.to_string())])
-    };
-    ox_core::i18n::format_message("{files}, {folders}", &[("files", &files), ("folders", &folders)])
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -227,27 +149,6 @@ mod tests {
     struct SizeTextCase {
         state: FolderSizeState,
         text: &'static str,
-    }
-
-    /// parity: PROP-033
-    #[test]
-    fn size_on_disk_reads_like_the_size_or_is_not_provided() {
-        assert_eq!(measured(1280, ScanStatus::Complete).size_on_disk_text(), "4.0 KB");
-        assert_eq!(
-            measured(1280, ScanStatus::Partial(PartialReason::EntriesExcluded)).size_on_disk_text(),
-            "≥ 4.0 KB"
-        );
-        assert_eq!(measured(0, ScanStatus::Scanning).size_on_disk_text(), "Scanning…");
-        let FolderSizeState::Measured(size) = measured(1280, ScanStatus::Complete) else {
-            unreachable!("measured gives a measured size");
-        };
-        let unreported = FolderSizeState::Measured(FolderSize {
-            allocated: None,
-            ..size
-        });
-        assert_eq!(unreported.size_on_disk_text(), "");
-        let failed = FolderSizeState::Unavailable("denied".to_owned());
-        assert_eq!(failed.size_on_disk_text(), "Unavailable");
     }
 
     /// parity: PROP-027
@@ -286,17 +187,9 @@ mod tests {
 
     /// parity: PROP-027
     #[test]
-    fn tooltips_name_the_status_counts_and_reason() {
-        let partial = measured(10, ScanStatus::Partial(PartialReason::EntriesExcluded));
-
-        let summary = partial.summary_tooltip();
+    fn tooltips_name_the_status_and_reason() {
         let cell = measured(10, ScanStatus::Complete).cell_tooltip();
 
-        assert_eq!(
-            summary,
-            "partial · 3 files · 1 skipped · 0 unreadable. Some links, mounts, snapshot collections or \
-             unreadable entries were excluded "
-        );
         assert_eq!(cell, "complete · Logical file bytes · ");
     }
 
