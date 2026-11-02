@@ -198,9 +198,9 @@ fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
     let heading = folder_heading(facts);
     let selected = facts.selection.len();
     let items = if selected > 0 {
-        selected.to_string()
+        ox_core::format::group_digits(selected as u64)
     } else {
-        facts.folder_item_count.to_string()
+        ox_core::format::group_digits(u64::from(facts.folder_item_count))
     };
     let action = if Page::from_uri(uri).is_some() {
         PaneAction::None
@@ -235,7 +235,7 @@ fn folder_heading(facts: &PaneFacts<'_>) -> FolderHeading {
             preview: Preview::Several,
             name: ox_core::i18n::format_message(
                 "{selected} items selected",
-                &[("selected", &selected.to_string())],
+                &[("selected", &ox_core::format::group_digits(selected as u64))],
             ),
             kind: ox_core::i18n::gettext_static("Multiple items"),
         };
