@@ -221,6 +221,20 @@ impl FolderPane {
         self.parts().empty_note.is_visible()
     }
 
+    /// What the note near the top of the list says while it shows, for
+    /// tests.
+    #[cfg(test)]
+    pub(super) fn shown_note_text(&self) -> Option<String> {
+        let note = &self.parts().empty_note;
+        note.is_visible().then(|| note.label().to_string())
+    }
+
+    /// Whether the list's rows are hidden, for tests.
+    #[cfg(test)]
+    pub(super) fn rows_hidden(&self) -> bool {
+        !self.parts().views.is_child_visible()
+    }
+
     /// Where the overlay puts "This folder is empty.": centred, a little
     /// under the details view's column titles, or under the top of an
     /// icon view. `None` for its other overlays.

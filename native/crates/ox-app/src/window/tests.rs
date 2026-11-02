@@ -62,6 +62,7 @@ mod share;
 mod sidebar;
 mod sidebar_layout;
 mod sidebar_sections;
+mod slow_locations;
 mod split_view;
 mod stopping;
 mod support;

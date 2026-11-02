@@ -132,6 +132,8 @@ pub(super) fn desktop_link(entry: &Entry) -> Option<Result<LinkTarget, String>> 
 
 /// Queries `uri` without blocking the interface.
 pub(super) async fn query_entry(uri: &str) -> Result<Entry, EntryError> {
+    #[cfg(test)]
+    crate::test_support::held::wait_while_held(uri).await;
     let file = gio::File::for_uri(uri);
     let info = file
         .query_info_future(
