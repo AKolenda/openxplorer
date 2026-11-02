@@ -105,10 +105,12 @@ fn an_indexed_folder_shows_its_state_and_leaves_the_suggestions() {
     });
     let row = settings.indexed_row("Indexed");
     assert_eq!(label_with_class(&row, "status-chip"), "Ready");
-    assert_eq!(
-        label_with_class(&row, "setting-value"),
-        "4 names · Live local events"
-    );
+    // The scan is Ready before its watches are recorded, so the row says
+    // Not watching for a moment first.
+    wait_until("the row to show its watches", || {
+        label_with_class(&settings.indexed_row("Indexed"), "setting-value")
+            == "4 names · Live local events"
+    });
     let suggested = settings.indexed_folders().suggestions().listed_labels();
     assert!(
         !suggested.contains(&"Example projects".to_owned()),
