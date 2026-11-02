@@ -320,31 +320,34 @@ fn cancelling_a_slow_create_leaves_no_file_and_says_nothing() {
     assert!(is_enabled(&test, "new-text-document"));
 }
 
-/// A create that ends after the user went to another tab leaves that tab
-/// alone, as Windows does: no listing, no selection change, no rename.
-/// The file is still made in the folder it was asked for.
+/// A create that ends after the user went to another tab on the same
+/// folder, on a share that sends no change notices, lists the new file
+/// there, as a change notice would, but leaves that tab's selection alone
+/// and renames nothing. The file is made in the folder it was asked for.
 ///
 /// parity: OPS-002
 #[gtk::test]
-fn a_create_that_ends_in_another_tab_leaves_that_tab_alone() {
+fn a_create_that_ends_in_another_tab_on_its_folder_lists_it_there_without_renaming() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let release = start_held_text_document(&test);
     test.window.add_tab(&fixture.uri()).expect("a valid folder");
     test.wait_for_listing("the second tab");
+    // As on a share that sends no change notices.
+    test.window
+        .imp()
+        .session
+        .borrow_mut()
+        .change_panes(|tab| tab.watch = None);
     select_names(&test, &["Notes 2.txt"]);
-    let shown = test.names();
 
-    drop(release);
-    wait_until("the create to end", || {
-        fixture.path("New Text Document.txt").is_file() && !test.window.has_running_write()
+    finish_held_text_document(&test, &fixture, release);
+    wait_until("the new file in the tab in front", || {
+        test.names().contains(&"New Text Document.txt".to_owned())
     });
-    wait_for(Duration::from_millis(300));
 
-    assert!(fixture.path("New Text Document.txt").is_file());
     assert_eq!(test.selected_names(), ["Notes 2.txt"], "the selection stays");
     assert!(!is_renaming_in_place(&test), "nothing is renamed there");
-    assert_eq!(test.names(), shown, "the tab is not listed again by the create");
 }
 
 /// A create that ends after the tab went to another folder leaves that
@@ -890,41 +893,16 @@ fn a_slow_create_shows_its_panel_again_after_an_archive_took_it() {
 fn input_before_the_new_items_listing_ends_drops_its_rename() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Résumé.txt"]);
+    let id = test.active_tab().expect("a tab");
     if let Some(tab) = test.window.imp().session.borrow_mut().active_mut() {
         tab.renames_selection = true;
     }
-    test.window.reload_selecting(vec![fixture.uri_of("Résumé.txt")]);
+    test.window.folder_changed(id);
     touch(&test, Input::Key);
     test.wait_for_listing("the folder");
     wait_for(Duration::from_millis(300));
 
     assert!(!is_renaming_in_place(&test), "nothing is renamed");
     assert_eq!(test.selected_names(), ["Résumé.txt"]);
-}
-
-/// Another tab in front on the same folder, on a share that sends no
-/// change notices, shows a file a slow create made there from the first
-/// tab, without anything being renamed.
-///
-/// parity: OPS-002
-#[gtk::test]
-fn another_tab_on_the_same_folder_shows_the_new_file() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    let release = start_held_text_document(&test);
-    test.window.add_tab(&fixture.uri()).expect("a valid folder");
-    test.wait_for_listing("the second tab");
-    // As on a share that sends no change notices.
-    test.window
-        .imp()
-        .session
-        .borrow_mut()
-        .change_panes(|tab| tab.watch = None);
-
-    finish_held_text_document(&test, &fixture, release);
-
-    wait_until("the new file in the tab in front", || {
-        test.names().contains(&"New Text Document.txt".to_owned())
-    });
-    assert!(!is_renaming_in_place(&test), "nothing is renamed");
 }
