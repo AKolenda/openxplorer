@@ -6805,7 +6805,7 @@ python_tests = [
 bridge = ["rename", "list"]
 dolphin = "Dolphin: F2 renames inline, selecting the name without extension; Shift+F2? (batch rename for multi-selection).; F2 rename"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try, an_item_that_is_not_on_screen_is_renamed_with_the_dialog, several_selected_items_are_renamed_with_one_numbered_name_and_undone_together); native/crates/ox-app/src/window/file_ops/availability.rs. F2 renames in place (OPS-010) with the dialog's checks and messages, which show in the toast while the field stays; an item whose cell is not on screen gets the Rename dialog. The renamed item stays selected. Differs on purpose: with several items selected, F2 and Rename open the batch rename (OPS-014) instead of doing nothing."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try, an_item_that_is_not_on_screen_is_renamed_with_the_dialog); native/crates/ox-app/src/window/tests/renaming_several.rs (one_selected_item_gets_exactly_the_typed_name); native/crates/ox-app/src/window/file_ops/availability.rs. F2 renames in place (OPS-010) with the dialog's checks and messages, which show in the toast while the field stays; an item whose cell is not on screen gets the Rename dialog. With one item selected the typed name is its whole new name, without a number. The renamed item stays selected. Differs on purpose: with several items selected, F2 and Rename give them all the typed name with a number, as Windows Explorer does (OPS-014), instead of doing nothing."
 
 [[feature]]
 id = "OPS-010"
@@ -6887,8 +6887,8 @@ native_note = "native/crates/ox-app/src/window/tests/renaming.rs (cancelling_the
 [[feature]]
 id = "OPS-014"
 area = "OPS"
-title = "Batch rename"
-behaviour = "F2 with several items selected opens 'Rename Items': 'Rename the <n> selected items to:' with the template 'New name #', where # becomes ascending numbers from a chosen start. If all the items' extensions differ, a common name without # is allowed and each keeps its extension. Undo reverses the whole batch as one step."
+title = "Rename several items at once"
+behaviour = "F2 or Rename with several items selected edits one name in place, as Windows Explorer does; Enter gives every selected item that name with a number in brackets, from (1) in the order shown ('Holiday (1).jpg', 'Holiday (2).jpg'), each file keeping its own extension. Escape renames nothing. Nothing is overwritten. Undo reverses the whole rename as one step."
 origin = ["dolphin"]
 priority = "must"
 openxplorer = "missing"
@@ -6897,12 +6897,16 @@ sources = [
   "kio:src/widgets/renamefiledialog.cpp:61-140",
   "dolphin:doc/index.docbook:898-928",
   "kio:src/widgets/fileundomanager.cpp:327",
+  "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ifileoperation-renameitems",
+  "https://learn.microsoft.com/en-us/answers/questions/2573644/bulk-rename-files-in-order-of-date-created",
+  "https://learn.microsoft.com/en-us/answers/questions/3956345/formatting-built-in-file-auto-numbering",
+  "https://devblogs.microsoft.com/oldnewthing/20070803-00/?p=25723",
 ]
 python_tests = []
 bridge = ["rename"]
 dolphin = "renamefile: F2 with multiple items (KIO::RenameFileDialog)"
 native = "done"
-native_note = "native/crates/ox-core/src/ops/batch_rename.rs (items_are_numbered_from_the_first_number_and_keep_their_extensions, a_taken_name_is_reported_and_the_rest_are_renamed); native/crates/ox-app/src/window/tests/file_operations.rs (several_selected_items_are_renamed_with_one_numbered_name_and_undone_together); native/crates/ox-core/tests/ops_undo.rs (a_batch_rename_is_undone_and_redone_as_one_step). F2, the command bar's and the context menu's Rename with several items open 'Rename items': 'Rename the <n> selected items to:', a Name field starting as 'New name #' with the part before # selected, and '# becomes ascending numbers starting at' (1). The first run of # becomes the number, zero-padded to its length (### gives 001); each item keeps its extension (.tar.gz and similar whole; folders have none). Without # the name is accepted only when every new name differs; otherwise 'Add # to the name, so each item gets its own number.' stays in the dialog. Items are numbered in view order and renamed as the window's one operation with the single-rename rules (never overwrites; a taken name is reported and the rest go on); the renamed items are selected without a message, as in Windows Explorer, and Undo and Redo reverse the batch as one step ('Undo Rename', Explorer's wording for any rename)."
+native_note = "native/crates/ox-core/src/ops/batch_rename.rs (each_item_keeps_its_own_extension_and_folders_get_none, a_typed_extension_of_the_edited_item_is_not_numbered, a_taken_number_is_skipped_and_nothing_is_overwritten, an_item_that_has_its_numbered_name_already_keeps_it, an_item_that_cannot_be_renamed_is_reported_and_the_rest_go_on); native/crates/ox-app/src/window/tests/renaming_several.rs (several_selected_items_get_the_typed_name_numbered_in_view_order, a_taken_numbered_name_is_skipped, escape_renames_none_of_the_selected_items, an_item_that_cannot_be_renamed_is_reported_and_the_rest_are_renamed, one_selected_item_gets_exactly_the_typed_name, several_items_off_screen_are_named_in_the_rename_dialog); native/crates/ox-core/tests/ops_undo.rs (a_batch_rename_is_undone_and_redone_as_one_step). As in Windows Explorer, F2, the command bar's and the context menu's Rename with several items selected edit one name in place: the focused item's, or the first selected item's when focus is on none of them (Rename dialog when its cell is not on screen). Enter gives every selected item the typed name plus ' (1)', ' (2)' and so on in the order shown, folders and files in one sequence, each file keeping the extension after its last dot; folders and files without an extension get none. The edited item's extension at the end of the typed name is dropped from the name the numbers follow, any other typed text is kept, so no extension changes and the extension question (OPS-049) is not asked. A number whose name is taken is skipped and nothing is overwritten; an item that fails for another reason is left as it is, named in 'Operation result', and the next item takes its number. Escape, or Enter on the unchanged name, renames nothing. The renamed items are selected without a message, and Undo and Redo reverse the whole rename as one step ('Undo Rename'). Differs from Dolphin on purpose: Windows Explorer's way replaces Dolphin's 'Rename Items' dialog, its '#' template and its start number."
 
 [[feature]]
 id = "OPS-015"

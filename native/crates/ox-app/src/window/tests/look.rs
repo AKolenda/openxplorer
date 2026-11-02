@@ -392,9 +392,9 @@ fn a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance() {
     let test = laid_out(&fixture.uri());
     for (theme, content) in [("light", "#ffffff"), ("dark", "#202020")] {
         show_theme(&test, theme);
-        // Renaming several items asks in a dialog; New folder asks nothing.
-        super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
-        test.activate("rename", None);
+        // A new file from a template asks for its name in a dialog; New
+        // folder asks nothing.
+        test.activate("new-markdown-document", None);
         let dialog = open_dialog(&test);
         wait_for_frames(&dialog, 3);
         assert_eq!(painted(&dialog).width(), 510, "the dialog's width");

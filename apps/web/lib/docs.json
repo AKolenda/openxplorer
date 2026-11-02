@@ -407,6 +407,13 @@
         ]
       },
       {
+        "id": "rename-several",
+        "title": "Rename several items at once",
+        "paragraphs": [
+          "As in Windows Explorer, select several items and press F2, or choose Rename, then type one name for the item whose name opens for editing and press Enter. Every selected item gets that name with a number in brackets, in the order the folder shows them: Holiday (1).jpg, Holiday (2).jpg, Holiday (3).png. Each file keeps its own extension, and folders and files without an extension get none. A numbered name that is already taken is skipped, so nothing is overwritten. Escape renames nothing, an item that cannot be renamed is listed in Operation result while the others are renamed, and one Ctrl+Z renames them all back."
+        ]
+      },
+      {
         "id": "transfer-jobs",
         "title": "Follow file operations",
         "paragraphs": [

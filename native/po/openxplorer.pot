@@ -902,7 +902,7 @@ msgstr ""
 msgid "Folder path"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/general_panel.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
 msgid "Name"
 msgstr ""
 
@@ -3743,7 +3743,7 @@ msgstr ""
 msgid "Paste files (Ctrl+V)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/conflict_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/conflict_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Rename"
 msgstr ""
 
@@ -4406,19 +4406,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
 msgid "Wait for the running file operation to finish."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/batch_rename.rs
-msgid "# becomes ascending numbers starting at"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/batch_rename.rs
-msgid "Rename items"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/file_ops/batch_rename.rs
-msgid "Rename the {len} selected items to:"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/batch_rename.rs
@@ -6992,15 +6979,7 @@ msgid "Use a share name of up to 80 characters without % < > * ? | / \\ + = ; : 
 msgstr ""
 
 #: crates/ox-core/src/ops/batch_rename.rs
-msgid "Add # to the name, so each item gets its own number."
-msgstr ""
-
-#: crates/ox-core/src/ops/batch_rename.rs
 msgid "Enter a name for the items."
-msgstr ""
-
-#: crates/ox-core/src/ops/batch_rename.rs
-msgid "New name #"
 msgstr ""
 
 #: crates/ox-core/src/ops/conflicts.rs

@@ -4309,18 +4309,6 @@ msgid "Wait for the running file operation to finish."
 msgstr "请等待正在进行的文件操作完成。"
 
 #: crates/ox-app/src/window/file_ops/batch_rename.rs
-msgid "# becomes ascending numbers starting at"
-msgstr "“#”将替换为从以下数字开始递增的编号"
-
-#: crates/ox-app/src/window/file_ops/batch_rename.rs
-msgid "Rename items"
-msgstr "重命名项目"
-
-#: crates/ox-app/src/window/file_ops/batch_rename.rs
-msgid "Rename the {len} selected items to:"
-msgstr "将选中的 {len} 个项目重命名为："
-
-#: crates/ox-app/src/window/file_ops/batch_rename.rs
 msgid "Renaming items…"
 msgstr "正在重命名项目…"
 
@@ -6783,16 +6771,8 @@ msgid "Use a share name of up to 80 characters without % < > * ? | / \\ + = ; : 
 msgstr "请使用不超过 80 个字符的共享名称，不能包含 % < > * ? | / \\ + = ; : \" 或 ,。"
 
 #: crates/ox-core/src/ops/batch_rename.rs
-msgid "Add # to the name, so each item gets its own number."
-msgstr "在名称中添加#，这样每个项目都会有自己的编号。"
-
-#: crates/ox-core/src/ops/batch_rename.rs
 msgid "Enter a name for the items."
 msgstr "请输入项目的名称。"
-
-#: crates/ox-core/src/ops/batch_rename.rs
-msgid "New name #"
-msgstr "新名称 #"
 
 #: crates/ox-core/src/ops/conflicts.rs
 msgid "Open a destination folder before pasting."

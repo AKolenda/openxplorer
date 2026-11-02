@@ -12,7 +12,8 @@
 //!   and no operation runs.
 //! - Cut and Delete: as Copy, and nothing selected is read-only.
 //! - Rename: as Cut, with exactly one item selected. The native app also
-//!   takes several, for the batch rename (OPS-014).
+//!   takes several, which get one numbered name as in Windows Explorer
+//!   (OPS-014).
 //! - Paste: a file clipboard, no search, no operation, every selected item
 //!   operable, and a writable folder.
 //! - New: no search, no operation, and a writable folder.

@@ -220,8 +220,7 @@ fn no_drag_starts_while_a_menu_or_a_dialog_is_open() {
     test.window.right_click(Some(notes));
     let with_menu = test.window.drag_content_for(notes);
     test.window.context_menu().popdown();
-    super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
-    test.activate("rename", None);
+    test.activate("new-markdown-document", None);
     let dialog = open_dialog(&test);
     let with_dialog = test.window.drag_content_for(notes);
     dialog.press("Cancel");

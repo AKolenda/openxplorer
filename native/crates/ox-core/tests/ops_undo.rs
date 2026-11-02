@@ -308,8 +308,8 @@ fn a_batch_rename_is_undone_and_redone_as_one_step() {
                 is_dir: false,
             })
             .to_vec(),
-        pattern: "Trip #".to_owned(),
-        first_number: 1,
+        name: "Trip".to_owned(),
+        edited_name: "b.txt".to_owned(),
     };
     let context = OperationContext::default();
 
@@ -326,8 +326,8 @@ fn a_batch_rename_is_undone_and_redone_as_one_step() {
     assert_eq!(record.undo_label(), "Undo Rename");
     assert_eq!(names_after_undo, [true, true]);
     assert!(redone.errors.is_empty(), "{:?}", redone.errors);
-    assert_eq!(fs::read(temp.path().join("Trip 1.txt")).unwrap(), b"b.txt");
-    assert_eq!(fs::read(temp.path().join("Trip 2.jpg")).unwrap(), b"a.jpg");
+    assert_eq!(fs::read(temp.path().join("Trip (1).txt")).unwrap(), b"b.txt");
+    assert_eq!(fs::read(temp.path().join("Trip (2).jpg")).unwrap(), b"a.jpg");
 }
 
 /// parity: OPS-029, DND-019

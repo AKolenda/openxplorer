@@ -96,7 +96,7 @@ mod undo;
 mod undo_apply;
 mod unfinished;
 
-pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
+pub use batch_rename::{rename_batch, BatchItem, BatchRename};
 pub use changed_copies::changed_copies;
 pub use chosen_transfer::{run_chosen_transfer, ChosenTransfer, ItemChoice};
 pub use conflicts::find_conflicts;
