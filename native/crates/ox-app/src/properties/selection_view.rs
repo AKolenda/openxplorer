@@ -64,7 +64,10 @@ impl SelectionProperties {
 
     /// The dialog's title: `<count> items Properties`.
     pub(crate) fn dialog_title(count: usize) -> String {
-        ox_core::i18n::format_message("{count} items Properties", &[("count", &count.to_string())])
+        ox_core::i18n::format_message(
+            "{count} items Properties",
+            &[("count", &ox_core::format::group_digits(count as u64))],
+        )
     }
 
     /// The widget, for the dialog's body.

@@ -123,7 +123,7 @@ fn drag_icon(art: Art, count: usize) -> gtk::Widget {
     icon.append(&ArtImage::new(art, DRAG_ICON_SIZE));
     if count > 1 {
         let badge = gtk::Label::builder()
-            .label(count.to_string())
+            .label(ox_core::format::group_digits(count as u64))
             .valign(gtk::Align::Start)
             .css_classes(["drag-count"])
             .build();

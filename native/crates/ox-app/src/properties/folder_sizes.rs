@@ -101,7 +101,7 @@ impl FolderSizeState {
                     "{status} · {files} files · {skipped} skipped · {errors} unreadable. {reason} {finished}",
                     &[
                         ("status", status),
-                        ("files", &size.files.to_string()),
+                        ("files", &ox_core::format::group_digits(size.files)),
                         ("skipped", &size.skipped.to_string()),
                         ("errors", &size.errors.to_string()),
                         ("reason", reason),
