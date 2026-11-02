@@ -416,6 +416,46 @@ fn another_tab_grabbed_before_a_release_settled_follows_once_it_landed() {
     assert!(strip.is_following(), "the other tab follows the pointer");
 }
 
+/// A tab let go before a tab that closes while it slides into place lands
+/// before the next tab still open, where the strip showed it, not at the
+/// end of the row.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_whose_landing_neighbour_closes_while_it_settles_lands_before_the_next() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    for folder in ["Music", "Pictures"] {
+        test.window.add_tab(&fixture.uri_of(folder)).expect("a folder");
+        test.wait_for_listing("another tab");
+    }
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let [first, second, third, fourth] = tab_ids(&test.window)[..] else {
+        panic!("four tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let x = grab_point(&test.window, first);
+    let second_width = strip.tab_width(second).expect("a shown tab");
+    let moved = Rc::new(Cell::new(None));
+
+    strip.grab_tab(first, (x, 10.0));
+    // Past the second tab's middle, short of the third's.
+    strip.follow_pointer(first, grab_point(&test.window, second) + second_width / 2.0);
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    strip.let_go(
+        true,
+        glib::clone!(
+            #[strong]
+            moved,
+            move |went| moved.set(Some(went))
+        ),
+    );
+    test.window.close_tab(third);
+    crate::test_support::harness::wait_until("the tab settled", || moved.get().is_some());
+
+    assert_eq!(moved.get(), Some(Some((first, Some(fourth)))));
+}
+
 /// A tab let go past another and pressed again while it still slides into
 /// its new place, before the strip took the new order: it is held where
 /// the press met it as drawn, so the next motion moves it with the

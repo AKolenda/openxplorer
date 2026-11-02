@@ -643,10 +643,8 @@ impl Session {
             // The window it left goes away, and the tab with it.
             self.released.set(true);
         }
-        if !self.merged.get() && self.hidden.get() {
-            if let Some(window) = self.dragged.upgrade().filter(stays) {
-                window.present();
-            }
+        if let Some(window) = self.dragged.upgrade().filter(stays) {
+            show_dragged_again(&window, self.tab, self.merged.get(), self.hidden.get());
         }
     }
 
@@ -683,6 +681,17 @@ impl Session {
         }
         self.release();
         true
+    }
+}
+
+/// The drag over: a `hidden` dragged window shows again while it keeps a
+/// tab, its own `tab` unless that `merged` into another window, or one
+/// opened in it during the drag, so no tab is left in a window no one sees.
+fn show_dragged_again(dragged: &BrowserWindow, tab: TabId, merged: bool, hidden: bool) {
+    let has_another =
+        |session: &crate::window::session::Session| session.tabs().iter().any(|kept| kept.id != tab);
+    if hidden && (!merged || has_another(&dragged.imp().session.borrow())) {
+        dragged.present();
     }
 }
 
@@ -1401,6 +1410,28 @@ mod tests {
 
         assert!(dragged.is_visible(), "the dragged window shows again");
         assert_eq!(dragged.tab_count(), 1, "with its tab");
+    }
+
+    /// A window drag whose tab moved into another row while a tab opened in
+    /// its hidden window, as an external request may open one there, ends
+    /// with that window shown again, so the tab it keeps can be seen.
+    ///
+    /// parity: TAB-033
+    #[gtk::test]
+    fn a_hidden_dragged_window_that_keeps_a_tab_after_a_merge_shows_again() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window
+            .add_tab(&fixture.uri_of("Documents"))
+            .expect("a folder");
+        test.wait_for_listing("the second tab");
+        let merged = test.window.imp().session.borrow().active_id().expect("a tab");
+        test.window.release_moved_tab(merged);
+        test.window.set_visible(false);
+
+        show_dragged_again(&test.window, merged, true, true);
+
+        assert!(test.window.is_visible(), "the dragged window shows again");
     }
 
     /// A row takes the dragged window's tab over itself, and the row that
