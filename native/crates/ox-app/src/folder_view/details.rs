@@ -31,7 +31,7 @@ use ox_core::format::DateStyle;
 use ox_core::settings::{ColumnWidth, ColumnWidths};
 
 pub(crate) use column_choice::chosen_from_keys;
-pub(crate) use column_text::cell_text;
+pub(crate) use column_text::shown_cell_text;
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners};
 use crate::folder_view::column_keys;
@@ -93,7 +93,12 @@ fn text_factory(
         let list_item = cells::as_list_item(object);
         let label = list_item.child().and_downcast::<gtk::Label>();
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
-            label.set_text(&cell_text(column, &item, dates.get()));
+            label.set_text(&shown_cell_text(
+                column,
+                &item,
+                dates.get(),
+                bind_owners.counts_items(),
+            ));
             bind_owners.style_cell(&label, &item);
             if column == SortColumn::Size {
                 column_text::request_item_count(&label, &item, &bind_owners);
@@ -408,7 +413,7 @@ impl DetailsView {
         };
         (0..items.n_items().min(limit))
             .filter_map(|position| items.item(position).and_downcast::<FileItem>())
-            .map(|item| cell_text(column, &item, self.date_style()))
+            .map(|item| shown_cell_text(column, &item, self.date_style(), self.counts_items()))
             .collect()
     }
 
@@ -443,6 +448,21 @@ impl DetailsView {
             for column in [SortColumn::Modified, SortColumn::Created, SortColumn::Deleted] {
                 self.redraw_column(column);
             }
+        }
+    }
+
+    /// Whether folders in the Size column say how many items they hold.
+    pub(crate) fn counts_items(&self) -> bool {
+        self.cells().owners.counts_items()
+    }
+
+    /// Makes folders in the Size column count their items, or not,
+    /// redrawing the Size cells shown: a count already made hides at once,
+    /// and shows again once counting is back on (VIEW-037).
+    pub(crate) fn set_counts_items(&self, counts: bool) {
+        if self.counts_items() != counts {
+            self.cells().owners.set_counts_items(counts);
+            self.redraw_column(SortColumn::Size);
         }
     }
 

@@ -120,14 +120,15 @@ pub(super) fn selection_text(selected: SelectionSummary) -> String {
 }
 
 /// What the status bar says about one item, the one selected or the one
-/// under the pointer: its name, its type and its size or item count
+/// under the pointer: its name, its type and its size, or its item count
+/// while `counts_items`, as the Size column shows it
 /// (`KFileItem::getStatusBarInfo` in Dolphin).
-pub(super) fn item_text(item: &FileItem) -> String {
+pub(super) fn item_text(item: &FileItem, counts_items: bool) -> String {
     let entry = item.entry();
     let size = match (item.folder_size(), item.item_count()) {
         (Some(measured), _) => Some(measured.size_text()),
-        (None, Some(count)) => Some(item_count_text(count)),
-        (None, None) => item.file_size().map(format::pretty_bytes),
+        (None, Some(count)) if counts_items => Some(item_count_text(count)),
+        (None, _) => item.file_size().map(format::pretty_bytes),
     };
     let mut parts = vec![entry.name.clone(), entry.type_label.clone()];
     parts.extend(size);
@@ -528,7 +529,7 @@ mod tests {
         entry.type_label = "PDF document".to_owned();
         let report = FileItem::new(entry);
         assert_eq!(
-            item_text(&report),
+            item_text(&report, true),
             format!("Report.pdf · PDF document · {}", format::pretty_bytes(2048))
         );
     }
