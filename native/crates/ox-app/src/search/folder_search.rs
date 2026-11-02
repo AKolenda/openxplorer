@@ -35,8 +35,24 @@ pub(crate) struct SearchRun {
     pub coverage: SearchSource,
     /// Whether the text of files is searched too (SRCH-036).
     pub search_in: SearchIn,
+    /// Whether the run only brings the shown rows up to date after the
+    /// cache or the listing changed, so it keeps them, their selection and
+    /// the strip as they are rather than starting over.
+    pub refreshes: bool,
     /// Cancelled when a newer edit replaces the run.
     pub cancellable: gio::Cancellable,
+}
+
+/// What a change in the cache or the listing asks of the shown search.
+#[derive(Debug)]
+pub(crate) enum Rerun {
+    /// Nothing: the search does not read the cache, as a walk of the
+    /// folder does not.
+    Keep,
+    /// Ask the cache again quietly and update the shown rows in place.
+    Refresh(SearchRun),
+    /// The search would now look elsewhere; run it again from the start.
+    Restart,
 }
 
 /// A window's search.
@@ -201,9 +217,42 @@ impl FolderSearch {
             return None;
         }
         self.report = Some(report);
+        Some(self.start_run(folder, source, coverage, false))
+    }
+
+    /// Follows a change in the cache, or in the listing a cached search
+    /// merges in, with the indexed folders now `roots`. A search that still
+    /// looks where it did is not started over: a walk of the folder does
+    /// not read the cache, so it goes on, and a cached search asks the
+    /// cache again without saying "Searching…" or replacing its rows.
+    /// Starting over every few seconds while a folder is indexed reset the
+    /// rows under the pointer and dropped the selection.
+    pub(crate) fn rerun(&mut self, folder: &str, roots: &[IndexRoot]) -> Rerun {
+        let Some(shown) = self.report.as_ref() else {
+            return Rerun::Restart;
+        };
+        let next = self.searching_report(roots, folder);
+        if (shown.source, shown.coverage) != (next.source, next.coverage) {
+            return Rerun::Restart;
+        }
+        if !next.source.uses_cache() {
+            return Rerun::Keep;
+        }
+        self.cancel();
+        Rerun::Refresh(self.start_run(folder, next.source, next.coverage, true))
+    }
+
+    /// Makes the run that may show its results next.
+    fn start_run(
+        &mut self,
+        folder: &str,
+        source: SearchSource,
+        coverage: SearchSource,
+        refreshes: bool,
+    ) -> SearchRun {
         let cancellable = gio::Cancellable::new();
         self.running = Some(cancellable.clone());
-        Some(SearchRun {
+        SearchRun {
             generation: self.generation,
             folder: folder.to_owned(),
             text: self.query.trim().to_owned(),
@@ -211,8 +260,9 @@ impl FolderSearch {
             source,
             coverage,
             search_in: self.search_in,
+            refreshes,
             cancellable,
-        })
+        }
     }
 
     /// Whether `run` is still the latest run, whose results may be shown.
@@ -343,6 +393,75 @@ mod tests {
         let report = search.report().expect("a search is reported");
         assert_eq!(report.caption(), "Current folder only");
         assert!(report.offers_to_cache_folder());
+    }
+
+    /// A change in the cache while a folder nobody indexed is walked, as
+    /// indexing another folder makes every few seconds, leaves the walk and
+    /// its rows alone.
+    ///
+    /// parity: SRCH-018, SRCH-035
+    #[test]
+    fn a_cache_change_leaves_a_walk_of_the_folder_alone() {
+        let mut search = searching("report");
+        let walk = search.begin(FOLDER, &[]).expect("the folder's tree is walked");
+        search.show_found(&walk, empty_results());
+
+        let elsewhere = enabled_root("file:///home/demo/Elsewhere");
+        let rerun = search.rerun(FOLDER, std::slice::from_ref(&elsewhere));
+
+        assert!(matches!(rerun, Rerun::Keep), "{rerun:?}");
+        assert!(!walk.cancellable.is_cancelled(), "the walk goes on");
+        assert!(search.is_current(&walk), "its rows may still be shown");
+        search.finish(&walk, empty_results(), false);
+        assert!(matches!(search.rerun(FOLDER, &[elsewhere]), Rerun::Keep));
+    }
+
+    /// A shown cached search asks the cache again without saying
+    /// "Searching…" or dropping the rows on screen.
+    ///
+    /// parity: SRCH-018
+    #[test]
+    fn a_cache_change_refreshes_a_cached_search_in_place() {
+        let roots = [enabled_root(FOLDER)];
+        let mut search = searching("report");
+        let first = search.begin(FOLDER, &roots).expect("a cached search");
+        let rows = empty_results();
+        search.finish(&first, rows.clone(), false);
+        let shown = search.report().cloned();
+
+        let Rerun::Refresh(refresh) = search.rerun(FOLDER, &roots) else {
+            panic!("a cached search asks the cache again");
+        };
+
+        assert!(refresh.refreshes);
+        assert!(search.is_current(&refresh));
+        assert_eq!(search.report(), shown.as_ref(), "the strip and status stay");
+        assert_eq!(search.results(), Some(&rows), "the shown rows stay");
+
+        let Rerun::Refresh(newer) = search.rerun(FOLDER, &roots) else {
+            panic!("a second change asks again");
+        };
+        assert!(refresh.cancellable.is_cancelled());
+        assert!(!search.is_current(&refresh), "only the newest answer is shown");
+        assert!(search.is_current(&newer));
+    }
+
+    /// A folder that became indexed is searched in the cache from the
+    /// start.
+    ///
+    /// parity: SRCH-018, SRCH-020
+    #[test]
+    fn a_folder_that_became_indexed_is_searched_again() {
+        let mut search = searching("report");
+        let walk = search.begin(FOLDER, &[]).expect("the folder's tree is walked");
+
+        let rerun = search.rerun(FOLDER, &[enabled_root(FOLDER)]);
+
+        assert!(matches!(rerun, Rerun::Restart), "{rerun:?}");
+        let run = search.begin(FOLDER, &[enabled_root(FOLDER)]).expect("a search");
+        assert!(walk.cancellable.is_cancelled());
+        assert!(run.source.uses_cache());
+        assert!(!run.refreshes);
     }
 
     /// parity: SRCH-007
