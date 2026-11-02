@@ -14,7 +14,9 @@ use super::file_ops_support::{
     dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
     select_names, wait_for_no_dialog,
 };
-use crate::test_support::harness::{settle, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    capture_popover, settle, wait_for_frames, wait_until, Fixture, TestWindow,
+};
 use crate::window::menu_popover::MenuStyle;
 
 /// The position of the item called `name` in `test`'s view.
@@ -455,6 +457,7 @@ fn the_compact_folder_menu_opens_its_submenus_in_place() {
         menu.row_labels().last().map(String::as_str),
         Some("Show more options")
     );
+    capture_popover(&test.window, &menu, "native-menu-compact-folder.png");
 
     menu.row("Sort by").emit_activate();
     wait_until("the Sort submenu", || {
