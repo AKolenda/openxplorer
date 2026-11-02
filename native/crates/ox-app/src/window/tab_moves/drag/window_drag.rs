@@ -321,6 +321,15 @@ impl Session {
         self.host.borrow().upgrade().as_ref() == Some(window)
     }
 
+    /// Whether this drag holds tab `id` of `window`: its tab in the dragged
+    /// window, and in the window it was dragged out of until that window
+    /// lets it go, which a merge or Escape still moves.
+    fn holds(&self, window: &BrowserWindow, id: TabId) -> bool {
+        let is = |weak: &glib::WeakRef<BrowserWindow>| weak.upgrade().as_ref() == Some(window);
+        (id == self.tab && is(&self.dragged))
+            || (id == self.origin_tab && !self.released.get() && is(&self.origin))
+    }
+
     /// A drag of tab `tabs.0` of `origin`, which is `tabs.1` of `dragged`:
     /// its data source, offering only [`WINDOW_DRAG_MIME`] and a move, its
     /// window drag and the device that starts it.
@@ -676,6 +685,12 @@ impl BrowserWindow {
         session.start_pump();
         SESSION.set(Some(session));
         true
+    }
+
+    /// Whether the window drag in progress holds tab `id` of this window,
+    /// which then neither closes nor changes location (TAB-003).
+    pub(super) fn window_drag_holds(&self, id: TabId) -> bool {
+        Session::current().is_some_and(|session| session.holds(self, id))
     }
 
     /// A new window with tab `id` of this one, at this window's size, shown

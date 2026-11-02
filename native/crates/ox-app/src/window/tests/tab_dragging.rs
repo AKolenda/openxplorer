@@ -13,6 +13,8 @@
 //! that display, GDK moves a window itself when the handle asks to, so a
 //! window drag that wins shows as a window that moved.
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::glib;
@@ -339,6 +341,86 @@ fn without_animations_tabs_jump_into_place_while_the_dragged_tab_follows() {
         "the dragged tab follows the pointer: {followed}"
     );
     assert_eq!(order_at_once, [second, first]);
+}
+
+/// A tab let go into its place without a slide is grabbed again before
+/// the main loop turns, as presses queued behind the release are: it goes
+/// on following the pointer, and the release's settling, overtaken, does
+/// not end the new drag. The strip is called directly, since a real
+/// pointer lets the main loop turn between its steps.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_grabbed_again_before_its_release_settled_goes_on_following() {
+    let _off = AnimationsOff::new();
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    let [first, _] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let x = grab_point(&test.window, first);
+    let settled = Rc::new(Cell::new(false));
+
+    strip.grab_tab(first, (x, 10.0));
+    strip.follow_pointer(first, x + 40.0);
+    strip.let_go(
+        true,
+        glib::clone!(
+            #[strong]
+            settled,
+            move |_| settled.set(true)
+        ),
+    );
+    strip.follow_pointer(first, x + 60.0);
+    wait_for(Duration::from_millis(40));
+
+    assert!(!settled.get(), "the overtaken release did not settle");
+    assert_eq!(strip.live_tab(), Some(first));
+    assert!(strip.is_following(), "the tab follows the pointer");
+}
+
+/// Another tab grabbed before a release without a slide settled: the
+/// released tab takes its place first, at once, and the new drag goes on.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn another_tab_grabbed_before_a_release_settled_follows_once_it_landed() {
+    let _off = AnimationsOff::new();
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    let [first, second] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let (x, other_x) = (grab_point(&test.window, first), grab_point(&test.window, second));
+    let settled = Rc::new(Cell::new(false));
+
+    strip.grab_tab(first, (x, 10.0));
+    strip.follow_pointer(first, x + 40.0);
+    strip.let_go(
+        true,
+        glib::clone!(
+            #[strong]
+            settled,
+            move |_| settled.set(true)
+        ),
+    );
+    strip.grab_tab(second, (other_x, 10.0));
+    strip.follow_pointer(second, other_x + 20.0);
+    let settled_first = settled.get();
+    wait_for(Duration::from_millis(40));
+
+    assert!(settled_first, "the released tab took its place first");
+    assert_eq!(strip.live_tab(), Some(second));
+    assert!(strip.is_following(), "the other tab follows the pointer");
+}
+
+/// A point 20 pixels into tab `id`, along the strip.
+fn grab_point(window: &BrowserWindow, id: TabId) -> f64 {
+    let strip = window.tab_strip();
+    let bounds = strip.tab_bounds_in(id, strip).expect("a shown tab");
+    f64::from(bounds.x()) + 20.0
 }
 
 /// With another window open, a tab dragged out of its row is carried by

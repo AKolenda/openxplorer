@@ -231,8 +231,14 @@ impl TabLayout {
             .as_ref()
             .is_some_and(|live| live.dragged() == dragged);
         if resumes {
-            if let Some(live) = self.imp().live.borrow_mut().as_mut() {
-                live.take_on_settled();
+            let settled = self
+                .imp()
+                .live
+                .borrow_mut()
+                .as_mut()
+                .and_then(LiveTabs::take_on_settled);
+            if let Some(settled) = settled {
+                settled.cancel();
             }
             self.follow(left);
             return;
@@ -383,14 +389,12 @@ impl TabLayout {
         }
     }
 
-    /// Runs what waits for a released tab, once, after this frame.
+    /// Runs what waits for a released tab, once, after this frame. It
+    /// stays with the live layout until then, so a new drag of the tab can
+    /// still call it off, and another tab grabbed meanwhile runs it first
+    /// ([`Self::finish_now`]).
     fn run_settled(&self) {
-        let settled = self
-            .imp()
-            .live
-            .borrow_mut()
-            .as_mut()
-            .and_then(LiveTabs::take_on_settled);
+        let settled = self.imp().live.borrow().as_ref().and_then(LiveTabs::on_settled);
         if let Some(settled) = settled {
             glib::idle_add_local_once(move || settled.run());
         }

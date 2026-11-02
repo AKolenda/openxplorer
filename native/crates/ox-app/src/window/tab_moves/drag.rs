@@ -168,7 +168,8 @@ impl BrowserWindow {
 
     /// True, after saying so, while tab `id` is being dragged: it cannot
     /// close or change location until the drag has settled where it goes
-    /// (TAB-003).
+    /// (TAB-003), whether GTK's drag and drop carries it, it moves along the
+    /// strip, or its window is dragged.
     pub(in crate::window) fn refuse_while_moving(&self, id: TabId) -> bool {
         let is_moving = self
             .imp()
@@ -176,7 +177,8 @@ impl BrowserWindow {
             .borrow()
             .as_ref()
             .is_some_and(|outgoing| outgoing.tab == id)
-            || self.tab_strip().live_tab() == Some(id);
+            || self.tab_strip().live_tab() == Some(id)
+            || self.window_drag_holds(id);
         if is_moving {
             self.show_message(ox_core::i18n::gettext_static(TAB_IS_MOVING));
         }

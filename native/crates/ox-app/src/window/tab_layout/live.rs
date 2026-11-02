@@ -21,6 +21,8 @@
 //! the desktop turns animations off (`gtk-enable-animations`), tabs move
 //! into place at once; the dragged tab still follows the pointer.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::glib;
@@ -82,8 +84,14 @@ struct Dragged {
     detached: bool,
 }
 
-/// What runs once a released tab is in place.
-pub(super) struct Settled(Box<dyn FnOnce()>);
+/// What runs once a released tab is in place: once, and not when a new
+/// drag of the tab calls it off first, even after it was handed to the
+/// main loop to run; each clone is the same.
+#[derive(Clone)]
+pub(super) struct Settled(Rc<RefCell<Option<Then>>>);
+
+/// What runs once, when it was not called off.
+type Then = Box<dyn FnOnce()>;
 
 impl std::fmt::Debug for Settled {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -92,8 +100,21 @@ impl std::fmt::Debug for Settled {
 }
 
 impl Settled {
-    pub(super) fn run(self) {
-        (self.0)();
+    fn new(then: Then) -> Self {
+        Self(Rc::new(RefCell::new(Some(then))))
+    }
+
+    /// Runs it, unless it ran or was called off.
+    pub(super) fn run(&self) {
+        let then = self.0.borrow_mut().take();
+        if let Some(then) = then {
+            then();
+        }
+    }
+
+    /// Calls it off.
+    pub(super) fn cancel(&self) {
+        self.0.borrow_mut().take();
     }
 }
 
@@ -242,7 +263,9 @@ impl LiveTabs {
         if self.dragged.settling {
             // Back in the strip before it slid back: it follows again.
             self.dragged.settling = false;
-            self.on_settled = None;
+            if let Some(settled) = self.on_settled.take() {
+                settled.cancel();
+            }
         }
         if was_away {
             // Back in the strip: the others open up for it again.
@@ -301,7 +324,7 @@ impl LiveTabs {
             live.dragged.settling = true;
             live.dragged.detached = false;
         });
-        self.on_settled = Some(Settled(then));
+        self.on_settled = Some(Settled::new(then));
     }
 
     /// Whether every slide is over at frame time `now`.
@@ -311,6 +334,11 @@ impl LiveTabs {
 
     pub(super) fn take_on_settled(&mut self) -> Option<Settled> {
         self.on_settled.take()
+    }
+
+    /// What waits for the released tab, which stays here until it ran.
+    pub(super) fn on_settled(&self) -> Option<Settled> {
+        self.on_settled.clone()
     }
 
     pub(super) fn set_tick(&mut self, tick: Option<gtk::TickCallbackId>) -> Option<gtk::TickCallbackId> {
