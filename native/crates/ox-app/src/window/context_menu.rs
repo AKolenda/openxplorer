@@ -28,7 +28,7 @@ use crate::integration::{self, ApplicationChoice, Tool};
 use crate::locations::Page;
 
 use super::actions::{plain_action, text_action};
-use super::command_bar::{new_menu, sort_menu, view_menu};
+use super::command_bar::{group_by_menu, new_menu, sort_menu, view_menu};
 use super::disk_tools::is_installed;
 use super::menu_popover::{MenuEntry, MenuPopover, MenuStyle};
 use super::widget_tree::children;
@@ -37,7 +37,8 @@ use super::BrowserWindow;
 
 use entries::{
     background_menu, compact_background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu,
-    zip_background_menu, zip_item_menu, Comparison, ContextMenu, ItemFacts, ItemLocation, ItemShape,
+    zip_background_menu, zip_item_menu, BackgroundSubmenus, Comparison, ContextMenu, ItemFacts, ItemLocation,
+    ItemShape,
 };
 
 /// How far into a row, and from the view's corner without one, a menu
@@ -197,7 +198,16 @@ impl BrowserWindow {
         let entries = match (items.first(), in_recycle_bin) {
             (None, true) => recycle_bin_background_menu(),
             (None, false) if style == MenuStyle::Compact => {
-                compact_background_menu(&self.journal_label(JournalDirection::Undo))
+                self.refresh_template_menu();
+                compact_background_menu(
+                    &self.journal_label(JournalDirection::Undo),
+                    BackgroundSubmenus {
+                        view: view_menu(),
+                        sort: sort_menu(),
+                        group: group_by_menu(),
+                        new: new_menu(self.template_menu_entries()),
+                    },
+                )
             }
             (None, false) => background_menu(
                 &self.journal_label(JournalDirection::Undo),
@@ -421,12 +431,12 @@ fn context_menu_of(view: &gtk::Widget) -> Option<MenuPopover> {
     children(view).find_map(|child| child.downcast::<MenuPopover>().ok())
 }
 
-/// The keys that open a context menu from the keyboard: the Menu key, in
-/// the right-click menu's style, and [`CLASSIC_MENU_KEY`].
-pub(super) const CONTEXT_MENU_KEYS: &str = "Menu|<Shift>F10";
+/// The key that opens the right-click menu's style from the keyboard.
+pub(super) const MENU_KEY: &str = "Menu";
 
-/// The key that opens the classic menu, `win.context-menu`.
-const CLASSIC_MENU_KEY: &str = "<Shift>F10";
+/// The key that opens the classic menu, `win.context-menu`, as "Show more
+/// options" does.
+pub(super) const CLASSIC_MENU_KEY: &str = "<Shift>F10";
 
 impl BrowserWindow {
     /// The Menu key opens the right-click menu's style and Shift+F10 the
@@ -445,8 +455,8 @@ impl BrowserWindow {
                 glib::Propagation::Stop
             }
         ));
-        let menu_key_trigger = gtk::KeyvalTrigger::new(gdk::Key::Menu, gdk::ModifierType::empty());
-        shortcuts.add_shortcut(gtk::Shortcut::new(Some(menu_key_trigger), Some(menu_key)));
+        let menu_key_trigger = gtk::ShortcutTrigger::parse_string(MENU_KEY);
+        shortcuts.add_shortcut(gtk::Shortcut::new(menu_key_trigger, Some(menu_key)));
         let classic = gtk::ShortcutTrigger::parse_string(CLASSIC_MENU_KEY);
         let action = gtk::NamedAction::new(&WindowAction::ContextMenu.detailed_name());
         shortcuts.add_shortcut(gtk::Shortcut::new(classic, Some(action)));

@@ -127,18 +127,69 @@ pub fn column_size_text(bytes: Option<u64>) -> String {
     )
 }
 
-/// `35000` as `35,000`, as Explorer's Size column groups digits.
+/// `35000` with the digits grouped in threes by the separator of the
+/// process's numeric locale, as Explorer's Size column groups them.
 fn group_thousands(value: u64) -> String {
+    group_thousands_with(value, group_separator_from_environment())
+}
+
+/// `35000` as `35<separator>000`.
+fn group_thousands_with(value: u64, separator: &str) -> String {
     let digits = value.to_string();
-    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3 * separator.len());
     for (index, digit) in digits.chars().enumerate() {
         let remaining = digits.len() - index;
         if index > 0 && remaining.is_multiple_of(3) {
-            grouped.push(',');
+            grouped.push_str(separator);
         }
         grouped.push(digit);
     }
     grouped
+}
+
+/// Languages that group digits with a full stop (CLDR `group` `.`).
+const FULL_STOP_LANGUAGES: [&str; 19] = [
+    "ca", "da", "de", "el", "es", "eu", "gl", "hr", "id", "is", "it", "nl", "pt", "ro", "sl", "sr", "tr",
+    "vi", "az",
+];
+
+/// Languages that group digits with a no-break space (CLDR `group` is a
+/// space).
+const SPACE_LANGUAGES: [&str; 18] = [
+    "be", "bg", "cs", "et", "fi", "fr", "hu", "kk", "lt", "lv", "nb", "nn", "no", "pl", "ru", "sk", "sv",
+    "uk",
+];
+
+/// The digit group separator of a locale name such as `de_DE.UTF-8`, after
+/// CLDR: a full stop, a no-break space, an apostrophe in Switzerland and
+/// Liechtenstein, else a comma (including `C` and `POSIX`).
+///
+/// `GLib` has no number formatting call and `localeconv` would need
+/// `unsafe`, so the language and region decide, as for the first weekday.
+fn group_separator_for_locale(locale: &str) -> &'static str {
+    let name = locale.split(['.', '@']).next().unwrap_or_default();
+    let (language, region) = name.split_once('_').unwrap_or((name, ""));
+    match (language, region) {
+        ("de" | "it" | "rm", "CH" | "LI") => "\u{2019}",
+        // Spanish in Mexico and the United States groups with a comma;
+        // Portuguese in Portugal with a space, in Brazil with a full stop.
+        ("es", "MX" | "US" | "PR" | "419") => ",",
+        ("pt", "PT") => "\u{a0}",
+        _ if FULL_STOP_LANGUAGES.contains(&language) => ".",
+        _ if SPACE_LANGUAGES.contains(&language) => "\u{a0}",
+        _ => ",",
+    }
+}
+
+/// The digit group separator of the process's numeric locale: `LC_ALL`,
+/// else `LC_NUMERIC`, else `LANG`, as the C library chooses it.
+fn group_separator_from_environment() -> &'static str {
+    let locale = ["LC_ALL", "LC_NUMERIC", "LANG"]
+        .into_iter()
+        .filter_map(|variable| std::env::var(variable).ok())
+        .find(|value| !value.is_empty())
+        .unwrap_or_default();
+    group_separator_for_locale(&locale)
 }
 
 /// `912 bytes`, `71.0 KB`, `130 KB`, `1.1 MB`: one decimal below 100 and
@@ -308,9 +359,26 @@ mod tests {
         assert_eq!(column_size_text(Some(20)), "1 KB");
         assert_eq!(column_size_text(Some(1024)), "1 KB");
         assert_eq!(column_size_text(Some(1025)), "2 KB");
-        assert_eq!(column_size_text(Some(2_401_280)), "2,345 KB");
-        assert_eq!(column_size_text(Some(1_073_741_824)), "1,048,576 KB");
         assert_eq!(column_size_text(None), "");
+        assert_eq!(group_thousands_with(2_345, ","), "2,345");
+        assert_eq!(group_thousands_with(1_048_576, "."), "1.048.576");
+        assert_eq!(group_thousands_with(999, ","), "999");
+    }
+
+    /// Digits are grouped as the numeric locale groups them, after CLDR.
+    ///
+    /// parity: VIEW-001
+    #[test]
+    fn digit_groups_follow_the_locale() {
+        assert_eq!(group_separator_for_locale("en_US.UTF-8"), ",");
+        assert_eq!(group_separator_for_locale("zh_CN.UTF-8"), ",");
+        assert_eq!(group_separator_for_locale("C"), ",");
+        assert_eq!(group_separator_for_locale("de_DE.UTF-8"), ".");
+        assert_eq!(group_separator_for_locale("pt_BR.UTF-8"), ".");
+        assert_eq!(group_separator_for_locale("es_MX.UTF-8"), ",");
+        assert_eq!(group_separator_for_locale("fr_FR.UTF-8"), "\u{a0}");
+        assert_eq!(group_separator_for_locale("pt_PT.UTF-8"), "\u{a0}");
+        assert_eq!(group_separator_for_locale("de_CH.UTF-8"), "\u{2019}");
     }
 
     /// One locale's samples of the reference time in [`locale_pattern`], as

@@ -182,10 +182,6 @@ msgid "Keep the terminal open when the command ends"
 msgstr ""
 
 #: crates/ox-app/resources/ui/open-with-dialog.ui
-msgid "Open with"
-msgstr ""
-
-#: crates/ox-app/resources/ui/open-with-dialog.ui
 msgid "Or run a command"
 msgstr ""
 
@@ -3751,7 +3747,7 @@ msgstr ""
 msgid "More options"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
 msgstr ""
 
@@ -3832,7 +3828,7 @@ msgstr ""
 msgid "From template…"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Group by"
 msgstr ""
 
@@ -3949,6 +3945,10 @@ msgid "Recent locations cleared."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Choose another app"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Compare files"
 msgstr ""
 
@@ -4025,6 +4025,10 @@ msgstr ""
 msgid "Open in {name}"
 msgstr ""
 
+#: crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/src/window/context_menu/entries.rs
+msgid "Open with"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs
 msgid "Open with {name}"
@@ -4054,7 +4058,7 @@ msgstr ""
 msgid "Select only one item for this command."
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Show more options"
 msgstr ""
 

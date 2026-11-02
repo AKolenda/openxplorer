@@ -264,6 +264,9 @@ fn the_folder_menu_names_the_step_undo_and_redo_take_as_windows_does() {
 fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic folder menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt"]);
 
     test.window.right_click(None);
@@ -330,6 +333,9 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
         fs::set_permissions(folder, fs::Permissions::from_mode(0o555)).expect("take write permission away");
     }
     let test = TestWindow::open(&fixture.uri());
+    // The classic folder menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("copy", None);
     assert!(is_enabled(&test, "paste"), "something to paste");
@@ -404,6 +410,9 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
 fn the_folder_menu_sorts_and_changes_the_view_in_place() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic folder menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     test.window.right_click(None);
     let menu = test.window.context_menu();
     assert_eq!(menu.row_labels()[..2], ["View", "Sort by"]);
@@ -427,6 +436,35 @@ fn the_folder_menu_sorts_and_changes_the_view_in_place() {
     wait_until("the View menu", || {
         menu.is_visible() && menu.row_labels().first().map(String::as_str) == Some("Details")
     });
+}
+
+/// Right-clicking blank space opens Windows 11's compact folder menu,
+/// whose View, Sort by and Group by open in the same compact menu rather
+/// than turning it into the classic one.
+///
+/// parity: CMD-010, CMD-011, CMD-012
+#[gtk::test]
+fn the_compact_folder_menu_opens_its_submenus_in_place() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    assert_eq!(menu.style(), MenuStyle::Compact);
+    assert_eq!(menu.row_labels()[..4], ["View", "Sort by", "Group by", "Refresh"]);
+    assert_eq!(
+        menu.row_labels().last().map(String::as_str),
+        Some("Show more options")
+    );
+
+    menu.row("Sort by").emit_activate();
+    wait_until("the Sort submenu", || {
+        menu.is_visible() && menu.row_labels().iter().any(|row| row == "Name")
+    });
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Compact,
+        "the submenu keeps the compact look"
+    );
 }
 
 /// Shift+F10 (`win.context-menu`) opens the classic menu of the selection,
@@ -481,6 +519,16 @@ fn shift_f10_opens_the_classic_menu_and_the_menu_key_the_compact_one() {
         menu.style(),
         MenuStyle::Compact,
         "the Menu key opens the compact menu"
+    );
+    menu.popdown();
+
+    choose_menu_style(&test, ContextMenu::Win10);
+    assert!(action.activate(gtk::ShortcutActionFlags::empty(), &view, None));
+    let menu = test.window.context_menu();
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Classic,
+        "with the classic menu chosen, the Menu key opens it"
     );
 }
 
