@@ -337,8 +337,14 @@ pub fn start_folders(
     if let Some(folder) = file_folder {
         candidates.push(StartFolder::Path(folder.to_path_buf()));
     }
-    let initial_uri = initial.map(initial_location).unwrap_or_default();
-    if let Some(memory) = memory {
+    // The caller's first folder as the memory writes it: empty for none.
+    // A folder it cannot write down (`None`), such as one on a phone, is
+    // never the same as the remembered one, nor taken for no folder.
+    let initial_uri = match initial {
+        None => Some(String::new()),
+        Some(folder) => Some(initial_location(folder)).filter(|uri| !uri.is_empty()),
+    };
+    if let (Some(memory), Some(initial_uri)) = (memory, initial_uri) {
         if file_folder.is_none() && same_folder(&memory.initial, &initial_uri) {
             candidates.push(StartFolder::Location(memory.last.clone()));
         }
@@ -701,6 +707,21 @@ mod tests {
             remembered_location(&export).as_deref(),
             Some("smb://nas/work/Notes")
         );
+    }
+
+    /// A folder the caller passes that the memory cannot write down, such
+    /// as one on a phone, is still a folder: it is not taken for "no
+    /// folder", so it is not passed over for the last one.
+    ///
+    /// parity: INT-035
+    #[test]
+    fn a_folder_that_cannot_be_written_down_is_not_taken_for_none() {
+        let phone = glib::user_runtime_dir().join("gvfs/mtp:host=Example_Phone/DCIM");
+        let never = memory("", "file:///srv/demo/Out");
+
+        let folders = start_folders(None, Some(&phone), Some(&never), &defaults());
+
+        assert_eq!(folders[0], StartFolder::Path(phone));
     }
 
     /// A damaged file is read as empty and replaced by the next change.

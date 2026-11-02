@@ -153,6 +153,14 @@ fn folder_takes_files(folder: &Path) -> WriteTest {
             let _ = std::fs::write(path, "written by another program");
         }
     }
+    #[cfg(test)]
+    if let (Ok(mut after), Ok(mut quiet)) = (QUIET_AFTER_TEST.lock(), QUIET.lock()) {
+        // The share stops answering once the folder test is done.
+        let (now, later): (Vec<PathBuf>, Vec<PathBuf>) =
+            after.drain(..).partition(|path| path.parent() == Some(folder));
+        quiet.extend(now);
+        after.extend(later);
+    }
     // A name that is taken already is another program's file: try another.
     for _ in 0..3 {
         let unique = glib::uuid_string_random();
@@ -324,6 +332,25 @@ pub(super) fn stop_answering(folder: &Path) {
 #[cfg(test)]
 fn never_answers(path: &Path) -> bool {
     NOT_ANSWERING.with(|folders| folders.borrow().iter().any(|folder| path.starts_with(folder)))
+        || is_listed(&QUIET, path)
+}
+
+/// Paths that stop answering once the folder they are in was tested, for
+/// tests; shared by every thread, as that test runs on GIO's workers.
+#[cfg(test)]
+static QUIET_AFTER_TEST: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Paths that stopped answering that way.
+#[cfg(test)]
+static QUIET: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Makes `path` stop answering once the write test of its folder ran, as
+/// a share that goes quiet halfway through the dialog's checks.
+#[cfg(test)]
+pub(super) fn stop_answering_after_test(path: &Path) {
+    if let Ok(mut paths) = QUIET_AFTER_TEST.lock() {
+        paths.push(path.to_path_buf());
+    }
 }
 
 #[cfg(test)]

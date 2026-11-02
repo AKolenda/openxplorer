@@ -852,8 +852,13 @@ impl BrowserWindow {
                 // Another program may have created one of the other files
                 // meanwhile: it is replaced only after asking too.
                 for name in names {
-                    if !existing.contains(&name) && probe(&folder.join(name)).await.exists() {
-                        existing.push(name);
+                    if existing.contains(&name) {
+                        continue;
+                    }
+                    match probe(&folder.join(name)).await {
+                        Probe::NoAnswer => return Err(not_answering(&folder)),
+                        found if found.exists() => existing.push(name),
+                        _ => {}
                     }
                 }
                 for name in &existing {
@@ -2291,6 +2296,34 @@ mod tests {
             "nothing is answered before the user says so"
         );
         press_in(&question, "Cancel");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// A share that stops answering while Save files checks it is
+    /// reported, never answered as a folder the files can be saved in.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn saving_files_where_the_share_stops_answering_says_so() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let names: Vec<Vec<u8>> = vec![b"one.txt\0".to_vec()];
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFiles",
+            vec![("files", names.to_variant())],
+        );
+        super::probe::stop_answering_after_test(&fixture.path("one.txt"));
+        let window = &portal.test.window;
+
+        window.picker().expect("a picker").accept.emit_clicked();
+        wait_until("the dialog to say so", || {
+            window.shown_message().contains("is not answering") || answer.borrow().is_some()
+        });
+
+        assert!(answer.borrow().is_none(), "nothing is answered");
         window.cancel_picking();
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
