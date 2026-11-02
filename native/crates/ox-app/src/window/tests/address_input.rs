@@ -91,18 +91,14 @@ fn an_smb_path_has_server_share_and_folder_crumbs_with_the_uri_encoded() {
     assert_eq!(labels[1..], ["Team files", "Q3 #1"]);
     assert!(crumb_target(&crumbs[0]).starts_with("smb://nas:1445/"));
     assert_eq!(crumb_target(&crumbs[2]), "smb://nas:1445/Team%20files/Q3%20%231");
-    let dividers: Vec<String> = descendants::<gtk::Label>(&crumb_box(&test))
-        .iter()
+    let dividers: Vec<gtk::Label> = descendants::<gtk::Label>(&crumb_box(&test))
+        .into_iter()
         .filter(|label| label.has_css_class("crumb-divider"))
-        .map(|label| label.widget_name().to_string())
         .collect();
-    assert_eq!(dividers, ["\\", "\\"], "a share's path divides with backslashes");
+    assert_eq!(dividers.len(), 2, "server › share › folder");
     assert!(
-        descendants::<gtk::Label>(&crumb_box(&test))
-            .iter()
-            .filter(|label| label.has_css_class("crumb-divider"))
-            .all(|label| label.text().is_empty()),
-        "dividers are drawn as Explorer's chevrons, not as text"
+        dividers.iter().all(|label| label.text().is_empty()),
+        "dividers are drawn as Explorer's chevrons, not as the path's '\\'"
     );
 }
 

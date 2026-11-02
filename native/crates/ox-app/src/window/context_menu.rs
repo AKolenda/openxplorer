@@ -121,7 +121,8 @@ impl BrowserWindow {
                 window.select_for_context_menu(&view, x, y);
                 #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
                 let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
-                window.open_context_menu(&view, &point, window.preferred_menu_style());
+                let style = menu_style_for(window.preferred_menu_style(), gesture.current_event_state());
+                window.open_context_menu(&view, &point, style);
             }
         ));
         view.add_controller(right_click);
@@ -153,14 +154,15 @@ impl BrowserWindow {
             return;
         };
         let mut menu = self.menu_for_selection(style);
+        let mut extras = Vec::new();
         // Service actions run programs on files: the Recycle Bin's items
         // and those inside a ZIP (ARC-026) are not files they can open.
         let folder = self.command_facts().folder;
         if !folder.is_recycle_bin && !folder.is_zip {
-            self.append_service_actions(&mut menu.entries);
+            self.append_service_actions(&mut extras, style == MenuStyle::Classic);
         }
         if self.administrator_target().is_some() {
-            menu.entries.push(
+            extras.push(
                 super::menu_popover::MenuItem::new(
                     ox_core::i18n::gettext_static("Open as administrator…"),
                     crate::icons::Icon::ShieldLock,
@@ -169,6 +171,7 @@ impl BrowserWindow {
                 .into(),
             );
         }
+        add_extras(&mut menu.entries, extras);
         popover.set_entries(menu.entries);
         popover.set_style_and_strip(style, menu.strip);
         popover.set_pointing_to(Some(point));
@@ -433,9 +436,67 @@ fn disk_tool_of(entry: &Entry) -> Option<DiskTool> {
     is_installed(tool).then_some(tool)
 }
 
+/// The style of a right-click menu: `preferred`, or the classic menu when
+/// Shift is held, as Shift+right-click opens it in Windows 11 Explorer.
+fn menu_style_for(preferred: MenuStyle, modifiers: gdk::ModifierType) -> MenuStyle {
+    if modifiers.contains(gdk::ModifierType::SHIFT_MASK) {
+        MenuStyle::Classic
+    } else {
+        preferred
+    }
+}
+
+/// Adds `extras`, the service actions and "Open as administrator…", to the
+/// end of a menu, or in Windows 11's compact menu above its last item,
+/// "Show more options", in a group of their own, as Explorer puts the
+/// commands other programs add there.
+fn add_extras(entries: &mut Vec<MenuEntry>, extras: Vec<MenuEntry>) {
+    if extras.is_empty() {
+        return;
+    }
+    let more = entries.iter().rposition(|entry| {
+        matches!(
+            entry,
+            MenuEntry::Item(item)
+                if item.action == super::menu_popover::MenuAction::Window(WindowAction::ShowMoreOptions)
+        )
+    });
+    match more {
+        Some(at) => {
+            let group = std::iter::once(MenuEntry::Divider).chain(extras);
+            // Before the divider that sets "Show more options" apart.
+            let before = if at > 0 && matches!(entries[at - 1], MenuEntry::Divider) {
+                at - 1
+            } else {
+                at
+            };
+            entries.splice(before..before, group);
+        }
+        None => entries.extend(extras),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Shift+right-click opens the classic menu whatever the choice, as in
+    /// Windows 11 Explorer.
+    ///
+    /// parity: CMD-010
+    #[test]
+    fn shift_right_click_opens_the_classic_menu() {
+        let shift = gdk::ModifierType::SHIFT_MASK;
+        assert_eq!(menu_style_for(MenuStyle::Compact, shift), MenuStyle::Classic);
+        assert_eq!(
+            menu_style_for(MenuStyle::Compact, gdk::ModifierType::empty()),
+            MenuStyle::Compact
+        );
+        assert_eq!(
+            menu_style_for(MenuStyle::Classic, gdk::ModifierType::empty()),
+            MenuStyle::Classic
+        );
+    }
 
     #[test]
     fn zip_archives_are_known_by_name_or_type() {

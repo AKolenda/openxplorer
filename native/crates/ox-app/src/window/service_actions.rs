@@ -87,7 +87,7 @@ impl BrowserWindow {
             .collect()
     }
 
-    pub(super) fn append_service_actions(&self, entries: &mut Vec<MenuEntry>) {
+    pub(super) fn append_service_actions(&self, entries: &mut Vec<MenuEntry>, with_configure: bool) {
         let enabled = self.context().settings_data().preferences.enabled_service_actions;
         let selection = self.service_selection();
         let actions = self.imp().service_actions.borrow();
@@ -115,14 +115,16 @@ impl BrowserWindow {
                 .into(),
             );
         }
-        entries.push(
-            MenuItem::new(
-                ox_core::i18n::gettext_static("Configure service actions…"),
-                Icon::Settings,
-                WindowAction::ManageServiceActions,
-            )
-            .into(),
-        );
+        if with_configure {
+            entries.push(
+                MenuItem::new(
+                    ox_core::i18n::gettext_static("Configure service actions…"),
+                    Icon::Settings,
+                    WindowAction::ManageServiceActions,
+                )
+                .into(),
+            );
+        }
     }
 
     async fn manage_service_actions(&self) {

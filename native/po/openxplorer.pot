@@ -732,6 +732,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Date created: {date}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
 msgid "Date modified: {date}"
 msgstr ""
 
@@ -4077,6 +4082,10 @@ msgstr ""
 msgid "This link points to an address OpenXplorer cannot open."
 msgstr ""
 
+#: crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/entry/type_label.rs
+msgid "Compressed folder"
+msgstr ""
+
 #: crates/ox-app/src/window/details_pane/content.rs
 msgid "Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter."
 msgstr ""
@@ -6111,10 +6120,6 @@ msgstr ""
 
 #: crates/ox-core/src/entry/error.rs
 msgid "Only folders and network shares can be pinned to Quick access."
-msgstr ""
-
-#: crates/ox-core/src/entry/type_label.rs
-msgid "Compressed folder"
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs

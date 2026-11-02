@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use gtk::gio;
 use gtk::prelude::FileExt;
 use ox_core::format;
-use ox_core::location::{is_smb_location, parent_location, LocationContext};
+use ox_core::location::{is_smb_location, parent_location, ArchiveLocation, LocationContext};
 use ox_core::places::NetworkLocation;
 
 use crate::folder_view::item::FileItem;
@@ -188,7 +188,7 @@ fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
             can_pin: entry.is_dir,
         },
         properties,
-        note: note_for(&entry.uri),
+        note: note_for(&entry.uri, true),
         media: MediaPreview::of(item),
     }
 }
@@ -223,7 +223,7 @@ fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
                 storage_of(uri).to_owned(),
             ),
         ],
-        note: note_for(uri),
+        note: note_for(uri, false),
         media: None,
     }
 }
@@ -240,11 +240,24 @@ fn folder_heading(facts: &PaneFacts<'_>) -> FolderHeading {
             kind: ox_core::i18n::gettext_static("Multiple items"),
         };
     }
+    // A ZIP's own top, open like a folder, is what Explorer calls it.
+    if is_zip_top(facts.folder_uri) {
+        return FolderHeading {
+            preview: Preview::Art(Art::ZipFolder),
+            name: facts.locations.title_for(facts.folder_uri),
+            kind: ox_core::i18n::gettext_static("Compressed folder"),
+        };
+    }
     FolderHeading {
         preview: Preview::Art(folder_art(facts)),
         name: facts.locations.title_for(facts.folder_uri),
         kind: ox_core::i18n::gettext_static("Folder"),
     }
+}
+
+/// Whether `uri` is the top of a ZIP opened like a folder (ARC-026).
+fn is_zip_top(uri: &str) -> bool {
+    ArchiveLocation::from_uri(uri).is_some_and(|location| location.parent().is_none())
 }
 
 /// The picture of the folder itself: on an SMB share the art its tab
@@ -278,9 +291,14 @@ fn modified_text(modified: Option<u64>, condensed: bool) -> String {
     }
 }
 
-fn note_for(uri: &str) -> &'static str {
+/// The note at the bottom of the pane: on a share, how it is reached;
+/// elsewhere the hint to select an item, except under `one_item`, which
+/// the user already selected (Windows Explorer's pane says nothing then).
+fn note_for(uri: &str, one_item: bool) -> &'static str {
     if is_smb_location(uri) {
         ox_core::i18n::gettext_static(NETWORK_NOTE)
+    } else if one_item {
+        ""
     } else {
         ox_core::i18n::gettext_static(LOCAL_NOTE)
     }
@@ -348,6 +366,7 @@ mod tests {
         );
         assert_eq!(property(&content, "Location"), Some("/tmp/ox-test"));
         assert_eq!(content.action, PaneAction::Open { can_pin: false });
+        assert_eq!(content.note, "", "no hint to select what is selected");
     }
 
     /// Condensed dates give the day only; otherwise the time follows.
@@ -411,6 +430,20 @@ mod tests {
         assert_eq!(property(&content, "Storage"), Some("This computer"));
         assert_eq!(content.action, PaneAction::PinFolder);
         assert_eq!(content.note, LOCAL_NOTE);
+    }
+
+    /// A ZIP opened like a folder is a compressed folder at its top, with
+    /// the ZIP's picture, and its folders are folders.
+    ///
+    /// parity: PROP-009, ARC-026
+    #[test]
+    fn the_top_of_a_zip_is_a_compressed_folder() {
+        let top = ArchiveLocation::root("file:///tmp/ox-test/Bundle.zip");
+        let content = content_for(&[], &top.uri());
+        assert_eq!(content.kind, "Compressed folder");
+        assert_eq!(content.preview, Preview::Art(Art::ZipFolder));
+        let inside = content_for(&[], &top.member("Docs/").uri());
+        assert_eq!(inside.kind, "Folder");
     }
 
     /// parity: PROP-009

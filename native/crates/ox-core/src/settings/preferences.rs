@@ -251,6 +251,13 @@ pub struct Preferences {
     pub auto_index: bool,
     /// Classic (Windows 10) or compact (Windows 11) context menus.
     pub context_menu: ContextMenu,
+    /// The classic menu was chosen in this app. Files the Python app or an
+    /// older release wrote store `"win10"`, its default, whether chosen or
+    /// not, so without this mark that value gives way to the compact menu
+    /// once, as Windows 11 Explorer opens it (`read.rs`). Stored only when
+    /// set.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub classic_menu_chosen: bool,
     /// Seconds between network location refreshes: 30, 60 or 300.
     pub network_interval: u32,
     /// Percent: 80, 90, 100, 110, 125, 150, 175 or 200.
@@ -374,9 +381,11 @@ pub struct Preferences {
     /// The folder tree's options (SIDE-028); saved only once changed.
     #[serde(skip_serializing_if = "FolderTreeOptions::is_default")]
     pub folder_tree: FolderTreeOptions,
-    /// Date columns show absolute dates instead of "Today at 3:00 PM"
-    /// (Dolphin's `UseShortRelativeDates`, inverted). Stored only when on.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    /// Date columns show absolute dates, as Windows Explorer does, instead
+    /// of "Today at 3:00 PM" (Dolphin's `UseShortRelativeDates`, inverted).
+    /// On by default; stored only when off, so a file that stored the
+    /// choice of absolute dates keeps it.
+    #[serde(skip_serializing_if = "is_true")]
     pub absolute_dates: bool,
     /// Each folder remembers its own display style: Windows' "Remember
     /// each folder's view settings" (Dolphin's `GlobalViewProps`,
@@ -398,8 +407,10 @@ pub struct Preferences {
     #[serde(rename = "itemChecksOnCtrl", skip_serializing_if = "is_true")]
     pub item_checks_on_ctrl: bool,
     /// Folders in the details view expand in place (Dolphin's
-    /// `ExpandableFolders`). Stored only when off.
-    #[serde(skip_serializing_if = "is_true")]
+    /// `ExpandableFolders`). Off by default, as Windows Explorer's details
+    /// view has no such arrows; stored only when on, so a file that stored
+    /// the choice to turn them off keeps it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub expandable_folders: bool,
     /// Windows 11's Compact view: the file list's and the navigation
     /// pane's rows stand closer, so more items fit. Off by default, as in
@@ -450,6 +461,7 @@ impl Default for Preferences {
             show_hidden: false,
             auto_index: true,
             context_menu: ContextMenu::default(),
+            classic_menu_chosen: false,
             network_interval: DEFAULT_NETWORK_INTERVAL,
             text_size: DEFAULT_TEXT_SIZE,
             sidebar_width: None,
@@ -481,11 +493,11 @@ impl Default for Preferences {
             begin_in_split_view: false,
             tab_switches_split_panes: false,
             folder_tree: FolderTreeOptions::default(),
-            absolute_dates: false,
+            absolute_dates: true,
             per_folder_views: true,
             selection_marker: false,
             item_checks_on_ctrl: true,
-            expandable_folders: true,
+            expandable_folders: false,
             compact_density: false,
             view_defaults: None,
             folder_views: Vec::new(),
@@ -535,6 +547,9 @@ impl Preferences {
         replace_if_some(&mut self.show_hidden, update.show_hidden);
         replace_if_some(&mut self.auto_index, update.auto_index);
         replace_if_some(&mut self.context_menu, update.context_menu);
+        if let Some(menu) = update.context_menu {
+            self.classic_menu_chosen = menu == ContextMenu::Win10;
+        }
         replace_if_some(&mut self.network_interval, network_interval);
         replace_if_some(&mut self.text_size, text_size);
         replace_if_some(&mut self.show_full_path, update.show_full_path);

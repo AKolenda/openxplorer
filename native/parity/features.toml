@@ -424,7 +424,7 @@ native_note = "native/crates/ox-app/src/window/session.rs (old_results_cannot_re
 id = "NAV-017"
 area = "NAV"
 title = "Breadcrumb bar shows one button per ancestor"
-behaviour = "Local paths show a '/' root button then one button per folder separated by '/'. SMB paths show a server button then share and folders separated by '\\'. The dividers are drawn as Windows 11 Explorer's chevrons; the '/' or '\\' they stand for is kept for tests. MTP/PTP/AFC paths start with the connected device's mount label, never the raw usb identifier. Labels are percent-decoded; each button's URI keeps the original encoding (a literal '#' stays %23) and host:port. Every ancestor stays visible (no collapsing). The last crumb has aria-current=location. Tooltip is the full display path and aria-label 'Go to <name>'. The bar auto-scrolls to the end and the mouse wheel scrolls it horizontally."
+behaviour = "Local paths show a '/' root button then one button per folder separated by '/'. SMB paths show a server button then share and folders separated by '\\'. The dividers are drawn as Windows 11 Explorer's chevrons (left-pointing in right-to-left languages); the crumbs still record which of '/' or '\\' the path uses (location_view.rs). MTP/PTP/AFC paths start with the connected device's mount label, never the raw usb identifier. Labels are percent-decoded; each button's URI keeps the original encoding (a literal '#' stays %23) and host:port. Every ancestor stays visible (no collapsing). The last crumb has aria-current=location. Tooltip is the full display path and aria-label 'Go to <name>'. The bar auto-scrolls to the end and the mouse wheel scrolls it horizontally."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -2750,7 +2750,7 @@ native_note = "Ctrl+Q is an application accelerator for app.quit, so it works in
 id = "VIEW-001"
 area = "VIEW"
 title = "Details view columns"
-behaviour = "Details view columns are Name (icon + name), Date modified (locale numeric date, '—' if unknown), Type (backend description) and Size. Folders have an empty Size unless measured. Hovering an item shows Windows Explorer's infotip (Type, Size, Date modified). Rows are 38 px at 100% text size."
+behaviour = "Details view columns are Name (icon + name), Date modified (locale numeric date, '—' if unknown), Type (backend description) and Size. Folders have an empty Size unless measured. Hovering an item shows Windows Explorer's infotip (a file's Type, Size and Date modified; a folder's Date created). Rows are 38 px at 100% text size."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -2772,7 +2772,7 @@ python_tests = [
 bridge = ["list"]
 dolphin = "Details view mode"
 native = "done"
-native_note = "Name (icon + name), Date modified, Type and Size columns in native/crates/ox-app/src/folder_view/details.rs; the item shows Explorer's infotip, Type, Size and Date modified, over its icon and name only; other columns show only their own tooltips (native/crates/ox-app/src/folder_view/cells/row_tooltip.rs, an_item_shows_its_infotip_or_its_full_path_while_searching); dates in native/crates/ox-core/src/format.rs (dates_follow_the_c_locale_with_a_full_year, column_dates_match_the_web_ui_in_each_locale); 38-pixel rows at 100% in native/crates/ox-app/src/text_size.rs (large_text_keeps_row_clearance). Date modified now also shows the clock time (VIEW-004)."
+native_note = "Name (icon + name), Date modified, Type and Size columns in native/crates/ox-app/src/folder_view/details.rs; the item shows Explorer's infotip, a file's Type, Size and Date modified or a folder's Date created, over its icon and name only; other columns show only their own tooltips (native/crates/ox-app/src/folder_view/cells/row_tooltip.rs, an_item_shows_its_infotip_or_its_full_path_while_searching); dates in native/crates/ox-core/src/format.rs (dates_follow_the_c_locale_with_a_full_year, column_dates_match_the_web_ui_in_each_locale); 38-pixel rows at 100% in native/crates/ox-app/src/text_size.rs (large_text_keeps_row_clearance). Date modified now also shows the clock time (VIEW-004)."
 
 [[feature]]
 id = "VIEW-002"
@@ -2820,7 +2820,7 @@ native_note = "native/crates/ox-core/src/format.rs (sizes_match_the_web_interfac
 id = "VIEW-004"
 area = "VIEW"
 title = "Dates show both date and time"
-behaviour = "Date columns show date and time. By default recent dates are relative ('Today at 3:00 PM', 'Yesterday'); an option switches to absolute short dates with time."
+behaviour = "Date columns show date and time. By default every date is an absolute short date with time, as in Windows Explorer; Settings › Files & folders › 'Relative dates (Today, Yesterday)' shows recent ones as 'Today at 3:00 PM' and 'Yesterday', as Dolphin does."
 origin = ["dolphin"]
 priority = "must"
 openxplorer = "partial"
@@ -2833,7 +2833,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "UseShortRelativeDates (default true)"
 native = "done"
-native_note = "Date modified shows the date and the clock time without seconds; by default today's and yesterday's dates read 'Today at 3:00 PM' and 'Yesterday at 3:00 PM', as Dolphin's UseShortRelativeDates does, and Settings > Appearance > Files and folders > Relative dates (preference absoluteDates) switches every window to absolute dates at once. native/crates/ox-core/src/format/relative_date.rs, native/crates/ox-app/src/folder_view/details.rs (set_date_style); tests today_and_yesterday_read_as_words_with_the_time and recent_dates_read_today_until_settings_turn_that_off."
+native_note = "Date modified shows the date and the clock time without seconds; by default today's and yesterday's dates read 'Today at 3:00 PM' and 'Yesterday at 3:00 PM', as Dolphin's UseShortRelativeDates does, and Settings > Appearance > Files and folders > Relative dates (preference absoluteDates) switches every window to absolute dates at once. native/crates/ox-core/src/format/relative_date.rs, native/crates/ox-app/src/folder_view/details.rs (set_date_style); tests today_and_yesterday_read_as_words_with_the_time and dates_read_in_full_until_settings_turn_relative_dates_on."
 
 [[feature]]
 id = "VIEW-005"
@@ -3498,7 +3498,7 @@ native_note = "Column titles are dragged to move their columns (GtkColumnView re
 id = "VIEW-035"
 area = "VIEW"
 title = "Expand folders in place in the details view"
-behaviour = "With expandable folders on (the default), a chevron before a folder shows its contents indented beneath it. Right and Left expand or collapse the current and selected folders. Expanded state survives Back/Forward."
+behaviour = "With Settings › Files & folders › expandable folders on (off by default, as Windows Explorer's details view has no such arrows), a chevron before a folder shows its contents indented beneath it. Right and Left expand or collapse the current and selected folders. Expanded state survives Back/Forward."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -3534,7 +3534,7 @@ native = "todo"
 id = "VIEW-037"
 area = "VIEW"
 title = "Folder item count in the Size column"
-behaviour = "In the details view a folder's Size shows how many items it contains ('N items'), counted in a worker thread without blocking the view."
+behaviour = "With Settings › Files & folders › 'Show the number of items in folders' on, a folder's Size in the details view shows how many items it contains ('N items'), counted in a worker thread without blocking the view. Off by default: Windows Explorer leaves a folder's Size empty."
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
@@ -3630,7 +3630,7 @@ python_tests = []
 bridge = []
 dolphin = "ShowToolTips (default false) + name tooltip for elided labels"
 native = "partial"
-native_note = "Every item (its icon and name in details, or its tile) shows Windows Explorer's infotip, Type, Size and Date modified, with its full name first when the name is cut short, so an elided name can still be read in full; while searching it shows the full path (native/crates/ox-app/src/folder_view/cells/row_tooltip.rs, an_item_shows_its_infotip_or_its_full_path_while_searching). Missing: Dolphin's 'Show tooltips' option with a preview and metadata."
+native_note = "Every item (its icon and name in details, or its tile) shows Windows Explorer's infotip, a file's Type, Size and Date modified or a folder's Date created, with its full name first when the name is cut short, so an elided name can still be read in full; while searching it shows the full path (native/crates/ox-app/src/folder_view/cells/row_tooltip.rs, an_item_shows_its_infotip_or_its_full_path_while_searching). Missing: Dolphin's 'Show tooltips' option with a preview and metadata."
 
 [[feature]]
 id = "VIEW-042"
@@ -5162,7 +5162,7 @@ native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (clicking_the_op
 id = "SIDE-003"
 area = "SIDE"
 title = "Current location highlighted in the sidebar"
-behaviour = "A sidebar entry whose URI equals the active tab's location (ignoring a trailing slash) is highlighted with the selection background and a 3×15 px accent pill on its left edge (plus an outline in high-contrast mode). Each entry's tooltip is its display path."
+behaviour = "A sidebar entry whose URI equals the active tab's location (ignoring a trailing slash) is highlighted with the selection background (plus an outline in high-contrast mode). The Python app's 3×15 px accent pill on its left edge keeps its room but is no longer painted, as Windows 11 Explorer's navigation pane has none. Each entry's tooltip is its display path."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -5175,7 +5175,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (the_open_place_is_highlighted_and_every_row_is_titled_with_its_path); native/crates/ox-app/src/window/tests/sidebar_layout.rs (the_selected_row_shows_the_accent_bar_at_its_edge); native/crates/ox-app/src/window/tests/accessibility.rs (higher_contrast_thickens_drop_outlines_and_outlines_the_open_place). The row of the open place is selected (same_location ignores a trailing slash) and shows the accent pill (3 x 16 per ui-spec.md §4.4; the web's is 3 x 15); high contrast adds an accent outline; each row's tooltip and accessible description is its display path."
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (the_open_place_is_highlighted_and_every_row_is_titled_with_its_path); native/crates/ox-app/src/window/tests/sidebar_layout.rs (the_selected_row_is_marked_by_its_fill_without_an_accent_bar); native/crates/ox-app/src/window/tests/accessibility.rs (higher_contrast_thickens_drop_outlines_and_outlines_the_open_place). The row of the open place is selected (same_location ignores a trailing slash) and shows the accent pill (3 x 16 per ui-spec.md §4.4; the web's is 3 x 15); high contrast adds an accent outline; each row's tooltip and accessible description is its display path."
 
 [[feature]]
 id = "SIDE-004"
@@ -6064,7 +6064,7 @@ native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (a_folder
 id = "CMD-010"
 area = "CMD"
 title = "File and folder context menu (Windows 11 compact)"
-behaviour = "The top strip holds Cut, Copy, Paste, Rename and Delete. The list below has the Open group (Open, Extract all…, Terminal, Open with, editors, new tab, pin, Open file location), 'Copy path', separator, 'Calculate folder size' (folders), 'Previous versions', 'Properties', separator, 'Show more options'. The cache toggle and 'Sign out of server…' appear only in the classic menu."
+behaviour = "The top strip holds Cut, Copy, Paste, Rename and Delete. The list below has the Open group (Open, Extract all…, Terminal, Open with, editors, new tab, pin, Open file location), 'Copy path', separator, 'Calculate folder size' (folders), 'Previous versions', 'Properties', separator, 'Show more options', always last: the Service actions submenu and 'Open as administrator…' sit in a group above it, and 'Configure service actions…', the cache toggle and 'Sign out of server…' appear only in the classic menu. Shift+right-click opens the classic menu, as in Windows 11 Explorer."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -6082,7 +6082,7 @@ python_tests = [
 ]
 bridge = ["clipboardSet", "operate", "rename", "previousVersions", "properties", "preferences"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (the_compact_menu_puts_the_edit_commands_in_its_strip, each_code_editor_is_offered_after_open_with_for_one_item: the compact list shares the Open group, editors included); native/crates/ox-app/src/window/tests/context_menus.rs (the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one)."
+native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_opens_the_compact_menu_with_show_more_options_last) and native/crates/ox-app/src/window/context_menu.rs (shift_right_click_opens_the_classic_menu); native/crates/ox-app/src/window/context_menu/entries.rs (the_compact_menu_puts_the_edit_commands_in_its_strip, each_code_editor_is_offered_after_open_with_for_one_item: the compact list shares the Open group, editors included); native/crates/ox-app/src/window/tests/context_menus.rs (the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one)."
 
 [[feature]]
 id = "CMD-011"
@@ -13212,7 +13212,7 @@ native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (properties
 id = "PROP-009"
 area = "PROP"
 title = "Details pane contents"
-behaviour = "The details pane has the header 'Details' with a close button, then a large preview icon: the item icon for one item, a copy glyph for several, a folder for none. Below are the name ('N items selected' or the folder title) and type ('Multiple items' or 'Folder'). For one item there is an 'Open' button, plus 'Pin to Quick access' for folders. With nothing selected on a real folder there is 'Pin to Quick access' for the folder. The 'Properties' list shows Type, Size (folders: measured or 'Not scanned'), Modified and Location for one item, or otherwise Items (the number selected, or the folder's entries when nothing is selected), Location and Storage ('Network share' or 'This computer'). A note always ends the pane: in an SMB location 'Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter.', elsewhere 'Select an item to see its properties. Double-click to open it.' (even when an item is selected)."
+behaviour = "The details pane has the header 'Details' with a close button, then a large preview icon: the item icon for one item, a copy glyph for several, a folder for none. Below are the name ('N items selected' or the folder title) and type ('Multiple items' or 'Folder'). For one item there is an 'Open' button, plus 'Pin to Quick access' for folders. With nothing selected on a real folder there is 'Pin to Quick access' for the folder. The 'Properties' list shows Type, Size (folders: measured or 'Not scanned'), Modified and Location for one item, or otherwise Items (the number selected, or the folder's entries when nothing is selected), Location and Storage ('Network share' or 'This computer'). A note ends the pane: in an SMB location 'Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter.', elsewhere 'Select an item to see its properties. Double-click to open it.' while nothing or several items are selected. With one item selected on this computer no note is shown, as Windows Explorer's pane shows none (the Python app showed it even then)."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14195,7 +14195,7 @@ native_note = "A preference change reaches every window through the shared AppCo
 id = "SET-016"
 area = "SET"
 title = "Preference defaults and allowed values"
-behaviour = "Defaults: theme 'system', view 'details', details pane on, showHidden off, autoIndex on, contextMenu 'win11' (the compact Windows 11 menu with 'Show more options', as Windows 11 Explorer opens it; the Python app's default was 'win10', which stays one choice away), networkInterval 60, textSize 100. Only allowed values are stored: theme light/dark/system; view details/grid; booleans for details, showHidden and autoIndex; contextMenu win10/win11; networkInterval 30/60/300; plus the bounded sizes. Anything else, such as a password field, is ignored."
+behaviour = "Defaults: theme 'system', view 'details', details pane on, showHidden off, autoIndex on, contextMenu 'win11' (the compact Windows 11 menu with 'Show more options', as Windows 11 Explorer opens it; the Python app's default was 'win10', which stays one choice away; a stored 'win10' that older releases and the Python app wrote as their default loads as 'win11' once, and choosing the classic menu stores 'classicMenuChosen': true so it stays), networkInterval 60, textSize 100. Only allowed values are stored: theme light/dark/system; view details/grid; booleans for details, showHidden and autoIndex; contextMenu win10/win11; networkInterval 30/60/300; plus the bounded sizes. Anything else, such as a password field, is ignored."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14208,7 +14208,7 @@ python_tests = [
 ]
 bridge = ["preferences"]
 native = "done"
-native_note = "native/crates/ox-core/src/settings/preferences.rs (defaults_match_the_python_app, choices_outside_the_whitelist_are_ignored, text_size_accepts_only_the_offered_sizes, network_intervals_outside_the_whitelist_are_ignored); native/crates/ox-core/src/settings/choices.rs; native/crates/ox-app/src/settings_page/indexing.rs (the_network_intervals_offered_are_the_ones_settings_accept)."
+native_note = "native/crates/ox-core/src/settings/tests/preferences.rs (a_stored_old_default_menu_becomes_the_compact_one_unless_chosen); native/crates/ox-core/src/settings/preferences.rs (defaults_match_the_python_app, choices_outside_the_whitelist_are_ignored, text_size_accepts_only_the_offered_sizes, network_intervals_outside_the_whitelist_are_ignored); native/crates/ox-core/src/settings/choices.rs; native/crates/ox-app/src/settings_page/indexing.rs (the_network_intervals_offered_are_the_ones_settings_accept)."
 
 [[feature]]
 id = "SET-017"
@@ -14354,7 +14354,7 @@ sources = ["v2.0.0:desktop/ui/app.js:720-729", "v2.0.0:desktop/ui/style.css:36"]
 python_tests = ["v2.0.0:desktop/tests/ui_release.py::Light appearance switch"]
 bridge = ["preferences"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (the_appearance_button_shows_the_drawn_appearance_and_its_menu_checks_the_choice): sun and \"Light\" or moon and \"Dark\", the applyTheme tooltip, the three menu items with the current choice checked. The label hides at 1050 px (window/breakpoints.rs, LOOK-022)."
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (more_options_offers_the_appearances_and_checks_the_choice): no appearance button in the bar, as in Windows 11 Explorer; More options lists Light appearance, Dark appearance and Use system appearance with the current choice checked. The hidden button keeps its sun or moon, label and tooltip code (window/command_bar.rs)."
 
 [[feature]]
 id = "LOOK-006"
@@ -14537,7 +14537,7 @@ native_note = "native/crates/ox-app/src/window/tests/look.rs (the_command_bar_ke
 id = "LOOK-014"
 area = "LOOK"
 title = "File list and sidebar row styling"
-behaviour = "Detail rows are 38 px with 4 px radius, hover background and a selected background with a subtle blue outline. Grid tiles are about 122 px with 6 px radius. Sidebar entries are 35 px with 12 px gap and 4 px radius; the selected entry has an accent pill. Cut items are at 50% opacity."
+behaviour = "Detail rows are 38 px with 4 px radius, hover background and a selected background with a subtle blue outline. Grid tiles are about 122 px with 6 px radius. Sidebar entries are 35 px with 12 px gap and 4 px radius; the selected entry is marked by its fill, without the Python app's accent pill, as in Windows 11 Explorer. Cut items are at 50% opacity."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"

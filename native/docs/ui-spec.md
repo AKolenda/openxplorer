@@ -52,7 +52,7 @@ and does not "improve" them away.
 | Palette character | Blue-grey tab strip (`#eff1f4` / `#191919`) standing in for Mica Alt; the active tab merges into a light chrome band; white (or `#202020`) content; soft blue selection `#e8f1fb` / `#263c50` with a faint blue edge. |
 | Artwork | The project's own colour art (`folderIcon`, `appendFolderArt`, `zipFolderIcon`, `fileIcon`, `networkIcon` in `app.js`) and its own stroke glyphs (the `paths` table). Folder art: `#d99a22` back, `#ffce56` / `#f7bd40` front, `#fff0bd` paper. Network pipe: `#23873f` with `#62cf7c` / `#35a854` highlights. |
 | Sizes | Row icons 21, sidebar icons 19, tiles 56, details preview 83. |
-| Behaviour you can see | Breakpoints at 1190 / 960 / 680 px, text sizes 80–200 %, the classic (Windows 10, default) or Windows 11 context menu, the amber snapshot-tab marker, type-to-select feedback in the status bar, drag-to-pin highlighting, reduced-motion support. |
+| Behaviour you can see | Breakpoints at 1190 / 960 / 680 px, text sizes 80–200 %, the Windows 11 (default) or classic Windows 10 context menu, the amber snapshot-tab marker, type-to-select feedback in the status bar, drag-to-pin highlighting, reduced-motion support. |
 
 ### 1.2 What "true to spec" means
 
@@ -178,7 +178,7 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 | C16 | `on_accent`: text on primary buttons | `#ffffff` / `#142535` (auth dialog `#112438`) | TextOnAccentFillColorPrimary `#FFFFFF` / `#000000` (CT#L216 / CT#L12) | `#ffffff` / `#000000` | safe |
 | C17 | `hover`: rows, sidebar, commands, menu items | `#f0f0f0` / `#343434` | SubtleFillColorSecondary `#09000000` / `#0FFFFFFF` → `#f0f0f0` on `#f9f9f9`, `#f6f6f6` on white / `#353535` on `#282828` (CT#L230 / CT#L26) | `#f0f0f0` / `#343434` on every surface | Keep. Equals WinUI on the chrome, slightly stronger on white. |
 | C18 | `pressed` | web `filter: brightness(.96)`; native `#e9e9e9` / `#3a3a3a` | SubtleFillColorTertiary `#06000000` / `#0AFFFFFF` → `#f3f3f3` / `#303030` on chrome (CT#L231 / CT#L27), with the foreground at TextFillColorSecondary (ABB#L83, BT#L121, TTL#L20) | `#f3f3f3` / `#303030` plus `color: @ox_muted` | safe. Windows makes pressed *lighter* than hover. |
-| C19 | `selected` | `#e8f1fb` / `#263c50` | WinUI ListView: SubtleFillColorSecondary plus an accent selection pill (LV#L172, LV#L227; the pill's size is drawn in code, not in LV: 3 × 16 (unverified)). Explorer's item view uses a blue tint instead (observed, unverified). | `#e8f1fb` / `#263c50` | Keep. |
+| C19 | `selected` | `#e8f1fb` / `#263c50` | WinUI ListView: SubtleFillColorSecondary plus an accent selection pill (LV#L172, LV#L227; the pill's size is drawn in code, not in LV: 3 × 16 (unverified)); the navigation pane no longer paints the pill (Explorer has none, 2026-11-02). Explorer's item view uses a blue tint instead (observed, unverified). | `#e8f1fb` / `#263c50` | Keep. |
 | C20 | `selected_hover` (new) | none | ListViewItemBackgroundSelectedPointerOver = SubtleFillColorTertiary (LV#L173); Explorer deepens the blue (observed, unverified) | `mix(@ox_selected, @ox_accent, .06)` = `#dae9f7` light (GTK 4.14.5 weights the second colour by the factor; measured) / ≈ `#28445a` dark with `#4cc2ff` | visible (subtle) |
 | C21 | `selected_edge` | rows `#80b4e028`, tiles `#80b4e060` | none in WinUI; GridViewItem draws a 2 px selected border (GV#L111) | rows `alpha(#80b4e0, .16)`, tiles `alpha(#80b4e0, .38)` | Keep. |
 | C22 | `border`: pane dividers, band borders | `#e8e8e8` / `#373737` | DividerStrokeColorDefault `#0F000000` / `#15FFFFFF` → `#eaeaea` on `#f9f9f9` / `#3a3a3a` on `#282828` (CT#L257 / CT#L53) | `#e8e8e8` / `#373737` | Keep (within 2 steps). |
@@ -496,7 +496,7 @@ where it differs; ✓ means the target equals the current app.
 | "New" | padding `0 10 0 8` ✓ | — | Keep. |
 | Separator | 1 × 20, `margin: 0 10`, `@ox_border` | AppBarSeparator 1 px, DividerStrokeColorDefault, margin `2,8,2,8` (ABS#L8, ABS#L14–16) | Keep. |
 | States | hover `@ox_hover`; pressed `@ox_pressed` with `@ox_muted` text; disabled `@ox_text_disabled`; toggled (Details open) `@ox_selected` | ABB#L77–79, ABB#L12 | safe |
-| Right group | Appearance (sun or moon glyph with a "Light" / "Dark" label, `@ox_muted`, text `@ox_text` on hover, label hidden at ≤ 1050), Settings (gear, `@ox_muted`), Details toggle ✓ | — | Keep. |
+| Right group | Details toggle ✓, as Windows 11 Explorer's bar ends. The Appearance button (sun or moon glyph with a "Light" / "Dark" label) and Settings (gear) are built but hidden (2026-11-02); More options offers both. | — | Applied. |
 | Responsive | ≤ 1190: gap 1, padding `0 10`, separator margin `0 6`; ≤ 960: commands padding `0 8`, min width 32; ≤ 680: hide Share, Cut, Rename and the Details toggle (they stay in More) ✓ | CommandBar overflow (CB#L5–8) | Keep. |
 
 ### 4.4 Sidebar
@@ -551,7 +551,7 @@ where it differs; ✓ means the target equals the current app.
 |---|---|---|---|
 | Bar | 30 including a 1 px top border (min `max(29, ceil(15·s + 9))` + 1); padding `0 13 0 19`; gap 18; background `@ox_bg`; text **12** px (11) in `@ox_muted` | 12 px minimum (L-TYPE) | text visible, P2 |
 | Left | "N items", "N selected, size" as separate spans 18 apart (native joins them with " · "); type-to-select hint in `@ox_accent`, or `@ox_muted` when nothing matches; ellipsis at 48 % width | — | Keep; D-N13. |
-| Right | status mode (**12** px, hidden at ≤ 680), update button 24 × 24, then the Details view and Large icons toggles, 24 × 24 with glyph **16** (15); active toggle `@ox_selected` with a `@ox_accent` glyph | Explorer puts Details and Large icons toggles at the right of its status bar (observed, unverified) | safe |
+| Right | the free space and its bar; the update button 24 × 24 only while an update needs the user (the status mode, **12** px, is hidden: Explorer names no build there; 2026-11-02); then the Details view and Large icons toggles, 24 × 24 with glyph **16** (15); active toggle `@ox_selected` with a `@ox_accent` glyph | Explorer puts Details and Large icons toggles at the right of its status bar (observed, unverified) | safe |
 
 ### 4.8 Details pane
 

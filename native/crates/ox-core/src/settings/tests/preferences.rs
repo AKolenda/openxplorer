@@ -18,6 +18,35 @@ fn the_default_context_menu_is_the_compact_one() {
     assert_eq!(preferences.context_menu, ContextMenu::Win11);
 }
 
+/// A classic menu an older release or the Python app stored as its
+/// default gives way to the compact one once; a classic menu chosen in
+/// this app is marked and stays after a restart.
+/// parity: SET-016
+#[test]
+fn a_stored_old_default_menu_becomes_the_compact_one_unless_chosen() {
+    let root = temporary_folder();
+    let older = json!({"version": 2, "preferences": {"contextMenu": "win10", "theme": "dark"}});
+    std::fs::write(root.path().join("settings.json"), older.to_string()).unwrap();
+    let mut store = Settings::open(root.path());
+    let preferences = store.snapshot().preferences;
+    assert_eq!(preferences.context_menu, ContextMenu::Win11);
+    assert_eq!(preferences.theme, Theme::Dark, "the rest is read as before");
+
+    save_preferences(&mut store, &json!({"contextMenu": "win10"}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(file.contains("\"classicMenuChosen\": true"), "{file}");
+    let reread = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(
+        reread.context_menu,
+        ContextMenu::Win10,
+        "a chosen classic menu stays"
+    );
+
+    save_preferences(&mut store, &json!({"contextMenu": "win11"}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(!file.contains("classicMenuChosen"), "{file}");
+}
+
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist`
 /// parity: SET-016
 #[test]

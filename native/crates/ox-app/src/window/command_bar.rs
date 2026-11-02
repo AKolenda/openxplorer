@@ -368,13 +368,6 @@ impl CommandBar {
             button.set_visible(shown);
         }
     }
-
-    /// The theme button's tooltip, for tests.
-    #[cfg(test)]
-    pub(super) fn appearance_tooltip(&self) -> Option<String> {
-        let tooltip = self.imp().appearance_button.tooltip_text();
-        tooltip.map(|text| text.to_string())
-    }
 }
 
 fn separator() -> gtk::Separator {

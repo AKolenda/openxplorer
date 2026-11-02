@@ -725,6 +725,11 @@ msgstr "选择"
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Date created: {date}"
+msgstr "创建日期：{date}"
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
 msgid "Date modified: {date}"
 msgstr "修改日期：{date}"
 

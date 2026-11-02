@@ -294,6 +294,12 @@ impl StatusBar {
         check_updates.set_tooltip_text(Some(&format!("{CHECK_FOR_UPDATES}\n{notice}")));
     }
 
+    /// Whether "Check for updates" shows, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_check_updates(&self) -> bool {
+        self.imp().check_updates_button.is_visible()
+    }
+
     /// The tooltip of "Check for updates", for tests.
     #[cfg(test)]
     pub(super) fn check_updates_tooltip(&self) -> String {

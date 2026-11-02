@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The tooltip of an item: Windows Explorer's infotip (its type, size and
-//! date modified), or its full path while searching.
+//! The tooltip of an item: Windows Explorer's infotip (a file's type, size
+//! and date modified, a folder's date created), or its full path while
+//! searching.
 //!
 //! Ports `row.title=state.query?displayUri(e.uri):e.name` of `renderRows`
 //! in `v2.0.0:desktop/ui/app.js` (VIEW-001, VIEW-042), with Explorer's
@@ -43,11 +44,17 @@ impl RowTooltip {
 }
 
 /// Explorer's infotip for `item`: "Type", "Size" and "Date modified" for
-/// a file, "Date modified" for a folder, each line only when known; the
-/// name when nothing is.
+/// a file, "Date created" for a folder (its date modified when the
+/// creation date is unknown), each line only when known; the name when
+/// nothing is.
 fn infotip(item: &FileItem) -> String {
     let entry = item.entry();
     let mut lines = Vec::new();
+    if let (true, Some(created)) = (entry.is_dir, entry.meta.created) {
+        let date = format::date_short_time_text(Some(created));
+        lines.push(format_message("Date created: {date}", &[("date", &date)]));
+        return lines.join("\n");
+    }
     if !entry.is_dir {
         if !entry.type_label.is_empty() {
             lines.push(format_message("Type: {type}", &[("type", &entry.type_label)]));
@@ -172,14 +179,52 @@ mod tests {
 
         let mut folder = folder_entry("Photos");
         folder.modified = Some(1_789_378_200);
+        folder.meta.created = None;
         assert_eq!(
-            RowTooltip::default().text(&FileItem::new(folder)),
+            RowTooltip::default().text(&FileItem::new(folder.clone())),
             format!(
                 "Date modified: {}",
                 format::date_short_time_text(Some(1_789_378_200))
             ),
-            "a folder has no type or size line"
+            "a folder has no type or size line, and its date modified stands in for an unknown creation"
         );
+        folder.meta.created = Some(1_789_000_000);
+        assert_eq!(
+            RowTooltip::default().text(&FileItem::new(folder)),
+            format!(
+                "Date created: {}",
+                format::date_short_time_text(Some(1_789_000_000))
+            ),
+            "a folder shows when it was created, as Explorer's infotip does"
+        );
+        let mut unknown = folder_entry("Mystery");
+        unknown.modified = None;
+        let unknown = FileItem::new(unknown);
+        assert_eq!(
+            RowTooltip::default().text(&unknown),
+            "Mystery",
+            "nothing known: the name"
+        );
+        assert_eq!(
+            tooltip_text(
+                RowTooltip::Name,
+                TooltipCell::Item,
+                &unknown,
+                None,
+                Some("Mystery".to_owned())
+            ),
+            Some("Mystery".to_owned()),
+            "a name cut short with nothing else known is not repeated"
+        );
+    }
+
+    /// The item cell shows the infotip, under its full name when that is
+    /// cut short; other columns show only their own tooltip, their full
+    /// text when cut short, or the path while searching.
+    ///
+    /// parity: VIEW-001, VIEW-041, VIEW-042
+    #[test]
+    fn each_cell_shows_its_own_tooltip_or_the_infotip() {
         let file = FileItem::new({
             let mut entry = file_entry("A long report name.txt");
             entry.type_label = "Text document".to_owned();
@@ -231,25 +276,6 @@ mod tests {
                 None
             ),
             Some("own".to_owned())
-        );
-        let mut unknown = folder_entry("Mystery");
-        unknown.modified = None;
-        let unknown = FileItem::new(unknown);
-        assert_eq!(
-            RowTooltip::default().text(&unknown),
-            "Mystery",
-            "nothing known: the name"
-        );
-        assert_eq!(
-            tooltip_text(
-                RowTooltip::Name,
-                TooltipCell::Item,
-                &unknown,
-                None,
-                Some("Mystery".to_owned())
-            ),
-            Some("Mystery".to_owned()),
-            "a name cut short with nothing else known is not repeated"
         );
     }
 }

@@ -93,6 +93,35 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
 }
 
+/// Windows 11's compact menu is the default: the edit commands in its
+/// strip and "Show more options" last, with nothing added after it.
+///
+/// parity: CMD-010, SET-016
+#[gtk::test]
+fn right_clicking_opens_the_compact_menu_with_show_more_options_last() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+
+    assert_eq!(menu.style(), MenuStyle::Compact);
+    assert!(
+        !menu.strip_labels().is_empty(),
+        "the edit commands sit in the strip"
+    );
+    let rows = menu.row_labels();
+    assert_eq!(
+        rows.last().map(String::as_str),
+        Some("Show more options"),
+        "{rows:?}"
+    );
+    assert!(
+        !rows.iter().any(|row| row == "Configure service actions…"),
+        "configuring is in the classic menu: {rows:?}"
+    );
+}
+
 /// The keyboard starts on the first enabled item, Up and Down wrap
 /// around, and closing the menu gives the keyboard back to the file pane.
 ///

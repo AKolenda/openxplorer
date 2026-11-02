@@ -65,6 +65,8 @@
   background-position: center;
   background-size: 12px 12px;
 }
+/* Right to left, the crumbs run leftwards and so do the chevrons. */
+.address .crumb-divider:dir(rtl) { background-image: -gtk-icontheme("ox-chevron-left-16-symbolic"); }
 /* A divider opens the subfolder menu of the crumb before it (NAV-020). */
 .address .crumb-divider:hover { background-color: @ox_hover; }
 .address button.address-chevron { min-width: 22px; min-height: 24px; }
