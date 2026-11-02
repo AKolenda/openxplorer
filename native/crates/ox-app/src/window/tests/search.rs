@@ -305,6 +305,73 @@ fn a_new_file_in_an_indexed_folder_appears_in_the_shown_search() {
     });
 }
 
+/// The rows a shown search holds now.
+fn shown_rows(test: &TestWindow) -> gtk::gio::ListStore {
+    let search = test.window.imp().search.borrow();
+    search.results().cloned().expect("the search shows its own rows")
+}
+
+/// A change in the cache brings a shown cached search up to date in
+/// place: the selected result stays the same row, still selected, and the
+/// strip does not go back to "Searching…".
+///
+/// parity: SRCH-018
+#[gtk::test]
+fn a_cache_change_keeps_the_selected_result_of_a_cached_search() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.index_folder(&fixture.uri());
+    test.search_for("notes");
+    assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt"]);
+    select_names(&test, &["Notes 2.txt"]);
+    let rows = shown_rows(&test);
+    let selected = test.window.folder_model().selected_items();
+
+    fs::write(fixture.path("Documents/notes 3.txt"), b"x").expect("fixture file");
+
+    wait_until("the new file to reach the shown search", || {
+        test.names().contains(&"notes 3.txt".to_owned())
+    });
+    assert_eq!(
+        shown_rows(&test),
+        rows,
+        "the rows on screen are updated, not replaced"
+    );
+    assert_eq!(test.selected_names(), ["Notes 2.txt"]);
+    assert_eq!(test.window.folder_model().selected_items(), selected);
+    assert_eq!(test.status_count(), "3 results · Cached");
+}
+
+/// Indexing another folder changes the cache every few seconds; a walk of
+/// a folder nobody indexed does not start over each time, so its rows and
+/// selection stay.
+///
+/// parity: SRCH-018, SRCH-035
+#[gtk::test]
+fn a_cache_change_elsewhere_leaves_a_walked_search_alone() {
+    let fixture = Fixture::standard();
+    let elsewhere = Fixture::standard();
+    fs::create_dir_all(fixture.path("Documents/Deep")).expect("fixture subfolder");
+    fs::write(fixture.path("Documents/Deep/notes archive.txt"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.search_for("notes");
+    assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes archive.txt"]);
+    select_names(&test, &["notes archive.txt"]);
+    let rows = shown_rows(&test);
+
+    test.index_folder(&elsewhere.uri());
+
+    assert_eq!(shown_rows(&test), rows, "the walk was not started over");
+    assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes archive.txt"]);
+    assert_eq!(test.selected_names(), ["notes archive.txt"]);
+    assert_eq!(
+        test.window.search_strip().caption(),
+        "Current folder + subfolders"
+    );
+}
+
 /// A move made in the window tells the search cache that both folders
 /// changed, so a share without a live watch shows it at once.
 ///
