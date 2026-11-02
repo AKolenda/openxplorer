@@ -492,12 +492,11 @@ impl BrowserWindow {
                 .of(app)
                 .cloned()
         });
-        let named = request.current_folder.as_deref();
-        let (file_folder, initial) = if request.folder_of_file {
-            (named, None)
-        } else {
-            (None, named)
-        };
+        let file_folder = request
+            .folder_of_file
+            .then_some(request.current_folder.as_deref())
+            .flatten();
+        let initial = request.suggested_folder.as_deref();
         let known = ox_core::places::FolderLocations::from_environment().read_paths();
         let defaults = [
             known.path(ox_core::places::KnownFolder::Documents).to_path_buf(),
@@ -1286,9 +1285,7 @@ impl BrowserWindow {
             Some((uri, path)) if path == folder => uri,
             _ => gio::File::for_path(&folder).uri().to_string(),
         };
-        let initial = (!picker.request.folder_of_file)
-            .then_some(picker.request.current_folder.as_deref())
-            .flatten();
+        let initial = picker.request.suggested_folder.as_deref();
         let _ =
             DialogFolders::open(&self.context().settings_directory()).remember(caller, initial, &location);
     }
@@ -2066,6 +2063,59 @@ mod tests {
             "a folder other than the first one passed is the app's choice"
         );
         moved.test.window.cancel_picking();
+        Portal::finish(&answer);
+    }
+
+    /// A Save that names both a file and a folder opens the file's folder
+    /// and still remembers the last folder under the folder the app
+    /// suggested, so the app's next Save from that folder starts there.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_save_naming_a_file_and_a_folder_remembers_by_the_folder() {
+        let fixture = Fixture::empty();
+        let downloads = fixture.path("Downloads");
+        let letters = fixture.path("Letters");
+        let reports = fixture.path("Reports");
+        for folder in [&downloads, &letters, &reports] {
+            fs::create_dir(folder).expect("a folder");
+        }
+
+        let first = Portal::new();
+        let answer = first.call_for(
+            "org.example.Editor",
+            "SaveFile",
+            &[
+                ("current_folder", path_variant(&downloads.display().to_string())),
+                (
+                    "current_file",
+                    path_variant(&letters.join("draft.odt").display().to_string()),
+                ),
+            ],
+        );
+        assert_eq!(
+            shown_folder(&first.test.window).as_deref(),
+            Some(letters.as_path()),
+            "the file's own folder opens"
+        );
+        save_as(&first, &answer, &reports.join("draft.odt"));
+
+        let next = Portal::new();
+        restart_with_memory_of(&first, &next);
+        let answer = next.call_for(
+            "org.example.Editor",
+            "SaveFile",
+            &[
+                ("current_folder", path_variant(&downloads.display().to_string())),
+                ("current_name", "notes.odt".to_variant()),
+            ],
+        );
+        assert_eq!(
+            shown_folder(&next.test.window).as_deref(),
+            Some(reports.as_path()),
+            "the same suggested folder reopens the last one"
+        );
+        next.test.window.cancel_picking();
         Portal::finish(&answer);
     }
 

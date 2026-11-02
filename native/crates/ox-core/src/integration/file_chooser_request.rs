@@ -183,6 +183,10 @@ pub struct ChooserRequest {
     /// named with its full path (`current_file`), rather than the folder
     /// it suggested (`current_folder`).
     pub folder_of_file: bool,
+    /// The folder the caller suggested (`current_folder`), kept when the
+    /// folder of its `current_file` takes its place: the dialog's memory
+    /// is keyed by it.
+    pub suggested_folder: Option<PathBuf>,
     /// The caller's extra choices.
     pub choices: Vec<Choice>,
 }
@@ -243,7 +247,8 @@ impl ChooserRequest {
             ChooserMethod::OpenFile | ChooserMethod::SaveFiles => None,
         };
         let folder_of_file = file_folder.is_some();
-        let current_folder = file_folder.or_else(|| lookup_path(options, "current_folder"));
+        let suggested_folder = lookup_path(options, "current_folder");
+        let current_folder = file_folder.or_else(|| suggested_folder.clone());
         Ok(Self {
             method,
             title: bounded(title),
@@ -255,6 +260,7 @@ impl ChooserRequest {
             current_filter,
             current_folder,
             folder_of_file,
+            suggested_folder,
             choices: read_choices(options)?,
         })
     }

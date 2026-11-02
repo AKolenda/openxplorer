@@ -184,6 +184,22 @@ fn save_file_takes_the_name_and_folder_of_the_current_file() {
         !suggested.folder_of_file,
         "a suggested folder, as Chrome sends it"
     );
+    let both = self::request(
+        "SaveFile",
+        &[
+            ("current_folder", path_variant("/home/someone/Downloads")),
+            ("current_file", path_variant("/home/someone/Documents/report.odt")),
+        ],
+    )
+    .expect("a valid call");
+    assert_eq!(
+        (both.current_folder.as_deref(), both.suggested_folder.as_deref()),
+        (
+            Some(Path::new("/home/someone/Documents")),
+            Some(Path::new("/home/someone/Downloads"))
+        ),
+        "the file's folder opens, and the suggested folder still keys the memory"
+    );
     let named =
         self::request("SaveFile", &[("current_name", "download.zip".to_variant())]).expect("a valid call");
     assert_eq!(
