@@ -41,8 +41,8 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
 use ox_core::integration::{
-    checked_name, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest, DialogFolders,
-    FileFilter, FilterPattern, StartFolder,
+    checked_name, remembered_location, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest,
+    DialogFolders, FileFilter, FilterPattern, StartFolder,
 };
 
 use super::actions::QUIT_ACCELERATORS;
@@ -237,16 +237,45 @@ async fn start_location(folder: StartFolder) -> Option<String> {
 async fn start_location_now(folder: StartFolder) -> Option<String> {
     let (uri, path) = match folder {
         StartFolder::Path(path) => (gio::File::for_path(&path).uri().to_string(), path),
-        StartFolder::Location(uri) => {
-            let path = match path_at_once(&uri) {
-                Known::Path(path) => path,
-                Known::NoPath => return None,
-                Known::Unknown => ask_for_path(&uri).await.path()?,
-            };
-            (uri, path)
-        }
+        StartFolder::Location(uri) => match path_at_once(&uri) {
+            Known::Path(path) => (uri, path),
+            Known::NoPath => return None,
+            Known::Unknown => match ask_for_path(&uri).await.path() {
+                Some(path) => (uri, path),
+                None => on_a_mount_with_its_user(&uri).await?,
+            },
+        },
     };
     (probe(&path).await == Probe::Folder).then_some(uri)
+}
+
+/// A remembered `location` that has no path of its own, found on a share
+/// `GVfs` mounted with a user: its address there and its local path. It
+/// is opened by the mount's address, so nothing is mounted.
+async fn on_a_mount_with_its_user(location: &str) -> Option<(String, PathBuf)> {
+    let roots: Vec<String> = gio::VolumeMonitor::get()
+        .mounts()
+        .iter()
+        .map(|mount| mount.root().uri().to_string())
+        .collect();
+    let mounted = address_on_mount(location, &roots)?;
+    let path = ask_for_path(&mounted).await.path()?;
+    Some((mounted, path))
+}
+
+/// The address of the remembered `location` on one of the mounts whose
+/// root addresses are `roots`: the memory keeps a location without its
+/// user ([`remembered_location`]), while `GVfs` names a share mounted with
+/// a user by an address that holds it (`sftp://anna@build.example/`), and
+/// gives the address without it no path. `None` when no mount holds it.
+fn address_on_mount(location: &str, roots: &[String]) -> Option<String> {
+    roots.iter().find_map(|root| {
+        // A mount without a user has the location's own path already.
+        glib::Uri::parse(root, glib::UriFlags::NONE).ok()?.userinfo()?;
+        let kept = remembered_location(root)?;
+        let rest = location.strip_prefix(kept.trim_end_matches('/'))?;
+        (rest.is_empty() || rest.starts_with('/')).then(|| format!("{}{rest}", root.trim_end_matches('/')))
+    })
 }
 
 /// The dialog's message when the caller could not write `name` in
@@ -2420,6 +2449,44 @@ mod tests {
             waited < super::START_TIMEOUT + std::time::Duration::from_millis(150),
             "waited {waited:?}, more than the start timeout {:?}",
             super::START_TIMEOUT
+        );
+    }
+
+    /// A remembered folder, kept without its user, is found on the share
+    /// `GVfs` mounted with that user, by the mount's own address; on no
+    /// other share, nor on a mount that only starts the same way.
+    ///
+    /// parity: INT-035, SAFE-010
+    #[test]
+    fn a_remembered_folder_is_found_on_a_share_mounted_with_a_user() {
+        let roots = [
+            "sftp://build.example/".to_owned(),
+            "sftp://anna@build.example.org/".to_owned(),
+            "sftp://anna@build.example/".to_owned(),
+            "smb://sam@studio-nas/projects/".to_owned(),
+        ];
+
+        assert_eq!(
+            super::address_on_mount("sftp://build.example/srv/My%20Out", &roots[1..]).as_deref(),
+            Some("sftp://anna@build.example/srv/My%20Out")
+        );
+        assert_eq!(
+            super::address_on_mount("smb://studio-nas/projects", &roots).as_deref(),
+            Some("smb://sam@studio-nas/projects")
+        );
+        assert_eq!(
+            super::address_on_mount("smb://studio-nas/projects-old/Film", &roots),
+            None,
+            "another share that starts the same way"
+        );
+        assert_eq!(
+            super::address_on_mount("sftp://build.example/srv", &roots[..1]),
+            None,
+            "a mount without a user has the address's own path"
+        );
+        assert_eq!(
+            super::address_on_mount("sftp://elsewhere.example/srv", &roots),
+            None
         );
     }
 

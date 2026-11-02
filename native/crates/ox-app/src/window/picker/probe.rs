@@ -244,18 +244,34 @@ fn create_and_remove(path: &Path) -> WriteTest {
         .create_new(true)
         .open(path)
     {
-        Ok(file) => {
+        Ok(mut file) => {
+            // One byte: an empty file needs no room, so a drive or quota
+            // with no space left but a free inode would take it.
+            let written = write_one_byte(&mut file, path);
             drop(file);
-            // The file is empty and the dialog's own; the caller creates it
-            // again when it saves.
-            match remove(path).or_else(|_| remove(path)) {
-                Ok(()) => WriteTest::Writable,
-                Err(error) => refusal(&error),
+            // The file is the dialog's own; the caller creates its own
+            // when it saves.
+            match (written, remove(path).or_else(|_| remove(path))) {
+                (Err(error), _) | (Ok(()), Err(error)) => refusal(&error),
+                (Ok(()), Ok(())) => WriteTest::Writable,
             }
         }
         Err(error) if error.kind() == ErrorKind::AlreadyExists => WriteTest::Appeared,
         Err(error) => refusal(&error),
     }
+}
+
+/// Writes one byte to the write test's file `path`.
+fn write_one_byte(file: &mut std::fs::File, path: &Path) -> std::io::Result<()> {
+    use std::io::Write;
+    #[cfg(test)]
+    if is_listed(&FULL, path) {
+        // A drive or quota with no space left, which still takes an empty file.
+        return Err(std::io::ErrorKind::StorageFull.into());
+    }
+    #[cfg(not(test))]
+    let _ = path;
+    file.write_all(b"0")
 }
 
 /// Removes the write test's file `path`.
@@ -282,6 +298,19 @@ static VETOES_HIDDEN: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec
 #[cfg(test)]
 pub(super) fn veto_hidden_names_in(folder: &Path) {
     if let Ok(mut paths) = VETOES_HIDDEN.lock() {
+        paths.push(folder.to_path_buf());
+    }
+}
+
+/// Folders with no space left for data, for tests.
+#[cfg(test)]
+static FULL: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Makes writing data in `folder` fail for want of space, as on a full
+/// drive or quota that still has room for an empty file.
+#[cfg(test)]
+pub(super) fn fill_up(folder: &Path) {
+    if let Ok(mut paths) = FULL.lock() {
         paths.push(folder.to_path_buf());
     }
 }
@@ -504,6 +533,27 @@ mod tests {
 
         assert_eq!(new_file, WriteTest::Denied);
         assert_eq!(replaced, WriteTest::Denied);
+    }
+
+    /// A drive or quota with no space left for data, which would still
+    /// take an empty file, is reported as full, and the test's file is
+    /// not left behind.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_full_drive_is_reported_as_full() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        fill_up(folder.path());
+
+        let test = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+
+        assert_eq!(test, WriteTest::NoSpace);
+        let left: Vec<_> = fs::read_dir(folder.path()).expect("the folder").collect();
+        assert!(left.is_empty(), "nothing is left behind");
     }
 
     /// parity: INT-032
