@@ -81,13 +81,13 @@ pub(crate) fn end_text(end: RunEnd) -> String {
         RunEnd::Cancelled => ox_core::i18n::gettext_static("Size scan cancelled").to_owned(),
         RunEnd::Finished { complete, partial: 0 } => ox_core::i18n::format_message(
             "Size scan finished · {complete} complete",
-            &[("complete", &complete.to_string())],
+            &[("complete", &ox_core::format::group_digits(complete as u64))],
         ),
         RunEnd::Finished { complete, partial } => ox_core::i18n::format_message(
             "Size scan finished · {complete} complete · {partial} partial/unavailable",
             &[
-                ("complete", &complete.to_string()),
-                ("partial", &partial.to_string()),
+                ("complete", &ox_core::format::group_digits(complete as u64)),
+                ("partial", &ox_core::format::group_digits(partial as u64)),
             ],
         ),
     };
