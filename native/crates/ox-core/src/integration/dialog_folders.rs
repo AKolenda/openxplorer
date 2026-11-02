@@ -255,7 +255,7 @@ fn fuse_export_location(path: &Path, root: &Path) -> FusePath {
         return FusePath::Unknown;
     };
     let port = field("port").map(|port| format!(":{port}")).unwrap_or_default();
-    let mut location = format!("{scheme}://{}{port}", escape(&host));
+    let mut location = format!("{scheme}://{}{port}", server_host(&host));
     for part in first.iter().map(String::as_str).chain(
         parts[index + 1..]
             .iter()
@@ -268,6 +268,25 @@ fn fuse_export_location(path: &Path, root: &Path) -> FusePath {
         location.push_str(&escape(part));
     }
     FusePath::Address(location)
+}
+
+/// `host`, a server named in a FUSE export, as an address writes it: an
+/// IPv6 address in brackets (`[2001:db8::1]`), as `GVfs` may store it with or
+/// without them, and any other name escaped.
+fn server_host(host: &str) -> String {
+    let bare = host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host);
+    if bare.contains(':')
+        && bare
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() || c == ':' || c == '.')
+    {
+        format!("[{bare}]")
+    } else {
+        glib::Uri::escape_string(host, None, false).to_string()
+    }
 }
 
 /// What a local path is to [`fuse_export_location`].
@@ -703,6 +722,23 @@ mod tests {
             StartFolder::Location("smb://studio-nas/projects/Film".into())
         );
         assert!(!folders.contains(&StartFolder::Path(fuse)), "{folders:?}");
+    }
+
+    /// A share on an IPv6 server keeps its address, with the server in
+    /// brackets, whether the export's name brackets it or not.
+    ///
+    /// parity: INT-035
+    #[test]
+    fn a_share_on_an_ipv6_server_keeps_its_address() {
+        for server in ["2001%3Adb8%3A%3A1", "%5B2001%3Adb8%3A%3A1%5D"] {
+            let fuse =
+                glib::user_runtime_dir().join(format!("gvfs/smb-share:server={server},share=projects/Film"));
+            assert_eq!(
+                initial_location(&fuse),
+                "smb://[2001:db8::1]/projects/Film",
+                "{server}"
+            );
+        }
     }
 
     /// Only `GVfs`'s own export folder holds shares: a local folder that
