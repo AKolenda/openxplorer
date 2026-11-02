@@ -342,15 +342,24 @@ impl BrowserWindow {
                 let Some((tab, window_id)) = target.and_then(glib::Variant::get::<(u64, u32)>) else {
                     return;
                 };
-                window.move_tab_into_window(TabId::from_raw(tab), window_id);
+                let tab = TabId::from_raw(tab);
+                if !window.refuse_while_moving(tab) {
+                    window.move_tab_into_window(tab, window_id);
+                }
             })
             .build();
+        // A tab that is being dragged stays where it is (TAB-003).
         self.add_action_entries([
-            tab_action(
-                WindowAction::MoveTabToNewWindow,
-                BrowserWindow::move_tab_to_new_window,
-            ),
-            tab_action(WindowAction::MoveTabToWindow, BrowserWindow::show_move_tab_menu),
+            tab_action(WindowAction::MoveTabToNewWindow, |window, tab| {
+                if !window.refuse_while_moving(tab) {
+                    window.move_tab_to_new_window(tab);
+                }
+            }),
+            tab_action(WindowAction::MoveTabToWindow, |window, tab| {
+                if !window.refuse_while_moving(tab) {
+                    window.show_move_tab_menu(tab);
+                }
+            }),
             into_window,
         ]);
     }

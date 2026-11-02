@@ -185,6 +185,15 @@ impl BrowserWindow {
         is_moving
     }
 
+    /// Why no file operation may start in this window now: a window drag
+    /// holds the mouse with it, as no keyboard command starts work during
+    /// a mouse drag in Windows Explorer, and Escape can still put the tab
+    /// back (TAB-035).
+    pub(in crate::window) fn window_drag_refusal(&self) -> Option<String> {
+        self.is_in_window_drag()
+            .then(|| ox_core::i18n::gettext_static(TAB_IS_MOVING).to_owned())
+    }
+
     /// [`Self::refuse_while_moving`] for the tab in front.
     pub(in crate::window) fn refuse_while_active_tab_moves(&self) -> bool {
         let active = self.imp().session.borrow().active_id();

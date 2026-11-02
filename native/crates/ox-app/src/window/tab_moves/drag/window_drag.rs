@@ -64,6 +64,9 @@ const MAGNETISM: f32 = super::source::DETACH_MAGNETISM as f32;
 /// new window to be drawn.
 const WINDOW_DRAWN_AT_LATEST: Duration = Duration::from_millis(800);
 
+/// How often a tab Escape takes back tries again while a window is busy.
+const RETURN_POLL: Duration = Duration::from_millis(200);
+
 /// What the desktop told this process's own Wayland objects.
 #[derive(Debug, Default)]
 struct Events {
@@ -150,6 +153,16 @@ impl Events {
     }
 }
 
+/// How giving a tab back went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GiveBack {
+    Done,
+    /// A window is busy: later.
+    Waits,
+    /// The tab or a window is gone, or the other window refused it.
+    Gone,
+}
+
 /// What happened to a drag's data source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SourceEvent {
@@ -188,6 +201,9 @@ thread_local! {
     static PROTOCOL: RefCell<Option<(gdk::Display, Option<Rc<Protocol>>)>> = const { RefCell::new(None) };
     /// The window drag in progress.
     static SESSION: RefCell<Option<Rc<Session>>> = const { RefCell::new(None) };
+    /// Tabs Escape takes back that wait for a window to be free, each in
+    /// the window it waits in.
+    static RETURNING: RefCell<Vec<(glib::WeakRef<BrowserWindow>, TabId)>> = const { RefCell::new(Vec::new()) };
 }
 
 impl Protocol {
@@ -652,12 +668,11 @@ impl Session {
             dragged.close();
             return;
         }
-        match self.back {
-            Some(Landing { before }) if dragged.hand_over_tab(self.tab, &origin, before).is_ok() => {
-                dragged.release_moved_tab(self.tab);
-            }
-            _ if self.hidden.get() => dragged.present(),
-            _ => {}
+        let is_back = self
+            .back
+            .is_some_and(|Landing { before }| dragged.take_tab_back(&origin, self.tab, before));
+        if !is_back && self.hidden.get() {
+            dragged.present();
         }
     }
 
@@ -802,7 +817,66 @@ impl BrowserWindow {
     /// Whether the window drag in progress holds tab `id` of this window,
     /// which then neither closes nor changes location (TAB-003).
     pub(super) fn window_drag_holds(&self, id: TabId) -> bool {
-        Session::current().is_some_and(|session| session.holds(self, id))
+        let is_returning = RETURNING.with_borrow(|returning| {
+            returning
+                .iter()
+                .any(|(window, tab)| *tab == id && window.upgrade().as_ref() == Some(self))
+        });
+        is_returning || Session::current().is_some_and(|session| session.holds(self, id))
+    }
+
+    /// Whether a window drag holds the mouse with this window: its dragged
+    /// window, the window it left or the row showing its stand-in.
+    pub(super) fn is_in_window_drag(&self) -> bool {
+        Session::current().is_some_and(|session| {
+            let is = |weak: &glib::WeakRef<BrowserWindow>| weak.upgrade().as_ref() == Some(self);
+            is(&session.dragged) || is(&session.origin.borrow()) || is(&session.host.borrow())
+        })
+    }
+
+    /// Escape takes tab `tab` of this window, the window it was dragged
+    /// out as, back into `origin`, before tab `before`: at once, true, or
+    /// once neither window is busy (a file operation, a dialog, the tab's
+    /// Properties), the tab held meanwhile, so whatever opened during the
+    /// drag, Escape puts the tab back where it was (TAB-035).
+    pub(super) fn take_tab_back(&self, origin: &BrowserWindow, tab: TabId, before: Option<TabId>) -> bool {
+        if self.give_tab_back(origin, tab, before) != GiveBack::Waits {
+            return true;
+        }
+        self.show_message(ox_core::i18n::gettext_static(super::TAB_IS_MOVING));
+        RETURNING.with_borrow_mut(|returning| returning.push((self.downgrade(), tab)));
+        let (from, to) = (self.downgrade(), origin.downgrade());
+        glib::timeout_add_local(RETURN_POLL, move || {
+            let gave = match (from.upgrade(), to.upgrade()) {
+                (Some(from), Some(to)) => from.give_tab_back(&to, tab, before),
+                _ => GiveBack::Gone,
+            };
+            if gave == GiveBack::Waits {
+                return glib::ControlFlow::Continue;
+            }
+            RETURNING.with_borrow_mut(|returning| {
+                returning.retain(|(window, waiting)| !(*waiting == tab && *window == from));
+            });
+            glib::ControlFlow::Break
+        });
+        false
+    }
+
+    /// Gives tab `tab` back to `origin` when neither window is busy.
+    fn give_tab_back(&self, origin: &BrowserWindow, tab: TabId, before: Option<TabId>) -> GiveBack {
+        if self.imp().session.borrow().tab(tab).is_none() {
+            return GiveBack::Gone;
+        }
+        if self.keeps_tab(tab) || origin.is_busy_for_tab_moves() {
+            return GiveBack::Waits;
+        }
+        match self.hand_over_tab(tab, origin, before) {
+            Ok(()) => {
+                self.release_moved_tab(tab);
+                GiveBack::Done
+            }
+            Err(_) => GiveBack::Gone,
+        }
     }
 
     /// A new window with tab `id` of this one, at this window's size, shown
@@ -1079,7 +1153,9 @@ delegate_noop!(Events: xdg_toplevel_drag_v1::XdgToplevelDragV1);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::harness::{wait_for_frames, Fixture, TestWindow};
+    use crate::test_support::harness::{
+        wait_for, wait_for_frames, wait_until, Fixture, OpenedWindows, TestWindow,
+    };
     use crate::test_support::pointer::{screen_point, Button, Pointer};
 
     /// Off Wayland, as on the tests' X11 display, no window drag is readied
@@ -1237,6 +1313,45 @@ mod tests {
         assert_eq!(seen.len(), 2, "both presses reached the window");
         assert_eq!(seen[0].0, Some(MousePress(seen[0].1)), "the primary button");
         assert_eq!(seen[1].0, None, "the middle button");
+    }
+
+    /// Escape takes a torn-out tab back where it was even when a window is
+    /// busy by then, as when a file operation started or a dialog opened
+    /// during the drag: the tab waits in its window, held, so it neither
+    /// closes nor moves, and goes back once neither window is busy.
+    ///
+    /// parity: TAB-035
+    #[gtk::test]
+    fn escape_takes_the_tab_back_once_its_windows_are_no_longer_busy() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window
+            .add_tab(&fixture.uri_of("Documents"))
+            .expect("a folder");
+        test.wait_for_listing("the second tab");
+        let moved = test.window.imp().session.borrow().active_id().expect("a tab");
+        let before = test.window.tab_after(moved);
+        let dragged = test.window.window_for_tab(moved).expect("a window for the tab");
+        let _opened = OpenedWindows::only(&[&test.window]);
+        test.window.release_moved_tab(moved);
+        let tab = dragged.imp().session.borrow().active_id().expect("the tab");
+        assert!(test.window.begin_test_write(), "the window it left is busy");
+
+        dragged.take_tab_back(&test.window, tab, before);
+        wait_for(Duration::from_millis(300));
+        let waited = (test.window.tab_count(), dragged.window_drag_holds(tab));
+        dragged.close_tab(tab);
+        let kept = dragged.tab_count();
+        test.window.end_test_write();
+        wait_until("the tab back where it was", || test.window.tab_count() == 2);
+
+        assert_eq!(waited, (1, true), "the tab waits in its window, held");
+        assert_eq!(kept, 1, "a waiting tab does not close");
+        assert_eq!(
+            test.window.current_uri(),
+            Some(fixture.uri_of("Documents")),
+            "back in front where it was"
+        );
     }
 
     /// A row takes the dragged window's tab over itself, and the row that

@@ -197,6 +197,12 @@ impl BrowserWindow {
                     press.set(Press::Ignored);
                     return;
                 }
+                // A tab on its way back after Escape is not dragged again.
+                if self.window_drag_holds(tab) {
+                    self.show_message(ox_core::i18n::gettext_static(super::TAB_IS_MOVING));
+                    press.set(Press::Ignored);
+                    return;
+                }
                 if let Some(start) = self.title_bar_point_in_strip(source, start.0, start.1) {
                     self.tab_strip().grab_tab(tab, start);
                 }
