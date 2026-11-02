@@ -40,7 +40,7 @@ use wayland_client::{
 };
 use wayland_protocols::xdg::toplevel_drag::v1::client::{xdg_toplevel_drag_manager_v1, xdg_toplevel_drag_v1};
 
-use crate::window::session::TabId;
+use crate::window::session::{Tab, TabId};
 use crate::window::tab_strip::Landing;
 use crate::window::BrowserWindow;
 
@@ -790,7 +790,7 @@ impl BrowserWindow {
         else {
             return false;
         };
-        if self.keeps_tab(id) {
+        if !self.drags_out_as_window(id) {
             return false;
         }
         // A new press means any earlier drag is over, even if the desktop
@@ -858,6 +858,21 @@ impl BrowserWindow {
                 .any(|(window, tab)| *tab == id && window.upgrade().as_ref() == Some(self))
         });
         is_returning || Session::current().is_some_and(|session| session.holds(self, id))
+    }
+
+    /// Whether tab `id` may be dragged out as a window. Not while it must
+    /// stay (TAB-031), nor a split tab of a window with other tabs: its
+    /// window would get a copy of only the active pane, and the original,
+    /// both panes, goes before the drag ends, so Escape could not put it
+    /// back whole. GTK's drag and drop carries that one, and keeps it here
+    /// until it lands. A window's only tab moves with its window, split or
+    /// not.
+    fn drags_out_as_window(&self, id: TabId) -> bool {
+        if self.keeps_tab(id) {
+            return false;
+        }
+        let session = self.imp().session.borrow();
+        session.tabs().len() <= 1 || !session.tab(id).is_some_and(Tab::is_split)
     }
 
     /// Whether a window drag holds the mouse with this window: its dragged
@@ -1355,6 +1370,35 @@ mod tests {
         assert_eq!(seen.len(), 2, "both presses reached the window");
         assert_eq!(seen[0].0, Some(MousePress(seen[0].1)), "the primary button");
         assert_eq!(seen[1].0, None, "the middle button");
+    }
+
+    /// A split tab of a window with other tabs is not dragged out as a
+    /// window, which would take only its active pane, but carried by GTK's
+    /// drag and drop, which keeps both panes here until it lands: Escape
+    /// leaves the tab whole. Its unsplit neighbour, and a split window's
+    /// only tab, which moves with its window, are dragged out as windows.
+    ///
+    /// parity: TAB-035, VIEW-059
+    #[gtk::test]
+    fn a_split_tab_with_other_tabs_is_not_dragged_out_as_a_window() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window
+            .split_tab(Some(&fixture.uri_of("Documents")))
+            .expect("split");
+        test.wait_for_listing("the right pane");
+        let split = test.window.imp().session.borrow().active_id().expect("a tab");
+        assert!(
+            test.window.drags_out_as_window(split),
+            "a split window's only tab"
+        );
+
+        test.window.add_tab(&fixture.uri()).expect("a folder");
+        test.wait_for_listing("the second tab");
+        let plain = test.window.imp().session.borrow().active_id().expect("a tab");
+
+        assert!(!test.window.drags_out_as_window(split), "a split tab with others");
+        assert!(test.window.drags_out_as_window(plain), "an unsplit tab");
     }
 
     /// Escape takes a torn-out tab back where it was even when a window is
