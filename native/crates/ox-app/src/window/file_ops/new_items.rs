@@ -130,10 +130,11 @@ impl BrowserWindow {
     /// Whether renaming the new item in place would disturb nothing the
     /// user did since the create started at input `generation` in tab
     /// `id` on `folder`: no key, mouse button or wheel was used in the
-    /// window, no dialog is in front, and that tab is still in front on
-    /// the same folder, without a search.
+    /// window, it is still the active window, no dialog is in front, and
+    /// that tab is still in front on the same folder, without a search.
     fn is_undisturbed_since(&self, generation: u64, id: TabId, folder: &str) -> bool {
         self.imp().input_generation.get() == generation
+            && self.is_active()
             && !self.dialog_in_front()
             && !self.is_searching()
             && self.shows_in_front(id, folder)

@@ -767,3 +767,36 @@ fn a_slow_create_shows_its_panel_once_another_write_lets_it_go() {
     assert_eq!(names_on_disk(&fixture), before, "nothing is left behind");
     assert!(!panel.is_visible());
 }
+
+/// Another window that took the focus while the create ran, such as a
+/// Properties window or another application's, keeps it: nothing is
+/// renamed in the browser window behind it, and the folder still shows
+/// the new file.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn another_window_taking_focus_during_the_create_keeps_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+    // Not added to the application: it stands in for another window.
+    let other = gtk::Window::new();
+    other.present();
+    wait_until("the other window has focus", || {
+        other.is_active() && !test.window.is_active()
+    });
+
+    finish_held_text_document(&test, &fixture, release);
+
+    let focus_kept = other.is_active();
+    let renaming = is_renaming_in_place(&test);
+    let selected = test.selected_names();
+    wait_until("the new file to be listed", || {
+        test.names().contains(&"New Text Document.txt".to_owned())
+    });
+    other.destroy();
+
+    assert!(focus_kept, "the other window keeps the focus");
+    assert!(!renaming, "nothing is renamed behind it");
+    assert!(selected.is_empty(), "nothing is selected: {selected:?}");
+}
