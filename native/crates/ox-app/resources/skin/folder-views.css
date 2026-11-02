@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-/* The folder pane: the details view, the icon view, the loading line and
-   the empty state (ui-spec.md §4.5, §4.6, §4.15; style.css .file-list,
-   .file-row, .file-tile, .loading-line, .empty-state). */
+/* The folder pane: the details view, the icon view and the empty state
+   (ui-spec.md §4.5, §4.6, §4.15; style.css .file-list, .file-row,
+   .file-tile, .empty-state). Progress shows in the address bar alone, as
+   in Windows Explorer (navigation.css, VIEW-068). */
 
 .folder-pane { background-color: @ox_bg; }
 
@@ -237,26 +238,6 @@ gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_out
 gridview.files.compact { padding: 4px 8px 8px 12px; }
 gridview.files.compact > child { padding: 0 8px 0 6px; margin: 0 2px 0 0; border-radius: 4px; }
 gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
-
-/* ---- Loading line (§4.15, M06, M08) ---- */
-/* A 2px line over the top of the pane with a quarter-width bar sliding
-   across it once a second (`@keyframes loading`). The bar is a background
-   image 25% wide; its position runs from -33.3% (a bar's width before the
-   start) to 133.3% (just past the end). With animations off the bar
-   stays at the start. */
-.loading-line {
-  min-height: 2px;
-  background-color: @ox_selected;
-  background-image: linear-gradient(@ox_accent, @ox_accent);
-  background-repeat: no-repeat;
-  background-size: 25% 2px;
-  background-position: 0 0;
-  animation: ox-loading 1s ease-in-out infinite;
-}
-@keyframes ox-loading {
-  from { background-position: -33.33% 0; }
-  to { background-position: 133.33% 0; }
-}
 
 /* The type-to-select hint is accent-coloured, and muted when no name
    matches (`.type-select-status[data-miss=true]`). */

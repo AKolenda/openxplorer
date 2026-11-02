@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The folder pane: the details and icon views, the empty and error state,
-//! the landing pages and the loading line.
+//! and the landing pages.
 //!
 //! Ports the `main` area of `v2.0.0:desktop/ui/index.html` and `renderContent` in
 //! `v2.0.0:desktop/ui/app.js`. Only the visible view is attached to the selection
@@ -8,7 +8,7 @@
 //! change, which made large folders several times slower to list.
 //!
 //! [`FolderPane`] is a widget subclass around a `GtkOverlay` (the pages,
-//! with the loading line laid over them). The views are widgets of their
+//! with their notes laid over them). The views are widgets of their
 //! own: [`DetailsView`] and [`IconView`], which keeps its tiles' scale.
 
 mod parts;
@@ -125,7 +125,6 @@ impl FolderPane {
             .child(&parts.stack)
             .css_classes(["folder-pane-overlay"])
             .build();
-        overlay.add_overlay(&parts.loading_line);
         overlay.add_overlay(&parts.empty_note);
         overlay.connect_get_child_position(glib::clone!(
             #[weak(rename_to = pane)]
@@ -319,24 +318,21 @@ impl FolderPane {
         }
     }
 
-    /// Shows the loading line over the items while `loading` lasts (see
-    /// [`LoadingLine::set_loading`](super::loading_line::LoadingLine::set_loading)).
+    /// Starts telling when the pane's location becomes slow while
+    /// `loading` lasts (see [`SlowDelay`](super::slow_delay::SlowDelay)).
     pub(super) fn set_loading(&self, loading: bool) {
-        self.parts().loading_line.set_loading(loading);
+        self.parts().slow_delay.set_running(loading);
     }
 
-    /// Whether the loading line shows now, which a listing does only once
-    /// it has run for a moment.
-    pub(super) fn shows_loading_line(&self) -> bool {
-        self.parts().loading_line.is_shown()
+    /// Whether the pane's location has taken longer than the delay, after
+    /// which the file area and the status bar say so.
+    pub(super) fn is_slow(&self) -> bool {
+        self.parts().slow_delay.is_slow()
     }
 
-    /// Calls `changed` whenever the loading line shows or hides.
-    /// The argument says whether the line shows now.
-    pub(super) fn connect_loading_line_changed(&self, changed: impl Fn(bool) + 'static) {
-        self.parts()
-            .loading_line
-            .connect_visible_notify(move |line| changed(line.is_visible()));
+    /// Calls `on_slow` each time the pane's location becomes slow.
+    pub(super) fn connect_slow(&self, on_slow: impl Fn() + 'static) {
+        self.parts().slow_delay.connect_slow(on_slow);
     }
 
     /// Shows `hint` over the pane, saying what a drag would do there, or
@@ -384,12 +380,6 @@ impl FolderPane {
     pub(super) fn drag_hint(&self) -> Option<String> {
         let label = &self.parts().drag_hint;
         label.is_visible().then(|| label.label().to_string())
-    }
-
-    /// The loading line, for tests.
-    #[cfg(test)]
-    pub(super) fn loading_line(&self) -> &super::loading_line::LoadingLine {
-        &self.parts().loading_line
     }
 
     /// The empty, loading and error page, for tests.

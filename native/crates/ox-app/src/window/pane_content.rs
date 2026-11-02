@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Which page a folder pane shows for its tab: the listing, the empty or
-//! error page, or a landing page, with the loading line over it, and
-//! "Working on it..." while a location takes a moment to open
+//! error page, or a landing page, and "Working on it..." while a
+//! location takes a moment to open
 //! ([`super::slow_location`]).
 //!
 //! Ports the page choice of `renderContent` in `v2.0.0:desktop/ui/app.js`.
@@ -69,11 +69,10 @@ pub(super) fn show_pane_state(
     } = state;
     pane.set_loading(opening || (loading && page.is_none()));
     pane.hide_rows(false);
-    // VIEW-068: once the location has taken a moment (the loading line's
-    // delay), the file area says "Working on it..." in place of the
+    // VIEW-068: once the location has taken a moment (the slow delay), the file area says "Working on it..." in place of the
     // previous folder, as Windows Explorer does. A reload keeps its rows,
     // and a location that answers sooner shows nothing.
-    let is_slow = pane.shows_loading_line();
+    let is_slow = pane.is_slow();
     let is_first_listing = loading && !reloading && page.is_none() && error.is_none();
     if is_slow && (opening || (is_first_listing && pane.model().n_items() == 0)) {
         pane.show_page(PanePage::Listing);

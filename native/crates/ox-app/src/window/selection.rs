@@ -149,7 +149,7 @@ impl BrowserWindow {
             StatusSubject::Folder {
                 shown,
                 bytes: self.folder_pane().model().shown_file_bytes(),
-                loading: self.is_loading() && self.folder_pane().shows_loading_line(),
+                loading: self.is_loading() && self.folder_pane().is_slow(),
             }
         };
         let model = self.folder_pane().model();

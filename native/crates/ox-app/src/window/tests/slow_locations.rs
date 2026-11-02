@@ -15,8 +15,8 @@ use ox_core::network::NetworkError;
 
 use crate::test_support::harness::{settle, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::test_support::held;
-use crate::window::loading_line::APPEARANCE_DELAY;
 use crate::window::session::TabPlacement;
+use crate::window::slow_delay::APPEARANCE_DELAY;
 
 /// What the file area says while a location is opened.
 const WORKING: &str = "Working on it...";
@@ -402,6 +402,65 @@ fn switching_tabs_while_a_slow_address_opens_keeps_each_tabs_state() {
     assert!(address_shows_progress(&test));
     drop(hold);
     wait_until("the slow tab's folder", || {
+        test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()
+    });
+    settle();
+    assert!(shows_nothing_busy(&test));
+}
+
+/// Widgets of the window that draw a second progress bar over the items,
+/// visible now. Windows Explorer shows only the address bar's.
+fn visible_progress_over_the_items(test: &TestWindow) -> usize {
+    crate::window::widget_tree::descendants::<gtk::Widget>(&test.window)
+        .iter()
+        .filter(|widget| widget.has_css_class("loading-line") && widget.is_visible())
+        .count()
+}
+
+/// Only the address bar shows progress, as in Windows Explorer: no line
+/// runs over the items while a location is opened, listed or refreshed,
+/// however long it takes.
+///
+/// parity: VIEW-047, VIEW-068
+#[gtk::test]
+fn only_the_address_bar_shows_progress_while_a_location_loads() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let documents = fixture.uri_of("Documents");
+
+    // A typed address, looked up and then listed.
+    let hold = held::hold(&documents);
+    enter_address(&test, &fixture.path("Documents").display().to_string());
+    wait_until("Working on it...", || says_working(&test));
+    assert!(address_shows_progress(&test));
+    assert_eq!(visible_progress_over_the_items(&test), 0, "a typed address");
+    drop(hold);
+    wait_until("the typed folder", || {
+        test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()
+    });
+
+    // A refresh of a slow folder keeps its page, with the address bar's
+    // progress alone.
+    let hold = held::hold(&documents);
+    test.window.refresh();
+    wait_for(APPEARANCE_DELAY * 2);
+    assert!(test.window.is_loading(), "the refresh is held");
+    assert!(address_shows_progress(&test));
+    assert!(shows_stop(&test));
+    assert_eq!(visible_progress_over_the_items(&test), 0, "a refresh");
+    drop(hold);
+    test.wait_for_listing("the refresh");
+
+    // A folder opened from the list.
+    test.window.navigate(&fixture.uri()).expect("the fixture folder");
+    test.wait_for_listing("the fixture folder");
+    let hold = held::hold(&documents);
+    test.window.activate_item(test.position_of("Documents"));
+    wait_until("Working on it...", || says_working(&test));
+    assert_eq!(visible_progress_over_the_items(&test), 0, "a folder click");
+    drop(hold);
+    wait_until("the opened folder", || {
         test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()
     });
     settle();

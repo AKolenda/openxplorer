@@ -58,17 +58,14 @@ impl BrowserWindow {
         self.follow_skin();
         self.install_view_zoom();
         for pane in self.folder_panes() {
-            pane.connect_loading_line_changed(glib::clone!(
+            pane.connect_slow(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |shown| {
-                    window.update_status();
-                    if shown && window.is_busy() {
-                        // A location that takes a moment says "Working on
-                        // it..." from now on (VIEW-068).
-                        window.update_content();
-                        window.update_beside_pane();
-                    }
+                move || {
+                    // A location that takes a moment says "Working on
+                    // it..." and "Loading…" from now on (VIEW-068).
+                    window.update_content();
+                    window.update_beside_pane();
                 }
             ));
         }

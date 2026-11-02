@@ -13,7 +13,7 @@
 //! - Refresh turns into Stop, which cancels whatever runs.
 //!
 //! Once the location has taken longer than
-//! [`APPEARANCE_DELAY`](super::loading_line::APPEARANCE_DELAY), the file
+//! [`APPEARANCE_DELAY`](super::slow_delay::APPEARANCE_DELAY), the file
 //! area says "Working on it..." where Explorer says it, near the top of
 //! the list, in place of the previous folder's rows; a location that
 //! answers sooner never flashes it (see `pane_content.rs`).
