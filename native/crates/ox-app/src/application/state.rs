@@ -346,6 +346,14 @@ fn build_window(app: &gtk::Application, context: &AppContext, start: Option<&str
 /// yet.
 fn window_with_first_tab(app: &gtk::Application, context: &AppContext, start: Option<&str>) -> BrowserWindow {
     let window = BrowserWindow::new(app, context);
+    open_first_tab(&window, context, start);
+    window
+}
+
+/// Gives `window`, which has no tab yet, a first tab at `start`, or the
+/// startup folder, falling back to Home, and says in it when the settings
+/// file could not be read.
+pub(super) fn open_first_tab(window: &BrowserWindow, context: &AppContext, start: Option<&str>) {
     let startup = startup_location(context);
     let start = start.unwrap_or(startup.as_str());
     if let Err(error) = window.add_tab(start) {
@@ -360,12 +368,11 @@ fn window_with_first_tab(app: &gtk::Application, context: &AppContext, start: Op
     if let Some(warning) = context.settings_warning() {
         window.show_message(&warning);
     }
-    window
 }
 
 /// Attaches the desktop integration to `app`: `FileManager1` requests
-/// open in its active window, and the Show in folder service starts when
-/// it is enabled.
+/// open in its active window, or a new one when Settings asks, and the
+/// Show in folder service starts when it is enabled.
 fn attach_desktop_integration(app: &gtk::Application, context: &AppContext) {
     let show = glib::clone!(
         #[weak]
@@ -452,6 +459,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
+    use ox_core::integration::{FileManagerMethod, FileManagerRequest};
     use ox_core::location::SETTINGS_URI;
     use ox_core::settings::{PreferencesUpdate, Theme};
     use tempfile::TempDir;
@@ -791,6 +799,16 @@ mod tests {
         assert_eq!(window.current_uri(), Some(fixture.uri()));
         WidgetExt::activate_action(window, "win.previous-tab", None).expect("the action");
         assert_eq!(window.current_uri(), first);
+        ask_for_new_windows(&app);
+        let locations = vec![fixture.uri_of("Documents")];
+        app.state
+            .run_command(&application(), CommandRequest::Open(locations));
+        assert_eq!(browser_windows().len(), 2);
+        assert_eq!(window.tab_count(), 2);
+    }
+
+    /// Turns on "Folders from other apps open in a new window".
+    fn ask_for_new_windows(app: &TestApp) {
         let update = PreferencesUpdate {
             external_folders_in_new_window: Some(true),
             ..PreferencesUpdate::default()
@@ -805,11 +823,114 @@ mod tests {
                 .preferences
                 .external_folders_in_new_window
         });
-        let locations = vec![fixture.uri_of("Documents")];
-        app.state
-            .run_command(&application(), CommandRequest::Open(locations));
-        assert_eq!(browser_windows().len(), 2);
-        assert_eq!(window.tab_count(), 2);
+    }
+
+    /// Sends `method` for `uris` as another application's `FileManager1`
+    /// call would.
+    fn show_in_folder(app: &TestApp, method: FileManagerMethod, uris: &[String]) {
+        let request = FileManagerRequest::new(method, uris).expect("valid locations");
+        super::super::requests::show_file_manager_request(&application(), &app.state.context, &request, "");
+    }
+
+    /// The window opened besides `known`.
+    fn window_besides(known: &[&BrowserWindow]) -> BrowserWindow {
+        let mut opened: Vec<BrowserWindow> = browser_windows()
+            .into_iter()
+            .filter(|window| !known.contains(&window))
+            .collect();
+        assert_eq!(opened.len(), 1, "one window opens");
+        opened.remove(0)
+    }
+
+    /// The names selected in `window`'s current folder.
+    fn selected_names(window: &BrowserWindow) -> Vec<String> {
+        let items = window.folder_model().selected_items();
+        items.iter().map(|item| item.entry().name.clone()).collect()
+    }
+
+    /// Show in folder from another app opens a tab in the active window
+    /// while Settings leaves "Folders from other apps open in a new
+    /// window" off.
+    ///
+    /// parity: INT-014, NAV-042
+    #[gtk::test]
+    fn show_in_folder_uses_the_active_window_by_default() {
+        let fixture = Fixture::standard();
+        fixture.write("Documents/report.txt");
+        let app = TestApp::new();
+        app.state.activate(&application());
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+
+        show_in_folder(
+            &app,
+            FileManagerMethod::ShowItems,
+            &[fixture.uri_of("Documents/report.txt")],
+        );
+        show_in_folder(&app, FileManagerMethod::ShowFolders, &[fixture.uri()]);
+
+        assert_eq!(browser_windows().len(), 1);
+        assert_eq!(window.tab_count(), 3);
+        assert_eq!(window.current_uri(), Some(fixture.uri()));
+    }
+
+    /// With "Folders from other apps open in a new window" on, each Show
+    /// in folder request opens a window of its own: `ShowItems` with the
+    /// file selected, `ShowFolders` at the folder and `ShowItemProperties`
+    /// with the Properties over the file's folder. The window in use keeps
+    /// its tabs.
+    ///
+    /// parity: INT-014, NAV-042
+    #[gtk::test]
+    fn show_in_folder_opens_a_new_window_when_settings_ask() {
+        let fixture = Fixture::standard();
+        fixture.write("Documents/report.txt");
+        let app = TestApp::new();
+        app.state.activate(&application());
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+        ask_for_new_windows(&app);
+
+        show_in_folder(
+            &app,
+            FileManagerMethod::ShowItems,
+            &[fixture.uri_of("Documents/report.txt")],
+        );
+
+        let items = window_besides(&[window]);
+        assert_eq!(window.tab_count(), 1);
+        assert_eq!(items.tab_count(), 1);
+        assert_eq!(items.current_uri(), Some(fixture.uri_of("Documents")));
+        wait_until("the selection", || selected_names(&items) == ["report.txt"]);
+
+        show_in_folder(
+            &app,
+            FileManagerMethod::ShowFolders,
+            &[fixture.uri_of("Documents")],
+        );
+
+        let folders = window_besides(&[window, &items]);
+        assert_eq!(folders.tab_count(), 1);
+        assert_eq!(folders.current_uri(), Some(fixture.uri_of("Documents")));
+
+        show_in_folder(
+            &app,
+            FileManagerMethod::ShowItemProperties,
+            &[fixture.uri_of("Documents/report.txt")],
+        );
+
+        let properties = window_besides(&[window, &items, &folders]);
+        assert_eq!(properties.tab_count(), 1);
+        assert_eq!(properties.current_uri(), Some(fixture.uri_of("Documents")));
+        wait_until("the Properties dialog", || {
+            properties.dialog_layer().shown().is_some()
+        });
+        let frame = properties.dialog_layer().shown().expect("a dialog is shown");
+        assert_eq!(frame.title(), "report.txt Properties");
+        wait_until("the selection", || selected_names(&properties) == ["report.txt"]);
+        assert_eq!(window.tab_count(), 1);
     }
 
     /// `--settings` and the launcher's Settings action open Settings in the

@@ -70,8 +70,8 @@ const NEW_WINDOW: RowText = RowText {
 
 const EXTERNAL_FOLDERS: RowText = RowText {
     title: "Folders from other apps open in a new window",
-    description: "Off: a folder opened from another app or the command line opens in a new tab, \
-                  and the tab you are using stays where it is.",
+    description: "Off: a folder opened from another app, Show in folder or the command line opens \
+                  in a new tab, and the tab you are using stays where it is.",
     keywords: "open folders from other apps in a new window xdg-open command line external new tab \
                window",
 };

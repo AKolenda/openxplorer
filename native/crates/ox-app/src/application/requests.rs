@@ -12,7 +12,7 @@ use gtk::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 
 use super::command_line::CommandRequest;
-use super::state::{active_window, browser_windows_of, open_window, AppState};
+use super::state::{active_window, browser_windows_of, open_first_tab, open_window, AppState};
 use super::AppAction;
 use crate::app_context::AppContext;
 use crate::settings_page::SettingsView;
@@ -161,16 +161,47 @@ impl AppState {
 
 /// Shows a `FileManager1` request in the active window, or a new one
 /// (`handle_reveal`): the caller's startup ID first, so the desktop lets
-/// the window take focus (INT-023), then the folders or items.
+/// the window take focus (INT-023), then the folders or items. When
+/// Settings opens folders from other apps in a new window (NAV-042), the
+/// request gets a window of its own, unless an update forbids another
+/// window now (UPD-005), when it goes to the active window as before.
 pub(super) fn show_file_manager_request(
     app: &gtk::Application,
     context: &AppContext,
     request: &FileManagerRequest,
     startup_id: &str,
 ) {
+    let in_new_window = context.settings_data().preferences.external_folders_in_new_window
+        && context.updates().new_window_refusal().is_none();
+    if in_new_window {
+        show_in_new_window(app, context, request, startup_id);
+        return;
+    }
     let window = active_window(app).unwrap_or_else(|| open_window(app, context, None));
     raise_for_caller(&window, startup_id);
     window.show_file_manager_request(request);
+}
+
+/// Opens a window whose tabs are the request's, with the items selected
+/// and scrolled to, raises it for the caller and then shows the
+/// Properties a `ShowItemProperties` request asks for. A window never
+/// opens empty: when none of the request's tabs opens, it shows the
+/// startup folder, with the reason in its message line.
+fn show_in_new_window(
+    app: &gtk::Application,
+    context: &AppContext,
+    request: &FileManagerRequest,
+    startup_id: &str,
+) {
+    let window = BrowserWindow::new(app, context);
+    window.open_request_tabs(request);
+    if window.tab_count() == 0 {
+        open_first_tab(&window, context, None);
+    } else if let Some(warning) = context.settings_warning() {
+        window.show_message(&warning);
+    }
+    raise_for_caller(&NewWindow(&window), startup_id);
+    window.open_request_properties(request);
 }
 
 /// A window raised for another program: the two steps whose order
@@ -190,6 +221,20 @@ impl RaisedWindow for BrowserWindow {
 
     fn raise(&self) {
         self.present();
+    }
+}
+
+/// A window not shown yet: raising it shows it for the first time, at the
+/// saved size.
+struct NewWindow<'a>(&'a BrowserWindow);
+
+impl RaisedWindow for NewWindow<'_> {
+    fn take_startup_id(&self, startup_id: &str) {
+        self.0.set_startup_id(startup_id);
+    }
+
+    fn raise(&self) {
+        self.0.present_as_new_window();
     }
 }
 
