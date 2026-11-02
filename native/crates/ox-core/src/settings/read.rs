@@ -112,6 +112,7 @@ fn read_sections(source: &Value, settings: &mut SettingsData) -> Result<(), Sett
     if let Some(preferences) = sections.get("preferences") {
         let mut update = PreferencesUpdate::from_json(preferences)?;
         forget_the_old_default_menu(preferences, &mut update);
+        forget_the_old_default_item_counts(preferences, &mut update);
         settings.preferences.apply(&update);
         keep_shared_previews_off(preferences, &mut settings.preferences);
     }
@@ -126,6 +127,17 @@ fn forget_the_old_default_menu(values: &Value, update: &mut PreferencesUpdate) {
     let chosen = values.get("classicMenuChosen").and_then(Value::as_bool) == Some(true);
     if update.context_menu == Some(ContextMenu::Win10) && !chosen {
         update.context_menu = None;
+    }
+}
+
+/// Folder item counts stored on (`viewOptions.countFolderItems`), which
+/// older releases wrote as their default with any other view option, give
+/// way to Explorer's empty folder Size, now the default, unless they were
+/// turned on since (`itemCountsChosen`, VIEW-037).
+fn forget_the_old_default_item_counts(values: &Value, update: &mut PreferencesUpdate) {
+    let chosen = values.get("itemCountsChosen").and_then(Value::as_bool) == Some(true);
+    if let (false, Some(options)) = (chosen, update.view_options.as_mut()) {
+        options.count_folder_items = false;
     }
 }
 

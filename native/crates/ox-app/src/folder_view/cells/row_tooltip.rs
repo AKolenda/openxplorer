@@ -34,28 +34,27 @@ pub(crate) enum RowTooltip {
 }
 
 impl RowTooltip {
-    /// The tooltip of the item `item`.
-    pub(crate) fn text(self, item: &FileItem) -> String {
+    /// The tooltip of the item `item`, if it has one.
+    pub(crate) fn text(self, item: &FileItem) -> Option<String> {
         match self {
             RowTooltip::Name => infotip(item),
-            RowTooltip::FullPath => display_path(&item.entry().uri),
+            RowTooltip::FullPath => Some(display_path(&item.entry().uri)),
         }
     }
 }
 
 /// Explorer's infotip for `item`: "Type", "Size" and "Date modified" for
-/// a file, "Date created" for a folder (its date modified when the
-/// creation date is unknown), each line only when known; the name when
-/// nothing is.
-fn infotip(item: &FileItem) -> String {
+/// a file, "Date created" for a folder, each line only when known; none
+/// when nothing is, as Explorer shows none then.
+fn infotip(item: &FileItem) -> Option<String> {
     let entry = item.entry();
     let mut lines = Vec::new();
-    if let (true, Some(created)) = (entry.is_dir, entry.meta.created) {
-        let date = format::date_short_time_text(Some(created));
-        lines.push(format_message("Date created: {date}", &[("date", &date)]));
-        return lines.join("\n");
-    }
-    if !entry.is_dir {
+    if entry.is_dir {
+        if let Some(created) = entry.meta.created {
+            let date = format::date_short_time_text(Some(created));
+            lines.push(format_message("Date created: {date}", &[("date", &date)]));
+        }
+    } else {
         if !entry.type_label.is_empty() {
             lines.push(format_message("Type: {type}", &[("type", &entry.type_label)]));
         }
@@ -63,16 +62,12 @@ fn infotip(item: &FileItem) -> String {
             let size = format::size_text(Some(size));
             lines.push(format_message("Size: {size}", &[("size", &size)]));
         }
+        if entry.modified.is_some() {
+            let date = format::date_short_time_text(entry.modified);
+            lines.push(format_message("Date modified: {date}", &[("date", &date)]));
+        }
     }
-    if entry.modified.is_some() {
-        let date = format::date_short_time_text(entry.modified);
-        lines.push(format_message("Date modified: {date}", &[("date", &date)]));
-    }
-    if lines.is_empty() {
-        entry.name.clone()
-    } else {
-        lines.join("\n")
-    }
+    (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
 /// A cell's own tooltip for `item`, which takes the place of the row's,
@@ -129,14 +124,12 @@ fn tooltip_text(
         return own;
     }
     match (row, kind) {
-        (RowTooltip::FullPath, _) => Some(row.text(item)),
-        (RowTooltip::Name, TooltipCell::Item) => {
-            let tip = row.text(item);
-            Some(match cut_short {
-                Some(name) if name != tip => format!("{name}\n{tip}"),
-                _ => tip,
-            })
-        }
+        (RowTooltip::FullPath, _) => row.text(item),
+        (RowTooltip::Name, TooltipCell::Item) => match (cut_short, row.text(item)) {
+            (Some(name), Some(tip)) => Some(format!("{name}\n{tip}")),
+            (name, None) => name,
+            (None, tip) => tip,
+        },
         (RowTooltip::Name, TooltipCell::Column) => cut_short,
     }
 }
@@ -169,41 +162,34 @@ mod tests {
         let item = FileItem::new(entry);
         assert_eq!(
             RowTooltip::default().text(&item),
-            format!(
+            Some(format!(
                 "Type: Text document\nSize: {}\nDate modified: {}",
                 format::size_text(Some(2_048)),
                 format::date_short_time_text(Some(1_789_378_200))
-            )
+            ))
         );
-        assert_eq!(RowTooltip::FullPath.text(&item), "/tmp/ox-test/Notes 2.txt");
+        assert_eq!(
+            RowTooltip::FullPath.text(&item).as_deref(),
+            Some("/tmp/ox-test/Notes 2.txt")
+        );
 
         let mut folder = folder_entry("Photos");
         folder.modified = Some(1_789_378_200);
-        folder.meta.created = None;
-        assert_eq!(
-            RowTooltip::default().text(&FileItem::new(folder.clone())),
-            format!(
-                "Date modified: {}",
-                format::date_short_time_text(Some(1_789_378_200))
-            ),
-            "a folder has no type or size line, and its date modified stands in for an unknown creation"
-        );
         folder.meta.created = Some(1_789_000_000);
         assert_eq!(
-            RowTooltip::default().text(&FileItem::new(folder)),
-            format!(
+            RowTooltip::default().text(&FileItem::new(folder.clone())),
+            Some(format!(
                 "Date created: {}",
                 format::date_short_time_text(Some(1_789_000_000))
-            ),
+            )),
             "a folder shows when it was created, as Explorer's infotip does"
         );
-        let mut unknown = folder_entry("Mystery");
-        unknown.modified = None;
-        let unknown = FileItem::new(unknown);
+        folder.meta.created = None;
+        let unknown = FileItem::new(folder);
         assert_eq!(
             RowTooltip::default().text(&unknown),
-            "Mystery",
-            "nothing known: the name"
+            None,
+            "nothing Explorer shows is known: no infotip"
         );
         assert_eq!(
             tooltip_text(
@@ -211,10 +197,14 @@ mod tests {
                 TooltipCell::Item,
                 &unknown,
                 None,
-                Some("Mystery".to_owned())
+                Some("Photos".to_owned())
             ),
-            Some("Mystery".to_owned()),
-            "a name cut short with nothing else known is not repeated"
+            Some("Photos".to_owned()),
+            "a name cut short is still read in full"
+        );
+        assert_eq!(
+            tooltip_text(RowTooltip::Name, TooltipCell::Item, &unknown, None, None),
+            None
         );
     }
 
@@ -230,7 +220,7 @@ mod tests {
             entry.type_label = "Text document".to_owned();
             entry
         });
-        let tip = RowTooltip::Name.text(&file);
+        let tip = RowTooltip::Name.text(&file).expect("a file's type is known");
         assert_eq!(
             tooltip_text(RowTooltip::Name, TooltipCell::Item, &file, None, None),
             Some(tip.clone())

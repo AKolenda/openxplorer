@@ -6,6 +6,7 @@
 
 use std::fs;
 
+use gtk::glib;
 use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
@@ -428,9 +429,13 @@ fn the_folder_menu_sorts_and_changes_the_view_in_place() {
     });
 }
 
+/// Shift+F10 (`win.context-menu`) opens the classic menu of the selection,
+/// and the Menu key the right-click menu's style, as in Windows 11
+/// Explorer.
+///
 /// parity: CMD-013, CMD-014
 #[gtk::test]
-fn the_menu_key_opens_the_classic_menu_of_the_selection() {
+fn shift_f10_opens_the_classic_menu_and_the_menu_key_the_compact_one() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     choose_menu_style(&test, ContextMenu::Win11);
@@ -443,9 +448,40 @@ fn the_menu_key_opens_the_classic_menu_of_the_selection() {
     assert_eq!(
         menu.style(),
         MenuStyle::Classic,
-        "the keyboard opens the classic menu"
+        "Shift+F10 opens the classic menu"
     );
     assert_eq!(menu.row_labels()[0], "Open");
+    menu.popdown();
+
+    let view = test.window.folder_pane().input_widget();
+    let menu_key = view
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            controller
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                .collect::<Vec<_>>()
+        })
+        .find(|shortcut| {
+            shortcut
+                .trigger()
+                .and_downcast::<gtk::KeyvalTrigger>()
+                .is_some_and(|trigger| trigger.keyval() == gtk::gdk::Key::Menu)
+        })
+        .expect("the view takes the Menu key");
+    let action = menu_key.action().expect("the Menu key runs an action");
+    assert!(action.activate(gtk::ShortcutActionFlags::empty(), &view, None));
+    let menu = test.window.context_menu();
+    assert!(menu.is_visible());
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Compact,
+        "the Menu key opens the compact menu"
+    );
 }
 
 /// parity: SIDE-009, SIDE-014

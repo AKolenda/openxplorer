@@ -251,6 +251,13 @@ pub struct Preferences {
     pub auto_index: bool,
     /// Classic (Windows 10) or compact (Windows 11) context menus.
     pub context_menu: ContextMenu,
+    /// Folder item counts were turned on in this app. Files of older
+    /// releases store `viewOptions.countFolderItems: true`, then the
+    /// default, whenever any view option changed, so without this mark
+    /// that value gives way to Explorer's empty folder Size once
+    /// (`read.rs`). Stored only when set.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub item_counts_chosen: bool,
     /// The classic menu was chosen in this app. Files the Python app or an
     /// older release wrote store `"win10"`, its default, whether chosen or
     /// not, so without this mark that value gives way to the compact menu
@@ -462,6 +469,7 @@ impl Default for Preferences {
             auto_index: true,
             context_menu: ContextMenu::default(),
             classic_menu_chosen: false,
+            item_counts_chosen: false,
             network_interval: DEFAULT_NETWORK_INTERVAL,
             text_size: DEFAULT_TEXT_SIZE,
             sidebar_width: None,
@@ -643,6 +651,7 @@ impl Preferences {
         };
         let columns_changed = options.details_columns != self.view_options.details_columns;
         self.view_options = options.clone();
+        self.item_counts_chosen = options.count_folder_items;
         columns_changed
     }
 

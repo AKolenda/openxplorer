@@ -110,6 +110,37 @@ pub fn size_text(bytes: Option<u64>) -> String {
     bytes.map_or_else(|| UNKNOWN_DATE.to_owned(), pretty_bytes)
 }
 
+/// A file's size as Windows Explorer's Size column writes it: whole
+/// kilobytes, rounded up, with thousands separated (`1 KB` for 20 bytes,
+/// `0 KB` for an empty file, `2,345 KB`); empty when unknown.
+pub fn column_size_text(bytes: Option<u64>) -> String {
+    let Some(bytes) = bytes else {
+        return String::new();
+    };
+    let kilobytes = bytes.div_ceil(1024);
+    crate::i18n::format_message(
+        "{value} {unit}",
+        &[
+            ("value", &group_thousands(kilobytes)),
+            ("unit", crate::i18n::gettext_static("KB")),
+        ],
+    )
+}
+
+/// `35000` as `35,000`, as Explorer's Size column groups digits.
+fn group_thousands(value: u64) -> String {
+    let digits = value.to_string();
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, digit) in digits.chars().enumerate() {
+        let remaining = digits.len() - index;
+        if index > 0 && remaining.is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    grouped
+}
+
 /// `912 bytes`, `71.0 KB`, `130 KB`, `1.1 MB`: one decimal below 100 and
 /// none from 100 up, in powers of 1024.
 ///
@@ -266,6 +297,21 @@ fn local_time(unix_seconds: u64) -> Option<DateTime> {
 mod tests {
     use super::locale_pattern::LocaleSamples;
     use super::*;
+
+    /// The Size column writes whole kilobytes, rounded up and grouped, as
+    /// Windows Explorer's does, and nothing for an unknown size.
+    ///
+    /// parity: VIEW-001
+    #[test]
+    fn the_size_column_writes_whole_kilobytes_rounded_up() {
+        assert_eq!(column_size_text(Some(0)), "0 KB");
+        assert_eq!(column_size_text(Some(20)), "1 KB");
+        assert_eq!(column_size_text(Some(1024)), "1 KB");
+        assert_eq!(column_size_text(Some(1025)), "2 KB");
+        assert_eq!(column_size_text(Some(2_401_280)), "2,345 KB");
+        assert_eq!(column_size_text(Some(1_073_741_824)), "1,048,576 KB");
+        assert_eq!(column_size_text(None), "");
+    }
 
     /// One locale's samples of the reference time in [`locale_pattern`], as
     /// glibc 2.39 prints them, and the texts for 2026-09-21 14:13:20 UTC.

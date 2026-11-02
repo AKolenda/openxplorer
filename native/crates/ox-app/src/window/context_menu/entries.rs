@@ -374,16 +374,90 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         Icon::History,
         WindowAction::PreviousVersions,
     );
-    let properties = item(
+    entries.push(for_one_item(versions, facts, false).into());
+    // Properties describe several items together (PROP-002).
+    entries.push(properties_item());
+    entries
+}
+
+/// Properties, of the selection or of the folder.
+fn properties_item() -> MenuEntry {
+    item(
         ox_core::i18n::gettext_static("Properties"),
         Icon::Info,
         WindowAction::Properties,
     )
-    .with_shortcut("Alt+Enter");
-    entries.push(for_one_item(versions, facts, false).into());
-    // Properties describe several items together (PROP-002).
-    entries.push(properties.into());
-    entries
+    .with_shortcut("Alt+Enter")
+    .into()
+}
+
+/// "Show more options", the compact menu's last item, which opens the
+/// classic menu in its place (Shift+F10).
+fn show_more_options_item() -> MenuEntry {
+    item(
+        ox_core::i18n::gettext_static("Show more options"),
+        Icon::MoreHorizontal,
+        WindowAction::ShowMoreOptions,
+    )
+    .with_shortcut("Shift+F10")
+    .into()
+}
+
+/// The Windows 11 style of the folder's own menu, in the order of
+/// Explorer's compact menu on blank space: View, Sort by and Refresh;
+/// Paste and Undo; New; Properties; Open in Terminal; then "Show more
+/// options" for the rest (CMD-011, CMD-012).
+pub(crate) fn compact_background_menu(undo_label: &str) -> Vec<MenuEntry> {
+    vec![
+        item(
+            ox_core::i18n::gettext_static("View"),
+            Icon::Grid,
+            WindowAction::ShowViewMenu,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Sort by"),
+            Icon::ArrowSort,
+            WindowAction::ShowSortMenu,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("Refresh"),
+            Icon::ArrowClockwise,
+            WindowAction::Refresh,
+        )
+        .with_shortcut("F5")
+        .into(),
+        MenuEntry::Divider,
+        item(
+            ox_core::i18n::gettext_static("Paste"),
+            Icon::ClipboardPaste,
+            WindowAction::Paste,
+        )
+        .with_shortcut("Ctrl+V")
+        .into(),
+        item(undo_label, Icon::ArrowUndo, WindowAction::Undo)
+            .with_shortcut("Ctrl+Z")
+            .into(),
+        MenuEntry::Divider,
+        item(
+            ox_core::i18n::gettext_static("New…"),
+            Icon::Add,
+            WindowAction::ShowNewMenu,
+        )
+        .into(),
+        MenuEntry::Divider,
+        properties_item(),
+        MenuEntry::Divider,
+        item(
+            ox_core::i18n::gettext_static("Open in Terminal"),
+            Icon::WindowConsole,
+            WindowAction::OpenInTerminal,
+        )
+        .into(),
+        MenuEntry::Divider,
+        show_more_options_item(),
+    ]
 }
 
 /// The menu of a file or folder, in `style` (`entryMenu`).
@@ -395,21 +469,19 @@ pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
 }
 
 /// The Windows 11 style: the edit commands in the strip, the Open group,
-/// Copy as path, the details and "Show more options" (CMD-010).
+/// Copy as path, Compress, Properties and "Show more options" (CMD-010),
+/// as Explorer's compact menu lists them. Duplicate, Calculate folder
+/// size, Analyse disk usage and Previous versions are in the classic menu
+/// behind it.
 fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     let mut entries = open_group(facts);
-    entries.push(duplicate_item());
     entries.push(copy_path_item());
     entries.push(compress_item());
     entries.push(MenuEntry::Divider);
-    entries.extend(details_group(facts));
+    // Properties describe several items together (PROP-002).
+    entries.push(properties_item());
     entries.push(MenuEntry::Divider);
-    let more = item(
-        ox_core::i18n::gettext_static("Show more options"),
-        Icon::MoreHorizontal,
-        WindowAction::ShowMoreOptions,
-    );
-    entries.push(more.with_shortcut("Shift+F10").into());
+    entries.push(show_more_options_item());
     ContextMenu {
         entries,
         strip: edit_items(facts).to_vec(),
@@ -1031,13 +1103,38 @@ mod tests {
                 "Open in new tab",
                 "Open in new window",
                 "Pin to Quick access",
-                "Duplicate",
                 "Copy as path",
                 "Compress to ZIP file",
                 "-",
-                "Calculate folder size",
-                "Previous versions",
                 "Properties",
+                "-",
+                "Show more options",
+            ]
+        );
+    }
+
+    /// The folder's compact menu lists what Explorer's does on blank
+    /// space and ends with "Show more options", which opens the classic
+    /// one with everything else.
+    ///
+    /// parity: CMD-010, CMD-011
+    #[test]
+    fn the_compact_background_menu_ends_with_show_more_options() {
+        assert_eq!(
+            labels(&compact_background_menu("Undo")),
+            [
+                "View",
+                "Sort by",
+                "Refresh",
+                "-",
+                "Paste",
+                "Undo",
+                "-",
+                "New…",
+                "-",
+                "Properties",
+                "-",
+                "Open in Terminal",
                 "-",
                 "Show more options",
             ]

@@ -47,6 +47,32 @@ fn a_stored_old_default_menu_becomes_the_compact_one_unless_chosen() {
     assert!(!file.contains("classicMenuChosen"), "{file}");
 }
 
+/// Folder item counts an older release stored as its default, with
+/// another view option, give way to Explorer's empty folder Size once;
+/// counts turned on in this app are marked and stay after a restart.
+/// parity: VIEW-037
+#[test]
+fn stored_old_default_item_counts_turn_off_unless_chosen() {
+    let root = temporary_folder();
+    let older = json!({"version": 2, "preferences": {
+        "viewOptions": {"previewVideos": false, "countFolderItems": true}
+    }});
+    std::fs::write(root.path().join("settings.json"), older.to_string()).unwrap();
+    let mut store = Settings::open(root.path());
+    let options = store.snapshot().preferences.view_options;
+    assert!(!options.count_folder_items, "the old default gives way");
+    assert!(!options.preview_videos, "the other options are read as before");
+
+    save_preferences(
+        &mut store,
+        &json!({"viewOptions": {"previewVideos": false, "countFolderItems": true}}),
+    );
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(file.contains("\"itemCountsChosen\": true"), "{file}");
+    let reread = Settings::open(root.path()).snapshot().preferences;
+    assert!(reread.view_options.count_folder_items, "counts turned on stay");
+}
+
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist`
 /// parity: SET-016
 #[test]
