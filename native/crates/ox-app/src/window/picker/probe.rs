@@ -128,16 +128,9 @@ pub(super) async fn test_write(folder: &Path, name: &std::ffi::OsStr, replacing:
         }
     } else {
         let inside = folder.to_path_buf();
-        on_a_worker(folder, move || {
-            #[cfg(test)]
-            if is_listed(&APPEARING, &target) {
-                // Another program, such as a sync client, creates it meanwhile.
-                let _ = std::fs::write(&target, "written by another program");
-            }
-            match folder_takes_files(&inside) {
-                WriteTest::Writable if std::fs::symlink_metadata(&target).is_ok() => WriteTest::Appeared,
-                test => test,
-            }
+        on_a_worker(folder, move || match folder_takes_files(&inside) {
+            WriteTest::Writable if std::fs::symlink_metadata(&target).is_ok() => WriteTest::Appeared,
+            test => test,
         })
         .await
     }
@@ -153,6 +146,13 @@ pub(super) async fn test_folder(folder: &Path) -> WriteTest {
 /// [`test_folder`] on the worker: creates and removes a hidden file with a
 /// name no other program uses.
 fn folder_takes_files(folder: &Path) -> WriteTest {
+    #[cfg(test)]
+    if let Ok(paths) = APPEARING.lock() {
+        // Another program, such as a sync client, creates files meanwhile.
+        for path in paths.iter().filter(|path| path.parent() == Some(folder)) {
+            let _ = std::fs::write(path, "written by another program");
+        }
+    }
     // A name that is taken already is another program's file: try another.
     for _ in 0..3 {
         let unique = glib::uuid_string_random();

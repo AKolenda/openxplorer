@@ -849,6 +849,13 @@ impl BrowserWindow {
                 // own), and every file to be replaced may be written.
                 let first = names.first().map(|name| name.to_string_lossy().into_owned());
                 write_refusal(test_folder(&folder).await, &folder, &first.unwrap_or_default())?;
+                // Another program may have created one of the other files
+                // meanwhile: it is replaced only after asking too.
+                for name in names {
+                    if !existing.contains(&name) && probe(&folder.join(name)).await.exists() {
+                        existing.push(name);
+                    }
+                }
                 for name in &existing {
                     let test = test_replace(&folder.join(name)).await;
                     write_refusal(test, &folder, &name.to_string_lossy())?;
@@ -2252,6 +2259,40 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [gio::File::for_path(&real).uri().to_string()]);
+    }
+
+    /// A file another program creates while Save files checks the folder
+    /// is replaced only after asking, as one that was there already.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_file_that_appears_while_saving_files_is_replaced_only_after_asking() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let names: Vec<Vec<u8>> = vec![b"one.txt\0".to_vec(), b"two.txt\0".to_vec()];
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFiles",
+            vec![("files", names.to_variant())],
+        );
+        super::probe::appear_when_tested(&fixture.path("two.txt"));
+        let window = &portal.test.window;
+
+        window.picker().expect("a picker").accept.emit_clicked();
+
+        let question = replace_question(&portal.test);
+        assert_eq!(
+            question.message().as_str(),
+            "“two.txt” already exists. Do you want to replace it?"
+        );
+        assert!(
+            answer.borrow().is_none(),
+            "nothing is answered before the user says so"
+        );
+        press_in(&question, "Cancel");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
 
     /// A file another program creates while Save checks the folder is

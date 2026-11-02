@@ -212,18 +212,21 @@ fn initial_location(path: &Path) -> String {
 /// The remote address of a path inside `GVfs`'s FUSE export
 /// (`…/gvfs/smb-share:server=nas,share=projects,user=sam/Film` is
 /// `smb://nas/projects/Film`), without the user the export's name holds.
-fn fuse_export_location(path: &Path) -> FusePath {
+fn fuse_export_location(path: &Path, root: &Path) -> FusePath {
     use std::path::Component;
-    let parts: Vec<&std::ffi::OsStr> = path
+    // Only GVfs's own export folder: a local folder that happens to be
+    // called `gvfs/smb-share:…` is a local folder.
+    let Ok(inside) = path.strip_prefix(root) else {
+        return FusePath::NotExport;
+    };
+    let parts: Vec<&std::ffi::OsStr> = inside
         .components()
         .filter_map(|part| match part {
             Component::Normal(part) => Some(part),
             _ => None,
         })
         .collect();
-    let Some(index) = parts.iter().position(|part| *part == "gvfs").map(|gvfs| gvfs + 1) else {
-        return FusePath::NotExport;
-    };
+    let index = 0;
     let Some(export) = parts.get(index).map(|export| export.to_str()) else {
         return FusePath::NotExport;
     };
@@ -305,7 +308,7 @@ pub fn remembered_location(location: &str) -> Option<String> {
         // A share's FUSE path is kept as the share's address: its name
         // holds the share's user.
         if let Ok((path, _)) = glib::filename_from_uri(location) {
-            match fuse_export_location(&path) {
+            match fuse_export_location(&path, &glib::user_runtime_dir().join("gvfs")) {
                 FusePath::NotExport => {}
                 FusePath::Address(remote) => return remembered_location(&remote),
                 FusePath::Unknown => return None,
@@ -330,34 +333,43 @@ pub fn start_folders(
     memory: Option<&AppFolders>,
     defaults: &[PathBuf],
 ) -> Vec<StartFolder> {
-    let mut folders = Vec::new();
+    let mut candidates = Vec::new();
     if let Some(folder) = file_folder {
-        folders.push(StartFolder::Path(folder.to_path_buf()));
+        candidates.push(StartFolder::Path(folder.to_path_buf()));
     }
     let initial_uri = initial.map(initial_location).unwrap_or_default();
     if let Some(memory) = memory {
         if file_folder.is_none() && same_folder(&memory.initial, &initial_uri) {
-            folders.push(StartFolder::Location(memory.last.clone()));
+            candidates.push(StartFolder::Location(memory.last.clone()));
         }
     }
     if let Some(folder) = initial {
-        folders.push(StartFolder::Path(folder.to_path_buf()));
+        candidates.push(StartFolder::Path(folder.to_path_buf()));
     }
     // Where the caller's own folder is gone, its last folder still beats
     // Documents.
     if let Some(memory) = memory {
-        let last = StartFolder::Location(memory.last.clone());
-        if !folders.contains(&last) {
-            folders.push(last);
-        }
+        candidates.push(StartFolder::Location(memory.last.clone()));
     }
-    for folder in defaults {
-        let folder = StartFolder::Path(folder.clone());
-        if !folders.contains(&folder) {
-            folders.push(folder);
-        }
-    }
-    folders
+    candidates.extend(defaults.iter().cloned().map(StartFolder::Path));
+    // Each folder once, however it is written: a share's FUSE path and its
+    // address are one folder, and a share that does not answer must not
+    // hold the dialog for two deadlines.
+    let mut seen: Vec<String> = Vec::new();
+    candidates
+        .into_iter()
+        .filter(|folder| {
+            let key = match folder {
+                StartFolder::Path(path) => Some(initial_location(path)).filter(|key| !key.is_empty()),
+                StartFolder::Location(location) => remembered_location(location),
+            }
+            .unwrap_or_else(|| format!("{folder:?}"));
+            let key = key.trim_end_matches('/').to_owned();
+            let new = !seen.contains(&key);
+            seen.push(key);
+            new
+        })
+        .collect()
 }
 
 /// Whether two folder URIs (empty for none) name the same folder.
@@ -604,14 +616,13 @@ mod tests {
     #[test]
     fn a_fuse_path_is_kept_as_its_share_without_the_user() {
         let directory = tempfile::tempdir().expect("a settings folder");
-        let fuse = Path::new("/run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam/Film");
+        let export =
+            glib::user_runtime_dir().join("gvfs/smb-share:server=studio-nas,share=projects,user=sam");
+        let fuse = export.join("Film");
+        let fuse = fuse.as_path();
         let mut folders = DialogFolders::open(directory.path());
         folders
-            .remember(
-                "org.example.Editor",
-                Some(fuse),
-                "file:///run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam/Film/Cuts",
-            )
+            .remember("org.example.Editor", Some(fuse), &folder_uri(&fuse.join("Cuts")))
             .expect("written");
 
         let text = fs::read_to_string(directory.path().join(DIALOG_FOLDERS_FILE)).expect("the file");
@@ -636,11 +647,14 @@ mod tests {
     fn an_older_memory_with_a_user_name_is_cleaned_when_read() {
         let directory = tempfile::tempdir().expect("a settings folder");
         let file = directory.path().join(DIALOG_FOLDERS_FILE);
-        fs::write(
-            &file,
-            r#"{"apps":[{"app":"org.example.Editor","initial":"file:///run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam","last":"smb://sam@studio-nas/projects/Reports"}]}"#,
-        )
-        .expect("written");
+        let export =
+            glib::user_runtime_dir().join("gvfs/smb-share:server=studio-nas,share=projects,user=sam");
+        let older = serde_json::json!({"apps": [{
+            "app": "org.example.Editor",
+            "initial": folder_uri(&export),
+            "last": "smb://sam@studio-nas/projects/Reports",
+        }]});
+        fs::write(&file, older.to_string()).expect("written");
 
         let memory = DialogFolders::open(directory.path());
 
@@ -649,6 +663,44 @@ mod tests {
         assert_eq!(entry.last, "smb://studio-nas/projects/Reports");
         let text = fs::read_to_string(&file).expect("the file");
         assert!(!text.contains("sam"), "{text}");
+    }
+
+    /// A share's FUSE path passed as the first folder and the share's
+    /// remembered address are one folder, tried once: an unanswering share
+    /// would otherwise hold the dialog for two start deadlines.
+    ///
+    /// parity: INT-035
+    #[test]
+    fn a_share_and_its_fuse_path_are_tried_once() {
+        let fuse = glib::user_runtime_dir().join("gvfs/smb-share:server=studio-nas,share=projects/Film");
+        let remembered = memory("smb://studio-nas/projects/Film", "smb://studio-nas/projects/Film");
+
+        let folders = start_folders(None, Some(&fuse), Some(&remembered), &defaults());
+
+        assert_eq!(
+            folders[0],
+            StartFolder::Location("smb://studio-nas/projects/Film".into())
+        );
+        assert!(!folders.contains(&StartFolder::Path(fuse)), "{folders:?}");
+    }
+
+    /// Only `GVfs`'s own export folder holds shares: a local folder that
+    /// happens to be called `gvfs/smb-share:…` stays a local folder.
+    ///
+    /// parity: INT-035
+    #[test]
+    fn only_the_runtime_gvfs_folder_holds_shares() {
+        let local = "file:///home/demo/Backups/gvfs/smb-share:server=nas,share=work/Notes";
+        assert_eq!(
+            remembered_location(local).as_deref(),
+            Some("file:///home/demo/Backups/gvfs/smb-share%3Aserver%3Dnas%2Cshare%3Dwork/Notes"),
+            "the local folder, as its canonical address"
+        );
+        let export = folder_uri(&glib::user_runtime_dir().join("gvfs/smb-share:server=nas,share=work/Notes"));
+        assert_eq!(
+            remembered_location(&export).as_deref(),
+            Some("smb://nas/work/Notes")
+        );
     }
 
     /// A damaged file is read as empty and replaced by the next change.
