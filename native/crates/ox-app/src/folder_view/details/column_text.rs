@@ -174,14 +174,18 @@ pub(super) fn request_item_count(label: &gtk::Label, item: &FileItem, owners: &R
             (owners.item_of(&label).as_ref() == Some(&item)).then_some(label)
         };
         let _slot = COUNTING.with(Rc::clone).take().await;
-        if shows_item().is_none() || item.item_count().is_some() {
+        if shows_item().is_none() {
             return;
         }
-        let uri = item.entry().uri.clone();
-        let Ok(Some(count)) = gio::spawn_blocking(move || count_items(&uri)).await else {
-            return;
-        };
-        item.set_item_count(count);
+        // A cell this one replaced may have counted the folder meanwhile;
+        // the count still shows here.
+        if item.item_count().is_none() {
+            let uri = item.entry().uri.clone();
+            let Ok(Some(count)) = gio::spawn_blocking(move || count_items(&uri)).await else {
+                return;
+            };
+            item.set_item_count(count);
+        }
         let Some(owners) = owners.upgrade() else {
             return;
         };
