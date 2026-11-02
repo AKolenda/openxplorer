@@ -160,9 +160,18 @@ impl BrowserWindow {
     }
 
     /// What tab `id` takes along when it moves, with the selection and
-    /// scroll position of the tab in front as they are now.
+    /// scroll position of the tab in front as they are now. A tab whose
+    /// listing has yet to put its view back, as one that just moved here,
+    /// takes the view it waits for: the view here does not show it yet.
     fn moved_tab(&self, id: TabId) -> Option<MovedTab> {
-        if self.imp().session.borrow().is_active(id) {
+        let shows_its_view = {
+            let session = self.imp().session.borrow();
+            session.is_active(id)
+                && session
+                    .tab(id)
+                    .is_some_and(|tab| tab.scroll_after_listing.is_none())
+        };
+        if shows_its_view {
             self.save_tab_view();
         }
         let session = self.imp().session.borrow();
@@ -172,7 +181,7 @@ impl BrowserWindow {
             history: tab.history.clone(),
             left_views: tab.left_views.clone(),
             selected: tab.selected.clone(),
-            scroll: tab.scroll,
+            scroll: tab.scroll_after_listing.unwrap_or(tab.scroll),
             view: self.folder_pane().view(),
             sort: self.folder_pane().details().sort_order(),
             settings_view: is_settings.then(|| self.settings_page().view()),
@@ -499,6 +508,45 @@ mod tests {
             "the original went once the new window had it"
         );
         assert!(!tab_ids(&test.window).contains(&moved));
+    }
+
+    /// A tab moved on again before its new window listed it, as a tab torn
+    /// out as a window and dropped on another row before that window drew
+    /// its folder, keeps its selection and scroll position: its window has
+    /// not shown them yet, so they come from the tab, not from its view.
+    ///
+    /// parity: TAB-039
+    #[gtk::test]
+    fn a_tab_moved_on_before_its_window_listed_it_keeps_its_selection_and_scroll() {
+        let first = Fixture::standard();
+        let many = Fixture::with_files(200);
+        let test = window_with_a_travelled_tab(&first, &many);
+        let moved = active_tab(&test.window);
+        let other = test.open_beside(&first.uri());
+
+        // A new window has the tab, shown as a torn-out tab's window is, its
+        // folder not listed yet.
+        let window = test.window.detach_tab(moved).expect("a new window");
+        window.present_as_torn_out();
+        let tab = active_tab(&window);
+        window
+            .hand_over_tab(tab, &other.window, None)
+            .expect("the other window takes the tab");
+        let _opened = OpenedWindows::only(&[&test.window, &other.window]);
+        window.release_moved_tab(tab);
+        test.window.release_moved_tab(moved);
+
+        wait_until("the moved tab to be listed", || other.window.is_listed());
+        wait_until("the selection", || {
+            other.window.folder_model().selected_items().len() == 1
+        });
+        assert_eq!(
+            other.window.folder_model().selected_items()[0].entry().name,
+            "file 0042.txt"
+        );
+        wait_until("the scroll position", || {
+            other.window.folder_pane().scroll_position() > 599.0
+        });
     }
 
     /// parity: TAB-029

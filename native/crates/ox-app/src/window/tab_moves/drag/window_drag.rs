@@ -164,9 +164,12 @@ struct Protocol {
     events: RefCell<Events>,
     data_devices: wl_data_device_manager::WlDataDeviceManager,
     toplevel_drags: xdg_toplevel_drag_manager_v1::XdgToplevelDragManagerV1,
+    /// GTK's seat, held so its `wl_seat` lives as long as these objects.
+    gdk_seat: gdk::Seat,
     seat: wl_seat::WlSeat,
-    /// This process's own pointer, which sees the serial of each press.
-    pointer: RefCell<wl_pointer::WlPointer>,
+    /// This process's own pointer, which sees the serial of each press,
+    /// when the seat has one ([`own_pointer`]).
+    pointer: RefCell<Option<wl_pointer::WlPointer>>,
     /// How many drags started, which numbers each drag's data source.
     drags: Cell<u64>,
 }
@@ -209,12 +212,9 @@ impl Protocol {
         let handle = queue.handle();
         let toplevel_drags = globals.bind(&handle, 1..=1, ()).ok()?;
         let data_devices = globals.bind(&handle, 3..=3, ()).ok()?;
-        let seat = display
-            .default_seat()?
-            .downcast::<gdk_wayland::WaylandSeat>()
-            .ok()?
-            .wl_seat()?;
-        let pointer = seat.get_pointer(&handle, ());
+        let gdk_seat = display.default_seat()?;
+        let seat = gdk_seat.downcast_ref::<gdk_wayland::WaylandSeat>()?.wl_seat()?;
+        let pointer = own_pointer(&gdk_seat, &seat, &handle);
         connection.flush().ok()?;
         Some(Self {
             connection,
@@ -222,6 +222,7 @@ impl Protocol {
             events: RefCell::new(Events::default()),
             data_devices,
             toplevel_drags,
+            gdk_seat,
             seat,
             pointer: RefCell::new(pointer),
             drags: Cell::new(0),
@@ -244,10 +245,10 @@ impl Protocol {
     /// when the only mouse is unplugged, and the next press reaches only a
     /// new one.
     fn renew_pointer(&self) {
-        let pointer = self.seat.get_pointer(&self.handle(), ());
+        let pointer = own_pointer(&self.gdk_seat, &self.seat, &self.handle());
         let old = self.pointer.replace(pointer);
         // A pointer can be released from version 3 of the seat on.
-        if old.version() >= 3 {
+        if let Some(old) = old.filter(|old| old.version() >= 3) {
             old.release();
         }
         let _ = self.connection.flush();
@@ -258,6 +259,21 @@ impl Protocol {
         self.drags.set(self.drags.get() + 1);
         self.drags.get()
     }
+}
+
+/// A pointer of this process's own on `seat`, GTK's `gdk_seat`, when the
+/// seat has a pointer and this build knows every event of the seat's
+/// version: asking a seat that never had a pointer for one is a protocol
+/// error, and so is an event the connection cannot read, either of which
+/// would end GTK's connection, and the app with it.
+fn own_pointer(
+    gdk_seat: &gdk::Seat,
+    seat: &wl_seat::WlSeat,
+    handle: &QueueHandle<Events>,
+) -> Option<wl_pointer::WlPointer> {
+    let has_pointer = gdk_seat.capabilities().contains(gdk::SeatCapabilities::POINTER);
+    let is_known = seat.version() <= wl_pointer::WlPointer::interface().version;
+    (has_pointer && is_known).then(|| seat.get_pointer(handle, ()))
 }
 
 /// A window drag in progress.
@@ -375,10 +391,14 @@ impl Session {
         })
     }
 
-    /// Lets the drag's objects go.
+    /// Lets the drag's objects go: the data source first, as Chromium
+    /// does, which ends any drag it has.
     fn release(&self) {
-        self.toplevel_drag.destroy();
+        // KWin refuses to let a toplevel drag go while its source is neither
+        // dropped nor cancelled, with a protocol error that would end GTK's
+        // connection, and the app with it; without its source, it lets go.
         self.source.destroy();
+        self.toplevel_drag.destroy();
         self.device.release();
         let _ = self.protocol.connection.flush();
     }
@@ -468,14 +488,14 @@ impl Session {
         });
     }
 
-    /// Attaches `window`, just presented and not drawn yet, to the drag.
-    fn attach(&self, window: &BrowserWindow) -> bool {
-        let Some(toplevel) = crate::gtk_xdg_toplevel::xdg_toplevel(window, &self.protocol.connection) else {
-            return false;
-        };
-        self.toplevel_drag.attach(&toplevel, self.offset.0, self.offset.1);
-        let _ = self.protocol.connection.flush();
-        true
+    /// Attaches `window` again, presented anew and not drawn yet, to the
+    /// drag. Hiding it destroyed the toplevel attached before, so none is
+    /// attached now: attaching while one is would be a protocol error.
+    fn attach(&self, window: &BrowserWindow) {
+        if let Some(toplevel) = crate::gtk_xdg_toplevel::xdg_toplevel(window, &self.protocol.connection) {
+            self.toplevel_drag.attach(&toplevel, self.offset.0, self.offset.1);
+            let _ = self.protocol.connection.flush();
+        }
     }
 
     /// The origin lets the tab go, now that its window is on screen.
@@ -527,15 +547,26 @@ impl Session {
     /// The pointer was released: the tab stays where it went, in another
     /// window or in its own window where the desktop left it.
     fn end(self: &Rc<Self>) {
+        self.end_without(None);
+    }
+
+    /// [`Self::end`], with `gone`, a window going away, left alone.
+    fn end_without(self: &Rc<Self>, gone: Option<&BrowserWindow>) {
         if !self.finish() {
             return;
         }
-        if let Some(host) = self.host.borrow().upgrade() {
+        let stays = |window: &BrowserWindow| Some(window) != gone;
+        if let Some(host) = self.host.borrow().upgrade().filter(stays) {
             host.tab_strip().dismiss_guest();
         }
-        self.release_origin();
+        if self.origin.upgrade().is_some_and(|origin| stays(&origin)) {
+            self.release_origin();
+        } else {
+            // The window it left goes away, and the tab with it.
+            self.released.set(true);
+        }
         if !self.merged.get() && self.hidden.get() {
-            if let Some(window) = self.dragged.upgrade() {
+            if let Some(window) = self.dragged.upgrade().filter(stays) {
                 window.present();
             }
         }
@@ -588,6 +619,16 @@ impl BrowserWindow {
     pub(super) fn connect_window_drags(&self) {
         self.connect_realize(|window| {
             let _ = Protocol::of(&WidgetExt::display(window));
+        });
+        // A window going away during a window drag ends the drag first, its
+        // tab where it is: before GTK lets the window's surface go, so the
+        // desktop cancels the drag. KWin would still send the release to a
+        // window under the pointer that went away, a drop GTK cannot take
+        // (it has no drop then, and crashes).
+        self.connect_unrealize(|window| {
+            if let Some(session) = Session::current() {
+                session.end_without(Some(window));
+            }
         });
         let pump = gtk::EventControllerLegacy::new();
         pump.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -659,19 +700,25 @@ impl BrowserWindow {
             }
         };
         let tab = dragged.imp().session.borrow().active_id().unwrap_or(id);
-        let session = Session::new(&protocol, self, &dragged, (id, tab), back, offset, grab.0);
-        // The press may have ended meanwhile; with it, the window is
-        // attached before it is drawn, then dragged with the press, as the
-        // protocol and Chrome do.
-        let serial = protocol.events.borrow_mut().take_serial(pressed_with);
-        let Some(serial) = serial.filter(|_| session.attach(&dragged)) else {
-            session.release();
+        // What may fail comes before the drag's objects are made, so they
+        // always serve a drag: the window's toplevel, and the press, which
+        // may have ended meanwhile.
+        let toplevel = crate::gtk_xdg_toplevel::xdg_toplevel(&dragged, &protocol.connection);
+        let serial = toplevel
+            .is_some()
+            .then(|| protocol.events.borrow_mut().take_serial(pressed_with))
+            .flatten();
+        let (Some(toplevel), Some(serial)) = (toplevel, serial) else {
             if !single {
                 // This window still has the tab.
                 dragged.close();
             }
             return false;
         };
+        let session = Session::new(&protocol, self, &dragged, (id, tab), back, offset, grab.0);
+        // Attached before it is drawn, then dragged with the press, as the
+        // protocol and Chrome do.
+        session.toplevel_drag.attach(&toplevel, offset.0, offset.1);
         if single {
             self.tab_strip().end_drag_now();
         }

@@ -197,11 +197,18 @@ impl TabStrip {
         // A drag keeps the tab widgets it moves until it is over; which tab
         // is in front shows at once.
         if imp.layout.is_live() {
+            let had_focus = imp.tab_list.focus_child().is_some();
             let is_front_only = self.show_front_only(tabs);
             imp.waiting_tabs.replace((!is_front_only).then(|| tabs.to_vec()));
             // A stand-in for a tab dragged in stays the one in front.
             if is_front_only && imp.guest.borrow().is_some() {
                 self.show_own_front(false);
+            }
+            // The focus goes with the front, as when the strip is drawn anew.
+            if is_front_only && had_focus {
+                if let Some(front) = self.front_widget() {
+                    front.grab_focus();
+                }
             }
             return;
         }
@@ -255,6 +262,15 @@ impl TabStrip {
             viewport,
             move || viewport.scroll_to(&active, None)
         ));
+    }
+
+    /// The widget of the tab in front.
+    fn front_widget(&self) -> Option<gtk::Box> {
+        let shown = self.imp().shown.borrow();
+        shown
+            .iter()
+            .find(|(view, _)| view.active)
+            .map(|(_, widget)| widget.clone())
     }
 
     /// Shows which of `tabs` is in front, when that is all that changed

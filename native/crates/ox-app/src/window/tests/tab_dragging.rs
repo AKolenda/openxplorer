@@ -457,6 +457,35 @@ fn a_tab_pressed_again_while_it_slides_into_place_is_held_where_it_is_drawn() {
     );
 }
 
+/// The tab in front, with keyboard focus, leaves the front while the tabs
+/// are laid out live, as when it is dragged out of its row and the tab
+/// beside it comes to the front: that tab takes the focus, as a strip
+/// drawn anew gives it, so the arrow keys, Home and End still move along
+/// the tabs.
+///
+/// parity: ACC-008, TAB-034
+#[gtk::test]
+fn the_tab_that_comes_to_the_front_during_a_drag_takes_the_focus() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    let [first, second] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let widget_of = |id| strip.tab_widget_of(id).expect("a shown tab");
+    widget_of(second).grab_focus();
+    assert!(widget_of(second).has_focus(), "the tab in front has focus");
+    let x = grab_point(&test.window, second);
+
+    strip.grab_tab(second, (x, 10.0));
+    strip.follow_pointer(second, x + 4.0);
+    strip.detach_tab(second);
+    test.window.switch_tab(first);
+
+    assert_eq!(strip.live_tab(), Some(second), "the tabs are still laid out live");
+    assert!(widget_of(first).has_focus(), "the tab now in front has focus");
+}
+
 /// A point 20 pixels into tab `id`, along the strip.
 fn grab_point(window: &BrowserWindow, id: TabId) -> f64 {
     let strip = window.tab_strip();
@@ -974,7 +1003,9 @@ fn border_width(widget: &gtk::Widget) -> i32 {
 
 /// A tab flicked out of its row and released before GTK may start a drag
 /// and drop (100 ms after the press) tears out as a release out there does
-/// once it has started, and the strip does not stay live.
+/// once it has started, and the strip does not stay live. The press and
+/// both moves reach the window together, as from a hand, so a busy main
+/// loop cannot let GTK's 100 ms pass between them.
 ///
 /// parity: TAB-032, TAB-034
 #[gtk::test]
@@ -987,10 +1018,11 @@ fn a_tab_released_out_of_its_row_before_drag_and_drop_starts_tears_out() {
     let strip_height = test.window.tab_strip().height();
 
     pointer.move_to(from.0, from.1);
-    pointer.press(Button::Primary);
     // Past the drag threshold, then well below the strip, at once.
-    pointer.move_to(from.0 + 12, from.1);
-    pointer.move_to(from.0 + 14, from.1 + strip_height + 40);
+    pointer.press_and_flick(
+        Button::Primary,
+        &[(from.0 + 12, from.1), (from.0 + 14, from.1 + strip_height + 40)],
+    );
     let started = drags_and_drops(&test.window);
     pointer.release(Button::Primary);
     let opened = OpenedWindows::only(&[&test.window]);

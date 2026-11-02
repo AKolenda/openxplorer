@@ -122,9 +122,33 @@ impl Pointer {
         }
     }
 
+    /// Presses `button` where the pointer is and moves it through `path` as
+    /// one flick of the hand: the X server has every step before the window
+    /// handles the first, so the window handles them one after another, and
+    /// nothing it times from the press, such as GTK's 100 milliseconds
+    /// before a drag and drop may start, comes between them however busy
+    /// its main loop is.
+    pub(crate) fn press_and_flick(&mut self, button: Button, path: &[(i32, i32)]) {
+        let mut requests = self.fake_request(BUTTON_PRESS, button as u8, 0, 0);
+        for &(x, y) in path {
+            requests.extend(self.fake_request(MOTION_NOTIFY, 0, x, y));
+        }
+        self.send(&requests);
+        self.sync();
+        wait_for(STEP_SETTLE);
+    }
+
     /// One fake device event, then waits until the X server handled it and
     /// the window had time to.
     fn fake(&mut self, kind: u8, detail: u8, x: i32, y: i32) {
+        let request = self.fake_request(kind, detail, x, y);
+        self.send(&request);
+        self.sync();
+        wait_for(STEP_SETTLE);
+    }
+
+    /// The XTEST request for one fake device event, now.
+    fn fake_request(&self, kind: u8, detail: u8, x: i32, y: i32) -> Vec<u8> {
         let mut request = Vec::with_capacity(36);
         request.extend_from_slice(&[self.xtest, XTEST_FAKE_INPUT]);
         request.extend_from_slice(&9_u16.to_le_bytes());
@@ -135,9 +159,7 @@ impl Pointer {
         request.extend_from_slice(&coordinate(x).to_le_bytes());
         request.extend_from_slice(&coordinate(y).to_le_bytes());
         request.extend_from_slice(&[0; 8]); // padding, then device 0
-        self.send(&request);
-        self.sync();
-        wait_for(STEP_SETTLE);
+        request
     }
 
     /// The major opcode of the extension `name`.

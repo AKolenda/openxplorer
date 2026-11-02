@@ -202,21 +202,14 @@ impl BrowserWindow {
                 }
                 press.set(Press::Live(tab));
                 self.tab_strip().follow_pointer(tab, x);
+                // GDK merges motions that wait together, so a quick flick's
+                // first may already be off the strip.
+                if self.is_off_the_strip(y) {
+                    self.leave_strip_with_press(source, press, pressed_with, tab);
+                }
             }
             Press::Live(tab) if self.is_off_the_strip(y) => {
-                let grab = self.tab_strip().grab_offset(tab);
-                if grab.is_some_and(|grab| self.drag_tab_out_as_window(tab, grab, pressed_with)) {
-                    // The desktop has the pointer now, and moves the window.
-                    press.set(Press::Handed);
-                } else if self.tab_count() <= 1 && !self.has_other_windows() {
-                    press.set(Press::Handed);
-                    self.move_window_by_its_tab(source, tab);
-                } else {
-                    // GTK's drag and drop starts with the next motion it
-                    // allows, and the tab leaves its strip once the tab it
-                    // carries is on screen.
-                    press.set(Press::Leaving(tab));
-                }
+                self.leave_strip_with_press(source, press, pressed_with, tab);
             }
             Press::Live(tab) => self.tab_strip().follow_pointer(tab, x),
             Press::Leaving(tab) if !self.is_off_the_strip(y) => {
@@ -224,6 +217,32 @@ impl BrowserWindow {
                 self.tab_strip().follow_pointer(tab, x);
             }
             Press::Idle | Press::Leaving(_) | Press::Handed | Press::Ignored => {}
+        }
+    }
+
+    /// Tab `tab`, following the pointer of a press (`pressed_with` when
+    /// the mouse's), left its strip: its window is dragged out with it, the
+    /// window itself moves for a window's only tab, or GTK's drag and drop
+    /// carries it.
+    fn leave_strip_with_press(
+        &self,
+        source: &gtk::DragSource,
+        press: &Cell<Press>,
+        pressed_with: Option<MousePress>,
+        tab: TabId,
+    ) {
+        let grab = self.tab_strip().grab_offset(tab);
+        if grab.is_some_and(|grab| self.drag_tab_out_as_window(tab, grab, pressed_with)) {
+            // The desktop has the pointer now, and moves the window.
+            press.set(Press::Handed);
+        } else if self.tab_count() <= 1 && !self.has_other_windows() {
+            press.set(Press::Handed);
+            self.move_window_by_its_tab(source, tab);
+        } else {
+            // GTK's drag and drop starts with the next motion it allows,
+            // and the tab leaves its strip once the tab it carries is on
+            // screen.
+            press.set(Press::Leaving(tab));
         }
     }
 
