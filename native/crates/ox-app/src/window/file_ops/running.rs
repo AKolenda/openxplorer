@@ -13,8 +13,6 @@
 //! Explorer, nothing more is said when every item succeeded; otherwise
 //! the "Operation result" dialog says what happened.
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::glib;
@@ -41,8 +39,8 @@ const QUICK_WRITE_PANEL_DELAY: Duration = Duration::from_secs(1);
 /// A write [`BrowserWindow::begin_quick_write`] started.
 #[derive(Debug)]
 pub(super) struct QuickWrite {
-    /// The timer that shows its panel, until it has shown it.
-    pending_panel: Rc<RefCell<Option<glib::SourceId>>>,
+    /// The timer that shows its panel whenever the panel is free.
+    panel_timer: glib::SourceId,
 }
 
 /// Why files are not written while a drive is formatted.
@@ -172,7 +170,8 @@ impl BrowserWindow {
     /// `label` with its Cancel button, shows only once it has run for
     /// [`QUICK_WRITE_PANEL_DELAY`], so a quick one looks instant, and
     /// once no other write holds the panel: it looks again each
-    /// [`QUICK_WRITE_PANEL_DELAY`] until the panel is free. `None`, as
+    /// [`QUICK_WRITE_PANEL_DELAY`] while it runs, so it shows again after
+    /// an archive operation took the panel and finished. `None`, as
     /// [`Self::begin_operation`] refuses, while any write runs, an
     /// extraction or compression on the panel included. End it with
     /// [`Self::end_quick_write`].
@@ -184,45 +183,38 @@ impl BrowserWindow {
         // The file and archive commands wait while it writes.
         self.update_file_commands();
         self.update_archive_actions();
-        let pending_panel = Rc::new(RefCell::new(None));
-        let source = glib::timeout_add_local(
+        let panel_timer = glib::timeout_add_local(
             QUICK_WRITE_PANEL_DELAY,
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                #[strong]
-                pending_panel,
                 #[strong]
                 cancel,
                 #[upgrade_or]
                 glib::ControlFlow::Break,
                 move || {
                     // An archive operation that checked before this write
-                    // began may hold the panel; it keeps it, and the
-                    // panel shows this write once it is free.
+                    // began may hold the panel, or take it from this
+                    // write later; it keeps it, and the panel shows this
+                    // write again once it is free.
                     let panel = window.transfer_panel();
-                    if panel.is_busy() {
-                        return glib::ControlFlow::Continue;
+                    if !panel.is_busy() && !cancel.is_cancelled() {
+                        panel.start(TransferKind::Create, label, cancel.clone());
                     }
-                    // Done, so there is nothing left to remove.
-                    pending_panel.take();
-                    panel.start(TransferKind::Create, label, cancel.clone());
-                    glib::ControlFlow::Break
+                    glib::ControlFlow::Continue
                 }
             ),
         );
-        pending_panel.replace(Some(source));
-        Some(QuickWrite { pending_panel })
+        Some(QuickWrite { panel_timer })
     }
 
     /// Forgets the write of [`Self::begin_quick_write`] and hides its
     /// panel, if it showed and is still its own. The file and archive
     /// commands, which wait while it writes, are enabled again for what
     /// is shown, which may be another tab by now.
-    pub(super) fn end_quick_write(&self, write: &QuickWrite, cancel: &Cancellation) {
-        if let Some(source) = write.pending_panel.take() {
-            source.remove();
-        } else if self.transfer_panel().runs(cancel) {
+    pub(super) fn end_quick_write(&self, write: QuickWrite, cancel: &Cancellation) {
+        write.panel_timer.remove();
+        if self.transfer_panel().runs(cancel) {
             self.transfer_panel().finish();
         }
         self.imp().file_operations.borrow_mut().running = None;

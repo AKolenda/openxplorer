@@ -18,6 +18,7 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::location::same_location;
 use ox_core::ops::{
     create_numbered_folder, create_numbered_starter, BuiltinTemplate, CreatedItem, OpsError, TemplateId,
 };
@@ -114,14 +115,14 @@ impl BrowserWindow {
         self.wait_at_text_document_gate().await;
         let name = format!("{}.txt", ox_core::i18n::gettext_static(NEW_TEXT_DOCUMENT_NAME));
         let created = create_numbered_starter(&folder, &name, BuiltinTemplate::Text, &context).await;
-        self.end_quick_write(&write, &context.cancel);
+        self.end_quick_write(write, &context.cancel);
         match created {
             Err(error) if error.is_cancelled() => {}
             Ok(created) if !self.is_undisturbed_since(generation, origin, &folder) => {
                 self.context().record_operation(created.undo_record());
                 let changed = changed_folders([folder.as_str()], [created.uri.as_str()]);
                 self.context().search_cache().folders_written(changed);
-                self.mark_changed(origin, &folder);
+                self.mark_changed(&folder);
             }
             created => self.rename_created(created),
         }
@@ -189,30 +190,30 @@ impl BrowserWindow {
         }
     }
 
-    /// One more input for [`Self::watch_input`].
+    /// One more input for [`Self::watch_input`]. A rename in place that
+    /// waits for its folder to be listed again is dropped: the user moved
+    /// on before its editor showed.
     fn note_input(&self) {
         let generation = &self.imp().input_generation;
         generation.set(generation.get().wrapping_add(1));
+        if let Ok(mut session) = self.imp().session.try_borrow_mut() {
+            session.change_panes(|tab| tab.renames_selection = false);
+        }
     }
 
-    /// Tells tab `id` that `folder` changed, when it still shows it, as a
-    /// change notice would: a tab on screen is listed again at once,
-    /// keeping its selection and search; one in the background when it
-    /// is shown again, so a share that sends no change notices shows the
-    /// new item too. Nothing is selected or renamed.
-    fn mark_changed(&self, id: TabId, folder: &str) {
-        let is_shown = {
-            let mut session = self.imp().session.borrow_mut();
-            let is_shown = session.is_active(id) || session.beside_active() == Some(id);
-            let Some(tab) = session.tab_mut(id).filter(|tab| tab.uri() == folder) else {
-                return;
-            };
-            if !is_shown {
-                tab.changed_while_hidden = true;
-            }
-            is_shown
+    /// Tells every pane still showing `folder` that it changed, as a
+    /// change notice would: one on screen is listed again at once,
+    /// keeping its selection and search; one in the background is listed
+    /// again too, or, on a share, when it is shown again, so a share that
+    /// sends no change notices shows the new item too. Nothing is
+    /// selected or renamed.
+    fn mark_changed(&self, folder: &str) {
+        let showing: Vec<TabId> = {
+            let session = self.imp().session.borrow();
+            let panes = session.panes().filter(|tab| same_location(tab.uri(), folder));
+            panes.map(|tab| tab.id).collect()
         };
-        if is_shown {
+        for id in showing {
             self.folder_changed(id);
         }
     }

@@ -853,3 +853,78 @@ fn the_archive_commands_wait_while_a_slow_create_writes() {
     assert_eq!(during, [false; 4], "they wait while the create writes");
     assert_eq!(after, [true; 4], "and come back");
 }
+
+/// A slow create whose shown panel an extraction took over after its
+/// moment shows its own panel again once that extraction ends, so it can
+/// still be cancelled without closing the window.
+///
+/// parity: OPS-002, OPS-022
+#[gtk::test]
+fn a_slow_create_shows_its_panel_again_after_an_archive_took_it() {
+    let fixture = Fixture::standard();
+    let before = names_on_disk(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.transfer_panel();
+    let release = start_held_text_document(&test);
+    wait_until("the create's panel", || panel.is_visible());
+    let _archive = start_archive_on_panel(&test);
+
+    test.window.finish_archive_operation();
+    wait_until("the create's panel again", || {
+        panel.is_visible() && panel.status_text() == "Creating a text document…"
+    });
+    panel.press_cancel();
+    drop(release);
+    wait_until("the create to stop", || !test.window.has_running_write());
+
+    assert_eq!(names_on_disk(&fixture), before, "nothing is left behind");
+    assert!(!panel.is_visible());
+}
+
+/// A key pressed while the folder is listed again for a rename in place,
+/// as after a create on a slow share, drops that rename: the item is
+/// selected, but no field takes the keyboard.
+///
+/// parity: OPS-002, OPS-010
+#[gtk::test]
+fn input_before_the_new_items_listing_ends_drops_its_rename() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    if let Some(tab) = test.window.imp().session.borrow_mut().active_mut() {
+        tab.renames_selection = true;
+    }
+    test.window.reload_selecting(vec![fixture.uri_of("Résumé.txt")]);
+    touch(&test, Input::Key);
+    test.wait_for_listing("the folder");
+    wait_for(Duration::from_millis(300));
+
+    assert!(!is_renaming_in_place(&test), "nothing is renamed");
+    assert_eq!(test.selected_names(), ["Résumé.txt"]);
+}
+
+/// Another tab in front on the same folder, on a share that sends no
+/// change notices, shows a file a slow create made there from the first
+/// tab, without anything being renamed.
+///
+/// parity: OPS-002
+#[gtk::test]
+fn another_tab_on_the_same_folder_shows_the_new_file() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let release = start_held_text_document(&test);
+    test.window.add_tab(&fixture.uri()).expect("a valid folder");
+    test.wait_for_listing("the second tab");
+    // As on a share that sends no change notices.
+    test.window
+        .imp()
+        .session
+        .borrow_mut()
+        .change_panes(|tab| tab.watch = None);
+
+    finish_held_text_document(&test, &fixture, release);
+
+    wait_until("the new file in the tab in front", || {
+        test.names().contains(&"New Text Document.txt".to_owned())
+    });
+    assert!(!is_renaming_in_place(&test), "nothing is renamed");
+}
