@@ -456,6 +456,78 @@ fn a_tab_whose_landing_neighbour_closes_while_it_settles_lands_before_the_next()
     assert_eq!(moved.get(), Some(Some((first, Some(fourth)))));
 }
 
+/// With "Tab key switches between split panes" on, Tab while a split tab
+/// is dragged along its row keeps its active pane active: the drag holds
+/// the tab by that pane, so leaving the row after a switch would carry the
+/// other pane out and leave the tab behind as well.
+///
+/// parity: TAB-032, VIEW-059
+#[gtk::test]
+fn tab_keeps_the_active_pane_of_a_split_tab_dragged_along_its_row() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    ox_core::settings::Settings::open(test.settings_directory())
+        .update_preferences(&ox_core::settings::PreferencesUpdate {
+            tab_switches_split_panes: Some(true),
+            ..ox_core::settings::PreferencesUpdate::default()
+        })
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the choice", || {
+        test.context.settings_data().preferences.tab_switches_split_panes
+    });
+    test.activate("split-view", None);
+    test.wait_for_listing("the new pane");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let dragged = active_tab(&test.window).expect("a tab in front");
+    let side = test.window.active_side();
+    let strip = test.window.tab_strip();
+    let x = grab_point(&test.window, dragged);
+
+    strip.grab_tab(dragged, (x, 10.0));
+    strip.follow_pointer(dragged, x - 40.0);
+    test.window.tab_to_other_pane();
+
+    assert_eq!(
+        active_tab(&test.window),
+        Some(dragged),
+        "the dragged pane stays active"
+    );
+    assert_eq!(test.window.active_side(), side);
+    assert_eq!(strip.live_tab(), Some(dragged));
+}
+
+/// A tab of another window dropped before a tab of this row that closed
+/// while it was dragged over the row lands before the next tab still
+/// open, where its stand-in showed it, not at the end of the row.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_dragged_in_before_a_tab_closed_meanwhile_lands_before_the_next() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    for folder in ["Music", "Pictures"] {
+        test.window.add_tab(&fixture.uri_of(folder)).expect("a folder");
+        test.wait_for_listing("another tab");
+    }
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let [first, _, third, fourth] = tab_ids(&test.window)[..] else {
+        panic!("four tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let view = strip.tab_view(first).expect("a shown tab");
+
+    // Over the third tab's first half: the stand-in goes before it.
+    strip.host_guest(&view, grab_point(&test.window, third), 0.0);
+    test.window.close_tab(third);
+    let landing = strip.land_guest();
+
+    assert_eq!(
+        landing,
+        Some(crate::window::tab_strip::Landing { before: Some(fourth) })
+    );
+}
+
 /// A tab let go past another and pressed again while it still slides into
 /// its new place, before the strip took the new order: it is held where
 /// the press met it as drawn, so the next motion moves it with the

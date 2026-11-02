@@ -190,10 +190,11 @@ impl BrowserWindow {
     }
 
     /// Makes the pane on `side` active, when the tab in front is split and
-    /// that pane is not active yet. Keyboard focus stays where it goes.
+    /// that pane is not active yet, nor dragged: the drag holds the tab by
+    /// its active pane (TAB-032). Keyboard focus stays where it goes.
     pub(super) fn activate_pane(&self, side: PaneSide) {
         let is_split = self.imp().session.borrow().active().is_some_and(Tab::is_split);
-        if !is_split || side == self.imp().active_side.get() {
+        if !is_split || side == self.imp().active_side.get() || self.refuse_while_active_tab_moves() {
             return;
         }
         self.leave_pane();

@@ -282,19 +282,28 @@ impl TabStrip {
     }
 
     /// The tab of another window is dropped here: its stand-in goes, and
-    /// where it was is where the tab lands; `None` without a stand-in.
+    /// where it was is where the tab lands, before the first tab after it
+    /// still open, as one may close during the drag; `None` without a
+    /// stand-in.
     pub(in crate::window) fn land_guest(&self) -> Option<Landing> {
         let guest = self.imp().guest.take()?;
         let layout = self.layout();
         let order = layout.live_order().unwrap_or_default();
-        let before = order.iter().position(|tab| *tab == guest).map(|at| Landing {
-            before: order.get(at + 1).and_then(|next| self.id_of(next)),
+        let after = order.iter().position(|tab| *tab == guest).map(|at| {
+            order
+                .iter()
+                .skip(at + 1)
+                .filter_map(|next| self.id_of(next))
+                .collect::<Vec<_>>()
         });
         self.imp().tab_list.remove(&guest);
         self.show_own_front(true);
         layout.end();
+        // The tabs as the session has them now.
         self.stop_live();
-        before
+        after.map(|after| Landing {
+            before: after.into_iter().find(|next| self.widget_of(*next).is_some()),
+        })
     }
 
     /// The border box of tab `id`, in `target`'s coordinates.
