@@ -845,7 +845,7 @@ impl BrowserWindow {
                         _ => {}
                     }
                 }
-                // The folder takes new files (a hidden file of the dialog's
+                // The folder takes new files (a file of the dialog's
                 // own), and every file to be replaced may be written.
                 let first = names.first().map(|name| name.to_string_lossy().into_owned());
                 write_refusal(test_folder(&folder).await, &folder, &first.unwrap_or_default())?;

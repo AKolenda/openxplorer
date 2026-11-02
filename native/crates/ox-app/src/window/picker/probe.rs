@@ -107,7 +107,7 @@ pub(super) enum WriteTest {
 /// caller gets, tested as Windows' Save dialog does unless the caller
 /// asks it not to (`OFN_NOTESTFILECREATE`) by creating a file there and
 /// removing it again. Unlike Windows, that file is never `name` itself
-/// but a hidden one of the dialog's own ([`test_folder`]): a sync client
+/// but one of the dialog's own with an ordinary, unique name ([`test_folder`]): a sync client
 /// or another program watching the folder could open and fill a file of
 /// the real name in the moment before the test removed it, and the test
 /// would then delete their data. A file of that name found after the
@@ -136,14 +136,14 @@ pub(super) async fn test_write(folder: &Path, name: &std::ffi::OsStr, replacing:
     }
 }
 
-/// Whether `folder` takes new files: a hidden file of the dialog's own is
+/// Whether `folder` takes new files: a file of the dialog's own is
 /// created there and removed again.
 pub(super) async fn test_folder(folder: &Path) -> WriteTest {
     let inside = folder.to_path_buf();
     on_a_worker(folder, move || folder_takes_files(&inside)).await
 }
 
-/// [`test_folder`] on the worker: creates and removes a hidden file with a
+/// [`test_folder`] on the worker: creates and removes a file with a
 /// name no other program uses.
 fn folder_takes_files(folder: &Path) -> WriteTest {
     #[cfg(test)]
@@ -163,8 +163,11 @@ fn folder_takes_files(folder: &Path) -> WriteTest {
     }
     // A name that is taken already is another program's file: try another.
     for _ in 0..3 {
-        let unique = glib::uuid_string_random();
-        match create_and_remove(&folder.join(format!(".openxplorer-save-test-{unique}"))) {
+        // An ordinary name, not a hidden one: a share may refuse hidden
+        // names (Samba's `veto files = /.*/`) while it takes the caller's
+        // file, and the test must never block a save the caller could make.
+        let unique = glib::uuid_string_random().replace('-', "");
+        match create_and_remove(&folder.join(format!("openxplorer-save-test-{unique}"))) {
             WriteTest::Appeared => {}
             test => return test,
         }
@@ -221,6 +224,16 @@ async fn on_a_worker(folder: &Path, test: impl FnOnce() -> WriteTest + Send + 's
 /// passing hiccup does not leave the file behind.
 fn create_and_remove(path: &Path) -> WriteTest {
     use std::io::ErrorKind;
+    #[cfg(test)]
+    let vetoed = is_listed(&VETOES_HIDDEN, path)
+        && path
+            .file_name()
+            .is_some_and(|name| name.as_encoded_bytes().starts_with(b"."));
+    #[cfg(test)]
+    if vetoed {
+        // Samba's `veto files = /.*/` answers a hidden name as not found.
+        return WriteTest::Unavailable;
+    }
     let refusal = |error: &std::io::Error| match error.kind() {
         ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem => WriteTest::Denied,
         ErrorKind::StorageFull | ErrorKind::QuotaExceeded => WriteTest::NoSpace,
@@ -258,6 +271,20 @@ fn remove(path: &Path) -> std::io::Result<()> {
 /// Paths another program creates while the write test runs, for tests. Shared by every thread, as the test runs on GIO's workers.
 #[cfg(test)]
 static APPEARING: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Folders that refuse hidden names, as a Samba share with
+/// `veto files = /.*/` does, for tests.
+#[cfg(test)]
+static VETOES_HIDDEN: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Makes `folder` refuse hidden names, as a Samba share that vetoes
+/// dotfiles does.
+#[cfg(test)]
+pub(super) fn veto_hidden_names_in(folder: &Path) {
+    if let Ok(mut paths) = VETOES_HIDDEN.lock() {
+        paths.push(folder.to_path_buf());
+    }
+}
 
 /// Paths whose removal fails, for tests.
 #[cfg(test)]
@@ -366,7 +393,7 @@ mod tests {
     /// The write test of a new file never creates the file's own name,
     /// which a sync client or another program watching the folder could
     /// open and fill before the test removed it again: it tests the
-    /// folder with a hidden file of its own, and leaves nothing behind.
+    /// folder with a file of its own, and leaves nothing behind.
     ///
     /// parity: INT-035
     #[gtk::test]
@@ -398,11 +425,38 @@ mod tests {
         assert!(
             created
                 .iter()
-                .any(|name| name.starts_with(".openxplorer-save-test-")),
+                .any(|name| name.starts_with("openxplorer-save-test-")),
             "the folder was tested: {created:?}"
         );
         let left: Vec<_> = fs::read_dir(folder.path()).expect("the folder").collect();
         assert!(left.is_empty(), "nothing is left behind");
+    }
+
+    /// A folder that refuses hidden names, as a Samba share that vetoes
+    /// dotfiles, still takes the file: the test's own file has an
+    /// ordinary name, so the test never blocks a save the caller could make.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_folder_that_refuses_hidden_names_still_takes_files() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        fs::write(folder.path().join("old.txt"), "x").expect("a file");
+        veto_hidden_names_in(folder.path());
+
+        let new_file = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+        let replaced = run(test_write(folder.path(), std::ffi::OsStr::new("old.txt"), true));
+
+        assert_eq!(new_file, WriteTest::Writable);
+        assert_eq!(replaced, WriteTest::Writable);
+        let left: Vec<String> = fs::read_dir(folder.path())
+            .expect("the folder")
+            .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+            .collect();
+        assert_eq!(left, ["old.txt"], "nothing is left behind");
     }
 
     /// A file another program creates while the Save dialog tests the

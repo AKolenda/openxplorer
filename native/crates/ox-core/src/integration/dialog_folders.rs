@@ -318,8 +318,23 @@ pub fn remembered_location(location: &str) -> Option<String> {
     let authority_end = rest.find('/').unwrap_or(rest.len());
     let (authority, path) = rest.split_at(authority_end);
     let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
+    if scheme == "afp" {
+        return afp_location(host, path);
+    }
     let bare = format!("{scheme}://{host}{path}");
     normalise(&bare).ok().map(|uri| without_user(&uri))
+}
+
+/// An AFP folder's address, canonical as [`normalise`] makes the others,
+/// which it does not handle: the host in lower case, the path escaped once
+/// and without a final slash, and no query or fragment.
+fn afp_location(host: &str, path: &str) -> Option<String> {
+    if host.is_empty() || path.contains(['?', '#']) {
+        return None;
+    }
+    let decoded = glib::Uri::unescape_string(path, None::<&str>)?;
+    let escaped = glib::Uri::escape_string(decoded.trim_end_matches('/'), Some("/"), false);
+    Some(format!("afp://{}{escaped}", host.to_ascii_lowercase()))
 }
 
 /// The folders a dialog tries, in order, as the module describes:
@@ -722,6 +737,30 @@ mod tests {
         let folders = start_folders(None, Some(&phone), Some(&never), &defaults());
 
         assert_eq!(folders[0], StartFolder::Path(phone));
+    }
+
+    /// A folder on an AFP volume `GVfs` mounts is remembered, canonical and
+    /// without its user, like any other network folder.
+    ///
+    /// parity: INT-035, SAFE-010
+    #[test]
+    fn an_afp_folder_is_remembered() {
+        assert_eq!(
+            remembered_location("afp://demo@Studio-NAS.example/Projects/Film%20Cuts/").as_deref(),
+            Some("afp://studio-nas.example/Projects/Film%20Cuts")
+        );
+        assert_eq!(remembered_location("afp://studio-nas.example/Projects?x=1"), None);
+        let directory = tempfile::tempdir().expect("a settings folder");
+        let mut folders = DialogFolders::open(directory.path());
+        folders
+            .remember("org.example.Editor", None, "afp://studio-nas.example/Projects")
+            .expect("written");
+        assert_eq!(
+            DialogFolders::open(directory.path())
+                .of("org.example.Editor")
+                .map(|entry| entry.last.as_str()),
+            Some("afp://studio-nas.example/Projects")
+        );
     }
 
     /// A damaged file is read as empty and replaced by the next change.
