@@ -392,22 +392,26 @@ pub fn start_folders(
     candidates.extend(defaults.iter().cloned().map(StartFolder::Path));
     // Each folder once, however it is written: a share's FUSE path and its
     // address are one folder, and a share that does not answer must not
-    // hold the dialog for two deadlines.
-    let mut seen: Vec<String> = Vec::new();
-    candidates
-        .into_iter()
-        .filter(|folder| {
-            let key = match folder {
-                StartFolder::Path(path) => Some(initial_location(path)).filter(|key| !key.is_empty()),
-                StartFolder::Location(location) => remembered_location(location),
+    // hold the dialog for two deadlines. The path is the one kept, in the
+    // first one's place: the remembered address has lost the share's user,
+    // which the path still names.
+    let mut kept: Vec<(String, StartFolder)> = Vec::new();
+    for folder in candidates {
+        let key = match &folder {
+            StartFolder::Path(path) => Some(initial_location(path)).filter(|key| !key.is_empty()),
+            StartFolder::Location(location) => remembered_location(location),
+        }
+        .unwrap_or_else(|| format!("{folder:?}"));
+        let key = key.trim_end_matches('/').to_owned();
+        match kept.iter_mut().find(|(seen, _)| *seen == key) {
+            Some((_, first @ StartFolder::Location(_))) if matches!(folder, StartFolder::Path(_)) => {
+                *first = folder;
             }
-            .unwrap_or_else(|| format!("{folder:?}"));
-            let key = key.trim_end_matches('/').to_owned();
-            let new = !seen.contains(&key);
-            seen.push(key);
-            new
-        })
-        .collect()
+            Some(_) => {}
+            None => kept.push((key, folder)),
+        }
+    }
+    kept.into_iter().map(|(_, folder)| folder).collect()
 }
 
 /// Whether two folder URIs (empty for none) name the same folder.
@@ -728,7 +732,8 @@ mod tests {
 
     /// A share's FUSE path passed as the first folder and the share's
     /// remembered address are one folder, tried once: an unanswering share
-    /// would otherwise hold the dialog for two start deadlines.
+    /// would otherwise hold the dialog for two start deadlines. The path is
+    /// tried, as the remembered address has lost the share's user.
     ///
     /// parity: INT-035
     #[test]
@@ -740,9 +745,13 @@ mod tests {
 
         assert_eq!(
             folders[0],
-            StartFolder::Location("smb://studio-nas/projects/Film".into())
+            StartFolder::Path(fuse),
+            "the path, which still names the share's user, in the remembered folder's place"
         );
-        assert!(!folders.contains(&StartFolder::Path(fuse)), "{folders:?}");
+        assert!(
+            !folders.contains(&StartFolder::Location("smb://studio-nas/projects/Film".into())),
+            "{folders:?}"
+        );
     }
 
     /// A share on an IPv6 server keeps its address, with the server in
