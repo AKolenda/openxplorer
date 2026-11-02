@@ -1624,3 +1624,27 @@ fn a_custom_icon_shows_in_the_view_until_the_default_is_restored() {
         .attribute_string("metadata::custom-icon");
     assert_eq!(stored, None);
 }
+
+/// OK pressed while Apply's change is still being made closes the window
+/// once the change is made, and does not make it twice.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn ok_during_apply_closes_once_the_change_is_made() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+
+    name_field(&window).set_text("Notes 2.md");
+    press(&window, "Apply");
+    wait_until("the question", || extension_questions(&window) == 1);
+    window.ok_button().emit_clicked();
+    assert!(!window.is_closed(), "the change is still being made");
+    message_over(&window).press("Change extension");
+
+    wait_until("the rename", || fixture.path("Notes 2.md").exists());
+    wait_until("the window to close", || window.is_closed());
+    assert_eq!(extension_questions(&window), 0, "asked once");
+}

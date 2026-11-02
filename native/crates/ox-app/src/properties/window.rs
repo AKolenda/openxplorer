@@ -461,6 +461,12 @@ impl PropertiesWindow {
     }
 
     fn press_ok(&self) {
+        // OK while a change is being made closes the window once it is
+        // made, as closing it then does; the change is not made twice.
+        if self.imp().is_applying.get() {
+            self.imp().close_after_apply.set(true);
+            return;
+        }
         let window = self.clone();
         glib::spawn_future_local(async move {
             if window.apply_changes().await {

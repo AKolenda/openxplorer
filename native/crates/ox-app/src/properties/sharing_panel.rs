@@ -381,11 +381,14 @@ mod tests {
     use super::*;
     use crate::test_support::harness::{descendants, wait_until};
 
-    /// A fake `net` in `folder` that lists `listing` and logs its calls.
+    /// A fake `net` in `folder` that lists `listing` and logs its calls,
+    /// slowly.
     fn fake_net(folder: &Path, listing: &str) -> Usershares {
         let program = folder.join("net");
+        // Like Samba's on a slow computer, it answers half a second after
+        // it is asked, so a change is still running when the call shows.
         let script = format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\ncat <<'EOF'\n{listing}\nEOF\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nsleep 0.5\ncat <<'EOF'\n{listing}\nEOF\n",
             folder.join("calls").display()
         );
         fs::write(&program, script).expect("the fake net");
@@ -444,7 +447,11 @@ mod tests {
         let calls = || fs::read_to_string(temporary.path().join("calls")).unwrap_or_default();
         wait_until("the share is changed", || calls().contains("usershare add"));
         assert!(calls().contains("usershare add Projects /srv/Projects Team Everyone:F guest_ok=n"));
-        wait_until("Apply to grey", || !dialog.apply_button().is_sensitive());
+        // Apply greys every button while the change runs: the change is
+        // made once OK can be pressed again.
+        wait_until("the change to be made", || {
+            dialog.ok_button().is_sensitive() && !dialog.apply_button().is_sensitive()
+        });
 
         // OK after Apply has nothing left to change.
         dialog.ok_button().emit_clicked();
