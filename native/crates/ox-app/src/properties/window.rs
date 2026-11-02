@@ -118,8 +118,10 @@ mod imp {
         /// selectable value starts selected.
         fn map(&self) {
             self.parent_map();
-            if !self.has_shown.replace(true) {
-                self.notebook.grab_focus();
+            // A dialog with one tab hides the tab row, which then takes no
+            // focus: OK has it instead.
+            if !self.has_shown.replace(true) && !self.notebook.grab_focus() {
+                self.ok.grab_focus();
             }
         }
     }
@@ -607,14 +609,17 @@ pub(crate) fn page() -> gtk::Box {
         .build()
 }
 
-/// A bordered button with `glyph` and `label`, for the Location tab and
-/// the permissions of several items.
+/// A Windows push button with `glyph` and `label`, for the Location tab,
+/// the mount assistant and the permissions of several items.
 pub(crate) fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     content.append(&icons::image(glyph, 16));
     content.append(&gtk::Label::new(Some(label)));
-    let button = gtk::Button::builder().child(&content).build();
-    button.add_css_class(crate::window::ButtonStyle::Bordered.css_class());
+    let button = gtk::Button::builder()
+        .child(&content)
+        .halign(gtk::Align::Start)
+        .css_classes(["properties-button"])
+        .build();
     button.update_property(&[gtk::accessible::Property::Label(label)]);
     button
 }

@@ -455,6 +455,7 @@ impl VersionsPanel {
             move || panel.load()
         );
         let form = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        form.set_vexpand(true);
         fill_source_form(&form, &item, self.versions(), &locations, back);
         self.append(&form);
     }

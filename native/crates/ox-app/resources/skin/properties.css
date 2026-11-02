@@ -149,7 +149,36 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 .ox-properties .version-row { border-spacing: 6px; }
 .ox-properties .versions-empty-heading { color: @ox_muted; }
 .ox-properties .snapshot-warnings { margin-top: 6px; color: @ox_muted; }
-.ox-properties .snapshot-source-actions { border-spacing: 8px; margin-top: 20px; }
+.ox-properties .snapshot-source-actions { border-spacing: 8px; margin-top: 16px; }
 
 /* Customize. */
 .ox-properties .properties-icon-preview { margin: 0 8px 4px 0; }
+
+/* Forms inside a tab or a Properties dialog (Snapshot source, Location,
+   the mount assistant, Advanced Sharing, several items' Security): the
+   captions, notes, check rows and name-value grids the dialogs share
+   (dialog/fields.rs), spaced as the tab pages are. */
+.ox-properties .field-label { margin: 10px 0 4px 0; }
+.ox-properties .quiet { color: @ox_muted; margin-bottom: 4px; }
+.ox-properties .note {
+  color: @ox_muted;
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  padding: 8px 10px;
+  margin-top: 10px;
+}
+.ox-properties checkbutton.checkbox-row { margin-top: 8px; }
+.ox-properties .dialog-error { color: @ox_error; margin-top: 8px; }
+.ox-properties entry {
+  min-height: 23px;
+  padding: 0 4px;
+  border-radius: 0;
+  border: 1px solid @ox_border;
+  background-color: @ox_bg;
+  box-shadow: none;
+}
+.ox-properties entry:focus-within { border-color: @ox_accent; }
+.ox-properties grid.property-grid { border-spacing: 14px 7px; margin: 5px 0 10px 4px; }
+.ox-properties .property-grid .property-name { min-width: 92px; }
+.ox-properties .properties-form-field { margin-bottom: 2px; }
+.ox-properties dropdown.properties-form-field { margin-top: 10px; }

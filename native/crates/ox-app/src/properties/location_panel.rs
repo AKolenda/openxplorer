@@ -34,7 +34,6 @@ use super::mount_assistant::mount_assistant;
 use super::window::glyph_button;
 use crate::dialog::{check_row, labelled_entry, quiet_text};
 use crate::icons::{self, Icon};
-use crate::window::ButtonStyle;
 
 /// The warning under the status line (`.location-warning`). The Python
 /// app never moved files; the native app offers to after a change.
@@ -242,8 +241,9 @@ impl LocationPanel {
         ));
         self.append(&consent);
         let apply = glyph_button(ox_core::i18n::gettext_static("Apply location"), Icon::Checkmark);
-        apply.remove_css_class(ButtonStyle::Bordered.css_class());
-        apply.add_css_class(ButtonStyle::Accent.css_class());
+        // The page's main button, set apart from the consent box above it.
+        apply.add_css_class("suggested-action");
+        apply.set_margin_top(8);
         apply.set_halign(gtk::Align::Start);
         apply.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]

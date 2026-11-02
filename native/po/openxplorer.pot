@@ -1978,6 +1978,14 @@ msgid "Map the current live folder to a directory containing dated snapshots. Ea
 msgstr ""
 
 #: crates/ox-app/src/properties/snapshot_source.rs
+msgid "Remove mapping"
+msgstr ""
+
+#: crates/ox-app/src/properties/snapshot_source.rs
+msgid "Save source"
+msgstr ""
+
+#: crates/ox-app/src/properties/snapshot_source.rs
 msgid "Snapshot collection folder"
 msgstr ""
 
