@@ -181,6 +181,14 @@ fn folder_takes_files(folder: &Path) -> WriteTest {
     WriteTest::Unavailable
 }
 
+/// Whether `info` lets the file be written: its `access::can-write`, or
+/// yes where the backend leaves that out (some `GVfs` backends do), as
+/// only an answer of no is a refusal; the permission bits still count.
+fn answers_writable(info: &gio::FileInfo) -> bool {
+    !info.has_attribute(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
+        || info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
+}
+
 /// Whether the existing file `target` may be replaced: it is not
 /// read-only, by its permission bits or as the system answers for this
 /// user (`access::can-write`, which also follows ACLs).
@@ -194,7 +202,7 @@ pub(super) async fn test_replace(target: &Path) -> WriteTest {
             gio::FileQueryInfoFlags::NONE,
             gio::Cancellable::NONE,
         ) {
-            Ok(info) => info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE),
+            Ok(info) => answers_writable(&info),
             // Gone since it was found: the caller creates it anew.
             Err(error) if error.matches(gio::IOErrorEnum::NotFound) => true,
             // A share that disconnected, or a path that cannot be read.
@@ -602,6 +610,11 @@ mod tests {
             run(test_replace(&folder.path().join("gone.txt"))),
             WriteTest::Writable
         );
+        // A backend that leaves `access::can-write` out has not refused.
+        let silent = gio::FileInfo::new();
+        assert!(answers_writable(&silent));
+        silent.set_attribute_boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE, false);
+        assert!(!answers_writable(&silent));
         // A new file the system cannot answer about: here, a name too long.
         assert_eq!(
             run(test_write(folder.path(), "n".repeat(300).as_ref(), false)),
