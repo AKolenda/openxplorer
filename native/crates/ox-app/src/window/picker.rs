@@ -274,15 +274,19 @@ fn opened_on_mount(path: PathBuf) -> (String, PathBuf) {
 /// root addresses are `roots`: the memory keeps a location without its
 /// user ([`remembered_location`]), while `GVfs` names a share mounted with
 /// a user by an address that holds it (`sftp://anna@build.example/`), and
-/// gives the address without it no path. `None` when no mount holds it.
+/// gives the address without it no path. `None` when no mount holds it,
+/// or when mounts with different users do: the memory cannot tell which
+/// account the folder was used through.
 fn address_on_mount(location: &str, roots: &[String]) -> Option<String> {
-    roots.iter().find_map(|root| {
+    let mut found = roots.iter().filter_map(|root| {
         // A mount without a user has the location's own path already.
         glib::Uri::parse(root, glib::UriFlags::NONE).ok()?.userinfo()?;
         let kept = remembered_location(root)?;
         let rest = location.strip_prefix(kept.trim_end_matches('/'))?;
         (rest.is_empty() || rest.starts_with('/')).then(|| format!("{}{rest}", root.trim_end_matches('/')))
-    })
+    });
+    let first = found.next()?;
+    found.all(|other| other == first).then_some(first)
 }
 
 /// The dialog's message when the caller could not write `name` in
@@ -2545,6 +2549,15 @@ mod tests {
         assert_eq!(
             super::address_on_mount("sftp://elsewhere.example/srv", &roots),
             None
+        );
+        let two_accounts = [
+            "sftp://anna@build.example/".to_owned(),
+            "sftp://ben@build.example/".to_owned(),
+        ];
+        assert_eq!(
+            super::address_on_mount("sftp://build.example/srv", &two_accounts),
+            None,
+            "two accounts on one server: which one was used is unknown"
         );
 
         let fixture = Fixture::empty();

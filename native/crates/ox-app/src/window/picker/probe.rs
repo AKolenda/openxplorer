@@ -129,7 +129,13 @@ pub(super) async fn test_write(folder: &Path, name: &std::ffi::OsStr, replacing:
     } else {
         let inside = folder.to_path_buf();
         on_a_worker(folder, move || match folder_takes_files(&inside) {
-            WriteTest::Writable if std::fs::symlink_metadata(&target).is_ok() => WriteTest::Appeared,
+            // Only a missing file is a new one: any other answer, such as
+            // a share that disconnected meanwhile, is not a place to save.
+            WriteTest::Writable => match std::fs::symlink_metadata(&target) {
+                Ok(_) => WriteTest::Appeared,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => WriteTest::Writable,
+                Err(_) => WriteTest::Unavailable,
+            },
             test => test,
         })
         .await
@@ -595,6 +601,11 @@ mod tests {
         assert_eq!(
             run(test_replace(&folder.path().join("gone.txt"))),
             WriteTest::Writable
+        );
+        // A new file the system cannot answer about: here, a name too long.
+        assert_eq!(
+            run(test_write(folder.path(), "n".repeat(300).as_ref(), false)),
+            WriteTest::Unavailable
         );
     }
 
