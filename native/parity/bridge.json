@@ -490,7 +490,7 @@
     },
     "properties": {
       "status": "native-tested",
-      "note": "Properties is a window of its own, as in Windows 11: it reads the item off the main thread and shows the General and Security tabs, with OK, Cancel and Apply; Change... opens the Open with dialog while Properties stays open.",
+      "note": "Properties is a window of its own, as in Windows 11: it reads the item off the main thread and shows the General and Security tabs, with OK, Cancel and Apply; Change... opens the Open with dialog as a dialog of the Properties window, which stays open behind it.",
       "evidence": [
         "native/crates/ox-app/src/window/tests/item_dialogs.rs::alt_enter_opens_a_files_properties_in_a_window_of_its_own",
         "native/crates/ox-app/src/window/tests/item_dialogs.rs::a_folders_size_and_contents_count_by_themselves",

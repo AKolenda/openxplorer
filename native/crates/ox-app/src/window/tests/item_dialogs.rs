@@ -795,29 +795,51 @@ fn properties_show_a_links_target_and_a_mount_points_details() {
     assert!(value_after(&general, "Free space:").is_some_and(|text| text.contains(" free of ")));
 }
 
-/// Change... opens Open with for the file, and Properties stays open, as
-/// in Windows.
+/// Change... opens Open with over the Properties window, as its own
+/// dialog transient for it, also when the browser window that opened
+/// Properties is behind another window; Properties stays open, and Cancel
+/// leaves its Opens with row as it was.
 ///
 /// parity: PROP-003
 #[gtk::test]
-fn change_opens_open_with_and_properties_stays_open() {
+fn change_opens_open_with_over_the_properties_window() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
     let window = test.wait_for_properties("Notes 2.txt Properties");
+    let general = general(&window);
+    let app_before = value_after(&general, "Opens with:");
+    // Another window covers the browser window.
+    let cover = gtk::Window::builder().title("Another app").build();
+    cover.present();
 
-    press(&general(&window), "Change...");
+    press(&general, "Change...");
 
     let open_with = || {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|toplevel| toplevel.downcast::<OpenWithDialog>().ok())
-            .find(|dialog| dialog.transient_for().as_ref() == Some(test.window.upcast_ref()))
+            .find(WidgetExt::is_visible)
     };
     wait_until("Open with", || open_with().is_some());
+    let dialog = open_with().expect("Open with is open");
+    assert_eq!(
+        dialog.transient_for().as_ref(),
+        Some(window.upcast_ref::<gtk::Window>()),
+        "Open with belongs to the Properties window"
+    );
+    assert!(dialog.is_modal(), "a dialog of its own over Properties");
     assert!(!window.is_closed(), "Properties stays open");
-    open_with().expect("Open with is open").close();
+    dialog.close();
+    wait_until("Open with to close", || open_with().is_none());
+    assert!(!window.is_closed(), "Cancel keeps Properties open");
+    assert_eq!(
+        value_after(&general, "Opens with:"),
+        app_before,
+        "Cancel changes nothing"
+    );
+    cover.destroy();
 }
 
 /// Escape closes Properties as Cancel does.

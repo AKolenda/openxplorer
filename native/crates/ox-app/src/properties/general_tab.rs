@@ -36,7 +36,6 @@ use super::folder_count::FolderCountRows;
 use super::metadata::{ItemProperties, MountFacts};
 use super::window::{divider, push_button, ApplyFuture, Pending, PropertiesWindow, Rows};
 use crate::icons::{Art, ArtImage};
-use crate::window::WindowAction;
 
 /// The size of the item's picture beside its name.
 const HEADER_ART_SIZE: i32 = 32;
@@ -176,7 +175,7 @@ fn type_of_file(entry: &Entry) -> String {
 }
 
 /// The application's name and Change..., which opens Open with for the
-/// file through the browser window.
+/// file as a dialog of the Properties window.
 fn opens_with_row(properties: &ItemProperties, can_change: bool) -> (gtk::Box, gtk::Label) {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let app = properties
@@ -198,7 +197,17 @@ fn opens_with_row(properties: &ItemProperties, can_change: bool) -> (gtk::Box, g
     change.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
         "Change the app this file opens with",
     ))]);
-    WindowAction::ChangeApp.assign_with_target_to(&change, &properties.entry.uri.to_variant());
+    // Open with is a dialog of this Properties window, not of the browser
+    // window, which may be behind other windows.
+    let uri = properties.entry.uri.clone();
+    change.connect_clicked(move |button| {
+        let Some(window) = PropertiesWindow::of(button) else {
+            return;
+        };
+        if let Some(opener) = window.opener() {
+            opener.change_app_over(window.upcast_ref(), &uri);
+        }
+    });
     row.append(&change);
     (row, value)
 }
