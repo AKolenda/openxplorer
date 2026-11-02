@@ -1338,6 +1338,15 @@ msgstr ""
 msgid "You can change the folder icon. If you change the icon, it will no longer show a preview of the folder's contents."
 msgstr ""
 
+#: crates/ox-app/src/properties/folder_count.rs crates/ox-app/src/properties/folder_sizes.rs
+msgid "Unavailable"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/folder_count.rs
+msgid "≥ {value}"
+msgstr ""
+
 #: crates/ox-app/src/properties/folder_sizes.rs
 msgid "Logical file bytes"
 msgstr ""
@@ -1348,10 +1357,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/folder_sizes.rs
 msgid "Scanning…"
-msgstr ""
-
-#: crates/ox-app/src/properties/folder_sizes.rs
-msgid "Unavailable"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
@@ -1541,6 +1546,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/properties/location_panel/applying.rs
 msgid "Location updated. Configuration backed up. Some items stayed in {previous}."
+msgstr ""
+
+#: crates/ox-app/src/properties/location_panel/applying.rs crates/ox-app/src/properties/sharing_panel.rs
+msgid "The change stopped."
 msgstr ""
 
 #: crates/ox-app/src/properties/location_panel/applying.rs
@@ -1894,10 +1903,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/sharing_panel.rs
 msgid "Shared"
-msgstr ""
-
-#: crates/ox-app/src/properties/sharing_panel.rs
-msgid "The change stopped."
 msgstr ""
 
 #: crates/ox-app/src/properties/sharing_panel.rs
@@ -6328,6 +6333,16 @@ msgstr ""
 msgid "%B %-d, %Y"
 msgstr ""
 
+#: crates/ox-core/src/format/explorer_text.rs
+msgctxt "thousands separator"
+msgid ","
+msgstr ""
+
+#: crates/ox-core/src/format/explorer_text.rs
+msgctxt "decimal separator"
+msgid "."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
 msgid "{bytes} bytes"
@@ -7543,6 +7558,16 @@ msgstr ""
 
 #: crates/ox-core/src/permissions.rs
 msgid "No Access"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/permissions.rs
+msgid "These items could not be changed: {named}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/permissions.rs
+msgid "{named} and {more} more"
 msgstr ""
 
 #: crates/ox-core/src/places/known_folders.rs
