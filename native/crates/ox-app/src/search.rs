@@ -39,7 +39,7 @@ pub(crate) mod test_roots;
 
 pub(crate) use cache::SearchCache;
 pub(crate) use error::CacheError;
-pub(crate) use folder_search::{FolderSearch, SearchRun};
+pub(crate) use folder_search::{FolderSearch, Rerun, SearchRun};
 pub(crate) use indexer::{CacheLocation, IndexerStart};
 pub(crate) use info_strip::{SearchInfoStrip, ShownOptions};
 pub(crate) use pin_sync::SettingsReading;

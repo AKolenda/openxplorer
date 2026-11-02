@@ -25,10 +25,11 @@ use ox_core::search::{HiddenItems, SearchFacets, SearchIn, SearchQuery, SearchRe
 use crate::folder_view::cells::RowTooltip;
 use crate::folder_view::details::DetailsListing;
 use crate::folder_view::item::FileItem;
+use crate::folder_view::reconcile;
 use crate::locations::Page;
 use crate::search::{
-    merge_results, related_roots, CacheError, Listing, SearchCount, SearchInfoStrip, SearchRun, SearchScope,
-    ShownOptions, RESULT_LIMIT,
+    merge_results, related_roots, CacheError, Listing, Rerun, SearchCount, SearchInfoStrip, SearchRun,
+    SearchScope, ShownOptions, RESULT_LIMIT,
 };
 
 use super::empty_page::EmptyState;
@@ -160,10 +161,22 @@ impl BrowserWindow {
         }
     }
 
-    /// Runs a shown search again after the cache or its source listing changed.
+    /// Brings a shown search up to date after the cache or its source
+    /// listing changed, without starting it over while it still looks
+    /// where it did ([`crate::search::FolderSearch::rerun`]).
     pub(super) fn run_search_again(&self) {
-        if self.is_searching() {
-            self.run_search();
+        if !self.is_searching() {
+            return;
+        }
+        let Some(folder) = self.searched_folder() else {
+            return;
+        };
+        let roots = self.context().search_cache().roots();
+        let rerun = self.imp().search.borrow_mut().rerun(&folder, &roots);
+        match rerun {
+            Rerun::Keep => {}
+            Rerun::Refresh(run) => self.ask_search_cache(run),
+            Rerun::Restart => self.run_search(),
         }
     }
 
@@ -252,18 +265,26 @@ impl BrowserWindow {
         if !is_current || !is_same_folder {
             return;
         }
-        match outcome {
+        let updated_in_place = match outcome {
             Ok(found) => self.keep_search_results(run, found),
             Err(error) if error.is_cancelled() => return,
-            Err(error) => self.imp().search.borrow_mut().fail(run, error.to_string()),
+            Err(error) => {
+                self.imp().search.borrow_mut().fail(run, error.to_string());
+                false
+            }
+        };
+        if !updated_in_place {
+            self.show_searched_items();
         }
-        self.show_searched_items();
         self.show_search_state();
     }
 
     /// Merges the listing's matches with `found` and keeps them as the
-    /// search's rows.
-    fn keep_search_results(&self, run: &SearchRun, found: SearchResults) {
+    /// search's rows. A refresh updates the rows on screen in place, so
+    /// unchanged results stay the same items, selected and scrolled to as
+    /// they were (as [`reconcile::update_in_place`] does for a reloaded
+    /// folder); returns whether it did.
+    fn keep_search_results(&self, run: &SearchRun, found: SearchResults) -> bool {
         let active = self.imp().session.borrow().active_id();
         let store = active.and_then(|id| self.tab_store(id));
         let shows_hidden = self.hidden_files_shown();
@@ -274,12 +295,25 @@ impl BrowserWindow {
             shows_hidden,
         });
         let merged = merge_results(listing, &run.text, found);
-        let rows = gio::ListStore::new::<FileItem>();
-        rows.extend_from_slice(&merged.items);
+        let shown = run
+            .refreshes
+            .then(|| self.imp().search.borrow().results().cloned())
+            .flatten();
+        let updated_in_place = shown.is_some();
+        let rows = if let Some(rows) = shown {
+            let entries = merged.items.iter().map(|item| item.entry().clone()).collect();
+            self.change_model(|| reconcile::update_in_place(&rows, entries));
+            rows
+        } else {
+            let rows = gio::ListStore::new::<FileItem>();
+            rows.extend_from_slice(&merged.items);
+            rows
+        };
         self.imp()
             .search
             .borrow_mut()
             .finish(run, rows, merged.is_truncated);
+        updated_in_place
     }
 
     /// Shows the search's rows: the cache's results, or else the listing

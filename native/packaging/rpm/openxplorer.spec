@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.10
+Version:        2.0.11
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -124,6 +124,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Mon Nov 02 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.11-1
+- OpenXplorer 2.0.11: shown search results no longer refresh while the
+  search cache changes, so a selected result stays selected.
+
 * Fri Oct 30 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.10-1
 - OpenXplorer 2.0.10: a Simplified Chinese translation, used when the
   desktop's language is Chinese.

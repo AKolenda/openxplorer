@@ -8176,6 +8176,10 @@ msgstr ""
 msgid "SMB"
 msgstr ""
 
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Search results no longer refresh every few seconds while folders are being indexed, so a result you select stays selected. A search of a folder nobody indexed no longer starts over, and a cached search updates in place instead of showing Searching again."
+msgstr ""
+
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "The preview is incomplete and runs beside the current OpenXplorer without replacing it. It never changes file associations, browser preferences or network mounts."
 msgstr ""
