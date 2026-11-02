@@ -181,7 +181,9 @@ impl BrowserWindow {
             return None;
         }
         self.imp().file_operations.borrow_mut().running = Some(cancel.clone());
+        // The file and archive commands wait while it writes.
         self.update_file_commands();
+        self.update_archive_actions();
         let pending_panel = Rc::new(RefCell::new(None));
         let source = glib::timeout_add_local(
             QUICK_WRITE_PANEL_DELAY,

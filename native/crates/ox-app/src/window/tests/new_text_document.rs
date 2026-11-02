@@ -827,3 +827,29 @@ fn the_archive_commands_come_back_once_a_background_create_ends() {
     assert!(is_enabled(&test, "extract-here"), "Extract here is back");
     assert_eq!(test.selected_names(), ["Bundle.zip"]);
 }
+
+/// Extract and Compress, enabled for a selected ZIP, wait while a slow
+/// create writes, as during any other write, without the selection
+/// changing, and come back once it ends.
+///
+/// parity: OPS-002, ARC-009
+#[gtk::test]
+fn the_archive_commands_wait_while_a_slow_create_writes() {
+    let fixture = super::archives::fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Bundle.zip"]);
+    let commands = ["extract-all", "extract-here", "compress-to-zip", "compress-to"];
+    let before = commands.map(|name| is_enabled(&test, name));
+
+    let release = start_held_text_document(&test);
+    let during = commands.map(|name| is_enabled(&test, name));
+    drop(release);
+    let field = name_editor(&test);
+    escape(&test, &field);
+    select_names(&test, &["Bundle.zip"]);
+    let after = commands.map(|name| is_enabled(&test, name));
+
+    assert_eq!(before, [true; 4], "enabled for the ZIP");
+    assert_eq!(during, [false; 4], "they wait while the create writes");
+    assert_eq!(after, [true; 4], "and come back");
+}
