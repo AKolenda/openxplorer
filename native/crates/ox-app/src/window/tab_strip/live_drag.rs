@@ -92,20 +92,22 @@ impl TabStrip {
     }
 
     /// Remembers where tab `id` was grabbed: (`x`, `y`) of the strip, from
-    /// the tab's top left corner.
+    /// the tab's top left corner as it is drawn. A tab let go a moment ago
+    /// may still slide into a place the session's order does not have yet,
+    /// so where it is drawn is where the press met it.
     pub(in crate::window) fn grab_tab(&self, id: TabId, (x, y): (f64, f64)) {
-        let row_x = self.in_row(x);
-        let left = self
-            .tab_slots()
-            .into_iter()
-            .find_map(|(tab, left, _)| (tab == id).then_some(left));
-        let top = self
-            .widget_of(id)
-            .and_then(|widget| widget.compute_bounds(self))
-            .map_or(0.0, |bounds| f64::from(bounds.y()));
-        if let Some(left) = left {
-            self.imp().grab.set(Some((id, (row_x - left, y - top))));
-        }
+        let Some(widget) = self.widget_of(id) else {
+            return;
+        };
+        let row = self.imp().tab_list.get();
+        let (Some(in_row), Some(in_strip)) = (widget.compute_bounds(&row), widget.compute_bounds(self))
+        else {
+            return;
+        };
+        let along = self.in_row(x) - f64::from(in_row.x());
+        self.imp()
+            .grab
+            .set(Some((id, (along, y - f64::from(in_strip.y())))));
     }
 
     /// Where on itself tab `id` was grabbed, from its top left corner, if

@@ -416,6 +416,47 @@ fn another_tab_grabbed_before_a_release_settled_follows_once_it_landed() {
     assert!(strip.is_following(), "the other tab follows the pointer");
 }
 
+/// A tab let go past another and pressed again while it still slides into
+/// its new place, before the strip took the new order: it is held where
+/// the press met it as drawn, so the next motion moves it with the
+/// pointer, not a tab's width away.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_pressed_again_while_it_slides_into_place_is_held_where_it_is_drawn() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    let [first, _] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let x = grab_point(&test.window, first);
+    let frames = |count| crate::test_support::harness::wait_for_frames(&test.window, count);
+
+    strip.grab_tab(first, (x, 10.0));
+    // Past the other tab: the order shown changes.
+    strip.follow_pointer(first, x + 150.0);
+    frames(2);
+    strip.let_go(true, |_| ());
+    // One frame into the 200 ms slide into its new place.
+    frames(1);
+    let drawn = grab_point(&test.window, first);
+    strip.grab_tab(first, (drawn, 10.0));
+    let grabbed_at = strip.grab_offset(first).map(|(along, _)| along);
+    strip.follow_pointer(first, drawn);
+    frames(1);
+    let after = grab_point(&test.window, first);
+
+    assert!(
+        grabbed_at.is_some_and(|along| (along - 20.0).abs() <= 1.0),
+        "held 20 pixels into the tab as drawn: {grabbed_at:?}"
+    );
+    assert!(
+        (after - drawn).abs() <= 1.0,
+        "the tab stays under the pointer: {drawn} then {after}"
+    );
+}
+
 /// A point 20 pixels into tab `id`, along the strip.
 fn grab_point(window: &BrowserWindow, id: TabId) -> f64 {
     let strip = window.tab_strip();
