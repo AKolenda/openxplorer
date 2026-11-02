@@ -19,12 +19,14 @@ use gtk::{gio, glib};
 use ox_core::entry::{self, Entry, EntryError, EntryKind};
 use ox_core::integration;
 
+use crate::folder_view::loader::Listing;
 use crate::locations::{self, Page};
 
 use super::desktop_link::{link_target_of_file, may_be_link, LinkTarget};
 use super::run_on_open::RunChoice;
 use super::session::TabId;
 use super::session::TabPlacement;
+use super::slow_location::OpeningKind;
 use super::BrowserWindow;
 
 mod outcome;
@@ -145,6 +147,20 @@ pub(super) async fn query_entry(uri: &str) -> Result<Entry, EntryError> {
     Ok(entry::entry_from_info(&file, &info))
 }
 
+/// Counts a typed address's lookup as answered once it ends, answered
+/// or cancelled, for tests.
+#[cfg(test)]
+struct AnsweredOnDrop(glib::WeakRef<BrowserWindow>);
+
+#[cfg(test)]
+impl Drop for AnsweredOnDrop {
+    fn drop(&mut self) {
+        if let Some(window) = self.0.upgrade() {
+            window.imp().activations.borrow_mut().answered += 1;
+        }
+    }
+}
+
 /// Where an address given to the address bar came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AddressSource {
@@ -187,12 +203,18 @@ impl BrowserWindow {
 
     /// Whether `pending` still speaks for its tab, and ends it.
     fn finish_activation(&self, pending: PendingActivation) -> bool {
-        let imp = self.imp();
-        let mut activations = imp.activations.borrow_mut();
         #[cfg(test)]
         {
-            activations.answered += 1;
+            self.imp().activations.borrow_mut().answered += 1;
         }
+        self.ends_activation(pending)
+    }
+
+    /// Whether `pending` still speaks for its tab, and ends it, without
+    /// counting it as answered.
+    fn ends_activation(&self, pending: PendingActivation) -> bool {
+        let imp = self.imp();
+        let mut activations = imp.activations.borrow_mut();
         let is_current = activations.newest.get(&pending.tab) == Some(&pending.generation);
         if is_current {
             activations.newest.remove(&pending.tab);
@@ -227,16 +249,33 @@ impl BrowserWindow {
         let Some(origin) = self.begin_item_activation() else {
             return;
         };
-        glib::spawn_future_local(glib::clone!(
+        let Activation::Folder(target) = activation_for(&entry) else {
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                async move {
+                    let outcome = window.resolve_activation(&entry).await;
+                    if window.end_item_activation(origin) {
+                        window.show_item_activation(origin, &entry, outcome);
+                    }
+                }
+            ));
+            return;
+        };
+        // A folder may be on a slow share, or one to mount first: the tab
+        // shows that it is opening it, and Stop cancels it (VIEW-068).
+        let lookup = Listing::spawn(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
                 let outcome = window.resolve_activation(&entry).await;
+                window.end_opening(origin.tab());
                 if window.end_item_activation(origin) {
                     window.show_item_activation(origin, &entry, outcome);
                 }
             }
         ));
+        self.begin_opening(origin.tab(), &target, OpeningKind::Item, lookup);
     }
 
     /// Reads `entry` again, mounting its share first when it has to, and
@@ -454,23 +493,71 @@ impl BrowserWindow {
         let Some(tab) = self.imp().session.borrow().active_id() else {
             return;
         };
+        // VIEW-068: Enter on the address the tab is going to already does
+        // not start it over.
+        if self.is_going_to(tab, &folder) {
+            return;
+        }
         let pending = self.begin_activation(tab);
-        glib::spawn_future_local(glib::clone!(
+        let target = folder.clone();
+        // Tests count the lookup as answered also when it is cancelled,
+        // even before it ran.
+        #[cfg(test)]
+        let answered = AnsweredOnDrop(self.downgrade());
+        let lookup = Listing::spawn(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
+                #[cfg(test)]
+                let _answered = answered;
                 let result = query_entry(&folder).await;
-                if window.finish_activation(pending) {
-                    let request = AddressRequest {
-                        uri: &folder,
-                        typed: &typed,
-                        place: place.as_deref(),
-                        source,
-                    };
+                // The user may have looked at another tab meanwhile, which
+                // drops the lookup's right to open a file (SAFE-013).
+                let is_current = window.ends_activation(pending);
+                if !window.end_opening(tab) {
+                    return;
+                }
+                let request = AddressRequest {
+                    uri: &folder,
+                    typed: &typed,
+                    place: place.as_deref(),
+                    source,
+                };
+                if is_current {
                     window.open_typed_location(&request, result);
+                } else {
+                    window.open_typed_folder_only(tab, &request, result);
                 }
             }
         ));
+        // The address stays in the address bar, with its progress, while
+        // it is looked up, as in Windows Explorer.
+        self.begin_opening(tab, &target, OpeningKind::Typed, lookup);
+    }
+
+    /// Opens the location a typed address resolved to, in tab `id`, which
+    /// the user left while it was looked up: a folder opens there, where
+    /// the user asked for it, but nothing else is opened or said.
+    fn open_typed_folder_only(
+        &self,
+        id: TabId,
+        request: &AddressRequest<'_>,
+        result: Result<Entry, EntryError>,
+    ) {
+        let folder = match result {
+            Ok(entry) => match activation_for(&entry) {
+                Activation::Folder(folder) => folder,
+                _ => return,
+            },
+            Err(EntryError::NotMounted(_)) => request.uri.to_owned(),
+            Err(_) => return,
+        };
+        if self.imp().session.borrow().is_active(id) {
+            self.accept_address(request.typed, request.source);
+            self.navigate_or_report(&folder);
+        } else {
+            self.navigate_background_tab(id, &folder);
+        }
     }
 
     /// The address `typed` is going to be opened: the crumbs show again,

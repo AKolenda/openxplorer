@@ -17,6 +17,7 @@ use crate::folder_view::watch::Watch;
 use crate::history::{History, HistoryViews};
 
 use super::listing_state::{ListingEnd, ListingState};
+use super::slow_location::Opening;
 
 mod split;
 
@@ -150,6 +151,9 @@ pub(super) struct Tab {
     /// An item of this tab is being opened; a second one waits for it
     /// (`tab.opening` in `openEntry`).
     pub is_activating: bool,
+    /// A location the tab is going to, looked up or mounted before the
+    /// tab moves there (see [`super::slow_location`]).
+    pub opening: Option<Opening>,
     /// The folder pane that shows this tab: the start pane, or the end
     /// pane of a split tab.
     pub side: PaneSide,
@@ -181,6 +185,7 @@ impl Tab {
             revealed_item: None,
             changed_while_hidden: false,
             is_activating: false,
+            opening: None,
             side: PaneSide::Start,
             beside: None,
         }

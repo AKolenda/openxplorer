@@ -109,6 +109,9 @@ impl BrowserWindow {
         }
         if mode == LoadMode::Navigate {
             self.supersede_activations(id);
+            // The tab goes elsewhere: a location it was still going to is
+            // cancelled, and nothing of it lands here (VIEW-068).
+            self.cancel_opening(id);
         }
         let Some(start) = self.begin_load(id, mode) else {
             return;

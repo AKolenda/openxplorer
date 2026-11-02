@@ -196,7 +196,27 @@ impl FolderPane {
     /// While it shows, the list is described by it for screen readers;
     /// the list's own description stays as it is.
     pub(super) fn show_empty_note(&self, show: bool) {
+        self.show_note(show, parts::EMPTY_NOTE);
+    }
+
+    /// Says "Working on it..." near the top of the list, where Windows
+    /// Explorer says it while it opens a location, with the list's rows
+    /// hidden when `hides_rows`: they are the previous folder's.
+    pub(super) fn show_working_note(&self, hides_rows: bool) {
+        self.hide_rows(hides_rows);
+        self.show_note(true, parts::WORKING_NOTE);
+    }
+
+    /// Hides or shows the list's rows (and the details view's column
+    /// titles), keeping the list's place, model and selection.
+    pub(super) fn hide_rows(&self, hide: bool) {
+        self.parts().views.set_child_visible(!hide);
+    }
+
+    /// Shows or hides the note near the top of the list, saying `text`.
+    fn show_note(&self, show: bool, text: &'static str) {
         let note = &self.parts().empty_note;
+        note.set_label(ox_core::i18n::gettext_static(text));
         // The row with keyboard focus goes with the last item: the list
         // keeps the keyboard, on its rows' area.
         if show && !note.is_visible() && self.view_has_focus() {
@@ -218,7 +238,8 @@ impl FolderPane {
 
     /// Whether "This folder is empty." shows.
     pub(super) fn shows_empty_note(&self) -> bool {
-        self.parts().empty_note.is_visible()
+        let note = &self.parts().empty_note;
+        note.is_visible() && note.label() == ox_core::i18n::gettext_static(parts::EMPTY_NOTE)
     }
 
     /// What the note near the top of the list says while it shows, for
@@ -311,10 +332,11 @@ impl FolderPane {
     }
 
     /// Calls `changed` whenever the loading line shows or hides.
-    pub(super) fn connect_loading_line_changed(&self, changed: impl Fn() + 'static) {
+    /// The argument says whether the line shows now.
+    pub(super) fn connect_loading_line_changed(&self, changed: impl Fn(bool) + 'static) {
         self.parts()
             .loading_line
-            .connect_visible_notify(move |_| changed());
+            .connect_visible_notify(move |line| changed(line.is_visible()));
     }
 
     /// Shows `hint` over the pane, saying what a drag would do there, or

@@ -28,8 +28,14 @@ fn refresh_or_stop(test: &TestWindow) -> (String, String) {
         .last_child()
         .and_downcast::<gtk::Button>()
         .expect("Refresh or Stop ends the row");
-    let action = button.action_name().map(|name| name.to_string()).unwrap_or_default();
-    let tooltip = button.tooltip_text().map(|text| text.to_string()).unwrap_or_default();
+    let action = button
+        .action_name()
+        .map(|name| name.to_string())
+        .unwrap_or_default();
+    let tooltip = button
+        .tooltip_text()
+        .map(|text| text.to_string())
+        .unwrap_or_default();
     (action, tooltip)
 }
 
@@ -70,7 +76,7 @@ fn shows_nothing_busy(test: &TestWindow) -> bool {
 /// once, "Working on it..." in place of the previous folder after a
 /// moment, and its own folder once it answers.
 ///
-/// parity: VIEW-047, VIEW-049, VIEW-074
+/// parity: VIEW-047, VIEW-049, VIEW-068
 #[gtk::test]
 fn a_slow_typed_address_shows_progress_stop_and_working_on_it() {
     let fixture = Fixture::standard();
@@ -83,7 +89,10 @@ fn a_slow_typed_address_shows_progress_stop_and_working_on_it() {
     enter_address(&test, &fixture.path("Documents").display().to_string());
 
     assert!(shows_stop(&test), "Refresh turns into Stop at once");
-    assert!(address_shows_progress(&test), "the address bar shows progress at once");
+    assert!(
+        address_shows_progress(&test),
+        "the address bar shows progress at once"
+    );
     assert!(!says_working(&test), "no message before the delay");
     wait_until("Working on it...", || says_working(&test));
     assert!(started.elapsed() >= APPEARANCE_DELAY, "the message waited");
@@ -104,7 +113,7 @@ fn a_slow_typed_address_shows_progress_stop_and_working_on_it() {
 /// Opening a slow folder from the list shows the same: progress and Stop
 /// at once, then "Working on it...".
 ///
-/// parity: VIEW-074
+/// parity: VIEW-068
 #[gtk::test]
 fn a_slow_folder_opened_from_the_list_shows_progress_and_working_on_it() {
     let fixture = Fixture::standard();
@@ -131,7 +140,7 @@ fn a_slow_folder_opened_from_the_list_shows_progress_and_working_on_it() {
 /// Stop cancels a slow address: the tab stays where it was, with its
 /// rows, and the address answering later changes nothing.
 ///
-/// parity: VIEW-049, VIEW-074
+/// parity: VIEW-049, VIEW-068
 #[gtk::test]
 fn stop_cancels_a_slow_address_and_its_late_answer_lands_nowhere() {
     let fixture = Fixture::standard();
@@ -159,7 +168,7 @@ fn stop_cancels_a_slow_address_and_its_late_answer_lands_nowhere() {
 /// Stop cancels a slow listing at once, too: the button and the address
 /// bar answer straight away, and the listing's rows never arrive.
 ///
-/// parity: VIEW-049, VIEW-074
+/// parity: VIEW-049, VIEW-068
 #[gtk::test]
 fn stop_cancels_a_slow_listing_at_once() {
     let fixture = Fixture::standard();
@@ -185,7 +194,7 @@ fn stop_cancels_a_slow_listing_at_once() {
 /// Enter on the address being opened does not start it over, neither
 /// while it is looked up nor while it is listed.
 ///
-/// parity: VIEW-074
+/// parity: VIEW-068
 #[gtk::test]
 fn enter_again_on_the_same_slow_address_does_not_start_over() {
     let fixture = Fixture::standard();
@@ -224,7 +233,7 @@ fn enter_again_on_the_same_slow_address_does_not_start_over() {
 /// Another address entered while one is opened replaces it: the first is
 /// cancelled, and its late answer never lands in the tab.
 ///
-/// parity: NAV-016, VIEW-074
+/// parity: NAV-016, VIEW-068
 #[gtk::test]
 fn another_address_replaces_a_slow_one_and_nothing_late_lands() {
     let fixture = Fixture::standard();
@@ -253,7 +262,7 @@ fn another_address_replaces_a_slow_one_and_nothing_late_lands() {
 /// Another folder entered while a slow one is listed replaces it: none
 /// of the slow folder's rows land.
 ///
-/// parity: NAV-016, VIEW-074
+/// parity: NAV-016, VIEW-068
 #[gtk::test]
 fn another_address_replaces_a_slow_listing() {
     let fixture = Fixture::standard();
@@ -279,7 +288,7 @@ fn another_address_replaces_a_slow_listing() {
 /// Escape while a typed address is opened ends editing, as it always
 /// does, and cancels the address, whose answer then lands nowhere.
 ///
-/// parity: NAV-027, VIEW-074
+/// parity: NAV-027, VIEW-068
 #[gtk::test]
 fn escape_in_the_address_bar_cancels_a_slow_address() {
     use gtk::gdk;
@@ -302,7 +311,11 @@ fn escape_in_the_address_bar_cancels_a_slow_address() {
     let taken = keys.iter().any(|keys| {
         keys.emit_by_name::<bool>(
             "key-pressed",
-            &[&gdk::Key::Escape.into_glib(), &no_keycode, &gdk::ModifierType::empty()],
+            &[
+                &gdk::Key::Escape.into_glib(),
+                &no_keycode,
+                &gdk::ModifierType::empty(),
+            ],
         )
     });
     settle();
@@ -318,14 +331,16 @@ fn escape_in_the_address_bar_cancels_a_slow_address() {
 /// and Stop cancels the mount; a failed mount shows the usual error and
 /// no message.
 ///
-/// parity: NET-004, VIEW-074
+/// parity: NET-004, VIEW-068
 #[gtk::test]
 fn a_slow_first_mount_shows_working_on_it_and_stop_cancels_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.wait_for_listing("the first folder");
     let share = "smb://example.invalid/share";
-    test.window.network().answer_mounts_with(|| Err(NetworkError::NotAFolder));
+    test.window
+        .network()
+        .answer_mounts_with(|| Err(NetworkError::NotAFolder));
     let hold = held::hold_mount(share);
 
     test.window.navigate(share).expect("an SMB share");
@@ -340,11 +355,15 @@ fn a_slow_first_mount_shows_working_on_it_and_stop_cancels_it() {
     assert!(shows_nothing_busy(&test));
     drop(hold);
     wait_for(APPEARANCE_DELAY * 2);
-    assert!(test.window.load_error().is_none(), "the cancelled mount says nothing");
+    assert!(
+        test.window.load_error().is_none(),
+        "the cancelled mount says nothing"
+    );
 
-    // Mounting again fails: the app's usual error, with no message left.
+    // Opening it again, the mount fails: the app's usual error, with no
+    // message left.
     let hold = held::hold_mount(share);
-    test.window.refresh();
+    test.window.navigate(share).expect("an SMB share");
     wait_until("Working on it...", || says_working(&test));
     drop(hold);
     wait_until("the failed mount", || test.window.load_error().is_some());
@@ -357,7 +376,7 @@ fn a_slow_first_mount_shows_working_on_it_and_stop_cancels_it() {
 /// location is usable, with Refresh and no progress, and the slow tab
 /// still opens its location when it is shown again.
 ///
-/// parity: TAB-056, VIEW-074
+/// parity: TAB-056, VIEW-068
 #[gtk::test]
 fn switching_tabs_while_a_slow_address_opens_keeps_each_tabs_state() {
     let fixture = Fixture::standard();

@@ -61,9 +61,14 @@ impl BrowserWindow {
             pane.connect_loading_line_changed(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move || {
+                move |shown| {
                     window.update_status();
-                    window.show_stop_or_refresh();
+                    if shown && window.is_busy() {
+                        // A location that takes a moment says "Working on
+                        // it..." from now on (VIEW-068).
+                        window.update_content();
+                        window.update_beside_pane();
+                    }
                 }
             ));
         }

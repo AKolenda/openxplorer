@@ -25,6 +25,13 @@ pub(super) struct ActivationOrigin {
     moves: u64,
 }
 
+impl ActivationOrigin {
+    /// The tab the activation started in.
+    pub(super) fn tab(self) -> TabId {
+        self.tab
+    }
+}
+
 impl BrowserWindow {
     /// Marks the active tab as opening an item; `None` while it already
     /// is, or before the window has a tab.
@@ -75,7 +82,7 @@ impl BrowserWindow {
 
     /// Moves the background tab `id` to the folder `uri`; it is listed
     /// when it is next shown.
-    fn navigate_background_tab(&self, id: TabId, uri: &str) {
+    pub(super) fn navigate_background_tab(&self, id: TabId, uri: &str) {
         let Ok(uri) = self.resolve_address(uri) else {
             return;
         };

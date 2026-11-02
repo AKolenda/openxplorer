@@ -117,6 +117,10 @@ fn empty_note() -> gtk::Label {
 /// What the note says.
 pub(super) const EMPTY_NOTE: &str = crate::i18n::message_id("This folder is empty.");
 
+/// What the note says while a location is opened, as Windows Explorer
+/// says it in the same place (VIEW-068).
+pub(super) const WORKING_NOTE: &str = crate::i18n::message_id("Working on it...");
+
 /// The rectangle a rubber band draws, hidden until one is drawn. It never
 /// takes the pointer.
 fn rubber_band() -> gtk::Box {

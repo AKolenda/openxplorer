@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Stopping a slow listing (VIEW-049). While the loading line shows, the
-//! Refresh button before the address bar turns into Stop, as Windows
-//! Explorer's does, and `win.stop` ends the listing, keeping the items
-//! that arrived, as Dolphin's View › Stop does. No "Loading" text comes
-//! back: the owner decided a slow listing shows only the line (VIEW-047);
-//! a stop says so once in the message line.
+//! Stopping a slow location (VIEW-049, VIEW-068). While the tab in front
+//! opens or lists a location, the Refresh button before the address bar
+//! is Stop, from the first moment, as Windows Explorer's is, and
+//! `win.stop` cancels it: a location still being looked up or mounted is
+//! dropped and the tab stays where it was, with its rows; a listing ends,
+//! keeping the items that arrived, as Dolphin's View › Stop does, and
+//! says so once in the message line.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -27,10 +28,11 @@ impl BrowserWindow {
         self.add_action_entries([plain_action(WindowAction::Stop, BrowserWindow::stop_listing)]);
     }
 
-    /// Shows Stop in place of Refresh while the loading line shows, and
-    /// Refresh again once it is gone.
+    /// Shows Stop in place of Refresh while the tab in front is busy, and
+    /// Refresh again once it is not. The button keeps its place, so
+    /// keyboard focus on it stays.
     pub(super) fn show_stop_or_refresh(&self) {
-        let loading = self.folder_pane().shows_loading_line();
+        let loading = self.is_busy();
         let row = &*self.imp().navigation_buttons;
         let buttons = std::iter::successors(row.first_child(), WidgetExt::next_sibling);
         let wanted = [WindowAction::Refresh, WindowAction::Stop].map(WindowAction::detailed_name);
@@ -63,9 +65,17 @@ impl BrowserWindow {
         action.assign_to(&button);
     }
 
-    /// Ends the active tab's running listing, keeping the items that
-    /// arrived; does nothing when no listing runs.
+    /// Cancels what the active tab is opening, leaving the tab where it
+    /// was, and ends its running listing, keeping the items that arrived;
+    /// does nothing when the tab is not busy.
     pub(super) fn stop_listing(&self) {
+        let Some(id) = self.imp().session.borrow().active_id() else {
+            return;
+        };
+        if self.cancel_opening(id) {
+            // The address bar shows where the tab is again.
+            self.finish_address();
+        }
         let stopped = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.active_mut() else { return };
