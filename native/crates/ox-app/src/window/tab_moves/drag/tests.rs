@@ -145,6 +145,38 @@ fn a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer() {
     );
 }
 
+/// A tab dropped on its own strip where the strip no longer followed it,
+/// as after it left the strip, lands there and leaves the strip still, so
+/// the strip shows the session's tabs again.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_dropped_on_its_own_strip_after_leaving_it_leaves_the_strip_still() {
+    let fixture = Fixture::standard();
+    let test = three_tabs(&fixture);
+    let [first, second, third] = tab_ids(&test.window)[..] else {
+        panic!("three tabs are open");
+    };
+    let dragged = start_dragging(&test.window, 0);
+    let strip = test.window.tab_strip();
+    let grab = middle_in(&tab_widget(&test.window, 0), strip);
+    strip.grab_tab(dragged, grab);
+    strip.follow_pointer(dragged, grab.0 + 4.0);
+    strip.detach_tab(dragged);
+    let was_live = strip.live_tab();
+
+    let taken = test
+        .window
+        .settle_tab_drag(dragged, &test.window, TabDropSpot::Strip { before: None });
+    test.window.end_tab_drag();
+    settle();
+
+    assert_eq!(was_live, Some(dragged), "the strip was live");
+    assert!(taken);
+    assert_eq!(strip.live_tab(), None, "the strip is still");
+    assert_eq!(tab_ids(&test.window), [second, third, first]);
+}
+
 /// parity: TAB-033, TAB-039
 #[gtk::test]
 fn a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag() {

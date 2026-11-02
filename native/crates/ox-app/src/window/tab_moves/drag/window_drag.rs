@@ -155,7 +155,7 @@ impl Events {
 
 /// How giving a tab back went.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum GiveBack {
+pub(super) enum GiveBack {
     Done,
     /// A window is busy: later.
     Waits,
@@ -684,22 +684,23 @@ impl Session {
     }
 }
 
-/// The drag over: a `hidden` dragged window shows again while it keeps a
-/// tab, its own `tab` unless that `merged` into another window, or one
-/// opened in it during the drag, so no tab is left in a window no one sees.
-fn show_dragged_again(dragged: &BrowserWindow, tab: TabId, merged: bool, hidden: bool) {
+/// The drag over, whichever way it ended: a `hidden` dragged window shows
+/// again while it keeps a tab, its own `tab` unless that `left` it, merged
+/// into another window or given back by Escape, or one opened in it during
+/// the drag, so no tab is left in a window no one sees.
+fn show_dragged_again(dragged: &BrowserWindow, tab: TabId, left: bool, hidden: bool) {
     let has_another =
         |session: &crate::window::session::Session| session.tabs().iter().any(|kept| kept.id != tab);
-    if hidden && (!merged || has_another(&dragged.imp().session.borrow())) {
+    if hidden && (!left || has_another(&dragged.imp().session.borrow())) {
         dragged.present();
     }
 }
 
 /// Escape, the drag over: tab `tabs.0` of `dragged` goes back to `origin`,
-/// before `tabs.1`, or only `dragged` goes while `origin` has not `released`
-/// the tab yet. Where the tab stays in `dragged`, as when `origin` went
-/// away during the drag, a `hidden` window shows again, so the tab is never
-/// left in a window no one sees.
+/// before `tabs.1`, or only its copy in `dragged` goes while `origin` has
+/// not `released` the tab yet, with `dragged` unless a tab opened there
+/// meanwhile. A `hidden` window that keeps a tab then shows again
+/// ([`show_dragged_again`]), as when `origin` went away during the drag.
 fn put_tab_back(
     dragged: &BrowserWindow,
     origin: Option<&BrowserWindow>,
@@ -707,18 +708,21 @@ fn put_tab_back(
     released: bool,
     hidden: bool,
 ) {
-    if let Some(origin) = origin.filter(|_| !released) {
-        // The origin still has the tab: only the new window goes.
+    let left = if let Some(origin) = origin.filter(|_| !released) {
+        // The origin still has the tab: only its copy here goes.
         origin.tab_strip().end_drag_now();
-        dragged.close();
-        return;
-    }
-    let is_back = origin
-        .zip(back)
-        .is_some_and(|(origin, Landing { before })| dragged.take_tab_back(origin, tab, before));
-    if !is_back && hidden {
-        dragged.present();
-    }
+        if dragged.tab_count() <= 1 {
+            dragged.close();
+            return;
+        }
+        dragged.release_moved_tab(tab);
+        true
+    } else {
+        origin.zip(back).is_some_and(|(origin, Landing { before })| {
+            dragged.take_tab_back(origin, tab, before) == GiveBack::Done
+        })
+    };
+    show_dragged_again(dragged, tab, left, hidden);
 }
 
 impl BrowserWindow {
@@ -869,10 +873,17 @@ impl BrowserWindow {
     /// out as, back into `origin`, before tab `before`: at once, true, or
     /// once neither window is busy (a file operation, a dialog, the tab's
     /// Properties), the tab held meanwhile, so whatever opened during the
-    /// drag, Escape puts the tab back where it was (TAB-035).
-    pub(super) fn take_tab_back(&self, origin: &BrowserWindow, tab: TabId, before: Option<TabId>) -> bool {
-        if self.give_tab_back(origin, tab, before) != GiveBack::Waits {
-            return true;
+    /// drag, Escape puts the tab back where it was (TAB-035). How it went
+    /// at once: [`GiveBack::Waits`] while it waits.
+    pub(super) fn take_tab_back(
+        &self,
+        origin: &BrowserWindow,
+        tab: TabId,
+        before: Option<TabId>,
+    ) -> GiveBack {
+        let gave = self.give_tab_back(origin, tab, before);
+        if gave != GiveBack::Waits {
+            return gave;
         }
         self.show_message(ox_core::i18n::gettext_static(super::TAB_IS_MOVING));
         RETURNING.with_borrow_mut(|returning| returning.push((self.downgrade(), tab)));
@@ -890,7 +901,7 @@ impl BrowserWindow {
             });
             glib::ControlFlow::Break
         });
-        false
+        GiveBack::Waits
     }
 
     /// Gives tab `tab` back to `origin` when neither window is busy.
@@ -1432,6 +1443,75 @@ mod tests {
         show_dragged_again(&test.window, merged, true, true);
 
         assert!(test.window.is_visible(), "the dragged window shows again");
+    }
+
+    /// Escape with the dragged window hidden over a row, after a tab opened
+    /// in it during the drag, takes the dragged tab back and shows that
+    /// window again with the tab it keeps, so no tab is left unseen.
+    ///
+    /// parity: TAB-035
+    #[gtk::test]
+    fn escape_shows_a_hidden_dragged_window_that_keeps_a_tab_opened_during_the_drag() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window
+            .add_tab(&fixture.uri_of("Documents"))
+            .expect("a folder");
+        test.wait_for_listing("the second tab");
+        let moved = test.window.imp().session.borrow().active_id().expect("a tab");
+        let before = test.window.tab_after(moved);
+        let dragged = test.window.window_for_tab(moved).expect("a window for the tab");
+        let _opened = OpenedWindows::only(&[&test.window]);
+        test.window.release_moved_tab(moved);
+        let tab = dragged.imp().session.borrow().active_id().expect("the tab");
+        dragged.add_tab(&fixture.uri()).expect("a folder");
+        dragged.set_visible(false);
+
+        put_tab_back(
+            &dragged,
+            Some(&test.window),
+            (tab, Some(Landing { before })),
+            true,
+            true,
+        );
+
+        assert_eq!(test.window.tab_count(), 2, "the tab went back");
+        assert!(dragged.is_visible(), "the dragged window shows again");
+        assert_eq!(dragged.tab_count(), 1, "with the tab opened in it");
+    }
+
+    /// Escape before the window the tab left let it go, after a tab opened
+    /// in the hidden dragged window, keeps that window and its tab, shown:
+    /// only the copy of the dragged tab goes.
+    ///
+    /// parity: TAB-035
+    #[gtk::test]
+    fn escape_before_the_origin_let_go_keeps_a_tab_opened_in_the_dragged_window() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window
+            .add_tab(&fixture.uri_of("Documents"))
+            .expect("a folder");
+        test.wait_for_listing("the second tab");
+        let moved = test.window.imp().session.borrow().active_id().expect("a tab");
+        let before = test.window.tab_after(moved);
+        let dragged = test.window.window_for_tab(moved).expect("a window for the tab");
+        let _opened = OpenedWindows::only(&[&test.window]);
+        let tab = dragged.imp().session.borrow().active_id().expect("the tab");
+        dragged.add_tab(&fixture.uri()).expect("a folder");
+        dragged.set_visible(false);
+
+        put_tab_back(
+            &dragged,
+            Some(&test.window),
+            (tab, Some(Landing { before })),
+            false,
+            true,
+        );
+
+        assert_eq!(test.window.tab_count(), 2, "the window it left kept the tab");
+        assert!(dragged.is_visible(), "the dragged window shows again");
+        assert_eq!(dragged.tab_count(), 1, "with the tab opened in it");
     }
 
     /// A row takes the dragged window's tab over itself, and the row that

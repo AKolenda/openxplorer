@@ -82,7 +82,14 @@ impl BrowserWindow {
                     return None;
                 };
                 press.set(Press::Idle);
-                window.prepare_tab(tab)
+                let content = window.prepare_tab(tab);
+                if content.is_none() {
+                    // The window became busy after the tab began following
+                    // the pointer, as a paste may make it: the tab goes back
+                    // where it was, as no drag and drop will let it go.
+                    window.let_go_of_tab(false);
+                }
+                content
             }
         ));
         source.connect_drag_begin(glib::clone!(
@@ -281,12 +288,12 @@ impl BrowserWindow {
     /// (it has no `xdg-toplevel-drag-v1`), and a window the desktop moves
     /// first goes wherever the desktop places it.
     fn move_window_by_its_tab(&self, source: &gtk::DragSource, tab: TabId) {
+        let hold = self.tab_strip().grab_offset(tab).map_or(0.0, |(x, _)| x);
+        self.tab_strip().end_drag_now();
         let Some(device) = source.device() else {
             return;
         };
         let (button, time) = (source.current_button(), source.current_event_time());
-        let hold = self.tab_strip().grab_offset(tab).map_or(0.0, |(x, _)| x);
-        self.tab_strip().end_drag_now();
         hand_press_to_window_move(self, &device, button, time, hold);
     }
 
@@ -624,6 +631,9 @@ impl BrowserWindow {
         let outcome = match spot {
             TabDropSpot::TearOut => TabDragOutcome::TornOut,
             TabDropSpot::Strip { before } if destination == self => {
+                // Dropped where the strip did not follow it, which then
+                // lays its tabs out as the session has them again.
+                self.tab_strip().end_drag_now();
                 self.reorder_tab(tab, before);
                 TabDragOutcome::Reordered
             }

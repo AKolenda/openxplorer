@@ -1073,6 +1073,41 @@ fn a_tab_released_out_of_its_row_before_drag_and_drop_starts_tears_out() {
     assert_eq!(test.window.tab_strip().live_tab(), None, "the strip is still");
 }
 
+/// A tab dragged along its row while its window becomes busy, as a paste
+/// may make it, and then out of the row, starts no drag and drop: it goes
+/// back where it was, and the strip does not stay live, so the tab may
+/// close and the strip shows changes again.
+///
+/// parity: TAB-031, TAB-032
+#[gtk::test]
+fn a_tab_whose_window_became_busy_while_it_followed_the_pointer_goes_back_on_leaving_the_row() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = two_tabs(&fixture);
+    let order = tab_ids(&test.window);
+    let tab = tab_widget(&test.window, 1);
+    let from = middle_on_screen(&mut pointer, &tab);
+    let along = (from.0 - 30, from.1);
+    let out = (along.0, along.1 + 80);
+
+    press_and_glide(&mut pointer, from, along, Pace::Held);
+    let was_live = test.window.tab_strip().live_tab();
+    assert!(test.window.begin_test_write(), "the window is busy");
+    pointer.glide(along, out, 6);
+    wait_for(HOLD);
+    let carried = drags_and_drops(&test.window);
+    pointer.release(Button::Primary);
+    wait_until("the strip is still", || {
+        test.window.tab_strip().live_tab().is_none()
+    });
+    test.window.end_test_write();
+
+    assert_eq!(was_live, order.get(1).copied(), "the tab followed the pointer");
+    assert!(!carried, "a busy window starts no drag and drop");
+    assert_eq!(tab_ids(&test.window), order, "every tab is where it was");
+    assert!(windows_besides(&[&test.window]).is_empty());
+}
+
 /// The only tab of a window, dragged out of its row, takes the window
 /// itself along, as Chrome moves a window by its only tab.
 ///
