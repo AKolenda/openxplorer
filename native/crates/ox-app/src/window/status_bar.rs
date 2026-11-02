@@ -93,8 +93,8 @@ pub(super) fn count_text(subject: StatusSubject) -> String {
             loading,
         } => (shown, bytes, loading),
     };
-    let mut items =
-        ngettext("{count} item", "{count} items", u64::from(shown)).replace("{count}", &shown.to_string());
+    let mut items = ngettext("{count} item", "{count} items", u64::from(shown))
+        .replace("{count}", &format::group_digits(u64::from(shown)));
     if bytes > 0 {
         items = format!("{items}  {}", format::pretty_bytes(bytes));
     }
@@ -112,7 +112,7 @@ pub(super) fn selection_text(selected: SelectionSummary) -> String {
         return String::new();
     }
     let count = ngettext("{count} selected", "{count} selected", u64::from(selected.count))
-        .replace("{count}", &selected.count.to_string());
+        .replace("{count}", &format::group_digits(u64::from(selected.count)));
     if selected.has_files {
         format!("{count}  {}", format::pretty_bytes(selected.bytes))
     } else {

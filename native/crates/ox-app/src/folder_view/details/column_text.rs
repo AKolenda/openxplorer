@@ -94,7 +94,8 @@ pub(crate) fn item_count_text(count: u32) -> String {
     if count == 1 {
         "1 item".to_owned()
     } else {
-        ox_core::i18n::format_message("{count} items", &[("count", &count.to_string())])
+        let count = ox_core::format::group_digits(u64::from(count));
+        ox_core::i18n::format_message("{count} items", &[("count", &count)])
     }
 }
 

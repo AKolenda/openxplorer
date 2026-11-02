@@ -154,7 +154,9 @@ const SPACE_LANGUAGES: [&str; 17] = [
 const COMMA_SPANISH_REGIONS: [&str; 11] = ["419", "DO", "GT", "HN", "MX", "NI", "PA", "PE", "PR", "SV", "US"];
 
 /// Languages of India, which group digits in lakhs (CLDR `#,##,##0`).
-const LAKH_LANGUAGES: [&str; 11] = ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"];
+const LAKH_LANGUAGES: [&str; 12] = [
+    "as", "bn", "gu", "hi", "kn", "ml", "mr", "ne", "or", "pa", "ta", "te",
+];
 
 impl DigitGrouping {
     /// Commas between groups of three: English, Chinese, Japanese, `C`.
@@ -187,10 +189,10 @@ impl DigitGrouping {
         Self {
             separator,
             // India groups in lakhs, and so do its languages named without
-            // a region, and Bengali in Bangladesh.
+            // a region, Bengali in Bangladesh and Nepali in Nepal.
             lakhs: region == "IN"
                 || (region.is_empty() && LAKH_LANGUAGES.contains(&language))
-                || language == "bn",
+                || matches!(language, "bn" | "ne"),
         }
     }
 
@@ -435,6 +437,7 @@ mod tests {
         assert_eq!(grouped("en_IN.UTF-8", 1_000), "1,000");
         assert_eq!(grouped("bn_BD.UTF-8", 123_456), "1,23,456");
         assert_eq!(grouped("hi.UTF-8", 123_456), "1,23,456");
+        assert_eq!(grouped("ne_NP.UTF-8", 123_456), "1,23,456");
         assert_eq!(grouped("ta_LK.UTF-8", 123_456), "123,456");
         assert_eq!(grouped("es_CR.UTF-8", 1_234), "1\u{a0}234");
     }
