@@ -236,7 +236,7 @@ async fn start_location(folder: StartFolder) -> Option<String> {
 /// [`start_location`] without its deadline.
 async fn start_location_now(folder: StartFolder) -> Option<String> {
     let (uri, path) = match folder {
-        StartFolder::Path(path) => (gio::File::for_path(&path).uri().to_string(), path),
+        StartFolder::Path(path) => (openable_uri(&gio::File::for_path(&path).uri(), &path), path),
         StartFolder::Location(uri) => match path_at_once(&uri) {
             Known::Path(path) => (uri, path),
             Known::NoPath => return None,
@@ -267,7 +267,23 @@ async fn on_a_mount_with_its_user(location: &str) -> Option<(String, PathBuf)> {
 /// mounted with a user: that path, as no tab takes the mount's address,
 /// which holds the user (SAFE-010).
 fn opened_on_mount(path: PathBuf) -> (String, PathBuf) {
-    (gio::File::for_path(&path).uri().to_string(), path)
+    (openable_uri(&gio::File::for_path(&path).uri(), &path), path)
+}
+
+/// The address a tab opens for the local `path`, whose GIO address is
+/// `uri`: that address, which names a share by its own address for a path
+/// in `GVfs`'s FUSE export, unless it holds a user (`smb://sam@nas/…`,
+/// as for a share mounted with one), which no tab takes (SAFE-010); then
+/// the path's literal `file://` address.
+fn openable_uri(uri: &str, path: &Path) -> String {
+    let has_user = glib::Uri::parse(uri, glib::UriFlags::NONE)
+        .ok()
+        .and_then(|parsed| parsed.userinfo())
+        .is_some();
+    if !has_user {
+        return uri.to_owned();
+    }
+    glib::filename_to_uri(path, None).map_or_else(|_| String::new(), |literal| literal.to_string())
 }
 
 /// The address of the remembered `location` on one of the mounts whose
@@ -2558,6 +2574,21 @@ mod tests {
             super::address_on_mount("sftp://build.example/srv", &two_accounts),
             None,
             "two accounts on one server: which one was used is unknown"
+        );
+
+        // GIO names a path on a share mounted with a user by an address
+        // that holds the user: the tab opens the path itself instead.
+        let fuse = std::path::Path::new(
+            "/run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam/Film",
+        );
+        assert_eq!(
+            super::openable_uri("smb://sam@studio-nas/projects/Film", fuse),
+            "file:///run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam/Film"
+        );
+        assert_eq!(
+            super::openable_uri("smb://studio-nas/projects/Film", fuse),
+            "smb://studio-nas/projects/Film",
+            "a share mounted without a user keeps its own address"
         );
 
         let fixture = Fixture::empty();
