@@ -183,13 +183,17 @@ pub(super) async fn test_replace(target: &Path) -> WriteTest {
     let folder = target.parent().unwrap_or(target);
     on_a_worker(folder, move || {
         let read_only = std::fs::metadata(&file).is_ok_and(|metadata| metadata.permissions().readonly());
-        let can_write = gio::File::for_path(&file)
-            .query_info(
-                gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
-                gio::FileQueryInfoFlags::NONE,
-                gio::Cancellable::NONE,
-            )
-            .map_or(true, |info| info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE));
+        let can_write = match gio::File::for_path(&file).query_info(
+            gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
+            gio::FileQueryInfoFlags::NONE,
+            gio::Cancellable::NONE,
+        ) {
+            Ok(info) => info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE),
+            // Gone since it was found: the caller creates it anew.
+            Err(error) if error.matches(gio::IOErrorEnum::NotFound) => true,
+            // A share that disconnected, or a path that cannot be read.
+            Err(_) => return WriteTest::Unavailable,
+        };
         if read_only || !can_write {
             WriteTest::ReadOnlyFile
         } else {
@@ -570,6 +574,28 @@ mod tests {
         assert_eq!(run(probe(&file)), Probe::File);
         assert_eq!(run(probe(&folder.path().join("missing"))), Probe::Missing);
         assert_eq!(run(probe(&dead.join("report.odt"))), Probe::NoAnswer);
+    }
+
+    /// A file that cannot be asked whether it may be replaced, as on a
+    /// share that disconnected, is not called writable; one that is gone
+    /// since it was found may be created anew.
+    ///
+    /// parity: INT-032, INT-035
+    #[gtk::test]
+    fn a_file_that_cannot_be_asked_about_is_not_replaced() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        let file = folder.path().join("notes.txt");
+        fs::write(&file, "x").expect("a file");
+
+        // Any error but a missing file: here, a path through a file.
+        assert_eq!(
+            run(test_replace(&file.join("report.txt"))),
+            WriteTest::Unavailable
+        );
+        assert_eq!(
+            run(test_replace(&folder.path().join("gone.txt"))),
+            WriteTest::Writable
+        );
     }
 
     /// An Open reply says whether the user may write what was chosen;

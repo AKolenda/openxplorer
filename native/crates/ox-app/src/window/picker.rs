@@ -250,8 +250,8 @@ async fn start_location_now(folder: StartFolder) -> Option<String> {
 }
 
 /// A remembered `location` that has no path of its own, found on a share
-/// `GVfs` mounted with a user: its address there and its local path. It
-/// is opened by the mount's address, so nothing is mounted.
+/// `GVfs` mounted with a user: the address the dialog opens and its local
+/// path. It is looked up by the mount's address, so nothing is mounted.
 async fn on_a_mount_with_its_user(location: &str) -> Option<(String, PathBuf)> {
     let roots: Vec<String> = gio::VolumeMonitor::get()
         .mounts()
@@ -260,7 +260,14 @@ async fn on_a_mount_with_its_user(location: &str) -> Option<(String, PathBuf)> {
         .collect();
     let mounted = address_on_mount(location, &roots)?;
     let path = ask_for_path(&mounted).await.path()?;
-    Some((mounted, path))
+    Some(opened_on_mount(path))
+}
+
+/// What the dialog opens for `path`, a folder's local path on a share
+/// mounted with a user: that path, as no tab takes the mount's address,
+/// which holds the user (SAFE-010).
+fn opened_on_mount(path: PathBuf) -> (String, PathBuf) {
+    (gio::File::for_path(&path).uri().to_string(), path)
 }
 
 /// The address of the remembered `location` on one of the mounts whose
@@ -2454,10 +2461,11 @@ mod tests {
 
     /// A remembered folder, kept without its user, is found on the share
     /// `GVfs` mounted with that user, by the mount's own address; on no
-    /// other share, nor on a mount that only starts the same way.
+    /// other share, nor on a mount that only starts the same way. No tab
+    /// takes that address, so the dialog opens the folder's local path.
     ///
     /// parity: INT-035, SAFE-010
-    #[test]
+    #[gtk::test]
     fn a_remembered_folder_is_found_on_a_share_mounted_with_a_user() {
         let roots = [
             "sftp://build.example/".to_owned(),
@@ -2488,6 +2496,17 @@ mod tests {
             super::address_on_mount("sftp://elsewhere.example/srv", &roots),
             None
         );
+
+        let fixture = Fixture::empty();
+        let test = TestWindow::without_tabs();
+        assert!(
+            test.window.add_tab("smb://sam@studio-nas/projects").is_err(),
+            "no tab takes an address with a user"
+        );
+        let (opened, path) = super::opened_on_mount(fixture.root().to_path_buf());
+        assert_eq!(path, fixture.root());
+        test.window.add_tab(&opened).expect("the folder opens");
+        assert_eq!(test.window.current_uri(), Some(fixture.uri()));
     }
 
     /// Saving where the caller cannot create the file, as on a share the

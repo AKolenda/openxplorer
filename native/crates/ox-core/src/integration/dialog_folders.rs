@@ -242,12 +242,28 @@ fn fuse_export_location(path: &Path, root: &Path) -> FusePath {
             .next_back()
     };
     let escape = |text: &str| glib::Uri::escape_string(text, None, false).to_string();
-    let (scheme, host, first) = match kind {
-        "smb-share" => ("smb", field("server"), field("share")),
-        "sftp" | "ftp" | "ftps" | "dav" | "davs" | "afp-volume" => (
+    let (scheme, host, first): (&str, Option<String>, Vec<String>) = match kind {
+        "smb-share" => ("smb", field("server"), field("share").into_iter().collect()),
+        // A WebDAV mount is of a folder on the server (`prefix=%2Fteam`),
+        // over TLS when `ssl=true`.
+        "dav" | "davs" => (
+            if kind == "davs" || field("ssl").as_deref() == Some("true") {
+                "davs"
+            } else {
+                "dav"
+            },
+            field("host"),
+            field("prefix")
+                .unwrap_or_default()
+                .split('/')
+                .filter(|part| !part.is_empty())
+                .map(str::to_owned)
+                .collect(),
+        ),
+        "sftp" | "ftp" | "ftps" | "afp-volume" => (
             kind.strip_suffix("-volume").unwrap_or(kind),
             field("host"),
-            field("volume"),
+            field("volume").into_iter().collect(),
         ),
         _ => return FusePath::Unknown,
     };
@@ -677,6 +693,29 @@ mod tests {
             StartFolder::Location(entry.last.clone()),
             "the same first folder"
         );
+    }
+
+    /// A WebDAV export keeps the folder it mounts (`prefix=`) and its TLS
+    /// (`ssl=true`), so two mounts on one server are two folders.
+    ///
+    /// parity: INT-035
+    #[test]
+    fn a_webdav_fuse_path_keeps_its_folder_and_tls() {
+        let root = glib::user_runtime_dir().join("gvfs");
+        let address = |export: &str| match fuse_export_location(&root.join(export).join("Documents"), &root) {
+            FusePath::Address(address) => address,
+            FusePath::NotExport | FusePath::Unknown => panic!("{export} has an address"),
+        };
+
+        assert_eq!(
+            address("dav:host=nas.invalid,ssl=true,prefix=%2Fteam-a,user=sam"),
+            "davs://nas.invalid/team-a/Documents"
+        );
+        assert_eq!(
+            address("dav:host=nas.invalid,prefix=%2Fteam-b%2Fshared"),
+            "dav://nas.invalid/team-b/shared/Documents"
+        );
+        assert_eq!(address("dav:host=nas.invalid"), "dav://nas.invalid/Documents");
     }
 
     /// A file an earlier build wrote with a user name in it is cleaned as
