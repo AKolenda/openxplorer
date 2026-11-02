@@ -32,6 +32,10 @@ const SCROLL_STEP: f64 = 14.0;
 /// How often the view scrolls while the pointer is at its edge.
 const SCROLL_TICK: Duration = Duration::from_millis(30);
 
+/// The name of the view's controller that ends a band whose release was
+/// lost.
+pub(super) const RELEASE_WATCH: &str = "rubber-band-release-watch";
+
 /// What a band does with the selection it starts from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum BandMode {
@@ -158,6 +162,28 @@ impl BrowserWindow {
             self,
             move |_, _| window.end_band()
         ));
+        // A release the drag never hears of, as some remote and nested
+        // sessions lose, must not leave the band drawn over the view: the
+        // pointer moving with no button held ends it. The drag forgets its
+        // press too, so the next press starts afresh.
+        let motion = gtk::EventControllerMotion::new();
+        motion.set_name(Some(RELEASE_WATCH));
+        motion.connect_motion(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            drag,
+            move |motion, _, _| {
+                let released = !motion
+                    .current_event_state()
+                    .contains(gdk::ModifierType::BUTTON1_MASK);
+                if released && window.imp().rubber_band.borrow().is_some() {
+                    window.end_band();
+                    drag.reset();
+                }
+            }
+        ));
+        view.add_controller(motion);
         view.connect_unmap(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -237,7 +263,9 @@ impl BrowserWindow {
         let pane = band.pane.clone();
         let (dx, dy) = scroll_offsets(&band.view);
         let start = (band.start.0 - dx, band.start.1 - dy);
-        let mut rect = rect_between(start, band.pointer);
+        // Drawn where the pointer drags it, in every view, as Explorer
+        // draws its band; in the details view it still takes whole rows.
+        let rect = rect_between(start, band.pointer);
         let content_rect = rect_between(band.start, (band.pointer.0 + dx, band.pointer.1 + dy));
         let full_rows = band.view.is::<gtk::ColumnView>();
         for (position, row) in pane.owners().shown_items(&band.view) {
@@ -249,11 +277,6 @@ impl BrowserWindow {
             band.bounds.insert(position, bounds);
         }
         let touched = touched_positions(&band.bounds, &content_rect, full_rows);
-        if full_rows {
-            #[expect(clippy::cast_precision_loss, reason = "a widget's pixel width")]
-            let width = band.view.width() as f32;
-            rect = graphene::Rect::new(0.0, rect.y(), width, rect.height());
-        }
         let selected = banded_selection(&band.initial, &touched, band.mode);
         let positions: Vec<u32> = selected.into_iter().collect();
         let shown = band.view.clone();

@@ -284,9 +284,9 @@ pub struct Preferences {
     #[serde(skip_serializing_if = "is_true")]
     pub browse_archives: bool,
     /// How a ZIP opens when [`Self::browse_archives`] is on: in the tab
-    /// like a folder, or in its own window as before (ARC-026). Stored
-    /// only when the folder is chosen.
-    #[serde(skip_serializing_if = "ZipOpening::is_window")]
+    /// like a folder, as Windows Explorer opens it, or in its own window
+    /// (ARC-026). Stored only when the window is chosen.
+    #[serde(skip_serializing_if = "ZipOpening::is_folder")]
     pub zip_opening: ZipOpening,
     /// The details pane's own options; saved only once changed, so the
     /// settings of a new installation stay as the Python app writes them.
@@ -459,7 +459,7 @@ impl Default for Preferences {
             editable_location: false,
             external_folders_in_new_window: false,
             browse_archives: true,
-            zip_opening: ZipOpening::Window,
+            zip_opening: ZipOpening::Folder,
             details_pane_options: DetailsPaneOptions::default(),
             view_options: ViewOptions::default(),
             full_path_in_title: false,

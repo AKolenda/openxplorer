@@ -2144,12 +2144,12 @@ msgid "Double-clicking a ZIP"
 msgstr "双击 ZIP 文件"
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "In a pop-up window (default)"
-msgstr "在弹出窗口中（默认）"
+msgid "In a pop-up window"
+msgstr "在弹出窗口中"
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "Like a folder (Windows)"
-msgstr "像文件夹一样（Windows）"
+msgid "Like a folder (default)"
+msgstr "像文件夹一样（默认）"
 
 #: crates/ox-app/src/settings_page/archives.rs
 msgid "Like a folder opens a ZIP in the tab, as Windows Explorer does: browse it with the address bar, Back and Up, copy or drag files out, and Extract all from the bar. In a pop-up window shows it over the tab."

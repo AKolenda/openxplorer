@@ -12,7 +12,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use super::archives::{archive_browser, fixture_with_zip};
+use super::archives::{archive_browser, fixture_with_zip, opening_zips_in_the_window};
 use super::support::middle_click_at;
 use crate::locations::Page;
 use crate::test_support::harness::{application, descendants, wait_for, wait_until, Fixture, TestWindow};
@@ -572,7 +572,7 @@ fn a_middle_click_on_blank_address_space_opens_the_selected_text() {
 #[gtk::test]
 fn a_typed_zip_opens_the_archive_browser() {
     let fixture = fixture_with_zip();
-    let test = TestWindow::open(&fixture.uri());
+    let test = opening_zips_in_the_window(&fixture);
     test.activate("location", None);
 
     test.window

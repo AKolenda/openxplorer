@@ -14,8 +14,8 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{is_triggered_by, press_shortcut_where_focused, shortcuts_of};
-use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
-use crate::window::rubber_band::BandMode;
+use crate::test_support::harness::{capture, descendants, wait_until, Fixture, TestWindow};
+use crate::window::rubber_band::{BandMode, RELEASE_WATCH};
 
 /// A folder long enough to scroll.
 const LONG_FOLDER: usize = 300;
@@ -177,12 +177,30 @@ fn a_rubber_band_selects_the_rows_it_crosses_as_it_moves() {
 
     test.window.begin_band(&view, (x, y), BandMode::Replace);
     test.window.move_band((x + 40.0, center_of(1)));
+    capture(&test.window, "native-rubber-band.png");
     let crossed: Vec<u32> = (1..=last).collect();
     assert_eq!(
         selected(&test),
         crossed,
         "the selection follows the band before it ends"
     );
+    assert_eq!(
+        pane.rubber_band_size().0,
+        40,
+        "the band is drawn where it is dragged, as in Explorer, not across the view"
+    );
+    // The pointer moving with no button held ends a band whose release
+    // was lost, and the selection stays as it was drawn.
+    let controllers = view.observe_controllers();
+    let watch = controllers
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::EventControllerMotion>().ok())
+        .find(|controller| controller.name().as_deref() == Some(RELEASE_WATCH))
+        .expect("the view watches for a lost release");
+    watch.emit_by_name::<()>("motion", &[&(x + 50.0), &center_of(1)]);
+    assert!(!pane.rubber_band_shown(), "a lost release leaves no band drawn");
+    assert_eq!(selected(&test), crossed);
     test.window.end_band();
 
     test.window.begin_band(&view, (x, y), BandMode::Toggle);

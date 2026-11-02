@@ -244,22 +244,22 @@ fn sections_and_places_hidden_from_two_windows_merge() {
     assert_eq!(merged.hidden_sidebar_places, ["recent:///"]);
 }
 
-/// ZIPs open in their window until the user chooses the folder, which is
-/// then stored; an unknown value changes nothing.
+/// ZIPs open like folders, as in Windows Explorer, until the user chooses
+/// the window, which is then stored; an unknown value changes nothing.
 ///
 /// parity: ARC-026
 #[test]
-fn zip_opening_is_the_window_until_the_folder_is_chosen() {
+fn zip_opening_is_the_folder_until_the_window_is_chosen() {
     let root = temporary_folder();
     let mut store = Settings::open(root.path());
-    assert_eq!(store.snapshot().preferences.zip_opening, ZipOpening::Window);
-    save_preferences(&mut store, &json!({"zipOpening": "folder"}));
+    assert_eq!(store.snapshot().preferences.zip_opening, ZipOpening::Folder);
+    save_preferences(&mut store, &json!({"zipOpening": "window"}));
     save_preferences(&mut store, &json!({"zipOpening": "popup"}));
     let reopened = Settings::open(root.path()).snapshot().preferences;
-    assert_eq!(reopened.zip_opening, ZipOpening::Folder);
-    save_preferences(&mut store, &json!({"zipOpening": "window"}));
+    assert_eq!(reopened.zip_opening, ZipOpening::Window);
+    save_preferences(&mut store, &json!({"zipOpening": "folder"}));
     let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
-    assert!(!file.contains("zipOpening"), "the window is not stored");
+    assert!(!file.contains("zipOpening"), "the folder is not stored");
 }
 
 /// Apply to all folders gives Downloads the applied Group by too: the
