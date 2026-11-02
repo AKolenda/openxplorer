@@ -457,7 +457,7 @@ fn the_compact_folder_menu_opens_its_submenus_in_place() {
         menu.row_labels().last().map(String::as_str),
         Some("Show more options")
     );
-    capture_popover(&test.window, &menu, "native-menu-compact-folder.png");
+    capture_popover(&test.window, menu.upcast_ref(), "native-menu-compact-folder.png");
 
     menu.row("Sort by").emit_activate();
     wait_until("the Sort submenu", || {

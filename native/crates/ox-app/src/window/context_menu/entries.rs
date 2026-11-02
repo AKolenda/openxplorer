@@ -281,9 +281,10 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
 
 /// The compact menu's applications, as Windows 11 Explorer's: one "Open
 /// with" submenu holding the item's applications and editors and "Choose
-/// another app" (Open with…), or "Open with…" alone when there are none;
-/// "Open in Terminal" for a folder. A file's "Open containing folder in
-/// Terminal" is in the classic menu.
+/// another app" (Open with…), or "Open with…" alone when there are none.
+/// A folder's "Open in Terminal" sits above "Show more options"
+/// ([`compact_item_menu`]); a file's "Open containing folder in Terminal"
+/// is in the classic menu.
 fn compact_application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     let is_folder = facts.shape == ItemShape::Folder;
     let mut entries = Vec::new();
@@ -320,14 +321,6 @@ fn compact_application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
             choices,
         );
         entries.push(for_one_item(open_with, facts, true).into());
-    }
-    if is_folder {
-        let terminal = item(
-            ox_core::i18n::gettext_static("Open in Terminal"),
-            Icon::WindowConsole,
-            WindowAction::OpenInTerminal,
-        );
-        entries.push(for_one_item(terminal, facts, true).into());
     }
     entries
 }
@@ -567,6 +560,16 @@ fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     // Properties describe several items together (PROP-002).
     entries.push(properties_item());
     entries.push(MenuEntry::Divider);
+    // A folder's Terminal sits where the folder's own compact menu has it.
+    if facts.shape == ItemShape::Folder {
+        let terminal = item(
+            ox_core::i18n::gettext_static("Open in Terminal"),
+            Icon::WindowConsole,
+            WindowAction::OpenInTerminal,
+        );
+        entries.push(for_one_item(terminal, facts, true).into());
+        entries.push(MenuEntry::Divider);
+    }
     entries.push(show_more_options_item());
     ContextMenu {
         entries,
@@ -1214,7 +1217,6 @@ mod tests {
             [
                 "Open",
                 "Open folder with…",
-                "Open in Terminal",
                 "Open in new tab",
                 "Open in new window",
                 "Pin to Quick access",
@@ -1222,6 +1224,8 @@ mod tests {
                 "Copy as path",
                 "-",
                 "Properties",
+                "-",
+                "Open in Terminal",
                 "-",
                 "Show more options",
             ]

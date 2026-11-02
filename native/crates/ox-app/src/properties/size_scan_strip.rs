@@ -65,7 +65,7 @@ pub(crate) fn progress_text(
             ("total", &position.total.to_string()),
             ("name", name),
             ("value3", &format::pretty_bytes(size.bytes)),
-            ("group_thousands", &group_thousands(size.files)),
+            ("group_thousands", &ox_core::format::group_digits(size.files)),
         ],
     );
     format!("{lead}{counted}")
@@ -92,20 +92,6 @@ pub(crate) fn end_text(end: RunEnd) -> String {
         "{hint} · Logical bytes; recalculate after changes",
         &[("hint", &hint)],
     )
-}
-
-/// `1234567` as `1,234,567`, as `toLocaleString` writes it in English.
-fn group_thousands(value: u64) -> String {
-    let digits = value.to_string();
-    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, digit) in digits.chars().enumerate() {
-        let remaining = digits.len() - index;
-        if index > 0 && remaining.is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(digit);
-    }
-    grouped
 }
 
 mod imp {

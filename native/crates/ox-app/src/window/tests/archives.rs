@@ -338,17 +338,19 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
         b"mine",
         "skipped, not replaced"
     );
-    let leftovers: Vec<_> = fs::read_dir(fixture.root())
-        .expect("the folder")
-        .filter_map(Result::ok)
-        .filter(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(".openxplorer-extract-")
-        })
-        .collect();
-    assert!(leftovers.is_empty(), "the private folder is removed");
+    // The private folder is removed once the move ends, which can come
+    // just after the report on a busy machine.
+    wait_until("the private folder to be removed", || {
+        fs::read_dir(fixture.root())
+            .expect("the folder")
+            .filter_map(Result::ok)
+            .all(|entry| {
+                !entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".openxplorer-extract-")
+            })
+    });
     let undo = test.window.lookup_action("undo").expect("the Undo action");
     assert!(
         !undo.is_enabled(),
