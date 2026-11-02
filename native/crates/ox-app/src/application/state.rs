@@ -846,6 +846,45 @@ mod tests {
         opened.remove(0)
     }
 
+    /// With "Open new windows in split view" on as well, a Show in folder
+    /// window begins split like any new window, the requested file
+    /// selected in the pane in front.
+    ///
+    /// parity: INT-014, NAV-042, VIEW-059
+    #[gtk::test]
+    fn show_in_folder_windows_begin_split_when_settings_ask() {
+        let fixture = Fixture::standard();
+        fixture.write("Documents/report.txt");
+        let app = TestApp::new();
+        app.state.activate(&application());
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+        ask_for_new_windows(&app);
+        let update = PreferencesUpdate {
+            begin_in_split_view: Some(true),
+            ..PreferencesUpdate::default()
+        };
+        app.state
+            .context
+            .update_preferences(update, |result| result.expect("saved"));
+        wait_until("the saved option", || {
+            app.state.context.settings_data().preferences.begin_in_split_view
+        });
+
+        show_in_folder(
+            &app,
+            FileManagerMethod::ShowItems,
+            &[fixture.uri_of("Documents/report.txt")],
+        );
+
+        let opened = window_besides(&[window]);
+        assert_eq!(opened.tab_count(), 1);
+        assert_eq!(opened.beside_uri(), Some(fixture.uri_of("Documents")));
+        assert_eq!(opened.current_uri(), Some(fixture.uri_of("Documents")));
+        wait_until("the selection", || selected_names(&opened) == ["report.txt"]);
+    }
+
     /// The names selected in `window`'s current folder.
     fn selected_names(window: &BrowserWindow) -> Vec<String> {
         let items = window.folder_model().selected_items();

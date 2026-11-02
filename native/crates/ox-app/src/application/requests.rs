@@ -184,8 +184,9 @@ pub(super) fn show_file_manager_request(
 
 /// Opens a window whose tabs are the request's, with the items selected
 /// and scrolled to, raises it for the caller and then shows the
-/// Properties a `ShowItemProperties` request asks for. A window never
-/// opens empty: when none of the request's tabs opens, it shows the
+/// Properties a `ShowItemProperties` request asks for. It begins split,
+/// with the request's pane in front, when Settings opens new windows in
+/// split view. A window never opens empty: when none of the request's tabs opens, it shows the
 /// startup folder, with the reason in its message line.
 fn show_in_new_window(
     app: &gtk::Application,
@@ -199,6 +200,12 @@ fn show_in_new_window(
         open_first_tab(&window, context, None);
     } else if let Some(warning) = context.settings_warning() {
         window.show_message(&warning);
+    }
+    // Like any new window, it begins split when Settings asks (VIEW-059).
+    if context.settings_data().preferences.begin_in_split_view {
+        if let Err(error) = window.begin_split_keeping_front() {
+            window.show_message(&error.to_string());
+        }
     }
     raise_for_caller(&NewWindow(&window), startup_id);
     window.open_request_properties(request);

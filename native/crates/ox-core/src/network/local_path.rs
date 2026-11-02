@@ -118,20 +118,14 @@ pub fn fuse_export_location(path: &Path, fuse_root: &Path) -> Option<String> {
         "mtp" | "gphoto2" => (kind, field("host")?, None, None),
         _ => return None,
     };
-    // An IPv6 address goes in brackets; a device's bracketed bus address,
-    // such as `[usb:001,004]`, keeps the form the app writes for devices.
-    let bracketed = host.starts_with('[') && host.ends_with(']');
-    let host = if host.parse::<std::net::Ipv6Addr>().is_ok() {
-        format!("[{host}]")
-    } else if bracketed && kind != "smb-share" {
-        host
-    } else {
-        quote_component(&host)
-    };
+    let host = authority_host(&host, kind != "smb-share")?;
     let mut location = format!("{scheme}://{host}");
     if let Some(port) = port {
+        if !port.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
         location.push(':');
-        location.push_str(&quote_component(&port));
+        location.push_str(&port);
     }
     // A WebDAV prefix is a path of its own, such as `/remote.php/webdav`.
     let leading = first.iter().flat_map(|first| first.split('/'));
@@ -146,6 +140,28 @@ pub fn fuse_export_location(path: &Path, fuse_root: &Path) -> Option<String> {
         location.push('/');
     }
     normalise(&location).ok().filter(|uri| !uri.starts_with("file:"))
+}
+
+/// The decoded export host `host` as the host of an address: unescaped,
+/// so a name with letters beyond ASCII stays as the address bar writes
+/// it (an escaped server name is refused there, SAFE-010); an IPv6
+/// address in brackets; a device's bracketed bus address, such as
+/// `[usb:001,004]`, as written when `is_device_like`. `None` for a name
+/// that would carry a user or another part of an address.
+fn authority_host(host: &str, is_device_like: bool) -> Option<String> {
+    if host.parse::<std::net::Ipv6Addr>().is_ok() {
+        return Some(format!("[{host}]"));
+    }
+    let bracketed = host.starts_with('[') && host.ends_with(']');
+    if bracketed && is_device_like {
+        return Some(host.to_owned());
+    }
+    let breaks_out = |c: char| {
+        matches!(c, '@' | '/' | '\\' | '?' | '#' | '%' | ':' | '[' | ']')
+            || c.is_whitespace()
+            || c.is_control()
+    };
+    (!host.contains(breaks_out)).then(|| host.to_owned())
 }
 
 /// `uri`, a location another application handed over, with a path inside
@@ -379,6 +395,33 @@ mod tests {
         ];
         for (relative, expected) in cases {
             assert_eq!(location_of(&root, relative).as_deref(), expected, "{relative}");
+        }
+    }
+
+    /// A server or host with letters beyond ASCII keeps them, unescaped,
+    /// as the address bar writes such a server; one whose decoded name
+    /// would carry a user (`@`) or another part of an address keeps the
+    /// local path.
+    ///
+    /// parity: INT-014, NET-026, SAFE-010
+    #[test]
+    fn non_ascii_hosts_keep_their_letters() {
+        let root = empty_root();
+
+        let share = location_of(&root, "smb-share:server=b%C3%BCro-nas,share=projekte/Film");
+        let expected = normalise("smb://büro-nas/projekte/Film").expect("a share address");
+        assert!(expected.starts_with("smb://büro-nas/"), "{expected}");
+        assert_eq!(share, Some(expected));
+        let sftp = location_of(&root, "sftp:host=r%C3%A9seau.example.test/srv");
+        assert_eq!(sftp, normalise("sftp://réseau.example.test/srv").ok());
+        assert!(sftp.is_some());
+        for hidden in [
+            "smb-share:server=sam%40nas,share=projects",
+            "smb-share:server=nas%2Fother,share=projects",
+            "sftp:host=nas%3Fx/srv",
+            "smb-share:port=4a5,server=nas,share=projects",
+        ] {
+            assert_eq!(location_of(&root, hidden), None, "{hidden}");
         }
     }
 
