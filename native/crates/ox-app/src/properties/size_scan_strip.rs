@@ -223,13 +223,15 @@ mod tests {
         };
         let position = RunPosition { index: 0, total: 3 };
 
+        // The count is grouped as the numeric locale groups it.
+        let files = ox_core::format::group_digits(1_024);
         assert_eq!(
             progress_text(position, "Projects", &size, false),
-            "Scanning folder size · 1/3 · Projects · 1.0 MB · 1,024 files"
+            format!("Scanning folder size · 1/3 · Projects · 1.0 MB · {files} files")
         );
         assert_eq!(
             progress_text(position, "Projects", &size, true),
-            "Cancelling… 1/3 · Projects · 1.0 MB · 1,024 files"
+            format!("Cancelling… 1/3 · Projects · 1.0 MB · {files} files")
         );
     }
 

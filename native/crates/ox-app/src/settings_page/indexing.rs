@@ -27,7 +27,7 @@ use ox_core::settings::PreferencesUpdate;
 
 use super::bindings::{Choice, PreferenceBinding};
 use super::group::SettingsGroup;
-use super::indexed_folders::{grouped_number, IndexCommand};
+use super::indexed_folders::IndexCommand;
 use super::pages::{Category, SettingsView, Subpage};
 use super::parts;
 use super::row::{ControlName, SettingRow};
@@ -201,7 +201,7 @@ impl CacheSummary {
         }
         let names = ox_core::i18n::format_message(
             "{grouped_number} names indexed",
-            &[("grouped_number", &grouped_number(self.names))],
+            &[("grouped_number", &ox_core::format::group_digits(self.names))],
         );
         let Some(updated) = self.last_updated else {
             return names;
@@ -447,6 +447,9 @@ mod tests {
         assert_eq!(one.title(), "Instant search is on for 1 folder");
         assert_eq!(one.text(), "17 names indexed");
         assert_eq!(many.title(), "Instant search is on for 5 folders");
-        assert_eq!(many.text(), "14,263 names indexed");
+        assert_eq!(
+            many.text(),
+            format!("{} names indexed", ox_core::format::group_digits(14_263))
+        );
     }
 }

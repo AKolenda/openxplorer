@@ -153,6 +153,9 @@ const SPACE_LANGUAGES: [&str; 17] = [
 /// and most of South America use a full stop.
 const COMMA_SPANISH_REGIONS: [&str; 11] = ["419", "DO", "GT", "HN", "MX", "NI", "PA", "PE", "PR", "SV", "US"];
 
+/// Languages of India, which group digits in lakhs (CLDR `#,##,##0`).
+const LAKH_LANGUAGES: [&str; 11] = ["as", "bn", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"];
+
 impl DigitGrouping {
     /// Commas between groups of three: English, Chinese, Japanese, `C`.
     pub const COMMAS: Self = Self {
@@ -174,7 +177,7 @@ impl DigitGrouping {
             ("de" | "it" | "rm", "CH" | "LI") => "\u{2019}",
             // French in Canada writes a no-break space, elsewhere a narrow
             // one, as Windows does.
-            ("de", "AT") | ("pt", "PT" | "AO" | "MZ") | ("fr", "CA") => "\u{a0}",
+            ("de", "AT") | ("pt", "PT" | "AO" | "MZ") | ("fr", "CA") | ("es", "CR") => "\u{a0}",
             ("es", region) if COMMA_SPANISH_REGIONS.contains(&region) => ",",
             ("fr", _) => "\u{202f}",
             _ if FULL_STOP_LANGUAGES.contains(&language) => ".",
@@ -183,7 +186,11 @@ impl DigitGrouping {
         };
         Self {
             separator,
-            lakhs: region == "IN",
+            // India groups in lakhs, and so do its languages named without
+            // a region, and Bengali in Bangladesh.
+            lakhs: region == "IN"
+                || (region.is_empty() && LAKH_LANGUAGES.contains(&language))
+                || language == "bn",
         }
     }
 
@@ -426,6 +433,10 @@ mod tests {
         assert_eq!(grouped("hi_IN.UTF-8", 12_345_678), "1,23,45,678");
         assert_eq!(grouped("en_IN.UTF-8", 999), "999");
         assert_eq!(grouped("en_IN.UTF-8", 1_000), "1,000");
+        assert_eq!(grouped("bn_BD.UTF-8", 123_456), "1,23,456");
+        assert_eq!(grouped("hi.UTF-8", 123_456), "1,23,456");
+        assert_eq!(grouped("ta_LK.UTF-8", 123_456), "123,456");
+        assert_eq!(grouped("es_CR.UTF-8", 1_234), "1\u{a0}234");
     }
 
     /// One locale's samples of the reference time in [`locale_pattern`], as

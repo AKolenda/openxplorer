@@ -233,6 +233,9 @@ fn the_folder_menu_names_the_step_undo_and_redo_take_as_windows_does() {
     require_private_trash();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic folder menu, which lists Redo; Windows 11's compact menu,
+    // the default, lists Undo only.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("trash", None);
     open_dialog(&test).press("Move to Trash");
