@@ -61,8 +61,11 @@ pub(crate) fn progress_text(
     let counted = ox_core::i18n::format_message(
         "{value1}/{total} · {name} · {value3} · {group_thousands} files",
         &[
-            ("value1", &(position.index + 1).to_string()),
-            ("total", &position.total.to_string()),
+            (
+                "value1",
+                &ox_core::format::group_digits((position.index + 1) as u64),
+            ),
+            ("total", &ox_core::format::group_digits(position.total as u64)),
             ("name", name),
             ("value3", &format::pretty_bytes(size.bytes)),
             ("group_thousands", &ox_core::format::group_digits(size.files)),

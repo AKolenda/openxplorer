@@ -189,7 +189,7 @@ impl CacheSummary {
             1 => ox_core::i18n::gettext("Instant search is on for 1 folder"),
             folders => ox_core::i18n::format_message(
                 "Instant search is on for {folders} folders",
-                &[("folders", &folders.to_string())],
+                &[("folders", &ox_core::format::group_digits(folders as u64))],
             ),
         }
     }

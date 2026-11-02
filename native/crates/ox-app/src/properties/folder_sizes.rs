@@ -102,8 +102,8 @@ impl FolderSizeState {
                     &[
                         ("status", status),
                         ("files", &ox_core::format::group_digits(size.files)),
-                        ("skipped", &size.skipped.to_string()),
-                        ("errors", &size.errors.to_string()),
+                        ("skipped", &ox_core::format::group_digits(size.skipped)),
+                        ("errors", &ox_core::format::group_digits(size.errors)),
                         ("reason", reason),
                         ("finished", &finished),
                     ],
