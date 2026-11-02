@@ -497,6 +497,87 @@ fn tab_keeps_the_active_pane_of_a_split_tab_dragged_along_its_row() {
     assert_eq!(strip.live_tab(), Some(dragged));
 }
 
+/// Keyboard focus moved into the inactive pane of a split tab dragged
+/// along its row goes back to its active pane, by which the drag holds the
+/// tab, so keys act on the pane the window shows active.
+///
+/// parity: TAB-032, VIEW-059
+#[gtk::test]
+fn focus_moved_into_the_other_pane_of_a_dragged_split_tab_goes_back() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    test.activate("split-view", None);
+    test.wait_for_listing("the new pane");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let dragged = active_tab(&test.window).expect("a tab in front");
+    let side = test.window.active_side();
+    let strip = test.window.tab_strip();
+    let x = grab_point(&test.window, dragged);
+
+    strip.grab_tab(dragged, (x, 10.0));
+    strip.follow_pointer(dragged, x - 40.0);
+    test.window.pane_on(side.other()).focus_view();
+
+    wait_until("focus back in the active pane", || {
+        gtk::prelude::RootExt::focus(&test.window)
+            .is_some_and(|focus| focus.is_ancestor(test.window.pane_on(side)))
+    });
+    assert_eq!(test.window.active_side(), side);
+    assert_eq!(active_tab(&test.window), Some(dragged));
+    assert_eq!(strip.live_tab(), Some(dragged));
+}
+
+/// A pane of a split tab clicked while the tab, let go past another a
+/// moment ago, still slides into its new place becomes active: the tab
+/// lands at once, by the pane it was dragged with, then the pane switches,
+/// so the window's active pane is the one the click focused.
+///
+/// parity: TAB-032, VIEW-059
+#[gtk::test]
+fn a_pane_clicked_while_its_split_tab_settles_becomes_active_once_it_landed() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    test.activate("split-view", None);
+    test.wait_for_listing("the new pane");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let [first, dragged] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    assert_eq!(
+        active_tab(&test.window),
+        Some(dragged),
+        "the split tab is in front"
+    );
+    let side = test.window.active_side();
+    let strip = test.window.tab_strip();
+    let x = grab_point(&test.window, dragged);
+    let moved = Rc::new(Cell::new(None));
+
+    strip.grab_tab(dragged, (x, 10.0));
+    // Past the first tab's start: the order shown changes.
+    strip.follow_pointer(dragged, grab_point(&test.window, first) - 20.0);
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    strip.let_go(
+        true,
+        glib::clone!(
+            #[strong]
+            moved,
+            move |went| moved.set(Some(went))
+        ),
+    );
+    assert!(moved.get().is_none(), "the tab still slides into place");
+    test.window.activate_pane(side.other());
+
+    assert_eq!(moved.get(), Some(Some((dragged, Some(first)))), "it landed first");
+    assert_eq!(test.window.active_side(), side.other());
+    assert_ne!(
+        active_tab(&test.window),
+        Some(dragged),
+        "the other pane is in front"
+    );
+    assert_eq!(strip.live_tab(), None);
+}
+
 /// A tab of another window dropped before a tab of this row that closed
 /// while it was dragged over the row lands before the next tab still
 /// open, where its stand-in showed it, not at the end of the row.

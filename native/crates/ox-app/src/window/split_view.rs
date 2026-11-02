@@ -117,14 +117,26 @@ impl BrowserWindow {
         press.connect_pressed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_, _, _, _| window.activate_pane(side)
+            move |_, _, _, _| {
+                window.activate_pane(side);
+            }
         ));
         column.add_controller(press);
         let focus = gtk::EventControllerFocus::new();
         focus.connect_enter(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_| window.activate_pane(side)
+            move |_| {
+                if !window.activate_pane(side) {
+                    // Focus goes back where the drag holds the tab, once
+                    // GTK has finished moving it here.
+                    glib::idle_add_local_once(glib::clone!(
+                        #[weak]
+                        window,
+                        move || window.folder_pane().focus_view()
+                    ));
+                }
+            }
         ));
         column.add_controller(focus);
     }
@@ -190,18 +202,25 @@ impl BrowserWindow {
     }
 
     /// Makes the pane on `side` active, when the tab in front is split and
-    /// that pane is not active yet, nor dragged: the drag holds the tab by
-    /// its active pane (TAB-032). Keyboard focus stays where it goes.
-    pub(super) fn activate_pane(&self, side: PaneSide) {
+    /// that pane is not active yet. Keyboard focus stays where it goes.
+    /// A tab let go a moment ago lands at once first; one still dragged
+    /// keeps its active pane, by which the drag holds it (TAB-032): false
+    /// then, as the pane on `side` stays inactive.
+    pub(super) fn activate_pane(&self, side: PaneSide) -> bool {
         let is_split = self.imp().session.borrow().active().is_some_and(Tab::is_split);
-        if !is_split || side == self.imp().active_side.get() || self.refuse_while_active_tab_moves() {
-            return;
+        if !is_split || side == self.imp().active_side.get() {
+            return true;
+        }
+        self.tab_strip().land_settling_tab();
+        if self.refuse_while_active_tab_moves() {
+            return false;
         }
         self.leave_pane();
         let active = self.imp().session.borrow_mut().activate_beside();
         if let Some(id) = active {
             self.show_tab_with(id, FocusOnShow::Keep);
         }
+        true
     }
 
     /// Tab in a folder view of a split tab, when the settings ask for it:

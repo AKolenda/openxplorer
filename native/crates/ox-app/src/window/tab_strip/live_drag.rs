@@ -31,6 +31,24 @@ pub(in crate::window) struct Landing {
     pub(in crate::window) before: Option<TabId>,
 }
 
+/// The tabs after a moved tab, left to right, when it moved: it lands
+/// before the first of them still open when it lands, as one may close
+/// meanwhile, or at the end when none is.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(in crate::window) struct LaterTabs(Vec<TabId>);
+
+impl LaterTabs {
+    /// The tabs `tabs`, left to right.
+    pub(in crate::window) fn new(tabs: impl IntoIterator<Item = TabId>) -> Self {
+        Self(tabs.into_iter().collect())
+    }
+
+    /// The first of them `is_open` says is still open.
+    pub(in crate::window) fn first_open(&self, is_open: impl Fn(TabId) -> bool) -> Option<TabId> {
+        self.0.iter().copied().find(|tab| is_open(*tab))
+    }
+}
+
 impl TabStrip {
     fn layout(&self) -> TabLayout {
         self.imp().layout.get()
@@ -155,6 +173,16 @@ impl TabStrip {
         self.layout().dragged().and_then(|widget| self.id_of(&widget))
     }
 
+    /// A tab let go a moment ago, still sliding into its place, takes it at
+    /// once, as when another drag starts; a tab following the pointer goes
+    /// on.
+    pub(in crate::window) fn land_settling_tab(&self) {
+        let layout = self.layout();
+        if layout.is_live() && layout.following().is_none() {
+            layout.finish_now();
+        }
+    }
+
     /// Whether a tab of this strip follows the pointer.
     pub(in crate::window) fn is_following(&self) -> bool {
         self.layout().following().is_some()
@@ -180,11 +208,7 @@ impl TabStrip {
             .then(|| {
                 let id = self.id_of(&dragged)?;
                 let at = order.iter().position(|tab| *tab == dragged)?;
-                let after: Vec<TabId> = order
-                    .iter()
-                    .skip(at + 1)
-                    .filter_map(|next| self.id_of(next))
-                    .collect();
+                let after = LaterTabs::new(order.iter().skip(at + 1).filter_map(|next| self.id_of(next)));
                 Some((id, after))
             })
             .flatten();
@@ -194,10 +218,7 @@ impl TabStrip {
                 // The tabs as the session has them now.
                 strip.stop_live();
                 let (id, after) = moved?;
-                Some((
-                    id,
-                    after.into_iter().find(|next| strip.widget_of(*next).is_some()),
-                ))
+                Some((id, after.first_open(|next| strip.widget_of(next).is_some())))
             });
             done(moved);
         });
@@ -289,20 +310,17 @@ impl TabStrip {
         let guest = self.imp().guest.take()?;
         let layout = self.layout();
         let order = layout.live_order().unwrap_or_default();
-        let after = order.iter().position(|tab| *tab == guest).map(|at| {
-            order
-                .iter()
-                .skip(at + 1)
-                .filter_map(|next| self.id_of(next))
-                .collect::<Vec<_>>()
-        });
+        let after = order
+            .iter()
+            .position(|tab| *tab == guest)
+            .map(|at| LaterTabs::new(order.iter().skip(at + 1).filter_map(|next| self.id_of(next))));
         self.imp().tab_list.remove(&guest);
         self.show_own_front(true);
         layout.end();
         // The tabs as the session has them now.
         self.stop_live();
         after.map(|after| Landing {
-            before: after.into_iter().find(|next| self.widget_of(*next).is_some()),
+            before: after.first_open(|next| self.widget_of(next).is_some()),
         })
     }
 

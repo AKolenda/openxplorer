@@ -37,7 +37,7 @@ use super::tab_menu::tab_menu;
 use super::window_action::WindowAction;
 
 pub(in crate::window) use carried_tab::MARGIN as CARRIED_MARGIN;
-pub(in crate::window) use live_drag::Landing;
+pub(in crate::window) use live_drag::{Landing, LaterTabs};
 
 /// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
 const ICON_SIZE: i32 = 16;
