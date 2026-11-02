@@ -234,7 +234,11 @@ impl AppState {
     /// Opens `files` from `GApplication` open (xdg-open) as the command
     /// line opens its locations.
     pub(super) fn open(&self, app: &gtk::Application, files: &[gio::File]) {
-        let uris = files.iter().map(|file| file.uri().to_string()).collect();
+        // A path inside the user's GVfs FUSE export opens at its share.
+        let uris = files
+            .iter()
+            .map(|file| ox_core::network::outside_location(file.uri().to_string()))
+            .collect();
         self.open_in_active_window(app, uris);
     }
 
