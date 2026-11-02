@@ -104,12 +104,17 @@ pub(super) enum WriteTest {
 }
 
 /// Whether `name` can be saved in `folder`, through the local path the
-/// caller gets, as Windows' Save dialog tests it unless the caller asks it
-/// not to (`OFN_NOTESTFILECREATE`): it creates the file and removes it.
-/// A file that already exists (`replacing`) is never opened for writing,
-/// which on some FUSE filesystems would change it: it is checked with
-/// [`test_replace`], and a hidden file of the dialog's own is created
-/// beside it instead ([`test_folder`]).
+/// caller gets, tested as Windows' Save dialog does unless the caller
+/// asks it not to (`OFN_NOTESTFILECREATE`) by creating a file there and
+/// removing it again. Unlike Windows, that file is never `name` itself
+/// but a hidden one of the dialog's own ([`test_folder`]): a sync client
+/// or another program watching the folder could open and fill a file of
+/// the real name in the moment before the test removed it, and the test
+/// would then delete their data. A file of that name found after the
+/// test, created meanwhile by another program, is reported
+/// ([`WriteTest::Appeared`]) and left alone. A file that already exists
+/// (`replacing`) is never opened for writing, which on some FUSE
+/// filesystems would change it: it is checked with [`test_replace`].
 ///
 /// It runs on a worker thread and waits at most [`PROBE_TIMEOUT`]. The
 /// permission bits alone do not tell: `GVfs`'s FUSE export reports every
@@ -122,7 +127,19 @@ pub(super) async fn test_write(folder: &Path, name: &std::ffi::OsStr, replacing:
             refused => refused,
         }
     } else {
-        on_a_worker(folder, move || create_and_remove(&target)).await
+        let inside = folder.to_path_buf();
+        on_a_worker(folder, move || {
+            #[cfg(test)]
+            if is_listed(&APPEARING, &target) {
+                // Another program, such as a sync client, creates it meanwhile.
+                let _ = std::fs::write(&target, "written by another program");
+            }
+            match folder_takes_files(&inside) {
+                WriteTest::Writable if std::fs::symlink_metadata(&target).is_ok() => WriteTest::Appeared,
+                test => test,
+            }
+        })
+        .await
     }
 }
 
@@ -130,18 +147,21 @@ pub(super) async fn test_write(folder: &Path, name: &std::ffi::OsStr, replacing:
 /// created there and removed again.
 pub(super) async fn test_folder(folder: &Path) -> WriteTest {
     let inside = folder.to_path_buf();
-    on_a_worker(folder, move || {
-        // A name that is taken already is another program's file: try another.
-        for _ in 0..3 {
-            let unique = glib::uuid_string_random();
-            match create_and_remove(&inside.join(format!(".openxplorer-save-test-{unique}"))) {
-                WriteTest::Appeared => {}
-                test => return test,
-            }
+    on_a_worker(folder, move || folder_takes_files(&inside)).await
+}
+
+/// [`test_folder`] on the worker: creates and removes a hidden file with a
+/// name no other program uses.
+fn folder_takes_files(folder: &Path) -> WriteTest {
+    // A name that is taken already is another program's file: try another.
+    for _ in 0..3 {
+        let unique = glib::uuid_string_random();
+        match create_and_remove(&folder.join(format!(".openxplorer-save-test-{unique}"))) {
+            WriteTest::Appeared => {}
+            test => return test,
         }
-        WriteTest::Unavailable
-    })
-    .await
+    }
+    WriteTest::Unavailable
 }
 
 /// Whether the existing file `target` may be replaced: it is not
@@ -193,11 +213,6 @@ async fn on_a_worker(folder: &Path, test: impl FnOnce() -> WriteTest + Send + 's
 /// passing hiccup does not leave the file behind.
 fn create_and_remove(path: &Path) -> WriteTest {
     use std::io::ErrorKind;
-    #[cfg(test)]
-    if is_listed(&APPEARING, path) {
-        // Another program, such as a sync client, creates it first.
-        let _ = std::fs::write(path, "written by another program");
-    }
     let refusal = |error: &std::io::Error| match error.kind() {
         ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem => WriteTest::Denied,
         ErrorKind::StorageFull | ErrorKind::QuotaExceeded => WriteTest::NoSpace,
@@ -232,8 +247,7 @@ fn remove(path: &Path) -> std::io::Result<()> {
     std::fs::remove_file(path)
 }
 
-/// Paths another program creates just before the write test does, for
-/// tests. Shared by every thread, as the test runs on GIO's workers.
+/// Paths another program creates while the write test runs, for tests. Shared by every thread, as the test runs on GIO's workers.
 #[cfg(test)]
 static APPEARING: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
 
@@ -247,7 +261,7 @@ fn is_listed(list: &std::sync::Mutex<Vec<PathBuf>>, path: &Path) -> bool {
         .is_ok_and(|paths| paths.iter().any(|listed| path.starts_with(listed)))
 }
 
-/// Makes another program create `path` just before the write test does.
+/// Makes another program create `path` while the write test runs.
 #[cfg(test)]
 pub(super) fn appear_when_tested(path: &Path) {
     if let Ok(mut paths) = APPEARING.lock() {
@@ -320,6 +334,48 @@ mod tests {
 
     fn run<T>(future: impl std::future::Future<Output = T>) -> T {
         glib::MainContext::default().block_on(future)
+    }
+
+    /// The write test of a new file never creates the file's own name,
+    /// which a sync client or another program watching the folder could
+    /// open and fill before the test removed it again: it tests the
+    /// folder with a hidden file of its own, and leaves nothing behind.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn the_write_test_of_a_new_file_never_creates_that_file() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        let monitor = gio::File::for_path(folder.path())
+            .monitor_directory(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+            .expect("a folder monitor");
+        monitor.set_rate_limit(0);
+        let created = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let seen = std::rc::Rc::clone(&created);
+        monitor.connect_changed(move |_, file, _, event| {
+            if event == gio::FileMonitorEvent::Created {
+                let name = file.basename().map(|name| name.to_string_lossy().into_owned());
+                seen.borrow_mut().extend(name);
+            }
+        });
+
+        let test = run(test_write(
+            folder.path(),
+            std::ffi::OsStr::new("report.txt"),
+            false,
+        ));
+        run(glib::timeout_future(Duration::from_millis(300)));
+
+        assert_eq!(test, WriteTest::Writable);
+        let created = created.borrow();
+        assert!(!created.iter().any(|name| name == "report.txt"), "{created:?}");
+        assert!(
+            created
+                .iter()
+                .any(|name| name.starts_with(".openxplorer-save-test-")),
+            "the folder was tested: {created:?}"
+        );
+        let left: Vec<_> = fs::read_dir(folder.path()).expect("the folder").collect();
+        assert!(left.is_empty(), "nothing is left behind");
     }
 
     /// A file another program creates while the Save dialog tests the

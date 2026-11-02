@@ -39,7 +39,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::location::{normalise, without_user};
+use crate::location::{normalise, unquote_lossy, without_user};
 use crate::private_storage::{
     private_directory, private_file_if_present, read_limited_text, replace_file_atomically,
     PrivateFileOptions, StorageError,
@@ -100,10 +100,19 @@ impl DialogFolders {
     /// The memory in the settings folder `directory`; never fails. A
     /// missing, damaged or refused file is read as empty, and the next
     /// change replaces it.
+    ///
+    /// Every field is cleaned as it is read ([`read`]), and a file an
+    /// earlier build wrote with a user name in it is written again
+    /// without it, so none survives on disk.
     pub fn open(directory: &Path) -> Self {
         let path = directory.join(DIALOG_FOLDERS_FILE);
-        let apps = read(&path).unwrap_or_default();
-        Self { path, apps }
+        let (apps, cleaned) = read(&path).unwrap_or_default();
+        let folders = Self { path, apps };
+        if cleaned {
+            // Best effort: the memory in hand is clean either way.
+            let _ = folders.save();
+        }
+        folders
     }
 
     /// What is remembered for `app`.
@@ -126,10 +135,10 @@ impl DialogFolders {
             return Ok(());
         }
         // Re-read, so a dialog of another window is not lost.
-        self.apps = read(&self.path).unwrap_or_default();
+        self.apps = read(&self.path).unwrap_or_default().0;
         let initial = match self.apps.iter().position(|entry| entry.app == app) {
             Some(index) => self.apps.remove(index).initial,
-            None => initial.map(folder_uri).unwrap_or_default(),
+            None => initial.map(initial_location).unwrap_or_default(),
         };
         self.apps.insert(
             0,
@@ -140,6 +149,11 @@ impl DialogFolders {
             },
         );
         self.apps.truncate(MAX_APPS);
+        self.save()
+    }
+
+    /// Writes the memory privately and atomically.
+    fn save(&self) -> Result<(), StorageError> {
         let text = serde_json::to_string_pretty(&Stored {
             apps: self.apps.clone(),
         })
@@ -149,23 +163,119 @@ impl DialogFolders {
     }
 }
 
-/// Reads the memory at `path`; `None` when there is none or it is unusable.
-fn read(path: &Path) -> Option<Vec<AppFolders>> {
+/// Reads the memory at `path`, cleaning every field as [`remember`]
+/// writes it: the folders through [`remembered_location`], so no user name
+/// or password survives; an entry that cannot be cleaned is dropped. The
+/// flag says whether anything changed. `None` when there is no memory or
+/// it is unusable.
+///
+/// [`remember`]: DialogFolders::remember
+fn read(path: &Path) -> Option<(Vec<AppFolders>, bool)> {
     let file = private_file_if_present(path, PrivateFileOptions::default()).ok()??;
     let text = read_limited_text(file, path, MAX_FILE_BYTES).ok()?;
     let stored: Stored = serde_json::from_str(&text).ok()?;
     let mut apps: Vec<AppFolders> = Vec::new();
+    let mut cleaned = false;
     for entry in stored.apps {
-        let sound = !entry.app.is_empty()
+        let last = remembered_location(&entry.last);
+        let initial = if entry.initial.is_empty() {
+            Some(String::new())
+        } else {
+            remembered_location(&entry.initial)
+        };
+        let sound_app = !entry.app.is_empty()
             && entry.app.len() <= MAX_TEXT_BYTES
-            && entry.initial.len() <= MAX_TEXT_BYTES
-            && remembered_location(&entry.last).as_deref() == Some(entry.last.as_str())
+            && !entry.app.chars().any(|c| c.is_control() || c == '/')
             && !apps.iter().any(|kept| kept.app == entry.app);
-        if sound && apps.len() < MAX_APPS {
-            apps.push(entry);
+        match (last, initial) {
+            (Some(last), Some(initial)) if sound_app && apps.len() < MAX_APPS => {
+                cleaned |= last != entry.last || initial != entry.initial;
+                apps.push(AppFolders {
+                    app: entry.app,
+                    initial,
+                    last,
+                });
+            }
+            _ => cleaned = true,
         }
     }
-    Some(apps)
+    Some((apps, cleaned))
+}
+
+/// How the memory keeps the initial folder `path` a caller passed: as
+/// [`remembered_location`] keeps it, so a share's FUSE path becomes the
+/// share's own address without its user. Empty when it cannot be kept.
+fn initial_location(path: &Path) -> String {
+    remembered_location(&folder_uri(path)).unwrap_or_default()
+}
+
+/// The remote address of a path inside `GVfs`'s FUSE export
+/// (`…/gvfs/smb-share:server=nas,share=projects,user=sam/Film` is
+/// `smb://nas/projects/Film`), without the user the export's name holds.
+fn fuse_export_location(path: &Path) -> FusePath {
+    use std::path::Component;
+    let parts: Vec<&std::ffi::OsStr> = path
+        .components()
+        .filter_map(|part| match part {
+            Component::Normal(part) => Some(part),
+            _ => None,
+        })
+        .collect();
+    let Some(index) = parts.iter().position(|part| *part == "gvfs").map(|gvfs| gvfs + 1) else {
+        return FusePath::NotExport;
+    };
+    let Some(export) = parts.get(index).map(|export| export.to_str()) else {
+        return FusePath::NotExport;
+    };
+    let Some((kind, fields)) = export.and_then(|export| export.split_once(':')) else {
+        return FusePath::Unknown;
+    };
+    let field = |key: &str| {
+        fields
+            .split(',')
+            .filter_map(|pair| pair.split_once('='))
+            .filter(|(name, _)| *name == key)
+            .map(|(_, value)| unquote_lossy(value))
+            .next_back()
+    };
+    let escape = |text: &str| glib::Uri::escape_string(text, None, false).to_string();
+    let (scheme, host, first) = match kind {
+        "smb-share" => ("smb", field("server"), field("share")),
+        "sftp" | "ftp" | "ftps" | "dav" | "davs" | "afp-volume" => (
+            kind.strip_suffix("-volume").unwrap_or(kind),
+            field("host"),
+            field("volume"),
+        ),
+        _ => return FusePath::Unknown,
+    };
+    let Some(host) = host.filter(|host| !host.is_empty()) else {
+        return FusePath::Unknown;
+    };
+    let port = field("port").map(|port| format!(":{port}")).unwrap_or_default();
+    let mut location = format!("{scheme}://{}{port}", escape(&host));
+    for part in first.iter().map(String::as_str).chain(
+        parts[index + 1..]
+            .iter()
+            .map(|part| part.to_str().unwrap_or_default()),
+    ) {
+        if part.is_empty() {
+            return FusePath::Unknown;
+        }
+        location.push('/');
+        location.push_str(&escape(part));
+    }
+    FusePath::Address(location)
+}
+
+/// What a local path is to [`fuse_export_location`].
+enum FusePath {
+    /// Not inside `GVfs`'s FUSE export.
+    NotExport,
+    /// Inside it: the remote address, without the export's user.
+    Address(String),
+    /// Inside an export it cannot turn into an address, which is then not
+    /// kept at all, as the export's name may hold a user.
+    Unknown,
 }
 
 /// The `file://` URI of a local folder, written from the path alone (never
@@ -191,6 +301,17 @@ pub fn remembered_location(location: &str) -> Option<String> {
     ) {
         return None;
     }
+    if scheme == "file" {
+        // A share's FUSE path is kept as the share's address: its name
+        // holds the share's user.
+        if let Ok((path, _)) = glib::filename_from_uri(location) {
+            match fuse_export_location(&path) {
+                FusePath::NotExport => {}
+                FusePath::Address(remote) => return remembered_location(&remote),
+                FusePath::Unknown => return None,
+            }
+        }
+    }
     let authority_end = rest.find('/').unwrap_or(rest.len());
     let (authority, path) = rest.split_at(authority_end);
     let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
@@ -213,7 +334,7 @@ pub fn start_folders(
     if let Some(folder) = file_folder {
         folders.push(StartFolder::Path(folder.to_path_buf()));
     }
-    let initial_uri = initial.map(folder_uri).unwrap_or_default();
+    let initial_uri = initial.map(initial_location).unwrap_or_default();
     if let Some(memory) = memory {
         if file_folder.is_none() && same_folder(&memory.initial, &initial_uri) {
             folders.push(StartFolder::Location(memory.last.clone()));
@@ -473,6 +594,61 @@ mod tests {
         assert_eq!(kept.apps.len(), MAX_APPS);
         assert!(kept.of("org.example.App0").is_none(), "the oldest went first");
         assert!(kept.of(&format!("org.example.App{}", MAX_APPS + 4)).is_some());
+    }
+
+    /// A FUSE path names its share's user (`user=sam`): the first folder
+    /// passed as one is kept as the share's own address without it, and
+    /// still matches when the caller passes it again; so is a last folder.
+    ///
+    /// parity: INT-035, SAFE-010
+    #[test]
+    fn a_fuse_path_is_kept_as_its_share_without_the_user() {
+        let directory = tempfile::tempdir().expect("a settings folder");
+        let fuse = Path::new("/run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam/Film");
+        let mut folders = DialogFolders::open(directory.path());
+        folders
+            .remember(
+                "org.example.Editor",
+                Some(fuse),
+                "file:///run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam/Film/Cuts",
+            )
+            .expect("written");
+
+        let text = fs::read_to_string(directory.path().join(DIALOG_FOLDERS_FILE)).expect("the file");
+        assert!(!text.contains("sam"), "{text}");
+        let memory = DialogFolders::open(directory.path());
+        let entry = memory.of("org.example.Editor").expect("remembered");
+        assert_eq!(entry.initial, "smb://studio-nas/projects/Film");
+        assert_eq!(entry.last, "smb://studio-nas/projects/Film/Cuts");
+        let folders = start_folders(None, Some(fuse), Some(entry), &[]);
+        assert_eq!(
+            folders[0],
+            StartFolder::Location(entry.last.clone()),
+            "the same first folder"
+        );
+    }
+
+    /// A file an earlier build wrote with a user name in it is cleaned as
+    /// it is read, on disk too, so no user name survives.
+    ///
+    /// parity: INT-035, SAFE-010
+    #[test]
+    fn an_older_memory_with_a_user_name_is_cleaned_when_read() {
+        let directory = tempfile::tempdir().expect("a settings folder");
+        let file = directory.path().join(DIALOG_FOLDERS_FILE);
+        fs::write(
+            &file,
+            r#"{"apps":[{"app":"org.example.Editor","initial":"file:///run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam","last":"smb://sam@studio-nas/projects/Reports"}]}"#,
+        )
+        .expect("written");
+
+        let memory = DialogFolders::open(directory.path());
+
+        let entry = memory.of("org.example.Editor").expect("kept, cleaned");
+        assert_eq!(entry.initial, "smb://studio-nas/projects");
+        assert_eq!(entry.last, "smb://studio-nas/projects/Reports");
+        let text = fs::read_to_string(&file).expect("the file");
+        assert!(!text.contains("sam"), "{text}");
     }
 
     /// A damaged file is read as empty and replaced by the next change.

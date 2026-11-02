@@ -801,8 +801,16 @@ impl BrowserWindow {
                 if let Some(name) = &picker.name {
                     name.set_text(&entry.name);
                 }
+                // The file's real name, bytes and all; the name shown
+                // (Entry::name, a display name) is only for what the
+                // dialog says.
                 let folder = path.parent().map(Path::to_path_buf).ok_or_else(not_local)?;
-                self.checked_save_target(picker, folder, entry.name.clone()).await
+                let real = path
+                    .file_name()
+                    .map(std::ffi::OsStr::to_os_string)
+                    .ok_or_else(not_local)?;
+                self.checked_save_target(picker, folder, real, entry.name.clone())
+                    .await
             }
             ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => Ok(Vec::new()),
         }
@@ -963,19 +971,22 @@ impl BrowserWindow {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         let name = checked_name(&saved_name(&written, picker.chosen_type())).map_err(|_| bad_name())?;
-        self.checked_save_target(picker, folder, name).await
+        self.checked_save_target(picker, folder, name.clone().into(), name)
+            .await
     }
 
     /// The file `name` in `folder` a Save dialog answers with, by the same
     /// checks whether it was typed or activated: a folder of that name
     /// opens; the caller must be able to write there ([`test_write`],
     /// which also finds a file another program creates meanwhile); an
-    /// existing file is replaced only after asking.
+    /// existing file is replaced only after asking. `name` is the real
+    /// file name; `label` is how the dialog names it to the user.
     async fn checked_save_target(
         &self,
         picker: &Rc<Picker>,
         folder: PathBuf,
-        name: String,
+        name: std::ffi::OsString,
+        label: String,
     ) -> Result<Vec<PathBuf>, String> {
         let Some(name_box) = &picker.name else {
             return Ok(Vec::new());
@@ -1008,9 +1019,9 @@ impl BrowserWindow {
                 }
             }
         }
-        write_refusal(test, &folder, &name)?;
+        write_refusal(test, &folder, &label)?;
         if exists {
-            self.confirm_replace(picker, vec![target], &[name]);
+            self.confirm_replace(picker, vec![target], &[label]);
             return Ok(Vec::new());
         }
         Ok(vec![target])
@@ -2213,6 +2224,34 @@ mod tests {
             .settings_directory()
             .join(ox_core::integration::DIALOG_FOLDERS_FILE);
         assert!(!memory.exists(), "a dialog that did not answer remembers nothing");
+    }
+
+    /// A file activated in a Save dialog is checked and answered by its
+    /// real name, also one that is not UTF-8, whose shown name differs.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn an_activated_file_is_saved_by_its_real_name() {
+        use std::os::unix::ffi::OsStrExt;
+        let fixture = Fixture::empty();
+        let real = fixture.root().join(std::ffi::OsStr::from_bytes(b"caf\xe9.txt"));
+        fs::write(&real, "old").expect("a file");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "SaveFile", Vec::new());
+        let test = &portal.test;
+        let shown = test
+            .names()
+            .into_iter()
+            .find(|name| name.starts_with("caf"))
+            .expect("the file is listed");
+
+        test.window.activate_item(test.position_of(&shown));
+        let question = replace_question(test);
+        press_in(&question, "Replace");
+
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [gio::File::for_path(&real).uri().to_string()]);
     }
 
     /// A file another program creates while Save checks the folder is
