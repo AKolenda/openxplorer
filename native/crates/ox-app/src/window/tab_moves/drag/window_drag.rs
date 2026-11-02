@@ -72,8 +72,9 @@ struct Events {
     press: Option<PointerPress>,
     /// How many primary releases this process's pointer saw.
     releases: u64,
-    /// What happened to each drag's data source, oldest first, by drag.
-    source: Vec<(u64, SourceEvent)>,
+    /// What happened to each drag's data source, oldest first, by drag,
+    /// with the releases this process's pointer had seen by then.
+    source: Vec<(u64, SourceEvent, u64)>,
 }
 
 /// A primary press, as this process's pointer saw it.
@@ -133,12 +134,18 @@ impl Events {
         Some(serial)
     }
 
-    /// What happened to the data source of drag `drag`, oldest first. What
-    /// earlier drags' sources said is let go: those drags are over.
-    fn take_source_events(&mut self, drag: u64) -> Vec<SourceEvent> {
+    /// The data source of drag `drag` said `event`.
+    fn on_source_event(&mut self, drag: u64, event: SourceEvent) {
+        self.source.push((drag, event, self.releases));
+    }
+
+    /// What happened to the data source of drag `drag`, oldest first, each
+    /// with the releases seen by then. What earlier drags' sources said is
+    /// let go: those drags are over.
+    fn take_source_events(&mut self, drag: u64) -> Vec<(SourceEvent, u64)> {
         std::mem::take(&mut self.source)
             .into_iter()
-            .filter_map(|(of, event)| (of == drag).then_some(event))
+            .filter_map(|(of, event, releases)| (of == drag).then_some((event, releases)))
             .collect()
     }
 }
@@ -236,6 +243,21 @@ impl Protocol {
         let _ = self.queue.borrow_mut().dispatch_pending(&mut events);
     }
 
+    /// Reads what the desktop sent so far, then handles it: GTK reads only
+    /// between events, so what was sent while one is handled, such as a
+    /// release while a window is made, waits unread until then. The read
+    /// takes only what is there (libwayland reads without waiting), and
+    /// what it brings GTK's objects waits in GTK's own queue for GTK.
+    fn read_now(&self) {
+        self.pump();
+        if let Some(guard) = self.queue.borrow().prepare_read() {
+            // Nothing there yet is no error, and a broken connection is
+            // GTK's to report.
+            let _ = guard.read();
+        }
+        self.pump();
+    }
+
     fn handle(&self) -> QueueHandle<Events> {
         self.queue.borrow().handle()
     }
@@ -286,8 +308,11 @@ struct Session {
     source: wl_data_source::WlDataSource,
     toplevel_drag: xdg_toplevel_drag_v1::XdgToplevelDragV1,
     device: wl_data_device::WlDataDevice,
-    /// The window the tab was dragged out of.
-    origin: glib::WeakRef<BrowserWindow>,
+    /// The window the tab was dragged out of, until it goes away.
+    origin: RefCell<glib::WeakRef<BrowserWindow>>,
+    /// The window of this app under the pointer, which the desktop sends
+    /// the release to.
+    target: RefCell<glib::WeakRef<BrowserWindow>>,
     /// The window the pointer carries: a new one with the tab, or the
     /// origin itself when the tab was its only one.
     dragged: glib::WeakRef<BrowserWindow>,
@@ -343,7 +368,7 @@ impl Session {
     fn holds(&self, window: &BrowserWindow, id: TabId) -> bool {
         let is = |weak: &glib::WeakRef<BrowserWindow>| weak.upgrade().as_ref() == Some(window);
         (id == self.tab && is(&self.dragged))
-            || (id == self.origin_tab && !self.released.get() && is(&self.origin))
+            || (id == self.origin_tab && !self.released.get() && is(&self.origin.borrow()))
     }
 
     /// A drag of tab `tabs.0` of `origin`, which is `tabs.1` of `dragged`:
@@ -374,7 +399,8 @@ impl Session {
             source,
             toplevel_drag,
             device,
-            origin: origin.downgrade(),
+            origin: RefCell::new(origin.downgrade()),
+            target: RefCell::new(glib::WeakRef::new()),
             dragged: dragged.downgrade(),
             tab,
             origin_tab,
@@ -503,7 +529,8 @@ impl Session {
         if self.released.replace(true) {
             return;
         }
-        if let Some(origin) = self.origin.upgrade() {
+        let origin = self.origin.borrow().upgrade();
+        if let Some(origin) = origin {
             origin.tab_strip().end_drag_now();
             origin.release_moved_tab(self.origin_tab);
         }
@@ -519,7 +546,8 @@ impl Session {
                 seen.releases != self.releases_at_start,
             )
         };
-        for event in events {
+        for (event, releases) in events {
+            let after_release = releases != self.releases_at_start;
             match event {
                 SourceEvent::Dropped => {
                     self.dropped.set(true);
@@ -529,9 +557,11 @@ impl Session {
                     glib::idle_add_local_once(move || session.end());
                 }
                 SourceEvent::Finished => self.end(),
-                // A drop nothing took is cancelled after the drop: only a
-                // cancel without one is Escape.
-                SourceEvent::Cancelled if self.dropped.get() => self.end(),
+                // A drop nothing took is cancelled after the drop, and a
+                // drag the desktop refused, its button already up, after the
+                // release this process's pointer saw: Escape cancels with
+                // the button held, after neither.
+                SourceEvent::Cancelled if self.dropped.get() || after_release => self.end(),
                 SourceEvent::Cancelled => self.cancel(),
             }
         }
@@ -550,6 +580,37 @@ impl Session {
         self.end_without(None);
     }
 
+    /// `window` left the screen during the drag. As the window under the
+    /// pointer or the row showing the stand-in, the drag ends first, its tab
+    /// where it is, so the desktop cancels the drag; the dragged window,
+    /// which the drag hides itself over a row, and any other window are
+    /// none of this.
+    fn on_window_hidden(self: &Rc<Self>, window: &BrowserWindow) {
+        // KWin still sends the release to the window it last had under the
+        // pointer after that window left the screen: a drop GTK cannot take,
+        // as it has no drop then, and crashes.
+        let is =
+            |weak: &RefCell<glib::WeakRef<BrowserWindow>>| weak.borrow().upgrade().as_ref() == Some(window);
+        if self.dragged.upgrade().as_ref() != Some(window) && (is(&self.host) || is(&self.target)) {
+            self.end_without(Some(window));
+        }
+    }
+
+    /// `window` goes away during the drag: the dragged window ends the drag
+    /// at once, as one under the pointer or showing the stand-in does
+    /// ([`Self::on_window_hidden`]); the window the tab left only loses its
+    /// claim to the tab, and any other window is none of the drag's business.
+    fn on_window_gone(self: &Rc<Self>, window: &BrowserWindow) {
+        let is =
+            |weak: &RefCell<glib::WeakRef<BrowserWindow>>| weak.borrow().upgrade().as_ref() == Some(window);
+        if self.dragged.upgrade().as_ref() == Some(window) || is(&self.host) || is(&self.target) {
+            self.end_without(Some(window));
+        } else if is(&self.origin) {
+            self.origin.replace(glib::WeakRef::new());
+            self.released.set(true);
+        }
+    }
+
     /// [`Self::end`], with `gone`, a window going away, left alone.
     fn end_without(self: &Rc<Self>, gone: Option<&BrowserWindow>) {
         if !self.finish() {
@@ -559,7 +620,8 @@ impl Session {
         if let Some(host) = self.host.borrow().upgrade().filter(stays) {
             host.tab_strip().dismiss_guest();
         }
-        if self.origin.upgrade().is_some_and(|origin| stays(&origin)) {
+        let origin = self.origin.borrow().upgrade();
+        if origin.is_some_and(|origin| stays(&origin)) {
             self.release_origin();
         } else {
             // The window it left goes away, and the tab with it.
@@ -580,7 +642,8 @@ impl Session {
         if let Some(host) = self.host.borrow().upgrade() {
             host.tab_strip().dismiss_guest();
         }
-        let (Some(dragged), Some(origin)) = (self.dragged.upgrade(), self.origin.upgrade()) else {
+        let origin = self.origin.borrow().upgrade();
+        let (Some(dragged), Some(origin)) = (self.dragged.upgrade(), origin) else {
             return;
         };
         if !self.released.replace(true) {
@@ -620,14 +683,14 @@ impl BrowserWindow {
         self.connect_realize(|window| {
             let _ = Protocol::of(&WidgetExt::display(window));
         });
-        // A window going away during a window drag ends the drag first, its
-        // tab where it is: before GTK lets the window's surface go, so the
-        // desktop cancels the drag. KWin would still send the release to a
-        // window under the pointer that went away, a drop GTK cannot take
-        // (it has no drop then, and crashes).
+        self.connect_unmap(|window| {
+            if let Some(session) = Session::current() {
+                session.on_window_hidden(window);
+            }
+        });
         self.connect_unrealize(|window| {
             if let Some(session) = Session::current() {
-                session.end_without(Some(window));
+                session.on_window_gone(window);
             }
         });
         let pump = gtk::EventControllerLegacy::new();
@@ -702,7 +765,9 @@ impl BrowserWindow {
         let tab = dragged.imp().session.borrow().active_id().unwrap_or(id);
         // What may fail comes before the drag's objects are made, so they
         // always serve a drag: the window's toplevel, and the press, which
-        // may have ended meanwhile.
+        // may have ended while the window was made: what the desktop sent
+        // meanwhile is read first.
+        protocol.read_now();
         let toplevel = crate::gtk_xdg_toplevel::xdg_toplevel(&dragged, &protocol.connection);
         let serial = toplevel
             .is_some()
@@ -818,6 +883,7 @@ impl BrowserWindow {
             return gdk::DragAction::empty();
         };
         session.on_source_events();
+        session.target.replace(self.downgrade());
         let dragged = session.dragged.upgrade();
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let point = graphene::Point::new(x as f32, y as f32);
@@ -828,7 +894,7 @@ impl BrowserWindow {
         if let (true, Some(view)) = (takes, view) {
             // Back over its own row before its window was drawn: the row
             // lets the tab go now, so it shows once, as the stand-in.
-            if session.origin.upgrade().as_ref() == Some(self) {
+            if session.origin.borrow().upgrade().as_ref() == Some(self) {
                 session.release_origin();
             }
             let in_strip = self
@@ -865,6 +931,17 @@ impl BrowserWindow {
             self.tab_strip().dismiss_guest();
             return;
         };
+        // The pointer left this window, unless another took it meanwhile: not
+        // at once, as GTK also says so for a window leaving the screen, which
+        // the desktop still takes for the window under the pointer
+        // (Session::on_window_hidden).
+        let (left, window) = (Rc::clone(&session), self.downgrade());
+        glib::idle_add_local_once(move || {
+            let is_target = left.target.borrow().upgrade() == window.upgrade();
+            if is_target {
+                left.target.replace(glib::WeakRef::new());
+            }
+        });
         let was_host = session.host.borrow().upgrade().as_ref() == Some(self);
         if !was_host {
             return;
@@ -965,7 +1042,7 @@ impl Dispatch<wl_data_source::WlDataSource, u64> for Events {
             wl_data_source::Event::Cancelled => SourceEvent::Cancelled,
             _ => return,
         };
-        events.source.push((*drag, event));
+        events.on_source_event(*drag, event);
     }
 }
 
@@ -1096,12 +1173,31 @@ mod tests {
     #[test]
     fn a_drag_handles_only_what_its_own_source_said() {
         let mut events = Events::default();
-        events.source.push((1, SourceEvent::Dropped));
-        events.source.push((1, SourceEvent::Cancelled));
-        events.source.push((2, SourceEvent::Dropped));
+        events.on_source_event(1, SourceEvent::Dropped);
+        events.on_source_event(1, SourceEvent::Cancelled);
+        events.on_source_event(2, SourceEvent::Dropped);
 
-        assert_eq!(events.take_source_events(2), vec![SourceEvent::Dropped]);
+        assert_eq!(events.take_source_events(2), vec![(SourceEvent::Dropped, 0)]);
         assert!(events.source.is_empty(), "the earlier drag's events are let go");
+    }
+
+    /// What a drag's source said is kept with the releases this process's
+    /// pointer had seen by then: a cancel after a release is a desktop
+    /// refusing a drag whose button was already up, never Escape, which
+    /// cancels with the button held.
+    ///
+    /// parity: TAB-034
+    #[test]
+    fn a_cancel_is_kept_with_the_releases_seen_before_it() {
+        let mut events = Events::default();
+        events.on_source_event(1, SourceEvent::Cancelled);
+        events.on_primary_button(5, 50, false);
+        events.on_source_event(1, SourceEvent::Cancelled);
+
+        assert_eq!(
+            events.take_source_events(1),
+            vec![(SourceEvent::Cancelled, 0), (SourceEvent::Cancelled, 1)]
+        );
     }
 
     /// A press of the mouse's primary button is one a window drag may start
