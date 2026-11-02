@@ -92,26 +92,38 @@ impl LocationPanel {
             );
             return;
         }
+        let panel = self.clone();
+        glib::spawn_future_local(async move {
+            let _ = panel.apply_checked_location().await;
+        });
+    }
+
+    /// Moves the folder to the checked destination the user consented to,
+    /// as Apply location and the window's OK and Apply do.
+    ///
+    /// # Errors
+    ///
+    /// Why the folder was not moved, which the status line shows too.
+    pub(super) async fn apply_checked_location(&self) -> Result<(), String> {
         self.imp().is_applying.set(true);
         self.update_apply();
         let value = self.field().text().to_string();
         let folder = self.folder();
         let relocation = self.relocation();
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = panel)]
-            self,
-            async move {
-                let applied =
-                    gio::spawn_blocking(move || relocation.apply(folder, &value, Consent::Given)).await;
-                panel.imp().is_applying.set(false);
-                panel.update_apply();
-                match applied {
-                    Ok(Ok(applied)) => panel.show_applied(applied).await,
-                    Ok(Err(error)) => panel.set_status(&error.to_string(), Tone::Error),
-                    Err(_) => {}
-                }
+        let applied = gio::spawn_blocking(move || relocation.apply(folder, &value, Consent::Given)).await;
+        self.imp().is_applying.set(false);
+        self.update_apply();
+        match applied {
+            Ok(Ok(applied)) => {
+                self.show_applied(applied).await;
+                Ok(())
             }
-        ));
+            Ok(Err(error)) => {
+                self.set_status(&error.to_string(), Tone::Error);
+                Err(error.to_string())
+            }
+            Err(_) => Err(ox_core::i18n::gettext("The change stopped.")),
+        }
     }
 
     /// Shows the new location and clears the consent, offers to move the

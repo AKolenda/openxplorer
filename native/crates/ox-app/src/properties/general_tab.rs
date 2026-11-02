@@ -72,12 +72,12 @@ pub(super) fn general_tab(
     properties: &ItemProperties,
     locations: &LocationContext,
     rights: GeneralRights,
-    uri: Rc<RefCell<String>>,
+    uri: &Rc<RefCell<String>>,
 ) -> GeneralTab {
     let entry = &properties.entry;
     let is_folder = entry.is_dir;
     let page = super::window::page();
-    let edits = GeneralEdits::new(window, properties, rights, uri);
+    let edits = GeneralEdits::new(window, properties, rights, Rc::clone(uri));
     page.append(&header(properties, &edits));
     page.append(&divider());
 
@@ -87,7 +87,7 @@ pub(super) fn general_tab(
         kind.add(&ox_core::i18n::gettext("Type"), &entry.type_label);
     } else {
         kind.add(&ox_core::i18n::gettext("Type of file"), &type_of_file(entry));
-        let (row, value) = opens_with_row(properties, rights.can_change_app);
+        let (row, value) = opens_with_row(properties, rights.can_change_app, uri);
         kind.add_control(&ox_core::i18n::gettext("Opens with"), &row);
         opens_with = Some(value);
     }
@@ -176,7 +176,11 @@ fn type_of_file(entry: &Entry) -> String {
 
 /// The application's name and Change..., which opens Open with for the
 /// file as a dialog of the Properties window.
-fn opens_with_row(properties: &ItemProperties, can_change: bool) -> (gtk::Box, gtk::Label) {
+fn opens_with_row(
+    properties: &ItemProperties,
+    can_change: bool,
+    uri: &Rc<RefCell<String>>,
+) -> (gtk::Box, gtk::Label) {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let app = properties
         .default_app
@@ -199,13 +203,14 @@ fn opens_with_row(properties: &ItemProperties, can_change: bool) -> (gtk::Box, g
     ))]);
     // Open with is a dialog of this Properties window, not of the browser
     // window, which may be behind other windows.
-    let uri = properties.entry.uri.clone();
+    // The file's location now: a rename on this tab changes it.
+    let uri = Rc::clone(uri);
     change.connect_clicked(move |button| {
         let Some(window) = PropertiesWindow::of(button) else {
             return;
         };
         if let Some(opener) = window.opener() {
-            opener.change_app_over(window.upcast_ref(), &uri);
+            opener.change_app_over(window.upcast_ref(), &uri.borrow());
         }
     });
     row.append(&change);
@@ -467,7 +472,13 @@ impl GeneralEdits {
             };
             let uri = self.uri.borrow().clone();
             let is_folder = self.is_folder || self.links_to_folder;
-            opener.rename_item_at(&uri, &original, &wanted, is_folder).await?;
+            let parent = window.as_ref().map_or_else(
+                || opener.clone().upcast::<gtk::Window>(),
+                |window| window.clone().upcast(),
+            );
+            opener
+                .rename_item_at(&parent, &uri, &original, &wanted, is_folder)
+                .await?;
             let renamed = gtk::gio::File::for_uri(&uri)
                 .parent()
                 .map(|parent| parent.child(&wanted).uri().to_string());

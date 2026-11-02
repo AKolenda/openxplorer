@@ -65,7 +65,7 @@ pub(crate) fn open_selection_properties(
     let rows = fill_general(&general, &entries, context);
     measure(&entries, &rows, &cancel);
     security.append(&quiet_text(ox_core::i18n::gettext_static(READING)));
-    read_permissions(&security, entries, context.clone());
+    read_permissions(&security, entries, context.clone(), window.downgrade());
     window
 }
 
@@ -193,7 +193,12 @@ async fn size_on_disk(uri: &str, cancel: &Cancellation) -> Option<u64> {
 /// Reads every item's permissions, then fills the Security tab: the
 /// items' owner and group, and the editor when every item can be
 /// changed here.
-fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesContext) {
+fn read_permissions(
+    panel: &gtk::Box,
+    entries: Vec<Entry>,
+    context: PropertiesContext,
+    window: glib::WeakRef<PropertiesWindow>,
+) {
     let panel = panel.downgrade();
     glib::spawn_future_local(async move {
         let mut items: Vec<ItemProperties> = Vec::new();
@@ -249,10 +254,12 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
             owner: shared(ItemProperties::owner_account),
             group: shared(ItemProperties::group_account),
         };
-        panel.append(&permissions_editor(
-            edited,
-            std::sync::Arc::clone(&context.versions),
-        ));
+        let (editor, change) = permissions_editor(edited, std::sync::Arc::clone(&context.versions));
+        panel.append(&editor);
+        // The window's OK and Apply make the editor's change too.
+        if let Some(window) = window.upgrade() {
+            window.add_pending(change);
+        }
     });
 }
 

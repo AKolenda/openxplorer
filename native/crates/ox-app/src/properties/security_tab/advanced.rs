@@ -13,10 +13,10 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::permissions::{
-    current_user_is_superuser, group_choices, user_choices, ModeChange, PermissionClass, PermissionRequest,
+    current_user_is_superuser, group_choices, user_choices, PermissionClass, PermissionRequest,
 };
 
-use super::{apply_request, SecurityContext, SecurityFacts};
+use super::{apply_request, changed_bits, SecurityContext, SecurityFacts};
 use crate::properties::permissions_editor::SharedAccountChoice as AccountChoice;
 use crate::properties::security_model::{access_summary, special_bit};
 use crate::properties::window::{ApplyFuture, Pending, PropertiesWindow, Rows};
@@ -73,7 +73,7 @@ impl Pending for AdvancedChanges {
                 return Ok(());
             };
             let request = PermissionRequest {
-                mode: ModeChange::Advanced(self.mode()),
+                mode: changed_bits(self.facts.mode.unwrap_or_default(), self.mode()),
                 owner: self.owner.as_ref().and_then(AccountChoice::changed),
                 group: self.group.changed(),
                 recursive: self.replaces(),

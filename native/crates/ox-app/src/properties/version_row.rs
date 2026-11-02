@@ -45,6 +45,7 @@ impl SnapshotTarget {
     }
 
     /// The target as a window action's parameter, `(sss)`.
+    #[cfg(test)]
     pub(crate) fn to_variant(&self) -> glib::Variant {
         (self.uri.as_str(), self.root.as_str(), self.label.as_str()).to_variant()
     }
@@ -143,22 +144,11 @@ pub(super) fn group_heading(date: Option<&SnapshotDate>, today: &glib::DateTime)
     let Some(date) = date else {
         return ox_core::i18n::gettext_static(DATE_UNAVAILABLE);
     };
-    let Ok(day) = glib::DateTime::from_local(
-        i32::from(date.year),
-        i32::from(date.month),
-        i32::from(date.day),
-        0,
-        0,
-        0.0,
-    ) else {
-        return ox_core::i18n::gettext_static(DATE_UNAVAILABLE);
-    };
-    let Ok(midnight) =
-        glib::DateTime::from_local(today.year(), today.month(), today.day_of_month(), 0, 0, 0.0)
-    else {
-        return ox_core::i18n::gettext_static(DATE_UNAVAILABLE);
-    };
-    let days_ago = midnight.difference(&day).as_days();
+    // Calendar days, not elapsed time: a day where the clocks change is
+    // 23 or 25 hours long.
+    let (year, month) = (i32::from(date.year), i32::from(date.month));
+    let days_ago = days_from_civil(today.year(), today.month(), today.day_of_month())
+        - days_from_civil(year, month, i32::from(date.day));
     // Monday starts the week, as ISO numbers it.
     let into_week = i64::from(today.day_of_week() - 1);
     let heading = if days_ago < 0 {
@@ -171,16 +161,28 @@ pub(super) fn group_heading(date: Option<&SnapshotDate>, today: &glib::DateTime)
         crate::i18n::message_id("Earlier this week")
     } else if days_ago <= into_week + 7 {
         crate::i18n::message_id("Last week")
-    } else if day.year() == today.year() && day.month() == today.month() {
+    } else if year == today.year() && month == today.month() {
         crate::i18n::message_id("Earlier this month")
-    } else if (day.year() * 12 + day.month()) + 1 == today.year() * 12 + today.month() {
+    } else if (year * 12 + month) + 1 == today.year() * 12 + today.month() {
         crate::i18n::message_id("Last month")
-    } else if day.year() == today.year() {
+    } else if year == today.year() {
         crate::i18n::message_id("Earlier this year")
     } else {
         crate::i18n::message_id("A long time ago")
     };
     ox_core::i18n::gettext_static(heading)
+}
+
+/// The number of days from 1970-01-01 to `year`-`month`-`day` in the
+/// proleptic Gregorian calendar (Howard Hinnant's `days_from_civil`).
+fn days_from_civil(year: i32, month: i32, day: i32) -> i64 {
+    let year = i64::from(if month <= 2 { year - 1 } else { year });
+    let era = year.div_euclid(400);
+    let year_of_era = year - era * 400;
+    let month = i64::from(month);
+    let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
 }
 
 #[cfg(test)]
@@ -214,5 +216,21 @@ mod tests {
         assert_eq!(heading(2026, 2, 1), "Earlier this year");
         assert_eq!(heading(2025, 12, 31), "A long time ago");
         assert_eq!(group_heading(None, &today), "Date unavailable");
+    }
+
+    /// Headings count calendar days: the day before the spring clock
+    /// change, a 23-hour day where the clocks change, is still yesterday.
+    ///
+    /// parity: PROP-019
+    #[test]
+    fn a_day_across_the_clock_change_is_still_yesterday() {
+        // Monday, March 30, 2026: Europe moved its clocks on the 29th.
+        let today = glib::DateTime::from_local(2026, 3, 30, 16, 0, 0.0).expect("a date");
+        let heading = |year, month, day| group_heading(Some(&date(year, month, day)), &today);
+        assert_eq!(heading(2026, 3, 29), "Yesterday");
+        assert_eq!(heading(2026, 3, 23), "Last week");
+        // Sunday, October 25, 2026, after the autumn change.
+        let autumn = glib::DateTime::from_local(2026, 10, 26, 1, 0, 0.0).expect("a date");
+        assert_eq!(group_heading(Some(&date(2026, 10, 25)), &autumn), "Yesterday");
     }
 }

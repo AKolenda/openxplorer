@@ -8,16 +8,16 @@
 //! it. Open browses a folder's version in a tab; Restore asks where to put
 //! a copy (Restore a copy never overwrites the live item). Snapshot
 //! source... on the left of the buttons configures where versions are
-//! looked for, and F5 looks again. The lookup starts the first time the
+//! looked for, and F5 looks again (through [`super::window::PropertiesWindow`]). The lookup starts the first time the
 //! tab is shown; looking again, opening Snapshot source... or closing the
 //! window cancels a lookup in progress, and a stale lookup's result is
 //! ignored.
 
 use std::sync::Arc;
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
 use ox_core::location::{ItemKind, LocationContext};
 use ox_core::transfer::Cancellation;
 use ox_core::versions::{PreviousVersions, VersionList, VersionsError};
@@ -28,7 +28,6 @@ use super::window::{paragraph, push_button};
 use super::{PropertiesTarget, RestoreRequest, SnapshotTarget};
 use crate::dialog::quiet_text;
 use crate::icons::{self, Icon};
-use crate::window::WindowAction;
 
 /// What the tab browses.
 const VERSIONS_INTRO: &str =
@@ -135,22 +134,16 @@ impl VersionsPanel {
             .set(versions)
             .expect("a new panel has no service yet");
         imp.locations.replace(locations);
-        let refresh = gtk::EventControllerKey::new();
-        refresh.connect_key_pressed(glib::clone!(
-            #[weak]
-            panel,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_, key, _, _| {
-                if key == gdk::Key::F5 {
-                    panel.load();
-                    return glib::Propagation::Stop;
-                }
-                glib::Propagation::Proceed
-            }
-        ));
-        panel.add_controller(refresh);
         panel
+    }
+
+    /// Lists the versions of the item at `uri`, as after a rename, looking
+    /// again if they were shown.
+    pub(super) fn set_item_uri(&self, uri: &str) {
+        self.imp().uri.replace(uri.to_owned());
+        if self.imp().is_loaded.get() {
+            self.load();
+        }
     }
 
     fn versions(&self) -> &Arc<PreviousVersions> {
@@ -289,25 +282,23 @@ impl VersionsPanel {
     }
 
     /// Open browses the selected folder version in a tab; Restore asks
-    /// where to put a copy of the selected version. Both run the browser
-    /// window's actions.
+    /// where to put a copy of the selected version. Both happen in the
+    /// browser window that opened Properties, which comes to the front
+    /// first, so what they show is not hidden behind other windows.
     fn run_on_selected(&self, open: bool) {
         let Some(version) = self.selected() else {
             return;
         };
-        let (action, target) = if open {
-            (
-                WindowAction::BrowseSnapshot,
-                SnapshotTarget::of_version(&version).to_variant(),
-            )
-        } else {
-            (
-                WindowAction::RestoreVersion,
-                RestoreRequest::of_version(&version).to_variant(),
-            )
+        let Some(opener) = super::window::PropertiesWindow::of(self).and_then(|window| window.opener())
+        else {
+            return;
         };
-        let name = format!("win.{}", action.name());
-        let _ = WidgetExt::activate_action(self, &name, Some(&target));
+        opener.present();
+        if open {
+            opener.browse_snapshot(SnapshotTarget::of_version(&version));
+        } else {
+            opener.ask_restore_destination(&RestoreRequest::of_version(&version));
+        }
     }
 
     /// Runs the lookup on a worker thread and shows its result, unless a
@@ -488,6 +479,12 @@ impl VersionsPanel {
     #[cfg(test)]
     pub(crate) fn refresh(&self) {
         self.load();
+    }
+
+    /// The item whose versions are listed, for tests.
+    #[cfg(test)]
+    pub(crate) fn item_uri(&self) -> String {
+        self.imp().uri.borrow().clone()
     }
 
     /// The snapshot names of the versions listed, for tests.

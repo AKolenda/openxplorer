@@ -46,6 +46,12 @@ pub(super) struct ItemDialogs {
     banner: OnceCell<SnapshotBanner>,
     /// The Properties windows this window opened and are still open.
     properties: RefCell<Vec<PropertiesWindow>>,
+    /// A caller's activation token for the next Properties window
+    /// (`ShowItemProperties`, INT-023).
+    startup_id: RefCell<Option<String>>,
+    /// The tokens Properties windows took, for tests.
+    #[cfg(test)]
+    used_startup_ids: RefCell<Vec<String>>,
     /// The tabs Browse opened, with the snapshot each shows
     /// (`snapshot_tabs`).
     pub(super) snapshot_tabs: RefCell<Vec<(TabId, SnapshotLocation)>>,
@@ -252,6 +258,30 @@ impl BrowserWindow {
 
     /// Shows the Properties window `window` and keeps it until it closes.
     fn present_properties(&self, window: &PropertiesWindow) {
+        self.keep_properties(window);
+        if let Some(startup_id) = self.item_dialogs().startup_id.take() {
+            window.set_startup_id(&startup_id);
+            #[cfg(test)]
+            self.item_dialogs().used_startup_ids.borrow_mut().push(startup_id);
+        }
+        window.present();
+    }
+
+    /// Keeps a caller's activation token for the next Properties window.
+    pub(crate) fn hand_startup_id_to_properties(&self, startup_id: &str) {
+        self.item_dialogs()
+            .startup_id
+            .replace(Some(startup_id.to_owned()));
+    }
+
+    /// The activation tokens Properties windows took, for tests.
+    #[cfg(test)]
+    pub(crate) fn properties_startup_ids(&self) -> Vec<String> {
+        self.item_dialogs().used_startup_ids.borrow().clone()
+    }
+
+    /// Keeps `window` among this window's Properties until it closes.
+    fn keep_properties(&self, window: &PropertiesWindow) {
         window.connect_closed_once(glib::clone!(
             #[weak(rename_to = browser)]
             self,
@@ -260,7 +290,17 @@ impl BrowserWindow {
             move || browser.properties_closed(&window)
         ));
         self.item_dialogs().properties.borrow_mut().push(window.clone());
-        window.present();
+    }
+
+    /// Takes over the Properties windows `previous` opened, as its last tab
+    /// moves here and it closes: they stay open, with the changes they
+    /// hold, and act through this window from now on.
+    pub(super) fn adopt_properties_windows(&self, previous: &BrowserWindow) {
+        let windows = previous.item_dialogs().properties.take();
+        for window in windows {
+            window.set_opener(self);
+            self.keep_properties(&window);
+        }
     }
 
     /// Forgets a Properties window that closed.

@@ -45,7 +45,10 @@ pub(crate) fn system_usershares(sandbox: Sandbox) -> Option<Usershares> {
 
 /// The folder, its share as last read, and the tab's labels.
 struct SharingState {
-    folder: PathBuf,
+    /// The folder, which a rename on General changes.
+    folder: RefCell<PathBuf>,
+    /// The folder's name in the first group.
+    folder_label: gtk::Label,
     usershares: Usershares,
     /// The share as last read; `None` when the folder is not shared.
     share: RefCell<Option<Usershare>>,
@@ -56,8 +59,9 @@ struct SharingState {
     buttons: [gtk::Button; 2],
 }
 
-/// The Sharing tab of the local folder `folder`, using `usershares`.
-pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> gtk::Box {
+/// The Sharing tab of the local folder `folder`, using `usershares`, and
+/// what points it at the folder's new path after a rename.
+pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> (gtk::Box, Rc<dyn Fn(PathBuf)>) {
     let page = super::window::page();
     let folder_name = folder
         .file_name()
@@ -69,7 +73,8 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> gtk::Box
     let identity = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     identity.append(&ArtImage::new(Art::Folder, FOLDER_ART));
     let names = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    names.append(&gtk::Label::builder().label(&folder_name).xalign(0.0).build());
+    let folder_label = gtk::Label::builder().label(&folder_name).xalign(0.0).build();
+    names.append(&folder_label);
     let state = gtk::Label::builder()
         .label(ox_core::i18n::gettext("Checking whether this folder is shared…"))
         .xalign(0.0)
@@ -115,7 +120,8 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> gtk::Box
     page.append(&password);
 
     let sharing = Rc::new(SharingState {
-        folder,
+        folder: RefCell::new(folder),
+        folder_label,
         usershares,
         share: RefCell::new(None),
         is_available: Cell::new(false),
@@ -134,19 +140,33 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> gtk::Box
     }
     // Read when first shown, so Properties of any folder runs no `net`
     // until the tab is opened.
-    let first_shown = Cell::new(false);
+    let first_shown = Rc::new(Cell::new(false));
+    let shown = Rc::clone(&first_shown);
+    let read = Rc::clone(&sharing);
     page.connect_map(move |_| {
-        if !first_shown.replace(true) {
-            sharing.reload();
+        if !shown.replace(true) {
+            read.reload();
         }
     });
-    page
+    let follow = move |folder: PathBuf| {
+        let name = folder
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        sharing.folder_label.set_text(&name);
+        sharing.folder.replace(folder);
+        if first_shown.get() {
+            sharing.reload();
+        }
+    };
+    (page, Rc::new(follow))
 }
 
 impl SharingState {
     /// Reads the folder's share off the main thread and shows it.
     fn reload(self: &Rc<Self>) {
-        let (usershares, folder) = (self.usershares.clone(), self.folder.clone());
+        let (usershares, folder) = (self.usershares.clone(), self.folder.borrow().clone());
         let sharing = Rc::clone(self);
         glib::spawn_future_local(async move {
             let read = gio::spawn_blocking(move || usershares.share_of(&folder)).await;
@@ -196,8 +216,8 @@ impl SharingState {
 /// Advanced Sharing's controls, held until OK or Apply.
 struct ShareSettings {
     sharing: Rc<SharingState>,
-    /// The share as the dialog opened on it.
-    initial: Option<Usershare>,
+    /// The share as the dialog opened on it, or as its last Apply made it.
+    initial: RefCell<Option<Usershare>>,
     share: gtk::CheckButton,
     name: gtk::Entry,
     comment: gtk::Entry,
@@ -210,7 +230,7 @@ impl ShareSettings {
     fn wanted(&self) -> Option<Usershare> {
         self.share.is_active().then(|| Usershare {
             name: self.name.text().trim().to_owned(),
-            path: self.sharing.folder.clone(),
+            path: self.sharing.folder.borrow().clone(),
             comment: self.comment.text().into(),
             allows_guests: self.guests.is_active(),
             is_read_only: self.read_only.is_active(),
@@ -220,22 +240,27 @@ impl ShareSettings {
 
 impl Pending for ShareSettings {
     fn has_changes(&self) -> bool {
-        self.wanted() != self.initial
+        self.wanted() != *self.initial.borrow()
     }
 
     fn apply(self: Rc<Self>) -> ApplyFuture {
         Box::pin(async move {
             let usershares = self.sharing.usershares.clone();
             let wanted = self.wanted();
-            let shared_as = self.initial.as_ref().map(|share| share.name.clone());
+            let shared_as = self.initial.borrow().as_ref().map(|share| share.name.clone());
+            let made = wanted.clone();
             let changed =
-                gio::spawn_blocking(move || change_share(&usershares, wanted.as_ref(), shared_as)).await;
+                gio::spawn_blocking(move || change_share(&usershares, made.as_ref(), shared_as)).await;
             let result = changed.unwrap_or_else(|_| {
                 Err(UsershareError::Refused(
                     ox_core::i18n::gettext_static("The change stopped.").into(),
                 ))
             });
             self.sharing.reload();
+            // What was made is where a later Apply or OK starts from.
+            if result.is_ok() {
+                self.initial.replace(wanted);
+            }
             result.map_err(|error| error.to_string())
         })
     }
@@ -248,6 +273,7 @@ fn open_advanced_sharing(parent: &PropertiesWindow, sharing: &Rc<SharingState>) 
     let initial = sharing.share.borrow().clone();
     let folder_name = sharing
         .folder
+        .borrow()
         .file_name()
         .unwrap_or_default()
         .to_string_lossy()
@@ -284,7 +310,7 @@ fn open_advanced_sharing(parent: &PropertiesWindow, sharing: &Rc<SharingState>) 
     );
     let settings = Rc::new(ShareSettings {
         sharing: Rc::clone(sharing),
-        initial,
+        initial: RefCell::new(initial),
         share,
         name,
         comment,
@@ -375,7 +401,7 @@ mod tests {
     fn the_tab_shows_the_share_and_advanced_sharing_changes_it() {
         let temporary = tempfile::tempdir().expect("a temporary folder");
         let listing = "[Projects]\npath=/srv/Projects\ncomment=Team\nusershare_acl=Everyone:R,\nguest_ok=n";
-        let panel = sharing_panel("/srv/Projects".into(), fake_net(temporary.path(), listing));
+        let (panel, _) = sharing_panel("/srv/Projects".into(), fake_net(temporary.path(), listing));
         let window = PropertiesWindow::new("Projects Properties", None, None);
         window.add_tab("sharing", "Sharing", &panel);
         window.present();
@@ -414,12 +440,20 @@ mod tests {
         assert!(read_only.is_active());
         read_only.set_active(false);
         assert!(dialog.apply_button().is_sensitive());
-        dialog.ok_button().emit_clicked();
-
+        dialog.apply_button().emit_clicked();
         let calls = || fs::read_to_string(temporary.path().join("calls")).unwrap_or_default();
         wait_until("the share is changed", || calls().contains("usershare add"));
         assert!(calls().contains("usershare add Projects /srv/Projects Team Everyone:F guest_ok=n"));
+        wait_until("Apply to grey", || !dialog.apply_button().is_sensitive());
+
+        // OK after Apply has nothing left to change.
+        dialog.ok_button().emit_clicked();
         wait_until("Advanced Sharing to close", || dialog.is_closed());
+        assert_eq!(
+            calls().matches("usershare add").count(),
+            1,
+            "the change is made once"
+        );
         window.destroy();
     }
 }

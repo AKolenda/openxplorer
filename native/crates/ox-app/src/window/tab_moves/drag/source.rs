@@ -58,6 +58,7 @@ impl BrowserWindow {
             tab,
             outcome: TabDragOutcome::Pending,
             is_refused_here: false,
+            destination: None,
         }));
         let dragged = DraggedTab {
             source: self.downgrade(),
@@ -116,17 +117,22 @@ impl BrowserWindow {
             return;
         };
         let tab = outgoing.tab;
-        let finish: fn(&BrowserWindow, TabId) = match outgoing.outcome {
-            TabDragOutcome::Pending | TabDragOutcome::TornOut => BrowserWindow::move_tab_to_new_window,
-            TabDragOutcome::MovedAway => BrowserWindow::release_moved_tab,
-            TabDragOutcome::Reordered | TabDragOutcome::Cancelled => return,
+        let destination = outgoing.destination.as_ref().and_then(glib::WeakRef::upgrade);
+        let finish: Box<dyn FnOnce(&BrowserWindow)> = match (outgoing.outcome, destination) {
+            (TabDragOutcome::Pending | TabDragOutcome::TornOut, _) => {
+                Box::new(move |window: &BrowserWindow| window.move_tab_to_new_window(tab))
+            }
+            (TabDragOutcome::MovedAway, destination) => {
+                Box::new(move |window: &BrowserWindow| window.release_moved_tab(tab, destination.as_ref()))
+            }
+            (TabDragOutcome::Reordered | TabDragOutcome::Cancelled, _) => return,
         };
         // After the drag's own signal handlers, so a window that closes
         // with its last tab is not destroyed in the middle of them.
         glib::idle_add_local_once(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || finish(&window, tab)
+            move || finish(&window)
         ));
     }
 
@@ -168,6 +174,9 @@ impl BrowserWindow {
         };
         if let Some(outgoing) = self.imp().outgoing_tab.borrow_mut().as_mut() {
             outgoing.outcome = outcome;
+            if outcome == TabDragOutcome::MovedAway {
+                outgoing.destination = Some(destination.downgrade());
+            }
         }
         true
     }

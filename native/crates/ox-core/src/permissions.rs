@@ -30,7 +30,11 @@ const STICKY: u32 = 0o1000;
 /// The owner's read and execute bits, which listing a folder needs.
 const OWNER_LISTS: u32 = 0o500;
 /// The attributes a change reads of each item.
-const MODE_ATTRIBUTES: &str = "standard::type,standard::name,unix::mode,unix::uid,unix::gid";
+const MODE_ATTRIBUTES: &str =
+    "standard::type,standard::name,unix::mode,unix::uid,unix::gid,unix::device,unix::is-mountpoint";
+
+/// How many items a Read-only change that went on past failures names.
+const NAMED_FAILURES: usize = 5;
 
 /// Who a permission is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,6 +183,17 @@ pub enum ModeChange {
     /// owner gets write back; folders, inside a change or asked for,
     /// keep their bits, as "Only applies to files in folder" says.
     ReadOnlyFiles(bool),
+    /// The bits the user changed in Properties' Edit... and Advanced:
+    /// `set` turned on and `clear` turned off, on top of the mode the item
+    /// has when the change is made, so a change made elsewhere since the
+    /// dialog opened is kept. A recursive change gives what is inside a
+    /// folder the folder's resulting bits, as [`Self::Advanced`] does.
+    Bits {
+        /// Bits to turn on.
+        set: u32,
+        /// Bits to turn off.
+        clear: u32,
+    },
 }
 
 impl ModeChange {
@@ -187,7 +202,8 @@ impl ModeChange {
         match self {
             Self::Simple(change) => change.apply_to(mode, is_folder),
             Self::Advanced(bits) => bits & PERMISSION_BITS,
-            Self::ReadOnlyFiles(read_only) => read_only_mode(mode, is_folder, read_only),
+            Self::ReadOnlyFiles(read_only) => read_only_mode(mode, is_folder, read_only, process_umask()),
+            Self::Bits { set, clear } => ((mode | set) & !clear) & PERMISSION_BITS,
         }
     }
 
@@ -210,20 +226,41 @@ impl ModeChange {
                     special | (access & !0o111)
                 }
             }
-            Self::ReadOnlyFiles(read_only) => read_only_mode(mode, is_folder, read_only),
+            Self::ReadOnlyFiles(read_only) => read_only_mode(mode, is_folder, read_only, process_umask()),
+            // `apply` turns a recursive change into the folder's resulting
+            // bits before it reaches the content; this keeps what a
+            // content item has, should one ever get here.
+            Self::Bits { .. } => mode,
         }
     }
 }
 
+/// The process's file-creation mask, from `/proc/self/status` (reading it
+/// with umask(2) would change it); `0o022` where it cannot be read.
+fn process_umask() -> u32 {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|status| {
+            let line = status.lines().find(|line| line.starts_with("Umask:"))?;
+            u32::from_str_radix(line.trim_start_matches("Umask:").trim(), 8).ok()
+        })
+        .unwrap_or(0o022)
+}
+
 /// `mode` of a file made read-only, or writable by its owner again; a
 /// folder's stays as it is.
-fn read_only_mode(mode: u32, is_folder: bool, read_only: bool) -> u32 {
+/// Clearing it gives write back to each class that may read the file, as
+/// far as the file-creation mask `umask` allows, so setting and clearing
+/// it leaves a file as a new one would be.
+fn read_only_mode(mode: u32, is_folder: bool, read_only: bool, umask: u32) -> u32 {
     if is_folder {
         mode
     } else if read_only {
         mode & !0o222
     } else {
-        mode | 0o200
+        // Each class's read bit, moved onto its write bit.
+        let readers_write = (mode & 0o444) >> 1;
+        mode | (readers_write & !umask)
     }
 }
 
@@ -256,10 +293,17 @@ impl PermissionRequest {
 /// everything inside a folder, without following links. Blocking; see
 /// [`apply_in_background`].
 ///
+/// [`ModeChange::Bits`] is applied to the mode the item has now; a
+/// recursive one then gives what is inside the item's resulting bits.
+/// [`ModeChange::ReadOnlyFiles`] skips snapshot collections and other file
+/// systems inside the folder, as the folder count does (PROP-028), and goes
+/// on past an item it cannot change.
+///
 /// # Errors
 ///
 /// The first item that could not be read or changed, or
-/// [`EntryError::Cancelled`].
+/// [`EntryError::Cancelled`]; for Read-only, every item that could not be
+/// changed, by name.
 pub fn apply(uri: &str, request: &PermissionRequest, cancel: &Cancellation) -> Result<(), EntryError> {
     let file = gio::File::for_uri(&normalise(uri)?);
     let info = file.query_info(
@@ -267,69 +311,166 @@ pub fn apply(uri: &str, request: &PermissionRequest, cancel: &Cancellation) -> R
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         Some(cancel.cancellable()),
     )?;
-    apply_to_item(&file, &info, request, true, cancel)
+    let mut request = *request;
+    if let (ModeChange::Bits { .. }, true) = (request.mode, info.has_attribute("unix::mode")) {
+        let mode = info.attribute_uint32("unix::mode") & PERMISSION_BITS;
+        let is_folder = info.file_type() == gio::FileType::Directory;
+        request.mode = ModeChange::Advanced(request.mode.for_item(mode, is_folder));
+    }
+    let mut walk = Walk {
+        request: &request,
+        cancel,
+        top: &file,
+        device: optional_device(&info),
+        keep_going: matches!(request.mode, ModeChange::ReadOnlyFiles(_)),
+        failures: Vec::new(),
+    };
+    walk.apply_to_item(&file, &info, true)?;
+    walk.into_result()
 }
 
-/// Changes `file` (the item asked for when `is_top`), then what is inside
-/// it when the request is recursive.
-fn apply_to_item(
-    file: &gio::File,
-    info: &gio::FileInfo,
-    request: &PermissionRequest,
-    is_top: bool,
-    cancel: &Cancellation,
-) -> Result<(), EntryError> {
-    if cancel.is_cancelled() {
-        return Err(EntryError::Cancelled);
+/// One application of a request: the item asked for and what is inside it.
+struct Walk<'a> {
+    request: &'a PermissionRequest,
+    cancel: &'a Cancellation,
+    /// The item asked for, which failures are named from.
+    top: &'a gio::File,
+    /// The file system of the item asked for.
+    device: Option<u32>,
+    /// Go on past items that cannot be changed (Read-only).
+    keep_going: bool,
+    /// The items that could not be changed, by their path from `top`.
+    failures: Vec<String>,
+}
+
+/// The `unix::device` of `info`, where it is reported.
+fn optional_device(info: &gio::FileInfo) -> Option<u32> {
+    info.has_attribute("unix::device")
+        .then(|| info.attribute_uint32("unix::device"))
+}
+
+impl Walk<'_> {
+    /// `Ok` when every item changed, else the items that did not.
+    fn into_result(self) -> Result<(), EntryError> {
+        if self.failures.is_empty() {
+            return Ok(());
+        }
+        let count = self.failures.len();
+        let mut named = self.failures[..count.min(NAMED_FAILURES)].join(", ");
+        if count > NAMED_FAILURES {
+            named = crate::i18n::format_message(
+                "{named} and {more} more",
+                &[("named", &named), ("more", &(count - NAMED_FAILURES).to_string())],
+            );
+        }
+        Err(EntryError::Failed(crate::i18n::format_message(
+            "These items could not be changed: {named}",
+            &[("named", &named)],
+        )))
     }
-    let kind = info.file_type();
-    // Links have no permissions of their own; special files are skipped.
-    if !matches!(kind, gio::FileType::Regular | gio::FileType::Directory) || !info.has_attribute("unix::mode")
-    {
-        return Ok(());
+
+    /// Whether the folder `info` lies outside what a Read-only change
+    /// reaches: a snapshot collection, or another file system.
+    fn is_excluded(&self, info: &gio::FileInfo) -> bool {
+        if !self.keep_going || info.file_type() != gio::FileType::Directory {
+            return false;
+        }
+        let name = info.name();
+        let is_collection = name
+            .to_str()
+            .is_some_and(|name| crate::sizes::SNAPSHOT_COLLECTION_NAMES.contains(&name));
+        let is_mount = info.boolean("unix::is-mountpoint");
+        let other_device = self.device.is_some() && optional_device(info) != self.device;
+        is_collection || is_mount || other_device
     }
-    let is_folder = kind == gio::FileType::Directory;
-    set_ownership(file, info, request, cancel)?;
-    let mode = info.attribute_uint32("unix::mode") & PERMISSION_BITS;
-    let wanted = if is_top {
-        request.mode.for_item(mode, is_folder)
-    } else {
-        request.mode.for_content(mode, is_folder)
-    };
-    let set_mode = || -> Result<(), EntryError> {
-        if wanted != mode {
-            file.set_attribute_uint32(
-                "unix::mode",
-                wanted,
-                gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-                Some(cancel.cancellable()),
-            )?;
+
+    /// Records that `file` could not be changed.
+    fn record(&mut self, file: &gio::File) {
+        let name = self.top.relative_path(file).map_or_else(
+            || file.parse_name().to_string(),
+            |path| path.display().to_string(),
+        );
+        self.failures.push(name);
+    }
+
+    /// Changes `file` (the item asked for when `is_top`), then what is
+    /// inside it when the request is recursive.
+    fn apply_to_item(
+        &mut self,
+        file: &gio::File,
+        info: &gio::FileInfo,
+        is_top: bool,
+    ) -> Result<(), EntryError> {
+        let (request, cancel) = (self.request, self.cancel);
+        if cancel.is_cancelled() {
+            return Err(EntryError::Cancelled);
+        }
+        let kind = info.file_type();
+        // Links have no permissions of their own; special files are skipped.
+        if !matches!(kind, gio::FileType::Regular | gio::FileType::Directory)
+            || !info.has_attribute("unix::mode")
+        {
+            return Ok(());
+        }
+        let is_folder = kind == gio::FileType::Directory;
+        set_ownership(file, info, request, cancel)?;
+        let mode = info.attribute_uint32("unix::mode") & PERMISSION_BITS;
+        let wanted = if is_top {
+            request.mode.for_item(mode, is_folder)
+        } else {
+            request.mode.for_content(mode, is_folder)
+        };
+        let set_mode = || -> Result<(), EntryError> {
+            if wanted != mode {
+                file.set_attribute_uint32(
+                    "unix::mode",
+                    wanted,
+                    gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+                    Some(cancel.cancellable()),
+                )?;
+            }
+            Ok(())
+        };
+        if !(is_folder && request.recursive) {
+            return set_mode();
+        }
+        // A mode that stops the owner listing the folder comes after its
+        // content, which could not be listed any more; any other comes
+        // first, so a folder the owner could not list becomes listable.
+        let locks_out = wanted & OWNER_LISTS != OWNER_LISTS;
+        if !locks_out {
+            set_mode()?;
+        }
+        let children = file.enumerate_children(
+            MODE_ATTRIBUTES,
+            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            Some(cancel.cancellable()),
+        )?;
+        loop {
+            let child_info = match children.next_file(Some(cancel.cancellable())) {
+                Ok(Some(child_info)) => child_info,
+                Ok(None) => break,
+                Err(error) if self.keep_going && !error.matches(gio::IOErrorEnum::Cancelled) => {
+                    self.record(file);
+                    break;
+                }
+                Err(error) => return Err(error.into()),
+            };
+            if self.is_excluded(&child_info) {
+                continue;
+            }
+            let child = file.child(child_info.name());
+            match self.apply_to_item(&child, &child_info, false) {
+                Err(EntryError::Cancelled) => return Err(EntryError::Cancelled),
+                Err(_) if self.keep_going => self.record(&child),
+                result => result?,
+            }
+        }
+        if locks_out {
+            set_mode()?;
         }
         Ok(())
-    };
-    if !(is_folder && request.recursive) {
-        return set_mode();
     }
-    // A mode that stops the owner listing the folder comes after its
-    // content, which could not be listed any more; any other comes first,
-    // so a folder the owner could not list becomes listable.
-    let locks_out = wanted & OWNER_LISTS != OWNER_LISTS;
-    if !locks_out {
-        set_mode()?;
-    }
-    let children = file.enumerate_children(
-        MODE_ATTRIBUTES,
-        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-        Some(cancel.cancellable()),
-    )?;
-    while let Some(child_info) = children.next_file(Some(cancel.cancellable()))? {
-        let child = file.child(child_info.name());
-        apply_to_item(&child, &child_info, request, false, cancel)?;
-    }
-    if locks_out {
-        set_mode()?;
-    }
-    Ok(())
 }
 
 /// Sets the group and owner the request names, where they differ. The
@@ -571,6 +712,129 @@ mod tests {
         );
 
         apply(&file_uri(&folder), &read_only(false), &Cancellation::new()).expect("applies");
-        assert_eq!(mode_of(&folder.join("Sub/photo.png")), 0o644);
+        let readable_write = 0o222 & !process_umask();
+        assert_eq!(
+            mode_of(&folder.join("Sub/photo.png")),
+            0o444 | readable_write,
+            "every class that may read gets write back, as the umask allows"
+        );
+    }
+
+    /// Clearing Read-only undoes setting it: each class that may read the
+    /// file may write it again, unless the umask keeps that bit off.
+    ///
+    /// parity: PROP-003
+    #[test]
+    fn clearing_read_only_gives_write_back_to_each_class_that_can_read() {
+        assert_eq!(read_only_mode(0o664, false, true, 0o002), 0o444);
+        assert_eq!(read_only_mode(0o444, false, false, 0o002), 0o664);
+        assert_eq!(read_only_mode(0o444, false, false, 0o022), 0o644);
+        assert_eq!(read_only_mode(0o440, false, false, 0o002), 0o660);
+        assert_eq!(read_only_mode(0o400, false, false, 0o077), 0o600);
+        assert_eq!(
+            read_only_mode(0o555, true, false, 0o002),
+            0o555,
+            "a folder keeps its bits"
+        );
+    }
+
+    /// Edit and Advanced change only the bits the user changed, on the
+    /// mode the item has when the change is made: a change made since the
+    /// dialog opened stays.
+    ///
+    /// parity: PROP-007
+    #[test]
+    fn changed_bits_apply_on_top_of_the_mode_on_disk() {
+        let root = tempfile::tempdir().expect("a folder");
+        let file = root.path().join("plan.txt");
+        fs::write(&file, b"p").expect("file");
+        // Read-only was applied after the dialog read 0o644.
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o444)).expect("mode");
+        let bits = |set, clear, recursive| PermissionRequest {
+            mode: ModeChange::Bits { set, clear },
+            owner: None,
+            group: None,
+            recursive,
+        };
+
+        apply(&file_uri(&file), &bits(0o020, 0o004, false), &Cancellation::new()).expect("applies");
+
+        assert_eq!(mode_of(&file), 0o460, "the owner stays read-only");
+
+        let folder = root.path().join("Shared");
+        fs::create_dir(&folder).expect("folder");
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).expect("mode");
+        fs::write(folder.join("notes.txt"), b"n").expect("file");
+        fs::set_permissions(folder.join("notes.txt"), fs::Permissions::from_mode(0o600)).expect("mode");
+
+        apply(&file_uri(&folder), &bits(0o020, 0, true), &Cancellation::new()).expect("applies");
+
+        assert_eq!(mode_of(&folder), 0o775);
+        assert_eq!(
+            mode_of(&folder.join("notes.txt")),
+            0o664,
+            "what is inside gets the folder's bits, without x for a plain file"
+        );
+    }
+
+    /// Read-only reaches neither a snapshot collection nor another file
+    /// system inside the folder, as the folder count skips them.
+    ///
+    /// parity: PROP-003, PROP-028
+    #[test]
+    fn read_only_skips_snapshot_collections() {
+        let root = tempfile::tempdir().expect("a folder");
+        let folder = root.path().join("Album");
+        let snapshot = folder.join(".snapshot/daily");
+        fs::create_dir_all(&snapshot).expect("folders");
+        fs::write(snapshot.join("photo.png"), b"p").expect("file");
+        fs::set_permissions(snapshot.join("photo.png"), fs::Permissions::from_mode(0o644)).expect("mode");
+        let request = PermissionRequest {
+            mode: ModeChange::ReadOnlyFiles(true),
+            owner: None,
+            group: None,
+            recursive: true,
+        };
+
+        apply(&file_uri(&folder), &request, &Cancellation::new()).expect("applies");
+
+        assert_eq!(mode_of(&snapshot.join("photo.png")), 0o644);
+    }
+
+    /// Read-only goes on past an item it cannot change and names it.
+    ///
+    /// parity: PROP-003
+    #[test]
+    fn read_only_goes_on_past_an_item_it_cannot_change_and_names_it() {
+        // The superuser can change everything, so nothing fails for it.
+        if rustix::process::geteuid().is_root() {
+            return;
+        }
+        let root = tempfile::tempdir().expect("a folder");
+        let folder = root.path().join("Album");
+        fs::create_dir_all(folder.join("Locked")).expect("folders");
+        fs::write(folder.join("Locked/hidden.png"), b"h").expect("file");
+        fs::write(folder.join("photo.png"), b"p").expect("file");
+        fs::set_permissions(folder.join("photo.png"), fs::Permissions::from_mode(0o644)).expect("mode");
+        fs::set_permissions(folder.join("Locked"), fs::Permissions::from_mode(0o000)).expect("mode");
+        let request = PermissionRequest {
+            mode: ModeChange::ReadOnlyFiles(true),
+            owner: None,
+            group: None,
+            recursive: true,
+        };
+
+        let applied = apply(&file_uri(&folder), &request, &Cancellation::new());
+
+        fs::set_permissions(folder.join("Locked"), fs::Permissions::from_mode(0o755)).expect("mode");
+        assert_eq!(
+            mode_of(&folder.join("photo.png")),
+            0o444,
+            "the rest still changed"
+        );
+        let Err(EntryError::Failed(message)) = applied else {
+            panic!("a failure naming the item: {applied:?}");
+        };
+        assert!(message.contains("Locked"), "{message}");
     }
 }

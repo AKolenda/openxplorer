@@ -21,7 +21,7 @@ use super::BrowserWindow;
 impl BrowserWindow {
     /// Opens a snapshot folder in a new tab, tagged with its snapshot
     /// (Browse).
-    pub(super) fn browse_snapshot(&self, target: SnapshotTarget) {
+    pub(crate) fn browse_snapshot(&self, target: SnapshotTarget) {
         self.refresh_snapshot_roots();
         if let Err(error) = self.open_tab(&target.uri, TabPlacement::Foreground) {
             self.show_message(&error.to_string());

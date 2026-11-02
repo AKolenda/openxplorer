@@ -169,10 +169,12 @@ impl BrowserWindow {
 
     /// Renames the item at `uri`, called `old_name`, to `name`, as the
     /// name field of Properties asks (PROP-005): the same checks, question
-    /// about a changed extension, write protection and Undo as Rename. The
-    /// error is the message to show.
+    /// about a changed extension, asked over `parent`, the Properties
+    /// window, write protection and Undo as Rename. The error is the
+    /// message to show.
     pub(crate) async fn rename_item_at(
         &self,
+        parent: &gtk::Window,
         uri: &str,
         old_name: &str,
         name: &str,
@@ -181,7 +183,10 @@ impl BrowserWindow {
         // An invalid name is refused before anything is asked, as renaming
         // in place and the Rename dialog refuse it.
         ox_core::location::validate_name(name).map_err(|error| error.to_string())?;
-        if !self.confirm_extension_change(old_name, name, is_folder).await {
+        if !self
+            .confirm_extension_change_over(parent, old_name, name, is_folder)
+            .await
+        {
             return Err(ox_core::i18n::gettext_static(NOT_RENAMED).to_owned());
         }
         let (context, _writing) = self.admit_write()?;

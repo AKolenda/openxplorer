@@ -47,6 +47,7 @@ impl RestoreRequest {
     }
 
     /// The request as a window action's parameter, `(sss)`.
+    #[cfg(test)]
     pub(crate) fn to_variant(&self) -> glib::Variant {
         (self.version_uri.as_str(), self.label.as_str(), self.name.as_str()).to_variant()
     }

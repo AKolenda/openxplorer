@@ -10,11 +10,15 @@
 //! closing the window stops the work its tabs started (a folder being
 //! counted, versions being looked up).
 //!
-//! The window runs the browser window's actions (open a snapshot in a
-//! tab, restore a copy, Open with) through that window's action group,
-//! inserted as `win`, so a tab's buttons name the same actions they named
-//! inside the browser window. The same window, modal and without tabs,
-//! is the Security tab's Edit and Advanced dialogs and Advanced Sharing.
+//! What a tab asks of the browser window that opened it (open a snapshot
+//! in a tab, restore a copy, Open with, rename) it asks through that
+//! window's methods ([`PropertiesWindow::opener`]). The window takes none
+//! of the browser window's actions or keyboard shortcuts, so Ctrl+F, F11
+//! and the others do nothing here; F5 looks again in the tab shown, where
+//! it can. Closing the window while OK or Apply runs waits for the change:
+//! the window closes once it is made, and stays open with the message when
+//! it fails. The same window, modal and without tabs, is the Security tab's
+//! Edit and Advanced dialogs and Advanced Sharing.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -36,6 +40,9 @@ const PAGE_MARGIN: i32 = 11;
 const TITLE_ART: i32 = 16;
 /// The close glyph of the title bar.
 const CLOSE_GLYPH: i32 = 12;
+
+/// What F5 runs, with the name of the tab shown.
+type RefreshHandler = Box<dyn Fn(&str)>;
 
 /// The future a pending change's [`Pending::apply`] returns: `Err` with
 /// the message to show when the change could not be made.
@@ -80,6 +87,13 @@ mod imp {
         pub(super) work: RefCell<Vec<Cancellation>>,
         /// Run when the window closes.
         pub(super) on_closed: RefCell<Vec<Box<dyn Fn()>>>,
+        /// Run once OK or Apply finished, whether or not every change was
+        /// made, so the tabs read the item again.
+        pub(super) on_applied: RefCell<Vec<Box<dyn Fn()>>>,
+        /// Run by F5, with the name of the tab shown.
+        pub(super) on_refresh: RefCell<Vec<super::RefreshHandler>>,
+        /// Set when the window was asked to close while a change ran.
+        pub(super) close_after_apply: Cell<bool>,
         /// The browser window that opened it.
         pub(super) opener: glib::WeakRef<BrowserWindow>,
         /// True while OK or Apply runs.
@@ -128,6 +142,12 @@ mod imp {
 
     impl WindowImpl for PropertiesWindow {
         fn close_request(&self) -> glib::Propagation {
+            // A change being made finishes first: the window closes after
+            // it, or stays to show why it failed.
+            if self.is_applying.get() {
+                self.close_after_apply.set(true);
+                return glib::Propagation::Stop;
+            }
             if !self.is_closed.replace(true) {
                 for work in self.work.take() {
                     work.cancel();
@@ -158,12 +178,10 @@ impl PropertiesWindow {
         if let Some(art) = art {
             window.imp().art.append(&ArtImage::new(art, TITLE_ART));
         }
+        // The window joins no application, so the browser window's
+        // keyboard shortcuts never reach it.
         if let Some(opener) = opener {
             window.imp().opener.set(Some(opener));
-            window.insert_action_group("win", Some(opener.upcast_ref::<gtk::gio::ActionGroup>()));
-            if let Some(application) = opener.application() {
-                window.set_application(Some(&application));
-            }
         }
         window
     }
@@ -197,7 +215,38 @@ impl PropertiesWindow {
         column.append(&self.footer());
         self.set_child(Some(&column));
         self.add_controller(crate::modal::escape_closes());
+        self.add_controller(self.refresh_key());
         self.update_relation(&[gtk::accessible::Relation::LabelledBy(&[imp.title.upcast_ref()])]);
+    }
+
+    /// F5: looks again in the tab shown, before any other widget takes it.
+    fn refresh_key(&self) -> gtk::ShortcutController {
+        let window = self.downgrade();
+        let action = gtk::CallbackAction::new(move |_, _| {
+            if let Some(window) = window.upgrade() {
+                let shown = window.selected_tab().unwrap_or_default();
+                for refresh in window.imp().on_refresh.borrow().iter() {
+                    refresh(&shown);
+                }
+            }
+            glib::Propagation::Stop
+        });
+        let trigger = gtk::KeyvalTrigger::new(gtk::gdk::Key::F5, gtk::gdk::ModifierType::empty());
+        let shortcuts = gtk::ShortcutController::new();
+        shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+        shortcuts.add_shortcut(gtk::Shortcut::new(Some(trigger), Some(action)));
+        shortcuts
+    }
+
+    /// Runs `refresh` on F5, with the name of the tab shown.
+    pub(crate) fn connect_refresh(&self, refresh: impl Fn(&str) + 'static) {
+        self.imp().on_refresh.borrow_mut().push(Box::new(refresh));
+    }
+
+    /// Runs `applied` each time OK or Apply finished, whether or not every
+    /// change was made.
+    pub(crate) fn connect_applied(&self, applied: impl Fn() + 'static) {
+        self.imp().on_applied.borrow_mut().push(Box::new(applied));
     }
 
     /// The item's picture, the title and the close button, as a handle the
@@ -286,6 +335,12 @@ impl PropertiesWindow {
     /// The title bar's text.
     pub(crate) fn title_text(&self) -> String {
         self.imp().title.text().to_string()
+    }
+
+    /// Makes `opener` the browser window this one acts through, as when the
+    /// tab that opened it moved to `opener` and its window closed.
+    pub(crate) fn set_opener(&self, opener: &BrowserWindow) {
+        self.imp().opener.set(Some(opener));
     }
 
     /// The browser window that opened this one, while it is open.
@@ -439,12 +494,19 @@ impl PropertiesWindow {
         }
         imp.is_applying.set(false);
         self.set_buttons_sensitive(true);
+        for applied in imp.on_applied.borrow().iter() {
+            applied();
+        }
+        let close_after = imp.close_after_apply.replace(false);
         if let Some(message) = failure {
             self.changed();
             self.show_error(&message);
             return false;
         }
         self.changed();
+        if close_after {
+            self.close();
+        }
         true
     }
 
@@ -458,6 +520,10 @@ impl PropertiesWindow {
     /// Shows `message` in a message box over the window, as Windows shows
     /// a failed change, with OK.
     pub(crate) fn show_error(&self, message: &str) {
+        // A closed window shows nothing more.
+        if self.is_closed() {
+            return;
+        }
         let window = self.clone();
         let message = message.to_owned();
         glib::spawn_future_local(async move {

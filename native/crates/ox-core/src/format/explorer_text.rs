@@ -25,33 +25,67 @@ pub fn exact_size_text(bytes: u64) -> String {
 /// `314 KB`. A size from 1000 of a unit up is written in the next unit
 /// (`0.97 MB`), as Explorer writes it, so it never has four digits.
 fn short_size(bytes: u64) -> String {
+    short_size_with(bytes, &Separators::current())
+}
+
+/// [`short_size`] with `separators`.
+fn short_size_with(bytes: u64, separators: &Separators) -> String {
     let Some(unit) = SIZE_UNITS
         .iter()
         .rev()
         .find(|unit| u128::from(bytes) * 1024 >= u128::from(unit.bytes) * 1000)
         .filter(|_| bytes >= 1024)
     else {
-        return crate::i18n::format_message("{bytes} bytes", &[("bytes", &grouped(bytes))]);
+        return crate::i18n::format_message(
+            "{bytes} bytes",
+            &[("bytes", &grouped_with(bytes, &separators.thousands))],
+        );
     };
     let symbol = crate::i18n::gettext_static(unit.symbol);
     let hundredths = u128::from(bytes) * 100 / u128::from(unit.bytes);
+    let point = &separators.decimal;
     let value = if hundredths < 1000 {
-        format!("{}.{:02}", hundredths / 100, hundredths % 100)
+        format!("{}{point}{:02}", hundredths / 100, hundredths % 100)
     } else if hundredths < 10_000 {
-        format!("{}.{}", hundredths / 100, hundredths % 100 / 10)
+        format!("{}{point}{}", hundredths / 100, hundredths % 100 / 10)
     } else {
         (hundredths / 100).to_string()
     };
     crate::i18n::format_message("{value} {unit}", &[("value", &value), ("unit", symbol)])
 }
 
-/// `1234567` as `1,234,567`.
+/// The decimal point and the thousands separator numbers are written
+/// with. They come from the user's language, as its translators write
+/// them; everything that writes a number takes them from here, so one
+/// place changes when the C library's locale data is used instead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Separators {
+    decimal: String,
+    thousands: String,
+}
+
+impl Separators {
+    /// The separators of the user's language: `.` and `,` in English.
+    fn current() -> Self {
+        Self {
+            decimal: crate::i18n::pgettext("decimal separator", "."),
+            thousands: crate::i18n::pgettext("thousands separator", ","),
+        }
+    }
+}
+
+/// `1234567` as `1,234,567`, with the user's thousands separator.
 pub fn grouped(value: u64) -> String {
+    grouped_with(value, &Separators::current().thousands)
+}
+
+/// `value` in groups of three digits separated by `separator`.
+fn grouped_with(value: u64, separator: &str) -> String {
     let digits = value.to_string();
-    let mut text = String::with_capacity(digits.len() + digits.len() / 3);
+    let mut text = String::with_capacity(digits.len() + digits.len() / 3 * separator.len());
     for (index, digit) in digits.chars().enumerate() {
         if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            text.push(',');
+            text.push_str(separator);
         }
         text.push(digit);
     }
@@ -111,6 +145,30 @@ mod tests {
         assert_eq!(exact_size_text(0), "0 bytes (0 bytes)");
         assert_eq!(exact_size_text(1_023_999), "999 KB (1,023,999 bytes)");
         assert_eq!(exact_size_text(1_024_000), "0.97 MB (1,024,000 bytes)");
+    }
+
+    /// Numbers take the language's separators: a German translation's
+    /// `,` and `.` give `15,4 MB (16.154.811 bytes)`.
+    ///
+    /// parity: PROP-003
+    #[test]
+    fn sizes_take_the_languages_separators() {
+        let german = Separators {
+            decimal: ",".to_owned(),
+            thousands: ".".to_owned(),
+        };
+        assert_eq!(short_size_with(16_154_811, &german), "15,4 MB");
+        assert_eq!(short_size_with(1_536, &german), "1,50 KB");
+        assert_eq!(grouped_with(16_154_811, &german.thousands), "16.154.811");
+        assert_eq!(grouped_with(1_234_567, "\u{202f}"), "1\u{202f}234\u{202f}567");
+        assert_eq!(
+            Separators::current(),
+            Separators {
+                decimal: ".".to_owned(),
+                thousands: ",".to_owned()
+            },
+            "English without a translation"
+        );
     }
 
     /// parity: PROP-004

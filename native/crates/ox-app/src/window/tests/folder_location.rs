@@ -143,6 +143,42 @@ fn the_location_tab_moves_documents_and_offers_to_move_its_files() {
     assert!(!folders.documents.join("plan.txt").exists());
 }
 
+/// A checked and consented location is applied by the window's OK, as
+/// by Apply location.
+///
+/// parity: PROP-017
+#[gtk::test]
+fn ok_applies_a_checked_and_consented_location() {
+    let folders = Folders::new();
+    let state = folders.home.join(".config-state");
+    let test =
+        TestWindow::open_with_standard_folders(&file_uri(&folders.home), folders.locations(), |context| {
+            context.use_folder_relocation(folders.relocation(&state));
+        });
+    test.activate("properties-of", Some(&file_uri(&folders.documents)));
+    let panel = location_panel(&test);
+    let window = test.window.properties_windows().remove(0);
+    let field = panel.location_field();
+    wait_until("the current location", || {
+        field.text() == folders.documents.to_string_lossy().as_ref()
+    });
+    field.set_text(&folders.destination.to_string_lossy());
+    press(&panel, "Check location");
+    wait_until("the check", || panel.status_text().starts_with("Local folder"));
+    assert!(!window.apply_button().is_sensitive(), "Apply waits for consent");
+    panel.set_consent(true);
+    assert!(window.apply_button().is_sensitive());
+
+    window.ok_button().emit_clicked();
+
+    let question = open_dialog(&test);
+    assert_eq!(question.title_text(), "Move files");
+    question.press("Don't move");
+    let user_dirs = fs::read_to_string(folders.config.join("user-dirs.dirs")).expect("the new setting");
+    assert!(user_dirs.contains(&folders.destination.display().to_string()));
+    wait_until("the window to close", || window.is_closed());
+}
+
 /// Brave's follow-up shows for Downloads only, starts unticked and, when
 /// ticked, opens Brave's own dialog for the new folder after Apply.
 ///

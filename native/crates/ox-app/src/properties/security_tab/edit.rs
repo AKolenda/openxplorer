@@ -2,17 +2,19 @@
 //! Edit...: Windows' "Permissions for <item>" dialog over the item's
 //! permission bits. Object name, the names, and the selected name's
 //! permissions with Allow check boxes; Deny boxes are shown, greyed, as
-//! Linux has no deny entries. OK or Apply sets the bits; the special bits
-//! stay as they are.
+//! Linux has no deny entries. OK or Apply turns on and off only the bits
+//! the user changed, on the mode the item has then, so a change made since
+//! the dialog opened (Read-only on General) stays; the special bits stay as
+//! they are.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::permissions::{ModeChange, PermissionClass, PermissionRequest};
+use ox_core::permissions::{PermissionClass, PermissionRequest};
 
-use super::{apply_request, NameList, PermissionGrid, SecurityContext, SecurityFacts};
+use super::{apply_request, changed_bits, NameList, PermissionGrid, SecurityContext, SecurityFacts};
 use crate::properties::window::{ApplyFuture, Pending, PropertiesWindow, Rows};
 
 /// The bits the dialog holds until OK or Apply.
@@ -36,7 +38,7 @@ impl Pending for EditedBits {
             };
             let facts = self.facts.borrow().clone();
             let request = PermissionRequest {
-                mode: ModeChange::Advanced(self.mode.get()),
+                mode: changed_bits(facts.mode.unwrap_or_default(), self.mode.get()),
                 owner: None,
                 group: None,
                 recursive: false,

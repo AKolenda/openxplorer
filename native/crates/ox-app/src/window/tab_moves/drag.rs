@@ -96,6 +96,8 @@ pub(in crate::window) struct OutgoingTabDrag {
     /// A window of this app refused the tab where the pointer was last
     /// (`last_rejected`): on X11 a release there reports "no target".
     is_refused_here: bool,
+    /// The window that took the tab, once one did.
+    destination: Option<glib::WeakRef<BrowserWindow>>,
 }
 
 /// The tab `drop` carries, when it is a tab drag of this process.

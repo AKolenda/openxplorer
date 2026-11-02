@@ -46,4 +46,5 @@ pub use local_provider::LocalSizeProvider;
 pub use provider::{FileIdentity, SizeEntry, SizeEntryKind, SizeProvider};
 pub use result::{FolderSize, PartialReason, ScanStatus};
 pub use run::{scan_folder_size, scan_folder_size_in_background};
+pub(crate) use scan::SNAPSHOT_COLLECTION_NAMES;
 pub use scan::{FolderSizeScan, ScanLimits, MAX_DURATION, MAX_ENTRIES};

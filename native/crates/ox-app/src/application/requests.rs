@@ -169,7 +169,15 @@ pub(super) fn show_file_manager_request(
     startup_id: &str,
 ) {
     let window = active_window(app).unwrap_or_else(|| open_window(app, context, None));
-    raise_for_caller(&window, startup_id);
+    // A token lets one window take focus. ShowItemProperties asks for a
+    // Properties window, which opens a moment later: it takes the token.
+    let is_properties = request.method() == ox_core::integration::FileManagerMethod::ShowItemProperties;
+    if is_properties && !startup_id.is_empty() {
+        window.hand_startup_id_to_properties(startup_id);
+        raise_for_caller(&window, "");
+    } else {
+        raise_for_caller(&window, startup_id);
+    }
     window.show_file_manager_request(request);
 }
 

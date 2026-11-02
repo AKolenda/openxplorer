@@ -399,8 +399,9 @@ pub(crate) enum WindowAction {
     /// Open with…: the Open with dialog for the one selected item, or the
     /// folder.
     OpenWith,
-    /// Change app… in Properties: the Open with dialog for the file whose
-    /// URI is the string target.
+    /// Change app…: the Open with dialog, over this window, for the file
+    /// whose URI is the string target. Properties' Change... opens it over
+    /// the Properties window instead (`BrowserWindow::change_app_over`).
     ChangeApp,
     /// Open folder with…: the Open with dialog for the folder whose URI is
     /// the string target (a Quick access pin's menu).

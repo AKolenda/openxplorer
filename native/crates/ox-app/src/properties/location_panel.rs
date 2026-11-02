@@ -399,9 +399,22 @@ impl LocationPanel {
         let Some(apply) = self.imp().apply_button.get() else {
             return;
         };
-        let can_apply =
-            !self.imp().is_applying.get() && self.consent().is_active() && self.is_field_checked();
-        apply.set_sensitive(can_apply);
+        apply.set_sensitive(self.has_change());
+        // The window's OK and Apply make the same change.
+        if let Some(window) = super::window::PropertiesWindow::of(self) {
+            window.changed();
+        }
+    }
+
+    /// Whether a checked destination waits, with consent, to be applied.
+    fn has_change(&self) -> bool {
+        !self.imp().is_applying.get() && self.consent().is_active() && self.is_field_checked()
+    }
+
+    /// The change the tab holds for the window's OK and Apply: the checked
+    /// destination the user consented to, as Apply location makes it.
+    pub(super) fn pending(&self) -> std::rc::Rc<dyn super::window::Pending> {
+        std::rc::Rc::new(CheckedLocationChange(self.downgrade()))
     }
 
     /// Whether the field holds the path the last check returned.
@@ -454,6 +467,24 @@ impl LocationPanel {
     /// Brave's follow-up box, which only Downloads shows.
     pub(crate) fn sync_brave_box(&self) -> gtk::CheckButton {
         self.imp().sync_brave.get().expect("build adds the box").clone()
+    }
+}
+
+/// A checked and consented destination, for the window's OK and Apply.
+struct CheckedLocationChange(glib::WeakRef<LocationPanel>);
+
+impl super::window::Pending for CheckedLocationChange {
+    fn has_changes(&self) -> bool {
+        self.0.upgrade().is_some_and(|panel| panel.has_change())
+    }
+
+    fn apply(self: std::rc::Rc<Self>) -> super::window::ApplyFuture {
+        Box::pin(async move {
+            match self.0.upgrade() {
+                Some(panel) => panel.apply_checked_location().await,
+                None => Ok(()),
+            }
+        })
     }
 }
 

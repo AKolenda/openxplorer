@@ -262,7 +262,7 @@ impl BrowserWindow {
         match self.detach_tab(id) {
             Ok(window) => {
                 window.present_as_new_window();
-                self.release_moved_tab(id);
+                self.release_moved_tab(id, Some(&window));
             }
             Err(refusal) => self.show_message(&refusal.to_string()),
         }
@@ -280,7 +280,7 @@ impl BrowserWindow {
             return;
         };
         match self.hand_over_tab(id, &destination, None) {
-            Ok(()) => self.release_moved_tab(id),
+            Ok(()) => self.release_moved_tab(id, Some(&destination)),
             Err(refusal) => self.show_message(&refusal.to_string()),
         }
     }

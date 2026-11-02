@@ -59,6 +59,12 @@ struct ItemPages {
     context: PropertiesContext,
     /// The item's location; a rename on the General tab changes it.
     uri: Rc<RefCell<String>>,
+    /// The location every tab works on, until a rename reaches them.
+    shown_uri: RefCell<String>,
+    /// The Previous Versions tab.
+    versions: VersionsPanel,
+    /// Points the Sharing tab at a renamed folder.
+    share_folder: Option<Rc<dyn Fn(std::path::PathBuf)>>,
     general: gtk::Box,
     security: gtk::Box,
     customize: Option<gtk::Box>,
@@ -85,13 +91,15 @@ pub(crate) fn open_item_properties(
         &general,
     );
     let local_folder = local_folder(&target);
+    let mut share_folder = None;
     if let Some((folder, usershares)) = local_folder.clone().zip(context.usershares.as_ref()) {
-        let sharing = sharing_panel(folder, usershares.clone());
+        let (sharing, follow) = sharing_panel(folder, usershares.clone());
         window.add_tab(
             PropertiesTab::Sharing.page_name(),
             PropertiesTab::Sharing.label(),
             &sharing,
         );
+        share_folder = Some(follow);
     }
     let security = page();
     window.add_tab(
@@ -101,6 +109,7 @@ pub(crate) fn open_item_properties(
     );
     if let Some(folder) = target.known_folder {
         let location = LocationPanel::new(folder, Arc::clone(&context.relocation), context.brave.clone());
+        window.add_pending(location.pending());
         window.add_tab(
             PropertiesTab::Location.page_name(),
             PropertiesTab::Location.label(),
@@ -124,6 +133,12 @@ pub(crate) fn open_item_properties(
         );
         customize
     });
+    let refreshed = versions.clone();
+    window.connect_refresh(move |name| {
+        if name == PropertiesTab::PreviousVersions.page_name() {
+            refreshed.load();
+        }
+    });
     let shown_versions = versions.clone();
     window.connect_tab_shown(move |name| {
         if name == PropertiesTab::PreviousVersions.page_name() {
@@ -141,6 +156,9 @@ pub(crate) fn open_item_properties(
     let pages = Rc::new(ItemPages {
         window: window.downgrade(),
         uri: Rc::new(RefCell::new(target.uri.clone())),
+        shown_uri: RefCell::new(target.uri.clone()),
+        versions,
+        share_folder,
         target,
         context,
         general,
@@ -149,6 +167,12 @@ pub(crate) fn open_item_properties(
         count,
     });
     pages.read(true);
+    let applied = Rc::downgrade(&pages);
+    window.connect_applied(move || {
+        if let Some(pages) = applied.upgrade() {
+            pages.applied();
+        }
+    });
     // The window keeps its pages, which the Security tab's dialogs read
     // the item again into, until it closes.
     let kept = RefCell::new(Some(pages));
@@ -168,6 +192,28 @@ fn local_folder(target: &PropertiesTarget) -> Option<std::path::PathBuf> {
 }
 
 impl ItemPages {
+    /// After OK or Apply: a rename reaches every tab, and the Security tab
+    /// reads the item again, as General may have changed its permissions.
+    fn applied(self: &Rc<Self>) {
+        let current = self.uri.borrow().clone();
+        if *self.shown_uri.borrow() != current {
+            self.shown_uri.replace(current.clone());
+            if let Some(window) = self.window.upgrade() {
+                // Properties of the renamed item come back to this window.
+                window.set_widget_name(&current);
+            }
+            self.versions.set_item_uri(&current);
+            if let Some((follow, path)) = self
+                .share_folder
+                .as_ref()
+                .zip(gtk::gio::File::for_uri(&current).path())
+            {
+                follow(path);
+            }
+        }
+        self.read(false);
+    }
+
     /// Reads the item off the main thread, then fills every page the
     /// first time, or only the Security tab after one of its dialogs
     /// changed the item.
@@ -237,13 +283,7 @@ impl ItemPages {
             can_change_app: !properties.entry.is_dir && !is_read_only,
         };
         clear(&self.general);
-        let general = general_tab(
-            window,
-            &properties,
-            &self.context.locations,
-            rights,
-            Rc::clone(&self.uri),
-        );
+        let general = general_tab(window, &properties, &self.context.locations, rights, &self.uri);
         self.general.append(&general.page);
         if let Some(rows) = &general.folder_rows {
             if is_smb_server(&properties.entry.uri) {
@@ -261,11 +301,7 @@ impl ItemPages {
             follow_default_app(window, &opens_with, properties.entry.content_type.clone());
         }
         if let Some(customize) = &self.customize {
-            let tab = super::custom_icon::customize_tab(
-                window,
-                &properties.entry.uri,
-                properties.custom_icon.as_deref(),
-            );
+            let tab = super::custom_icon::customize_tab(window, &self.uri, properties.custom_icon.as_deref());
             customize.append(&tab);
         }
     }

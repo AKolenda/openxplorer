@@ -23,7 +23,8 @@ const PREVIEW_SIZE: i32 = 32;
 /// The icon chosen, until OK or Apply.
 struct IconChoice {
     window: glib::WeakRef<PropertiesWindow>,
-    uri: String,
+    /// The folder's location, which a rename on General changes.
+    uri: Rc<RefCell<String>>,
     /// The folder's own icon now, if it has one.
     current: RefCell<Option<String>>,
     /// The icon the user chose: a picture, or `None` for the default.
@@ -68,12 +69,13 @@ impl Pending for IconChoice {
     fn apply(self: Rc<Self>) -> ApplyFuture {
         Box::pin(async move {
             let icon = self.chosen.borrow().clone();
-            set_custom_icon(&self.uri, icon.clone())
+            let uri = self.uri.borrow().clone();
+            set_custom_icon(&uri, icon.clone())
                 .await
                 .map_err(|error| error.to_string())?;
             self.current.replace(icon);
             if let Some(opener) = self.window.upgrade().and_then(|window| window.opener()) {
-                opener.refresh_item_icon(&self.uri);
+                opener.refresh_item_icon(&uri);
             }
             Ok(())
         })
@@ -82,7 +84,11 @@ impl Pending for IconChoice {
 
 /// The Customize tab of the local folder at `uri`, whose own icon is
 /// `current`.
-pub(super) fn customize_tab(window: &PropertiesWindow, uri: &str, current: Option<&str>) -> gtk::Box {
+pub(super) fn customize_tab(
+    window: &PropertiesWindow,
+    uri: &Rc<RefCell<String>>,
+    current: Option<&str>,
+) -> gtk::Box {
     let page = super::window::page();
     let (frame, content) = group(&ox_core::i18n::gettext("Folder icons"));
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
@@ -108,7 +114,7 @@ pub(super) fn customize_tab(window: &PropertiesWindow, uri: &str, current: Optio
     page.append(&frame);
     let choice = Rc::new(IconChoice {
         window: window.downgrade(),
-        uri: uri.to_owned(),
+        uri: Rc::clone(uri),
         current: RefCell::new(current.map(str::to_owned)),
         chosen: RefCell::new(current.map(str::to_owned)),
         preview,

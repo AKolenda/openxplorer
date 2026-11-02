@@ -19,11 +19,12 @@ use crate::dialog::{Dialog, DialogFrame};
 use crate::integration::OpenWithDialog;
 use crate::properties::{FolderSizeState, PropertiesWindow, RestoreRequest, SnapshotTarget, VersionsPanel};
 use crate::test_support::harness::{
-    capture, capture_dialog, descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow,
+    capture, capture_dialog, descendants, settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow,
     ThemeGuard,
 };
 use crate::window::tests::file_ops_support::open_dialog;
 use crate::window::widget_tree::children;
+use crate::window::WindowAction;
 
 /// The name of the snapshot the fixtures create.
 pub(super) const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
@@ -143,6 +144,23 @@ fn message_over(window: &PropertiesWindow) -> Dialog {
     dialog_over_properties(window).expect("a message shows")
 }
 
+/// The message box over `window` that is not the extension question,
+/// once it shows.
+fn refusal_over(window: &PropertiesWindow) -> Dialog {
+    let find = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|toplevel| toplevel.downcast::<Dialog>().ok())
+            .find(|dialog| {
+                dialog.is_visible()
+                    && dialog.transient_for().as_ref() == Some(window.upcast_ref())
+                    && dialog.title_text() != "Change the extension?"
+            })
+    };
+    wait_until("a message over Properties", || find().is_some());
+    find().expect("a message shows")
+}
+
 /// The Properties dialog (Edit..., Advanced, Advanced Sharing) over
 /// `window`, titled `title`.
 fn sub_dialog(window: &PropertiesWindow, title: &str) -> PropertiesWindow {
@@ -216,6 +234,30 @@ fn show_item_properties_opens_the_folder_and_the_properties() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     test.wait_for_listing("the Documents listing");
     wait_until("the selection", || test.selected_names() == ["report.txt"]);
+}
+
+/// The caller's activation token goes to the Properties window that
+/// `ShowItemProperties` opens, so the desktop lets it come to the front.
+///
+/// parity: INT-014, INT-023
+#[gtk::test]
+fn show_item_properties_gives_the_callers_token_to_the_properties_window() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/report.txt");
+    let test = TestWindow::open(&fixture.uri());
+    let item = [fixture.uri_of("Documents/report.txt")];
+    let request =
+        FileManagerRequest::new(FileManagerMethod::ShowItemProperties, &item).expect("a valid location");
+
+    test.window.hand_startup_id_to_properties("caller-token-1");
+    test.window.show_file_manager_request(&request);
+
+    test.wait_for_properties("report.txt Properties");
+    assert_eq!(
+        test.window.properties_startup_ids(),
+        ["caller-token-1"],
+        "the Properties window took the caller's token"
+    );
 }
 
 /// Alt+Enter opens a file's Properties as Windows 11 lays them out: a
@@ -323,6 +365,249 @@ fn a_folders_size_and_contents_count_by_themselves() {
         "the count is the window's own, not a Calculate folder size run"
     );
     capture_dialog(&window, "native-properties-folder.png");
+}
+
+/// A count that left something out reads as at least its total, and a
+/// folder that cannot be read reads Unavailable, never a false zero.
+///
+/// parity: PROP-027, PROP-028
+#[gtk::test]
+fn a_partial_or_failed_folder_count_is_never_shown_as_exact() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Linked")).expect("a folder");
+    fs::write(fixture.path("Linked/a.txt"), b"0123456789").expect("a file");
+    std::os::unix::fs::symlink(fixture.path("Notes 2.txt"), fixture.path("Linked/link.txt")).expect("a link");
+    fs::create_dir(fixture.path("Locked")).expect("a folder");
+    fs::write(fixture.path("Locked/secret.txt"), b"secret").expect("a file");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Linked");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Linked Properties");
+    let page = general(&window);
+
+    wait_until("the partial count", || {
+        value_after(&page, "Contains:").is_some_and(|text| text.starts_with("≥ "))
+    });
+    assert_eq!(
+        value_after(&page, "Size:").as_deref(),
+        Some("≥ 10 bytes (10 bytes)")
+    );
+    window.close();
+
+    // The superuser reads every folder, so only another user sees this.
+    if ox_core::permissions::current_user_is_superuser() {
+        return;
+    }
+    fs::set_permissions(fixture.path("Locked"), fs::Permissions::from_mode(0o000)).expect("mode");
+    test.select_named("Locked");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Locked Properties");
+    let page = general(&window);
+    wait_until("the failed count", || {
+        value_after(&page, "Contains:").as_deref() == Some("Unavailable")
+    });
+    let shown = (value_after(&page, "Size:"), value_after(&page, "Size on disk:"));
+    fs::set_permissions(fixture.path("Locked"), fs::Permissions::from_mode(0o755)).expect("mode");
+    assert_eq!(
+        shown,
+        (Some("Unavailable".to_owned()), Some("Unavailable".to_owned()))
+    );
+}
+
+/// Edit... after Apply on General changes the item as it is now: Read-only
+/// stays, and after Hidden renamed the file Edit changes the file under its
+/// new name, never an unrelated file that took the old one.
+///
+/// parity: PROP-007
+#[gtk::test]
+fn edit_after_general_changes_the_item_as_it_is_now() {
+    let fixture = Fixture::standard();
+    let path = fixture.path("Notes 2.txt");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o664)).expect("a known mode");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let general_page = general(&window);
+
+    check(&general_page, "Read-only").set_active(true);
+    check(&general_page, "Hidden").set_active(true);
+    press(&window, "Apply");
+    let hidden = fixture.path(".Notes 2.txt");
+    wait_until("the hidden name", || hidden.exists());
+    wait_until("Read-only", || mode_of(&hidden) == 0o444);
+    // Another file takes the old name.
+    fs::write(&path, b"unrelated").expect("a file");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("a known mode");
+    window.select_tab("security");
+    let security = tab(&window, "security");
+    wait_until("the Security tab read again", || {
+        texts(&security).iter().any(|text| text.ends_with(".Notes 2.txt"))
+    });
+
+    press(&security, "Edit...");
+    let edit = sub_dialog(&window, "Permissions for .Notes 2.txt");
+    let names = descendants::<gtk::ListBox>(&edit).remove(0);
+    names.select_row(names.row_at_index(2).as_ref());
+    let read = descendants::<gtk::CheckButton>(&edit)
+        .into_iter()
+        .filter(WidgetExt::is_sensitive)
+        .nth(3)
+        .expect("Allow Read");
+    assert!(read.is_active(), "others may read");
+    read.set_active(false);
+    edit.ok_button().emit_clicked();
+
+    wait_until("the change", || mode_of(&hidden) == 0o440);
+    assert_eq!(mode_of(&path), 0o600, "the unrelated file is untouched");
+}
+
+/// A rename on General reaches every tab: asking again for the renamed
+/// item brings the same window back, and the other tabs work on the new
+/// name.
+///
+/// parity: PROP-005
+#[gtk::test]
+fn a_rename_reaches_every_tab() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Album")).expect("a folder");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Album");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Album Properties");
+
+    name_field(&window).set_text("Papers");
+    press(&window, "Apply");
+    wait_until("the rename", || fixture.path("Papers").exists());
+    wait_until("the new title", || window.title_text() == "Papers Properties");
+
+    assert_eq!(versions_of(&window).item_uri(), fixture.uri_of("Papers"));
+    test.wait_for_listing("the listing again");
+    test.select_named("Papers");
+    test.activate("properties", None);
+    settle();
+    assert_eq!(
+        test.window.properties_windows(),
+        std::slice::from_ref(&window),
+        "the renamed item's Properties come back"
+    );
+}
+
+/// Closing Properties while OK applies waits for the change: a refused
+/// change keeps the window open with its message, and a made one closes it.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn closing_during_ok_waits_for_the_change() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let name = name_field(&window);
+
+    name.set_text("Notes 2.md");
+    window.ok_button().emit_clicked();
+    wait_until("the question", || extension_questions(&window) == 1);
+    let question = message_over(&window);
+    window.close();
+    assert!(!window.is_closed(), "the window waits for the change");
+    question.press("Cancel");
+    refusal_over(&window).press("OK");
+    assert!(!window.is_closed(), "a refused change keeps the window");
+
+    wait_until("no message", || dialog_over_properties(&window).is_none());
+    window.ok_button().emit_clicked();
+    wait_until("the question again", || extension_questions(&window) == 1);
+    let question = message_over(&window);
+    window.close();
+    question.press("Change extension");
+    wait_until("the rename", || fixture.path("Notes 2.md").exists());
+    wait_until("the window to close", || window.is_closed());
+    assert!(
+        dialog_over_properties(&window).is_none(),
+        "no message over a closed window"
+    );
+}
+
+/// The browser window's shortcuts do nothing in Properties, and F5 looks
+/// for previous versions again there.
+///
+/// parity: PROP-001, PROP-019
+#[gtk::test]
+fn properties_take_no_browser_shortcut_and_f5_looks_again() {
+    let fixture = fixture_with_snapshot();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Documents");
+    test.activate("previous-versions", None);
+    let window = test.wait_for_properties("Documents Properties");
+    let versions = versions_of(&window);
+    wait_until("the versions", || !versions.version_labels().is_empty());
+    let first = versions.lookup_number();
+
+    for action in [
+        "win.refresh",
+        "win.search",
+        "win.location",
+        "win.full-screen",
+        "win.new-tab",
+    ] {
+        assert!(
+            WidgetExt::activate_action(&window, action, None).is_err(),
+            "{action} does not reach the browser window from Properties"
+        );
+    }
+    let f5 = window
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            controller
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .collect::<Vec<_>>()
+        })
+        .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+        .find(|shortcut| {
+            shortcut
+                .trigger()
+                .is_some_and(|trigger| trigger.to_str().as_str() == "F5")
+        })
+        .expect("Properties has its own F5");
+    f5.action()
+        .expect("an action")
+        .activate(gtk::ShortcutActionFlags::empty(), &window, None);
+
+    assert!(versions.lookup_number() > first, "F5 looked again");
+}
+
+/// Moving the only tab to a new window keeps its window's Properties open,
+/// with the change they hold, acting through the tab's new window.
+///
+/// parity: PROP-001, TAB-029
+#[gtk::test]
+fn properties_go_on_with_the_last_tab_moved_away() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    name_field(&window).set_text("Renamed.txt");
+    let tab = test.active_tab().expect("a tab");
+
+    let action = format!("win.{}", WindowAction::MoveTabToNewWindow.name());
+    WidgetExt::activate_action(&test.window, &action, Some(&tab.to_raw().to_variant()))
+        .expect("the action exists");
+
+    wait_until("the old window to close", || !test.window.is_visible());
+    assert!(!window.is_closed(), "Properties stays open");
+    let opener = window.opener().expect("a new window took over");
+    assert_ne!(opener, test.window);
+    assert!(opener.properties_windows().contains(&window));
+    window.ok_button().emit_clicked();
+    wait_until("the rename", || fixture.path("Renamed.txt").exists());
+    opener.close();
 }
 
 /// Properties are windows of their own: several stay open, the browser
@@ -543,29 +828,34 @@ fn the_name_in_properties_asks_before_changing_the_extension() {
 
     name.set_text("Notes 2.md");
     press(&window, "Apply");
-    let question = open_dialog(&test);
-    assert_eq!(question.title_text(), "Change the extension?");
+    let question = message_over(&window);
+    assert_eq!(
+        question.title_text(),
+        "Change the extension?",
+        "the question is over Properties"
+    );
     question.press("Cancel");
-    let refusal = message_over(&window);
+    let refusal = refusal_over(&window);
     assert_eq!(refusal.message_text(), "The name was not changed.");
     refusal.press("OK");
     assert!(fixture.path("Notes 2.txt").is_file());
 
     press(&window, "Apply");
-    open_dialog(&test).press("Change extension");
+    wait_until("the question again", || extension_questions(&window) == 1);
+    message_over(&window).press("Change extension");
 
     wait_until("the rename", || fixture.path("Notes 2.md").exists());
     assert!(!window.is_closed(), "Apply keeps the window open");
 }
 
-/// The extension questions open over `test`'s window.
-fn extension_questions(test: &TestWindow) -> usize {
+/// The extension questions open over the Properties window `window`.
+fn extension_questions(window: &PropertiesWindow) -> usize {
     gtk::Window::list_toplevels()
         .into_iter()
-        .filter_map(|window| window.downcast::<Dialog>().ok())
+        .filter_map(|toplevel| toplevel.downcast::<Dialog>().ok())
         .filter(|dialog| {
             dialog.is_visible()
-                && dialog.transient_for().as_ref() == Some(test.window.upcast_ref())
+                && dialog.transient_for().as_ref() == Some(window.upcast_ref())
                 && dialog.title_text() == "Change the extension?"
         })
         .count()
@@ -586,12 +876,12 @@ fn ok_twice_in_properties_asks_about_the_extension_once() {
     window.ok_button().emit_clicked();
     window.ok_button().emit_clicked();
 
-    wait_until("the question", || extension_questions(&test) > 0);
+    wait_until("the question", || extension_questions(&window) > 0);
     wait_for_frames(&test.window, 3);
-    assert_eq!(extension_questions(&test), 1, "one question");
-    open_dialog(&test).press("Cancel");
-    wait_until("no question", || extension_questions(&test) == 0);
-    message_over(&window).press("OK");
+    assert_eq!(extension_questions(&window), 1, "one question");
+    message_over(&window).press("Cancel");
+    wait_until("no question", || extension_questions(&window) == 0);
+    refusal_over(&window).press("OK");
     assert!(fixture.path("Notes 2.txt").is_file());
 }
 
@@ -613,9 +903,9 @@ fn a_link_to_a_folder_is_renamed_in_properties_without_the_extension_question() 
     window.ok_button().emit_clicked();
 
     wait_until("the rename", || {
-        fixture.path("Docs.new").is_symlink() || extension_questions(&test) > 0
+        fixture.path("Docs.new").is_symlink() || extension_questions(&window) > 0
     });
-    assert_eq!(extension_questions(&test), 0, "no extension question");
+    assert_eq!(extension_questions(&window), 0, "no extension question");
     wait_until("the window to close", || window.is_closed());
 }
 
@@ -752,7 +1042,12 @@ fn properties_of_several_items_total_them_and_change_them_together() {
 
     choices[2].set_selected(0);
     assert!(apply.is_sensitive());
-    apply.emit_clicked();
+    assert!(
+        window.apply_button().is_sensitive(),
+        "the window's Apply knows the change"
+    );
+    window.ok_button().emit_clicked();
+    wait_until("OK to close", || window.is_closed());
 
     wait_until("every item changed", || {
         mode_of(&fixture.path("Notes 2.txt")) == 0o640

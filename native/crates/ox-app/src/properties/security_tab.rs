@@ -352,6 +352,16 @@ impl PermissionGrid {
     }
 }
 
+/// The change from `before`, the bits a dialog opened on, to `after`, the
+/// bits the user left: only those turned on or off, applied to the mode
+/// the item has when the change is made.
+pub(super) fn changed_bits(before: u32, after: u32) -> ox_core::permissions::ModeChange {
+    ox_core::permissions::ModeChange::Bits {
+        set: after & !before,
+        clear: before & !after,
+    }
+}
+
 /// Applies `request` to the item of `facts`, refusing a previous version
 /// (PROP-024) and holding off formatting while it runs (DEV-012).
 pub(super) async fn apply_request(

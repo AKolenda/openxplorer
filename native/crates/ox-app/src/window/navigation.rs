@@ -408,8 +408,13 @@ impl BrowserWindow {
 
     /// Takes tab `id` out after another window took it: it is not
     /// remembered as closed, and the last tab leaving closes the window.
-    pub(super) fn release_moved_tab(&self, id: TabId) {
+    pub(super) fn release_moved_tab(&self, id: TabId, destination: Option<&BrowserWindow>) {
         if self.tab_count() <= 1 {
+            // Properties opened here go on with the tab's new window, with
+            // any change they hold (PROP-001).
+            if let Some(destination) = destination {
+                destination.adopt_properties_windows(self);
+            }
             self.request_close();
             return;
         }
