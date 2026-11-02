@@ -658,22 +658,18 @@ impl Session {
         if let Some(host) = self.host.borrow().upgrade() {
             host.tab_strip().dismiss_guest();
         }
-        let origin = self.origin.borrow().upgrade();
-        let (Some(dragged), Some(origin)) = (self.dragged.upgrade(), origin) else {
+        let Some(dragged) = self.dragged.upgrade() else {
             return;
         };
-        if !self.released.replace(true) {
-            // The origin still has the tab: only the new window goes.
-            origin.tab_strip().end_drag_now();
-            dragged.close();
-            return;
-        }
-        let is_back = self
-            .back
-            .is_some_and(|Landing { before }| dragged.take_tab_back(&origin, self.tab, before));
-        if !is_back && self.hidden.get() {
-            dragged.present();
-        }
+        let origin = self.origin.borrow().upgrade();
+        let released = self.released.replace(true);
+        put_tab_back(
+            &dragged,
+            origin.as_ref(),
+            (self.tab, self.back),
+            released,
+            self.hidden.get(),
+        );
     }
 
     /// Ends the session and releases its objects; false when it was over.
@@ -687,6 +683,32 @@ impl Session {
         }
         self.release();
         true
+    }
+}
+
+/// Escape, the drag over: tab `tabs.0` of `dragged` goes back to `origin`,
+/// before `tabs.1`, or only `dragged` goes while `origin` has not `released`
+/// the tab yet. Where the tab stays in `dragged`, as when `origin` went
+/// away during the drag, a `hidden` window shows again, so the tab is never
+/// left in a window no one sees.
+fn put_tab_back(
+    dragged: &BrowserWindow,
+    origin: Option<&BrowserWindow>,
+    (tab, back): (TabId, Option<Landing>),
+    released: bool,
+    hidden: bool,
+) {
+    if let Some(origin) = origin.filter(|_| !released) {
+        // The origin still has the tab: only the new window goes.
+        origin.tab_strip().end_drag_now();
+        dragged.close();
+        return;
+    }
+    let is_back = origin
+        .zip(back)
+        .is_some_and(|(origin, Landing { before })| dragged.take_tab_back(origin, tab, before));
+    if !is_back && hidden {
+        dragged.present();
     }
 }
 
@@ -1352,6 +1374,33 @@ mod tests {
             Some(fixture.uri_of("Documents")),
             "back in front where it was"
         );
+    }
+
+    /// Escape after the window the tab left went away, with the dragged
+    /// window hidden over another row, shows that window again: the tab has
+    /// nowhere to go back to, and stays in a window that can be seen.
+    ///
+    /// parity: TAB-035
+    #[gtk::test]
+    fn escape_shows_a_hidden_dragged_window_whose_origin_went_away() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window
+            .add_tab(&fixture.uri_of("Documents"))
+            .expect("a folder");
+        test.wait_for_listing("the second tab");
+        let moved = test.window.imp().session.borrow().active_id().expect("a tab");
+        let before = test.window.tab_after(moved);
+        let dragged = test.window.window_for_tab(moved).expect("a window for the tab");
+        let _opened = OpenedWindows::only(&[&test.window]);
+        test.window.release_moved_tab(moved);
+        let tab = dragged.imp().session.borrow().active_id().expect("the tab");
+        dragged.set_visible(false);
+
+        put_tab_back(&dragged, None, (tab, Some(Landing { before })), true, true);
+
+        assert!(dragged.is_visible(), "the dragged window shows again");
+        assert_eq!(dragged.tab_count(), 1, "with its tab");
     }
 
     /// A row takes the dragged window's tab over itself, and the row that
