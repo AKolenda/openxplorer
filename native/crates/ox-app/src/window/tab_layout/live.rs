@@ -273,6 +273,13 @@ impl LiveTabs {
         }
         let dragged = self.dragged.tab.clone();
         let dragged_width = width(&dragged);
+        // A tab just added to the row, as one dragged in from another
+        // window, has no room in it until the row is laid out again: the
+        // row is as wide as all its tabs.
+        let row = packed(&self.order, gap, None, width)
+            .last()
+            .zip(self.order.last())
+            .map_or(row, |(last, tab)| row.max(last + width(tab)));
         let left = left.clamp(0.0, (row - dragged_width).max(0.0));
         let mut order = self.order.clone();
         let Some(mut at) = order.iter().position(|tab| *tab == dragged) else {

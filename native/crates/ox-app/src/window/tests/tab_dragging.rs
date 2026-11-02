@@ -609,6 +609,30 @@ fn a_tab_dragged_in_before_a_tab_closed_meanwhile_lands_before_the_next() {
     );
 }
 
+/// A tab of another window over the blank title bar beside a window's
+/// only tab: its stand-in goes after that tab, where the pointer is, and a
+/// drop there without another motion lands it at the end, though the row
+/// was only as wide as one tab when the stand-in came.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_dragged_in_beside_a_windows_only_tab_lands_after_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let [only] = tab_ids(&test.window)[..] else {
+        panic!("one tab is open");
+    };
+    let strip = test.window.tab_strip();
+    let view = strip.tab_view(only).expect("a shown tab");
+    let bounds = strip.tab_bounds_in(only, strip).expect("a shown tab");
+
+    strip.host_guest(&view, f64::from(bounds.x() + bounds.width()) + 40.0, 0.0);
+    let landing = strip.land_guest();
+
+    assert_eq!(landing, Some(crate::window::tab_strip::Landing { before: None }));
+}
+
 /// A tab let go past another and pressed again while it still slides into
 /// its new place, before the strip took the new order: it is held where
 /// the press met it as drawn, so the next motion moves it with the
@@ -648,6 +672,50 @@ fn a_tab_pressed_again_while_it_slides_into_place_is_held_where_it_is_drawn() {
         (after - drawn).abs() <= 1.0,
         "the tab stays under the pointer: {drawn} then {after}"
     );
+}
+
+/// A tab let go past another and pressed again while it still slides
+/// into its new place, the press held until it is there and the other tab
+/// slid under the point pressed: the press drags the tab it met, not the
+/// one now under that point.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_pressed_while_it_slides_into_place_is_the_one_dragged_once_it_landed() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = two_tabs(&fixture);
+    let [first, second] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let first_tab = tab_widget(&test.window, 0);
+    let width = f64::from(first_tab.width());
+    let pressed_in_row = left_in_row(&test.window, &first_tab) + 20.0 + (width * 0.7).trunc();
+    let from = on_screen(&mut pointer, &first_tab, (20.0, 10.0));
+    // Past the other tab's middle, still over its place.
+    #[expect(clippy::cast_possible_truncation, reason = "a tab's width")]
+    let released = (from.0 + (width * 0.7) as i32, from.1);
+
+    press_and_glide(&mut pointer, from, released, Pace::Held);
+    pointer.release(Button::Primary);
+    // Pressed again on the tab as drawn, at the start of its slide.
+    pointer.press(Button::Primary);
+    wait_until("the tab to land", || {
+        tab_ids(&test.window) == [second, first] && strip.live_tab().is_none()
+    });
+    let under_the_press = strip
+        .tab_bounds_in(second, &strip.tab_list())
+        .is_some_and(|bounds| pressed_in_row < f64::from(bounds.x() + bounds.width()));
+    pointer.glide(released, (released.0 + 40, released.1), 4);
+    wait_for(HOLD);
+    let dragged = strip.live_tab();
+    pointer.release(Button::Primary);
+    wait_until("the release to settle", || strip.live_tab().is_none());
+
+    assert!(under_the_press, "the other tab slid under the point pressed");
+    assert_eq!(dragged, Some(first), "the press drags the tab it met");
+    assert_eq!(tab_ids(&test.window), [second, first]);
 }
 
 /// The tab in front, with keyboard focus, leaves the front while the tabs

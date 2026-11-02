@@ -41,9 +41,9 @@ pub(super) const DETACH_MAGNETISM: f64 = 15.0;
 enum Press {
     /// No press, or one the window handle has.
     Idle,
-    /// Pressed here, in the title bar's coordinates, not yet past the drag
-    /// threshold.
-    Pending((f64, f64)),
+    /// Pressed here, in the title bar's coordinates, on this tab if one,
+    /// not yet past the drag threshold.
+    Pending((f64, f64), Option<TabId>),
     /// The tab follows the pointer along its strip.
     Live(TabId),
     /// The tab left its strip: GTK's drag and drop starts with the next
@@ -128,6 +128,8 @@ impl BrowserWindow {
         pressed_with: &Rc<Cell<Option<MousePress>>>,
     ) {
         source.connect_begin(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
             #[strong]
             press,
             #[strong]
@@ -135,7 +137,7 @@ impl BrowserWindow {
             move |source, sequence| {
                 pressed_with.set(MousePress::of(source));
                 if let Some(point) = source.point(sequence) {
-                    press.set(Press::Pending(point));
+                    press.set(Press::Pending(point, window.grab_pressed_tab(source, point)));
                 }
             }
         ));
@@ -195,8 +197,9 @@ impl BrowserWindow {
             return;
         };
         match press.get() {
-            Press::Pending(start) => {
-                let Some(tab) = take_tab_presses_from_the_window_handle(self, source, start, point) else {
+            Press::Pending(start, pressed) => {
+                let Some(tab) = take_tab_presses_from_the_window_handle(self, source, pressed, start, point)
+                else {
                     return;
                 };
                 if self.keeps_tab(tab) {
@@ -209,9 +212,6 @@ impl BrowserWindow {
                     self.show_message(ox_core::i18n::gettext_static(super::TAB_IS_MOVING));
                     press.set(Press::Ignored);
                     return;
-                }
-                if let Some(start) = self.title_bar_point_in_strip(source, start.0, start.1) {
-                    self.tab_strip().grab_tab(tab, start);
                 }
                 press.set(Press::Live(tab));
                 self.tab_strip().follow_pointer(tab, x);
@@ -231,6 +231,17 @@ impl BrowserWindow {
             }
             Press::Idle | Press::Leaving(_) | Press::Handed | Press::Ignored => {}
         }
+    }
+
+    /// The tab a press at `point` of the title bar would drag, held where
+    /// the press met it as drawn. It is the tab the press drags, also when
+    /// another slides under the point before the press moves, as the
+    /// others do while a tab let go a moment ago slides into its place.
+    fn grab_pressed_tab(&self, source: &gtk::DragSource, point: (f64, f64)) -> Option<TabId> {
+        let (x, y) = self.title_bar_point_in_strip(source, point.0, point.1)?;
+        let tab = self.tab_strip().draggable_tab_at(x, y)?;
+        self.tab_strip().grab_tab(tab, (x, y));
+        Some(tab)
     }
 
     /// Tab `tab`, following the pointer of a press (`pressed_with` when
@@ -681,18 +692,20 @@ impl BrowserWindow {
 /// and `prepare` offers it to GTK's drag and drop only once it left the
 /// strip, so GTK starts that drag in the middle of the press, with the
 /// press's own grab on Wayland.
+///
+/// `pressed` is the tab the press, at `start`, began on, if it is still
+/// open; `point` is where the pointer is now.
 fn take_tab_presses_from_the_window_handle(
     window: &BrowserWindow,
     source: &gtk::DragSource,
+    pressed: Option<TabId>,
     start: (f64, f64),
     point: (f64, f64),
 ) -> Option<TabId> {
     if !is_past_drag_threshold(window, start, point) {
         return None;
     }
-    let tab = window
-        .title_bar_point_in_strip(source, start.0, start.1)
-        .and_then(|(x, y)| window.tab_strip().draggable_tab_at(x, y));
+    let tab = pressed.filter(|tab| window.tab_strip().tab_view(*tab).is_some());
     if tab.is_some() {
         source.set_state(gtk::EventSequenceState::Claimed);
     }
