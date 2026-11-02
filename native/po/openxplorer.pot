@@ -2162,11 +2162,11 @@ msgid "Windows 10 is compact and shows familiar text commands."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 10 · Classic (default)"
+msgid "Windows 10 · Classic"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 11 · Compact actions"
+msgid "Windows 11 · Compact actions (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs

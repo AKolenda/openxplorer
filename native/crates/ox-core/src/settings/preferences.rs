@@ -1012,7 +1012,8 @@ mod tests {
         let preferences = Preferences::default();
         assert_eq!(preferences.theme, Theme::System);
         assert_eq!(preferences.view, View::Details);
-        assert_eq!(preferences.context_menu, ContextMenu::Win10);
+        // Windows 11's compact menu, where the Python app had the classic one.
+        assert_eq!(preferences.context_menu, ContextMenu::Win11);
         assert_eq!(preferences.network_interval, 60);
         assert_eq!(preferences.text_size, 100);
         assert!(preferences.auto_index);
@@ -1020,14 +1021,15 @@ mod tests {
         assert!(!preferences.show_hidden);
     }
 
-    /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`.
+    /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`,
+    /// with Windows 11's compact menu where the Python app stored "win10".
     /// parity: SET-016
     #[test]
     fn default_preferences_are_stored_like_the_python_app() {
         let stored = serde_json::to_value(Preferences::default()).unwrap();
         let python = json!({
             "theme": "system", "view": "details", "details": true, "showHidden": false,
-            "autoIndex": true, "contextMenu": "win10", "networkInterval": 60, "textSize": 100
+            "autoIndex": true, "contextMenu": "win11", "networkInterval": 60, "textSize": 100
         });
         assert_eq!(stored, python);
     }

@@ -448,11 +448,13 @@ fn address_options_menu() -> gio::Menu {
     menu
 }
 
-/// The `/` or `\\` between crumbs, hidden from screen readers as
+/// The divider between crumbs: Windows 11 Explorer's chevron, drawn by
+/// the skin (`.crumb-divider`), where app.js wrote the path's `/` or `\\`
+/// (`divider`, kept as the widget's name). Hidden from screen readers as
 /// `aria-hidden` hides it in app.js.
-fn divider_label(text: &str) -> gtk::Label {
+fn divider_label(divider: &str) -> gtk::Label {
     gtk::Label::builder()
-        .label(text)
+        .name(divider)
         .accessible_role(gtk::AccessibleRole::Presentation)
         .css_classes(["crumb-divider"])
         .build()

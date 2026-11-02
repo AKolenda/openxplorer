@@ -45,6 +45,9 @@ pub(super) fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
 fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 10.txt"]);
 
     test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
@@ -128,6 +131,9 @@ fn the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files() {
 fn with_several_items_selected_the_one_item_commands_are_disabled() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
 
     test.window.right_click(Some(position_of(&test, "Notes 2.txt")));

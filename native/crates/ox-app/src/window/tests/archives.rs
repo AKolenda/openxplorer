@@ -162,7 +162,7 @@ fn a_late_archive_listing_never_replaces_a_newer_one() {
 #[gtk::test]
 fn closing_the_extract_dialog_drops_its_check() {
     let fixture = fixture_with_zip();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     test.activate("extract-all", None);
     let frame = test.shown_dialog().expect("the Extract dialog");
@@ -184,7 +184,7 @@ fn closing_the_extract_dialog_drops_its_check() {
 #[gtk::test]
 fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
     let fixture = fixture_with_zip();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
 
     test.activate("extract-all", None);
@@ -258,7 +258,7 @@ pub(super) fn mark_encrypted(path: &Path) {
 fn a_password_zip_says_so_and_offers_the_archive_manager() {
     let fixture = fixture_with_zip();
     mark_encrypted(&fixture.path("Bundle.zip"));
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     test.activate("extract-all", None);
     let frame = test.wait_for_dialog("the Extract dialog");
@@ -285,7 +285,7 @@ fn a_password_zip_says_so_and_offers_the_archive_manager() {
 #[gtk::test]
 fn extract_refuses_an_empty_folder_and_keeps_the_dialog_open() {
     let fixture = fixture_with_zip();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     test.activate("extract-all", None);
     let frame = test.wait_for_dialog("the Extract dialog");
@@ -311,7 +311,7 @@ fn extract_refuses_an_empty_folder_and_keeps_the_dialog_open() {
 fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
     let fixture = fixture_with_zip();
     fs::write(fixture.path("readme.txt"), b"mine").expect("a file the archive also has");
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     test.activate("extract-all", None);
     let frame = test.wait_for_dialog("the Extract dialog");
@@ -369,7 +369,7 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
 fn cancelling_an_extractions_conflict_question_says_nothing() {
     let fixture = fixture_with_zip();
     fs::write(fixture.path("readme.txt"), b"mine").expect("a file the archive also has");
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     test.activate("extract-all", None);
     let frame = test.wait_for_dialog("the Extract dialog");
@@ -409,7 +409,7 @@ fn cancelling_an_extractions_conflict_question_says_nothing() {
 #[gtk::test]
 fn extract_all_into_an_existing_folder_counts_its_files_when_nothing_is_left_out() {
     let fixture = fixture_with_zip();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     test.activate("extract-all", None);
     let frame = test.wait_for_dialog("the Extract dialog");
@@ -430,7 +430,7 @@ fn extract_all_into_an_existing_folder_counts_its_files_when_nothing_is_left_out
 #[gtk::test]
 fn extract_all_creates_a_missing_folder_with_its_parents() {
     let fixture = fixture_with_zip();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     test.activate("extract-all", None);
     let frame = test.wait_for_dialog("the Extract dialog");
@@ -456,7 +456,7 @@ fn extract_all_creates_a_missing_folder_with_its_parents() {
 #[gtk::test]
 fn enter_in_the_folder_field_extracts() {
     let fixture = fixture_with_zip();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     test.activate("extract-all", None);
     let frame = test.wait_for_dialog("the Extract dialog");
@@ -482,7 +482,7 @@ fn enter_in_the_folder_field_extracts() {
 fn extract_here_uses_the_next_free_name() {
     let fixture = fixture_with_zip();
     fs::create_dir(fixture.path("Bundle")).expect("a folder with the archive's name");
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
 
     test.activate("extract-here", None);
@@ -502,7 +502,7 @@ fn extract_here_uses_the_next_free_name() {
 #[gtk::test]
 fn nothing_is_extracted_while_a_file_operation_runs() {
     let fixture = fixture_with_zip();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     let running = test.window.begin_operation("Preparing copy…");
 
@@ -529,8 +529,9 @@ fn write_tar_gz(fixture: &Fixture) {
     assert!(status.success());
 }
 
-/// A .tar.gz opens in the archive browser and extracts like a ZIP; with
-/// "Open archives as folders" off it opens in its default application,
+/// A .tar.gz opens in the archive browser and extracts like a ZIP, also
+/// now that ZIPs open like folders by default; with "Open archives as
+/// folders" off it opens in its default application,
 /// unless it was handed to the app.
 ///
 /// parity: ARC-022, ARC-024
@@ -538,7 +539,7 @@ fn write_tar_gz(fixture: &Fixture) {
 fn a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere() {
     let fixture = Fixture::standard();
     write_tar_gz(&fixture);
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Site.tar.gz");
 
     test.activate("open", None);
@@ -579,7 +580,7 @@ fn a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere() {
 #[gtk::test]
 fn compress_to_zip_puts_the_selection_into_a_new_zip_beside_it() {
     let fixture = Fixture::standard();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     test.select_named("Documents");
 
     test.activate("compress-to-zip", None);
@@ -600,7 +601,7 @@ fn compress_to_zip_puts_the_selection_into_a_new_zip_beside_it() {
 #[gtk::test]
 fn compress_to_asks_for_a_name_and_a_format() {
     let fixture = Fixture::standard();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     let compress = |name: &str| {
         test.select_named("Notes 2.txt");
         test.activate("compress-to", None);
@@ -625,7 +626,7 @@ fn compress_to_asks_for_a_name_and_a_format() {
 #[gtk::test]
 fn the_archive_commands_follow_the_selection() {
     let fixture = fixture_with_zip();
-    let test = opening_zips_in_the_window(&fixture);
+    let test = TestWindow::open(&fixture.uri());
     let is_enabled = |name: &str| {
         test.window
             .lookup_action(name)

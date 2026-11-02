@@ -94,9 +94,16 @@ fn an_smb_path_has_server_share_and_folder_crumbs_with_the_uri_encoded() {
     let dividers: Vec<String> = descendants::<gtk::Label>(&crumb_box(&test))
         .iter()
         .filter(|label| label.has_css_class("crumb-divider"))
-        .map(|label| label.text().to_string())
+        .map(|label| label.widget_name().to_string())
         .collect();
-    assert_eq!(dividers, ["\\", "\\"]);
+    assert_eq!(dividers, ["\\", "\\"], "a share's path divides with backslashes");
+    assert!(
+        descendants::<gtk::Label>(&crumb_box(&test))
+            .iter()
+            .filter(|label| label.has_css_class("crumb-divider"))
+            .all(|label| label.text().is_empty()),
+        "dividers are drawn as Explorer's chevrons, not as text"
+    );
 }
 
 /// parity: NAV-018

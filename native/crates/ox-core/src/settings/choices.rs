@@ -101,9 +101,10 @@ impl View {
 #[serde(rename_all = "lowercase")]
 pub enum ContextMenu {
     /// The classic, full Windows 10 menu.
-    #[default]
     Win10,
-    /// The compact Windows 11 menu.
+    /// The compact Windows 11 menu, as Windows 11 Explorer opens it, with
+    /// the classic one behind "Show more options".
+    #[default]
     Win11,
 }
 

@@ -7,13 +7,15 @@
 use super::*;
 use crate::grouping::GroupBy;
 
-/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic`
+/// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic`,
+/// whose classic default became Windows 11's compact menu, as Windows 11
+/// Explorer opens it.
 /// parity: SET-016
 #[test]
-fn the_default_context_menu_is_the_classic_one() {
+fn the_default_context_menu_is_the_compact_one() {
     let root = temporary_folder();
     let preferences = Settings::open(root.path()).snapshot().preferences;
-    assert_eq!(preferences.context_menu, ContextMenu::Win10);
+    assert_eq!(preferences.context_menu, ContextMenu::Win11);
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist`

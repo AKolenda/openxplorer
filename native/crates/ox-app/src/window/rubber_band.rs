@@ -173,15 +173,14 @@ impl BrowserWindow {
             self,
             #[weak]
             drag,
-            move |motion, _, _| {
-                let released = !motion
-                    .current_event_state()
-                    .contains(gdk::ModifierType::BUTTON1_MASK);
-                if released && window.imp().rubber_band.borrow().is_some() {
-                    window.end_band();
-                    drag.reset();
-                }
-            }
+            move |motion, _, _| window.end_band_released(motion, &drag)
+        ));
+        motion.connect_leave(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            drag,
+            move |motion| window.end_band_released(motion, &drag)
         ));
         view.add_controller(motion);
         view.connect_unmap(glib::clone!(
@@ -346,6 +345,19 @@ impl BrowserWindow {
         }
         self.update_band();
         glib::ControlFlow::Continue
+    }
+
+    /// Ends the band and resets `drag` when `motion`'s event, a move over
+    /// the view or the pointer leaving it, comes with no button held: the
+    /// release was lost.
+    fn end_band_released(&self, motion: &gtk::EventControllerMotion, drag: &gtk::GestureDrag) {
+        let released = !motion
+            .current_event_state()
+            .contains(gdk::ModifierType::BUTTON1_MASK);
+        if released && self.imp().rubber_band.borrow().is_some() {
+            self.end_band();
+            drag.reset();
+        }
     }
 
     /// Ends the band: the selection stays as it was drawn.

@@ -54,7 +54,7 @@ Administrator access does not remove OpenXplorer’s protection of snapshot fold
 
 ## Choose your context menu
 
-Windows 10-style classic menus are the default; Settings can switch to the Windows 11-style compact option. Open with uses registered applications; identical editor names are deduplicated.
+The Windows 11-style compact menu is the default, with the classic menu behind Show more options (Shift+F10); Settings can make the Windows 10-style classic menu the default instead. Open with uses registered applications; identical editor names are deduplicated.
 
 ## Share files by email
 

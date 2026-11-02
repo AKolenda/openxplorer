@@ -50,7 +50,7 @@
 @define-color ox_title_hover alpha(white, .06);    /* C03, D-A03: caption, +, windows */
 @define-color ox_title_pressed alpha(white, .04);  /* §4.14 */
 @define-color ox_tab_hover alpha(white, .05);      /* C03 visible for tabs: alpha(white, .06) */
-@define-color ox_tab_text_inactive @ox_text;       /* C37 visible: @ox_muted */
+@define-color ox_tab_text_inactive @ox_muted;      /* C37: TabViewItemHeaderForeground, secondary */
 
 /* Lines and strokes */
 @define-color ox_border #373737;                   /* C22 */

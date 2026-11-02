@@ -201,6 +201,15 @@ fn a_rubber_band_selects_the_rows_it_crosses_as_it_moves() {
     watch.emit_by_name::<()>("motion", &[&(x + 50.0), &center_of(1)]);
     assert!(!pane.rubber_band_shown(), "a lost release leaves no band drawn");
     assert_eq!(selected(&test), crossed);
+    // So does the pointer leaving the view with no button held.
+    test.window.begin_band(&view, (x, y), BandMode::Replace);
+    test.window.move_band((x + 40.0, center_of(1)));
+    assert!(pane.rubber_band_shown());
+    watch.emit_by_name::<()>("leave", &[]);
+    assert!(
+        !pane.rubber_band_shown(),
+        "leaving after a lost release ends the band"
+    );
     test.window.end_band();
 
     test.window.begin_band(&view, (x, y), BandMode::Toggle);

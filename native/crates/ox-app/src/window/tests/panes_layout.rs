@@ -207,7 +207,11 @@ fn the_details_note_fills_the_pane_width() {
 fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let status_buttons: Vec<gtk::Button> = descendants::<gtk::Button>(test.window.status_bar());
+    // "Check for updates" shows only while an update needs the user.
+    let status_buttons: Vec<gtk::Button> = descendants::<gtk::Button>(test.window.status_bar())
+        .into_iter()
+        .filter(gtk::Button::is_visible)
+        .collect();
     let placed: Vec<Bounds> = status_buttons
         .iter()
         .map(|button| bounds(&test, button))

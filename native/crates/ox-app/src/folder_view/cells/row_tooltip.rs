@@ -6,7 +6,8 @@
 //! in `v2.0.0:desktop/ui/app.js` (VIEW-001, VIEW-042), with Explorer's
 //! infotip in place of a name the row already shows: it shows over the
 //! item itself (its icon and name, or its tile), under the full name when
-//! that is cut short, and the other columns show their own tooltips only. GTK reuses cells for other items, so the
+//! that is cut short, and the other columns show their own tooltips, or
+//! their full text when it is cut short. GTK reuses cells for other items, so the
 //! text is worked out when the tooltip is asked for, from the item the
 //! cell shows then and whether the window searches then.
 
@@ -77,13 +78,13 @@ pub(crate) enum TooltipCell {
     /// The item itself: its icon and name, or its tile. It shows the
     /// infotip.
     Item,
-    /// Another column, which shows only its own tooltip, or the full path
-    /// while searching.
+    /// Another column, which shows its own tooltip, its full text when that
+    /// is cut short, or the full path while searching.
     Column,
 }
 
 /// Gives `cell`, one of the cells registered in `owners`, the tooltip
-/// `own_tooltip` gives for its item, else its row's where `kind` shows it.
+/// `own_tooltip` gives for its item, else what [`tooltip_text`] says.
 pub(crate) fn show_row_tooltip(
     cell: &impl IsA<gtk::Widget>,
     owners: &Rc<CellOwners>,
@@ -96,28 +97,51 @@ pub(crate) fn show_row_tooltip(
         let Some(item) = owners.item_of(cell) else {
             return false;
         };
-        let row = owners.row_tooltip();
-        let text = match own_tooltip(&item) {
-            Some(text) => text,
-            // A name cut short is read in full above the infotip.
-            None if kind == TooltipCell::Item
-                && row == RowTooltip::Name
-                && name_is_elided(cell.upcast_ref()) =>
-            {
-                format!("{}\n{}", item.entry().name, row.text(&item))
-            }
-            None if kind == TooltipCell::Item || row == RowTooltip::FullPath => row.text(&item),
-            None => return false,
+        let cut_short = cut_short_text(cell.upcast_ref(), &item);
+        let Some(text) = tooltip_text(owners.row_tooltip(), kind, &item, own_tooltip(&item), cut_short)
+        else {
+            return false;
         };
         tooltip.set_text(Some(&text));
         true
     });
 }
 
-/// Whether `cell` is an item whose name is cut short where it is shown.
-fn name_is_elided(cell: &gtk::Widget) -> bool {
-    cell.downcast_ref::<super::FileCell>()
-        .is_some_and(super::FileCell::name_is_elided)
+/// The tooltip of a `kind` cell showing `item`, or `None` for none: the
+/// cell's `own` tooltip, else the full path while searching, else the
+/// item's infotip under its full name when that is `cut_short`, or a
+/// column's full text when it is `cut_short`, as Explorer shows them.
+fn tooltip_text(
+    row: RowTooltip,
+    kind: TooltipCell,
+    item: &FileItem,
+    own: Option<String>,
+    cut_short: Option<String>,
+) -> Option<String> {
+    if own.is_some() {
+        return own;
+    }
+    match (row, kind) {
+        (RowTooltip::FullPath, _) => Some(row.text(item)),
+        (RowTooltip::Name, TooltipCell::Item) => {
+            let tip = row.text(item);
+            Some(match cut_short {
+                Some(name) if name != tip => format!("{name}\n{tip}"),
+                _ => tip,
+            })
+        }
+        (RowTooltip::Name, TooltipCell::Column) => cut_short,
+    }
+}
+
+/// The full text `cell` cuts short with an ellipsis, if it does: the
+/// item's name, or a column's text.
+fn cut_short_text(cell: &gtk::Widget, item: &FileItem) -> Option<String> {
+    if let Some(file_cell) = cell.downcast_ref::<super::FileCell>() {
+        return file_cell.name_is_elided().then(|| item.entry().name.clone());
+    }
+    let label = cell.downcast_ref::<gtk::Label>()?;
+    label.layout().is_ellipsized().then(|| label.text().to_string())
 }
 
 #[cfg(test)]
@@ -156,12 +180,76 @@ mod tests {
             ),
             "a folder has no type or size line"
         );
+        let file = FileItem::new({
+            let mut entry = file_entry("A long report name.txt");
+            entry.type_label = "Text document".to_owned();
+            entry
+        });
+        let tip = RowTooltip::Name.text(&file);
+        assert_eq!(
+            tooltip_text(RowTooltip::Name, TooltipCell::Item, &file, None, None),
+            Some(tip.clone())
+        );
+        assert_eq!(
+            tooltip_text(
+                RowTooltip::Name,
+                TooltipCell::Item,
+                &file,
+                None,
+                Some("A long report name.txt".to_owned())
+            ),
+            Some(format!("A long report name.txt\n{tip}")),
+            "a name cut short is read in full above the infotip"
+        );
+        assert_eq!(
+            tooltip_text(RowTooltip::Name, TooltipCell::Column, &file, None, None),
+            None,
+            "other columns do not repeat the infotip"
+        );
+        assert_eq!(
+            tooltip_text(
+                RowTooltip::Name,
+                TooltipCell::Column,
+                &file,
+                None,
+                Some("Text document".to_owned())
+            ),
+            Some("Text document".to_owned()),
+            "a column cut short shows its full text"
+        );
+        assert_eq!(
+            tooltip_text(RowTooltip::FullPath, TooltipCell::Column, &file, None, None),
+            Some("/tmp/ox-test/A long report name.txt".to_owned()),
+            "every cell shows the path while searching"
+        );
+        assert_eq!(
+            tooltip_text(
+                RowTooltip::Name,
+                TooltipCell::Column,
+                &file,
+                Some("own".to_owned()),
+                None
+            ),
+            Some("own".to_owned())
+        );
         let mut unknown = folder_entry("Mystery");
         unknown.modified = None;
+        let unknown = FileItem::new(unknown);
         assert_eq!(
-            RowTooltip::default().text(&FileItem::new(unknown)),
+            RowTooltip::default().text(&unknown),
             "Mystery",
             "nothing known: the name"
+        );
+        assert_eq!(
+            tooltip_text(
+                RowTooltip::Name,
+                TooltipCell::Item,
+                &unknown,
+                None,
+                Some("Mystery".to_owned())
+            ),
+            Some("Mystery".to_owned()),
+            "a name cut short with nothing else known is not repeated"
         );
     }
 }

@@ -2115,12 +2115,12 @@ msgid "Windows 10 is compact and shows familiar text commands."
 msgstr "Windows 10 风格更紧凑，并显示熟悉的文本命令。"
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 10 · Classic (default)"
-msgstr "Windows 10 · 经典（默认）"
+msgid "Windows 10 · Classic"
+msgstr "Windows 10 · 经典"
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 11 · Compact actions"
-msgstr "Windows 11 · 紧凑操作"
+msgid "Windows 11 · Compact actions (default)"
+msgstr "Windows 11 · 紧凑操作（默认）"
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "appearance dark light system colour color mode"
