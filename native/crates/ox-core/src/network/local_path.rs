@@ -74,12 +74,15 @@ pub fn fuse_export_path(uri: &str, fuse_root: &Path) -> Option<PathBuf> {
 /// `smb-share:server=nas,share=projects,user=sam/Film` is
 /// `smb://nas/projects/Film`: the export's user and domain are left out,
 /// as the share's normal address leaves them out, and SMB's own port too.
-/// SFTP, FTP, WebDAV, MTP and gPhoto2 exports map the same way.
+/// SFTP, FTP, WebDAV, MTP, gPhoto2 and AFC exports map the same way, except
+/// that SFTP, FTP and WebDAV keep the export's user, which picks the
+/// account `GVfs` mounted (`sftp://sam@build/srv`).
 ///
 /// `None`, so the caller keeps the local path, when `path` is not below
 /// `fuse_root` (a look-alike folder elsewhere, or one that climbs out with
 /// `..`), when `fuse_root` belongs to another user, and for an export
-/// whose name does not say where it leads. Only `fuse_root` itself is
+/// whose name does not say where it leads or whose user an address
+/// cannot carry. Only `fuse_root` itself is
 /// looked at on disk; nothing is mounted.
 pub fn fuse_export_location(path: &Path, fuse_root: &Path) -> Option<String> {
     let relative = path.strip_prefix(fuse_root).ok()?;
@@ -101,25 +104,35 @@ pub fn fuse_export_location(path: &Path, fuse_root: &Path) -> Option<String> {
             .filter(|value| !value.is_empty())
     };
     let port = field("port");
-    let (scheme, host, port, first) = match kind {
+    // SFTP, FTP and WebDAV name the account in the address (SAFE-010
+    // keeps it out of what is saved); SMB and devices never do.
+    let user = field("user");
+    let (scheme, host, port, first, user) = match kind {
         "smb-share" => {
             let port = port.filter(|port| *port != DEFAULT_SMB_PORT.to_string());
-            ("smb", field("server")?, port, Some(field("share")?))
+            ("smb", field("server")?, port, Some(field("share")?), None)
         }
-        "sftp" | "ftp" | "ftps" => (kind, field("host")?, port, None),
+        "sftp" | "ftp" | "ftps" => (kind, field("host")?, port, None, user),
         "dav" => {
             let scheme = if field("ssl").as_deref() == Some("true") {
                 "davs"
             } else {
                 "dav"
             };
-            (scheme, field("host")?, port, field("prefix"))
+            (scheme, field("host")?, port, field("prefix"), user)
         }
-        "mtp" | "gphoto2" => (kind, field("host")?, None, None),
+        "mtp" | "gphoto2" => (kind, field("host")?, None, None, None),
+        // An iOS device's port picks its storage: 3 is the apps' files.
+        "afc" => (kind, field("host")?, port, None, None),
         _ => return None,
     };
     let host = authority_host(&host, kind != "smb-share")?;
-    let mut location = format!("{scheme}://{host}");
+    let user = match user {
+        Some(user) if user.contains(breaks_out_of_authority) => return None,
+        Some(user) => format!("{user}@"),
+        None => String::new(),
+    };
+    let mut location = format!("{scheme}://{user}{host}");
     if let Some(port) = port {
         if !port.bytes().all(|byte| byte.is_ascii_digit()) {
             return None;
@@ -156,12 +169,13 @@ fn authority_host(host: &str, is_device_like: bool) -> Option<String> {
     if bracketed && is_device_like {
         return Some(host.to_owned());
     }
-    let breaks_out = |c: char| {
-        matches!(c, '@' | '/' | '\\' | '?' | '#' | '%' | ':' | '[' | ']')
-            || c.is_whitespace()
-            || c.is_control()
-    };
-    (!host.contains(breaks_out)).then(|| host.to_owned())
+    (!host.contains(breaks_out_of_authority)).then(|| host.to_owned())
+}
+
+/// True for a character that would end a decoded host or user name and
+/// start another part of an address, or that an address cannot hold.
+fn breaks_out_of_authority(c: char) -> bool {
+    matches!(c, '@' | '/' | '\\' | '?' | '#' | '%' | ':' | '[' | ']') || c.is_whitespace() || c.is_control()
 }
 
 /// `uri`, a location another application handed over, with a path inside
@@ -366,15 +380,16 @@ mod tests {
         let cases = [
             (
                 "sftp:host=build-box,port=2222,user=sam/srv/logs",
-                Some("sftp://build-box:2222/srv/logs"),
+                Some("sftp://sam@build-box:2222/srv/logs"),
             ),
+            ("sftp:host=build-box/srv", Some("sftp://build-box/srv")),
             (
                 "ftp:host=files.example.test/pub",
                 Some("ftp://files.example.test/pub"),
             ),
             (
                 "dav:host=cloud.example.test,prefix=%2Fremote.php%2Fwebdav,ssl=true,user=sam/Notes",
-                Some("davs://cloud.example.test/remote.php/webdav/Notes"),
+                Some("davs://sam@cloud.example.test/remote.php/webdav/Notes"),
             ),
             (
                 "dav:host=cloud.example.test/Notes",
@@ -388,6 +403,16 @@ mod tests {
                 "gphoto2:host=%5Busb%3A001%2C004%5D/DCIM",
                 Some("gphoto2://[usb:001,004]/DCIM"),
             ),
+            (
+                "afc:host=00008020-0012ABCD,port=3/Fictional App",
+                Some("afc://00008020-0012ABCD:3/Fictional%20App"),
+            ),
+            (
+                "afc:host=00008020-0012ABCD/DCIM",
+                Some("afc://00008020-0012ABCD/DCIM"),
+            ),
+            ("sftp:host=build-box,user=s%40m/srv", None),
+            ("ftp:host=files.example.test,user=a%2Fb/pub", None),
             ("afp-volume:host=old-mac,volume=Shared/Docs", None),
             ("nfs:host=nfs-box,prefix=%2Fexport/a", None),
             ("smb-share:share=projects/Film", None),
