@@ -800,3 +800,30 @@ fn another_window_taking_focus_during_the_create_keeps_it() {
     assert!(!renaming, "nothing is renamed behind it");
     assert!(selected.is_empty(), "nothing is selected: {selected:?}");
 }
+
+/// The archive commands of the tab the user went to while a slow create
+/// ran, which wait while it writes, come back once it ends, without the
+/// selection changing again.
+///
+/// parity: OPS-002, ARC-009
+#[gtk::test]
+fn the_archive_commands_come_back_once_a_background_create_ends() {
+    let fixture = super::archives::fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let release = start_held_text_document(&test);
+    test.window.add_tab(&fixture.uri()).expect("a valid folder");
+    test.wait_for_listing("the second tab");
+    select_names(&test, &["Bundle.zip"]);
+    let waited = !is_enabled(&test, "extract-all");
+
+    drop(release);
+    wait_until("the create to end", || {
+        fixture.path("Documents/New Text Document.txt").is_file() && !test.window.has_running_write()
+    });
+    settle();
+
+    assert!(waited, "Extract all waits while the create writes");
+    assert!(is_enabled(&test, "extract-all"), "Extract all is back");
+    assert!(is_enabled(&test, "extract-here"), "Extract here is back");
+    assert_eq!(test.selected_names(), ["Bundle.zip"]);
+}

@@ -214,7 +214,9 @@ impl BrowserWindow {
     }
 
     /// Forgets the write of [`Self::begin_quick_write`] and hides its
-    /// panel, if it showed and is still its own.
+    /// panel, if it showed and is still its own. The file and archive
+    /// commands, which wait while it writes, are enabled again for what
+    /// is shown, which may be another tab by now.
     pub(super) fn end_quick_write(&self, write: &QuickWrite, cancel: &Cancellation) {
         if let Some(source) = write.pending_panel.take() {
             source.remove();
@@ -223,6 +225,7 @@ impl BrowserWindow {
         }
         self.imp().file_operations.borrow_mut().running = None;
         self.update_file_commands();
+        self.update_archive_actions();
     }
 
     /// Forgets the running operation and hides its panel.
