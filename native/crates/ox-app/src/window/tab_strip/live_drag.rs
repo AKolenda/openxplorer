@@ -153,8 +153,12 @@ impl TabStrip {
             layout.follow(left);
             return;
         }
-        // A tab released a moment ago takes its place first.
+        // A tab released a moment ago takes its place first, which shows
+        // the tabs given meanwhile: the grabbed tab may have a new widget.
         layout.finish_now();
+        let Some(widget) = self.widget_of(id) else {
+            return;
+        };
         let order = self.widgets();
         // No tooltip pops up over a tab that moves.
         for tab in &order {

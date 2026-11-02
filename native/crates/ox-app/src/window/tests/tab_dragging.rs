@@ -416,6 +416,39 @@ fn another_tab_grabbed_before_a_release_settled_follows_once_it_landed() {
     assert!(strip.is_following(), "the other tab follows the pointer");
 }
 
+/// Another tab grabbed before a release settled, after it changed folder
+/// meanwhile: the release's landing draws that tab anew, and the new drag
+/// moves the tab as drawn now, not the widget it had when grabbed.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_that_changed_folder_while_a_release_settled_follows_once_grabbed() {
+    let _off = AnimationsOff::new();
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    let [first, second] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    assert_eq!(active_tab(&test.window), Some(second));
+    let strip = test.window.tab_strip();
+    let (x, other_x) = (grab_point(&test.window, first), grab_point(&test.window, second));
+
+    strip.grab_tab(first, (x, 10.0));
+    strip.follow_pointer(first, x + 40.0);
+    strip.let_go(true, |_| ());
+    // The tab in front goes elsewhere: the strip waits to draw it anew.
+    test.window.navigate(&fixture.uri_of("Music")).expect("a folder");
+    let grabbed_widget = strip.tab_widget_of(second).expect("a shown tab");
+    strip.grab_tab(second, (other_x, 10.0));
+    strip.follow_pointer(second, other_x + 20.0);
+
+    let dragged = strip.tab_widget_of(second).expect("a shown tab");
+    assert_ne!(dragged, grabbed_widget, "the tab was drawn anew");
+    assert_eq!(dragged.parent(), Some(strip.tab_list().upcast::<gtk::Widget>()));
+    assert_eq!(strip.live_tab(), Some(second));
+    assert!(strip.is_following(), "the tab follows the pointer");
+}
+
 /// A tab let go before a tab that closes while it slides into place lands
 /// before the next tab still open, where the strip showed it, not at the
 /// end of the row.
