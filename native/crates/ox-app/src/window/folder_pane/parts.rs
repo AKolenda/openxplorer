@@ -15,7 +15,6 @@ use crate::folder_view::grid::{IconSize, IconView};
 use crate::folder_view::keep_top::TopKeeper;
 use crate::folder_view::model::FolderModel;
 use crate::window::empty_page::EmptyPage;
-use crate::window::loading_line::LoadingLine;
 
 use super::{FolderView, PanePage};
 
@@ -41,8 +40,6 @@ pub(super) struct PaneParts {
     pub(super) empty_area: gtk::Box,
     /// The landing page's contents.
     pub(super) landing: gtk::Box,
-    /// The line over the pane while a folder is listed.
-    pub(super) loading_line: LoadingLine,
     /// "This folder is empty." near the top of the list, as Windows
     /// Explorer says it, while the folder shown has no items.
     pub(super) empty_note: gtk::Label,
@@ -77,7 +74,6 @@ impl PaneParts {
             empty,
             empty_area,
             landing,
-            loading_line: LoadingLine::new(),
             empty_note: empty_note(),
             drag_hint: drag_hint(),
             rubber_band: rubber_band(),
@@ -116,6 +112,10 @@ fn empty_note() -> gtk::Label {
 
 /// What the note says.
 pub(super) const EMPTY_NOTE: &str = crate::i18n::message_id("This folder is empty.");
+
+/// What the note says while a location is opened, as Windows Explorer
+/// says it in the same place (VIEW-068).
+pub(super) const WORKING_NOTE: &str = crate::i18n::message_id("Working on it...");
 
 /// The rectangle a rubber band draws, hidden until one is drawn. It never
 /// takes the pointer.

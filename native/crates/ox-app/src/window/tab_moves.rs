@@ -7,9 +7,10 @@
 //! `applyPendingTabRestore` of `v2.0.0:desktop/ui/app.js`, and the handoff of
 //! `v2.0.0:desktop/tab_transfers.py`. Every window lives in this process, so a
 //! tab moves as a [`MovedTab`], the state `prepareTabTransfer` sent: its
-//! history, selection, scroll position, view, sort and Settings page. The
-//! destination restores the history, view and sort at once, and the
-//! selection and scroll position once its folder is listed. The drag
+//! history, selection, scroll position, view, sort and Settings page, and
+//! a location it was still going to. The destination restores the
+//! history, view and sort at once, goes on to that location, and restores
+//! the selection and scroll position once its folder is listed. The drag
 //! gesture that moves tabs is in [`drag`].
 //!
 //! Safety rule "the original is kept until the destination has the tab"
@@ -91,6 +92,9 @@ pub(super) struct MovedTab {
     sort: SortOrder,
     /// The page Settings shows, for the Settings tab.
     settings_view: Option<SettingsView>,
+    /// A location the tab was still going to, looked up or mounted,
+    /// which the destination goes on to (VIEW-068).
+    opening: Option<String>,
 }
 
 /// The menu that moves tab `id` into one of `windows`, which lists each
@@ -178,6 +182,7 @@ impl BrowserWindow {
             view: self.folder_pane().view(),
             sort: self.folder_pane().details().sort_order(),
             settings_view: is_settings.then(|| self.settings_page().view()),
+            opening: tab.opening.as_ref().map(|opening| opening.target().to_owned()),
         })
     }
 
@@ -209,6 +214,9 @@ impl BrowserWindow {
         self.show_view(tab.view);
         self.folder_pane().details().sort_by(tab.sort);
         self.show_tab(id);
+        if let Some(target) = tab.opening {
+            self.resume_opening(id, &target);
+        }
         Ok(())
     }
 

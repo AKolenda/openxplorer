@@ -268,7 +268,7 @@ unverified). That is why the app's 12 px base is correct.
 | R11 | Tooltip | desktop default; native 4 | 4 (L-GEO; TT#L52) | 4 | Keep. |
 | R12 | Scrollbar thumb | 8 (web, 9 px bar) | 3 (SB#L190) | 3 | Native already (§4.12). |
 | R13 | Selection pill | 4 | 2 (NV#L222; TRI#L130); 1.5 (LV#L212) | 2 | safe |
-| R14 | Bars: capacity, progress, loading line | 4 / 3 / 0 | 4 for bar-shaped elements (L-GEO) | 2 (half of the 4 px height) / 2 / 0 | Keep; a 4 px-tall bar is already a pill. |
+| R14 | Bars: capacity, progress | 4 / 3 / 0 | 4 for bar-shaped elements (L-GEO) | 2 (half of the 4 px height) / 2 / 0 | Keep; a 4 px-tall bar is already a pill. |
 
 ### 3.5 Spacing
 
@@ -320,9 +320,9 @@ stroke. Fluent's CSS shadow ramp (FT `utils/shadows.js`):
 | M03 | Exit | none | Fast-out `cubic-bezier(0,0,0,1)`, 167 ms, always with a fade (L-MOTION) | `167ms cubic-bezier(0,0,0,1)` plus `opacity` | n/a |
 | M04 | Point to point (moving selection pill) | instant | `cubic-bezier(0.55,0.55,0,1)`, 167 / 250 / 333 ms (L-MOTION) | optional, 167 ms | visible, P3 |
 | M05 | Scrollbar expand and contract | web: none | expand 167 ms after 400 ms; contract 167 ms after 500 ms (SB#L173–176, SB#L188–189); spline `0,0,0,1` (SB#L484) | `transition: min-width 167ms cubic-bezier(0,0,0,1), min-height 167ms cubic-bezier(0,0,0,1);` GTK controls the delays. | safe |
-| M06 | Loading line | 25 % bar, `1s ease-in-out infinite` | none; Fluent duration and curve tokens are in FT `global/durations.js` and `global/curves.js` | Keep. Show it only after 150 ms (Fluent `durationFast`) so fast folders never flash it. | safe |
+| M06 | Loading line | 25 % bar, `1s ease-in-out infinite` | none; Fluent duration and curve tokens are in FT `global/durations.js` and `global/curves.js` | Replaced (VIEW-068): as in Windows Explorer, the address bar's fill is the only progress bar, from the first moment, and no line runs over the items. "Working on it..." and the status bar's "Loading…" wait 300 ms (`slow_delay.rs`) so fast folders never flash them. | safe |
 | M07 | Popover open | instant (web) | Direct entrance (M02) | GTK 4.14 popovers do not animate; keep them instant. | n/a |
-| M08 | Reduced motion | `@media (prefers-reduced-motion: reduce)` → 0.01 ms | n/a | GTK disables CSS transitions and animations when `gtk-enable-animations` is false (GNOME "Reduce animation" / `enable-animations`). The loading line must then show a static 25 % bar. | must keep (rule 1) |
+| M08 | Reduced motion | `@media (prefers-reduced-motion: reduce)` → 0.01 ms | n/a | GTK disables CSS transitions and animations when `gtk-enable-animations` is false (GNOME "Reduce animation" / `enable-animations`). The address bar's progress fill must then stay still, at a third of the field. | must keep (rule 1) |
 
 ### 3.8 Target palette files
 
@@ -652,7 +652,7 @@ All transitions follow M01.
 | Empty folder | The list stays, with its column titles in Details; "This folder is empty." in `@ox_muted`, centred just under the titles (near the top in the icon views), wrapping in a narrow pane, as in Windows Explorer. | safe |
 | No results, unavailable location, empty Recycle Bin | Centred block starting 30 % down the pane, 20 px from each side, gap 12: glyph 44 at `opacity: .6` in `@ox_muted`; title 16 / **600** in `@ox_text`; message 12 px `@ox_muted`, max width 460, wrapping; optional action as a bordered button, padding `8 20`. | visible (subtle), P3 (weight, T13) |
 | Error (unreachable share, denied) | The same block with the error text and a Retry button. | Keep. |
-| Loading | 2 px line across the top of the content pane: track `@ox_selected`, 25 % bar `@ox_accent` moving left to right in `1s ease-in-out infinite`; appears after 150 ms (M06); static when animations are off (M08). | safe |
+| Opening a location | As in Windows Explorer, from the first moment: a `@ox_selected` fill crawls along behind the address (`.address.loading`, quickly at first, then ever slower, still at a third of the field when animations are off, M08), the address bar is busy for screen readers, and Refresh is Stop. After 300 ms (M06), "Working on it..." in `@ox_muted` where "This folder is empty." goes, in place of the previous folder's rows (VIEW-068). | safe |
 | Search in progress or cached | Search-info bar under the header area: min height 40, padding `7 14`, `@ox_chrome`, 1 px bottom border, **12** px text (11), accent glyph; cache freshness on the right in `@ox_muted`. | text visible, P2 |
 | Folder-size scan | Bottom bar: min height 44, padding `8 18`, `@ox_chrome`, 1 px top border, **12** px text (11), "Cancel scan" as a secondary button 27 high. | text visible, P2 (T04) |
 | Transfer | Floating panel 43 px above the bottom, between the sidebar and the details pane, radius 8, shadow E08, 4 px progress track `@ox_border` with a `@ox_accent` fill. | safe |
@@ -755,7 +755,7 @@ size before judging hairlines.
 | Scrollbar | `scrollbar.vertical`/`.horizontal`, `.overlay-indicator`, `.hovering`, `.dragging`, `> range > trough > slider` | |
 | Tooltip | `tooltip.background` | |
 | Paned | `paned.workspace > separator` | |
-| Progress | `progressbar > trough > progress` | loading line, capacity bar |
+| Progress | `progressbar > trough > progress` | capacity bar |
 
 ### 6.2 What GTK 4.14 cannot do, and the workaround
 
