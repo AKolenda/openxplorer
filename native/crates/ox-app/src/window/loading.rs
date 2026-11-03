@@ -161,9 +161,6 @@ impl BrowserWindow {
     /// Ends tab `id`'s listing with `error` before anything was read; a
     /// cancelled one ends without a message.
     fn refuse_listing(&self, id: TabId, mode: LoadMode, error: EntryError) {
-        if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
-            tab.waits_to_mount = false;
-        }
         if error != EntryError::Cancelled {
             self.fail_load(id, mode, error);
         }
@@ -347,12 +344,7 @@ impl BrowserWindow {
             return;
         }
         let is_listed = result.is_ok();
-        let waits_to_mount = self
-            .imp()
-            .session
-            .borrow_mut()
-            .tab_mut(id)
-            .is_some_and(|tab| std::mem::take(&mut tab.waits_to_mount));
+        let waits_to_mount = self.imp().session.borrow().tab(id).is_some_and(|tab| tab.waits_to_mount);
         let may_mount = run.mount_retry == MountRetry::Allowed && !waits_to_mount;
         match result {
             Ok(()) if run.mode == LoadMode::Reload => self.merge_rows(id, run.held_rows.take()),

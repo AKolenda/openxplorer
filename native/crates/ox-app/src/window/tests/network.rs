@@ -15,6 +15,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 use ox_core::network::{
     begin_sign_out, DiscoveredServer, Discovery, ForgetScope, MountOutcome, NetworkError, SignOutRequest,
@@ -306,6 +307,11 @@ fn a_share_another_application_shows_is_mounted_only_when_the_user_asks() {
     wait_for(Duration::from_millis(500));
     assert!(test.window.properties_windows().is_empty(), "no Properties");
     assert_eq!(mounts.get(), 0, "nothing was mounted for the requests");
+    // A refresh the folder watch starts is not the user asking.
+    let active = test.window.imp().session.borrow().active_id();
+    test.window.folder_changed(active.expect("a tab in front"));
+    test.wait_for_listing("the watch's refresh");
+    assert_eq!(mounts.get(), 0, "nothing was mounted for the watch's refresh");
 
     test.activate("refresh", None);
     wait_until("the user's connect", || mounts.get() == 1);

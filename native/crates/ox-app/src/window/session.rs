@@ -149,10 +149,11 @@ pub(super) struct Tab {
     /// Its network folder changed while it was in the background: it is
     /// listed again when next shown (TAB-056).
     pub changed_while_hidden: bool,
-    /// Its next listing does not mount an unmounted share: another
-    /// application asked to show the location (`FileManager1`), so the
-    /// tab says it is not mounted until the user asks to connect with Try
-    /// again (NET-004).
+    /// Its listings do not mount an unmounted share: another application
+    /// asked to show the location (`FileManager1`), so the tab says it is
+    /// not mounted until the user asks to connect with Try again (or F5),
+    /// or takes the tab elsewhere (NET-004). Refreshes the folder watch
+    /// starts do not count.
     pub waits_to_mount: bool,
     /// An item of this tab is being opened; a second one waits for it
     /// (`tab.opening` in `openEntry`).

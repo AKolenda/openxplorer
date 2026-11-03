@@ -120,8 +120,8 @@ impl BrowserWindow {
         }
     }
 
-    /// Makes the listing tab `id` runs, or runs next, leave its share
-    /// unmounted until the user asks to connect.
+    /// Makes tab `id`'s listings, the one running included, leave its
+    /// share unmounted until the user asks to connect.
     pub(super) fn wait_to_mount(&self, id: TabId) {
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.waits_to_mount = true;
