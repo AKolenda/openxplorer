@@ -77,3 +77,42 @@ fn app_pages_cannot_be_requested_from_outside() {
         );
     }
 }
+
+/// The current user's `GVfs` FUSE root, in the private runtime folder
+/// check.py gives each test run. Nothing is exported in it: the request
+/// reads only the path.
+fn user_fuse_root() -> std::path::PathBuf {
+    let root = glib::user_runtime_dir().join("gvfs");
+    std::fs::create_dir_all(&root).expect("the private runtime folder takes the FUSE root");
+    root
+}
+
+/// "Show in folder" for a file a browser saved onto a share through
+/// `GVfs`'s FUSE export shows the share's own location, without the
+/// export's user, for every method; a look-alike path elsewhere, and an
+/// export whose name cannot be reversed, keep their local path.
+///
+/// parity: INT-007, INT-014, NET-026
+#[test]
+fn a_file_in_the_users_fuse_export_is_shown_at_its_share() {
+    let root = user_fuse_root();
+    let saved = root.join("smb-share:server=fictional-nas,share=team%20files,user=sam/Reports/q3 draft.pdf");
+    let saved = ox_core::location::file_uri(&saved);
+
+    for method in FileManagerMethod::ALL {
+        let request = FileManagerRequest::new(method, &[saved.as_str()]).expect("valid");
+
+        assert_eq!(
+            request.uris(),
+            ["smb://fictional-nas/team%20files/Reports/q3%20draft.pdf"],
+            "{method:?}"
+        );
+    }
+    let look_alike = "file:///tmp/gvfs/smb-share:server=fictional-nas,share=team/a.pdf";
+    let request = FileManagerRequest::new(FileManagerMethod::ShowItems, &[look_alike]).expect("valid");
+    let local = ox_core::location::normalise(look_alike).expect("a local path");
+    assert_eq!(request.uris(), [local]);
+    let unknown = ox_core::location::file_uri(&root.join("nfs:host=nfs-box,prefix=%2Fexport/a.pdf"));
+    let request = FileManagerRequest::new(FileManagerMethod::ShowItems, &[unknown.as_str()]).expect("valid");
+    assert_eq!(request.uris(), [unknown]);
+}

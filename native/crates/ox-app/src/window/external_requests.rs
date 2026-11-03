@@ -10,7 +10,9 @@
 //! shows it, lists it again, selects exactly the requested items and
 //! scrolls to the first; a file is never opened as a folder.
 //! `ShowItemProperties` opens the item's folder in a new tab with the
-//! item selected, and the item's Properties over it.
+//! item selected, and the item's Properties over it. When Settings opens
+//! folders from other apps in a new window, the application gives the
+//! request a window of its own, whose tabs are only the request's.
 
 use gtk::subclass::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
@@ -41,6 +43,15 @@ pub(super) fn items_by_folder(uris: &[String], home: &str) -> Vec<(String, Vec<S
 impl BrowserWindow {
     /// Shows a checked `FileManager1` request or `--select`.
     pub(crate) fn show_file_manager_request(&self, request: &FileManagerRequest) {
+        self.open_request_tabs(request);
+        self.open_request_properties(request);
+    }
+
+    /// The tabs of a checked `FileManager1` request: each folder, or each
+    /// item's folder with the items selected. A window opened for the
+    /// request (INT-014, NAV-042) takes them before it is shown, as its
+    /// only tabs; it is left without a tab when none could be opened.
+    pub(crate) fn open_request_tabs(&self, request: &FileManagerRequest) {
         let home = self.imp().locations.borrow().home_uri();
         match request.method() {
             FileManagerMethod::ShowFolders => {
@@ -58,8 +69,15 @@ impl BrowserWindow {
                 for (folder, items) in items_by_folder(first, &home) {
                     self.select_in_new_tab(&folder, items);
                 }
-                self.open_properties_of(&first[0], PropertiesTab::General);
             }
+        }
+    }
+
+    /// The Properties of a checked `ShowItemProperties` request's item,
+    /// over the window once it is shown; nothing for the other methods.
+    pub(crate) fn open_request_properties(&self, request: &FileManagerRequest) {
+        if request.method() == FileManagerMethod::ShowItemProperties {
+            self.open_properties_of(&request.uris()[0], PropertiesTab::General);
         }
     }
 
