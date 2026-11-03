@@ -5,6 +5,17 @@ Every icon the native app shows is one of these files, copied byte for byte
 from its upstream set; none is drawn by the app or edited here. The product
 owner approved the set and its mapping on 2026-09-27.
 
+Added on 2026-11-03 to match Windows 11 File Explorer's "…" and View
+menus (CMD-006, CMD-007), from the same pinned package and awaiting the
+owner's review: `wrench_20_regular` (Properties), `select_object_20_regular`
+(Invert selection), `rectangle_landscape_20_regular` (Extra large and Large
+icons), `text_column_two_20_regular` (List), `panel_left_20_regular`
+(Navigation pane), `arrow_autofit_height_20_regular` (Compact view),
+`checkbox_checked_20_regular` (Item check boxes) and `circle_small_20_filled`
+(the dot that marks a chosen view, sort or the open Details pane). Redo
+shows `arrow_undo_20_regular` mirrored by the menu's CSS
+(`-gtk-icon-transform`), as Windows 11 draws it; the file is not changed.
+
 The files use the `hicolor/scalable/<context>/` layout of a GTK icon theme and
 are compiled into the application as a GResource (`icons.gresource.xml`, built
 by `build.rs`). Every name starts with `ox-`, so no desktop icon theme can
@@ -34,6 +45,7 @@ it.
 |---|---|---|---|
 | `actions/ox-add-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/add_20_regular.svg` | eace2d0d89e66e50d5c93cf82d21eb9e73a452dc370a76846d1f1802788dd71c |
 | `actions/ox-apps-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/apps_20_regular.svg` | 0ad15fd4cca3d66e5221e3533d1fafd4d705ebdbc68e74e0674a72106fe627ba |
+| `actions/ox-arrow-autofit-height-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_autofit_height_20_regular.svg` | 6c520e2e07a8b86ced98036b6b5f9cf3018a1a153d80c8be9842770f78990552 |
 | `actions/ox-arrow-clockwise-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_clockwise_20_regular.svg` | e216c5859ca5368c3ce795d1ffaf19b4be5e5ba2df6d09e7ff544d3c2fef0466 |
 | `actions/ox-arrow-counterclockwise-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_counterclockwise_20_regular.svg` | 932290054023ca03b2f567d1c351d5d53fc1b73a312cc8df9902c6dcc09aea1e |
 | `actions/ox-arrow-down-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_down_20_regular.svg` | c1548448de9cc56a3569bb51e54e954337eff72fa6d6e68a910c1586033780f8 |
@@ -47,6 +59,7 @@ it.
 | `actions/ox-arrow-undo-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_undo_20_regular.svg` | 6ddfab37900746fb49d4acae7296e154274fd12f4faad3bf41fdeab66ae0bb39 |
 | `actions/ox-arrow-up-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_up_20_regular.svg` | 895cf1471c758a2e3ed183ac90f3f58566ae6c792228b742c2303eac34cfdf6e |
 | `actions/ox-braces-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/braces_20_regular.svg` | 831e9dbe8a711887b0212ccaedca58056f72121d16a8c0fc2b7061dac770d29b |
+| `actions/ox-checkbox-checked-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/checkbox_checked_20_regular.svg` | e283886c405bba6ffc78d236a38e211360e7d02b16e446d2eba71e9f8697bcc3 |
 | `actions/ox-checkmark-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/checkmark_20_regular.svg` | 9ad90a13e5d3dd6309544d09a14817b7e609015db6e6c60ecd44ef120d2b3470 |
 | `actions/ox-chevron-down-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_down_16_regular.svg` | 33efa668d236d70a945c00cbbd3fda019994794a5b5a2e17f5e66aac19abd199 |
 | `actions/ox-chevron-down-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_down_20_regular.svg` | 2584741754fe0e27641d7423ff96e675167119889fbc1e5129516973cbfb136a |
@@ -73,24 +86,30 @@ it.
 | `actions/ox-more-horizontal-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/more_horizontal_20_regular.svg` | d700fdb05f2b48ed931352413ce2fd110fbbaa77f661858568312d31aadd2cdf |
 | `actions/ox-open-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/open_20_regular.svg` | ac1788bb4ce4e3fa50668a6569ac0021a5da1d27c4c3035cceb1ba26eda99584 |
 | `actions/ox-paint-brush-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/paint_brush_20_regular.svg` | 208ec8628a886146383d3a520f1beff702d3b904cd9eabe2152570b6e8d172a0 |
+| `actions/ox-panel-left-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/panel_left_20_regular.svg` | f31a8664092ca1bfb4fdb6809c936ab3e4109063641f8548f013bbe869a65461 |
 | `actions/ox-panel-right-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/panel_right_20_regular.svg` | a4830810b33a540cc4e7d78a355b7bafbe43f1893e344efd3961589c91a59625 |
+| `actions/ox-rectangle-landscape-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/rectangle_landscape_20_regular.svg` | 0ff1b572b52110eebe5f13c6ee3fa7b0ad8b0edbba55f4bde353f221ac304f87 |
 | `actions/ox-rename-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/rename_20_regular.svg` | e4cd064a10bd0345430f78eccb012c966502bc6285ff70c9ee23962d52836f47 |
 | `actions/ox-search-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/search_20_regular.svg` | bdcaed7e5348ba774acf854b840ef8bcf30c024bf5d3bf50b1e08d3aac8aab17 |
 | `actions/ox-select-all-off-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/select_all_off_20_regular.svg` | bb1a786c70234a30f5f26f92c3d885a7a91159d9b31c1a0c4fa6a9505b2b910f |
 | `actions/ox-select-all-on-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/select_all_on_20_regular.svg` | 199464932860850ba995faf317487f035e08707fd062dc682607deb69ec261f9 |
+| `actions/ox-select-object-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/select_object_20_regular.svg` | ea513ac8358c344d6444a8b617b3c965ba71f94c45915ff4f8779480cee09cd8 |
 | `actions/ox-settings-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/settings_20_regular.svg` | 082803991d9af2fdb934957c5c8cddb04885665c7669d73d0c3d3dfee7ac7e6a |
 | `actions/ox-share-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/share_20_regular.svg` | c0f5d5c7dd6ea4bb52da116b5809256f349384b24339945891164b6854f98c5a |
 | `actions/ox-square-multiple-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/square_multiple_20_regular.svg` | de601d733420494510b8129cc413f76463435f7366a727faefde9b9e9a457a9f |
 | `actions/ox-subtract-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/subtract_20_regular.svg` | a724aae5ef54510875cf0b1dda4b49e6bb39dcb9f44dad450cdb1f64d5feb85b |
 | `actions/ox-table-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/table_20_regular.svg` | 01abb91aad998f162fd39dd5989844c43afd428597b9824dcb7ba1e2cd965572 |
 | `actions/ox-text-bullet-list-ltr-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/text_bullet_list_ltr_20_regular.svg` | e3e8e7fc40d3b9a39d731dc8c6886551d489329f792df8f20c80ffed78f3bcee |
+| `actions/ox-text-column-two-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/text_column_two_20_regular.svg` | 8b692956fd7b4e8a1cb26ec17fe0cd1d5976914752e673d8d1d08e205b34fcfd |
 | `actions/ox-window-console-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/window_console_20_regular.svg` | 6d198e13d313e59254a22ccc759fcf47bb32a9f73ae68a075004e0d6ca9aa579 |
 | `actions/ox-window-multiple-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/window_multiple_20_regular.svg` | 6f885abfd54d205612317a62c5bd8cf9017783a817eca5e141fdc7ba5136968f |
 | `actions/ox-window-new-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/window_new_20_regular.svg` | c64f483ea659f4446541cbf77e6712ba8e28673cdc7594e11a56afa44d263273 |
+| `actions/ox-wrench-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/wrench_20_regular.svg` | 35032e75227053783c0a35d87fdd3e99a8287b57175876e4ea04304e305ce554 |
 | `devices/ox-hard-drive-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/hard_drive_20_regular.svg` | 04551457489e67a9b568cc7d2f710a26776d3675ee4dd92b4535692085104b35 |
 | `devices/ox-laptop-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/laptop_20_regular.svg` | e0ff6f7f08ec6ed92b4264dab67f248627f5b12abbbec7eb231b1029f7469085 |
 | `devices/ox-phone-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/phone_20_regular.svg` | 3ee7532f1327fcd58e57b51fd523ef4bc781780bd9cd59b60fc67e02f10554f0 |
 | `devices/ox-server-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/server_20_regular.svg` | 13fb53a15a383d600d24062d14a92b6df8e47d65f01b81af23cc47c54009b7a7 |
+| `emblems/ox-circle-small-20-filled-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/circle_small_20_filled.svg` | 2c66febb23b8b5f7233500418e110ecb83c3b3afccefd6f86cc784f99a184bfa |
 | `emblems/ox-dismiss-circle-16-filled-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/dismiss_circle_16_filled.svg` | 9e28ebc2b04e1a528968f227ba83d5a54ea2657305ef0cafd44440a93917a3bf |
 | `emblems/ox-folder-zip-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/folder_zip_20_regular.svg` | 7fa45a1da754ab612939a3806d6a5079642c0a2d897db59da2f9be5034e8870c |
 | `emblems/ox-pin-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/pin_16_regular.svg` | 4294f30fef80b1ad90e746cb161321be97ff3ea40b4316812619624aab6a12a2 |

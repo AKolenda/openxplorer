@@ -12,6 +12,7 @@
   <gresource prefix="/io/winspace/Development/Native/icons">
     <file>scalable/actions/ox-add-20-symbolic.svg</file>
     <file>scalable/actions/ox-apps-20-symbolic.svg</file>
+    <file>scalable/actions/ox-arrow-autofit-height-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-clockwise-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-counterclockwise-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-down-20-symbolic.svg</file>
@@ -25,6 +26,7 @@
     <file>scalable/actions/ox-arrow-undo-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-up-20-symbolic.svg</file>
     <file>scalable/actions/ox-braces-20-symbolic.svg</file>
+    <file>scalable/actions/ox-checkbox-checked-20-symbolic.svg</file>
     <file>scalable/actions/ox-checkmark-20-symbolic.svg</file>
     <file>scalable/actions/ox-chevron-down-16-symbolic.svg</file>
     <file>scalable/actions/ox-chevron-down-20-symbolic.svg</file>
@@ -51,24 +53,30 @@
     <file>scalable/actions/ox-more-horizontal-20-symbolic.svg</file>
     <file>scalable/actions/ox-open-20-symbolic.svg</file>
     <file>scalable/actions/ox-paint-brush-20-symbolic.svg</file>
+    <file>scalable/actions/ox-panel-left-20-symbolic.svg</file>
     <file>scalable/actions/ox-panel-right-20-symbolic.svg</file>
+    <file>scalable/actions/ox-rectangle-landscape-20-symbolic.svg</file>
     <file>scalable/actions/ox-rename-20-symbolic.svg</file>
     <file>scalable/actions/ox-search-20-symbolic.svg</file>
     <file>scalable/actions/ox-select-all-off-20-symbolic.svg</file>
     <file>scalable/actions/ox-select-all-on-20-symbolic.svg</file>
+    <file>scalable/actions/ox-select-object-20-symbolic.svg</file>
     <file>scalable/actions/ox-settings-20-symbolic.svg</file>
     <file>scalable/actions/ox-share-20-symbolic.svg</file>
     <file>scalable/actions/ox-square-multiple-20-symbolic.svg</file>
     <file>scalable/actions/ox-subtract-20-symbolic.svg</file>
     <file>scalable/actions/ox-table-20-symbolic.svg</file>
     <file>scalable/actions/ox-text-bullet-list-ltr-20-symbolic.svg</file>
+    <file>scalable/actions/ox-text-column-two-20-symbolic.svg</file>
     <file>scalable/actions/ox-window-console-20-symbolic.svg</file>
     <file>scalable/actions/ox-window-multiple-20-symbolic.svg</file>
     <file>scalable/actions/ox-window-new-20-symbolic.svg</file>
+    <file>scalable/actions/ox-wrench-20-symbolic.svg</file>
     <file>scalable/devices/ox-hard-drive-20-symbolic.svg</file>
     <file>scalable/devices/ox-laptop-20-symbolic.svg</file>
     <file>scalable/devices/ox-phone-20-symbolic.svg</file>
     <file>scalable/devices/ox-server-20-symbolic.svg</file>
+    <file>scalable/emblems/ox-circle-small-20-filled-symbolic.svg</file>
     <file>scalable/emblems/ox-dismiss-circle-16-filled-symbolic.svg</file>
     <file>scalable/emblems/ox-folder-zip-20-symbolic.svg</file>
     <file>scalable/emblems/ox-pin-16-symbolic.svg</file>

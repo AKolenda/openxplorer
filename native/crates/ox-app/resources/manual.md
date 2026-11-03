@@ -50,7 +50,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 ## Network locations
 
 - Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.
-- Map network location, below the navigation pane or in the "…" menu of This PC and Network, saves a share in the navigation pane.
+- Map network location, below the navigation pane, or Map network drive in the "…" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.
 - OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.
 - Right-click a share or server and choose Sign out of server to disconnect and forget a session.
 

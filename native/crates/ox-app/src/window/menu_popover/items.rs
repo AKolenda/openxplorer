@@ -118,6 +118,12 @@ pub(in crate::window) struct MenuItem {
     /// subfolder's in the New menu (OPS-003); empty for an item that runs
     /// its action.
     pub submenu: Vec<MenuEntry>,
+    /// Shows its glyph mirrored left to right, as Windows 11 draws Redo
+    /// with Undo's arrow.
+    pub mirrored: bool,
+    /// Marks it with a dot rather than a check mark while it is on, as
+    /// Windows 11 marks a choice such as the view or the open pane.
+    pub dot_mark: bool,
 }
 
 impl MenuItem {
@@ -135,6 +141,8 @@ impl MenuItem {
             disabled_reason: None,
             application_icon: None,
             submenu: Vec::new(),
+            mirrored: false,
+            dot_mark: false,
         }
     }
 
@@ -181,6 +189,7 @@ impl MenuItem {
     pub(in crate::window) fn choice(label: &str, glyph: Icon, action: WindowAction, value: &str) -> Self {
         Self {
             check: ItemCheck::FollowsAction,
+            dot_mark: true,
             ..Self::with_text_target(label, glyph, action, value)
         }
     }
@@ -190,6 +199,22 @@ impl MenuItem {
         Self {
             check: ItemCheck::FollowsAction,
             ..Self::new(label, glyph, action)
+        }
+    }
+
+    /// The same item with its glyph mirrored left to right.
+    pub(in crate::window) fn mirrored(self) -> Self {
+        Self {
+            mirrored: true,
+            ..self
+        }
+    }
+
+    /// The same item, marked with a dot while it is on.
+    pub(in crate::window) fn with_dot_mark(self) -> Self {
+        Self {
+            dot_mark: true,
+            ..self
         }
     }
 

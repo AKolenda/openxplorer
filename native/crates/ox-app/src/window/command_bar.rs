@@ -34,7 +34,7 @@ use super::window_action::WindowAction;
 
 use menus::{appearance_items, more_menu};
 pub(super) use menus::{group_by_menu, new_menu, sort_menu, view_menu};
-pub(super) use menus::{FolderPin, MoreMenuState, NetworkMapping};
+pub(super) use menus::{FolderPin, MoreMenuState, MorePlace, NetworkDrive};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).

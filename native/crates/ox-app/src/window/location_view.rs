@@ -13,13 +13,14 @@ use gtk::subclass::prelude::*;
 use ox_core::location::{
     self, is_archive_location, is_device_location, is_server_location, parent_location, LocationContext,
 };
-use ox_core::places::NetworkLocation;
+use ox_core::ops::JournalDirection;
+use ox_core::places::{NetworkLocation, Place};
 
 use crate::icons::{Art, Icon};
 use crate::locations::Page;
 
 use super::address_bar::CrumbButton;
-use super::command_bar::{FolderPin, MoreMenuState, NetworkMapping};
+use super::command_bar::{FolderPin, MoreMenuState, MorePlace, NetworkDrive};
 use super::session::{Session, Tab};
 use super::tab_strip::TabView;
 use super::window_action::WindowAction;
@@ -130,6 +131,15 @@ fn tab_view(
     }
 }
 
+/// What the "…" menu keeps of the places the sidebar was last drawn from.
+#[derive(Debug, Default)]
+pub(super) struct MoreMenuPlaces {
+    /// Quick access, for Pin or Unpin.
+    quick_access: Vec<Place>,
+    /// The connected network shares, for Disconnect network drive.
+    network_drives: Vec<NetworkDrive>,
+}
+
 impl BrowserWindow {
     /// Updates the frame after the active tab moved: the address bar
     /// returns to breadcrumbs.
@@ -164,7 +174,7 @@ impl BrowserWindow {
         search.set_folder_title(&title);
         search.set_enabled(!on_page && !in_zip && !is_device_location(uri));
         self.show_extract_button();
-        self.update_more_menu(&self.places().quick_access);
+        self.update_more_menu();
         self.update_cache_folder_action();
         self.render_tabs();
         self.show_pane_captions();
@@ -177,24 +187,66 @@ impl BrowserWindow {
         self.picker_selection_changed();
     }
 
-    /// Shows in "…" what the folder shown allows: Map network location in
-    /// This PC and Network, and Unpin from Quick access while `quick_access`
-    /// has the folder, else Pin to Quick access. It follows the location
-    /// and every change to Quick access, from any menu or window.
-    pub(super) fn update_more_menu(&self, quick_access: &[ox_core::places::Place]) {
+    /// Keeps what "…" needs of `places`, which the sidebar has just been
+    /// drawn from: Quick access, for Pin or Unpin, and the connected
+    /// network shares, for Disconnect network drive.
+    pub(super) fn remember_more_menu_places(&self, places: &crate::places::Places) {
+        let network_drives = places
+            .network
+            .iter()
+            .filter(|share| {
+                share.is_connected
+                    && share.kind != ox_core::places::NetworkKind::Server
+                    && !location::is_smb_server(&share.uri)
+            })
+            .map(|share| NetworkDrive {
+                label: share.label.clone(),
+                uri: share.uri.clone(),
+            })
+            .collect();
+        self.imp().more_menu_places.replace(Some(MoreMenuPlaces {
+            quick_access: places.quick_access.clone(),
+            network_drives,
+        }));
+    }
+
+    /// Shows in "…" what the location shown allows, as Windows 11's "…"
+    /// does: in This PC and Network the network drive commands; in a
+    /// folder Undo and Redo while each can run, named for the step, and
+    /// Unpin from Quick access while the folder is pinned, else Pin to
+    /// Quick access. It follows the location, every change to Quick access
+    /// or the network shares, and the undo journal.
+    pub(super) fn update_more_menu(&self) {
         let Some(uri) = self.current_uri() else {
             return;
         };
-        let page = Page::from_uri(&uri);
-        let mapping = match page {
-            Some(Page::ThisPc | Page::Network) => NetworkMapping::Offered,
-            _ => NetworkMapping::NotHere,
+        if self.imp().more_menu_places.borrow().is_none() {
+            let places = self.places();
+            self.remember_more_menu_places(&places);
+        }
+        let sources = self.imp().more_menu_places.borrow();
+        let Some(sources) = sources.as_ref() else {
+            return;
         };
-        let pinned = quick_access
+        let page = Page::from_uri(&uri);
+        let place = match page {
+            Some(Page::ThisPc | Page::Network) => MorePlace::NetworkPage,
+            _ => MorePlace::Folder,
+        };
+        let pinned = sources
+            .quick_access
             .iter()
-            .find(|place| page.is_none() && location::same_location(&place.uri, &uri));
-        let pin = pinned.map_or(FolderPin::Unpinned, |place| FolderPin::Pinned(place.uri.clone()));
-        self.command_bar().show_more_menu(MoreMenuState { mapping, pin });
+            .find(|pin| page.is_none() && location::same_location(&pin.uri, &uri));
+        let pin = pinned.map_or(FolderPin::Unpinned, |pin| FolderPin::Pinned(pin.uri.clone()));
+        let context = self.context();
+        let state = MoreMenuState {
+            place,
+            pin,
+            undo: context.journal_label(JournalDirection::Undo),
+            redo: context.journal_label(JournalDirection::Redo),
+            network_drives: sources.network_drives.clone(),
+        };
+        self.command_bar().show_more_menu(state);
     }
 
     /// Titles the window after the active tab's location: its name, or

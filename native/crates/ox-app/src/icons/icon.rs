@@ -29,6 +29,8 @@ pub(crate) enum Icon {
     Add,
     /// `apps_20_regular`: the Default apps settings.
     Apps,
+    /// `arrow_autofit_height_20_regular`: View > Show > Compact view, as Windows 11 draws it.
+    ArrowAutofitHeight,
     /// `arrow_clockwise_20_regular`: Refresh, Check for updates, and the
     /// Refresh and Reset buttons of Settings.
     ArrowClockwise,
@@ -54,7 +56,10 @@ pub(crate) enum Icon {
     ArrowRight,
     /// `arrow_sort_20_regular`: Sort and its columns.
     ArrowSort,
-    /// `arrow_swap_20_regular`: Invert selection.
+    /// `arrow_swap_20_regular`: Invert selection until "…" took Windows
+    /// 11's glyph for it (2026-11-03); still bundled with the approved
+    /// set, for the owner to keep or remove.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-03"))]
     ArrowSwap,
     /// `arrow_undo_20_regular`: Undo.
     ArrowUndo,
@@ -62,6 +67,8 @@ pub(crate) enum Icon {
     ArrowUp,
     /// `braces_20_regular`: New JSON file.
     Braces,
+    /// `checkbox_checked_20_regular`: View > Show > Item check boxes.
+    CheckboxChecked,
     /// `checkmark_20_regular`: a checked menu item and the chosen option of
     /// a settings drop-down.
     Checkmark,
@@ -78,6 +85,9 @@ pub(crate) enum Icon {
     /// `chevron_right_16_regular`: a settings row that opens a page of its
     /// own.
     ChevronRight16,
+    /// `circle_small_20_filled`: the dot a menu shows beside the chosen view or sort, and the open
+    /// Details pane, as Windows 11 marks a choice.
+    CircleSmallFilled,
     /// `clipboard_paste_20_regular`: Paste.
     ClipboardPaste,
     /// `clock_20_regular`: Previous versions, and the banner of a tab that
@@ -188,22 +198,31 @@ pub(crate) enum Icon {
     Organization,
     /// `paint_brush_20_regular`: the Appearance settings.
     PaintBrush,
+    /// `panel_left_20_regular`: View > Show > Navigation pane.
+    PanelLeft,
     /// `panel_right_20_regular`: the details pane toggle.
     PanelRight,
     /// `phone_20_regular`: phones and other devices.
     Phone,
     /// `pin_16_regular`: pins and the Quick access headings.
     Pin,
+    /// `rectangle_landscape_20_regular`: View > Extra large icons and Large icons.
+    RectangleLandscape,
     /// `rename_20_regular`: Rename.
     Rename,
     /// `search_20_regular`: the search box, Cache this folder for search,
     /// Select items matching, the settings search and the Search &
     /// indexing settings.
     Search,
-    /// `select_all_off_20_regular`: Select none.
+    /// `select_all_off_20_regular`: Select none until "…" took Windows 11's
+    /// four squares for it (2026-11-03); still bundled with the approved
+    /// set, for the owner to keep or remove.
+    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-03"))]
     SelectAllOff,
     /// `select_all_on_20_regular`: Select all.
     SelectAllOn,
+    /// `select_object_20_regular`: Invert selection, as Windows 11 draws it.
+    SelectObject,
     /// `server_20_regular`: an SMB server on the network bar.
     Server,
     /// `settings_20_regular`: Settings.
@@ -226,6 +245,8 @@ pub(crate) enum Icon {
     TableColor48,
     /// `text_bullet_list_ltr_20_regular`: the details view.
     TextBulletList,
+    /// `text_column_two_20_regular`: View > List.
+    TextColumnTwo,
     /// `video_20_regular`: the Videos folder.
     Video,
     /// `video_20_color`: videos at small sizes.
@@ -244,16 +265,20 @@ pub(crate) enum Icon {
     WindowMultiple,
     /// `window_new_20_regular`: New window, in menus and in Settings.
     WindowNew,
+    /// `wrench_20_regular`: Properties in the "…" menu, as Windows 11 draws it.
+    Wrench,
 }
 
 impl Icon {
     /// The icon's name in the app's icon theme: its file name under
     /// `resources/icons/hicolor/scalable/`, without `.svg`. An exhaustive
     /// table, hence its length.
+    #[expect(clippy::too_many_lines, reason = "one arm per bundled icon")]
     pub(crate) const fn name(self) -> &'static str {
         match self {
             Icon::Add => "ox-add-20-symbolic",
             Icon::Apps => "ox-apps-20-symbolic",
+            Icon::ArrowAutofitHeight => "ox-arrow-autofit-height-20-symbolic",
             Icon::ArrowClockwise => "ox-arrow-clockwise-20-symbolic",
             Icon::ArrowCounterclockwise => "ox-arrow-counterclockwise-20-symbolic",
             Icon::ArrowDown => "ox-arrow-down-20-symbolic",
@@ -268,11 +293,13 @@ impl Icon {
             Icon::ArrowUndo => "ox-arrow-undo-20-symbolic",
             Icon::ArrowUp => "ox-arrow-up-20-symbolic",
             Icon::Braces => "ox-braces-20-symbolic",
+            Icon::CheckboxChecked => "ox-checkbox-checked-20-symbolic",
             Icon::Checkmark => "ox-checkmark-20-symbolic",
             Icon::ChevronDown => "ox-chevron-down-20-symbolic",
             Icon::ChevronDown16 => "ox-chevron-down-16-symbolic",
             Icon::ChevronLeft16 => "ox-chevron-left-16-symbolic",
             Icon::ChevronRight16 => "ox-chevron-right-16-symbolic",
+            Icon::CircleSmallFilled => "ox-circle-small-20-filled-symbolic",
             Icon::ClipboardPaste => "ox-clipboard-paste-20-symbolic",
             Icon::Clock => "ox-clock-20-symbolic",
             Icon::Code => "ox-code-20-symbolic",
@@ -322,13 +349,16 @@ impl Icon {
             Icon::Open => "ox-open-20-symbolic",
             Icon::Organization => "ox-organization-20-symbolic",
             Icon::PaintBrush => "ox-paint-brush-20-symbolic",
+            Icon::PanelLeft => "ox-panel-left-20-symbolic",
             Icon::PanelRight => "ox-panel-right-20-symbolic",
             Icon::Phone => "ox-phone-20-symbolic",
             Icon::Pin => "ox-pin-16-symbolic",
+            Icon::RectangleLandscape => "ox-rectangle-landscape-20-symbolic",
             Icon::Rename => "ox-rename-20-symbolic",
             Icon::Search => "ox-search-20-symbolic",
             Icon::SelectAllOff => "ox-select-all-off-20-symbolic",
             Icon::SelectAllOn => "ox-select-all-on-20-symbolic",
+            Icon::SelectObject => "ox-select-object-20-symbolic",
             Icon::Server => "ox-server-20-symbolic",
             Icon::Settings => "ox-settings-20-symbolic",
             Icon::Share => "ox-share-20-symbolic",
@@ -340,6 +370,7 @@ impl Icon {
             Icon::TableColor32 => "ox-table-32-color",
             Icon::TableColor48 => "ox-table-48-color",
             Icon::TextBulletList => "ox-text-bullet-list-ltr-20-symbolic",
+            Icon::TextColumnTwo => "ox-text-column-two-20-symbolic",
             Icon::Video => "ox-video-20-symbolic",
             Icon::VideoColor20 => "ox-video-20-color",
             Icon::VideoColor32 => "ox-video-32-color",
@@ -349,6 +380,7 @@ impl Icon {
             Icon::WindowConsole => "ox-window-console-20-symbolic",
             Icon::WindowMultiple => "ox-window-multiple-20-symbolic",
             Icon::WindowNew => "ox-window-new-20-symbolic",
+            Icon::Wrench => "ox-wrench-20-symbolic",
         }
     }
 
@@ -371,9 +403,10 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 97] = [
+pub(crate) const ALL_ICONS: [Icon; 105] = [
     Icon::Add,
     Icon::Apps,
+    Icon::ArrowAutofitHeight,
     Icon::ArrowClockwise,
     Icon::ArrowCounterclockwise,
     Icon::ArrowDown,
@@ -388,11 +421,13 @@ pub(crate) const ALL_ICONS: [Icon; 97] = [
     Icon::ArrowUndo,
     Icon::ArrowUp,
     Icon::Braces,
+    Icon::CheckboxChecked,
     Icon::Checkmark,
     Icon::ChevronDown,
     Icon::ChevronDown16,
     Icon::ChevronLeft16,
     Icon::ChevronRight16,
+    Icon::CircleSmallFilled,
     Icon::ClipboardPaste,
     Icon::Clock,
     Icon::Code,
@@ -442,13 +477,16 @@ pub(crate) const ALL_ICONS: [Icon; 97] = [
     Icon::Open,
     Icon::Organization,
     Icon::PaintBrush,
+    Icon::PanelLeft,
     Icon::PanelRight,
     Icon::Phone,
     Icon::Pin,
+    Icon::RectangleLandscape,
     Icon::Rename,
     Icon::Search,
     Icon::SelectAllOff,
     Icon::SelectAllOn,
+    Icon::SelectObject,
     Icon::Server,
     Icon::Settings,
     Icon::Share,
@@ -460,6 +498,7 @@ pub(crate) const ALL_ICONS: [Icon; 97] = [
     Icon::TableColor32,
     Icon::TableColor48,
     Icon::TextBulletList,
+    Icon::TextColumnTwo,
     Icon::Video,
     Icon::VideoColor20,
     Icon::VideoColor32,
@@ -469,6 +508,7 @@ pub(crate) const ALL_ICONS: [Icon; 97] = [
     Icon::WindowConsole,
     Icon::WindowMultiple,
     Icon::WindowNew,
+    Icon::Wrench,
 ];
 
 #[cfg(test)]

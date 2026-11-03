@@ -162,28 +162,48 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
         .into()
 }
 
-/// The View menu: the views (Details, List and Explorer's four icon
-/// sizes), Compact view, Show with the panes and Hidden items, Dolphin's
-/// split view, folder tree and terminal, then the text size.
+/// The glyph Windows 11's View menu draws for `size`.
+fn icon_size_glyph(size: IconSize) -> Icon {
+    if size == IconSize::MEDIUM {
+        Icon::Desktop
+    } else if size == IconSize::SMALL {
+        Icon::Grid
+    } else {
+        Icon::RectangleLandscape
+    }
+}
+
+/// The View menu, as Windows 11 File Explorer's: the icon sizes from the
+/// largest, List and Details; the Details pane, with a dot while it is
+/// open; Show, with the navigation pane, Compact view, item check boxes
+/// and Hidden items; then Dolphin's Split view, Folder tree and Terminal,
+/// at the top level where they were before Show existed; then the text
+/// size. Windows' Tiles and Content views, Preview pane and File name
+/// extensions are things the app does not have, so they are not listed.
 pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
-    let details = view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details);
-    let compact = view_item(&gettext("List"), Icon::Table, FolderView::Compact);
-    let mut entries = vec![details, compact];
-    let icon_sizes = IconSize::NAMED.into_iter().filter_map(|size| {
-        let label = size.label()?;
-        Some(view_item(label, Icon::Grid, FolderView::Icons(size)))
-    });
-    entries.extend(icon_sizes);
+    let mut entries: Vec<MenuEntry> = IconSize::NAMED
+        .into_iter()
+        .filter_map(|size| {
+            let label = size.label()?;
+            Some(view_item(label, icon_size_glyph(size), FolderView::Icons(size)))
+        })
+        .collect();
     entries.extend([
+        view_item(&gettext("List"), Icon::TextColumnTwo, FolderView::Compact),
+        view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details),
         MenuEntry::Divider,
-        // Windows 11 lists Compact view on its own, then Show.
+        // Windows 11 marks the open pane with a dot, as Details and its
+        // Preview pane are one choice there.
         MenuItem::toggle(
-            &gettext("Compact view"),
-            Icon::TextBulletList,
-            WindowAction::CompactDensity,
+            &gettext("Details pane"),
+            Icon::PanelRight,
+            WindowAction::DetailsPane,
         )
+        .with_shortcut("Alt+Shift+P")
+        .with_dot_mark()
         .into(),
         MenuItem::submenu(&gettext("Show"), Icon::Eye, WindowAction::Hidden, show_menu()).into(),
+        MenuEntry::Divider,
         MenuItem::toggle(
             &ox_core::i18n::gettext("Split view"),
             Icon::PanelRight,
@@ -221,25 +241,30 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     entries
 }
 
-/// View > Show, as Windows 11 File Explorer's: the navigation and details
-/// panes, item check boxes and Hidden items, the hidden-files toggle that
-/// Ctrl+H and Folder Options change too (VIEW-023). The app has no
-/// preview pane or file-name-extensions switch, so those are not listed.
+/// View > Show, as Windows 11 File Explorer's with the items the app has:
+/// the navigation pane, Compact view, item check boxes and Hidden items,
+/// the hidden-files toggle that Ctrl+H and Folder Options change too
+/// (VIEW-023), each with a check mark while on.
 fn show_menu() -> Vec<MenuEntry> {
     vec![
-        MenuItem::toggle(&gettext("Navigation pane"), Icon::Folder, WindowAction::Sidebar)
-            .with_shortcut("F9")
-            .into(),
         MenuItem::toggle(
-            &gettext("Details pane"),
-            Icon::PanelRight,
-            WindowAction::DetailsPane,
+            &gettext("Navigation pane"),
+            Icon::PanelLeft,
+            WindowAction::Sidebar,
         )
-        .with_shortcut("Alt+Shift+P")
+        .with_shortcut("F9")
         .into(),
+        MenuEntry::Divider,
+        MenuItem::toggle(
+            &gettext("Compact view"),
+            Icon::ArrowAutofitHeight,
+            WindowAction::CompactDensity,
+        )
+        .into(),
+        MenuEntry::Divider,
         MenuItem::toggle(
             &gettext("Item check boxes"),
-            Icon::SelectAllOn,
+            Icon::CheckboxChecked,
             WindowAction::ItemCheckBoxes,
         )
         .into(),
@@ -263,14 +288,15 @@ pub(super) fn appearance_items() -> [MenuEntry; 3] {
     ]
 }
 
-/// Whether "…" offers Map network location: only in This PC and
-/// Network, as Windows 11 File Explorer's "…" offers Map network drive.
+/// Where the window is, for what "…" lists there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::window) enum NetworkMapping {
-    /// This PC or Network is shown.
-    Offered,
-    /// Anywhere else; the navigation pane's button still maps one.
-    NotHere,
+pub(in crate::window) enum MorePlace {
+    /// A folder, or any location that is not a page: Undo and Redo, Pin
+    /// or Unpin, then the selection commands.
+    Folder,
+    /// This PC or Network: the network drive commands in place of Pin,
+    /// as Windows 11's "…" lists them in This PC.
+    NetworkPage,
 }
 
 /// Whether the folder shown is pinned to Quick access, which decides
@@ -284,32 +310,62 @@ pub(in crate::window) enum FolderPin {
     Pinned(String),
 }
 
-/// What the "…" menu depends on: where the window is and whether the
-/// folder shown is pinned.
+/// A connected network share that Disconnect network drive can end.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::window) struct NetworkDrive {
+    /// Its name, as the sidebar shows it.
+    pub label: String,
+    /// The location `win.disconnect` unmounts.
+    pub uri: String,
+}
+
+/// What the "…" menu depends on: where the window is, whether the folder
+/// shown is pinned, what Undo and Redo would do, and the connected
+/// shares.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::window) struct MoreMenuState {
-    /// Whether Map network location is offered.
-    pub mapping: NetworkMapping,
+    /// Where the window is.
+    pub place: MorePlace,
     /// Whether the folder shown is pinned.
     pub pin: FolderPin,
+    /// Undo's label, naming the step ("Undo Rename"), while there is
+    /// something to undo.
+    pub undo: Option<String>,
+    /// Redo's label while there is something to redo.
+    pub redo: Option<String>,
+    /// The connected network shares.
+    pub network_drives: Vec<NetworkDrive>,
 }
 
 impl Default for MoreMenuState {
-    /// A folder that is not pinned, away from This PC and Network.
+    /// A folder that is not pinned, with nothing to undo or redo.
     fn default() -> Self {
         Self {
-            mapping: NetworkMapping::NotHere,
+            place: MorePlace::Folder,
             pin: FolderPin::Unpinned,
+            undo: None,
+            redo: None,
+            network_drives: Vec::new(),
         }
     }
 }
 
-/// The More options ("…") menu, laid out as Windows 11 File Explorer's:
-/// Map network location in This PC and Network, Pin to Quick access or
-/// Unpin from Quick access for the folder shown, the selection commands,
-/// then Options.
+/// Why Disconnect network drive cannot run.
+const NO_NETWORK_DRIVE: &str = crate::i18n::message_id("No network drive is connected.");
+
+/// The More options ("…") menu, laid out as Windows 11 File Explorer's.
 ///
-/// The rest of what it used to list moved where Windows has it (the
+/// In a folder: Undo and Redo while each can run, named for the step as
+/// the folder's own menu names it; Pin to Quick access or Unpin from
+/// Quick access; Select all, Select none, Invert selection and the app's
+/// Select items matching…; then Properties, of the selection or the
+/// folder, and Options. In This PC and Network: Map network drive (the
+/// Map network location dialog), Add a network location (the same dialog
+/// at a web address, as Windows' wizard adds websites and FTP sites) and
+/// Disconnect network drive, in place of Pin. Windows' Connect to a media
+/// server has no `GVfs` backend to run on Linux, so it is not offered.
+///
+/// The rest of what "…" used to list moved where Windows has it (the
 /// user's request of 2026-11-03, CMD-007): New window to Ctrl+N and a
 /// folder's "Open in new window"; Settings to Folder Options' "More
 /// settings…" and Ctrl+,; Default file explorer to Settings > Default
@@ -318,13 +374,56 @@ impl Default for MoreMenuState {
 /// Show > Hidden items; Keyboard shortcuts, Help, License & source and
 /// About this build to Settings > About, with F1 and Ctrl+? as before.
 pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
+    let mut entries = match state.place {
+        MorePlace::Folder => folder_commands(state),
+        MorePlace::NetworkPage => network_drive_commands(&state.network_drives),
+    };
+    entries.extend([
+        MenuEntry::Divider,
+        MenuItem::new(&gettext("Select all"), Icon::SelectAllOn, WindowAction::SelectAll)
+            .with_shortcut("Ctrl+A")
+            .into(),
+        item(&gettext("Select none"), Icon::Grid, WindowAction::SelectNone),
+        item(
+            &gettext("Invert selection"),
+            Icon::SelectObject,
+            WindowAction::InvertSelection,
+        ),
+        item(
+            &gettext("Select items matching…"),
+            Icon::Search,
+            WindowAction::SelectMatching,
+        ),
+        MenuEntry::Divider,
+        item(&gettext("Properties"), Icon::Wrench, WindowAction::Properties),
+        // Last, as in Windows 11's "…" menu.
+        item(&gettext("Options"), Icon::Settings, WindowAction::FolderOptions),
+    ]);
+    entries
+}
+
+/// A folder's first commands: Undo and Redo while each can run, then Pin
+/// or Unpin.
+fn folder_commands(state: &MoreMenuState) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
-    if state.mapping == NetworkMapping::Offered {
-        entries.push(item(
-            &gettext("Map network location"),
-            Icon::Organization,
-            WindowAction::MapNetworkLocation,
-        ));
+    if let Some(undo) = &state.undo {
+        entries.push(
+            MenuItem::new(undo, Icon::ArrowUndo, WindowAction::Undo)
+                .with_shortcut("Ctrl+Z")
+                .into(),
+        );
+    }
+    if let Some(redo) = &state.redo {
+        // Windows 11 draws Redo as Undo's arrow turned the other way.
+        entries.push(
+            MenuItem::new(redo, Icon::ArrowUndo, WindowAction::Redo)
+                .with_shortcut("Ctrl+Y")
+                .mirrored()
+                .into(),
+        );
+    }
+    if !entries.is_empty() {
+        entries.push(MenuEntry::Divider);
     }
     let pin = match &state.pin {
         FolderPin::Unpinned => item(
@@ -340,35 +439,55 @@ pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
         )
         .into(),
     };
-    entries.extend([
-        pin,
-        MenuEntry::Divider,
-        MenuItem::new(&gettext("Select all"), Icon::SelectAllOn, WindowAction::SelectAll)
-            .with_shortcut("Ctrl+A")
-            .into(),
-        item(
-            &gettext("Select none"),
-            Icon::SelectAllOff,
-            WindowAction::SelectNone,
-        ),
-        item(
-            &gettext("Invert selection"),
-            Icon::ArrowSwap,
-            WindowAction::InvertSelection,
-        ),
-        item(
-            &gettext("Select items matching…"),
-            Icon::Search,
-            WindowAction::SelectMatching,
-        ),
-        // Last of the folder's commands, as in Windows 11's "…" menu.
-        item(&gettext("Options"), Icon::Settings, WindowAction::FolderOptions),
-    ]);
+    entries.push(pin);
     entries
+}
+
+/// This PC's and Network's first commands: Map network drive, Add a
+/// network location and Disconnect network drive, which lists `drives`
+/// to disconnect, or says why it cannot run while none is connected.
+fn network_drive_commands(drives: &[NetworkDrive]) -> Vec<MenuEntry> {
+    let disconnect = if drives.is_empty() {
+        MenuItem::new(
+            &gettext("Disconnect network drive"),
+            Icon::ArrowEject,
+            WindowAction::Disconnect,
+        )
+        .disabled_because(true, ox_core::i18n::gettext_static(NO_NETWORK_DRIVE))
+    } else {
+        let choices = drives
+            .iter()
+            .map(|drive| {
+                MenuItem::with_text_target(&drive.label, Icon::Server, WindowAction::Disconnect, &drive.uri)
+                    .into()
+            })
+            .collect();
+        MenuItem::submenu(
+            &gettext("Disconnect network drive"),
+            Icon::ArrowEject,
+            WindowAction::Disconnect,
+            choices,
+        )
+    };
+    vec![
+        item(
+            &gettext("Map network drive"),
+            Icon::Organization,
+            WindowAction::MapNetworkLocation,
+        ),
+        item(
+            &gettext("Add a network location"),
+            Icon::Add,
+            WindowAction::AddNetworkLocation,
+        ),
+        disconnect.into(),
+    ]
 }
 
 #[cfg(test)]
 mod tests {
+    use gtk::glib;
+
     use super::*;
     use crate::window::menu_popover::MenuAction;
 
@@ -404,5 +523,59 @@ mod tests {
             })
             .collect();
         assert!(!view_labels.iter().any(|label| label.contains("display style")));
+    }
+
+    /// Disconnect network drive lists each connected share, running
+    /// `win.disconnect` on it, and is disabled, saying why, while none is.
+    ///
+    /// parity: CMD-007, DEV-006
+    #[test]
+    fn disconnect_network_drive_lists_the_connected_shares_or_says_why_not() {
+        let find = |entries: Vec<MenuEntry>| {
+            entries.into_iter().find_map(|entry| match entry {
+                MenuEntry::Item(item) if item.label == "Disconnect network drive" => Some(item),
+                _ => None,
+            })
+        };
+        let state = MoreMenuState {
+            place: MorePlace::NetworkPage,
+            ..MoreMenuState::default()
+        };
+        let none = find(more_menu(&state)).expect("This PC has it");
+        assert!(none.submenu.is_empty());
+        assert_eq!(none.disabled_reason, Some("No network drive is connected."));
+
+        let state = MoreMenuState {
+            network_drives: vec![NetworkDrive {
+                label: "Backup (S:)".to_owned(),
+                uri: "smb://fileserver/backup".to_owned(),
+            }],
+            ..state
+        };
+        let some = find(more_menu(&state)).expect("This PC has it");
+        let choices: Vec<(String, MenuAction, Option<String>)> = some
+            .submenu
+            .iter()
+            .filter_map(|entry| match entry {
+                MenuEntry::Item(item) => Some((
+                    item.label.clone(),
+                    item.action,
+                    item.target.as_ref().and_then(glib::Variant::get::<String>),
+                )),
+                MenuEntry::Divider => None,
+            })
+            .collect();
+        assert_eq!(
+            choices,
+            [(
+                "Backup (S:)".to_owned(),
+                MenuAction::Window(WindowAction::Disconnect),
+                Some("smb://fileserver/backup".to_owned())
+            )]
+        );
+        assert!(
+            find(more_menu(&MoreMenuState::default())).is_none(),
+            "a folder has Pin instead"
+        );
     }
 }

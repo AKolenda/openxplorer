@@ -295,6 +295,9 @@ pub(crate) enum WindowAction {
     DropChoice,
     /// Opens the connect dialog for a network share.
     MapNetworkLocation,
+    /// Opens the connect dialog at a web address, as Windows 11's "Add a
+    /// network location" (This PC's and Network's "…").
+    AddNetworkLocation,
     /// Looks for SMB servers that advertise themselves.
     DiscoverServers,
     /// Stops looking for servers.
@@ -566,6 +569,7 @@ impl WindowAction {
             WindowAction::MoveTabIntoWindow => "move-tab-into-window",
             WindowAction::DropChoice => "drop-choice",
             WindowAction::MapNetworkLocation => "map-network-location",
+            WindowAction::AddNetworkLocation => "add-network-location",
             WindowAction::DiscoverServers => "discover-servers",
             WindowAction::StopDiscovery => "stop-discovery",
             WindowAction::KeepInNetwork => "keep-in-network",

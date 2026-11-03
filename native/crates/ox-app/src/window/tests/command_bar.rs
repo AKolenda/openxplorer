@@ -187,30 +187,36 @@ const SORT_MENU: [&str; 11] = [
     "Folders first",
 ];
 
-/// The "…" menu in a folder, as Windows 11 File Explorer's: Pin, the
-/// selection commands, then Options. Map network location shows only in
-/// This PC and Network; everything else it held has moved to Settings,
-/// Folder Options or View > Show (CMD-007).
-const MORE_MENU: [&str; 7] = [
+/// The "…" menu in a folder with nothing to undo, as Windows 11 File
+/// Explorer's: Pin, the selection commands with the app's Select items
+/// matching…, then Properties and Options (CMD-007).
+const MORE_MENU: [&str; 9] = [
     "Pin to Quick access",
     "-",
     "Select all",
     "Select none",
     "Invert selection",
     "Select items matching…",
+    "-",
+    "Properties",
     "Options",
 ];
 
-/// The "…" menu in This PC and Network, which starts with Map network
-/// location as Windows' starts with Map network drive.
-const MORE_MENU_ON_A_NETWORK_PAGE: [&str; 8] = [
-    "Map network location",
-    "Pin to Quick access",
+/// The "…" menu in This PC and Network, as Windows 11's in This PC: the
+/// network drive commands, the selection commands, Properties and
+/// Options, and no Pin. Windows' Connect to a media server has no `GVfs`
+/// backend to run, so it is not listed.
+const MORE_MENU_ON_A_NETWORK_PAGE: [&str; 11] = [
+    "Map network drive",
+    "Add a network location",
+    "Disconnect network drive",
     "-",
     "Select all",
     "Select none",
     "Invert selection",
     "Select items matching…",
+    "-",
+    "Properties",
     "Options",
 ];
 
@@ -240,13 +246,15 @@ fn the_menus_list_the_current_items_between_the_same_dividers() {
     assert_eq!(menu_of(&test, "More options").row_labels(), MORE_MENU);
 }
 
-/// "…" lists Map network location only in This PC and Network, as
-/// Windows 11 lists Map network drive, and none of the items that moved
-/// out of it; the sidebar keeps its Map network location button.
+/// "…" in This PC and Network lists Windows 11's network drive commands
+/// in place of Pin: Map network drive and Add a network location open the
+/// connect dialog, and Disconnect network drive says why it cannot run
+/// while no share is connected. Properties says pages have none. The
+/// sidebar keeps its Map network location button.
 ///
-/// parity: CMD-007, NET-001
+/// parity: CMD-007, NET-001, CMD-031
 #[gtk::test]
-fn the_more_menu_maps_network_locations_only_in_this_pc_and_network() {
+fn the_more_menu_of_this_pc_and_network_has_the_network_drive_commands() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     for page in [Page::ThisPc, Page::Network] {
@@ -256,7 +264,21 @@ fn the_more_menu_maps_network_locations_only_in_this_pc_and_network() {
         let more = menu_of(&test, "More options");
         more.popup();
         wait_for_frames(&test.window, 2);
-        assert!(more.row("Map network location").is_sensitive(), "{page:?}");
+        assert!(more.row("Map network drive").is_sensitive(), "{page:?}");
+        assert!(more.row("Add a network location").is_sensitive(), "{page:?}");
+        let disconnect = more.row("Disconnect network drive");
+        assert!(!disconnect.is_sensitive(), "{page:?}");
+        assert_eq!(
+            disconnect.tooltip_text().unwrap_or_default().lines().nth(1),
+            Some("No network drive is connected."),
+            "{page:?}"
+        );
+        let properties = more.row("Properties");
+        assert_eq!(
+            properties.tooltip_text().unwrap_or_default().lines().nth(1),
+            Some("Pages such as This PC have no properties."),
+            "{page:?}"
+        );
         more.popdown();
     }
     test.window.navigate(&fixture.uri()).expect("the folder");
@@ -271,6 +293,113 @@ fn the_more_menu_maps_network_locations_only_in_this_pc_and_network() {
             button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
         });
     assert!(sidebar_maps, "the sidebar keeps Map network location");
+}
+
+/// The glyph of `row`, a menu row: the image after its mark slot.
+fn row_glyph(row: &gtk::ListBoxRow) -> Option<String> {
+    let images = descendants::<gtk::Image>(row);
+    images
+        .into_iter()
+        .filter(|image| !image.has_css_class("menu-mark"))
+        .find_map(|image| image.icon_name().map(|name| name.to_string()))
+}
+
+/// "…" in a folder shows Undo and Redo only while each can run, naming the
+/// step as the folder's menu does, with Redo's glyph Undo's mirrored as
+/// Windows 11 draws it; and Properties, with Windows' wrench, opens the
+/// folder's Properties or the selection's.
+///
+/// parity: CMD-007, OPS-029, CMD-011
+#[gtk::test]
+fn the_more_menu_shows_undo_and_redo_only_while_they_can_run() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let more = || menu_of(&test, "More options");
+    let undo_redo = || {
+        let labels = more().row_labels();
+        labels
+            .into_iter()
+            .filter(|label| label.starts_with("Undo") || label.starts_with("Redo"))
+            .collect::<Vec<_>>()
+    };
+    assert!(undo_redo().is_empty(), "{:?}", more().row_labels());
+
+    for _ in 0..2 {
+        test.activate("new-folder", None);
+        super::file_ops_support::name_editor(&test).emit_activate();
+        wait_until("the name to be kept", || {
+            !super::file_ops_support::is_renaming_in_place(&test)
+        });
+    }
+    wait_until("… to offer Undo", || undo_redo() == ["Undo New"]);
+    let labels = more().row_labels();
+    assert_eq!(&labels[..3], ["Undo New", "-", "Pin to Quick access"]);
+
+    test.activate("undo", None);
+    wait_until("… to offer Undo and Redo", || {
+        undo_redo() == ["Undo New", "Redo New"]
+    });
+    let menu = more();
+    menu.popup();
+    wait_for_frames(&test.window, 2);
+    let undo = row_glyph(&menu.row("Undo New"));
+    let redo_row = menu.row("Redo New");
+    assert_eq!(undo.as_deref(), Some(Icon::ArrowUndo.name()));
+    assert_eq!(row_glyph(&redo_row).as_deref(), Some(Icon::ArrowUndo.name()));
+    let mirrored = descendants::<gtk::Image>(&redo_row)
+        .into_iter()
+        .any(|image| image.has_css_class("mirrored"));
+    assert!(mirrored, "Redo shows Undo's glyph mirrored");
+    let properties = menu.row("Properties");
+    assert!(properties.is_sensitive());
+    assert_eq!(row_glyph(&properties).as_deref(), Some(Icon::Wrench.name()));
+    menu.popdown();
+
+    test.activate("undo", None);
+    wait_until("… to offer Redo only", || undo_redo() == ["Redo New"]);
+    assert_eq!(
+        more()
+            .items_labels()
+            .iter()
+            .find(|label| label.starts_with("Redo"))
+            .map(String::as_str),
+        Some("Redo New")
+    );
+}
+
+/// "…" > Properties runs `win.properties`, which describes the selection
+/// when items are selected and the folder shown otherwise, as Windows 11's
+/// does.
+///
+/// parity: CMD-007, PROP-001
+#[gtk::test]
+fn properties_in_the_more_menu_describes_the_selection_or_the_folder() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let item = more_item(&test, "Properties");
+    assert_eq!(
+        item.action,
+        crate::window::menu_popover::MenuAction::Window(WindowAction::Properties)
+    );
+    assert!(item.target.is_none());
+    assert!(
+        test.window.is_action_enabled(WindowAction::Properties.name()),
+        "the folder's"
+    );
+    select_names(&test, &["Notes 2.txt", "Documents"]);
+    assert!(
+        test.window.is_action_enabled(WindowAction::Properties.name()),
+        "the selection's"
+    );
+}
+
+/// The "…" item labelled `label`.
+fn more_item(test: &TestWindow, label: &str) -> crate::window::menu_popover::MenuItem {
+    menu_of(test, "More options")
+        .items()
+        .into_iter()
+        .find(|item| item.label == label)
+        .unwrap_or_else(|| panic!("… has {label}"))
 }
 
 /// Whether `test`'s window has `uri` pinned to Quick access.
@@ -412,20 +541,49 @@ fn enter_on_a_command_opens_its_menu_below_it_and_not_the_selection() {
     });
 }
 
-/// View > Show, as Windows 11 File Explorer's: the panes, item check
-/// boxes and Hidden items, each a toggle with its key.
-const SHOW_MENU: [&str; 6] = [
+/// The View menu, as Windows 11 File Explorer's: the views from the
+/// largest icons to Details, the Details pane, Show, then Dolphin's split
+/// view, folder tree and terminal where they were before Show, and the
+/// text size. Windows' Tiles, Content and Preview pane are views and a
+/// pane the app does not have.
+const VIEW_MENU: [&str; 17] = [
+    "Extra large icons",
+    "Large icons",
+    "Medium icons",
+    "Small icons",
+    "List",
+    "Details",
+    "-",
+    "Details pane",
+    "Show",
+    "-",
+    "Split view",
+    "Folder tree",
+    "Terminal",
+    "-",
+    "Larger text",
+    "Smaller text",
+    "Reset text size",
+];
+
+/// View > Show, as Windows 11's with the items the app has: the
+/// navigation pane, Compact view, item check boxes and Hidden items.
+/// Windows' File name extensions has no setting in the app.
+const SHOW_MENU: [&str; 8] = [
     "Show",
     "-",
     "Navigation pane",
-    "Details pane",
+    "-",
+    "Compact view",
+    "-",
     "Item check boxes",
     "Hidden items",
 ];
 
-/// The toggles of View > Show show their check while they are on; Hidden
-/// items is the hidden-files toggle that "…" used to hold, as Windows 11
-/// has it at View > Show > Hidden items, and Ctrl+H's.
+/// The View menu lists Windows 11's items in its order; Details pane is
+/// beside the views with a dot while it is open, and View > Show's
+/// toggles show a check mark while on. Hidden items is the hidden-files
+/// toggle and Ctrl+H's.
 ///
 /// parity: CMD-006, VIEW-023
 #[gtk::test]
@@ -433,34 +591,131 @@ fn view_show_checks_hidden_items_and_the_details_pane_while_on() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let view = menu_of(&test, "View");
-    let top = view.row_labels();
-    assert!(top.iter().any(|label| label == "Show"), "{top:?}");
-    for moved in [
-        "Show hidden files",
-        "Hidden items",
-        "Navigation pane",
-        "Details pane",
-    ] {
-        assert!(!top.iter().any(|label| label == moved), "{moved} is under Show");
-    }
-    let toggles = ["Hidden items", "Details pane"];
-    let checked_now = || {
+    assert_eq!(view.row_labels(), VIEW_MENU);
+    let marks_now = || {
         view.popup();
         wait_until("the View menu", || view.is_visible());
+        let pane = view.checked_labels().contains(&"Details pane".to_owned());
         view.click_row("Show");
         assert_eq!(view.row_labels(), SHOW_MENU);
         assert!(view.row("Hidden items").is_sensitive());
-        let checked = view.checked_labels();
+        let hidden = view.checked_labels().contains(&"Hidden items".to_owned());
         view.popdown();
         wait_until("the View menu to close", || !view.is_visible());
-        toggles.map(|toggle| checked.contains(&toggle.to_owned()))
+        [hidden, pane]
     };
-    let before = checked_now();
+    let before = marks_now();
 
     test.activate("hidden", None);
     test.activate("details-pane", None);
 
-    assert_eq!(checked_now(), before.map(|was_checked| !was_checked));
+    assert_eq!(marks_now(), before.map(|was_on| !was_on));
+}
+
+/// The mark in the column left of a menu row's glyph, as Windows 11 draws
+/// it: a dot for a choice and the Details pane, a check mark for a
+/// toggle, and the item's own glyph beside it either way.
+///
+/// parity: CMD-006, CMD-031
+#[gtk::test]
+fn menu_marks_are_dots_for_choices_and_checks_for_toggles_beside_the_glyph() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.activate("view", Some("details"));
+    let view = menu_of(&test, "View");
+    view.popup();
+    wait_until("the View menu", || view.is_visible());
+    let mark_of = |label: &str| {
+        let row = view.row(label);
+        descendants::<gtk::Image>(&row)
+            .into_iter()
+            .find(|image| image.has_css_class("menu-mark"))
+            .and_then(|image| image.icon_name())
+            .map(|name| name.to_string())
+    };
+    assert_eq!(
+        mark_of("Details").as_deref(),
+        Some(Icon::CircleSmallFilled.name())
+    );
+    assert_eq!(
+        row_glyph(&view.row("Details")).as_deref(),
+        Some(Icon::TextBulletList.name())
+    );
+    assert_eq!(mark_of("Large icons"), None, "an unchosen view has no mark");
+    view.click_row("Show");
+    if test.window.is_action_enabled(WindowAction::Sidebar.name()) {
+        assert_eq!(
+            mark_of("Navigation pane").as_deref(),
+            Some(Icon::Checkmark.name())
+        );
+        assert_eq!(
+            row_glyph(&view.row("Navigation pane")).as_deref(),
+            Some(Icon::PanelLeft.name())
+        );
+    }
+    view.popdown();
+}
+
+/// The glyphs of "…" and View are Windows 11's, from the bundled Fluent
+/// icons: Undo's arrow, the pin, select all and none, invert, the wrench
+/// and gear, the view sizes, the panes and Show's items.
+///
+/// parity: CMD-007, CMD-006
+#[gtk::test]
+fn the_more_and_view_menus_show_windows_glyphs() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let glyph_of = |menu: &MenuPopover, label: &str| {
+        menu.items()
+            .into_iter()
+            .find(|item| item.label == label)
+            .map_or_else(|| panic!("the menu has {label}"), |item| item.glyph)
+    };
+    let more = menu_of(&test, "More options");
+    for (label, glyph) in [
+        ("Pin to Quick access", Icon::Pin),
+        ("Select all", Icon::SelectAllOn),
+        ("Select none", Icon::Grid),
+        ("Invert selection", Icon::SelectObject),
+        ("Properties", Icon::Wrench),
+        ("Options", Icon::Settings),
+    ] {
+        assert_eq!(glyph_of(&more, label), glyph, "{label}");
+    }
+    let view = menu_of(&test, "View");
+    for (label, glyph) in [
+        ("Extra large icons", Icon::RectangleLandscape),
+        ("Large icons", Icon::RectangleLandscape),
+        ("Medium icons", Icon::Desktop),
+        ("Small icons", Icon::Grid),
+        ("List", Icon::TextColumnTwo),
+        ("Details", Icon::TextBulletList),
+        ("Details pane", Icon::PanelRight),
+    ] {
+        assert_eq!(glyph_of(&view, label), glyph, "{label}");
+    }
+    let show = view
+        .items()
+        .into_iter()
+        .find(|item| item.label == "Show")
+        .expect("View has Show");
+    let show_glyphs: Vec<(String, Icon)> = show
+        .submenu
+        .iter()
+        .filter_map(|entry| match entry {
+            crate::window::menu_popover::MenuEntry::Item(item) => Some((item.label.clone(), item.glyph)),
+            crate::window::menu_popover::MenuEntry::Divider => None,
+        })
+        .collect();
+    assert_eq!(
+        show_glyphs,
+        [
+            ("Navigation pane".to_owned(), Icon::PanelLeft),
+            ("Compact view".to_owned(), Icon::ArrowAutofitHeight),
+            ("Item check boxes".to_owned(), Icon::CheckboxChecked),
+            ("Hidden items".to_owned(), Icon::Eye),
+        ]
+    );
 }
 
 /// View > Terminal and Ctrl+Shift+F4, Dolphin's Terminal panel keys, open
@@ -556,7 +811,7 @@ fn the_view_menu_keeps_the_text_size_items_and_checks_the_current_view() {
     let labels = view.row_labels();
     let text_size = ["-", "Larger text", "Smaller text", "Reset text size"];
     assert_eq!(&labels[labels.len() - 4..], text_size);
-    assert_eq!(labels[0], "Details");
+    assert_eq!(labels[0], "Extra large icons");
     test.activate("view", Some("large"));
     view.popup();
     wait_for_frames(&test.window, 2);

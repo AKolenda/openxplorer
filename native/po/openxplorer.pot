@@ -34,7 +34,7 @@ msgid "- New in the command bar creates a folder, a document from the built-in s
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location, below the navigation pane or in the \"…\" menu of This PC and Network, saves a share in the navigation pane.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
+msgid "- Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.\n- Map network location, below the navigation pane, or Map network drive in the \"…\" menu of This PC and Network, saves a share in the navigation pane. Add a network location in that menu starts at a web address, and Disconnect network drive there disconnects a connected share.\n- OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.\n- Right-click a share or server and choose Sign out of server to disconnect and forget a session."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -596,11 +596,15 @@ msgstr ""
 msgid "Add a network folder to your sidebar: a Windows share, or a folder on an SSH, FTP, WebDAV or NFS server."
 msgstr ""
 
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs
+msgid "Add a network location"
+msgstr ""
+
 #: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/dialogs/network_sign_in.rs
 msgid "Connect"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
+#: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/window/landing.rs crates/ox-app/src/window/sidebar.rs
 msgid "Map network location"
 msgstr ""
 
@@ -3980,6 +3984,10 @@ msgid "Details pane"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Disconnect network drive"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "File…"
 msgstr ""
 
@@ -4031,6 +4039,10 @@ msgstr ""
 msgid "List"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar/menus.rs
+msgid "Map network drive"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/ops/templates.rs
 msgid "Markdown document"
 msgstr ""
@@ -4044,11 +4056,19 @@ msgid "Navigation pane"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
+msgid "No network drive is connected."
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Options"
 msgstr ""
 
 #: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/entries.rs
 msgid "Pin to Quick access"
+msgstr ""
+
+#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Properties"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -4211,10 +4231,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Pin this folder"
-msgstr ""
-
-#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
-msgid "Properties"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/navigation_buttons.rs crates/ox-app/src/window/shortcuts_window.rs

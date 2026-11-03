@@ -410,7 +410,7 @@ impl MenuPopover {
 
     /// The items shown, one per row after the back row, without the
     /// dividers.
-    fn items(&self) -> Vec<MenuItem> {
+    pub(in crate::window) fn items(&self) -> Vec<MenuItem> {
         items_of(&self.shown_entries()).cloned().collect()
     }
 
@@ -455,13 +455,21 @@ impl MenuPopover {
             list.append(&back_row(&submenu));
             after_divider = true;
         }
-        for entry in &self.shown_entries() {
+        let entries = self.shown_entries();
+        // A menu with a choice or toggle keeps a column for the marks, as
+        // Windows 11 does, so every glyph lines up.
+        let marks = if items_of(&entries).any(|item| item.check != ItemCheck::Plain) {
+            MarkColumn::Shown
+        } else {
+            MarkColumn::None
+        };
+        for entry in &entries {
             let MenuEntry::Item(item) = entry else {
                 after_divider = true;
                 continue;
             };
             let can_choose = self.can_choose(item);
-            let row = item_row(item, self.check_mark(item));
+            let row = item_row(item, self.check_mark(item), marks);
             row.set_sensitive(can_choose);
             explain_availability(self, row.upcast_ref(), item, can_choose);
             if after_divider {
@@ -716,22 +724,56 @@ fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuIt
     control.update_property(&[gtk::accessible::Property::Description(&reason)]);
 }
 
-/// A row's glyph (the check mark while checked, as app.js draws it; the
+/// Whether a menu's rows keep a column for check marks and dots before
+/// their glyphs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MarkColumn {
+    /// The menu has no choice or toggle.
+    None,
+    /// The menu has one, so every row keeps the column.
+    Shown,
+}
+
+/// The mark column of a row: a dot for a chosen choice (or an item that
+/// asks for one, such as the open Details pane), a check mark for a toggle
+/// that is on, as Windows 11 draws them, else an empty slot.
+fn mark_slot(item: &MenuItem, check: CheckMark) -> gtk::Widget {
+    if check != CheckMark::Checked {
+        let slot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        slot.set_size_request(ROW_GLYPH, ROW_GLYPH);
+        slot.add_css_class("menu-mark-slot");
+        return slot.upcast();
+    }
+    let mark = if item.dot_mark {
+        Icon::CircleSmallFilled
+    } else {
+        Icon::Checkmark
+    };
+    let image = icons::image(mark, ROW_GLYPH);
+    image.add_css_class("menu-mark");
+    image.upcast()
+}
+
+/// A row's mark column when the menu has one, its glyph (the
 /// application's own icon for an item that opens one), its label and its
 /// shortcut.
-fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
-    let glyph = if check == CheckMark::Checked {
-        Icon::Checkmark
-    } else {
-        item.glyph
-    };
+fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::Box {
     let application_icon = item
         .application_icon
         .as_deref()
-        .filter(|_| check != CheckMark::Checked)
         .and_then(|icon| integration::application_image(Some(icon), ROW_GLYPH));
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&application_icon.unwrap_or_else(|| icons::image(glyph, ROW_GLYPH)));
+    if marks == MarkColumn::Shown {
+        content.append(&mark_slot(item, check));
+    }
+    let glyph = application_icon.unwrap_or_else(|| {
+        let image = icons::image(item.glyph, ROW_GLYPH);
+        if item.mirrored {
+            image.add_css_class("mirrored");
+        }
+        image
+    });
+    content.append(&glyph);
     let label = gtk::Label::builder()
         .label(&item.label)
         .xalign(0.0)
@@ -757,14 +799,14 @@ fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
     content
 }
 
-/// The row for `item`, showing `check`.
-fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
+/// The row for `item`, showing `check` in the menu's `marks` column.
+fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn) -> gtk::ListBoxRow {
     let role = match check {
         CheckMark::NotCheckable => gtk::AccessibleRole::MenuItem,
         CheckMark::Unchecked | CheckMark::Checked => gtk::AccessibleRole::MenuItemCheckbox,
     };
     let row = gtk::ListBoxRow::builder()
-        .child(&item_content(item, check))
+        .child(&item_content(item, check, marks))
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
