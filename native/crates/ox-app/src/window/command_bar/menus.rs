@@ -278,13 +278,13 @@ pub(in crate::window) enum NetworkMapping {
 /// selection commands, then Options.
 ///
 /// The rest of what it used to list moved where Windows has it (the
-/// owner's request of 2026-11-03, CMD-007): New window to Ctrl+N and a
+/// user's request of 2026-11-03, CMD-007): New window to Ctrl+N and a
 /// folder's "Open in new window"; Settings to Folder Options' "More
 /// settings…" and Ctrl+,; Default file explorer to Settings > Default
 /// apps; Cache this folder for search to Settings > Search; the
-/// appearances to Settings > Appearance; Show hidden files to View > Show
-/// > Hidden items; Keyboard shortcuts, Help, License & source and About
-/// this build to Settings > About, with F1 and Ctrl+? as before.
+/// appearances to Settings > Appearance; Show hidden files to View >
+/// Show > Hidden items; Keyboard shortcuts, Help, License & source and
+/// About this build to Settings > About, with F1 and Ctrl+? as before.
 pub(super) fn more_menu(mapping: NetworkMapping) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
     if mapping == NetworkMapping::Offered {

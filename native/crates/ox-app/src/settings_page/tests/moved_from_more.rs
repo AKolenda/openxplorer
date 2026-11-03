@@ -93,7 +93,7 @@ fn search_has_no_folder_to_cache_from_this_pc() {
     );
 }
 
-/// Settings > Default apps is where OpenXplorer becomes the default file
+/// Settings > Default apps is where `OpenXplorer` becomes the default file
 /// explorer, by an explicit button, now that "…" no longer offers it.
 ///
 /// parity: CMD-007, INT-008
