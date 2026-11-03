@@ -21,12 +21,13 @@ fn change_preferences(test: &TestWindow, update: &PreferencesUpdate) {
     test.context.reload_settings();
 }
 
-/// Files written just now read "Today at …"; turning relative dates off in
-/// Settings writes them in full in every window at once.
+/// Dates are written in full by default, as Windows Explorer writes them;
+/// turning relative dates on in Settings makes files written just now read
+/// "Today at …" in every window at once.
 ///
 /// parity: VIEW-004
 #[gtk::test]
-fn recent_dates_read_today_until_settings_turn_that_off() {
+fn dates_read_in_full_until_settings_turn_relative_dates_on() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let dates = || {
@@ -36,19 +37,21 @@ fn recent_dates_read_today_until_settings_turn_that_off() {
             .cell_texts(SortColumn::Modified, 4)
     };
     assert!(
-        dates().iter().all(|date| date.starts_with("Today at ")),
+        dates()
+            .iter()
+            .all(|date| !date.is_empty() && !date.starts_with("Today")),
         "{:?}",
         dates()
     );
     change_preferences(
         &test,
         &PreferencesUpdate {
-            absolute_dates: Some(true),
+            absolute_dates: Some(false),
             ..PreferencesUpdate::default()
         },
     );
-    wait_until("dates in full", || {
-        dates().iter().all(|date| !date.starts_with("Today"))
+    wait_until("relative dates", || {
+        dates().iter().all(|date| date.starts_with("Today at "))
     });
 }
 
@@ -897,7 +900,15 @@ fn a_folder_expands_in_place_and_back_keeps_it_open() {
     )
     .expect("a file");
     let test = TestWindow::open(&fixture.uri());
+    change_preferences(
+        &test,
+        &PreferencesUpdate {
+            expandable_folders: Some(true),
+            ..PreferencesUpdate::default()
+        },
+    );
     let model = test.window.folder_pane().model();
+    wait_until("folders to expand in place", || model.tree().is_expandable());
     let shown = model.n_items();
     let tree = model.tree();
     let documents = tree.row(0).expect("Documents is listed first");

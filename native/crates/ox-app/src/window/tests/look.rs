@@ -307,6 +307,9 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
 fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
     let menu = test.window.context_menu();
     wait_for_frames(&test.window, 2);
@@ -343,6 +346,9 @@ fn menus_and_the_sign_in_dialog_paint_each_appearance() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     let cases = [
         ("light", "#f9f9f9", "#f9f9f9", "#ffffff"),
         ("dark", "#2c2c2c", "#282828", "#202020"),

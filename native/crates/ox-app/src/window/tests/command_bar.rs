@@ -50,7 +50,10 @@ pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
         match group {
             // Extract all shows only inside a ZIP opened like a folder.
             Some(group) => controls.extend(children(&group).filter(WidgetExt::is_visible)),
-            None => controls.push(child),
+            // The appearance toggle and Settings are hidden, as Windows 11
+            // Explorer's bar has neither.
+            None if child.is_visible() => controls.push(child),
+            None => {}
         }
     }
     controls
@@ -106,8 +109,6 @@ fn the_command_bar_has_the_current_controls_in_order() {
             "Sort",
             "View",
             "More options",
-            "Light",
-            "Settings (Ctrl+,)",
             "Details",
         ]
     );
@@ -184,7 +185,7 @@ const SORT_MENU: [&str; 11] = [
     "Folders first",
 ];
 
-/// The appearance button's menu (`appearanceMenu`).
+/// The appearances More options offers (`appearanceMenu`).
 const APPEARANCE_MENU: [&str; 3] = ["Light appearance", "Dark appearance", "Use system appearance"];
 
 /// How the More options menu starts.
@@ -218,7 +219,6 @@ fn the_menus_list_the_current_items_between_the_same_dividers() {
     let test = laid_out(&fixture.uri());
     assert_eq!(menu_of(&test, "New").row_labels(), NEW_MENU);
     assert_eq!(menu_of(&test, "Sort").row_labels(), SORT_MENU);
-    assert_eq!(menu_of(&test, "Light").row_labels(), APPEARANCE_MENU);
     let more = menu_of(&test, "More options").row_labels();
     assert_eq!(&more[..MORE_MENU_START.len()], MORE_MENU_START);
     assert_eq!(&more[more.len() - MORE_MENU_END.len()..], MORE_MENU_END);
@@ -242,7 +242,7 @@ fn menu_button(test: &TestWindow, name: &str) -> gtk::MenuButton {
 fn enter_on_a_command_opens_its_menu_below_it_and_not_the_selection() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    for name in ["New", "Sort", "View", "More options", "Light"] {
+    for name in ["New", "Sort", "View", "More options"] {
         let popover = menu_button(&test, name).popover().expect("a menu");
         assert_eq!(popover.position(), gtk::PositionType::Bottom, "{name}");
     }
@@ -373,47 +373,52 @@ fn more_options_needs_a_folder_for_pin_and_cache() {
     assert_eq!(glyph.icon_name().as_deref(), Some(Icon::Code.name()));
 }
 
-/// The Appearance button shows a sun and "Light" or a moon and "Dark"
-/// for the drawn appearance, names the choice in its tooltip, and its
-/// menu checks the current choice (`applyTheme` in app.js).
+/// More options offers the three appearances and checks the chosen one,
+/// as the appearance button's menu did (`applyTheme` in app.js); Windows
+/// 11 Explorer's bar has no appearance button, so it is hidden.
 ///
 /// parity: LOOK-005
 #[gtk::test]
-fn the_appearance_button_shows_the_drawn_appearance_and_its_menu_checks_the_choice() {
+fn more_options_offers_the_appearances_and_checks_the_choice() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let button = descendants::<gtk::MenuButton>(test.window.command_bar())
-        .into_iter()
-        .find(|button| button.has_css_class("theme-toggle"))
-        .expect("the command bar has the Appearance button");
-    let cases = [
-        ("light", "Light", Icon::WeatherSunny, "Light appearance"),
-        ("dark", "Dark", Icon::WeatherMoon, "Dark appearance"),
-    ];
-    for (theme, label, glyph, checked) in cases {
+    assert!(
+        !command_bar_names(&test)
+            .iter()
+            .any(|name| name == "Light" || name == "Dark"),
+        "no appearance button in the bar"
+    );
+    for (theme, checked) in [
+        ("light", "Light appearance"),
+        ("dark", "Dark appearance"),
+        ("system", "Use system appearance"),
+    ] {
         test.activate("theme", Some(theme));
-        let shown = descendants::<gtk::Label>(&button);
-        assert_eq!(shown.first().map(gtk::Label::text).as_deref(), Some(label));
-        let image = descendants::<gtk::Image>(&button);
-        let icon_name = image.first().and_then(gtk::Image::icon_name);
-        assert_eq!(icon_name.as_deref(), Some(glyph.name()), "{theme}");
-        let tooltip = button.tooltip_text().unwrap_or_default();
-        assert_eq!(tooltip, format!("Appearance: {theme}. Click to change."));
-        let menu = button
-            .popover()
-            .and_downcast::<MenuPopover>()
-            .expect("an app menu");
-        assert_eq!(menu.row_labels(), APPEARANCE_MENU);
+        let menu = menu_of(&test, "More options");
+        let labels = menu.row_labels();
+        assert!(
+            labels
+                .windows(APPEARANCE_MENU.len())
+                .any(|run| run == APPEARANCE_MENU),
+            "{labels:?}"
+        );
         menu.popup();
         wait_for_frames(&test.window, 2);
         let checked_labels = menu.checked_labels();
         menu.popdown();
-        assert_eq!(checked_labels, [checked]);
+        assert!(
+            checked_labels.iter().any(|label| label == checked),
+            "{theme}: {checked_labels:?}"
+        );
+        let others = APPEARANCE_MENU.iter().filter(|label| **label != checked);
+        for other in others {
+            assert!(
+                !checked_labels.iter().any(|label| label == other),
+                "{theme}: {other}"
+            );
+        }
     }
-    test.activate("theme", Some("system"));
-    let tooltip = button.tooltip_text().unwrap_or_default();
-    assert!(tooltip.starts_with("Appearance: System ("), "{tooltip}");
 }
 
 /// parity: VIEW-006

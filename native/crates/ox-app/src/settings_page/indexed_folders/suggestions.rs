@@ -262,7 +262,7 @@ impl IndexSuggestions {
         let count = imp.selected.borrow().len();
         imp.selection_label.set_text(&ox_core::i18n::format_message(
             "{count} selected",
-            &[("count", &count.to_string())],
+            &[("count", &ox_core::format::group_digits(count as u64))],
         ));
         imp.index_selected.set_sensitive(count > 0);
     }

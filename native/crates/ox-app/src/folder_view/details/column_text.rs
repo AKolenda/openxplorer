@@ -29,7 +29,8 @@ thread_local! {
 
 /// The text `column` shows for `item`. A folder shows its measured size
 /// once measured, else its item count once counted, else nothing; a file
-/// of unknown size shows `—` (`prettyBytes` in app.js).
+/// shows whole kilobytes, as Windows Explorer's Size column does, and
+/// nothing when its size is unknown (app.js wrote `prettyBytes`).
 pub(crate) fn cell_text(column: SortColumn, item: &FileItem, dates: DateStyle) -> String {
     let entry = item.entry();
     match column {
@@ -48,7 +49,8 @@ pub(crate) fn cell_text(column: SortColumn, item: &FileItem, dates: DateStyle) -
             (Some(measured), _) => measured.size_text(),
             (None, Some(count)) => item_count_text(count),
             (None, None) if entry.is_dir => String::new(),
-            (None, None) => format::size_text(item.file_size()),
+            // Whole kilobytes, as Windows Explorer's Size column.
+            (None, None) => format::column_size_text(item.file_size()),
         },
         SortColumn::Extension => extension_of(item).to_owned(),
         SortColumn::Owner => entry.meta.owner.clone().unwrap_or_default(),
@@ -92,7 +94,8 @@ pub(crate) fn item_count_text(count: u32) -> String {
     if count == 1 {
         "1 item".to_owned()
     } else {
-        ox_core::i18n::format_message("{count} items", &[("count", &count.to_string())])
+        let count = ox_core::format::group_digits(u64::from(count));
+        ox_core::i18n::format_message("{count} items", &[("count", &count)])
     }
 }
 
