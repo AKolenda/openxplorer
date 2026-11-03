@@ -6,6 +6,7 @@
 
 use std::fs;
 
+use gtk::glib;
 use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
@@ -13,7 +14,9 @@ use super::file_ops_support::{
     dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
     select_names, text_field, wait_for_no_dialog,
 };
-use crate::test_support::harness::{settle, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    capture_popover, settle, wait_for_frames, wait_until, Fixture, TestWindow,
+};
 use crate::window::menu_popover::MenuStyle;
 
 /// The position of the item called `name` in `test`'s view.
@@ -45,6 +48,9 @@ pub(super) fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
 fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 10.txt"]);
 
     test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
@@ -90,6 +96,35 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
 }
 
+/// Windows 11's compact menu is the default: the edit commands in its
+/// strip and "Show more options" last, with nothing added after it.
+///
+/// parity: CMD-010, SET-016
+#[gtk::test]
+fn right_clicking_opens_the_compact_menu_with_show_more_options_last() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+
+    assert_eq!(menu.style(), MenuStyle::Compact);
+    assert!(
+        !menu.strip_labels().is_empty(),
+        "the edit commands sit in the strip"
+    );
+    let rows = menu.row_labels();
+    assert_eq!(
+        rows.last().map(String::as_str),
+        Some("Show more options"),
+        "{rows:?}"
+    );
+    assert!(
+        !rows.iter().any(|row| row == "Configure service actions…"),
+        "configuring is in the classic menu: {rows:?}"
+    );
+}
+
 /// The keyboard starts on the first enabled item, Up and Down wrap
 /// around, and closing the menu gives the keyboard back to the file pane.
 ///
@@ -128,6 +163,9 @@ fn the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files() {
 fn with_several_items_selected_the_one_item_commands_are_disabled() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
 
     test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
@@ -255,6 +293,9 @@ fn the_folder_menu_names_the_step_undo_and_redo_take_as_windows_does() {
     require_private_trash();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic folder menu, which lists Redo; Windows 11's compact menu,
+    // the default, lists Undo only.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("trash", None);
     open_dialog(&test).press("Move to Trash");
@@ -288,6 +329,9 @@ fn the_folder_menu_names_the_step_undo_and_redo_take_as_windows_does() {
 fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic folder menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt"]);
 
     test.window.right_click(None);
@@ -354,6 +398,9 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
         fs::set_permissions(folder, fs::Permissions::from_mode(0o555)).expect("take write permission away");
     }
     let test = TestWindow::open(&fixture.uri());
+    // The classic folder menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt"]);
     test.activate("copy", None);
     assert!(is_enabled(&test, "paste"), "something to paste");
@@ -428,6 +475,9 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
 fn the_folder_menu_sorts_and_changes_the_view_in_place() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic folder menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     test.window.right_click(None);
     let menu = test.window.context_menu();
     assert_eq!(menu.row_labels()[..2], ["View", "Sort by"]);
@@ -453,9 +503,43 @@ fn the_folder_menu_sorts_and_changes_the_view_in_place() {
     });
 }
 
+/// Right-clicking blank space opens Windows 11's compact folder menu,
+/// whose View, Sort by and Group by open in the same compact menu rather
+/// than turning it into the classic one.
+///
+/// parity: CMD-010, CMD-011, CMD-012
+#[gtk::test]
+fn the_compact_folder_menu_opens_its_submenus_in_place() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    assert_eq!(menu.style(), MenuStyle::Compact);
+    assert_eq!(menu.row_labels()[..4], ["View", "Sort by", "Group by", "Refresh"]);
+    assert_eq!(
+        menu.row_labels().last().map(String::as_str),
+        Some("Show more options")
+    );
+    capture_popover(&test.window, menu.upcast_ref(), "native-menu-compact-folder.png");
+
+    menu.row("Sort by").emit_activate();
+    wait_until("the Sort submenu", || {
+        menu.is_visible() && menu.row_labels().iter().any(|row| row == "Name")
+    });
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Compact,
+        "the submenu keeps the compact look"
+    );
+}
+
+/// Shift+F10 (`win.context-menu`) opens the classic menu of the selection,
+/// and the Menu key the right-click menu's style, as in Windows 11
+/// Explorer.
+///
 /// parity: CMD-013, CMD-014
 #[gtk::test]
-fn the_menu_key_opens_the_classic_menu_of_the_selection() {
+fn shift_f10_opens_the_classic_menu_and_the_menu_key_the_compact_one() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     choose_menu_style(&test, ContextMenu::Win11);
@@ -468,9 +552,50 @@ fn the_menu_key_opens_the_classic_menu_of_the_selection() {
     assert_eq!(
         menu.style(),
         MenuStyle::Classic,
-        "the keyboard opens the classic menu"
+        "Shift+F10 opens the classic menu"
     );
     assert_eq!(menu.row_labels()[0], "Open");
+    menu.popdown();
+
+    let view = test.window.folder_pane().input_widget();
+    let menu_key = view
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            controller
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                .collect::<Vec<_>>()
+        })
+        .find(|shortcut| {
+            shortcut
+                .trigger()
+                .and_downcast::<gtk::KeyvalTrigger>()
+                .is_some_and(|trigger| trigger.keyval() == gtk::gdk::Key::Menu)
+        })
+        .expect("the view takes the Menu key");
+    let action = menu_key.action().expect("the Menu key runs an action");
+    assert!(action.activate(gtk::ShortcutActionFlags::empty(), &view, None));
+    let menu = test.window.context_menu();
+    assert!(menu.is_visible());
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Compact,
+        "the Menu key opens the compact menu"
+    );
+    menu.popdown();
+
+    choose_menu_style(&test, ContextMenu::Win10);
+    assert!(action.activate(gtk::ShortcutActionFlags::empty(), &view, None));
+    let menu = test.window.context_menu();
+    assert_eq!(
+        menu.style(),
+        MenuStyle::Classic,
+        "with the classic menu chosen, the Menu key opens it"
+    );
 }
 
 /// parity: SIDE-009, SIDE-014
@@ -696,7 +821,7 @@ fn a_formats_result_outlives_its_window() {
 }
 
 /// Windows' "Copy as path", with its Ctrl+Shift+C, copies the selected
-/// item's path; the command bar's Share no longer does.
+/// item's path in double quotes; the command bar's Share no longer does.
 ///
 /// parity: CLIP-012, CLIP-013
 #[gtk::test]
@@ -717,6 +842,6 @@ fn copy_as_path_in_the_menu_copies_the_items_path() {
     let clipboard = test.window.clipboard();
     let copied = gtk::glib::MainContext::default().block_on(clipboard.read_text_future());
     let copied = copied.ok().flatten().map(|text| text.to_string());
-    let expected = fixture.path("Notes 2.txt").display().to_string();
+    let expected = format!("\"{}\"", fixture.path("Notes 2.txt").display());
     assert_eq!(copied, Some(expected));
 }

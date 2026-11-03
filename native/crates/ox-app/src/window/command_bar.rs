@@ -4,8 +4,9 @@
 //! Ports `section.commandbar` in `v2.0.0:desktop/ui/index.html` and its menus in
 //! `setup()` and `openNewMenu` of `v2.0.0:desktop/ui/app.js`, in the same order:
 //! New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾,
-//! View ▾, More options, then at the right the appearance toggle, Settings
-//! and the Details toggle. Every control runs a window or application
+//! View ▾, More options, then at the right the Details toggle, as Windows
+//! 11 Explorer's bar ends; the appearance toggle and Settings there are
+//! hidden, as both are in More options. Every control runs a window or application
 //! action. New is disabled where nothing can be created, and Delete is named
 //! plainly "Delete", as in Windows Explorer, or "Delete permanently" in the
 //! Recycle Bin (CMD-003). Share, which was Copy path in the Python app, shows
@@ -31,7 +32,7 @@ use super::menu_popover::{name_menu_button, MenuEntry, MenuPopover};
 use super::window_action::WindowAction;
 
 use menus::{appearance_items, more_menu};
-pub(super) use menus::{new_menu, sort_menu, view_menu};
+pub(super) use menus::{group_by_menu, new_menu, sort_menu, view_menu};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -251,10 +252,16 @@ impl CommandBar {
 
     /// Gives the appearance toggle, Settings and the Details toggle, which
     /// the template places at the right, what it cannot express.
+    ///
+    /// Windows 11 Explorer's bar ends with Details alone; the appearance
+    /// and Settings are in its "…" menu, which already offers both
+    /// ([`more_menu`]), so their buttons stay built but hidden.
     fn finish_right_commands(&self) {
         self.finish_appearance_button();
         self.finish_settings_button();
         self.finish_details_toggle();
+        self.imp().appearance_button.set_visible(false);
+        self.imp().settings_button.set_visible(false);
     }
 
     /// The appearance menu, and the light appearance until the window
@@ -360,13 +367,6 @@ impl CommandBar {
         if let Some(button) = self.imp().extract_button.get() {
             button.set_visible(shown);
         }
-    }
-
-    /// The theme button's tooltip, for tests.
-    #[cfg(test)]
-    pub(super) fn appearance_tooltip(&self) -> Option<String> {
-        let tooltip = self.imp().appearance_button.tooltip_text();
-        tooltip.map(|text| text.to_string())
     }
 }
 
