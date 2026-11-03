@@ -5,9 +5,9 @@
 //! and `v2.0.0:desktop/winspace.py`:
 //!
 //! - Moving to a folder clears the rows and fills them batch by batch. The
-//!   blank list shows at once, with no "Loading" text; only a listing that
-//!   takes longer than a moment shows the thin loading line, as Windows
-//!   Explorer and Dolphin do. Landing pages never show it.
+//!   blank list shows at once, and the address bar its progress; only a
+//!   listing that takes longer than a moment says "Working on it...", as
+//!   Windows Explorer does. Landing pages never show it.
 //! - Listing the same folder again (F5, or a change the monitor saw) keeps
 //!   the rows on screen and merges the new listing in when it is complete,
 //!   so scroll position, keyboard focus and selection survive.
@@ -109,6 +109,9 @@ impl BrowserWindow {
         }
         if mode == LoadMode::Navigate {
             self.supersede_activations(id);
+            // The tab goes elsewhere: a location it was still going to is
+            // cancelled, and nothing of it lands here (VIEW-068).
+            self.cancel_opening(id);
         }
         let Some(start) = self.begin_load(id, mode) else {
             return;

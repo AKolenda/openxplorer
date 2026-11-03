@@ -365,9 +365,10 @@ impl BrowserWindow {
             session
                 .active()
                 .and_then(Tab::beside)
-                .map(|tab| (PaneState::of(tab), tab.uri().to_owned()))
+                .map(|tab| (tab.id, PaneState::of(tab), tab.uri().to_owned()))
         };
-        let Some((state, uri)) = beside else { return };
+        let Some((id, state, uri)) = beside else { return };
+        self.redraw_when_slow(id);
         let side = self.imp().active_side.get().other();
         // The toast speaks for the active pane only.
         let listing = if ox_core::location::same_location(&uri, ox_core::location::TRASH_URI) {

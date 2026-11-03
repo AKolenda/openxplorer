@@ -7,7 +7,8 @@
       "note": "Double-click, Enter and Open read the item again and open a folder, ZIP or file for what it is now; a failure is reported in the tab that asked.",
       "evidence": [
         "native/crates/ox-app/src/window/tests/opening.rs::an_item_is_read_again_when_opened_and_a_failure_is_a_dialog",
-        "native/crates/ox-app/src/window/tests/opening.rs::an_opened_folder_stays_with_the_tab_that_asked_for_it"
+        "native/crates/ox-app/src/window/tests/opening.rs::an_opened_folder_stays_with_the_tab_that_asked_for_it",
+        "native/crates/ox-app/src/window/tests/slow_locations.rs::a_slow_folder_opened_from_the_list_shows_progress_and_working_on_it"
       ]
     },
     "applications": {
@@ -179,7 +180,7 @@
     },
     "cancel": {
       "status": "native-tested",
-      "note": "Core cancellation is regression-tested: the transfer engine stops mid-copy and removes its partial stage, a replacement cancelled after the old item is moved aside still finishes so the name is never lost, a local delete cancelled during its preflight keeps the file, GIO copy, move and delete refuse an already-cancelled token, and a listing stops after a batch. Native: Cancel on the transfer panel cancels the running operation, and the panel reads \"Cancelling…\".",
+      "note": "Core cancellation is regression-tested: the transfer engine stops mid-copy and removes its partial stage, a replacement cancelled after the old item is moved aside still finishes so the name is never lost, a local delete cancelled during its preflight keeps the file, GIO copy, move and delete refuse an already-cancelled token, and a listing stops after a batch. Native: Cancel on the transfer panel cancels the running operation, and the panel reads \"Cancelling…\". Stop cancels a location the tab is still looking up, mounting or listing, and nothing of it lands later.",
       "evidence": [
         "native/crates/ox-core/tests/transfer_cases/operations.rs::cancellation_during_copy_removes_partial_stage_and_stops_the_batch",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_old_name",
@@ -187,7 +188,9 @@
         "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs::cancellation_prevents_copy_move_and_recursive_delete",
         "native/crates/ox-core/tests/gio_node_cases/removal.rs::cancellation_during_local_delete_preflight_preserves_the_file",
         "native/crates/ox-core/src/entry/enumerate.rs::dropping_the_listing_stops_delivery",
-        "native/crates/ox-app/src/window/tests/file_operations.rs::the_transfer_panel_shows_the_running_operation_and_cancel_stops_it"
+        "native/crates/ox-app/src/window/tests/file_operations.rs::the_transfer_panel_shows_the_running_operation_and_cancel_stops_it",
+        "native/crates/ox-app/src/window/tests/slow_locations.rs::stop_cancels_a_slow_address_and_its_late_answer_lands_nowhere",
+        "native/crates/ox-app/src/window/tests/slow_locations.rs::a_slow_first_mount_shows_working_on_it_and_stop_cancels_it"
       ]
     },
     "chrome": {
@@ -356,7 +359,7 @@
     },
     "list": {
       "status": "core-tested",
-      "note": "GIO enumeration covers batching, hidden files, symlinks and cancellation on temporary local folders. Remote authentication remains pending.",
+      "note": "GIO enumeration covers batching, hidden files, symlinks and cancellation on temporary local folders. A slow listing shows progress and Working on it..., and a replaced one delivers nothing. Remote authentication remains pending.",
       "evidence": [
         "native/crates/ox-core/tests/entry_enumeration.rs::listing_preserves_file_and_folder_metadata",
         "native/crates/ox-core/src/entry/enumerate.rs::the_top_of_a_large_folder_arrives_first",
@@ -364,7 +367,8 @@
         "native/crates/ox-core/tests/entry_enumeration.rs::hidden_items_are_listed_and_flagged",
         "native/crates/ox-core/tests/entry_enumeration.rs::an_empty_folder_finishes_without_rows",
         "native/crates/ox-core/src/entry/enumerate.rs::dropping_the_listing_stops_delivery",
-        "native/crates/ox-core/tests/entry_enumeration.rs::symlink_to_a_folder_is_browsable_without_recursing_into_it"
+        "native/crates/ox-core/tests/entry_enumeration.rs::symlink_to_a_folder_is_browsable_without_recursing_into_it",
+        "native/crates/ox-app/src/window/tests/slow_locations.rs::another_address_replaces_a_slow_listing"
       ]
     },
     "locationApply": {

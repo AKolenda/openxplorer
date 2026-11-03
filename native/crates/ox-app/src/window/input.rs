@@ -88,7 +88,11 @@ impl BrowserWindow {
         self.address_bar().connect_cancelled(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || window.finish_address()
+            move || {
+                // The address being opened goes with the edit (VIEW-068).
+                window.cancel_typed_opening();
+                window.finish_address();
+            }
         ));
         self.install_focus_regions();
         super::menu_popover::close_menus_on_press(self);
