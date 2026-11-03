@@ -1,3 +1,8 @@
+# Unreleased
+
+## Security
+* Deleting a folder permanently while using **Open as administrator** is now refused, before anything is deleted, when other user accounts can change that folder, a folder inside it or a folder on the way to it, when it is on a drive whose permissions can't be checked, or when a drive is mounted at or inside it. Single files and links are deleted as before.
+
 # 2.0.11 — 2026-11-02
 
 ## What's Changed
