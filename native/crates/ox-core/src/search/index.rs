@@ -482,6 +482,28 @@ mod tests {
         assert_eq!(root_state(&share.index, SHARE).entry_count, 0);
     }
 
+    /// A root deleted before its entries, as the pinned and frequent roots
+    /// are, or by a writer that leaves its entries behind, keeps counting
+    /// them if it comes back.
+    ///
+    /// parity: SRCH-022
+    #[test]
+    fn a_root_added_again_counts_the_entries_left_behind() {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "a.pdf"), listed_file(SHARE, "b.pdf")]);
+        let connection = share.index.connect().unwrap();
+        connection
+            .execute("DELETE FROM roots WHERE uri=?1", [SHARE])
+            .unwrap();
+
+        share
+            .index
+            .configure(SHARE, Caching::Enabled, "share", HiddenItems::Skip)
+            .unwrap();
+
+        assert_eq!(root_state(&share.index, SHARE).entry_count, 2);
+    }
+
     /// Monitoring errors are cut to 500 characters before they are stored.
     ///
     /// parity: SRCH-022
