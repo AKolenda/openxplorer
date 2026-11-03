@@ -4,8 +4,12 @@
 //! Ports `root_network`, `policy` and `allowed` from
 //! `v2.0.0:desktop/index_service.py` (SRCH-030, SRCH-031).
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+
+use gio::prelude::*;
 
 use super::error::SearchError;
 use super::mounts::{mount_for_path, read_mounts, Mount};
@@ -18,6 +22,49 @@ const SYSTEM_FOLDERS: [&str; 6] = ["/proc", "/sys", "/dev", "/run", "/tmp", "/va
 
 /// Folder names that hold snapshot history.
 const SNAPSHOT_FOLDERS: [&str; 4] = [".snapshot", ".snapshots", "#snapshot", ".zfs"];
+
+/// What shows that a folder with a dependency folder's name really is one.
+#[derive(Debug, Clone, Copy)]
+enum Marker {
+    /// The name alone: a tool reserves it, and nobody names a folder of
+    /// their own that way.
+    Name,
+    /// One of these files beside the folder, such as the `Cargo.toml`
+    /// that a `target` folder is built from.
+    Beside(&'static [&'static str]),
+    /// One of these files inside the folder, such as a virtual
+    /// environment's `pyvenv.cfg`.
+    Inside(&'static [&'static str]),
+}
+
+/// Folders that hold build output and installed dependencies: they are
+/// regenerated wholesale and hold no file anyone searches for, yet they
+/// outnumber the user's own files many times over.
+///
+/// Safety rule "a user's own folder is never taken for build output": a
+/// name such as `target`, `vendor` or `venv` is skipped only with the
+/// project file that made it, so a `target` folder of sales plans or a
+/// `vendor` folder of invoices is still indexed. `build` and `dist` are left
+/// out because no project file tells their output apart from a real folder.
+const DEPENDENCY_FOLDERS: [(&str, Marker); 9] = [
+    ("node_modules", Marker::Beside(&["package.json"])),
+    ("target", Marker::Beside(&["Cargo.toml", "pom.xml"])),
+    ("__pycache__", Marker::Name),
+    (".pytest_cache", Marker::Name),
+    (".venv", Marker::Inside(&["pyvenv.cfg"])),
+    ("venv", Marker::Inside(&["pyvenv.cfg"])),
+    (
+        ".gradle",
+        Marker::Beside(&[
+            "build.gradle",
+            "build.gradle.kts",
+            "settings.gradle",
+            "settings.gradle.kts",
+        ]),
+    ),
+    ("bower_components", Marker::Beside(&["bower.json"])),
+    ("vendor", Marker::Beside(&["composer.json", "go.mod", "Gemfile"])),
+];
 
 /// Filesystem types that are checked on a timer instead of watched.
 const NETWORK_FILESYSTEMS: [&str; 7] = [
@@ -81,6 +128,12 @@ impl RootStorage {
 pub(crate) struct IndexScope {
     root: String,
     excluded: Vec<String>,
+    /// Stops a marker lookup when the scan or update is stopped.
+    cancellable: gio::Cancellable,
+    /// Whether each folder below the root with a dependency folder's name,
+    /// by its path below the root, had its marker: every item below it
+    /// asks again, and on a network share each lookup is a round trip.
+    markers: RefCell<HashMap<String, bool>>,
 }
 
 impl IndexScope {
@@ -141,6 +194,8 @@ impl IndexScope {
         let mut scope = Self {
             root: root.to_owned(),
             excluded: Vec::new(),
+            cancellable: gio::Cancellable::new(),
+            markers: RefCell::default(),
         };
         let Some(root_path) = local_path(root) else {
             return scope;
@@ -159,20 +214,39 @@ impl IndexScope {
         scope
     }
 
+    /// This scope, with its marker lookups stopped by `cancellable`.
+    pub(crate) fn cancelled_by(mut self, cancellable: &gio::Cancellable) -> Self {
+        self.cancellable = cancellable.clone();
+        self
+    }
+
     /// Whether `uri` may be indexed (`allowed` in Python): inside the root,
-    /// not excluded, and not in snapshot history.
+    /// not excluded, and not in snapshot history or a dependency folder.
     ///
     /// Safety rule "no snapshot history": `.snapshot`, `.snapshots`,
     /// `#snapshot` and `.zfs` folders would multiply the index by every
     /// retained version.
+    ///
+    /// Safety rule "no build output or installed dependencies": a root
+    /// counted 123,974 `node_modules` entries and 25,845 `target` entries
+    /// alone, so one root reached the entry limit before it finished
+    /// scanning.
     pub(crate) fn admits(&self, uri: &str) -> bool {
+        self.admits_kind(uri, true)
+    }
+
+    /// [`IndexScope::admits`] for an item known to be a file or a folder:
+    /// its own name is only compared for a folder, so a plain file called
+    /// `target` or `vendor` is still indexed, while the folders above it
+    /// are compared for both.
+    fn admits_kind(&self, uri: &str, is_dir: bool) -> bool {
         if !is_at_or_below(uri, &self.root) {
             return false;
         }
         if self.excluded.iter().any(|excluded| is_at_or_below(uri, excluded)) {
             return false;
         }
-        !self.is_in_snapshot_folder(uri)
+        !self.is_in_named_folder(uri, is_dir)
     }
 
     /// The items of `batch` that may be indexed, with canonical URIs.
@@ -192,23 +266,72 @@ impl IndexScope {
                 continue;
             }
             item.uri = normalise(&item.uri)?;
-            if self.admits(&item.uri) {
+            if self.admits_kind(&item.uri, item.is_dir) {
                 admitted.push(item);
             }
         }
         Ok(admitted)
     }
 
-    /// Whether a folder between the root and `uri` is snapshot history.
-    fn is_in_snapshot_folder(&self, uri: &str) -> bool {
+    /// Whether a folder between the root and `uri` is snapshot history or
+    /// holds build output and dependencies.
+    ///
+    /// Only the folders below the root are compared, so a root named
+    /// `node_modules` is still admitted: whoever indexes that folder asked
+    /// for it. Names are compared as whole path components, so a folder
+    /// called `my-target-notes` or `node_modules-old` is still indexed, and
+    /// a file never counts as the folder that holds it.
+    fn is_in_named_folder(&self, uri: &str, is_dir: bool) -> bool {
         let root_path = decoded_path(&self.root);
         let path = decoded_path(uri);
         let relative = path
             .get(root_path.trim_end_matches('/').len()..)
             .unwrap_or_default();
-        relative
+        let components: Vec<&str> = relative
             .split('/')
-            .any(|component| SNAPSHOT_FOLDERS.contains(&component))
+            .filter(|component| !component.is_empty())
+            .collect();
+        let compared = if is_dir {
+            components.len()
+        } else {
+            components.len().saturating_sub(1)
+        };
+        (0..compared).any(|index| {
+            let component = components[index];
+            SNAPSHOT_FOLDERS.contains(&component)
+                || self.is_dependency_folder(&components[..index], component)
+        })
+    }
+
+    /// Whether the folder `name`, reached from the root through `parents`,
+    /// holds build output or installed dependencies: it has one of the
+    /// names in [`DEPENDENCY_FOLDERS`] and its marker is there. Only a
+    /// folder with one of those names is looked at on disk.
+    fn is_dependency_folder(&self, parents: &[&str], name: &str) -> bool {
+        let Some((_, marker)) = DEPENDENCY_FOLDERS.iter().find(|(folder, _)| *folder == name) else {
+            return false;
+        };
+        let key = format!("{}/{name}", parents.join("/"));
+        if let Some(&known) = self.markers.borrow().get(&key) {
+            return known;
+        }
+        let exists =
+            |folder: &gio::File, file: &str| folder.child(file).query_exists(Some(&self.cancellable));
+        let parent = parents
+            .iter()
+            .fold(gio::File::for_uri(&self.root), |folder, child| {
+                folder.child(child)
+            });
+        let is_marked = match marker {
+            Marker::Name => true,
+            Marker::Beside(files) => files.iter().any(|file| exists(&parent, file)),
+            Marker::Inside(files) => {
+                let folder = parent.child(name);
+                files.iter().any(|file| exists(&folder, file))
+            }
+        };
+        self.markers.borrow_mut().insert(key, is_marked);
+        is_marked
     }
 }
 
@@ -272,14 +395,157 @@ mod tests {
         assert!(!scope("file:///mnt/data", &mounts).admits("file:///mnt/data/other-volume/file"));
     }
 
+    /// A folder tree below a fresh temporary folder: each path ending in
+    /// `/` is a folder, every other one an empty file.
+    fn tree(paths: &[&str]) -> (tempfile::TempDir, String) {
+        let base = tempfile::tempdir().unwrap();
+        for path in paths {
+            let full = base.path().join(path);
+            if path.ends_with('/') {
+                fs::create_dir_all(&full).unwrap();
+            } else {
+                fs::create_dir_all(full.parent().unwrap()).unwrap();
+                fs::write(&full, "").unwrap();
+            }
+        }
+        let root = file_uri(base.path());
+        (base, root)
+    }
+
+    /// A dependency folder beside or holding the project file that made it
+    /// is refused, so a crawl neither stores its files nor descends into
+    /// it.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn dependency_folders_below_a_root_are_refused() {
+        let (_base, root) = tree(&[
+            "web/package.json",
+            "web/node_modules/left-pad/index.js",
+            "native/Cargo.toml",
+            "native/target/debug/ox",
+            "app/__pycache__/views.pyc",
+            "app/.venv/pyvenv.cfg",
+            "app/.venv/lib/python3.13/site-packages/",
+            "php/composer.json",
+            "php/vendor/acme/src/Client.php",
+            "src/main.rs",
+        ]);
+        let project = scope(&root, &[]);
+        let uri = |path: &str| format!("{root}/{path}");
+
+        assert!(!project.admits(&uri("web/node_modules")));
+        assert!(!project.admits(&uri("web/node_modules/left-pad/index.js")));
+        assert!(!project.admits(&uri("native/target/debug/ox")));
+        assert!(!project.admits(&uri("app/__pycache__/views.pyc")));
+        assert!(!project.admits(&uri("app/.venv/lib/python3.13/site-packages")));
+        assert!(!project.admits(&uri("php/vendor/acme/src/Client.php")));
+        assert!(project.admits(&uri("web/package.json")));
+        assert!(project.admits(&uri("src/main.rs")));
+    }
+
+    /// Safety rule "a user's own folder is never taken for build output":
+    /// without the project file that makes a dependency folder, a folder
+    /// with its name is the user's and is indexed.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn folders_named_like_dependency_folders_without_their_project_file_are_admitted() {
+        let (_base, root) = tree(&[
+            "Sales/target/2027 plan.odt",
+            "Accounts/vendor/invoice-0042.pdf",
+            "Course/venv/notes.txt",
+            "Course/node_modules/notes.txt",
+            "Garden/.gradle/beds.txt",
+            "Garden/bower_components/list.txt",
+        ]);
+        let home = scope(&root, &[]);
+        let uri = |path: &str| format!("{root}/{path}");
+
+        assert!(home.admits(&uri("Sales/target")));
+        assert!(home.admits(&uri("Sales/target/2027%20plan.odt")));
+        assert!(home.admits(&uri("Accounts/vendor/invoice-0042.pdf")));
+        assert!(home.admits(&uri("Course/venv/notes.txt")));
+        assert!(home.admits(&uri("Course/node_modules/notes.txt")));
+        assert!(home.admits(&uri("Garden/.gradle/beds.txt")));
+        assert!(home.admits(&uri("Garden/bower_components/list.txt")));
+    }
+
+    /// Names are compared as whole path components: a folder or file that
+    /// only looks like one of the excluded names is still indexed.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn names_that_only_look_like_dependency_folders_are_admitted() {
+        let project = scope("file:///home/test/project", &[]);
+        assert!(project.admits("file:///home/test/project/node_modules-old/index.js"));
+        assert!(project.admits("file:///home/test/project/my-target/notes.txt"));
+        assert!(project.admits("file:///home/test/project/my-target-notes.txt"));
+        assert!(project.admits("file:///home/test/project/vendors/acme.txt"));
+        assert!(project.admits("file:///home/test/project/targets.md"));
+        // `build` and `dist` are too common to be excluded.
+        assert!(project.admits("file:///home/test/project/build/output.o"));
+        assert!(project.admits("file:///home/test/project/dist/app.js"));
+    }
+
+    /// A folder's marker is looked up once per scope: every item below it
+    /// asks again, and on a network share each lookup is a round trip.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn a_folders_marker_is_looked_up_once() {
+        let (base, root) = tree(&["Sales/target/plan.odt"]);
+        let home = scope(&root, &[]);
+        let uri = |path: &str| format!("{root}/{path}");
+        assert!(home.admits(&uri("Sales/target/plan.odt")));
+
+        fs::write(base.path().join("Sales/Cargo.toml"), "").unwrap();
+
+        assert!(home.admits(&uri("Sales/target/budget.odt")));
+        assert!(!scope(&root, &[]).admits(&uri("Sales/target/budget.odt")));
+    }
+
+    /// A file is never taken for the folder that holds it: only a folder
+    /// named `target` or `vendor` is build output or installed dependencies,
+    /// so a file with that name is still indexed.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn a_file_named_like_a_dependency_folder_is_admitted() {
+        let (_base, root) = tree(&["Cargo.toml", "composer.json", "target/debug/notes.txt", "vendor"]);
+        let project = scope(&root, &[]);
+        let uri = |path: &str| format!("{root}/{path}");
+
+        assert!(project.admits_kind(&uri("target"), false));
+        assert!(project.admits_kind(&uri("vendor"), false));
+        assert!(!project.admits_kind(&uri("target"), true));
+        // The folders above the file are compared for a file too.
+        assert!(!project.admits_kind(&uri("target/debug/notes.txt"), false));
+    }
+
+    /// Safety rule "the user's choice wins": a root named like a dependency
+    /// folder is indexed, since the exclusion is for the folders below a
+    /// root and never for the root itself.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn a_root_named_like_a_dependency_folder_is_admitted() {
+        let modules = "file:///home/test/project/node_modules";
+        let root = scope(modules, &[]);
+        assert!(root.admits(modules));
+        assert!(root.admits("file:///home/test/project/node_modules/left-pad/index.js"));
+        let cache = scope("file:///home/test/project/.venv", &[]);
+        assert!(cache.admits("file:///home/test/project/.venv/bin/python"));
+    }
+
     /// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_root_exclusions`
     /// parity: SRCH-031
     #[test]
     fn root_exclusions() {
         assert!(!scope("file:///", &[]).admits("file:///proc/1"));
         let without_exclusions = IndexScope {
-            root: "file:///".to_owned(),
             excluded: Vec::new(),
+            ..scope("file:///", &[])
         };
         assert!(!without_exclusions.admits("file:///.snapshots/1"));
         assert!(!without_exclusions.admits("file:///.zfs/snapshot"));

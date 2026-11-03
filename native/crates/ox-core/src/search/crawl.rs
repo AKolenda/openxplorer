@@ -97,7 +97,7 @@ fn walk_root(
     generation: &ScanGeneration,
     storage: RootStorage,
 ) -> Result<ScanOutcome, SearchError> {
-    let scope = shared.scope_of(&job.root.uri)?;
+    let scope = shared.scope_of(&job.root.uri)?.cancelled_by(&job.cancellable);
     let limit = EntryLimit::of(shared, &job.root)?;
     let mut crawl = Crawl::new(shared, job, generation, scope, storage, limit);
     crawl.run()?;

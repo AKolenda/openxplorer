@@ -195,6 +195,11 @@ impl LocalWatch {
         lock(&self.table).remove(&self.inotify, root, None);
     }
 
+    /// Stops the watches of `root` at or below `subtree`.
+    pub(crate) fn remove_subtree(&self, root: &str, subtree: &str) {
+        lock(&self.table).remove(&self.inotify, root, Some(subtree));
+    }
+
     /// The events that arrived since the last call.
     pub(crate) fn take_events(&self) -> Vec<WatchEvent> {
         self.events.try_iter().collect()
