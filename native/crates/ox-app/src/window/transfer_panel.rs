@@ -49,6 +49,9 @@ pub(crate) enum TransferKind {
     Files,
     /// Extracting or compressing a ZIP archive.
     Archive,
+    /// Creating a new item, such as New ▸ Text document on a slow share,
+    /// which cannot pause.
+    Create,
 }
 
 impl TransferKind {
@@ -57,6 +60,7 @@ impl TransferKind {
         match self {
             TransferKind::Files => Icon::Copy,
             TransferKind::Archive => Icon::FolderZip,
+            TransferKind::Create => Icon::DocumentAdd,
         }
     }
 }
@@ -172,6 +176,15 @@ impl TransferPanel {
     /// True while an operation runs.
     pub(crate) fn is_busy(&self) -> bool {
         self.imp().cancel.borrow().is_some()
+    }
+
+    /// True while the operation `cancel` stops is the one shown.
+    pub(crate) fn runs(&self, cancel: &Cancellation) -> bool {
+        self.imp()
+            .cancel
+            .borrow()
+            .as_ref()
+            .is_some_and(|shown| shown.cancellable() == cancel.cancellable())
     }
 
     /// Shows the worker's report: its label, and its fraction, clamped to
