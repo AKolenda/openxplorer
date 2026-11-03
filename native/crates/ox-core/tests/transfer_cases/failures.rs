@@ -334,3 +334,71 @@ fn cancellation_never_hides_a_backup_that_requires_manual_recovery() {
         fixture.assert_no_staging();
     }
 }
+
+/// An engine and the bytes written that each of its byte reports says.
+type TransferEngineAndLog = (ox_core::transfer::TransferEngine, Arc<Mutex<Vec<u64>>>);
+
+/// An engine over `fixture` whose first file copy fails at 60 % and is
+/// retried.
+fn retrying_engine(fixture: &Fixture) -> TransferEngineAndLog {
+    use ox_core::transfer::{FailedItem, FailureAnswer};
+
+    let written = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&written);
+    let engine = fixture
+        .engine(Faults::new(Fault::InterruptedOnce, &fixture.cancel))
+        .with_failure_question(|_: &FailedItem| FailureAnswer::Retry)
+        .with_progress(move |progress| {
+            if let Some(bytes) = progress.bytes {
+                log.lock().expect("byte log").push(bytes.batch_written);
+            }
+        });
+    (engine, written)
+}
+
+/// A file whose copy fails partway and is retried counts its bytes once:
+/// the abandoned attempt's bytes are taken back, so the action never
+/// reads as further than it is.
+///
+/// parity: OPS-021, OPS-047
+#[test]
+fn a_retried_item_counts_its_bytes_once() {
+    let fixture = Fixture::new();
+    let source = fixture.source_folder.join("document");
+    write(&source, &"x".repeat(1000));
+    let (mut engine, written) = retrying_engine(&fixture);
+
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
+
+    assert!(result.errors.is_empty(), "{result:?}");
+    let written = written.lock().expect("byte log");
+    assert!(
+        written.iter().all(|bytes| *bytes <= 1000),
+        "never more than the file: {written:?}"
+    );
+    assert_eq!(written.last(), Some(&1000));
+}
+
+/// A file inside a folder whose copy fails partway and is retried by
+/// itself counts its bytes once, beside the folder's other files.
+///
+/// parity: OPS-021, OPS-047
+#[test]
+fn a_retried_entry_inside_a_folder_counts_its_bytes_once() {
+    let fixture = Fixture::new();
+    let folder = fixture.source_folder.join("album");
+    std::fs::create_dir(&folder).expect("a folder");
+    write(&folder.join("one"), &"x".repeat(1000));
+    write(&folder.join("two"), &"y".repeat(500));
+    let (mut engine, written) = retrying_engine(&fixture);
+
+    let result = fixture.run(&mut engine, &[&folder], Request::Copy(ConflictPolicy::Skip));
+
+    assert!(result.errors.is_empty(), "{result:?}");
+    let written = written.lock().expect("byte log");
+    assert!(
+        written.iter().all(|bytes| *bytes <= 1500),
+        "never more than the files: {written:?}"
+    );
+    assert_eq!(written.last(), Some(&1500));
+}

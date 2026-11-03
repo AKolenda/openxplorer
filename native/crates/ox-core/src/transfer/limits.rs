@@ -184,11 +184,12 @@ impl Incoming<'_> {
         uris: &[&str],
         cancel: &Cancellation,
         on_folder: &mut dyn FnMut(),
-    ) -> Result<Option<u64>, TransferError> {
+    ) -> Result<Option<TreeTotals>, TransferError> {
         let Some(free) = self.filesystem.free else {
             return Ok(None);
         };
         let mut needed = 0_u64;
+        let mut files = 0_u64;
         for uri in uris {
             let Ok(source) = factory(uri) else {
                 continue;
@@ -196,7 +197,9 @@ impl Incoming<'_> {
             if !self.writes(source.as_ref(), cancel) {
                 continue;
             }
-            needed = needed.saturating_add(tree_size(source.as_ref(), cancel, 0, on_folder)?);
+            let tree = tree_size(source.as_ref(), cancel, 0, on_folder)?;
+            needed = needed.saturating_add(tree.bytes);
+            files = files.saturating_add(tree.files);
             if needed > free {
                 return Err(TransferError::failed(crate::i18n::format_message(
                     "Not enough free space on {destination}: {needed} needed, {free} free.",
@@ -208,7 +211,7 @@ impl Incoming<'_> {
                 )));
             }
         }
-        Ok(Some(needed))
+        Ok(Some(TreeTotals { bytes: needed, files }))
     }
 
     /// True when the run will write `source`'s bytes into the folder. A
@@ -238,32 +241,46 @@ impl Incoming<'_> {
     }
 }
 
-/// The bytes of the files in `node`'s tree, links not followed.
-/// `on_folder` is called before each folder is listed.
+/// What the free-space check measured of the items a run writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct TreeTotals {
+    /// The bytes of their files.
+    pub(crate) bytes: u64,
+    /// How many files they hold, for the items remaining (OPS-021).
+    pub(crate) files: u64,
+}
+
+/// The bytes and the number of the files in `node`'s tree, links not
+/// followed. `on_folder` is called before each folder is listed.
 fn tree_size(
     node: &dyn Node,
     cancel: &Cancellation,
     depth: usize,
     on_folder: &mut dyn FnMut(),
-) -> Result<u64, TransferError> {
+) -> Result<TreeTotals, TransferError> {
     cancel.check()?;
     let Ok(info) = node.info(Some(cancel)) else {
-        return Ok(0);
+        return Ok(TreeTotals::default());
     };
     match info.kind {
-        NodeKind::File => Ok(info.size),
+        NodeKind::File => Ok(TreeTotals {
+            bytes: info.size,
+            files: 1,
+        }),
         NodeKind::Directory if depth < MAX_DEPTH => {
             on_folder();
             let Ok(children) = node.children(Some(cancel)) else {
-                return Ok(0);
+                return Ok(TreeTotals::default());
             };
-            let mut total = 0_u64;
+            let mut total = TreeTotals::default();
             for child in children {
-                total = total.saturating_add(tree_size(child.as_ref(), cancel, depth + 1, on_folder)?);
+                let tree = tree_size(child.as_ref(), cancel, depth + 1, on_folder)?;
+                total.bytes = total.bytes.saturating_add(tree.bytes);
+                total.files = total.files.saturating_add(tree.files);
             }
             Ok(total)
         }
-        _ => Ok(0),
+        _ => Ok(TreeTotals::default()),
     }
 }
 

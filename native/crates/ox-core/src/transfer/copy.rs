@@ -27,6 +27,7 @@
 use std::ffi::OsString;
 
 use super::cancellation::Cancellation;
+use super::engine::{Accounting, SharedAccounting};
 use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::item_failure::{EntryDecision, ItemFailures};
@@ -57,6 +58,9 @@ pub(crate) struct Copier<'a> {
     /// Asks about an entry inside a folder that cannot be copied, and
     /// keeps what was left out (OPS-047).
     failures: Option<&'a mut ItemFailures>,
+    /// The run's accounting, which a retried entry takes the bytes of
+    /// its discarded attempt back from (OPS-021).
+    accounting: Option<&'a SharedAccounting>,
     /// The names from the top item down to the entry being copied.
     entry_path: Vec<String>,
     /// Set when a safety rule stopped the copy (the nesting limit, an
@@ -82,6 +86,7 @@ impl<'a> Copier<'a> {
             emit,
             copied: None,
             failures: None,
+            accounting: None,
             entry_path: Vec::new(),
             stopped: false,
         }
@@ -91,6 +96,12 @@ impl<'a> Copier<'a> {
     /// copied, instead of failing the whole item (OPS-047).
     pub(crate) fn asking(mut self, failures: &'a mut ItemFailures) -> Self {
         self.failures = Some(failures);
+        self
+    }
+
+    /// Takes a retried entry's discarded bytes back from `accounting`.
+    pub(crate) fn accounting(mut self, accounting: &'a SharedAccounting) -> Self {
+        self.accounting = Some(accounting);
         self
     }
 
@@ -230,6 +241,7 @@ impl<'a> Copier<'a> {
     ) -> Result<(), TransferError> {
         loop {
             let copied_before = self.copied.as_deref().map_or(0, Vec::len);
+            let checkpoint = self.accounting.map(Accounting::checkpoint);
             let mut made = None;
             let error = match self.try_entry(child.as_ref(), target, depth, &mut made) {
                 Ok(Some(info)) => {
@@ -263,6 +275,12 @@ impl<'a> Copier<'a> {
                         self.discard_partial(target, name)?;
                     }
                 }
+            }
+            // The retry writes the discarded attempt's bytes again.
+            if let (EntryDecision::Retry, Some(accounting), Some(checkpoint)) =
+                (decision, self.accounting, checkpoint)
+            {
+                Accounting::roll_back(accounting, checkpoint);
             }
             if decision == EntryDecision::Skip {
                 return Ok(());
@@ -312,7 +330,7 @@ impl<'a> Copier<'a> {
         let name = source.display_name();
         let cancel = self.cancel;
         let emit = &mut *self.emit;
-        let mut progress = |current: u64, total: u64| {
+        let mut report = |current: u64, total: u64, file_started: bool| {
             cancel.wait_while_paused();
             // Nothing more is reported once the user cancelled.
             if cancel.is_cancelled() {
@@ -328,12 +346,18 @@ impl<'a> Copier<'a> {
                     // The engine fills in what the batch writes.
                     batch_size: None,
                     batch_written: 0,
+                    file_started,
                 }),
+                items: None,
+                name: Some(name.clone()),
             });
         };
         // An explicit boundary lets the engine accumulate bytes even when
-        // adjacent files have the same size. It is throttled after accounting.
-        progress(0, 0);
-        source.copy_file(target, cancel, &mut progress)
+        // adjacent files have the same size, and count the files. It is
+        // throttled after accounting.
+        report(0, 0, true);
+        source.copy_file(target, cancel, &mut |current, total| {
+            report(current, total, false);
+        })
     }
 }

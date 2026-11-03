@@ -133,13 +133,9 @@ pub(crate) struct BrowserWindow {
     /// The details pane beside the folder pane.
     #[template_child]
     pub(super) details_pane: TemplateChild<DetailsPane>,
-    /// The running file operation's progress and Cancel, over the
-    /// folder pane.
-    #[template_child]
-    pub(super) transfer_panel: TemplateChild<TransferPanel>,
-    /// A bounded stack of independently cancellable jobs.
-    #[template_child]
-    pub(super) transfer_panels: TemplateChild<gtk::Box>,
+    /// The action of the window's exclusive operation, or of its first
+    /// transfer job, in the application's progress window.
+    pub(super) transfer_panel: std::cell::OnceCell<TransferPanel>,
     /// The message at the bottom of the workspace.
     #[template_child]
     pub(super) toast: TemplateChild<Toast>,
@@ -331,12 +327,16 @@ impl ObjectImpl for BrowserWindow {
         window.finish_title_bar();
         window.add_navigation_buttons();
         window.watch_quick_look();
+        self.transfer_panel
+            .set(TransferPanel::for_window(&window))
+            .expect("constructed runs once per object");
         self.volume_monitor
             .set(gio::VolumeMonitor::get())
             .expect("constructed runs once per object");
     }
 
     fn dispose(&self) {
+        self.obj().end_progress_actions();
         self.obj().end_size_scans();
         self.obj().close_properties_windows();
         self.obj().end_band();

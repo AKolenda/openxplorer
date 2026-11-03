@@ -6,7 +6,7 @@
 
 use gio::prelude::*;
 
-use super::{local_delete, remote_delete, GioNode};
+use super::{admin_delete, local_delete, remote_delete, GioNode};
 use crate::transfer::{Cancellation, NodeKind, TransferError, WriteGuard};
 
 impl GioNode {
@@ -27,7 +27,9 @@ impl GioNode {
 
     /// XFER-015: permanently deletes the item and everything inside it.
     /// Local items are deleted relative to pinned folder descriptors; every
-    /// other location is deleted by path, as the Python app does. `kind` is
+    /// other location is deleted by path, as the Python app does. A folder
+    /// under `admin://` is deleted by path only when no other account can
+    /// change anything that walk resolves (see `admin_delete`). `kind` is
     /// what the caller found the item to be, as for
     /// [`Node::delete_tree_of_kind`](crate::transfer::Node::delete_tree_of_kind):
     /// anything but a folder is deleted without looking inside it.
@@ -46,6 +48,9 @@ impl GioNode {
         self.require_item()?;
         match self.local_path() {
             Some(path) => local_delete::delete_tree(&path, kind, cancel, guard),
+            None if self.file.has_uri_scheme("admin") => {
+                admin_delete::delete_tree(&self.file, kind, cancel, guard)
+            }
             None => remote_delete::delete_tree(&self.file, kind, cancel, guard),
         }
     }

@@ -463,6 +463,11 @@ impl BrowserWindow {
         self.save_selection();
         let active = self.imp().session.borrow().active_id();
         if let Some(id) = active {
+            // The user asks for it: a share another application asked to
+            // show may be mounted now (Try again, NET-004).
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.waits_to_mount = false;
+            }
             self.load_tab(id, LoadMode::Reload);
         }
     }

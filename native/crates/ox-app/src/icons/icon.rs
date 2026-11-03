@@ -85,6 +85,8 @@ pub(crate) enum Icon {
     /// `chevron_right_16_regular`: a settings row that opens a page of its
     /// own.
     ChevronRight16,
+    /// `chevron_up_16_regular`: the progress window's "Fewer details".
+    ChevronUp16,
     /// `circle_small_20_filled`: the dot a menu shows beside the chosen view or sort, and the open
     /// Details pane, as Windows 11 marks a choice.
     CircleSmallFilled,
@@ -202,8 +204,13 @@ pub(crate) enum Icon {
     PanelLeft,
     /// `panel_right_20_regular`: the details pane toggle.
     PanelRight,
+    /// `pause_16_regular`: pausing an action in the progress window.
+    Pause16,
     /// `phone_20_regular`: phones and other devices.
     Phone,
+    /// `play_16_regular`: resuming a paused action in the progress
+    /// window.
+    Play16,
     /// `pin_16_regular`: pins and the Quick access headings.
     Pin,
     /// `rectangle_landscape_20_regular`: View > Extra large icons and Large icons.
@@ -299,6 +306,7 @@ impl Icon {
             Icon::ChevronDown16 => "ox-chevron-down-16-symbolic",
             Icon::ChevronLeft16 => "ox-chevron-left-16-symbolic",
             Icon::ChevronRight16 => "ox-chevron-right-16-symbolic",
+            Icon::ChevronUp16 => "ox-chevron-up-16-symbolic",
             Icon::CircleSmallFilled => "ox-circle-small-20-filled-symbolic",
             Icon::ClipboardPaste => "ox-clipboard-paste-20-symbolic",
             Icon::Clock => "ox-clock-20-symbolic",
@@ -351,7 +359,9 @@ impl Icon {
             Icon::PaintBrush => "ox-paint-brush-20-symbolic",
             Icon::PanelLeft => "ox-panel-left-20-symbolic",
             Icon::PanelRight => "ox-panel-right-20-symbolic",
+            Icon::Pause16 => "ox-pause-16-symbolic",
             Icon::Phone => "ox-phone-20-symbolic",
+            Icon::Play16 => "ox-play-16-symbolic",
             Icon::Pin => "ox-pin-16-symbolic",
             Icon::RectangleLandscape => "ox-rectangle-landscape-20-symbolic",
             Icon::Rename => "ox-rename-20-symbolic",
@@ -403,7 +413,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 105] = [
+pub(crate) const ALL_ICONS: [Icon; 108] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowAutofitHeight,
@@ -427,6 +437,7 @@ pub(crate) const ALL_ICONS: [Icon; 105] = [
     Icon::ChevronDown16,
     Icon::ChevronLeft16,
     Icon::ChevronRight16,
+    Icon::ChevronUp16,
     Icon::CircleSmallFilled,
     Icon::ClipboardPaste,
     Icon::Clock,
@@ -479,7 +490,9 @@ pub(crate) const ALL_ICONS: [Icon; 105] = [
     Icon::PaintBrush,
     Icon::PanelLeft,
     Icon::PanelRight,
+    Icon::Pause16,
     Icon::Phone,
+    Icon::Play16,
     Icon::Pin,
     Icon::RectangleLandscape,
     Icon::Rename,

@@ -12,8 +12,11 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::time::Duration;
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
+use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 use ox_core::network::{
     begin_sign_out, DiscoveredServer, Discovery, ForgetScope, MountOutcome, NetworkError, SignOutRequest,
     WriteActivity, KEYRING_SAVE_NOTICE,
@@ -24,7 +27,7 @@ use crate::locations::Page;
 use crate::network::Discoverer;
 use crate::test_support::file_entry;
 use crate::test_support::harness::{
-    capture, capture_dialog, descendants, wait_until, Fixture, TestWindow, ThemeGuard,
+    capture, capture_dialog, descendants, wait_for, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::window::session::TabPlacement;
 use crate::window::BrowserWindow;
@@ -301,6 +304,72 @@ fn an_unmounted_share_is_mounted_once_then_listed_again() {
     wait_until("the failed mount", || {
         test.window.load_error().as_deref() == Some("This location is not a folder.")
     });
+}
+
+/// Any program on the session bus may ask to show a location
+/// (`FileManager1`), so a share it names is not mounted for it: the tab
+/// says the share is not mounted, and the share is mounted, signing in
+/// with a saved password if there is one, only when the user chooses Try
+/// again. The share is on a host that does not exist, which `GVfs` reports
+/// as not mounted, and the mount is the test's.
+///
+/// parity: NET-004, INT-014
+#[gtk::test]
+fn a_share_another_application_shows_is_mounted_only_when_the_user_asks() {
+    let test = TestWindow::open(Page::Network.uri());
+    let mounts = Rc::new(Cell::new(0));
+    let counted = Rc::clone(&mounts);
+    test.window.network().answer_mounts_with(move || {
+        counted.set(counted.get() + 1);
+        Ok(())
+    });
+    let share = "smb://example.invalid/share";
+    let folders = FileManagerRequest::new(FileManagerMethod::ShowFolders, &[share]).expect("an SMB share");
+    let items = ["smb://example.invalid/other/report.pdf"];
+    let items = FileManagerRequest::new(FileManagerMethod::ShowItems, &items).expect("an SMB file");
+
+    test.window.show_file_manager_request(&folders);
+    test.wait_for_listing("the shown share's listing");
+    assert_eq!(test.window.current_uri().as_deref(), Some(share));
+    let page = test.window.folder_pane().empty_page();
+    assert!(
+        page.offers_try_again(),
+        "the share is unavailable, with Try again"
+    );
+    test.window.show_file_manager_request(&items);
+    test.wait_for_listing("the shown item's folder");
+    assert_eq!(
+        test.window.current_uri().as_deref(),
+        Some("smb://example.invalid/other")
+    );
+    assert!(test.window.load_error().is_some(), "the share is unavailable");
+    let item = ["smb://example.invalid/third/notes.txt"];
+    let properties =
+        FileManagerRequest::new(FileManagerMethod::ShowItemProperties, &item).expect("an SMB file");
+    test.window.show_file_manager_request(&properties);
+    test.wait_for_listing("the Properties item's folder");
+    wait_for(Duration::from_millis(500));
+    assert!(test.window.properties_windows().is_empty(), "no Properties");
+    assert_eq!(mounts.get(), 0, "nothing was mounted for the requests");
+    // A refresh the folder watch starts is not the user asking.
+    let active = test.window.imp().session.borrow().active_id();
+    test.window.folder_changed(active.expect("a tab in front"));
+    test.wait_for_listing("the watch's refresh");
+    assert_eq!(mounts.get(), 0, "nothing was mounted for the watch's refresh");
+
+    let selection = || {
+        let session = test.window.imp().session.borrow();
+        let tab = session.active().expect("a tab in front");
+        (tab.selected.clone(), tab.reveals_selection)
+    };
+    let requested = (vec![item[0].to_owned()], true);
+    assert_eq!(selection(), requested, "the item waits to be selected");
+
+    test.activate("refresh", None);
+    assert_eq!(selection(), requested, "Try again keeps the item to select");
+    wait_until("the user's connect", || mounts.get() == 1);
+    test.wait_for_listing("the listing after the mount");
+    assert_eq!(mounts.get(), 1, "mounted once");
 }
 
 /// Measuring a share that is not mounted mounts it once and measures it

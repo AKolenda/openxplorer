@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-/* Dialogs, the transfer panel and the Windows 11 context menu
-   (ui-spec.md §4.9, §4.11, §4.15; style.css .modal, .transfer, .menu.win11
+/* Dialogs, the progress window and the Windows 11 context menu
+   (ui-spec.md §4.9, §4.11, §4.15, §4.17; style.css .modal, .menu.win11
    and .context-strip). */
 
 /* ---- Dialogs (§4.11, E02; src/dialog/window.rs, src/update/dialog.rs
@@ -80,33 +80,50 @@ window.ox button.danger {
 window.ox button.danger:hover { background-color: alpha(@ox_critical_fill, .9); }
 window.ox button.danger:active { background-color: alpha(@ox_critical_fill, .8); color: @ox_on_critical; }
 
-/* ---- Transfer panel of every write: file operations, extraction,
-   compression (§4.15 "Transfer", E08; src/window/transfer_panel.rs) ---- */
-.transfer {
+/* ---- Progress window: every running write of the application, each an
+   action with Pause and Cancel, as Windows Explorer shows them
+   (§4.17 "Progress window"; src/window/progress_window.rs,
+   src/window/transfer_panel.rs). The bar and the graph change only when
+   the operation reports, and Pause or Resume recolours the whole action
+   at once, with no fade (ACC-010). ---- */
+window.progress-window { background-color: @ox_bg; color: @ox_text; }
+.progress-action { padding: 14px 20px 14px 20px; }
+.progress-action + .progress-action { border-top: 1px solid @ox_border; }
+.progress-header { font-size: 12px; }
+.progress-header link { color: @ox_accent; }
+.progress-percent { font-size: 18px; }
+window.ox button.progress-control { min-width: 28px; min-height: 28px; padding: 0; border-radius: 4px; }
+.progress-action progressbar > trough {
+  min-height: 14px;
   background-color: @ox_chrome;
   border: 1px solid @ox_border;
-  border-radius: 8px;
-  padding: 14px;
-  margin: 0 12px 13px 12px;
-  box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
+  border-radius: 2px;
 }
-.transfer image { color: @ox_accent; }
-.transfer progressbar > trough { min-height: 4px; background-color: @ox_border; border-radius: 2px; border: none; }
-.transfer progressbar > trough > progress {
-  min-height: 4px;
+.progress-action progressbar > trough > progress {
+  min-height: 14px;
   min-width: 0;
   margin: 0;
   background-color: @ox_accent;
-  border-radius: 2px;
   border: none;
+  border-radius: 1px;
 }
-/* The current file's bar under the batch bar (OPS-020): thinner and
-   muted, so the batch bar stays the one that says how far the job is. */
-.transfer progressbar.transfer-file { margin-top: -4px; }
-.transfer progressbar.transfer-file > trough,
-.transfer progressbar.transfer-file > trough > progress { min-height: 2px; }
-.transfer progressbar.transfer-file > trough > progress { background-color: @ox_muted; }
-window.ox .transfer button.bordered { padding: 4px 12px; }
+/* A paused action turns the caution colour (Windows UX guidance:
+   "Turn the progress bar yellow to indicate that the user has paused"). */
+.progress-action.paused progressbar > trough > progress { background-color: @ox_caution; }
+/* The speed graph of More details (src/window/transfer_panel/speed_graph.rs):
+   drawn into a picture at the device's scale in these colours, which it
+   reads from hidden swatches, redrawn at once when the action pauses or
+   resumes. */
+speedgraph { border: 1px solid @ox_border; background-color: @ox_bg; color: @ox_text; }
+speedgraph .speed-line { color: @ox_text; }
+.progress-action.paused speedgraph .speed-line { color: @ox_caution; }
+speedgraph .speed-area { color: alpha(@ox_accent, .6); }
+speedgraph .speed-reached { color: alpha(@ox_accent, .12); }
+speedgraph .speed-grid { color: alpha(@ox_text, .07); }
+.progress-action.paused speedgraph .speed-area { color: alpha(@ox_caution, .65); }
+.progress-action.paused speedgraph .speed-reached { color: alpha(@ox_caution, .14); }
+speedgraph .speed-label { font-size: 11px; }
+.progress-footer { padding: 6px 12px 10px 12px; border-top: 1px solid @ox_border; }
 
 /* ---- Windows 11 style context menu (§4.9, CMD-008) ---- */
 popover.ox-menu.compact > contents {

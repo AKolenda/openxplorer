@@ -123,6 +123,9 @@ A citation such as `CT#L243` means the base URL, then the path below, then `#L24
 | FSI | https://github.com/microsoft/fluentui-system-icons (licence: MIT) |
 | GTK-NEWS | https://gitlab.gnome.org/GNOME/gtk/-/blob/main/NEWS |
 | GTK-CSS | https://docs.gtk.org/gtk4/css-properties.html |
+| B8-COPY | Building Windows 8 blog, "Improving our file management basics: copy, move, rename, and delete" (2011), archived at https://learn.microsoft.com/en-us/archive/blogs/b8/improving-our-file-management-basics-copy-move-rename-and-delete, with the Windows team's replies under it |
+| UX-PROG | Windows UX guidance, "Progress Bars": https://learn.microsoft.com/en-us/windows/win32/uxguide/progress-bars (written for Windows 7) |
+| SH-ACT | `SPACTION` in `shobjidl_core.h`: https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/ne-shobjidl_core-spaction |
 
 Local facts checked on the development machine (Zorin OS 18.1, GTK
 4.14.5, Pango 1.52.1):
@@ -657,7 +660,7 @@ All transitions follow M01.
 | Opening a location | As in Windows Explorer, from the first moment: a `@ox_selected` fill crawls along behind the address (`.address.loading`, quickly at first, then ever slower, still at a third of the field when animations are off, M08), the address bar is busy for screen readers, and Refresh is Stop. After 300 ms (M06), "Working on it..." in `@ox_muted` where "This folder is empty." goes, in place of the previous folder's rows (VIEW-068). | safe |
 | Search in progress or cached | Search-info bar under the header area: min height 40, padding `7 14`, `@ox_chrome`, 1 px bottom border, **12** px text (11), accent glyph; cache freshness on the right in `@ox_muted`. | text visible, P2 |
 | Folder-size scan | Bottom bar: min height 44, padding `8 18`, `@ox_chrome`, 1 px top border, **12** px text (11), "Cancel scan" as a secondary button 27 high. | text visible, P2 (T04) |
-| Transfer | Floating panel 43 px above the bottom, between the sidebar and the details pane, radius 8, shadow E08, 4 px progress track `@ox_border` with a `@ox_accent` fill. | safe |
+| Transfer | The progress window of §4.17, not a panel over the folder pane. | visible |
 | Toast | 78 px above the bottom, centred, background `@ox_text`, text `@ox_bg`, radius 8, padding `12 20`, 12 px, shadow E08, max width 650. | safe |
 
 ### 4.16 Landing pages (Home, This PC, Network, Settings)
@@ -672,6 +675,35 @@ Keep the current metrics:
 - Network banner padding 20, radius 7 (R09).
 - Recent table: 12 px rows with 10 px padding and 1 px `@ox_border` dividers.
 - Settings: left navigation 244 wide on `@ox_sidebar`; sections max 1000 wide, radius **7** (9) (R09), padding 24.
+
+### 4.17 Progress window
+
+Every running write of the application (copy, move, Recycle Bin, delete,
+extraction, compression, restored copy, Undo) is an action of one small
+window of its own, as in Windows Explorer (B8-COPY: "a single dialog" for
+all copy jobs). Templates: `resources/ui/progress-window.ui` and
+`resources/ui/transfer-panel.ui`; skin: `dialogs.css`.
+
+| Part | Target | Source |
+|---|---|---|
+| Window | Content 460 wide; not resizable, as the Windows window is not: it takes its natural height each time More details opens or closes and each time an action comes or goes, up to 560 for the list, which then scrolls. No parent, no position, not modal: the desktop places it (Wayland). Background `@ox_bg`. | Width: measured from screenshots, not a source. Fixed size: Windows. No placement: Wayland. |
+| Title | One action: its percentage, "44% complete". Several: "2 Running Actions". | UX-PROG ("66% Complete" for a modeless progress window); the plural form from Windows screenshots. |
+| When it shows | After an action has run for 1 s, without taking the focus; never for an operation that ends sooner. An action that already waited before it started (a slow New ▸ Text document) shows at once. No widget has focus and no focus ring shows when it opens; Tab reaches the folder links, whose ring the keyboard shows. | UX-PROG ("two seconds or longer" need feedback; "Don't steal input focus"). The 1 s value is not from a source. |
+| When it closes | When its last action ends. Closing it cancels every action; finished items stay. | Observed Windows behaviour, not a source. |
+| Action | Padding `14 20`; actions divided by 1 px `@ox_border`. Line 1, 12 px: "Copying 1,718 items from Downloads to Backup", each folder a link in `@ox_accent` that opens it in a new window. Line 2: "44% complete", 18 px, with Pause (Play while paused) and Cancel as 28 × 28 flat icon buttons (Fluent `pause_16`, `play_16`, `dismiss_16`), named "Pause", "Resume" and "Cancel". Bar: 14 px trough `@ox_chrome` with a 1 px `@ox_border` edge, fill `@ox_accent`. | Verbs: SH-ACT (Copying, Moving, Recycling, Deleting); Extracting and Compressing are not Shell actions. Links and per-job pause/stop: B8-COPY. Sizes: not a source. |
+| Paused | Bar fill, the graph's area, part done and speed line `@ox_caution`, all on the next frame, with details open or closed, and back on Resume; no fade. Pause becomes Resume. | UX-PROG ("Turn the progress bar yellow … If the user has paused, change the Pause button label to Resume"). |
+| More details | A flat toggle at the bottom with a chevron, "More details" / "Fewer details", for every action; remembered across sessions (`progressDetails`), saved without telling the browsing windows that their settings changed, so they do not redraw. | B8-COPY ("'More details' is sticky … across sessions"). |
+| Details | Speed graph 72 high in the bar's place, 1 px `@ox_border` edge on `@ox_bg`: faint gridlines (10 columns, 4 rows, `alpha(@ox_text, .07)`), the part done shaded `alpha(@ox_accent, .12)`, the speed as a filled area `alpha(@ox_accent, .6)` up to the current percentage, its top edge running straight from one report's speed to the next and anti-aliased, the highest speed at 1/1.3 of the height, and a 1 px `@ox_text` line across at the current speed with "Speed: 32.8 MB/s" (11 px) above its right end. Then "Name: <item>", "Time remaining: About 25 seconds" ("Calculating…" at first), "Items remaining: 1,030 (313 MB)". No bar of the file being copied, as in Windows. | B8-COPY ("a real-time throughput graph … the speed of data transfer, the transfer rate trend, and how much data is left"); wording from Windows screenshots; time formats per UX-PROG. Sizes and colours: not a source. |
+| Motion | None: the bar and graph change only on reports, and the paused colour applies at once, with or without animations (ACC-010). | — |
+
+The graph's pixels are computed in Rust (`render` in
+`speed_graph.rs`) at the device's scale and shown as a texture in a
+`gtk::Picture`, drawn again only when the action reports, its size or
+scale changes or the theme changes its colours, which it reads from hidden
+swatches styled in `dialogs.css`. It uses no GTK or Cairo drawing call,
+which `native/tools/check.py` forbids for icons. The item count first counts the selected items, then every file
+once the free-space check has counted them; Windows counts every file from
+the start.
 
 ---
 
