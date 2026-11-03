@@ -4055,6 +4055,10 @@ msgid "Properties"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Rename items…"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Select only one item for this command."
 msgstr ""
 
@@ -4449,7 +4453,7 @@ msgstr ""
 msgid "Rename the {len} selected items to:"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/batch_rename.rs
+#: crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/numbered_rename.rs
 msgid "Renaming items…"
 msgstr ""
 
@@ -7038,7 +7042,7 @@ msgstr ""
 msgid "Add # to the name, so each item gets its own number."
 msgstr ""
 
-#: crates/ox-core/src/ops/batch_rename.rs
+#: crates/ox-core/src/ops/batch_rename.rs crates/ox-core/src/ops/numbered_rename.rs
 msgid "Enter a name for the items."
 msgstr ""
 

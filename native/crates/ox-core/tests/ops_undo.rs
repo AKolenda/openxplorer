@@ -15,9 +15,9 @@ use std::time::{Duration, Instant};
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
-    changed_copies, create_item, create_links, duplicate_items, list_recycle_bin, rename_batch, reverse,
-    run_transfer, undo, BatchItem, BatchRename, LinkRequest, OperationContext, TransferRequest, UndoJournal,
-    UndoRecord,
+    changed_copies, create_item, create_links, duplicate_items, list_recycle_bin, rename_batch,
+    rename_numbered_items, reverse, run_transfer, undo, BatchItem, BatchRename, LinkRequest, NumberedRename,
+    OperationContext, TransferRequest, UndoJournal, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -328,6 +328,44 @@ fn a_batch_rename_is_undone_and_redone_as_one_step() {
     assert!(redone.errors.is_empty(), "{:?}", redone.errors);
     assert_eq!(fs::read(temp.path().join("Trip 1.txt")).unwrap(), b"b.txt");
     assert_eq!(fs::read(temp.path().join("Trip 2.jpg")).unwrap(), b"a.jpg");
+}
+
+/// parity: OPS-029, OPS-050
+#[test]
+fn a_numbered_rename_is_undone_and_redone_as_one_step() {
+    let temp = tempfile::tempdir().unwrap();
+    for name in ["b.txt", "a.jpg"] {
+        fs::write(temp.path().join(name), name).unwrap();
+    }
+    let batch = NumberedRename {
+        items: ["b.txt", "a.jpg"]
+            .map(|name| BatchItem {
+                uri: file_uri(&temp.path().join(name)),
+                name: name.to_owned(),
+                is_dir: false,
+            })
+            .to_vec(),
+        name: "Trip".to_owned(),
+        edited_name: "b.txt".to_owned(),
+        edited_is_dir: false,
+    };
+    let context = OperationContext::default();
+
+    let outcome = block_on(rename_numbered_items(&batch, &context)).expect("a valid name");
+    let record = outcome.undo.expect("an undoable rename");
+    let reversal = block_on(reverse(&record, &context, |_| {})).expect("an undo");
+    let names_after_undo = [
+        temp.path().join("b.txt").is_file(),
+        temp.path().join("a.jpg").is_file(),
+    ];
+    let redo = reversal.inverse.expect("the undo can be redone");
+    let redone = block_on(undo(&redo, &context, |_| {})).expect("a redo");
+
+    assert_eq!(record.undo_label(), "Undo Rename");
+    assert_eq!(names_after_undo, [true, true]);
+    assert!(redone.errors.is_empty(), "{:?}", redone.errors);
+    assert_eq!(fs::read(temp.path().join("Trip (1).txt")).unwrap(), b"b.txt");
+    assert_eq!(fs::read(temp.path().join("Trip (2).jpg")).unwrap(), b"a.jpg");
 }
 
 /// parity: OPS-029, DND-019

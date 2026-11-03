@@ -5,8 +5,9 @@
 //! Ports `rename` in `v2.0.0:desktop/ui/app.js`. It does nothing unless an item
 //! is selected, no operation runs, and the item can be changed: not a
 //! share root, a virtual entry or a previous version. With several items
-//! selected, the batch rename asks instead ([`super::batch_rename`]),
-//! where the Python app did nothing. As in
+//! selected, the name typed for one of them goes to all of them with a
+//! number, as in Windows Explorer ([`super::numbered_rename`]), where the
+//! Python app did nothing. As in
 //! Explorer and Dolphin, the name is edited in place in its row or tile
 //! ([`super::inline_rename`]); when the item's cell is not on screen, the
 //! Python app's Rename dialog asks instead. Either way the name is checked
@@ -28,7 +29,7 @@ use crate::window::BrowserWindow;
 
 /// The Rename dialog's line when the user keeps a name that would hide
 /// the item.
-const NOT_RENAMED: &str = crate::i18n::message_id("The name was not changed.");
+pub(super) const NOT_RENAMED: &str = crate::i18n::message_id("The name was not changed.");
 
 /// How much of `entry`'s name a rename selects: a file's name before its
 /// extension, a folder's whole name.
@@ -59,17 +60,16 @@ fn moved_location(shown: &str, old: &str, new: &str) -> Option<String> {
 
 impl BrowserWindow {
     /// F2: renames the selected item in place, or with the dialog when its
-    /// cell is not on screen; several selected items are renamed together
-    /// (OPS-014).
+    /// cell is not on screen; several selected items get one numbered name
+    /// (OPS-050).
     pub(crate) async fn rename_selection(&self) {
         if !self.allows(FileCommand::Rename) || self.refuses_writes() {
             return;
         }
         let model = self.folder_pane().model();
-        let selected = model.selected_items();
+        let selected = model.selected_positions();
         if selected.len() > 1 {
-            let entries: Vec<Entry> = selected.iter().map(|item| item.entry().clone()).collect();
-            self.rename_several(&entries).await;
+            self.rename_several_selected(&selected).await;
             return;
         }
         let Some(position) = model.first_selected() else {
@@ -80,8 +80,48 @@ impl BrowserWindow {
         };
         let view = self.folder_pane().view_widget();
         match self.folder_pane().owners().file_cell_at(position, &view) {
-            Some(cell) => self.rename_in_place(&cell, item.entry()),
+            Some(cell) => self.rename_in_place(&cell, item.entry(), None),
             None => self.rename_with_dialog(item.entry()).await,
+        }
+    }
+
+    /// Rename items…: renames the several selected items with the "Rename
+    /// items" dialog and its `#` template (OPS-014); nothing with one item
+    /// or none selected.
+    pub(crate) async fn rename_items_selection(&self) {
+        if !self.allows(FileCommand::Rename) || self.refuses_writes() {
+            return;
+        }
+        let selected = self.folder_pane().model().selected_items();
+        if selected.len() < 2 {
+            return;
+        }
+        let entries: Vec<Entry> = selected.iter().map(|item| item.entry().clone()).collect();
+        self.rename_several(&entries).await;
+    }
+
+    /// Several items selected at `positions`, ascending: edits the name of
+    /// the focused one, or of the first when focus is on none of them, and
+    /// gives the typed name to all of them (OPS-050).
+    async fn rename_several_selected(&self, positions: &[u32]) {
+        let pane = self.folder_pane();
+        let model = pane.model();
+        let entries: Vec<Entry> = positions
+            .iter()
+            .filter_map(|&position| model.item(position).map(|item| item.entry().clone()))
+            .collect();
+        let edited = pane
+            .focused_position()
+            .filter(|position| positions.contains(position))
+            .or_else(|| positions.first().copied());
+        let Some((position, item)) = edited.and_then(|position| Some((position, model.item(position)?)))
+        else {
+            return;
+        };
+        let view = pane.view_widget();
+        match pane.owners().file_cell_at(position, &view) {
+            Some(cell) => self.rename_in_place(&cell, item.entry(), Some(entries)),
+            None => self.rename_numbered_with_dialog(&entries, item.entry()).await,
         }
     }
 
