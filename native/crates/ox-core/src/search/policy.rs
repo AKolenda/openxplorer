@@ -19,6 +19,22 @@ const SYSTEM_FOLDERS: [&str; 6] = ["/proc", "/sys", "/dev", "/run", "/tmp", "/va
 /// Folder names that hold snapshot history.
 const SNAPSHOT_FOLDERS: [&str; 4] = [".snapshot", ".snapshots", "#snapshot", ".zfs"];
 
+/// Folder names that hold build output and installed dependencies: they are
+/// regenerated wholesale and hold no file anyone searches for, yet they
+/// outnumber the user's own files many times over. `build` and `dist` are
+/// left out because real folders carry those names.
+const DEPENDENCY_FOLDERS: [&str; 9] = [
+    "node_modules",
+    "target",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".pytest_cache",
+    ".gradle",
+    "bower_components",
+    "vendor",
+];
+
 /// Filesystem types that are checked on a timer instead of watched.
 const NETWORK_FILESYSTEMS: [&str; 7] = [
     "cifs",
@@ -160,11 +176,16 @@ impl IndexScope {
     }
 
     /// Whether `uri` may be indexed (`allowed` in Python): inside the root,
-    /// not excluded, and not in snapshot history.
+    /// not excluded, and not in snapshot history or a dependency folder.
     ///
     /// Safety rule "no snapshot history": `.snapshot`, `.snapshots`,
     /// `#snapshot` and `.zfs` folders would multiply the index by every
     /// retained version.
+    ///
+    /// Safety rule "no build output or installed dependencies": a root
+    /// counted 123,974 `node_modules` entries and 25,845 `target` entries
+    /// alone, so one root reached the entry limit before it finished
+    /// scanning.
     pub(crate) fn admits(&self, uri: &str) -> bool {
         if !is_at_or_below(uri, &self.root) {
             return false;
@@ -172,7 +193,7 @@ impl IndexScope {
         if self.excluded.iter().any(|excluded| is_at_or_below(uri, excluded)) {
             return false;
         }
-        !self.is_in_snapshot_folder(uri)
+        !self.is_in_named_folder(uri)
     }
 
     /// The items of `batch` that may be indexed, with canonical URIs.
@@ -199,17 +220,27 @@ impl IndexScope {
         Ok(admitted)
     }
 
-    /// Whether a folder between the root and `uri` is snapshot history.
-    fn is_in_snapshot_folder(&self, uri: &str) -> bool {
+    /// Whether a folder between the root and `uri` is snapshot history or
+    /// holds build output and dependencies.
+    ///
+    /// Only the folders below the root are compared, so a root named
+    /// `node_modules` is still admitted: whoever indexes that folder asked
+    /// for it. Names are compared as whole path components, so a folder
+    /// called `my-target-notes` or `node_modules-old` is still indexed.
+    fn is_in_named_folder(&self, uri: &str) -> bool {
         let root_path = decoded_path(&self.root);
         let path = decoded_path(uri);
         let relative = path
             .get(root_path.trim_end_matches('/').len()..)
             .unwrap_or_default();
-        relative
-            .split('/')
-            .any(|component| SNAPSHOT_FOLDERS.contains(&component))
+        relative.split('/').any(is_excluded_folder)
     }
+}
+
+/// Whether `component` is a folder name that [`IndexScope::admits`] refuses:
+/// snapshot history, build output or installed dependencies.
+fn is_excluded_folder(component: &str) -> bool {
+    SNAPSHOT_FOLDERS.contains(&component) || DEPENDENCY_FOLDERS.contains(&component)
 }
 
 /// The decoded path of a location.
@@ -270,6 +301,53 @@ mod tests {
     fn nested_mounts_remain_excluded() {
         let mounts = [Mount::new("/mnt/data/other-volume", "ext4")];
         assert!(!scope("file:///mnt/data", &mounts).admits("file:///mnt/data/other-volume/file"));
+    }
+
+    /// A dependency folder below a root is refused, so a crawl neither
+    /// stores its files nor descends into it.
+    #[test]
+    fn dependency_folders_below_a_root_are_refused() {
+        let project = scope("file:///home/test/project", &[]);
+        assert!(!project.admits("file:///home/test/project/node_modules"));
+        assert!(!project.admits("file:///home/test/project/node_modules/left-pad/index.js"));
+        assert!(!project.admits("file:///home/test/project/app/node_modules/left-pad/index.js"));
+        assert!(!project.admits("file:///home/test/project/native/target/debug/ox"));
+        assert!(!project.admits("file:///home/test/project/app/__pycache__/views.pyc"));
+        assert!(!project.admits("file:///home/test/project/.venv/lib/python3.13/site-packages"));
+        assert!(!project.admits("file:///home/test/project/vendor/serde/src/lib.rs"));
+        assert!(project.admits("file:///home/test/project/src/main.rs"));
+    }
+
+    /// Names are compared as whole path components: a folder or file that
+    /// only looks like one of the excluded names is still indexed.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn names_that_only_look_like_dependency_folders_are_admitted() {
+        let project = scope("file:///home/test/project", &[]);
+        assert!(project.admits("file:///home/test/project/node_modules-old/index.js"));
+        assert!(project.admits("file:///home/test/project/my-target/notes.txt"));
+        assert!(project.admits("file:///home/test/project/my-target-notes.txt"));
+        assert!(project.admits("file:///home/test/project/vendors/acme.txt"));
+        assert!(project.admits("file:///home/test/project/targets.md"));
+        // `build` and `dist` are too common to be excluded.
+        assert!(project.admits("file:///home/test/project/build/output.o"));
+        assert!(project.admits("file:///home/test/project/dist/app.js"));
+    }
+
+    /// Safety rule "the user's choice wins": a root named like a dependency
+    /// folder is indexed, since the exclusion is for the folders below a
+    /// root and never for the root itself.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn a_root_named_like_a_dependency_folder_is_admitted() {
+        let modules = "file:///home/test/project/node_modules";
+        let root = scope(modules, &[]);
+        assert!(root.admits(modules));
+        assert!(root.admits("file:///home/test/project/node_modules/left-pad/index.js"));
+        let cache = scope("file:///home/test/project/.venv", &[]);
+        assert!(cache.admits("file:///home/test/project/.venv/bin/python"));
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_v05.py::LiveTests::test_root_exclusions`
