@@ -5,9 +5,12 @@
 //! Ports `filemanager_request` in `v2.0.0:desktop/window_state.py`. Only the
 //! three methods of the interface are accepted, with 1 to 100 locations,
 //! and every location is normalised like one typed in the address bar:
-//! a request carries data to show, never a command to run.
+//! a request carries data to show, never a command to run. A path inside
+//! the user's `GVfs` FUSE export, as a browser passes for a download it
+//! saved onto a share, becomes the share's own location.
 
 use crate::location::{normalise, LocationError};
+use crate::network::outside_location;
 
 /// The most locations one request may name, as in the Python app.
 pub const MAX_REQUEST_LOCATIONS: usize = 100;
@@ -82,7 +85,7 @@ impl FileManagerRequest {
         }
         let uris = locations
             .iter()
-            .map(|location| normalise(location.as_ref()))
+            .map(|location| normalise(location.as_ref()).map(outside_location))
             .collect::<Result<_, _>>()?;
         Ok(Self { method, uris })
     }
