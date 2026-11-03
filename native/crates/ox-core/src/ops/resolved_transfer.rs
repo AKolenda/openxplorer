@@ -23,9 +23,12 @@
 //!   (XFER-009, XFER-010); that replaced file is gone, so Undo leaves
 //!   its replacement in place.
 //!
-//! A move removes each merged folder it emptied, as Windows does; one
-//! still holding a skipped file stays. The groups run the safe answers
-//! first; a cancellation stops the steps that have not started.
+//! The items without a conflict go first, before the user answers
+//! ([`run_free_items`]), as Windows queues the conflicts "to the end of
+//! the copy job" (Building Windows 8, 2011); the answered ones follow
+//! ([`run_answered_items`]), the safe answers first. A move removes each
+//! merged folder it emptied, as Windows does; one still holding a skipped
+//! file stays. A cancellation stops the steps that have not started.
 //!
 //! [`scan_name_conflicts`]: super::scan_name_conflicts
 
@@ -65,9 +68,45 @@ pub enum Resolution {
     KeepBoth,
 }
 
+/// What the first part of a transfer with conflicts did: the items
+/// without a conflict, copied or moved while the user has not answered
+/// yet. Windows copies those first and asks about the rest at the end
+/// ("conflicts are all queued to the end of the copy job", Building
+/// Windows 8, 2011).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FreeItemsDone {
+    /// Their outcome.
+    total: TransferOutcome,
+    /// Where they landed.
+    landed: Vec<Landed>,
+    /// When the transfer started, in seconds since the Unix epoch.
+    started: u64,
+}
+
+impl FreeItemsDone {
+    /// True when the user cancelled while they were copied or moved.
+    pub fn cancelled(&self) -> bool {
+        self.total.result.cancelled
+    }
+
+    /// The outcome of the transfer stopped before the conflicts were
+    /// answered: only these items count, and it reads as cancelled, so
+    /// nothing is reported but what needs the user.
+    pub fn into_outcome(mut self, scan: &ConflictScan, context: &OperationContext) -> TransferOutcome {
+        self.total.result.cancelled = true;
+        let mut run = Run::new(scan, &[], context, |_| {}, Some(self));
+        if scan.mode == TransferMode::Move {
+            run.remove_emptied_folders();
+        }
+        run.finish()
+    }
+}
+
 /// Runs `scan` with `answers`, one per conflict in order, sending
-/// throttled progress to `progress` on the worker thread. The outcome
-/// adds up every step, and its Undo reverses the whole paste as one step.
+/// throttled progress to `progress` on the worker thread: the items
+/// without a conflict first ([`run_free_items`]), then the answered ones
+/// ([`run_answered_items`]). The outcome adds up every step, and its Undo
+/// reverses the whole paste as one step.
 ///
 /// # Errors
 ///
@@ -82,15 +121,77 @@ pub async fn run_resolved_transfer(
     context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<TransferOutcome, OpsError> {
-    if answers.len() != scan.conflicts.len() {
-        return Err(OpsError::failed(crate::i18n::gettext(
-            "Answer every name conflict first.",
-        )));
-    }
+    check_answers(scan, answers)?;
     let scan = scan.clone();
     let answers = answers.to_vec();
     let context = context.clone();
-    on_worker(move || Run::new(&scan, &answers, &context, progress).run()).await
+    on_worker(move || {
+        let mut run = Run::new(&scan, &answers, &context, progress, None);
+        if !run.free_items()? {
+            run.answered_items()?;
+        }
+        Ok(run.finish())
+    })
+    .await
+}
+
+/// Copies or moves the items of `scan` without a conflict, before the
+/// user answers about the others, sending throttled progress to
+/// `progress` on the worker thread.
+///
+/// # Errors
+///
+/// As [`run_resolved_transfer`].
+pub async fn run_free_items(
+    scan: &ConflictScan,
+    context: &OperationContext,
+    progress: impl FnMut(Progress) + Send + 'static,
+) -> Result<FreeItemsDone, OpsError> {
+    let scan = scan.clone();
+    let context = context.clone();
+    on_worker(move || {
+        let mut run = Run::new(&scan, &[], &context, progress, None);
+        run.free_items()?;
+        Ok(run.into_free_items_done())
+    })
+    .await
+}
+
+/// Goes on with the transfer whose items without a conflict are `done`:
+/// the conflicts of `scan` as `answers` says, one per conflict in order.
+///
+/// # Errors
+///
+/// As [`run_resolved_transfer`].
+pub async fn run_answered_items(
+    scan: &ConflictScan,
+    answers: &[Resolution],
+    done: FreeItemsDone,
+    context: &OperationContext,
+    progress: impl FnMut(Progress) + Send + 'static,
+) -> Result<TransferOutcome, OpsError> {
+    check_answers(scan, answers)?;
+    let scan = scan.clone();
+    let answers = answers.to_vec();
+    let context = context.clone();
+    on_worker(move || {
+        let mut run = Run::new(&scan, &answers, &context, progress, Some(done));
+        if !run.total.result.cancelled {
+            run.answered_items()?;
+        }
+        Ok(run.finish())
+    })
+    .await
+}
+
+/// Refuses answers that are not one per conflict.
+fn check_answers(scan: &ConflictScan, answers: &[Resolution]) -> Result<(), OpsError> {
+    if answers.len() == scan.conflicts.len() {
+        return Ok(());
+    }
+    Err(OpsError::failed(crate::i18n::gettext(
+        "Answer every name conflict first.",
+    )))
 }
 
 /// One run of a resolved transfer.
@@ -112,11 +213,14 @@ struct Run<'a> {
 }
 
 impl<'a> Run<'a> {
+    /// A run of `scan` with `answers`, going on from `earlier` when the
+    /// items without a conflict are done.
     fn new(
         scan: &'a ConflictScan,
         answers: &'a [Resolution],
         context: &'a OperationContext,
         mut progress: impl FnMut(Progress) + Send + 'static,
+        earlier: Option<FreeItemsDone>,
     ) -> Self {
         let mut previous_steps = 0_u64;
         let mut current_step = 0_u64;
@@ -132,23 +236,36 @@ impl<'a> Run<'a> {
             }
             progress(report);
         });
+        let earlier = earlier.unwrap_or_else(|| FreeItemsDone {
+            started: unix_seconds_now(),
+            ..FreeItemsDone::default()
+        });
         Self {
             scan,
             answers,
             context,
             engine,
-            started: unix_seconds_now(),
-            total: TransferOutcome::default(),
-            landed: Vec::new(),
+            started: earlier.started,
+            total: earlier.total,
+            landed: earlier.landed,
             kept: Vec::new(),
             overwritten: HashSet::new(),
         }
     }
 
-    /// Every step, safe answers first, then the outcome.
-    fn run(mut self) -> Result<TransferOutcome, OpsError> {
+    /// What the items without a conflict did, to go on with later.
+    fn into_free_items_done(self) -> FreeItemsDone {
+        FreeItemsDone {
+            total: self.total,
+            landed: self.landed,
+            started: self.started,
+        }
+    }
+
+    /// The items without a conflict, and copies into their own folder;
+    /// true when the user cancelled.
+    fn free_items(&mut self) -> Result<bool, OpsError> {
         let scan = self.scan;
-        let mode = scan.mode;
         let groups = [
             (PlannedKind::Free, ConflictPolicy::Skip),
             (PlannedKind::OwnFolderCopy, ConflictPolicy::KeepBoth),
@@ -157,18 +274,25 @@ impl<'a> Run<'a> {
             for (folder, uris) in grouped(&scan.items, |item| item.kind == kind) {
                 for chunk in uris.chunks(MAX_ITEMS) {
                     let request = TransferRequest {
-                        mode,
+                        mode: scan.mode,
                         uris: chunk.to_vec(),
                         destination_folder: Some(folder.clone()),
                         policy,
                     };
                     let part = run_on_engine(&mut self.engine, &request, self.context)?;
                     if self.add(part) {
-                        return Ok(self.finish());
+                        return Ok(true);
                     }
                 }
             }
         }
+        Ok(false)
+    }
+
+    /// The answered conflicts, the safe answers first, then, for a move,
+    /// the merged folders it emptied.
+    fn answered_items(&mut self) -> Result<(), OpsError> {
+        let scan = self.scan;
         let answered: Vec<(&PlannedItem, &NameConflict, Resolution)> = scan
             .items
             .iter()
@@ -190,14 +314,14 @@ impl<'a> Run<'a> {
                     _ => self.replace(item, conflict)?,
                 };
                 if self.add(part) {
-                    return Ok(self.finish());
+                    return Ok(());
                 }
             }
         }
-        if mode == TransferMode::Move {
+        if scan.mode == TransferMode::Move {
             self.remove_emptied_folders();
         }
-        Ok(self.finish())
+        Ok(())
     }
 
     /// Adds `part` to the outcome; true when the user cancelled.

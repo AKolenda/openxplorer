@@ -56,14 +56,15 @@ pub(crate) enum Icon {
     ArrowSort,
     /// `arrow_swap_20_regular`: Invert selection.
     ArrowSwap,
-    /// `arrow_undo_20_regular`: Undo.
+    /// `arrow_undo_20_regular`: Undo, and "Skip this file" in Replace or
+    /// Skip Files.
     ArrowUndo,
     /// `arrow_up_20_regular`: Up and the Ascending sort.
     ArrowUp,
     /// `braces_20_regular`: New JSON file.
     Braces,
-    /// `checkmark_20_regular`: a checked menu item and the chosen option of
-    /// a settings drop-down.
+    /// `checkmark_20_regular`: a checked menu item, the chosen option of a
+    /// settings drop-down, and "Replace the file in the destination".
     Checkmark,
     /// `chevron_down_20_regular`: the menu carets of New, Sort and View.
     ChevronDown,
@@ -125,7 +126,8 @@ pub(crate) enum Icon {
     DocumentColor32,
     /// `document_48_color`: the same at large sizes.
     DocumentColor48,
-    /// `document_copy_20_regular`: New from template.
+    /// `document_copy_20_regular`: New from template, and "Compare info for
+    /// both files".
     DocumentCopy,
     /// `document_text_20_regular`: New text document.
     DocumentText,

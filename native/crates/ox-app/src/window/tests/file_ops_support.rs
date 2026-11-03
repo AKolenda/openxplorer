@@ -224,7 +224,11 @@ pub(in crate::window) enum ConflictAnswer {
 fn asking_window(test: &TestWindow) -> crate::window::progress_window::ProgressWindow {
     wait_until("the Replace or Skip Files question", || {
         test.context.progress_window().is_some_and(|window| {
-            window.is_visible() && window.actions().iter().any(|action| action.is_asking())
+            window.is_visible()
+                && window
+                    .actions()
+                    .iter()
+                    .any(crate::window::transfer_panel::TransferPanel::is_asking)
         })
     });
     test.context.progress_window().expect("it asks")
@@ -237,7 +241,7 @@ pub(in crate::window) fn cancel_conflicts(test: &TestWindow) {
     let action = window
         .actions()
         .into_iter()
-        .find(|action| action.is_asking())
+        .find(crate::window::transfer_panel::TransferPanel::is_asking)
         .expect("the asking action");
     action.press_cancel();
 }

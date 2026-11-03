@@ -18,8 +18,8 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use ox_core::ops::{
-    reverse, run_resolved_transfer, scan_name_conflicts, ConflictScan, OperationContext, OpsError,
-    PlannedKind, Resolution, UndoRecord,
+    reverse, run_answered_items, run_free_items, run_resolved_transfer, scan_name_conflicts, ConflictScan,
+    OperationContext, OpsError, PlannedKind, Resolution, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, TransferMode, MAX_ITEMS};
 
@@ -383,4 +383,71 @@ fn a_move_merges_folders_and_undo_puts_everything_back() {
         b"existing track"
     );
     assert!(!dst.join("Music/notes.txt").exists());
+}
+
+/// The items without a conflict are copied before the user answers, as
+/// Windows queues the conflicts to the end of the job; the answers then
+/// finish it, and Undo covers both parts.
+///
+/// parity: OPS-026, OPS-027
+#[test]
+fn the_items_without_a_conflict_go_before_the_answers() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("free.txt"), b"free");
+    write(&src.join("taken.txt"), b"incoming");
+    write(&dst.join("taken.txt"), b"existing");
+    let context = OperationContext::default();
+    let scan = scan(TransferMode::Copy, &src, &["free.txt", "taken.txt"], &dst);
+
+    let first = block_on(run_free_items(&scan, &context, |_| {})).expect("the free items");
+    assert!(dst.join("free.txt").is_file(), "copied before the answers");
+    assert_eq!(fs::read(dst.join("taken.txt")).unwrap(), b"existing");
+    assert!(!first.cancelled());
+    let outcome = block_on(run_answered_items(
+        &scan,
+        &[Resolution::Replace],
+        first,
+        &context,
+        |_| {},
+    ))
+    .expect("the answers");
+
+    assert_eq!(fs::read(dst.join("taken.txt")).unwrap(), b"incoming");
+    assert_eq!(
+        outcome.created,
+        [file_uri(&dst.join("free.txt")), file_uri(&dst.join("taken.txt"))]
+    );
+    let Some(UndoRecord::Replace { steps, .. }) = &outcome.undo else {
+        panic!("{:?}", outcome.undo);
+    };
+    assert!(matches!(steps.as_slice(), [UndoRecord::Copy { copies }] if copies.len() == 2));
+}
+
+/// Stopping at the question keeps what was copied before it, undoably,
+/// and changes none of the files it asked about.
+///
+/// parity: OPS-026
+#[test]
+fn stopping_at_the_question_keeps_the_items_copied_before_it() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("free.txt"), b"free");
+    write(&src.join("taken.txt"), b"incoming");
+    write(&dst.join("taken.txt"), b"existing");
+    let context = OperationContext::default();
+    let scan = scan(TransferMode::Copy, &src, &["free.txt", "taken.txt"], &dst);
+
+    let first = block_on(run_free_items(&scan, &context, |_| {})).expect("the free items");
+    let outcome = first.into_outcome(&scan, &context);
+
+    assert!(outcome.result.cancelled, "nothing to report");
+    assert_eq!(fs::read(dst.join("taken.txt")).unwrap(), b"existing");
+    assert_eq!(
+        outcome.undo,
+        Some(UndoRecord::Copy {
+            copies: vec![file_uri(&dst.join("free.txt"))]
+        })
+    );
 }

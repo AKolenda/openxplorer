@@ -9,8 +9,8 @@
 //! folders it merges into too ([`scan_name_conflicts`]); without a
 //! conflict the copy starts at once with the Skip policy, so a name that
 //! appears after the check is still never overwritten. With conflicts the
-//! action asks "Replace or Skip Files" in place of its progress, as
-//! Windows does, and "Compare info for both files" or "Let me decide for
+//! items without one are copied first and the action then asks "Replace
+//! or Skip Files" in place of its progress, as Windows does, and "Compare info for both files" or "Let me decide for
 //! each file" opens the File Conflict window
 //! ([`crate::window::conflict_window`]); items without a conflict keep
 //! the Skip policy whatever the answers. A copy of an item into its own
@@ -25,8 +25,8 @@ use gtk::subclass::prelude::*;
 use ox_core::clipboard::{ClipboardFiles, ClipboardMode};
 use ox_core::location::{parent_location, same_location};
 use ox_core::ops::{
-    run_resolved_transfer, scan_name_conflicts, starting_label, ConflictScan, OpsError, Resolution,
-    TransferOutcome,
+    run_answered_items, run_free_items, run_resolved_transfer, scan_name_conflicts, starting_label,
+    ConflictScan, OperationContext, OpsError, TransferOutcome,
 };
 use ox_core::transfer::{Cancellation, TransferMode};
 
@@ -163,13 +163,12 @@ impl BrowserWindow {
             &context.cancel,
             Action::of(verb, &incoming.uris, Some(&destination)),
         );
-        let Some((scan, answers)) = self.check_and_ask(&incoming, &context.cancel).await else {
+        let Some(scan) = self.check(&incoming, &context.cancel).await else {
             self.end_transfer(&context.cancel);
             return None;
         };
-        let progress = self.progress_reporter(&context.cancel);
         let mark = mark_unfinished(Some(&destination));
-        let outcome = run_resolved_transfer(&scan, &answers, &context, progress).await;
+        let outcome = self.run_and_ask(&scan, &context).await;
         drop(mark);
         self.end_transfer(&context.cancel);
         let written = scan
@@ -194,15 +193,10 @@ impl BrowserWindow {
         outcome.ok()
     }
 
-    /// Finds the name conflicts of `incoming`, inside merged folders too,
-    /// and asks about them in the action of the job `cancel` stops: the
-    /// plan and an answer per conflict, or `None` when nothing may run. A
-    /// failed check opens "Could not check destination".
-    async fn check_and_ask(
-        &self,
-        incoming: &IncomingItems,
-        cancel: &Cancellation,
-    ) -> Option<(ConflictScan, Vec<Resolution>)> {
+    /// Finds the name conflicts of `incoming`, inside merged folders too:
+    /// the plan, or `None` when the user cancelled or the check failed,
+    /// which opens "Could not check destination".
+    async fn check(&self, incoming: &IncomingItems, cancel: &Cancellation) -> Option<ConflictScan> {
         let checked = scan_name_conflicts(
             incoming.mode,
             &incoming.uris,
@@ -210,9 +204,9 @@ impl BrowserWindow {
             cancel,
         )
         .await;
-        let scan = match checked {
-            Ok(scan) => scan,
-            Err(OpsError::Cancelled) => return None,
+        match checked {
+            Ok(scan) => Some(scan),
+            Err(OpsError::Cancelled) => None,
             Err(error) => {
                 dialog::show_message(
                     self,
@@ -220,17 +214,34 @@ impl BrowserWindow {
                     &error.to_string(),
                 )
                 .await;
-                return None;
+                None
             }
-        };
-        if !scan.has_conflicts() {
-            return Some((scan, Vec::new()));
         }
-        let answers = self
-            .panel_for_operation(cancel)
-            .ask_about_conflicts(&scan)
-            .await?;
-        Some((scan, answers))
+    }
+
+    /// Runs `scan` as the job of `context`: the items without a conflict
+    /// first, then, as Windows queues the conflicts to the end of the job,
+    /// the question in the job's action and the answered items. Cancel at
+    /// the question keeps what was already copied, and says nothing.
+    async fn run_and_ask(
+        &self,
+        scan: &ConflictScan,
+        context: &OperationContext,
+    ) -> Result<TransferOutcome, OpsError> {
+        let progress = self.progress_reporter(&context.cancel);
+        if !scan.has_conflicts() {
+            return run_resolved_transfer(scan, &[], context, progress).await;
+        }
+        let first = run_free_items(scan, context, progress).await?;
+        if first.cancelled() {
+            return Ok(first.into_outcome(scan, context));
+        }
+        let panel = self.panel_for_operation(&context.cancel);
+        let Some(answers) = panel.ask_about_conflicts(scan).await else {
+            return Ok(first.into_outcome(scan, context));
+        };
+        let progress = self.progress_reporter(&context.cancel);
+        run_answered_items(scan, &answers, first, context, progress).await
     }
 }
 

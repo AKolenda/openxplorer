@@ -123,7 +123,9 @@ pub use report::{
     summarize, summarize_batch_rename, summarize_duplicate, summarize_journal_step, summarize_links,
     summarize_restore, summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
 };
-pub use resolved_transfer::{run_resolved_transfer, Resolution};
+pub use resolved_transfer::{
+    run_answered_items, run_free_items, run_resolved_transfer, FreeItemsDone, Resolution,
+};
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
 pub use tab_transfer::{
     Acceptance, Delivery, KeptReason, TabMessage, TabMoveOutcome, TabTransferError, TabTransferToken,

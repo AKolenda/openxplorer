@@ -51,13 +51,20 @@ pub(super) fn question_texts(scan: &ConflictScan) -> [String; 4] {
     use ox_core::i18n::{format_message, gettext};
     let count = scan.conflicts.len();
     if let [conflict] = scan.conflicts.as_slice() {
+        let name = conflict.name();
         let summary = if conflict.existing.is_folder {
-            "The destination already has a folder named \"{name}\""
+            format_message(
+                "The destination already has a folder named \"{name}\"",
+                &[("name", &name)],
+            )
         } else {
-            "The destination already has a file named \"{name}\""
+            format_message(
+                "The destination already has a file named \"{name}\"",
+                &[("name", &name)],
+            )
         };
         return [
-            format_message(summary, &[("name", &conflict.name())]),
+            summary,
             gettext("Replace the file in the destination"),
             gettext("Skip this file"),
             gettext("Compare info for both files"),
@@ -102,31 +109,28 @@ impl TransferPanel {
     /// an answer per conflict, or `None` when the user cancelled.
     pub(crate) async fn ask_about_conflicts(&self, scan: &ConflictScan) -> Option<Vec<Resolution>> {
         let count = scan.conflicts.len();
-        let answers = loop {
-            let row = self.ask_row(scan).await?;
-            match row {
-                Row::Replace => break Some(vec![Resolution::Replace; count]),
-                Row::Skip => break Some(vec![Resolution::Skip; count]),
-                Row::Decide => {
-                    let Some(window) = self.imp().window.upgrade() else {
-                        break None;
-                    };
-                    let source = self.source_folder();
-                    let destination = scan.destination_folder.clone();
-                    let conflicts = FileConflictWindow::new(&window, self, scan, &source, &destination);
-                    self.imp().conflict_window.set(Some(&conflicts));
-                    let answers = conflicts.answers().await;
-                    self.imp().conflict_window.set(None);
-                    if answers.is_none() {
-                        // Cancel in the File Conflict window stops the
-                        // whole action, as in Windows.
-                        self.cancel();
-                    }
-                    break answers;
-                }
-            }
+        let answers = match self.ask_row(scan).await {
+            None => None,
+            Some(Row::Replace) => Some(vec![Resolution::Replace; count]),
+            Some(Row::Skip) => Some(vec![Resolution::Skip; count]),
+            Some(Row::Decide) => self.decide_each(scan).await,
         };
         self.end_question();
+        answers
+    }
+
+    /// Opens the File Conflict window and waits for its answers; Cancel
+    /// there stops the whole action, as in Windows.
+    async fn decide_each(&self, scan: &ConflictScan) -> Option<Vec<Resolution>> {
+        let window = self.imp().window.upgrade()?;
+        let source = self.source_folder();
+        let conflicts = FileConflictWindow::new(&window, self, scan, &source, &scan.destination_folder);
+        self.imp().conflict_window.set(Some(&conflicts));
+        let answers = conflicts.answers().await;
+        self.imp().conflict_window.set(None);
+        if answers.is_none() {
+            self.cancel();
+        }
         answers
     }
 
@@ -156,7 +160,7 @@ impl TransferPanel {
             .cancel
             .borrow()
             .as_ref()
-            .is_some_and(|cancel| cancel.is_cancelled())
+            .is_some_and(ox_core::transfer::Cancellation::is_cancelled)
         {
             self.answer(None);
         }

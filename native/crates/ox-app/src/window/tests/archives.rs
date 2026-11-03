@@ -360,8 +360,10 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
 }
 
 /// Cancel in the name-conflict question of an extraction into an existing
-/// folder just stops, as in Windows Explorer: no message follows, nothing
-/// is added and the private folder is removed.
+/// folder just stops, as in Windows Explorer: no message follows, the
+/// file it asked about is unchanged and the private folder is removed.
+/// As Windows asks at the end of the job, the items without a conflict
+/// were already extracted, and stay.
 ///
 /// parity: ARC-011, ARC-012
 #[gtk::test]
@@ -394,7 +396,10 @@ fn cancelling_an_extractions_conflict_question_says_nothing() {
 
     assert!(super::file_ops_support::dialog_over(&test).is_none());
     assert_eq!(test.window.shown_message(), "", "nothing is said after Cancel");
-    assert!(!fixture.path("Docs").exists(), "nothing is added");
+    assert!(
+        fixture.path("Docs/a.txt").is_file(),
+        "the items without a conflict came first"
+    );
     assert_eq!(fs::read(fixture.path("readme.txt")).expect("kept"), b"mine");
 }
 

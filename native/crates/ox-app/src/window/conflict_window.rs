@@ -200,119 +200,35 @@ impl FileConflictWindow {
         }
     }
 
-    /// Lays out the window's content.
+    /// Lays out the window's content and connects its controls.
     fn build(&self, panel: &TransferPanel, scan: &ConflictScan, source: &str, destination: &str) {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let top = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        top.add_css_class("file-conflicts-top");
-        let heading = gtk::Label::new(Some(&gettext("Which files do you want to keep?")));
-        heading.set_xalign(0.0);
-        heading.set_wrap(true);
-        heading.add_css_class("file-conflicts-heading");
-        heading.set_accessible_role(gtk::AccessibleRole::Heading);
-        let hint = gtk::Label::new(Some(&gettext(
-            "If you select both versions, the copied file will have a number added to its name.",
-        )));
-        hint.set_xalign(0.0);
-        hint.set_wrap(true);
-        top.append(&heading);
-        top.append(&hint);
-        content.append(&top);
-
-        let opener = |label: &gtk::Label| {
-            label.connect_activate_link(glib::clone!(
-                #[weak]
-                panel,
-                #[upgrade_or]
-                glib::Propagation::Stop,
-                move |_, uri| {
-                    panel.open_location(uri);
-                    glib::Propagation::Stop
-                }
-            ));
-        };
-        let headers = gtk::Grid::new();
-        headers.set_column_homogeneous(true);
-        headers.add_css_class("file-conflicts-sides");
-        let mut header_checks = Vec::new();
-        for (column, (template, uri)) in [
-            (gettext("Files from {folder}"), source),
-            (gettext("Files already in {folder}"), destination),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let markup = header_markup(&template, uri);
-            let check = gtk::CheckButton::new();
-            let label = gtk::Label::new(None);
-            label.set_markup(&markup);
-            label.set_xalign(0.0);
-            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-            opener(&label);
-            let plain = template.replacen("{folder}", &location_name(uri), 1);
-            check.update_property(&[gtk::accessible::Property::Label(&plain)]);
-            label.set_mnemonic_widget(Some(&check));
-            let side = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-            side.append(&check);
-            side.append(&label);
-            headers.attach(&side, i32::try_from(column).unwrap_or_default(), 0, 1, 1);
-            header_checks.push(check);
-        }
+        content.append(&intro());
+        let (headers, incoming_header, existing_header) = side_headers(panel, source, destination);
         content.append(&headers);
-
-        let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        list.set_accessible_role(gtk::AccessibleRole::List);
-        list.update_property(&[gtk::accessible::Property::Label(&gettext(
-            "Files with the same names",
-        ))]);
-        let source_name = location_name(source);
-        let destination_name = location_name(destination);
-        let mut rows = Vec::new();
-        for conflict in &scan.conflicts {
-            let (row, checks) = conflict_row(conflict, &source_name, &destination_name);
-            list.append(&row);
-            rows.push(checks);
-        }
-        let scroller = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .vexpand(true)
-            .child(&list)
-            .build();
-        scroller.add_css_class("file-conflicts-list");
-        content.append(&scroller);
-
-        let footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        footer.add_css_class("file-conflicts-footer");
+        let (list, rows) = conflict_list(scan, &location_name(source), &location_name(destination));
+        content.append(&list);
         let same = rows.iter().filter(|row| row.same).count();
-        let skip_same = (same > 0).then(|| {
-            let check = gtk::CheckButton::with_label(&skip_same_label(same));
-            check.set_hexpand(true);
-            footer.append(&check);
-            check
-        });
-        if skip_same.is_none() {
-            let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-            spacer.set_hexpand(true);
-            footer.append(&spacer);
-        }
-        let continue_button = gtk::Button::with_label(&gettext("Continue"));
-        continue_button.add_css_class("suggested-action");
-        continue_button.set_sensitive(false);
-        let cancel_button = gtk::Button::with_label(&gettext("Cancel"));
-        footer.append(&continue_button);
-        footer.append(&cancel_button);
+        let (footer, skip_same, continue_button, cancel_button) = footer(same);
         content.append(&footer);
         self.set_child(Some(&content));
         self.set_default_widget(Some(&continue_button));
 
         let imp = self.imp();
         imp.rows.replace(rows);
-        let mut header_checks = header_checks.into_iter();
-        imp.incoming_header.replace(header_checks.next());
-        imp.existing_header.replace(header_checks.next());
+        imp.incoming_header.replace(Some(incoming_header));
+        imp.existing_header.replace(Some(existing_header));
         imp.skip_same.replace(skip_same);
         imp.continue_button.replace(Some(continue_button.clone()));
         self.connect_checks();
+        self.connect_answers(&continue_button, &cancel_button);
+        for (conflict, row) in scan.conflicts.iter().zip(self.imp().rows.borrow().iter()) {
+            load_pictures(conflict, row);
+        }
+    }
+
+    /// Continue answers, Cancel and Escape cancel.
+    fn connect_answers(&self, continue_button: &gtk::Button, cancel_button: &gtk::Button) {
         continue_button.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -341,9 +257,6 @@ impl FileConflictWindow {
             ))),
         ));
         self.add_controller(escape);
-        for (conflict, row) in scan.conflicts.iter().zip(self.imp().rows.borrow().iter()) {
-            load_pictures(conflict, row);
-        }
     }
 
     /// Keeps the header check boxes, "Skip … same date and size" and
@@ -482,6 +395,113 @@ impl FileConflictWindow {
         let rows = self.imp().rows.borrow();
         (rows[index].incoming.clone(), rows[index].existing.clone())
     }
+}
+
+/// "Which files do you want to keep?" and the hint under it.
+fn intro() -> gtk::Box {
+    let top = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    top.add_css_class("file-conflicts-top");
+    let heading = gtk::Label::new(Some(&gettext("Which files do you want to keep?")));
+    heading.set_xalign(0.0);
+    heading.set_wrap(true);
+    heading.add_css_class("file-conflicts-heading");
+    heading.set_accessible_role(gtk::AccessibleRole::Heading);
+    let hint = gtk::Label::new(Some(&gettext(
+        "If you select both versions, the copied file will have a number added to its name.",
+    )));
+    hint.set_xalign(0.0);
+    hint.set_wrap(true);
+    top.append(&heading);
+    top.append(&hint);
+    top
+}
+
+/// The check boxes "Files from <source>" and "Files already in
+/// <destination>", each folder a link that `panel` opens.
+fn side_headers(
+    panel: &TransferPanel,
+    source: &str,
+    destination: &str,
+) -> (gtk::Grid, gtk::CheckButton, gtk::CheckButton) {
+    let headers = gtk::Grid::new();
+    headers.set_column_homogeneous(true);
+    headers.add_css_class("file-conflicts-sides");
+    let header = |column: i32, template: String, uri: &str| {
+        let check = gtk::CheckButton::new();
+        let label = gtk::Label::new(None);
+        label.set_markup(&header_markup(&template, uri));
+        label.set_xalign(0.0);
+        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        label.connect_activate_link(glib::clone!(
+            #[weak]
+            panel,
+            #[upgrade_or]
+            glib::Propagation::Stop,
+            move |_, uri| {
+                panel.open_location(uri);
+                glib::Propagation::Stop
+            }
+        ));
+        let plain = template.replacen("{folder}", &location_name(uri), 1);
+        check.update_property(&[gtk::accessible::Property::Label(&plain)]);
+        label.set_mnemonic_widget(Some(&check));
+        let side = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        side.append(&check);
+        side.append(&label);
+        headers.attach(&side, column, 0, 1, 1);
+        check
+    };
+    let incoming = header(0, gettext("Files from {folder}"), source);
+    let existing = header(1, gettext("Files already in {folder}"), destination);
+    (headers, incoming, existing)
+}
+
+/// The scrolled list of the conflicts, one row each, from the folders
+/// called `source` and `destination`.
+fn conflict_list(
+    scan: &ConflictScan,
+    source: &str,
+    destination: &str,
+) -> (gtk::ScrolledWindow, Vec<RowChecks>) {
+    let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    list.set_accessible_role(gtk::AccessibleRole::List);
+    list.update_property(&[gtk::accessible::Property::Label(&gettext(
+        "Files with the same names",
+    ))]);
+    let mut rows = Vec::new();
+    for conflict in &scan.conflicts {
+        let (row, checks) = conflict_row(conflict, source, destination);
+        list.append(&row);
+        rows.push(checks);
+    }
+    let scroller = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .vexpand(true)
+        .child(&list)
+        .build();
+    scroller.add_css_class("file-conflicts-list");
+    (scroller, rows)
+}
+
+/// "Skip N files with the same date and size" when `same` is not 0, then
+/// Continue and Cancel.
+fn footer(same: usize) -> (gtk::Box, Option<gtk::CheckButton>, gtk::Button, gtk::Button) {
+    let footer = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    footer.add_css_class("file-conflicts-footer");
+    let skip_same = (same > 0).then(|| gtk::CheckButton::with_label(&skip_same_label(same)));
+    let start: gtk::Widget = match &skip_same {
+        Some(check) => check.clone().upcast(),
+        None => gtk::Box::new(gtk::Orientation::Horizontal, 0).upcast(),
+    };
+    start.set_hexpand(true);
+    footer.append(&start);
+    let continue_button = gtk::Button::with_label(&gettext("Continue"));
+    continue_button.add_css_class("suggested-action");
+    continue_button.set_sensitive(false);
+    let cancel_button = gtk::Button::with_label(&gettext("Cancel"));
+    footer.append(&continue_button);
+    footer.append(&cancel_button);
+    (footer, skip_same, continue_button, cancel_button)
 }
 
 /// The row of one conflict: the name, then each side's check box with its
