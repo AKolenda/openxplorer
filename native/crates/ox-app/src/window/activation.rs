@@ -194,6 +194,11 @@ impl BrowserWindow {
         activations.newest.retain(|tab, _| *tab == id);
     }
 
+    /// Whether a lookup started for tab `id` still speaks for it.
+    fn has_current_activation(&self, id: TabId) -> bool {
+        self.imp().activations.borrow().newest.contains_key(&id)
+    }
+
     /// Starts a lookup for tab `id`, superseding its earlier one.
     fn begin_activation(&self, id: TabId) -> PendingActivation {
         let mut activations = self.imp().activations.borrow_mut();
@@ -499,11 +504,17 @@ impl BrowserWindow {
         // VIEW-068: Enter on the address the tab is going to already does
         // not start it over. A typed lookup ends the edit once it answers;
         // nothing else would, so the address bar returns to its crumbs now.
+        // A typed lookup that lost its right to open a file, as the user
+        // looked at another tab meanwhile, is started over: this Enter
+        // asks for the file again (SAFE-013).
         if self.is_going_to(tab, &folder) {
             if !self.is_opening_typed(tab) {
                 self.accept_address(&typed, source);
+                return;
             }
-            return;
+            if self.has_current_activation(tab) {
+                return;
+            }
         }
         let pending = self.begin_activation(tab);
         let target = folder.clone();

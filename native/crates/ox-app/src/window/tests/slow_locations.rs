@@ -753,3 +753,37 @@ fn an_unmounted_address_answered_after_leaving_the_tab_opens_nothing() {
 
     assert_eq!(test.window.current_uri(), Some(fixture.uri()), "nothing opened");
 }
+
+/// Enter again on a typed file address whose lookup lost its right to
+/// open a file, as the user looked at another tab meanwhile, opens the
+/// file once it answers: the new Enter asks for it.
+///
+/// parity: SAFE-013, VIEW-068
+#[gtk::test]
+fn enter_again_after_leaving_the_tab_opens_the_typed_file() {
+    let fixture = Fixture::standard();
+    std::fs::write(fixture.path("agenda.txt"), "agenda").expect("a file");
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let slow_tab = test.active_tab().expect("a tab");
+    let agenda = fixture.uri_of("agenda.txt");
+    let path = fixture.path("agenda.txt").display().to_string();
+    let hold = held::hold(&held::lookup_key(&agenda));
+    enter_address(&test, &path);
+    wait_until("the lookup to wait", || {
+        held::waits(&held::lookup_key(&agenda)) == 1
+    });
+    test.window
+        .open_tab(&fixture.uri(), TabPlacement::Foreground)
+        .expect("another tab");
+    test.wait_for_listing("the other tab");
+    test.activate_tab(slow_tab);
+    settle();
+
+    enter_address(&test, &path);
+    drop(hold);
+
+    wait_until("the typed file to open", || {
+        test.context.recorded_launches().len() == 1
+    });
+}
