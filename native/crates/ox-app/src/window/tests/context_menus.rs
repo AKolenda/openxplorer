@@ -212,6 +212,7 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
 fn rename_items_in_the_classic_menu_opens_the_numbering_dialog_for_several_items() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win10);
     select_names(&test, &["Notes 2.txt"]);
     test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
     let menu = test.window.context_menu();

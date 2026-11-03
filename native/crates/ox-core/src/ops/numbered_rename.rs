@@ -57,7 +57,9 @@ impl NumberedRename {
     ///
     /// # Errors
     ///
-    /// An empty name, or one that is not valid (such as one with a slash).
+    /// An empty name, or one that is not valid (such as one with a slash),
+    /// also once an item's number and extension are added: a name too long
+    /// for one item is refused before any item is renamed.
     pub fn base_name(&self) -> Result<String, OpsError> {
         let typed = self.name.trim_end();
         let kept = if self.edited_is_dir {
@@ -65,9 +67,9 @@ impl NumberedRename {
         } else {
             extension(&self.edited_name)
         };
-        let base = match kept {
-            Some(kept) if typed.len() > kept.len() && ends_with_ignoring_case(typed, kept) => {
-                &typed[..typed.len() - kept.len()]
+        let base = match (kept, extension(typed)) {
+            (Some(kept), Some(ending)) if same_ignoring_case(kept, ending) => {
+                &typed[..typed.len() - ending.len()]
             }
             _ => typed,
         };
@@ -77,6 +79,11 @@ impl NumberedRename {
             )));
         }
         validate_name(base)?;
+        // The largest number the items take when none is skipped.
+        let last = u32::try_from(self.items.len()).unwrap_or(u32::MAX);
+        for item in &self.items {
+            validate_name(&numbered_name(base, last, item))?;
+        }
         Ok(base.to_owned())
     }
 }
@@ -99,10 +106,10 @@ fn extension(name: &str) -> Option<&str> {
     (dot > 0 && dot + 1 < name.len()).then(|| &name[dot..])
 }
 
-/// True when `text` ends with `suffix`, whatever their case.
-fn ends_with_ignoring_case(text: &str, suffix: &str) -> bool {
-    text.get(text.len() - suffix.len()..)
-        .is_some_and(|end| end.to_lowercase() == suffix.to_lowercase())
+/// True when `first` and `second` differ at most in case, by Unicode case
+/// folding (OPS-049): "ß" and "SS", the Kelvin sign and "k".
+fn same_ignoring_case(first: &str, second: &str) -> bool {
+    glib::casefold(first) == glib::casefold(second)
 }
 
 /// Renames every item of `batch` on a worker thread. The outcome lists
@@ -168,13 +175,20 @@ fn rename_numbered(
 ) -> Result<super::RenamedItem, OpsError> {
     let folder = GioNode::new(&item.uri).parent();
     let is_taken = |name: &str| {
-        // The item's own name is not taken: renaming to it changes nothing.
-        name != item.name
+        !is_own_name(name, item)
             && folder
                 .as_ref()
                 .is_some_and(|folder| folder.child(name.as_ref()).exists(Some(&context.cancel)))
     };
     rename_numbered_with(item, base, number, context, is_taken)
+}
+
+/// True when `name` is `item`'s own name, or differs from it only in case,
+/// which a share that ignores case reports as the item itself: it is not
+/// taken. A different item with that name, where case counts, is still
+/// found by the rename, which never overwrites.
+fn is_own_name(name: &str, item: &BatchItem) -> bool {
+    same_ignoring_case(name, &item.name)
 }
 
 /// [`rename_numbered`], asking `is_taken` about each numbered name first:
@@ -285,6 +299,49 @@ mod tests {
         assert!(base(".jpg", "IMG_2031.jpg").is_ok_and(|name| name == ".jpg"));
         assert!(base("   ", "IMG_2031.jpg").is_err());
         assert!(base("a/b", "IMG_2031.jpg").is_err());
+    }
+
+    /// The ending is compared with Unicode case folding, as the extension
+    /// question does (OPS-049), and cut where the typed name has it.
+    ///
+    /// parity: OPS-050
+    #[test]
+    fn a_typed_extension_differing_only_by_case_folding_is_not_numbered() {
+        let base = |typed: &str, edited: &str| batch(Vec::new(), typed, edited).base_name();
+
+        assert_eq!(base("Holiday.SS", "report.\u{df}").expect("valid"), "Holiday");
+        assert_eq!(
+            base("Holiday.\u{1e9e}", "report.\u{df}").expect("valid"),
+            "Holiday"
+        );
+        assert_eq!(base("Holiday.k", "photo.\u{212a}").expect("valid"), "Holiday");
+    }
+
+    /// A name that fits on its own but not with an item's number and
+    /// extension is refused before anything is renamed.
+    ///
+    /// parity: OPS-050
+    #[test]
+    fn a_name_too_long_for_one_item_is_refused_for_all() {
+        let long = "a".repeat(248);
+        let items = vec![item("Trip", true), item("notes.txt", false)];
+
+        assert!(batch(items, &long, "Trip").base_name().is_err());
+        assert!(batch(vec![item("Trip", true)], &long, "Trip").base_name().is_ok());
+    }
+
+    /// A numbered name that differs from the item's own only in case is
+    /// the item's own: a share that ignores case says it exists, but it is
+    /// not taken, so the item is not pushed to the next number.
+    ///
+    /// parity: OPS-050
+    #[test]
+    fn a_case_only_change_of_the_items_own_name_is_not_taken() {
+        let photo = item("Photo (1).JPG", false);
+
+        assert!(is_own_name("Photo (1).JPG", &photo));
+        assert!(is_own_name("photo (1).JPG", &photo));
+        assert!(!is_own_name("photo (2).JPG", &photo));
     }
 
     /// parity: OPS-050
