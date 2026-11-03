@@ -32,9 +32,9 @@ use super::breakpoints::WindowWidth;
 use super::menu_popover::{name_menu_button, MenuEntry, MenuPopover};
 use super::window_action::WindowAction;
 
-pub(super) use menus::NetworkMapping;
 use menus::{appearance_items, more_menu};
 pub(super) use menus::{group_by_menu, new_menu, sort_menu, view_menu};
+pub(super) use menus::{FolderPin, MoreMenuState, NetworkMapping};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -162,8 +162,9 @@ mod imp {
         /// The "…" menu, which offers Map network location only in This
         /// PC and Network.
         pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
-        /// Whether the "…" menu offers Map network location now.
-        pub(super) network_mapping: Cell<Option<super::NetworkMapping>>,
+        /// What the "…" menu shows now: Map network location or not, Pin
+        /// or Unpin.
+        pub(super) more_state: RefCell<super::MoreMenuState>,
     }
 
     #[glib::object_subclass]
@@ -257,19 +258,20 @@ impl CommandBar {
         let (more, menu) = more_button();
         group.append(&more);
         imp.more_menu.set(menu).expect("constructed runs once per object");
-        imp.network_mapping.set(Some(NetworkMapping::NotHere));
     }
 
-    /// Lists Map network location in "…" only in This PC and Network, as
-    /// Windows 11 File Explorer lists Map network drive.
-    pub(super) fn offer_network_mapping(&self, mapping: NetworkMapping) {
+    /// Shows `state` in "…": Map network location only in This PC and
+    /// Network, as Windows 11 File Explorer lists Map network drive, and
+    /// Pin to Quick access or Unpin from Quick access for the folder shown.
+    pub(super) fn show_more_menu(&self, state: MoreMenuState) {
         let imp = self.imp();
-        if imp.network_mapping.replace(Some(mapping)) == Some(mapping) {
+        if *imp.more_state.borrow() == state {
             return;
         }
         if let Some(menu) = imp.more_menu.get() {
-            menu.set_entries(more_menu(mapping));
+            menu.set_entries(more_menu(&state));
         }
+        imp.more_state.replace(state);
     }
 
     /// Gives the appearance toggle, Settings and the Details toggle, which
@@ -459,7 +461,7 @@ fn extract_all_button() -> gtk::Button {
 
 /// The "…" button and its menu.
 fn more_button() -> (gtk::MenuButton, MenuPopover) {
-    let menu = MenuPopover::new(more_menu(NetworkMapping::NotHere));
+    let menu = MenuPopover::new(more_menu(&MoreMenuState::default()));
     let button = gtk::MenuButton::builder()
         .child(&icons::image(Icon::MoreHorizontal, ICON_COMMAND_GLYPH))
         .tooltip_text(ox_core::i18n::gettext("More options"))

@@ -208,6 +208,7 @@ impl BrowserWindow {
         self.render_tabs();
         self.update_details_pane();
         self.update_index_candidates(&places.quick_access);
+        self.update_more_menu(&places.quick_access);
     }
 
     /// Redraws the landing page of each pane on screen that shows one.

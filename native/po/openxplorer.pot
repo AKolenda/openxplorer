@@ -4047,8 +4047,8 @@ msgstr ""
 msgid "Options"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Pin current folder"
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/entries.rs
+msgid "Pin to Quick access"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -4081,6 +4081,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs crates/ox-core/src/ops/templates.rs
 msgid "Text document"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/sidebar/menu.rs
+msgid "Unpin from Quick access"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
@@ -4207,10 +4211,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Pin this folder"
-msgstr ""
-
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/sidebar/entries.rs
-msgid "Pin to Quick access"
 msgstr ""
 
 #: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
@@ -5757,10 +5757,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs
 msgid "Show all entries"
-msgstr ""
-
-#: crates/ox-app/src/window/sidebar/menu.rs
-msgid "Unpin from Quick access"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

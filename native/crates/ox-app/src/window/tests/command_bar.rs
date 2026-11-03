@@ -192,7 +192,7 @@ const SORT_MENU: [&str; 11] = [
 /// This PC and Network; everything else it held has moved to Settings,
 /// Folder Options or View > Show (CMD-007).
 const MORE_MENU: [&str; 7] = [
-    "Pin current folder",
+    "Pin to Quick access",
     "-",
     "Select all",
     "Select none",
@@ -205,7 +205,7 @@ const MORE_MENU: [&str; 7] = [
 /// location as Windows' starts with Map network drive.
 const MORE_MENU_ON_A_NETWORK_PAGE: [&str; 8] = [
     "Map network location",
-    "Pin current folder",
+    "Pin to Quick access",
     "-",
     "Select all",
     "Select none",
@@ -271,6 +271,61 @@ fn the_more_menu_maps_network_locations_only_in_this_pc_and_network() {
             button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
         });
     assert!(sidebar_maps, "the sidebar keeps Map network location");
+}
+
+/// Whether `test`'s window has `uri` pinned to Quick access.
+fn is_pinned(test: &TestWindow, uri: &str) -> bool {
+    let pins = test.window.places().quick_access;
+    pins.iter()
+        .any(|place| ox_core::location::same_location(&place.uri, uri))
+}
+
+/// "…" pins the folder shown or unpins it, as Windows 11's toggles
+/// between "Pin to Quick access" and "Unpin from Quick access", and
+/// follows a pin added or removed elsewhere: from the folder's own
+/// item, a right-click menu or the sidebar's Unpin.
+///
+/// parity: CMD-007, SIDE-009
+#[gtk::test]
+fn the_more_menu_pins_or_unpins_the_folder_shown() {
+    const PIN: &str = "Pin to Quick access";
+    const UNPIN: &str = "Unpin from Quick access";
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let folder = fixture.uri();
+    let more = || menu_of(&test, "More options");
+    let offers = |label: &str| more().row_labels().iter().any(|row| row == label);
+    assert!(offers(PIN) && !offers(UNPIN), "{:?}", more().row_labels());
+
+    let button = menu_button(&test, "More options");
+    button.popup();
+    wait_until("the menu", || more().is_visible());
+    more().click_row(PIN);
+    wait_until("the folder to be pinned", || is_pinned(&test, &folder));
+    wait_until("… to offer Unpin", || offers(UNPIN) && !offers(PIN));
+
+    button.popup();
+    wait_until("the menu", || more().is_visible());
+    let unpin = more().row(UNPIN);
+    assert!(unpin.is_sensitive());
+    more().click_row(UNPIN);
+    wait_until("the folder to be unpinned", || !is_pinned(&test, &folder));
+    wait_until("… to offer Pin again", || offers(PIN) && !offers(UNPIN));
+
+    // Pinned from a right-click menu, then shown: "…" offers Unpin.
+    let documents = fixture.uri_of("Documents");
+    select_names(&test, &["Documents"]);
+    test.activate("pin-selected", None);
+    wait_until("Documents to be pinned", || is_pinned(&test, &documents));
+    test.window.navigate(&documents).expect("Documents");
+    wait_until("… to offer Unpin in Documents", || offers(UNPIN));
+
+    // Unpinned from the sidebar's menu, which runs win.unpin with the pin.
+    test.activate("unpin", Some(&documents));
+    wait_until("Documents to be unpinned", || !is_pinned(&test, &documents));
+    wait_until("… to offer Pin after the sidebar unpins", || {
+        offers(PIN) && !offers(UNPIN)
+    });
 }
 
 /// What left "…" keeps its keys: Ctrl+N opens a new window, Ctrl+, opens
@@ -427,7 +482,7 @@ fn the_view_menu_and_ctrl_shift_f4_open_the_terminal_here() {
     assert!(keys.iter().any(|key| key == "<Shift><Control>F4"), "{keys:?}");
 }
 
-/// More options: "Pin current folder" needs a folder, so pages disable
+/// More options: "Pin to Quick access" needs a folder, so pages disable
 /// it and say why (CMD-031).
 ///
 /// parity: CMD-007, CMD-031
@@ -438,14 +493,14 @@ fn more_options_needs_a_folder_for_pin() {
     let more = menu_of(&test, "More options");
     more.popup();
     wait_for_frames(&test.window, 2);
-    assert!(more.row("Pin current folder").is_sensitive());
+    assert!(more.row("Pin to Quick access").is_sensitive());
     more.popdown();
 
     for page in [Page::ThisPc, Page::Settings] {
         test.window.navigate(page.uri()).expect("a page");
         more.popup();
         wait_for_frames(&test.window, 2);
-        let pin = more.row("Pin current folder");
+        let pin = more.row("Pin to Quick access");
         assert!(!pin.is_sensitive(), "{page:?}");
         let tooltip = pin.tooltip_text().unwrap_or_default();
         assert_eq!(

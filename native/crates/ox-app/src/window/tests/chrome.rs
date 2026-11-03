@@ -194,7 +194,7 @@ fn the_more_menu_items_work_and_their_tooltips_are_their_labels() {
     let more_button = menu_button_with_class(&test, "more-command");
     let more = app_menu(&more_button);
     more_button.popup();
-    for label in ["Pin current folder", "Select all", "Options"] {
+    for label in ["Pin to Quick access", "Select all", "Options"] {
         let row = more.row(label);
         assert!(row.is_sensitive(), "{label}");
         assert_eq!(row.tooltip_text().unwrap_or_default().as_str(), label);

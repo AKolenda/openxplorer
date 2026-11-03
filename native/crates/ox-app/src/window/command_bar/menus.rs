@@ -273,9 +273,41 @@ pub(in crate::window) enum NetworkMapping {
     NotHere,
 }
 
+/// Whether the folder shown is pinned to Quick access, which decides
+/// whether "…" pins it or unpins it, as Windows 11 File Explorer's does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::window) enum FolderPin {
+    /// Not pinned, or a page that cannot be: "Pin to Quick access".
+    Unpinned,
+    /// Pinned as the Quick access pin at this location: "Unpin from
+    /// Quick access", which removes that pin as the sidebar's Unpin does.
+    Pinned(String),
+}
+
+/// What the "…" menu depends on: where the window is and whether the
+/// folder shown is pinned.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::window) struct MoreMenuState {
+    /// Whether Map network location is offered.
+    pub mapping: NetworkMapping,
+    /// Whether the folder shown is pinned.
+    pub pin: FolderPin,
+}
+
+impl Default for MoreMenuState {
+    /// A folder that is not pinned, away from This PC and Network.
+    fn default() -> Self {
+        Self {
+            mapping: NetworkMapping::NotHere,
+            pin: FolderPin::Unpinned,
+        }
+    }
+}
+
 /// The More options ("…") menu, laid out as Windows 11 File Explorer's:
-/// Map network location in This PC and Network, Pin current folder, the
-/// selection commands, then Options.
+/// Map network location in This PC and Network, Pin to Quick access or
+/// Unpin from Quick access for the folder shown, the selection commands,
+/// then Options.
 ///
 /// The rest of what it used to list moved where Windows has it (the
 /// user's request of 2026-11-03, CMD-007): New window to Ctrl+N and a
@@ -285,17 +317,31 @@ pub(in crate::window) enum NetworkMapping {
 /// appearances to Settings > Appearance; Show hidden files to View >
 /// Show > Hidden items; Keyboard shortcuts, Help, License & source and
 /// About this build to Settings > About, with F1 and Ctrl+? as before.
-pub(super) fn more_menu(mapping: NetworkMapping) -> Vec<MenuEntry> {
+pub(super) fn more_menu(state: &MoreMenuState) -> Vec<MenuEntry> {
     let mut entries = Vec::new();
-    if mapping == NetworkMapping::Offered {
+    if state.mapping == NetworkMapping::Offered {
         entries.push(item(
             &gettext("Map network location"),
             Icon::Organization,
             WindowAction::MapNetworkLocation,
         ));
     }
+    let pin = match &state.pin {
+        FolderPin::Unpinned => item(
+            &gettext("Pin to Quick access"),
+            Icon::Pin,
+            WindowAction::PinFolder,
+        ),
+        FolderPin::Pinned(uri) => MenuItem::with_text_target(
+            &gettext("Unpin from Quick access"),
+            Icon::Pin,
+            WindowAction::Unpin,
+            uri,
+        )
+        .into(),
+    };
     entries.extend([
-        item(&gettext("Pin current folder"), Icon::Pin, WindowAction::PinFolder),
+        pin,
         MenuEntry::Divider,
         MenuItem::new(&gettext("Select all"), Icon::SelectAllOn, WindowAction::SelectAll)
             .with_shortcut("Ctrl+A")
@@ -346,7 +392,7 @@ mod tests {
     #[test]
     fn options_in_the_more_menu_opens_folder_options() {
         assert_eq!(
-            labels_running(&more_menu(NetworkMapping::NotHere), WindowAction::FolderOptions),
+            labels_running(&more_menu(&MoreMenuState::default()), WindowAction::FolderOptions),
             ["Options"]
         );
         assert!(labels_running(&view_menu(), WindowAction::FolderOptions).is_empty());

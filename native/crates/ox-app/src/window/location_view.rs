@@ -19,7 +19,7 @@ use crate::icons::{Art, Icon};
 use crate::locations::Page;
 
 use super::address_bar::CrumbButton;
-use super::command_bar::NetworkMapping;
+use super::command_bar::{FolderPin, MoreMenuState, NetworkMapping};
 use super::session::{Session, Tab};
 use super::tab_strip::TabView;
 use super::window_action::WindowAction;
@@ -164,11 +164,7 @@ impl BrowserWindow {
         search.set_folder_title(&title);
         search.set_enabled(!on_page && !in_zip && !is_device_location(uri));
         self.show_extract_button();
-        let mapping = match Page::from_uri(uri) {
-            Some(Page::ThisPc | Page::Network) => NetworkMapping::Offered,
-            _ => NetworkMapping::NotHere,
-        };
-        self.command_bar().offer_network_mapping(mapping);
+        self.update_more_menu(&self.places().quick_access);
         self.update_cache_folder_action();
         self.render_tabs();
         self.show_pane_captions();
@@ -179,6 +175,26 @@ impl BrowserWindow {
         self.render_landing();
         self.show_surface_for(uri);
         self.picker_selection_changed();
+    }
+
+    /// Shows in "…" what the folder shown allows: Map network location in
+    /// This PC and Network, and Unpin from Quick access while `quick_access`
+    /// has the folder, else Pin to Quick access. It follows the location
+    /// and every change to Quick access, from any menu or window.
+    pub(super) fn update_more_menu(&self, quick_access: &[ox_core::places::Place]) {
+        let Some(uri) = self.current_uri() else {
+            return;
+        };
+        let page = Page::from_uri(&uri);
+        let mapping = match page {
+            Some(Page::ThisPc | Page::Network) => NetworkMapping::Offered,
+            _ => NetworkMapping::NotHere,
+        };
+        let pinned = quick_access
+            .iter()
+            .find(|place| page.is_none() && location::same_location(&place.uri, &uri));
+        let pin = pinned.map_or(FolderPin::Unpinned, |place| FolderPin::Pinned(place.uri.clone()));
+        self.command_bar().show_more_menu(MoreMenuState { mapping, pin });
     }
 
     /// Titles the window after the active tab's location: its name, or
