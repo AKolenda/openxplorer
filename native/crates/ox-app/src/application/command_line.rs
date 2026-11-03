@@ -14,6 +14,7 @@ use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::location::{normalise, LocationError};
+use ox_core::network::outside_location;
 
 /// A command-line option the application registers, as `CLI_OPTIONS`
 /// lists them.
@@ -174,6 +175,8 @@ impl CommandRequest {
         has_option: impl Fn(CommandOption) -> bool,
         locations: Vec<String>,
     ) -> Result<Self, CommandLineError> {
+        // A path inside the user's GVfs FUSE export opens at its share.
+        let locations: Vec<String> = locations.into_iter().map(outside_location).collect();
         let request = if has_option(CommandOption::Quit) {
             Self::Quit
         } else if has_option(CommandOption::FileManagerService) {
@@ -298,6 +301,25 @@ mod tests {
             let parsed = request(case.options, case.locations).expect("a valid command line");
             assert_eq!(parsed, case.request, "{:?}", case.options);
         }
+    }
+
+    /// `--select` and plain locations inside the current user's `GVfs`
+    /// FUSE export (in check.py's private runtime folder) open at the
+    /// share's own location.
+    ///
+    /// parity: INT-004, INT-007, NET-026
+    #[test]
+    fn locations_in_the_users_fuse_export_open_at_their_share() {
+        let root = gtk::glib::user_runtime_dir().join("gvfs");
+        std::fs::create_dir_all(&root).expect("the private runtime folder takes the FUSE root");
+        let saved = root.join("smb-share:server=fictional-nas,share=projects/Film/cut.mp4");
+        let saved = ox_core::location::file_uri(&saved);
+        let share = "smb://fictional-nas/projects/Film/cut.mp4".to_owned();
+
+        let select = request(&[CommandOption::Select], &[saved.as_str()]).expect("a file");
+        assert_eq!(select, CommandRequest::Select(vec![share.clone()]));
+        let open = request(&[], &[saved.as_str()]).expect("a location");
+        assert_eq!(open, CommandRequest::Open(vec![share]));
     }
 
     /// parity: INT-007

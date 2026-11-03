@@ -12,6 +12,7 @@
 use rusqlite::{Connection, ErrorCode, Transaction, TransactionBehavior};
 
 use super::root::{RootStatus, SearchEngine};
+use super::text::unix_now;
 
 /// The tables and indexes of the first release.
 const TABLES: &str = "
@@ -63,6 +64,42 @@ const CONTENT_REVISION: &str = "
           OR old.generation IS NOT new.generation OR old.include_hidden IS NOT new.include_hidden
           OR old.status IS NOT new.status OR old.updated IS NOT new.updated BEGIN
         UPDATE cache_revision SET revision=revision+1 WHERE singleton=1; END;
+";
+
+/// How many entries each root holds, kept exact by the triggers below.
+///
+/// Counting one root's entries reads its whole index range: a root with a
+/// million entries costs about a second of CPU per count, and the app reads
+/// the roots every five seconds and after every change while it shows a
+/// window. The triggers make that one row instead, and they also observe
+/// writers from older releases, which know nothing of this table. A row
+/// follows the entries, not the root: it goes with a root's last entry, so
+/// entries a writer leaves behind are still counted if the root comes back,
+/// and nothing of a removed root stays once its entries are gone.
+const ROOT_COUNTS: &str = "
+    CREATE TABLE IF NOT EXISTS root_counts(root TEXT PRIMARY KEY, entries INTEGER NOT NULL);
+    CREATE TRIGGER IF NOT EXISTS root_count_insert AFTER INSERT ON entries BEGIN
+        INSERT INTO root_counts(root, entries) VALUES(new.root, 1)
+        ON CONFLICT(root) DO UPDATE SET entries=entries+1; END;
+    CREATE TRIGGER IF NOT EXISTS root_count_delete AFTER DELETE ON entries BEGIN
+        UPDATE root_counts SET entries=entries-1 WHERE root=old.root;
+        DELETE FROM root_counts WHERE root=old.root AND entries<=0; END;
+    CREATE TRIGGER IF NOT EXISTS root_count_move AFTER UPDATE OF root ON entries
+        WHEN old.root IS NOT new.root BEGIN
+        UPDATE root_counts SET entries=entries-1 WHERE root=old.root;
+        DELETE FROM root_counts WHERE root=old.root AND entries<=0;
+        INSERT INTO root_counts(root, entries) VALUES(new.root, 1)
+        ON CONFLICT(root) DO UPDATE SET entries=entries+1; END;
+";
+
+/// The name [`ROOT_COUNTS`] is recorded under once every cached entry was
+/// counted into it.
+const ROOT_COUNTS_MIGRATION: &str = "root-counts";
+
+/// Counts the entries a database an older release wrote already holds.
+const COUNT_EXISTING_ENTRIES: &str = "
+    INSERT OR REPLACE INTO root_counts(root, entries)
+        SELECT root, count(*) FROM entries GROUP BY root;
 ";
 
 /// Columns added to `roots` after the first release, with their
@@ -118,6 +155,8 @@ pub(super) fn prepare(connection: &mut Connection) -> rusqlite::Result<SearchEng
     transaction.execute_batch(TABLES)?;
     add_missing_root_columns(&transaction)?;
     transaction.execute_batch(CONTENT_REVISION)?;
+    transaction.execute_batch(ROOT_COUNTS)?;
+    count_existing_entries(&transaction)?;
     let engine = create_full_text_index(&transaction)?;
     transaction.commit()?;
     Ok(engine)
@@ -142,6 +181,25 @@ pub(super) fn recover_interrupted(connection: &Connection) -> rusqlite::Result<(
             RootStatus::Indexing.as_str(),
             RootStatus::Queued.as_str(),
         ),
+    )?;
+    Ok(())
+}
+
+/// Counts the entries a database an older release wrote already holds, once
+/// per database: the triggers count what is written after they exist.
+fn count_existing_entries(transaction: &Transaction<'_>) -> rusqlite::Result<()> {
+    let is_counted: bool = transaction.query_row(
+        "SELECT count(*) > 0 FROM index_migrations WHERE name=?1",
+        [ROOT_COUNTS_MIGRATION],
+        |row| row.get(0),
+    )?;
+    if is_counted {
+        return Ok(());
+    }
+    transaction.execute_batch(COUNT_EXISTING_ENTRIES)?;
+    transaction.execute(
+        "INSERT OR IGNORE INTO index_migrations(name, applied) VALUES(?1, ?2)",
+        (ROOT_COUNTS_MIGRATION, unix_now()),
     )?;
     Ok(())
 }

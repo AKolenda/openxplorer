@@ -40,7 +40,7 @@
 //! | `error` | [`OpsError`] and the bridge's error codes |
 //! | `create` | New folder and New file, and New folder under the next free name |
 //! | `templates` | The built-in and user templates New offers |
-//! | `new_from_template` | New from template, staged privately and published without overwriting |
+//! | `new_from_template` | New from template, staged privately and published without overwriting, and New ▸ Text document under the next free name |
 //! | `rename` | Rename, and renaming back for Undo |
 //! | `batch_rename` | The "Rename items" dialog's `#` template for several items |
 //! | `numbered_rename` | F2 on several items: one name with (1), (2) as in Windows Explorer |
@@ -111,7 +111,7 @@ pub use duplicate::duplicate_items;
 pub use error::OpsError;
 pub use journal::{JournalDirection, JournalEntry, UndoJournal, UNDO_LIMIT};
 pub use links::{create_link, create_links, CreatedLink, LinkRequest, NewLink};
-pub use new_from_template::{create_from_template, NewFromTemplate};
+pub use new_from_template::{create_from_template, create_numbered_starter, NewFromTemplate};
 pub use numbered_rename::{rename_numbered_items, NumberedRename};
 pub use progress::{starting_label, PROGRESS_INTERVAL};
 pub use recycle_bin::{

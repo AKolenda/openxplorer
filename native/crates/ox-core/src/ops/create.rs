@@ -128,8 +128,9 @@ fn existing_folder(parent_uri: &str, name: &str) -> Option<String> {
     (file_type == gio::FileType::Directory).then(|| item.uri().to_string())
 }
 
-/// The most numbered names New folder tries before it gives up.
-const MAX_NUMBERED_NAMES: u32 = 10_000;
+/// The most numbered names New folder, and New ▸ Text document, try
+/// before they give up.
+pub(super) const MAX_NUMBERED_NAMES: u32 = 10_000;
 
 /// Creates an empty folder in the folder at `folder_uri` under the first
 /// free name of `base_name`, `base_name (2)`, `base_name (3)`, ..., as

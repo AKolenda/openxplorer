@@ -2849,7 +2849,7 @@ msgid "Off: Tab moves keyboard focus through the window as usual."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "Off: a folder opened from another app or the command line opens in a new tab, and the tab you are using stays where it is."
+msgid "Off: a folder opened from another app, Show in folder or the command line opens in a new tab, and the tab you are using stays where it is."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -4681,6 +4681,14 @@ msgstr ""
 msgid "Use a name without slashes or control characters."
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a text document…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New Text Document"
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/new_items.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "New folder"
 msgstr ""
@@ -5131,12 +5139,31 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
+msgid "There is not enough space in “{folder}” to save the file."
+msgstr ""
+
+#: crates/ox-app/src/window/picker.rs
+msgid "You don't have permission to save in this location. Contact the administrator to obtain permission."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{folder}” is not available. If it is on a network, make sure the share is still connected."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
 msgid "“{name}” is a folder, not a file."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
 msgid "“{name}” is not a valid file name."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{name}” is set to read-only. Try again with a different file name."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7150,6 +7177,11 @@ msgstr ""
 
 #: crates/ox-core/src/ops/new_from_template.rs
 msgid "This template is unavailable, too large, or not a regular template file."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/new_from_template.rs
+msgid "Too many files are called “{base_name}”. Rename some of them, then try again."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
