@@ -90,8 +90,9 @@ fn update_folders(shared: &Shared, job: &UpdateJob, storage: RootStorage) -> Res
         }
         if !scope.admits(&folder) {
             // A folder that became build output since it was read, such as
-            // a `venv` that just got its `pyvenv.cfg`, leaves the cache when
-            // its parent is read again.
+            // a `venv` that just got its `pyvenv.cfg`, is no longer watched,
+            // and leaves the cache when its parent is read again.
+            shared.forget_watches_below(root, &folder);
             let parent = parent_uri(&folder);
             if scope.admits(&parent) {
                 pending.push(parent);

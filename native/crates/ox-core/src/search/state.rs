@@ -287,6 +287,14 @@ impl Shared {
         }
     }
 
+    /// Stops the watches of `root` at or below `folder`, which the index no
+    /// longer reads.
+    pub(super) fn forget_watches_below(&self, root: &str, folder: &str) {
+        if let Some(watch) = &self.state().watch {
+            watch.remove_subtree(root, folder);
+        }
+    }
+
     /// Records how changes below `root` reach the cache
     /// (`update_monitoring` in Python).
     pub(super) fn report_monitoring(&self, root: &str, storage: RootStorage) {
