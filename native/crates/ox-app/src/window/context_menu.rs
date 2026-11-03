@@ -40,6 +40,7 @@ use entries::{
     zip_background_menu, zip_item_menu, BackgroundSubmenus, Comparison, ContextMenu, ItemFacts, ItemLocation,
     ItemShape,
 };
+pub(super) use entries::{SendToDrive, SendToTargets};
 
 /// How far into a row, and from the view's corner without one, a menu
 /// opened from the keyboard points.
@@ -267,6 +268,7 @@ impl BrowserWindow {
             caching,
             delete_label: self.delete_label(),
             disk_tool: disk_tool_of(entry),
+            send_to: self.send_to_targets(),
         }
     }
 

@@ -46,6 +46,9 @@ impl BrowserWindow {
             WindowAction::OpenWith | WindowAction::OpenInTerminal | WindowAction::OpenInEditor => {
                 Some(ox_core::i18n::gettext_static("Select one item at a time."))
             }
+            WindowAction::Share => Some(ox_core::i18n::gettext_static(
+                "Only files can be attached to an email.",
+            )),
             WindowAction::OpenFileLocation => Some(ox_core::i18n::gettext_static(
                 "Only a search result has a file location to open.",
             )),

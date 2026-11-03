@@ -46,6 +46,7 @@ it.
 | `actions/ox-arrow-swap-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_swap_20_regular.svg` | e7e6de1e4d107a047e20cb8952d048643cb954ea7fe4e55d556ea894387eafd2 |
 | `actions/ox-arrow-undo-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_undo_20_regular.svg` | 6ddfab37900746fb49d4acae7296e154274fd12f4faad3bf41fdeab66ae0bb39 |
 | `actions/ox-arrow-up-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_up_20_regular.svg` | 895cf1471c758a2e3ed183ac90f3f58566ae6c792228b742c2303eac34cfdf6e |
+| `actions/ox-bluetooth-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/bluetooth_20_regular.svg` | 8aca45dde436287bce2568ab6ecc281250606502a33565872e7098af3efef2d7 |
 | `actions/ox-braces-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/braces_20_regular.svg` | 831e9dbe8a711887b0212ccaedca58056f72121d16a8c0fc2b7061dac770d29b |
 | `actions/ox-checkmark-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/checkmark_20_regular.svg` | 9ad90a13e5d3dd6309544d09a14817b7e609015db6e6c60ecd44ef120d2b3470 |
 | `actions/ox-chevron-down-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_down_16_regular.svg` | 33efa668d236d70a945c00cbbd3fda019994794a5b5a2e17f5e66aac19abd199 |
@@ -69,6 +70,7 @@ it.
 | `actions/ox-grid-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/grid_20_regular.svg` | e39560fcf33db8035a28269765f079779c6938dbc8a51bc80f00a7293878c825 |
 | `actions/ox-history-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/history_20_regular.svg` | 44499869f85aa37f46046e9652d5912a3f9a1ce2c4b835dd3c556d23cb664ef7 |
 | `actions/ox-link-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/link_20_regular.svg` | 0d7ca18928ccb48ddc7dc5eb69102c49e1a83cc4aa8d7a455bf600ecdc3b5b69 |
+| `actions/ox-mail-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/mail_20_regular.svg` | 8aa051904377b23103019322703930ef1919d6e12f0ef59d1c0a8123b1a0bc0f |
 | `actions/ox-markdown-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/markdown_20_regular.svg` | d403eefaecab68909090c42910f354cfeb7a63d9085437d8cbf9f7b333e149fe |
 | `actions/ox-maximize-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/maximize_20_regular.svg` | 7f3aec5319b7e66c5f088f26bb8b0c1135496757f999aa421b1860414ce0e84f |
 | `actions/ox-more-horizontal-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/more_horizontal_20_regular.svg` | d700fdb05f2b48ed931352413ce2fd110fbbaa77f661858568312d31aadd2cdf |

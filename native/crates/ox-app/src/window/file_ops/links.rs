@@ -12,7 +12,9 @@
 use glib::clone;
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::ops::{create_link, create_links, starting_label, summarize_links, LinkRequest, NewLink};
+use ox_core::ops::{
+    create_link, create_links, create_shortcuts, starting_label, summarize_links, LinkRequest, NewLink,
+};
 use ox_core::transfer::TransferMode;
 
 use super::running::FinishedOperation;
@@ -54,6 +56,25 @@ impl BrowserWindow {
             summary: summarize_links(&outcome.result),
             undo: outcome.undo,
             select_after: outcome.created,
+        });
+        self.conclude_operation(finished).await;
+    }
+
+    /// Makes the shortcuts `request` asks for, named as Windows names them
+    /// (Send to ▸ Desktop (create shortcut), CMD-038), as the window's one
+    /// operation and reports them; Undo moves them to the Trash. Does
+    /// nothing while another operation runs. The shortcuts are elsewhere,
+    /// so nothing is selected afterwards.
+    pub(in crate::window) async fn run_shortcuts(&self, request: &LinkRequest) {
+        let Some(context) = self.begin_operation(starting_label(TransferMode::Copy)) else {
+            return;
+        };
+        let outcome = create_shortcuts(request, &context).await;
+        self.end_operation();
+        let finished = outcome.map(|outcome| FinishedOperation {
+            summary: summarize_links(&outcome.result),
+            undo: outcome.undo,
+            select_after: Vec::new(),
         });
         self.conclude_operation(finished).await;
     }

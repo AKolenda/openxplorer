@@ -60,6 +60,8 @@ pub(crate) enum Icon {
     ArrowUndo,
     /// `arrow_up_20_regular`: Up and the Ascending sort.
     ArrowUp,
+    /// `bluetooth_20_regular`: Send to ▸ Bluetooth device.
+    Bluetooth,
     /// `braces_20_regular`: New JSON file.
     Braces,
     /// `checkmark_20_regular`: a checked menu item and the chosen option of
@@ -175,6 +177,8 @@ pub(crate) enum Icon {
     Laptop,
     /// `link_20_regular`: Copy as path in the context menus.
     Link,
+    /// `mail_20_regular`: Send to ▸ Mail recipient.
+    Mail,
     /// `markdown_20_regular`: New Markdown document.
     Markdown,
     /// `maximize_20_regular`: the window's maximise button.
@@ -275,6 +279,7 @@ impl Icon {
             Icon::ArrowSwap => "ox-arrow-swap-20-symbolic",
             Icon::ArrowUndo => "ox-arrow-undo-20-symbolic",
             Icon::ArrowUp => "ox-arrow-up-20-symbolic",
+            Icon::Bluetooth => "ox-bluetooth-20-symbolic",
             Icon::Braces => "ox-braces-20-symbolic",
             Icon::Checkmark => "ox-checkmark-20-symbolic",
             Icon::ChevronDown => "ox-chevron-down-20-symbolic",
@@ -324,6 +329,7 @@ impl Icon {
             Icon::Info => "ox-info-20-symbolic",
             Icon::Laptop => "ox-laptop-20-symbolic",
             Icon::Link => "ox-link-20-symbolic",
+            Icon::Mail => "ox-mail-20-symbolic",
             Icon::Markdown => "ox-markdown-20-symbolic",
             Icon::Maximize => "ox-maximize-20-symbolic",
             Icon::MoreHorizontal => "ox-more-horizontal-20-symbolic",
@@ -382,7 +388,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 100] = [
+pub(crate) const ALL_ICONS: [Icon; 102] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowClockwise,
@@ -398,6 +404,7 @@ pub(crate) const ALL_ICONS: [Icon; 100] = [
     Icon::ArrowSwap,
     Icon::ArrowUndo,
     Icon::ArrowUp,
+    Icon::Bluetooth,
     Icon::Braces,
     Icon::Checkmark,
     Icon::ChevronDown,
@@ -447,6 +454,7 @@ pub(crate) const ALL_ICONS: [Icon; 100] = [
     Icon::Info,
     Icon::Laptop,
     Icon::Link,
+    Icon::Mail,
     Icon::Markdown,
     Icon::Maximize,
     Icon::MoreHorizontal,
