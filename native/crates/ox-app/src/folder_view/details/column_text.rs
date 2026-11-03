@@ -72,6 +72,28 @@ pub(crate) fn cell_text(column: SortColumn, item: &FileItem, dates: DateStyle) -
     }
 }
 
+/// What `column` shows for `item` in a view whose folders say how many
+/// items they hold while `counts_items`: [`cell_text`], but a count kept
+/// from before shows only while they do. Turning item counts off empties
+/// a counted folder's Size at once, and turning them back on shows the
+/// count again without counting twice (VIEW-037).
+pub(crate) fn shown_cell_text(
+    column: SortColumn,
+    item: &FileItem,
+    dates: DateStyle,
+    counts_items: bool,
+) -> String {
+    let hides_count = column == SortColumn::Size
+        && !counts_items
+        && item.folder_size().is_none()
+        && item.item_count().is_some();
+    if hides_count {
+        String::new()
+    } else {
+        cell_text(column, item, dates)
+    }
+}
+
 /// The tooltip of `column`'s cell for `item` in place of the row's
 /// (`renderRows` in app.js): a search result's full path in Folder path,
 /// how a measured folder size was counted in Size, else none.
@@ -155,16 +177,30 @@ pub(super) fn request_item_count(label: &gtk::Label, item: &FileItem, owners: &R
             (owners.item_of(&label).as_ref() == Some(&item)).then_some(label)
         };
         let _slot = COUNTING.with(Rc::clone).take().await;
-        if shows_item().is_none() || item.item_count().is_some() {
+        if shows_item().is_none() {
             return;
         }
-        let uri = item.entry().uri.clone();
-        let Ok(Some(count)) = gio::spawn_blocking(move || count_items(&uri)).await else {
+        // A cell this one replaced may have counted the folder meanwhile;
+        // the count still shows here.
+        if item.item_count().is_none() {
+            let uri = item.entry().uri.clone();
+            let Ok(Some(count)) = gio::spawn_blocking(move || count_items(&uri)).await else {
+                return;
+            };
+            item.set_item_count(count);
+        }
+        let Some(owners) = owners.upgrade() else {
             return;
         };
-        item.set_item_count(count);
+        owners.item_counted(&item);
         if let Some(label) = shows_item() {
-            label.set_text(&cell_text(SortColumn::Size, &item, DateStyle::Absolute));
+            let counts_items = owners.counts_items();
+            label.set_text(&shown_cell_text(
+                SortColumn::Size,
+                &item,
+                DateStyle::Absolute,
+                counts_items,
+            ));
         }
     });
 }
@@ -204,6 +240,15 @@ mod tests {
         item.set_item_count(count_items(&uri).expect("a local folder"));
 
         assert_eq!(cell_text(SortColumn::Size, &item, DateStyle::Absolute), "2 items");
+        assert_eq!(
+            shown_cell_text(SortColumn::Size, &item, DateStyle::Absolute, false),
+            "",
+            "a count shows only while folders count their items"
+        );
+        assert_eq!(
+            shown_cell_text(SortColumn::Size, &item, DateStyle::Absolute, true),
+            "2 items"
+        );
         assert_eq!(permissions_text(0o040_755), "drwxr-xr-x");
     }
 }
