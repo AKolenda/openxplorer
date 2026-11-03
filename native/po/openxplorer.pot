@@ -8628,6 +8628,10 @@ msgid "Preview build of OpenXplorer 2.0.2 under its own application ID."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Running copies, moves and deletes show in a Windows-style progress window, and Properties is redone as Windows 11's Properties windows. Several selected items can be renamed at once, a new text document is created at once and renamed in place, tabs drag as in Chrome, and the menus and defaults match Windows 11 Explorer. A slow location shows at once that it is opening, search is faster and more reliable, and Copy as path quotes each path. Deleting a folder permanently under Open as administrator is refused when other accounts can change it, and a share another app asks OpenXplorer to show is connected to only when you choose Try again."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "SMB"
 msgstr ""
 
