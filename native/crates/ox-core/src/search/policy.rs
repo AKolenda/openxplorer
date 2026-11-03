@@ -187,13 +187,21 @@ impl IndexScope {
     /// alone, so one root reached the entry limit before it finished
     /// scanning.
     pub(crate) fn admits(&self, uri: &str) -> bool {
+        self.admits_kind(uri, true)
+    }
+
+    /// [`IndexScope::admits`] for an item known to be a file or a folder:
+    /// its own name is only compared for a folder, so a plain file called
+    /// `target` or `vendor` is still indexed, while the folders above it
+    /// are compared for both.
+    fn admits_kind(&self, uri: &str, is_dir: bool) -> bool {
         if !is_at_or_below(uri, &self.root) {
             return false;
         }
         if self.excluded.iter().any(|excluded| is_at_or_below(uri, excluded)) {
             return false;
         }
-        !self.is_in_named_folder(uri)
+        !self.is_in_named_folder(uri, is_dir)
     }
 
     /// The items of `batch` that may be indexed, with canonical URIs.
@@ -213,7 +221,7 @@ impl IndexScope {
                 continue;
             }
             item.uri = normalise(&item.uri)?;
-            if self.admits(&item.uri) {
+            if self.admits_kind(&item.uri, item.is_dir) {
                 admitted.push(item);
             }
         }
@@ -226,14 +234,26 @@ impl IndexScope {
     /// Only the folders below the root are compared, so a root named
     /// `node_modules` is still admitted: whoever indexes that folder asked
     /// for it. Names are compared as whole path components, so a folder
-    /// called `my-target-notes` or `node_modules-old` is still indexed.
-    fn is_in_named_folder(&self, uri: &str) -> bool {
+    /// called `my-target-notes` or `node_modules-old` is still indexed, and
+    /// a file never counts as the folder that holds it.
+    fn is_in_named_folder(&self, uri: &str, is_dir: bool) -> bool {
         let root_path = decoded_path(&self.root);
         let path = decoded_path(uri);
         let relative = path
             .get(root_path.trim_end_matches('/').len()..)
             .unwrap_or_default();
-        relative.split('/').any(is_excluded_folder)
+        let components: Vec<&str> = relative
+            .split('/')
+            .filter(|component| !component.is_empty())
+            .collect();
+        let compared = if is_dir {
+            components.len()
+        } else {
+            components.len().saturating_sub(1)
+        };
+        components[..compared]
+            .iter()
+            .any(|component| is_excluded_folder(component))
     }
 }
 
@@ -333,6 +353,22 @@ mod tests {
         // `build` and `dist` are too common to be excluded.
         assert!(project.admits("file:///home/test/project/build/output.o"));
         assert!(project.admits("file:///home/test/project/dist/app.js"));
+    }
+
+    /// A file is never taken for the folder that holds it: only a folder
+    /// named `target` or `vendor` is build output or installed dependencies,
+    /// so a file with that name is still indexed.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn a_file_named_like_a_dependency_folder_is_admitted() {
+        let project = scope("file:///home/test/project", &[]);
+
+        assert!(project.admits_kind("file:///home/test/project/target", false));
+        assert!(project.admits_kind("file:///home/test/project/vendor", false));
+        assert!(!project.admits_kind("file:///home/test/project/target", true));
+        // The folders above the file are compared for a file too.
+        assert!(!project.admits_kind("file:///home/test/project/target/debug/notes.txt", false));
     }
 
     /// Safety rule "the user's choice wins": a root named like a dependency
