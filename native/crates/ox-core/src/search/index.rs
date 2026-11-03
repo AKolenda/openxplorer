@@ -395,11 +395,14 @@ impl Drop for PooledConnection {
     }
 }
 
-/// Roots and their counts through the caller's connection or snapshot.
+/// Roots and their counts through the caller's connection or snapshot. The
+/// counts come from `root_counts`, which the triggers keep exact, so this
+/// reads one row per root instead of every entry of every root.
 fn read_roots(connection: &Connection) -> rusqlite::Result<Vec<IndexRoot>> {
     let mut statement = connection.prepare(
-        "SELECT r.*, (SELECT count(*) FROM entries e WHERE e.root=r.uri) AS entry_count
-         FROM roots r ORDER BY r.label COLLATE NOCASE",
+        "SELECT r.*, COALESCE(c.entries, 0) AS entry_count
+         FROM roots r LEFT JOIN root_counts c ON c.root=r.uri
+         ORDER BY r.label COLLATE NOCASE",
     )?;
     let roots = statement.query_map((), IndexRoot::from_row)?;
     roots.collect()
@@ -560,6 +563,67 @@ mod tests {
 
         assert!(found_names(&share.index, "bank").is_empty());
         assert!(share.index.roots().unwrap().is_empty());
+    }
+
+    /// The count a root reports is the row the triggers keep, so it follows
+    /// what a scan stores and what a clear deletes without counting the
+    /// entries of the root again.
+    ///
+    /// parity: SRCH-022
+    #[test]
+    fn a_roots_entry_count_follows_its_entries() {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "a.pdf"), listed_file(SHARE, "b.pdf")]);
+        assert_eq!(root_state(&share.index, SHARE).entry_count, 2);
+
+        share.index.clear(SHARE).unwrap();
+
+        assert_eq!(root_state(&share.index, SHARE).entry_count, 0);
+    }
+
+    /// A root deleted before its entries, as the pinned and frequent roots
+    /// are, or by a writer that leaves its entries behind, keeps counting
+    /// them if it comes back.
+    ///
+    /// parity: SRCH-022
+    #[test]
+    fn a_root_added_again_counts_the_entries_left_behind() {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "a.pdf"), listed_file(SHARE, "b.pdf")]);
+        let connection = share.index.connect().unwrap();
+        connection
+            .execute("DELETE FROM roots WHERE uri=?1", [SHARE])
+            .unwrap();
+
+        share
+            .index
+            .configure(SHARE, Caching::Enabled, "share", HiddenItems::Skip)
+            .unwrap();
+
+        assert_eq!(root_state(&share.index, SHARE).entry_count, 2);
+    }
+
+    /// A root deleted before its entries, as unpinning and turning frequent
+    /// folders off do, keeps no count of them once they are gone.
+    ///
+    /// parity: SRCH-022
+    #[test]
+    fn a_removed_roots_count_goes_with_its_last_entry() {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "a.pdf"), listed_file(SHARE, "b.pdf")]);
+        let connection = share.index.connect().unwrap();
+
+        connection
+            .execute("DELETE FROM roots WHERE uri=?1", [SHARE])
+            .unwrap();
+        connection
+            .execute("DELETE FROM entries WHERE root=?1", [SHARE])
+            .unwrap();
+
+        let rows: i64 = connection
+            .query_row("SELECT count(*) FROM root_counts", (), |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 0);
     }
 
     /// The cache keeps a connection open, so SQLite does not delete the
