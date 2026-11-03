@@ -365,7 +365,9 @@ fn a_click_just_outside_the_box_still_hits_it() {
 
     // What follows the box starts the row's usual gap after what it draws:
     // the reach takes no room.
-    let next = check.next_sibling().expect("the box comes first");
+    let next = std::iter::successors(check.next_sibling(), gtk::Widget::next_sibling)
+        .find(gtk::Widget::is_visible)
+        .expect("the box comes first");
     let next_left = next.compute_bounds(&cell).expect("laid out").x();
     #[expect(clippy::cast_precision_loss, reason = "a small spacing")]
     let gap = cell.spacing() as f32;
