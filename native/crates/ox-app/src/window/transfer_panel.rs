@@ -333,6 +333,11 @@ impl TransferPanel {
         if let Some(items) = progress.items {
             imp.items.set(Some(items));
             self.count_items(items.total);
+            // Without a byte total, as for a same-drive move, the items
+            // done move the action.
+            if !imp.by_bytes.get() && items.total > 0 {
+                self.advance(progress_share(items.done, items.total));
+            }
         }
         // A file's own fraction moves nothing: a full file is never shown
         // as the action finishing (OPS-020).
@@ -762,6 +767,24 @@ mod tests {
         assert_eq!(panel.percent_text(), "50% complete");
         panel.show_progress(&batch("3 item(s) completed", 1.0));
         assert_eq!(panel.percent_text(), "100% complete");
+        panel.finish();
+    }
+
+    /// An action without a byte total, such as a same-drive move, moves
+    /// on with its items rather than staying at 0 % until it ends.
+    ///
+    /// parity: OPS-021
+    #[gtk::test]
+    fn an_action_without_a_byte_total_moves_on_with_its_items() {
+        let panel: TransferPanel = glib::Object::new();
+        panel.start(TransferKind::Files, "Moving items…", Cancellation::new());
+
+        panel.show_progress(&Progress {
+            items: Some(ItemCount { done: 3, total: 10 }),
+            ..batch("Move: 3.txt (4/10)", 0.0)
+        });
+
+        assert_eq!(panel.percent_text(), "30% complete");
         panel.finish();
     }
 

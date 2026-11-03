@@ -17,7 +17,10 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use ox_core::ops::{find_conflicts, run_transfer, OperationContext, OpsError, TransferRequest, UndoRecord};
+use ox_core::ops::{
+    find_conflicts, run_chosen_transfer, run_transfer, ChosenTransfer, ItemChoice, OperationContext,
+    OpsError, TransferRequest, UndoRecord,
+};
 use ox_core::transfer::{
     Cancellation, ConflictPolicy, ItemCount, Progress, ProgressScope, TransferMode, MAX_ITEMS,
 };
@@ -324,6 +327,89 @@ fn a_deletion_counts_the_selected_items() {
             ItemCount { done: 2, total: 2 },
         ]
     );
+}
+
+/// A paste whose conflicts were answered runs one group per answer, and
+/// the action reads complete only when its last group is: an earlier
+/// group's end is its share of the paste, not the whole.
+///
+/// parity: OPS-021, OPS-028
+#[test]
+fn a_paste_run_in_groups_is_complete_only_after_its_last_group() {
+    let folders = Folders::new();
+    for name in ["new.txt", "taken.txt"] {
+        fs::write(folders.source().join(name), name).unwrap();
+    }
+    fs::write(folders.destination().join("taken.txt"), "old").unwrap();
+    let reports: Arc<Mutex<Vec<Progress>>> = Arc::default();
+    let sink = Arc::clone(&reports);
+    let choice = |name: &str, policy| ItemChoice {
+        uri: file_uri(&folders.source().join(name)),
+        policy,
+        rename_to: None,
+    };
+    let paste = ChosenTransfer {
+        mode: TransferMode::Copy,
+        destination_folder: file_uri(&folders.destination()),
+        items: vec![
+            choice("new.txt", ConflictPolicy::Skip),
+            choice("taken.txt", ConflictPolicy::Replace),
+        ],
+    };
+
+    block_on(run_chosen_transfer(
+        &paste,
+        &OperationContext::default(),
+        move |progress| sink.lock().unwrap().push(progress),
+    ))
+    .unwrap();
+
+    let fractions: Vec<f64> = reports
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|report| report.scope == ProgressScope::Batch)
+        .map(|report| report.fraction)
+        .collect();
+    let (last, earlier) = fractions.split_last().expect("batch reports");
+    assert!((last - 1.0).abs() < f64::EPSILON, "{fractions:?}");
+    assert!(earlier.iter().all(|fraction| *fraction < 1.0), "{fractions:?}");
+    assert!(
+        fractions.windows(2).all(|pair| pair[0] <= pair[1]),
+        "{fractions:?}"
+    );
+}
+
+/// A paste whose conflicts were all answered alike runs as one group,
+/// whose item counts are the whole paste's, for "Items remaining".
+///
+/// parity: OPS-021, OPS-028
+#[test]
+fn a_paste_run_as_one_group_counts_its_items() {
+    let folders = Folders::new();
+    fs::write(folders.source().join("taken.txt"), "new").unwrap();
+    fs::write(folders.destination().join("taken.txt"), "old").unwrap();
+    let reports: Arc<Mutex<Vec<Progress>>> = Arc::default();
+    let sink = Arc::clone(&reports);
+    let paste = ChosenTransfer {
+        mode: TransferMode::Copy,
+        destination_folder: file_uri(&folders.destination()),
+        items: vec![ItemChoice {
+            uri: file_uri(&folders.source().join("taken.txt")),
+            policy: ConflictPolicy::Replace,
+            rename_to: None,
+        }],
+    };
+
+    block_on(run_chosen_transfer(
+        &paste,
+        &OperationContext::default(),
+        move |progress| sink.lock().unwrap().push(progress),
+    ))
+    .unwrap();
+
+    let last = reports.lock().unwrap().last().and_then(|report| report.items);
+    assert_eq!(last, Some(ItemCount { done: 1, total: 1 }));
 }
 
 /// Each item's batch report reaches the panel, even right after the
