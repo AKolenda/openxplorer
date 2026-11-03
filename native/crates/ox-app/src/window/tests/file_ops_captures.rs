@@ -17,7 +17,7 @@ use ox_core::transfer::{Progress, ProgressScope};
 use super::file_ops_support::{is_enabled, open_dialog, select_names, wait_for_no_dialog};
 use crate::dialog::Dialog;
 use crate::test_support::harness::{
-    capture, capture_popover, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+    capture, capture_popover, descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 
 /// The theme keys, as `win.theme` takes them.
@@ -67,10 +67,40 @@ fn the_delete_and_conflict_dialogs_are_captured_light_and_dark() {
         wait_for_no_dialog(&test);
         wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
         test.activate("paste", None);
-        let conflict = open_dialog(&test);
-        capture_dialog(&test, &conflict, &format!("native-dialog-conflict-{theme}.png"));
-        conflict.press("Cancel");
-        wait_for_no_dialog(&test);
+        wait_until("the Replace or Skip Files question", || {
+            test.context.progress_window().is_some_and(|window| {
+                window.is_visible()
+                    && window
+                        .actions()
+                        .iter()
+                        .any(crate::window::transfer_panel::TransferPanel::is_asking)
+            })
+        });
+        let progress = test.context.progress_window().expect("it asks");
+        crate::test_support::harness::capture_dialog(
+            &progress,
+            &format!("native-dialog-conflict-{theme}.png"),
+        );
+        let decide = descendants::<gtk::Button>(&progress)
+            .into_iter()
+            .find(|button| {
+                descendants::<gtk::Label>(button)
+                    .iter()
+                    .any(|label| label.text() == "Let me decide for each file")
+            })
+            .expect("the row");
+        decide.emit_clicked();
+        wait_until("the File Conflict window", || {
+            progress.conflict_window().is_some()
+        });
+        let conflicts = progress.conflict_window().expect("it shows");
+        conflicts.row_checks(0).0.set_active(true);
+        crate::test_support::harness::capture_dialog(
+            &conflicts,
+            &format!("native-dialog-file-conflicts-{theme}.png"),
+        );
+        conflicts.close();
+        wait_until("the action to end", || test.context.progress_window().is_none());
     }
 }
 
