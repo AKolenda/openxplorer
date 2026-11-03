@@ -46,7 +46,7 @@ and does not "improve" them away.
 
 | Area | Keep |
 |---|---|
-| Layout order | Tab strip in the title bar → navigation row (Back, Forward, Up, Refresh, breadcrumb address, search) → command bar (New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾, View ▾, More ··· ⟶ Appearance, Settings, Details) → sidebar │ content │ details pane → status bar. |
+| Layout order | Tab strip in the title bar → navigation row (Back, Forward, Up, Refresh, breadcrumb address, search) → command bar (New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾, View ▾, More ··· ⟶ Details) → sidebar │ content │ details pane → status bar. |
 | Band heights | Title bar 42 (no border), navigation row 62, command bar 55, column header 38, status bar 30 (each of these four includes its 1 px border); row pitch 38. |
 | Widths | Tab 215, sidebar 210 plus a 6 px resizer, details pane 262, search 235, caption buttons 46. |
 | Palette character | Blue-grey tab strip (`#eff1f4` / `#191919`) standing in for Mica Alt; the active tab merges into a light chrome band; white (or `#202020`) content; soft blue selection `#e8f1fb` / `#263c50` with a faint blue edge. |
@@ -496,7 +496,9 @@ where it differs; ✓ means the target equals the current app.
 | "New" | padding `0 10 0 8` ✓ | — | Keep. |
 | Separator | 1 × 20, `margin: 0 10`, `@ox_border` | AppBarSeparator 1 px, DividerStrokeColorDefault, margin `2,8,2,8` (ABS#L8, ABS#L14–16) | Keep. |
 | States | hover `@ox_hover`; pressed `@ox_pressed` with `@ox_muted` text; disabled `@ox_text_disabled`; toggled (Details open) `@ox_selected` | ABB#L77–79, ABB#L12 | safe |
-| Right group | Details toggle ✓, as Windows 11 Explorer's bar ends. The Appearance button (sun or moon glyph with a "Light" / "Dark" label) and Settings (gear) are built but hidden (2026-11-02); More options offers both. | — | Applied. |
+| Right group | Details toggle ✓, as Windows 11 Explorer's bar ends. The Appearance button (sun or moon glyph with a "Light" / "Dark" label) and Settings (gear) are built but hidden (2026-11-02). Since 2026-11-03 the appearances are chosen in Settings > Appearance and Settings opens from Folder Options > More settings… and Ctrl+,. | — | Applied. |
+| More options (…) | Windows 11 File Explorer's "…" (2026-11-03, the user's request; CMD-007): [Map network location, in This PC and Network only] · Pin current folder │ Select all (Ctrl+A) · Select none · Invert selection · Select items matching… · Options. Nothing was removed; each item that left went where Windows 11 has it, and keeps its keys: New window → Ctrl+N and a folder's "Open in new window" (both right-click menus and the navigation pane already had it), as Windows' "…" has no New window; Settings → Folder Options' General tab, "More settings…" (it keeps the choices made, as OK does), and Ctrl+,, as Windows sends app-wide options to Settings; Default file explorer… → Settings > Default apps, already the place for it and still an explicit button; Cache this folder for search → Settings > Search, a switch for the folder shown before Settings opened, as Windows' indexing options are in Settings (the folder's menu and the search strip keep it); Light, Dark and Use system appearance → Settings > Appearance's theme cards, as Windows 11 sets its colours in Settings > Personalization; Show hidden files → View > Show > Hidden items (Ctrl+H); Keyboard shortcuts (Ctrl+?), Help (F1), License & source and About this build → Settings > About, as Windows keeps About and Help out of Explorer's "…". Map network location shows only in This PC and Network, as Map network drive does in Windows; the navigation pane's button stays. | File Explorer "…" menu, Windows 11 23H2 (observed): Map network drive and Disconnect network drive in This PC; Pin to Quick access, Select all, Select none, Invert selection, Properties, Options in a folder | Applied. |
+| View menu | Details, List and the icon sizes │ Compact view · Show ▸ (Navigation pane F9, Details pane Alt+Shift+P, Item check boxes, Hidden items Ctrl+H) · Split view F3 · Folder tree F7 · Terminal │ Larger, Smaller and Reset text. Show follows Windows 11's View > Show; it has no Preview pane or File name extensions because the app has neither. Split view, Folder tree and Terminal are Dolphin's and stay at the top level. | File Explorer View > Show, Windows 11 23H2 (observed) | Applied. |
 | Responsive | ≤ 1190: gap 1, padding `0 10`, separator margin `0 6`; ≤ 960: commands padding `0 8`, min width 32; ≤ 680: hide Share, Cut, Rename and the Details toggle (they stay in More) ✓ | CommandBar overflow (CB#L5–8) | Keep. |
 
 ### 4.4 Sidebar
@@ -984,7 +986,7 @@ are built, use these rules:
 | Zoom | Ctrl + wheel and Ctrl + +/−, already mapped to text size (80–200 %) and icon size. There is no status-bar slider, because Explorer has none. |
 | Free space | "N GB free" at 12 px in the status bar's left group, after the selection text. |
 | Selection checkboxes | Optional 16 × 16 checkbox before the row icon, shown on hover and for selected rows (Explorer "Item check boxes", observed, unverified). |
-| Hidden files | View ▾ toggle. Hidden entries at `opacity: .6`, like the cut style. |
+| Hidden files | View ▾ > Show > Hidden items toggle, as Windows 11 has it (2026-11-03; it was also in More options). Hidden entries at `opacity: .6`, like the cut style. |
 | Terminal panel | Bottom pane with the status-bar treatment: 1 px `@ox_border` top, `@ox_bg`. |
 
 ---

@@ -6,12 +6,14 @@
 //! disabled with the milestone that brings them.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{is_triggered_by, press_shortcut, select_names, window_shortcuts};
 use super::geometry::laid_out;
 use crate::icons::Icon;
 use crate::locations::Page;
+use crate::settings_page::{Category, SettingsView};
 use crate::test_support::harness::{
     application, descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
@@ -185,43 +187,115 @@ const SORT_MENU: [&str; 11] = [
     "Folders first",
 ];
 
-/// The appearances More options offers (`appearanceMenu`).
-const APPEARANCE_MENU: [&str; 3] = ["Light appearance", "Dark appearance", "Use system appearance"];
+/// The "…" menu in a folder, as Windows 11 File Explorer's: Pin, the
+/// selection commands, then Options. Map network location shows only in
+/// This PC and Network; everything else it held has moved to Settings,
+/// Folder Options or View > Show (CMD-007).
+const MORE_MENU: [&str; 7] = [
+    "Pin current folder",
+    "-",
+    "Select all",
+    "Select none",
+    "Invert selection",
+    "Select items matching…",
+    "Options",
+];
 
-/// How the More options menu starts.
-const MORE_MENU_START: [&str; 11] = [
+/// The "…" menu in This PC and Network, which starts with Map network
+/// location as Windows' starts with Map network drive.
+const MORE_MENU_ON_A_NETWORK_PAGE: [&str; 8] = [
+    "Map network location",
+    "Pin current folder",
+    "-",
+    "Select all",
+    "Select none",
+    "Invert selection",
+    "Select items matching…",
+    "Options",
+];
+
+/// The items that left "…" for Settings, Folder Options and View > Show.
+const MOVED_FROM_MORE_MENU: [&str; 12] = [
     "New window",
     "Settings",
     "Default file explorer…",
     "Cache this folder for search",
-    "Map network location",
-    "Pin current folder",
-    "-",
     "Light appearance",
     "Dark appearance",
     "Use system appearance",
     "Show hidden files",
-];
-
-/// How the More options menu ends.
-const MORE_MENU_END: [&str; 5] = [
-    "-",
     "Keyboard shortcuts",
     "Help",
     "License & source",
     "About this build",
 ];
 
-/// parity: VIEW-013
+/// parity: VIEW-013, CMD-007
 #[gtk::test]
 fn the_menus_list_the_current_items_between_the_same_dividers() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     assert_eq!(menu_of(&test, "New").row_labels(), NEW_MENU);
     assert_eq!(menu_of(&test, "Sort").row_labels(), SORT_MENU);
-    let more = menu_of(&test, "More options").row_labels();
-    assert_eq!(&more[..MORE_MENU_START.len()], MORE_MENU_START);
-    assert_eq!(&more[more.len() - MORE_MENU_END.len()..], MORE_MENU_END);
+    assert_eq!(menu_of(&test, "More options").row_labels(), MORE_MENU);
+}
+
+/// "…" lists Map network location only in This PC and Network, as
+/// Windows 11 lists Map network drive, and none of the items that moved
+/// out of it; the sidebar keeps its Map network location button.
+///
+/// parity: CMD-007, NET-001
+#[gtk::test]
+fn the_more_menu_maps_network_locations_only_in_this_pc_and_network() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    for page in [Page::ThisPc, Page::Network] {
+        test.window.navigate(page.uri()).expect("a page");
+        let labels = menu_of(&test, "More options").row_labels();
+        assert_eq!(labels, MORE_MENU_ON_A_NETWORK_PAGE, "{page:?}");
+        let more = menu_of(&test, "More options");
+        more.popup();
+        wait_for_frames(&test.window, 2);
+        assert!(more.row("Map network location").is_sensitive(), "{page:?}");
+        more.popdown();
+    }
+    test.window.navigate(&fixture.uri()).expect("the folder");
+    let labels = menu_of(&test, "More options").row_labels();
+    assert_eq!(labels, MORE_MENU);
+    for moved in MOVED_FROM_MORE_MENU {
+        assert!(!labels.iter().any(|label| label == moved), "{moved} moved");
+    }
+    let sidebar_maps = descendants::<gtk::Button>(test.window.sidebar())
+        .into_iter()
+        .any(|button| {
+            button.action_name().as_deref() == Some(&*WindowAction::MapNetworkLocation.detailed_name())
+        });
+    assert!(sidebar_maps, "the sidebar keeps Map network location");
+}
+
+/// What left "…" keeps its keys: Ctrl+N opens a new window, Ctrl+, opens
+/// Settings, F1 the manual and Ctrl+? the keyboard shortcuts.
+///
+/// parity: CMD-007, CMD-016
+#[gtk::test]
+fn the_items_moved_out_of_the_more_menu_keep_their_keys() {
+    let fixture = Fixture::standard();
+    let _test = laid_out(&fixture.uri());
+    for (action, key) in [
+        (WindowAction::Help.detailed_name(), "F1"),
+        (
+            WindowAction::KeyboardShortcuts.detailed_name(),
+            "<Control>question",
+        ),
+        (WindowAction::Settings.detailed_name(), "<Control>comma"),
+    ] {
+        let keys = application().accels_for_action(&action);
+        assert!(keys.iter().any(|bound| bound == key), "{action}: {keys:?}");
+    }
+    let new_window = crate::application::AppAction::NewWindow.detailed_name();
+    let ctrl_n = crate::window::window_keys::window_key_bindings()
+        .any(|(action, keys)| action == new_window && keys == "<Primary>n");
+    assert!(ctrl_n, "Ctrl+N opens a new window");
 }
 
 /// The command bar control named `name` as the menu button it is.
@@ -283,20 +357,47 @@ fn enter_on_a_command_opens_its_menu_below_it_and_not_the_selection() {
     });
 }
 
-/// The toggles of the View menu show their check while they are on.
+/// View > Show, as Windows 11 File Explorer's: the panes, item check
+/// boxes and Hidden items, each a toggle with its key.
+const SHOW_MENU: [&str; 6] = [
+    "Show",
+    "-",
+    "Navigation pane",
+    "Details pane",
+    "Item check boxes",
+    "Hidden items",
+];
+
+/// The toggles of View > Show show their check while they are on; Hidden
+/// items is the hidden-files toggle that "…" used to hold, as Windows 11
+/// has it at View > Show > Hidden items, and Ctrl+H's.
 ///
-/// parity: CMD-006
+/// parity: CMD-006, VIEW-023
 #[gtk::test]
-fn the_view_menu_checks_hidden_files_and_the_details_pane_while_on() {
+fn view_show_checks_hidden_items_and_the_details_pane_while_on() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let view = menu_of(&test, "View");
-    let toggles = ["Show hidden files", "Details pane"];
+    let top = view.row_labels();
+    assert!(top.iter().any(|label| label == "Show"), "{top:?}");
+    for moved in [
+        "Show hidden files",
+        "Hidden items",
+        "Navigation pane",
+        "Details pane",
+    ] {
+        assert!(!top.iter().any(|label| label == moved), "{moved} is under Show");
+    }
+    let toggles = ["Hidden items", "Details pane"];
     let checked_now = || {
         view.popup();
-        wait_for_frames(&test.window, 2);
+        wait_until("the View menu", || view.is_visible());
+        view.click_row("Show");
+        assert_eq!(view.row_labels(), SHOW_MENU);
+        assert!(view.row("Hidden items").is_sensitive());
         let checked = view.checked_labels();
         view.popdown();
+        wait_until("the View menu to close", || !view.is_visible());
         toggles.map(|toggle| checked.contains(&toggle.to_owned()))
     };
     let before = checked_now();
@@ -326,20 +427,18 @@ fn the_view_menu_and_ctrl_shift_f4_open_the_terminal_here() {
     assert!(keys.iter().any(|key| key == "<Shift><Control>F4"), "{keys:?}");
 }
 
-/// More options: "Pin current folder" and the cache toggle need a
-/// folder, so pages disable them and say why; "License & source" shows
-/// the code glyph app.js lacked.
+/// More options: "Pin current folder" needs a folder, so pages disable
+/// it and say why (CMD-031).
 ///
 /// parity: CMD-007, CMD-031
 #[gtk::test]
-fn more_options_needs_a_folder_for_pin_and_cache() {
+fn more_options_needs_a_folder_for_pin() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let more = menu_of(&test, "More options");
     more.popup();
     wait_for_frames(&test.window, 2);
     assert!(more.row("Pin current folder").is_sensitive());
-    assert!(more.row("Cache this folder for search").is_sensitive());
     more.popdown();
 
     for page in [Page::ThisPc, Page::Settings] {
@@ -348,38 +447,24 @@ fn more_options_needs_a_folder_for_pin_and_cache() {
         wait_for_frames(&test.window, 2);
         let pin = more.row("Pin current folder");
         assert!(!pin.is_sensitive(), "{page:?}");
-        let cache = more.row("Cache this folder for search");
-        assert!(!cache.is_sensitive(), "{page:?}");
-        // Each says why (CMD-031).
-        for (row, reason) in [
-            (pin, "Only a folder can be pinned to Quick access."),
-            (
-                cache,
-                "Only a folder on a drive or share can be cached for search.",
-            ),
-        ] {
-            let tooltip = row.tooltip_text().unwrap_or_default();
-            assert_eq!(tooltip.lines().nth(1), Some(reason), "{page:?}");
-        }
+        let tooltip = pin.tooltip_text().unwrap_or_default();
+        assert_eq!(
+            tooltip.lines().nth(1),
+            Some("Only a folder can be pinned to Quick access."),
+            "{page:?}"
+        );
         more.popdown();
     }
-
-    let license = more.row("License & source");
-    let glyph = license
-        .child()
-        .and_then(|content| content.first_child())
-        .and_downcast::<gtk::Image>()
-        .expect("a row starts with its glyph");
-    assert_eq!(glyph.icon_name().as_deref(), Some(Icon::Code.name()));
 }
 
-/// More options offers the three appearances and checks the chosen one,
-/// as the appearance button's menu did (`applyTheme` in app.js); Windows
-/// 11 Explorer's bar has no appearance button, so it is hidden.
+/// The appearances left "…" for Settings > Appearance, as Windows 11
+/// sets its colours in Settings: the bar has no appearance button, and
+/// the theme cards follow `win.theme`, which the keyboard and the cards
+/// run.
 ///
-/// parity: LOOK-005
+/// parity: LOOK-005, CMD-007
 #[gtk::test]
-fn more_options_offers_the_appearances_and_checks_the_choice() {
+fn the_appearances_are_chosen_in_settings_not_in_more_options() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
@@ -389,35 +474,21 @@ fn more_options_offers_the_appearances_and_checks_the_choice() {
             .any(|name| name == "Light" || name == "Dark"),
         "no appearance button in the bar"
     );
-    for (theme, checked) in [
-        ("light", "Light appearance"),
-        ("dark", "Dark appearance"),
-        ("system", "Use system appearance"),
-    ] {
+    let labels = menu_of(&test, "More options").row_labels();
+    for appearance in ["Light appearance", "Dark appearance", "Use system appearance"] {
+        assert!(!labels.iter().any(|label| label == appearance), "{labels:?}");
+    }
+    test.window
+        .open_settings(Some(SettingsView::Category(Category::Appearance)));
+    let page = &test.window.imp().settings_page;
+    for (theme, card) in [("light", "Light"), ("dark", "Dark"), ("system", "System")] {
         test.activate("theme", Some(theme));
-        let menu = menu_of(&test, "More options");
-        let labels = menu.row_labels();
-        assert!(
-            labels
-                .windows(APPEARANCE_MENU.len())
-                .any(|run| run == APPEARANCE_MENU),
-            "{labels:?}"
-        );
-        menu.popup();
-        wait_for_frames(&test.window, 2);
-        let checked_labels = menu.checked_labels();
-        menu.popdown();
-        assert!(
-            checked_labels.iter().any(|label| label == checked),
-            "{theme}: {checked_labels:?}"
-        );
-        let others = APPEARANCE_MENU.iter().filter(|label| **label != checked);
-        for other in others {
-            assert!(
-                !checked_labels.iter().any(|label| label == other),
-                "{theme}: {other}"
-            );
-        }
+        let radios = descendants::<gtk::CheckButton>(&**page).into_iter();
+        let mut cards = radios.filter(|radio| radio.has_css_class("theme-radio"));
+        let radio = cards
+            .find(|radio| radio.label().as_deref() == Some(card))
+            .unwrap_or_else(|| panic!("Appearance has a {card} card"));
+        wait_until("the card to follow the theme", || radio.is_active());
     }
 }
 

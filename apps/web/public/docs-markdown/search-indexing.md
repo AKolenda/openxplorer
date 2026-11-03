@@ -4,7 +4,7 @@ Search names and paths from a local index. Keep the boundaries clear.
 
 ## Choose what gets indexed
 
-Settings → Search → Indexed folders → Manage lists folders, SMB shares and mounted volumes. Check a root or add a custom path to index its filenames and metadata. The initial scan does not download file contents.
+Settings → Search → Indexed folders → Manage lists folders, SMB shares and mounted volumes. Check a root or add a custom path to index its filenames and metadata. The initial scan does not download file contents. Settings → Search → Cache this folder for search indexes the folder you opened Settings from, as a folder's right-click menu does.
 
 Each mounted filesystem is selected separately. Selecting Local Disk does not automatically traverse every other mounted volume.
 

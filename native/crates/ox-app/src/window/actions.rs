@@ -317,7 +317,8 @@ impl BrowserWindow {
         ]);
     }
 
-    /// Show hidden files (Ctrl+H, View and More options): one setting for
+    /// Show hidden files (Ctrl+H, View > Show > Hidden items and Folder
+    /// Options): one setting for
     /// every folder, as in Windows. Shows the choice here at once and
     /// saves it, after which every other window follows.
     fn set_hidden_files_shown(&self, shown: bool) {

@@ -19,6 +19,7 @@ use crate::icons::{Art, Icon};
 use crate::locations::Page;
 
 use super::address_bar::CrumbButton;
+use super::command_bar::NetworkMapping;
 use super::session::{Session, Tab};
 use super::tab_strip::TabView;
 use super::window_action::WindowAction;
@@ -163,6 +164,11 @@ impl BrowserWindow {
         search.set_folder_title(&title);
         search.set_enabled(!on_page && !in_zip && !is_device_location(uri));
         self.show_extract_button();
+        let mapping = match Page::from_uri(uri) {
+            Some(Page::ThisPc | Page::Network) => NetworkMapping::Offered,
+            _ => NetworkMapping::NotHere,
+        };
+        self.command_bar().offer_network_mapping(mapping);
         self.update_cache_folder_action();
         self.render_tabs();
         self.show_pane_captions();

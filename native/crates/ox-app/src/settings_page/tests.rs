@@ -26,6 +26,7 @@ use crate::text_size::TextSize;
 use crate::window::WindowAction;
 
 mod indexing;
+mod moved_from_more;
 mod redesign;
 
 /// A window on the standard fixture with Settings open in front.
@@ -435,7 +436,7 @@ fn a_search_that_matches_nothing_says_so() {
     assert_eq!(settings.chosen_category(), None);
 }
 
-/// More > Default file explorer… names its category, so it shows all of
+/// `win.default-file-explorer` names its category, so it shows all of
 /// it rather than the rows an earlier search left, which may be none.
 ///
 /// parity: SET-019

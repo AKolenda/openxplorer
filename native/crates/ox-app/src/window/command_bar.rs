@@ -6,7 +6,8 @@
 //! New ▾ │ Cut, Copy, Paste, Rename, Share, Delete │ Sort ▾,
 //! View ▾, More options, then at the right the Details toggle, as Windows
 //! 11 Explorer's bar ends; the appearance toggle and Settings there are
-//! hidden, as both are in More options. Every control runs a window or application
+//! hidden, as Windows 11 sets both in Settings (Settings > Appearance, and
+//! Folder Options > More settings… or Ctrl+,). Every control runs a window or application
 //! action. New is disabled where nothing can be created, and Delete is named
 //! plainly "Delete", as in Windows Explorer, or "Delete permanently" in the
 //! Recycle Bin (CMD-003). Share, which was Copy path in the Python app, shows
@@ -31,6 +32,7 @@ use super::breakpoints::WindowWidth;
 use super::menu_popover::{name_menu_button, MenuEntry, MenuPopover};
 use super::window_action::WindowAction;
 
+pub(super) use menus::NetworkMapping;
 use menus::{appearance_items, more_menu};
 pub(super) use menus::{group_by_menu, new_menu, sort_menu, view_menu};
 
@@ -157,6 +159,11 @@ mod imp {
         pub(super) delete_button: OnceCell<gtk::Button>,
         /// Extract all, shown inside a ZIP opened like a folder (ARC-026).
         pub(super) extract_button: OnceCell<gtk::Button>,
+        /// The "…" menu, which offers Map network location only in This
+        /// PC and Network.
+        pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
+        /// Whether the "…" menu offers Map network location now.
+        pub(super) network_mapping: Cell<Option<super::NetworkMapping>>,
     }
 
     #[glib::object_subclass]
@@ -247,15 +254,30 @@ impl CommandBar {
             "view-command",
             view_menu(),
         ));
-        group.append(&more_button());
+        let (more, menu) = more_button();
+        group.append(&more);
+        imp.more_menu.set(menu).expect("constructed runs once per object");
+        imp.network_mapping.set(Some(NetworkMapping::NotHere));
+    }
+
+    /// Lists Map network location in "…" only in This PC and Network, as
+    /// Windows 11 File Explorer lists Map network drive.
+    pub(super) fn offer_network_mapping(&self, mapping: NetworkMapping) {
+        let imp = self.imp();
+        if imp.network_mapping.replace(Some(mapping)) == Some(mapping) {
+            return;
+        }
+        if let Some(menu) = imp.more_menu.get() {
+            menu.set_entries(more_menu(mapping));
+        }
     }
 
     /// Gives the appearance toggle, Settings and the Details toggle, which
     /// the template places at the right, what it cannot express.
     ///
     /// Windows 11 Explorer's bar ends with Details alone; the appearance
-    /// and Settings are in its "…" menu, which already offers both
-    /// ([`more_menu`]), so their buttons stay built but hidden.
+    /// is chosen in Settings > Appearance and Settings opens from Folder
+    /// Options or Ctrl+, so their buttons stay built but hidden.
     fn finish_right_commands(&self) {
         self.finish_appearance_button();
         self.finish_settings_button();
@@ -435,16 +457,18 @@ fn extract_all_button() -> gtk::Button {
     button
 }
 
-fn more_button() -> gtk::MenuButton {
+/// The "…" button and its menu.
+fn more_button() -> (gtk::MenuButton, MenuPopover) {
+    let menu = MenuPopover::new(more_menu(NetworkMapping::NotHere));
     let button = gtk::MenuButton::builder()
         .child(&icons::image(Icon::MoreHorizontal, ICON_COMMAND_GLYPH))
         .tooltip_text(ox_core::i18n::gettext("More options"))
-        .popover(&MenuPopover::new(more_menu()))
+        .popover(&menu)
         .valign(gtk::Align::Center)
         .css_classes(["command", "more-command"])
         .build();
     name_menu_button(&button, &ox_core::i18n::gettext("More options"));
-    button
+    (button, menu)
 }
 
 #[cfg(test)]

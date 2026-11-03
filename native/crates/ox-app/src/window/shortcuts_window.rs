@@ -2,7 +2,7 @@
 //! The keyboard shortcuts window: every bound key, grouped by task, with
 //! a search field (CMD-032).
 //!
-//! Ctrl+? and More options > Keyboard shortcuts open it, from any tab,
+//! Ctrl+? and Settings > About > Keyboard shortcuts open it, from any tab,
 //! Settings included, as Nautilus's Keyboard Shortcuts window. Its keys
 //! are read from the live bindings: the application's accelerators as
 //! GTK holds them, and the key tables the window installs its shortcut

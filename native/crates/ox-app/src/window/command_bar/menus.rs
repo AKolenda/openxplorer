@@ -11,7 +11,6 @@ use ox_core::grouping::GroupBy;
 use ox_core::i18n::gettext;
 use ox_core::settings::Theme;
 
-use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sort_roles::SortRole;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
@@ -164,8 +163,8 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 }
 
 /// The View menu: the views (Details, List and Explorer's four icon
-/// sizes), the hidden-files toggle, the pane toggles, Compact view and the
-/// terminal, then the text size.
+/// sizes), Compact view, Show with the panes and Hidden items, Dolphin's
+/// split view, folder tree and terminal, then the text size.
 pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item(&gettext("Details"), Icon::TextBulletList, FolderView::Details);
     let compact = view_item(&gettext("List"), Icon::Table, FolderView::Compact);
@@ -177,19 +176,14 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     entries.extend(icon_sizes);
     entries.extend([
         MenuEntry::Divider,
-        MenuItem::toggle(&gettext("Show hidden files"), Icon::Eye, WindowAction::Hidden)
-            .with_shortcut("Ctrl+H")
-            .into(),
+        // Windows 11 lists Compact view on its own, then Show.
         MenuItem::toggle(
-            &gettext("Details pane"),
-            Icon::PanelRight,
-            WindowAction::DetailsPane,
+            &gettext("Compact view"),
+            Icon::TextBulletList,
+            WindowAction::CompactDensity,
         )
-        .with_shortcut("Alt+Shift+P")
         .into(),
-        MenuItem::toggle(&gettext("Navigation pane"), Icon::Folder, WindowAction::Sidebar)
-            .with_shortcut("F9")
-            .into(),
+        MenuItem::submenu(&gettext("Show"), Icon::Eye, WindowAction::Hidden, show_menu()).into(),
         MenuItem::toggle(
             &ox_core::i18n::gettext("Split view"),
             Icon::PanelRight,
@@ -203,19 +197,6 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
             WindowAction::FolderTree,
         )
         .with_shortcut("F7")
-        .into(),
-        // After the panes, as Windows 11 lists it under View > Show.
-        MenuItem::toggle(
-            &gettext("Compact view"),
-            Icon::TextBulletList,
-            WindowAction::CompactDensity,
-        )
-        .into(),
-        MenuItem::toggle(
-            &gettext("Item check boxes"),
-            Icon::SelectAllOn,
-            WindowAction::ItemCheckBoxes,
-        )
         .into(),
         // Dolphin's Terminal panel embeds Konsole; VTE for GTK 4 is not
         // available everywhere the app ships, so this opens the desktop's
@@ -240,6 +221,34 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     entries
 }
 
+/// View > Show, as Windows 11 File Explorer's: the navigation and details
+/// panes, item check boxes and Hidden items, the hidden-files toggle that
+/// Ctrl+H and Folder Options change too (VIEW-023). The app has no
+/// preview pane or file-name-extensions switch, so those are not listed.
+fn show_menu() -> Vec<MenuEntry> {
+    vec![
+        MenuItem::toggle(&gettext("Navigation pane"), Icon::Folder, WindowAction::Sidebar)
+            .with_shortcut("F9")
+            .into(),
+        MenuItem::toggle(
+            &gettext("Details pane"),
+            Icon::PanelRight,
+            WindowAction::DetailsPane,
+        )
+        .with_shortcut("Alt+Shift+P")
+        .into(),
+        MenuItem::toggle(
+            &gettext("Item check boxes"),
+            Icon::SelectAllOn,
+            WindowAction::ItemCheckBoxes,
+        )
+        .into(),
+        MenuItem::toggle(&gettext("Hidden items"), Icon::Eye, WindowAction::Hidden)
+            .with_shortcut("Ctrl+H")
+            .into(),
+    ]
+}
+
 /// The appearance menu's item for `theme`.
 fn theme_item(label: &str, glyph: Icon, theme: Theme) -> MenuEntry {
     MenuItem::choice(label, glyph, WindowAction::Theme, theme.as_str()).into()
@@ -254,36 +263,39 @@ pub(super) fn appearance_items() -> [MenuEntry; 3] {
     ]
 }
 
-/// The More options menu, plus the selection commands the native context
-/// menu used to hold.
-pub(super) fn more_menu() -> Vec<MenuEntry> {
-    let mut entries = vec![
-        MenuItem::new(&gettext("New window"), Icon::WindowNew, AppAction::NewWindow)
-            .with_shortcut("Ctrl+N")
-            .into(),
-        item(&gettext("Settings"), Icon::Settings, WindowAction::Settings),
-        item(
-            &gettext("Default file explorer…"),
-            Icon::Folder,
-            WindowAction::DefaultFileExplorer,
-        ),
-        MenuItem::toggle(
-            &gettext("Cache this folder for search"),
-            Icon::Search,
-            WindowAction::CacheFolder,
-        )
-        .into(),
-        item(
+/// Whether "…" offers Map network location: only in This PC and
+/// Network, as Windows 11 File Explorer's "…" offers Map network drive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::window) enum NetworkMapping {
+    /// This PC or Network is shown.
+    Offered,
+    /// Anywhere else; the navigation pane's button still maps one.
+    NotHere,
+}
+
+/// The More options ("…") menu, laid out as Windows 11 File Explorer's:
+/// Map network location in This PC and Network, Pin current folder, the
+/// selection commands, then Options.
+///
+/// The rest of what it used to list moved where Windows has it (the
+/// owner's request of 2026-11-03, CMD-007): New window to Ctrl+N and a
+/// folder's "Open in new window"; Settings to Folder Options' "More
+/// settings…" and Ctrl+,; Default file explorer to Settings > Default
+/// apps; Cache this folder for search to Settings > Search; the
+/// appearances to Settings > Appearance; Show hidden files to View > Show
+/// > Hidden items; Keyboard shortcuts, Help, License & source and About
+/// this build to Settings > About, with F1 and Ctrl+? as before.
+pub(super) fn more_menu(mapping: NetworkMapping) -> Vec<MenuEntry> {
+    let mut entries = Vec::new();
+    if mapping == NetworkMapping::Offered {
+        entries.push(item(
             &gettext("Map network location"),
             Icon::Organization,
             WindowAction::MapNetworkLocation,
-        ),
-        item(&gettext("Pin current folder"), Icon::Pin, WindowAction::PinFolder),
-        MenuEntry::Divider,
-    ];
-    entries.extend(appearance_items());
-    entries.push(MenuItem::toggle(&gettext("Show hidden files"), Icon::Eye, WindowAction::Hidden).into());
+        ));
+    }
     entries.extend([
+        item(&gettext("Pin current folder"), Icon::Pin, WindowAction::PinFolder),
         MenuEntry::Divider,
         MenuItem::new(&gettext("Select all"), Icon::SelectAllOn, WindowAction::SelectAll)
             .with_shortcut("Ctrl+A")
@@ -305,25 +317,6 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
         ),
         // Last of the folder's commands, as in Windows 11's "…" menu.
         item(&gettext("Options"), Icon::Settings, WindowAction::FolderOptions),
-        MenuEntry::Divider,
-        // app.js asked for a `code` glyph it did not have and drew a
-        // document; the native app has the code glyph.
-        MenuItem::new(
-            &ox_core::i18n::gettext("Keyboard shortcuts"),
-            Icon::Table,
-            WindowAction::KeyboardShortcuts,
-        )
-        .with_shortcut("Ctrl+?")
-        .into(),
-        MenuItem::new(
-            &ox_core::i18n::gettext("Help"),
-            Icon::DocumentText,
-            WindowAction::Help,
-        )
-        .with_shortcut("F1")
-        .into(),
-        item(&gettext("License & source"), Icon::Code, WindowAction::License),
-        item(&gettext("About this build"), Icon::Info, WindowAction::About),
     ]);
     entries
 }
@@ -353,7 +346,7 @@ mod tests {
     #[test]
     fn options_in_the_more_menu_opens_folder_options() {
         assert_eq!(
-            labels_running(&more_menu(), WindowAction::FolderOptions),
+            labels_running(&more_menu(NetworkMapping::NotHere), WindowAction::FolderOptions),
             ["Options"]
         );
         assert!(labels_running(&view_menu(), WindowAction::FolderOptions).is_empty());

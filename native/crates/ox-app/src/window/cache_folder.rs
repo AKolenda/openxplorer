@@ -7,8 +7,9 @@
 //! "in new tab" and "in new window" forms (SRCH-016). "Cache this
 //! folder for search" is a check item: checked while the folder is an
 //! indexed folder, and unchecking it stops caching it, as "Stop caching
-//! this folder" did. The More menu, the folder's menu and the search
-//! strip's "Cache this folder" act on the folder shown; the menus of a
+//! this folder" did. Settings > Search, the folder's menu and the search
+//! strip's "Cache this folder" act on the folder shown (Settings on the
+//! one shown before it opened; "…" held it until CMD-007 moved it); the menus of a
 //! Quick access pin and of a folder item on theirs ([`cache_item`]). None
 //! is offered for pages, phones, cameras or a server's share list, which
 //! cannot be indexed.

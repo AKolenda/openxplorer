@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  The OpenXplorer user manual that F1 and More options > Help open
+  The OpenXplorer user manual that F1 and Settings > About > Help open
   (CMD-033). It is compiled into the program, so it is installed with
   every package and works offline. Each "## " heading starts a topic of
   the Help dialog; src/window/help.rs splits it there.
@@ -16,7 +16,7 @@ OpenXplorer shows your folders, drives, phones and network shares in one tabbed 
 - Ctrl+T opens a tab, Ctrl+W closes it and Ctrl+Shift+T reopens the last closed tab. Ctrl+N opens a new window. Drag a tab out of the tab strip to give it a window of its own.
 - Type the start of a name to select it in the folder.
 
-The full list of keys is in More options > Keyboard shortcuts (Ctrl+?).
+The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Files and folders
 
@@ -37,20 +37,20 @@ The full list of keys is in More options > Keyboard shortcuts (Ctrl+?).
 - Sort offers name, modified and created dates, type, extension, size and further metadata. In Details, click a column heading to sort; the heading menu chooses visible columns, and headings can be reordered.
 - In Details, expand a folder to browse its contents in place. Preview settings control network files and the maximum file size.
 - Right-click empty space in a folder for View, Sort by, New, Paste and the folder's other commands.
-- Ctrl+H shows or hides hidden files. Alt+Shift+P or Alt+P shows the details pane, F9 the navigation pane.
+- Ctrl+H, or View > Show > Hidden items, shows or hides hidden files. Alt+Shift+P or Alt+P shows the details pane, F9 the navigation pane.
 - F11 shows the window full screen; press it again to get the window back as it was.
 - Ctrl+plus, Ctrl+minus and Ctrl+0 change the text size.
 
 ## Search
 
 - Ctrl+F or Ctrl+E moves to the search box. Typing there filters the folder you are in.
-- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search. Only names and paths are stored, on this computer; no file contents are read.
+- Folders you choose can be cached for search: right-click a folder and choose Cache this folder for search, or use Cache this folder for search in Settings > Search for the folder you opened Settings from. Only names and paths are stored, on this computer; no file contents are read.
 - Open file location (on a result's menu) opens the folder that holds it, with the result selected.
 
 ## Network locations
 
 - Open Network in the navigation pane, or type an address such as smb://server/share, to browse a share.
-- Map network location in More options saves a share in the navigation pane.
+- Map network location, below the navigation pane or in the "…" menu of This PC and Network, saves a share in the navigation pane.
 - OpenXplorer asks for your user name and password when a server needs them, and can keep the password in your desktop's keyring.
 - Right-click a share or server and choose Sign out of server to disconnect and forget a session.
 
@@ -84,7 +84,7 @@ The full list of keys is in More options > Keyboard shortcuts (Ctrl+?).
 
 ## Settings and privacy
 
-- Ctrl+, opens Settings, which has its own search box.
+- Ctrl+, opens Settings, which has its own search box; so does More settings… in Folder Options (… > Options). Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the licence and About this build.
 - OpenXplorer uses the network only for locations you open, server discovery you start and the update check you ask for. It has no telemetry.
 - Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files.
 
