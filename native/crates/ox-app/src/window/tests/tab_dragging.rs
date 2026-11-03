@@ -1465,3 +1465,126 @@ fn the_only_tab_dragged_out_of_its_row_moves_its_window() {
     );
     assert_eq!(test.window.tab_count(), 1);
 }
+
+/// `window` narrowed to `width` pixels, laid out.
+fn narrowed(window: &BrowserWindow, width: i32) {
+    window.set_default_size(width, 600);
+    wait_until("the window to narrow", || window.width() <= width);
+    crate::test_support::harness::wait_for_frames(window, 3);
+}
+
+/// A tab dragged straight sideways out of its window onto a window beside
+/// it, whose row lines up with its own, leaves its row and moves into that
+/// window, as one dragged down and over does.
+///
+/// parity: TAB-033, TAB-034
+#[gtk::test]
+fn a_tab_dragged_sideways_onto_a_window_beside_moves_there() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = two_tabs(&fixture);
+    narrowed(&test.window, 680);
+    let other = test.open_beside(&fixture.uri());
+    narrowed(&other.window, 680);
+    // The new window covers the first: drag it right of it by its blank
+    // title bar, so the two stand side by side, their rows lined up.
+    let blank =
+        crate::test_support::harness::descendants::<gtk::Box>(&other.window.titlebar().expect("a title bar"))
+            .into_iter()
+            .find(|child| child.has_css_class("title-drag"))
+            .expect("the bar has its blank drag area");
+    let grab = middle_on_screen(&mut pointer, &blank);
+    let (right, _) = on_screen(&mut pointer, &test.window, (f64::from(test.window.width()), 0.0));
+    let (other_left, _) = on_screen(&mut pointer, &other.window, (0.0, 0.0));
+    drag(
+        &mut pointer,
+        grab,
+        (grab.0 + right - other_left + 20, grab.1),
+        Pace::Held,
+    );
+    wait_for(HOLD);
+    let other_first = tab_ids(&other.window)[0];
+    let from = middle_on_screen(&mut pointer, &tab_widget(&test.window, 1));
+    let target = tab_widget(&other.window, 0);
+    let to = on_screen(
+        &mut pointer,
+        &target,
+        (f64::from(target.width()) * 0.3, f64::from(target.height()) / 2.0),
+    );
+    assert!(
+        to.0 > right,
+        "the other window is beside this one: {to:?}, {right}"
+    );
+    assert!((to.1 - from.1).abs() <= 2, "the rows line up: {from:?}, {to:?}");
+
+    press_and_glide(&mut pointer, from, to, Pace::Held);
+    pointer.release(Button::Primary);
+    wait_until("the tab to leave", || test.window.tab_count() == 1);
+
+    assert_eq!(other.window.tab_count(), 2);
+    assert_eq!(other.window.current_uri(), Some(fixture.uri_of("Documents")));
+    assert_eq!(
+        tab_ids(&other.window)[1],
+        other_first,
+        "the tab went before the first"
+    );
+}
+
+/// A tab dragged along a row whose tabs do not all fit, held at its
+/// visible right edge, scrolls the row there and goes on following the
+/// pointer as the row moves under it, so it reaches the end, out of sight
+/// when the drag began, and lands there.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_held_at_the_edge_of_a_row_that_does_not_fit_scrolls_it_and_lands_there() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let strip = test.window.tab_strip();
+    let scroll = strip
+        .tab_list()
+        .parent()
+        .and_downcast::<gtk::Viewport>()
+        .and_then(|viewport| viewport.hadjustment())
+        .expect("the row scrolls sideways");
+    for _ in 0..60 {
+        if scroll.upper() > scroll.page_size() + 300.0 {
+            break;
+        }
+        test.window.add_tab(&fixture.uri()).expect("a folder");
+        test.wait_for_listing("another tab");
+        crate::test_support::harness::wait_for_frames(&test.window, 2);
+    }
+    scroll.set_value(0.0);
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    let first = tab_ids(&test.window)[0];
+    let x = grab_point(&test.window, first);
+    let edge = f64::from(strip.width()) - 5.0;
+    let landed = Rc::new(Cell::new(None));
+
+    strip.grab_tab(first, (x, 10.0));
+    strip.follow_pointer(first, x + 40.0);
+    strip.follow_pointer(first, edge);
+    wait_until("the row to scroll to its end", || {
+        scroll.value() >= scroll.upper() - scroll.page_size() - 0.5
+    });
+    // It follows the pointer to the visible end of the row, once laid out.
+    let drawn_right = || {
+        let drawn = strip.tab_bounds_in(first, strip).expect("a shown tab");
+        f64::from(drawn.x() + drawn.width())
+    };
+    wait_until("the tab to reach the visible end of the row", || {
+        (drawn_right() - f64::from(strip.width())).abs() <= 2.0
+    });
+    strip.let_go(
+        true,
+        glib::clone!(
+            #[strong]
+            landed,
+            move |moved| landed.set(Some(moved))
+        ),
+    );
+    wait_until("the tab to land", || landed.get().is_some());
+
+    assert_eq!(landed.get(), Some(Some((first, None))), "it landed last");
+}

@@ -217,15 +217,15 @@ impl BrowserWindow {
                 self.tab_strip().follow_pointer(tab, x);
                 // GDK merges motions that wait together, so a quick flick's
                 // first may already be off the strip.
-                if self.is_off_the_strip(y) {
+                if self.is_off_the_strip((x, y)) {
                     self.leave_strip_with_press(source, press, pressed_with, tab);
                 }
             }
-            Press::Live(tab) if self.is_off_the_strip(y) => {
+            Press::Live(tab) if self.is_off_the_strip((x, y)) => {
                 self.leave_strip_with_press(source, press, pressed_with, tab);
             }
             Press::Live(tab) => self.tab_strip().follow_pointer(tab, x),
-            Press::Leaving(tab) if !self.is_off_the_strip(y) => {
+            Press::Leaving(tab) if !self.is_off_the_strip((x, y)) => {
                 press.set(Press::Live(tab));
                 self.tab_strip().follow_pointer(tab, x);
             }
@@ -255,6 +255,7 @@ impl BrowserWindow {
         pressed_with: Option<MousePress>,
         tab: TabId,
     ) {
+        self.tab_strip().stop_edge_scroll();
         let grab = self.tab_strip().grab_offset(tab);
         if grab.is_some_and(|grab| self.drag_tab_out_as_window(tab, grab, pressed_with)) {
             // The desktop has the pointer now, and moves the window.
@@ -270,11 +271,20 @@ impl BrowserWindow {
         }
     }
 
-    /// Whether `y` of the strip is more than Chrome's 15 pixels
-    /// (`kVerticalDetachMagnetism`) above or below it.
-    fn is_off_the_strip(&self, y: f64) -> bool {
-        let height = f64::from(self.tab_strip().height());
-        y < -DETACH_MAGNETISM || y > height + DETACH_MAGNETISM
+    /// Whether (`x`, `y`) of the strip is more than Chrome's 15 pixels
+    /// (`kVerticalDetachMagnetism`) above or below it, or past either side
+    /// of the window, as over a window beside it whose row lines up.
+    fn is_off_the_strip(&self, (x, y): (f64, f64)) -> bool {
+        let strip = self.tab_strip();
+        let height = f64::from(strip.height());
+        if y < -DETACH_MAGNETISM || y > height + DETACH_MAGNETISM {
+            return true;
+        }
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let point = gtk::graphene::Point::new(x as f32, 0.0);
+        strip
+            .compute_point(self, &point)
+            .is_some_and(|point| point.x() < 0.0 || f64::from(point.x()) > f64::from(self.width()))
     }
 
     /// Whether another window of this app is open, which a tab dragged

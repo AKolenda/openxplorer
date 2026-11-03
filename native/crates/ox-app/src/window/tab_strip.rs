@@ -20,6 +20,7 @@
 
 mod carried_tab;
 mod drag_marks;
+mod edge_scroll;
 mod live_drag;
 
 use std::cell::Cell;
@@ -116,6 +117,14 @@ mod imp {
         pub(super) waiting_tabs: RefCell<Option<Vec<TabView>>>,
         /// A stand-in for a tab dragged here from another window.
         pub(super) guest: RefCell<Option<gtk::Widget>>,
+        /// The tab following the pointer and where the pointer is, along
+        /// the strip, which it follows again as the strip scrolls.
+        pub(super) pointer: Cell<Option<(TabId, f64)>>,
+        /// How far each tick of a drag dwelling near an edge scrolls the
+        /// strip.
+        pub(super) edge_step: Cell<f64>,
+        /// The timer of that scroll.
+        pub(super) edge_scroll: RefCell<Option<glib::SourceId>>,
     }
 
     #[glib::object_subclass]
@@ -141,6 +150,7 @@ mod imp {
             self.parent_constructed();
             crate::i18n::translate_template(&*self.obj(), "tab-strip.ui");
             gestures::scroll_sideways_with_wheel(&self.scroller);
+            self.obj().follow_the_pointer_as_it_scrolls();
             self.obj().add_controller(super::copy_on_double_click());
             let menu = MenuPopover::new(Vec::new());
             menu.set_offset(0, 0);

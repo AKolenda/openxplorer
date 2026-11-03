@@ -54,12 +54,16 @@ impl TabStrip {
         self.imp().layout.get()
     }
 
-    /// `x` of the strip in the row of tabs, which scrolls inside it.
+    /// `x` of the strip in the row of tabs, which scrolls inside it: from
+    /// the viewport and its scroll, so a scroll counts before the row is
+    /// laid out again.
     pub(super) fn in_row(&self, x: f64) -> f64 {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let point = gtk::graphene::Point::new(x as f32, 0.0);
-        self.compute_point(&*self.imp().tab_list, &point)
-            .map_or(x, |point| f64::from(point.x()))
+        let viewport = self.imp().viewport.get();
+        let scrolled = viewport.hadjustment().map_or(0.0, |scroll| scroll.value());
+        self.compute_point(&viewport, &point)
+            .map_or(x, |point| f64::from(point.x()) + scrolled)
     }
 
     /// The widget of tab `id`.
@@ -154,6 +158,8 @@ impl TabStrip {
         if grabbed != id {
             return;
         }
+        self.imp().pointer.set(Some((id, x)));
+        self.scroll_near_edge(x);
         let left = self.in_row(x) - offset.0;
         let layout = self.layout();
         if layout.dragged().as_ref() == Some(&widget) {
@@ -197,6 +203,13 @@ impl TabStrip {
     /// Whether a tab of this strip follows the pointer.
     pub(in crate::window) fn is_following(&self) -> bool {
         self.layout().following().is_some()
+    }
+
+    /// Whether tab `id` of this strip follows the pointer.
+    pub(super) fn follows(&self, id: TabId) -> bool {
+        self.layout()
+            .following()
+            .is_some_and(|following| self.widget_of(id).as_ref() == Some(&following))
     }
 
     /// The dragged tab is let go: it slides into the place shown, or with
