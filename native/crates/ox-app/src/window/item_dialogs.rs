@@ -243,6 +243,7 @@ impl BrowserWindow {
             .find(|window| window.widget_name() == target.uri.as_str());
         if let Some(window) = open {
             window.select_tab(tab.page_name());
+            self.hand_over_startup_id(&window);
             window.present();
             return;
         }
@@ -259,12 +260,18 @@ impl BrowserWindow {
     /// Shows the Properties window `window` and keeps it until it closes.
     fn present_properties(&self, window: &PropertiesWindow) {
         self.keep_properties(window);
+        self.hand_over_startup_id(window);
+        window.present();
+    }
+
+    /// Gives `window` the caller's activation token kept for it, if any,
+    /// so the desktop lets it come to the front.
+    fn hand_over_startup_id(&self, window: &PropertiesWindow) {
         if let Some(startup_id) = self.item_dialogs().startup_id.take() {
             window.set_startup_id(&startup_id);
             #[cfg(test)]
             self.item_dialogs().used_startup_ids.borrow_mut().push(startup_id);
         }
-        window.present();
     }
 
     /// Keeps a caller's activation token for the next Properties window.

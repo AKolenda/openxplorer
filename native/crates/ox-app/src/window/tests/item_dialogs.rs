@@ -237,7 +237,8 @@ fn show_item_properties_opens_the_folder_and_the_properties() {
 }
 
 /// The caller's activation token goes to the Properties window that
-/// `ShowItemProperties` opens, so the desktop lets it come to the front.
+/// `ShowItemProperties` opens or brings back, so the desktop lets it come
+/// to the front.
 ///
 /// parity: INT-014, INT-023
 #[gtk::test]
@@ -258,6 +259,14 @@ fn show_item_properties_gives_the_callers_token_to_the_properties_window() {
         ["caller-token-1"],
         "the Properties window took the caller's token"
     );
+
+    // Asked again, the open window comes back with the new caller's token.
+    test.window.hand_startup_id_to_properties("caller-token-2");
+    test.window.show_file_manager_request(&request);
+    wait_until("the second token", || {
+        test.window.properties_startup_ids() == ["caller-token-1", "caller-token-2"]
+    });
+    assert_eq!(test.window.properties_windows().len(), 1, "the same window");
 }
 
 /// Alt+Enter opens a file's Properties as Windows 11 lays them out: a
@@ -798,6 +807,76 @@ fn a_folders_read_only_reaches_the_files_inside_only() {
     assert!(!window.is_closed(), "Apply keeps the window open");
 }
 
+/// A folder's Read-only changed while Apply makes the change before it
+/// stays to apply.
+///
+/// parity: PROP-003
+#[gtk::test]
+fn a_folders_read_only_changed_during_apply_stays_to_apply() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Album")).expect("a folder");
+    fs::write(fixture.path("Album/photo.png"), b"p").expect("a file");
+    fs::set_permissions(fixture.path("Album/photo.png"), fs::Permissions::from_mode(0o644)).expect("mode");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Album");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Album Properties");
+    let read_only = check(&general(&window), "Read-only (Only applies to files in folder)");
+
+    read_only.set_active(true);
+    press(&window, "Apply");
+    // Apply greys the buttons as it starts the change, which then runs off
+    // the main thread until the main loop takes its result.
+    while window.ok_button().is_sensitive() {
+        glib::MainContext::default().iteration(true);
+    }
+    read_only.set_active(false);
+    assert!(read_only.is_inconsistent() || !read_only.is_active(), "cleared");
+
+    wait_until("the change", || window.ok_button().is_sensitive());
+    assert_eq!(
+        mode_of(&fixture.path("Album/photo.png")),
+        0o444,
+        "Read-only was made"
+    );
+    assert!(
+        window.apply_button().is_sensitive(),
+        "clearing it is left to apply"
+    );
+}
+
+/// Read-only is refused on a location registered as a previous version
+/// after the window opened, as Security and renaming refuse it.
+///
+/// parity: PROP-024
+#[gtk::test]
+fn read_only_refuses_a_location_made_a_previous_version_meanwhile() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Backups")).expect("a backup folder");
+    let path = fixture.path("Backups/plan.txt");
+    fs::write(&path, b"plan").expect("a file");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("a known mode");
+    let test = TestWindow::open(&fixture.uri_of("Backups"));
+    test.select_named("plan.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("plan.txt Properties");
+    let read_only = check(&general(&window), "Read-only");
+
+    test.context
+        .previous_versions()
+        .configure(
+            &fixture.uri_of("Documents"),
+            &ox_core::location::file_uri(&fixture.path("Backups")),
+            ox_core::versions::SnapshotLayout::Direct,
+        )
+        .expect("a snapshot source");
+    read_only.set_active(true);
+    press(&window, "Apply");
+
+    refusal_over(&window).press("OK");
+    assert_eq!(mode_of(&path), 0o644, "the previous version is unchanged");
+}
+
 /// Hidden adds a leading dot to the name on Apply, and a taken name is
 /// refused with the normal message.
 ///
@@ -1331,7 +1410,8 @@ pub(super) fn versions_of(window: &PropertiesWindow) -> VersionsPanel {
 }
 
 /// Previous Versions lists the snapshot under Name and Date modified,
-/// grouped by date, and Open and Restore act on the one selected.
+/// grouped by date, and Open and Restore act on the one selected; a
+/// click only selects it.
 ///
 /// parity: PROP-019, PROP-020, PROP-032
 #[gtk::test]
@@ -1363,6 +1443,11 @@ fn previous_versions_lists_the_snapshots_of_the_folder() {
     );
     assert!(shown.iter().any(|text| text.ends_with(" 12:30")), "{shown:?}");
     assert!(!button(&versions, "Open").is_sensitive(), "nothing selected yet");
+    let rows = descendants::<gtk::ListBox>(&versions).remove(0);
+    assert!(
+        !rows.activates_on_single_click(),
+        "a click only selects a version, for Open or Restore"
+    );
     capture_dialog(&window, "native-properties-versions.png");
 
     versions.select_version(0);

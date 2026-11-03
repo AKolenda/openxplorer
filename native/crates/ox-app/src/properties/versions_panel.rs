@@ -353,8 +353,11 @@ impl VersionsPanel {
 
     /// The versions under their date headings.
     fn show_versions(&self, list: &gtk::Box, found: &VersionList) {
+        // A click selects a version for Open or Restore; a double click
+        // or Enter opens it.
         let rows = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::Single)
+            .activate_on_single_click(false)
             .css_classes(["versions-rows"])
             .build();
         rows.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(

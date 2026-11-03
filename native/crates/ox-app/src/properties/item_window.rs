@@ -289,7 +289,14 @@ impl ItemPages {
             can_change_app: !properties.entry.is_dir && !is_read_only,
         };
         clear(&self.general);
-        let general = general_tab(window, &properties, &self.context.locations, rights, &self.uri);
+        let general = general_tab(
+            window,
+            &properties,
+            &self.context.locations,
+            rights,
+            &self.uri,
+            &self.context.versions,
+        );
         self.general.append(&general.page);
         self.general_edits.replace(Some(Rc::clone(&general.edits)));
         if let Some(rows) = &general.folder_rows {

@@ -23,6 +23,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -31,6 +32,7 @@ use ox_core::format;
 use ox_core::location::LocationContext;
 use ox_core::permissions::{apply_in_background, ModeChange, PermissionRequest};
 use ox_core::transfer::Cancellation;
+use ox_core::versions::PreviousVersions;
 
 use super::folder_count::FolderCountRows;
 use super::metadata::{ItemProperties, MountFacts};
@@ -76,11 +78,12 @@ pub(super) fn general_tab(
     locations: &LocationContext,
     rights: GeneralRights,
     uri: &Rc<RefCell<String>>,
+    versions: &Arc<PreviousVersions>,
 ) -> GeneralTab {
     let entry = &properties.entry;
     let is_folder = entry.is_dir;
     let page = super::window::page();
-    let edits = GeneralEdits::new(window, properties, rights, Rc::clone(uri));
+    let edits = GeneralEdits::new(window, properties, rights, Rc::clone(uri), Arc::clone(versions));
     page.append(&header(properties, &edits));
     page.append(&divider());
 
@@ -293,6 +296,8 @@ pub(super) struct GeneralEdits {
     hidden: gtk::CheckButton,
     /// Set while the tab changes a box itself.
     is_updating: Cell<bool>,
+    /// Which locations are previous versions, which are never changed.
+    versions: Arc<PreviousVersions>,
 }
 
 impl GeneralEdits {
@@ -301,6 +306,7 @@ impl GeneralEdits {
         properties: &ItemProperties,
         rights: GeneralRights,
         uri: Rc<RefCell<String>>,
+        versions: Arc<PreviousVersions>,
     ) -> Rc<Self> {
         let entry = &properties.entry;
         let name = gtk::Entry::builder()
@@ -338,6 +344,7 @@ impl GeneralEdits {
             folder_read_only: Cell::new(ReadOnly::Unchanged),
             hidden,
             is_updating: Cell::new(false),
+            versions,
         });
         edits.connect_controls();
         edits
@@ -458,6 +465,12 @@ impl GeneralEdits {
         let window = self.window.upgrade();
         let opener = window.as_ref().and_then(PropertiesWindow::opener);
         if let Some(read_only) = self.read_only_change() {
+            let uri = self.uri.borrow().clone();
+            // A location registered as a previous version since the window
+            // opened is never changed (PROP-024).
+            self.versions
+                .check_writable(&uri)
+                .map_err(|refusal| refusal.to_string())?;
             // No drive is formatted while the item changes (DEV-012).
             let _writing = match &opener {
                 Some(opener) => Some(opener.hold_write()?),
@@ -469,12 +482,15 @@ impl GeneralEdits {
                 group: None,
                 recursive: self.is_folder,
             };
-            let uri = self.uri.borrow().clone();
+            let submitted = self.folder_read_only.get();
             apply_in_background(uri, request, Cancellation::new())
                 .await
                 .map_err(|error| error.to_string())?;
             if self.is_folder {
-                self.show_folder_read_only(ReadOnly::Unchanged);
+                // A box changed while the change was made stays to apply.
+                if self.folder_read_only.get() == submitted {
+                    self.show_folder_read_only(ReadOnly::Unchanged);
+                }
             } else {
                 self.read_only_now.set(Some(read_only));
             }
