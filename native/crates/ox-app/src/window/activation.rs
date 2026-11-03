@@ -497,8 +497,12 @@ impl BrowserWindow {
             return;
         };
         // VIEW-068: Enter on the address the tab is going to already does
-        // not start it over.
+        // not start it over. A typed lookup ends the edit once it answers;
+        // nothing else would, so the address bar returns to its crumbs now.
         if self.is_going_to(tab, &folder) {
+            if !self.is_opening_typed(tab) {
+                self.accept_address(&typed, source);
+            }
             return;
         }
         let pending = self.begin_activation(tab);
@@ -537,6 +541,33 @@ impl BrowserWindow {
         // The address stays in the address bar, with its progress, while
         // it is looked up, as in Windows Explorer.
         self.begin_opening(tab, &target, OpeningKind::Typed, lookup);
+    }
+
+    /// Tab `id`, moved here from another window while it was going to
+    /// `target`, goes on there: the lookup starts over in this window and,
+    /// as for a tab the user left, opens only a folder (VIEW-068,
+    /// SAFE-013).
+    pub(super) fn resume_opening(&self, id: TabId, target: &str) {
+        let folder = target.to_owned();
+        let lookup = Listing::spawn(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let result = query_entry(&folder).await;
+                if !window.end_opening(id) {
+                    return;
+                }
+                let request = AddressRequest {
+                    uri: &folder,
+                    typed: &folder,
+                    place: None,
+                    source: AddressSource::Pasted,
+                };
+                window.open_typed_folder_only(id, &request, result);
+                window.after_opening(id);
+            }
+        ));
+        self.begin_opening(id, target, OpeningKind::Typed, lookup);
     }
 
     /// Opens the location a typed address resolved to, in tab `id`, which

@@ -13,8 +13,11 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::network::NetworkError;
 
-use crate::test_support::harness::{settle, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
+use crate::test_support::harness::{
+    settle, wait_for, wait_until, Fixture, OpenedWindows, TestWindow, STANDARD_NAMES,
+};
 use crate::test_support::held;
+use crate::window::address_bar::AddressMode;
 use crate::window::session::TabPlacement;
 use crate::window::slow_delay::APPEARANCE_DELAY;
 
@@ -588,4 +591,96 @@ fn each_tab_keeps_its_own_slow_state() {
     assert!(shows_nothing_busy(&test), "nothing is left of its slow state");
     assert!(!status_says_loading(&test));
     assert_eq!(test.window.current_uri(), Some(documents));
+}
+
+/// Enter on the folder the tab is listing for the first time does not
+/// list it again, but ends the edit: the address bar returns to its
+/// crumbs, as for any address it opens.
+///
+/// parity: NAV-027, VIEW-068
+#[gtk::test]
+fn enter_on_the_folder_being_listed_returns_the_address_bar_to_its_crumbs() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let documents = fixture.uri_of("Documents");
+    let hold = held::hold(&held::listing_key(&documents));
+    test.window.navigate(&documents).expect("a folder");
+    wait_until("the listing to wait", || {
+        held::waits(&held::listing_key(&documents)) == 1
+    });
+
+    enter_address(&test, &fixture.path("Documents").display().to_string());
+
+    assert_eq!(test.window.address_bar().mode(), AddressMode::Crumbs);
+    assert!(shows_stop(&test), "the listing goes on");
+    drop(hold);
+    test.wait_for_listing("the folder");
+    assert_eq!(
+        held::waits(&held::listing_key(&documents)),
+        1,
+        "the listing was not started over"
+    );
+    assert_eq!(test.window.address_bar().mode(), AddressMode::Crumbs);
+}
+
+/// A slow lookup says "Loading…" in the status bar with "Working on
+/// it...", as a slow listing does.
+///
+/// parity: VIEW-050, VIEW-068
+#[gtk::test]
+fn a_slow_lookup_says_loading_in_the_status_bar() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+    let documents = fixture.uri_of("Documents");
+    let hold = held::hold(&held::lookup_key(&documents));
+
+    enter_address(&test, &fixture.path("Documents").display().to_string());
+    assert!(!status_says_loading(&test), "not before the delay");
+    wait_until("Working on it...", || says_working(&test));
+
+    assert!(status_says_loading(&test));
+    drop(hold);
+    wait_until("the typed folder", || {
+        test.window.current_uri().as_deref() == Some(documents.as_str()) && !test.window.is_loading()
+    });
+    settle();
+    assert!(!status_says_loading(&test));
+}
+
+/// A tab moved to another window while its address is looked up goes on
+/// to that address there, showing that it is working, rather than
+/// staying where it was.
+///
+/// parity: TAB-029, VIEW-068
+#[gtk::test]
+fn a_tab_moved_while_a_slow_address_opens_goes_on_to_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.add_tab(&fixture.uri()).expect("a folder");
+    test.wait_for_listing("the second tab");
+    let moved = test.active_tab().expect("a tab");
+    let documents = fixture.uri_of("Documents");
+    let hold = held::hold(&held::lookup_key(&documents));
+    enter_address(&test, &fixture.path("Documents").display().to_string());
+    wait_until("the lookup to wait", || {
+        held::waits(&held::lookup_key(&documents)) == 1
+    });
+
+    test.window.move_tab_to_new_window(moved);
+    let opened = OpenedWindows::only(&[&test.window]);
+    let window = opened.window();
+    settle();
+
+    assert!(
+        window.address_bar().has_css_class("loading"),
+        "the moved tab still shows that it is going there"
+    );
+    assert_eq!(test.window.tab_count(), 1, "the original went");
+    drop(hold);
+    wait_until("the address in the new window", || {
+        window.current_uri().as_deref() == Some(documents.as_str()) && window.is_listed()
+    });
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }

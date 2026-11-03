@@ -52,6 +52,13 @@ pub(in crate::window) struct Opening {
     work: Listing,
 }
 
+impl Opening {
+    /// The location the tab is going to.
+    pub(in crate::window) fn target(&self) -> &str {
+        &self.target
+    }
+}
+
 /// The CSS class of the address bar while the tab in front is busy.
 const LOADING_CLASS: &str = "loading";
 
@@ -118,6 +125,16 @@ impl BrowserWindow {
             Some(opening) => opening.target == target,
             None => tab.listing_state.is_listing() && !tab.reloading && tab.uri() == target,
         }
+    }
+
+    /// Whether tab `id` is looking up an address typed or pasted into the
+    /// address bar, which ends the edit once it answers.
+    pub(super) fn is_opening_typed(&self, id: TabId) -> bool {
+        let session = self.imp().session.borrow();
+        session
+            .tab(id)
+            .and_then(|tab| tab.opening.as_ref())
+            .is_some_and(|opening| opening.kind == OpeningKind::Typed)
     }
 
     /// Tab `id` starts going to `target`, which `work` looks up; any
