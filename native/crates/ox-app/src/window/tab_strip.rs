@@ -212,15 +212,14 @@ impl TabStrip {
         // is in front shows at once.
         if imp.layout.is_live() {
             let had_focus = imp.tab_list.focus_child().is_some();
-            let shown_front = self.show_front(tabs);
-            let is_front_only = shown_front == Some(true);
+            let is_front_only = self.show_front(tabs);
             imp.waiting_tabs.replace((!is_front_only).then(|| tabs.to_vec()));
             // A stand-in for a tab dragged in stays the one in front.
-            if shown_front.is_some() && imp.guest.borrow().is_some() {
+            if imp.guest.borrow().is_some() {
                 self.show_own_front(false);
             }
             // The focus goes with the front, as when the strip is drawn anew.
-            if shown_front.is_some() && had_focus {
+            if had_focus {
                 if let Some(front) = self.front_widget() {
                     front.grab_focus();
                 }
@@ -288,30 +287,27 @@ impl TabStrip {
             .map(|(_, widget)| widget.clone())
     }
 
-    /// Shows which of `tabs` is in front, when they are the tabs shown, in
-    /// the same order: `Some(true)` when that is all that changed,
-    /// `Some(false)` when a tab's location or title changed too, which
-    /// waits for the drag to end; `None` when other tabs are given.
-    fn show_front(&self, tabs: &[TabView]) -> Option<bool> {
+    /// Shows which of the tabs shown is in front among `tabs`, by id:
+    /// none when the tab in front is one the strip does not show yet, as
+    /// one opened during a drag. True when nothing but the front changed;
+    /// otherwise the rest waits for the drag to end.
+    fn show_front(&self, tabs: &[TabView]) -> bool {
         let mut shown = self.imp().shown.borrow_mut();
-        let is_same_tabs =
-            shown.len() == tabs.len() && shown.iter().zip(tabs).all(|((view, _), tab)| view.id == tab.id);
-        if !is_same_tabs {
-            return None;
-        }
-        let is_front_only = shown
-            .iter()
-            .zip(tabs)
-            .all(|((view, _), tab)| is_same_but_for_front(view, tab));
-        for ((view, widget), tab) in shown.iter_mut().zip(tabs) {
-            show_in_front(widget, tab.active);
-            if is_front_only {
-                *view = tab.clone();
-            } else {
-                view.active = tab.active;
+        let is_front_only = shown.len() == tabs.len()
+            && shown
+                .iter()
+                .zip(tabs)
+                .all(|((view, _), tab)| is_same_but_for_front(view, tab));
+        for (view, widget) in shown.iter_mut() {
+            let given = tabs.iter().find(|tab| tab.id == view.id);
+            let active = given.is_some_and(|tab| tab.active);
+            show_in_front(widget, active);
+            match given.filter(|_| is_front_only) {
+                Some(tab) => *view = tab.clone(),
+                None => view.active = active,
             }
         }
-        Some(is_front_only)
+        is_front_only
     }
 
     /// The tab at (`x`, `y`) in the strip, if any: where a file drop

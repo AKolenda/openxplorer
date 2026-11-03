@@ -609,6 +609,50 @@ fn no_tab_opens_while_another_is_dragged_along_its_row() {
     assert_eq!(strip.live_tab(), Some(first), "the tab still follows the pointer");
 }
 
+/// A tab reopened while another is dragged along its row waits for the
+/// drag to end to show in the strip, but which tab is in front still
+/// shows: the tab the keyboard brings to the front afterwards takes the
+/// selected state and the focus, so the arrow keys go on from it.
+///
+/// parity: ACC-008, TAB-032
+#[gtk::test]
+fn a_tab_shown_by_the_keyboard_after_one_reopened_during_a_drag_takes_the_focus() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    test.window.add_tab(&fixture.uri_of("Music")).expect("a folder");
+    test.wait_for_listing("a third tab");
+    let [first, second, third] = tab_ids(&test.window)[..] else {
+        panic!("three tabs are open");
+    };
+    test.window.close_tab(third);
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let strip = test.window.tab_strip();
+    let widget_of = |id| strip.tab_widget_of(id).expect("a shown tab");
+    test.window.switch_tab(first);
+    widget_of(first).grab_focus();
+    let x = grab_point(&test.window, first);
+
+    strip.grab_tab(first, (x, 10.0));
+    strip.follow_pointer(first, x + 4.0);
+    test.activate("reopen-closed-tab", None);
+    let reopened = active_tab(&test.window);
+    let first_in_front_meanwhile = widget_of(first).has_css_class("active");
+    test.window.switch_tab(second);
+
+    assert_eq!(tab_ids(&test.window).len(), 3, "the tab reopened");
+    assert_ne!(reopened, Some(first), "the reopened tab came to the front");
+    assert!(
+        !first_in_front_meanwhile,
+        "the dragged tab no longer showed in front"
+    );
+    assert_eq!(strip.live_tab(), Some(first), "the tabs are still laid out live");
+    assert!(
+        widget_of(second).has_css_class("active"),
+        "the second tab shows in front"
+    );
+    assert!(widget_of(second).has_focus(), "the tab now in front has focus");
+}
+
 /// With "Tab key switches between split panes" on, Tab while a split tab
 /// is dragged along its row keeps its active pane active: the drag holds
 /// the tab by that pane, so leaving the row after a switch would carry the
