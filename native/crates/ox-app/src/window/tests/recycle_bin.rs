@@ -16,7 +16,7 @@ use ox_core::transfer::Cancellation;
 use super::file_ops_support::{
     dialog_over, is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
 };
-use crate::folder_view::details::cell_text;
+use crate::folder_view::details::shown_cell_text;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
@@ -135,16 +135,22 @@ fn the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted() {
         .expect("Budget.txt is listed");
     let alpha = fixture.path("Alpha").display().to_string();
     assert_eq!(
-        cell_text(
+        shown_cell_text(
             SortColumn::OriginalLocation,
             &budget,
-            ox_core::format::DateStyle::Absolute
+            ox_core::format::DateStyle::Absolute,
+            true
         ),
         alpha
     );
     let unknown = ox_core::format::date_short_time_text(None);
     assert_ne!(
-        cell_text(SortColumn::Deleted, &budget, ox_core::format::DateStyle::Absolute),
+        shown_cell_text(
+            SortColumn::Deleted,
+            &budget,
+            ox_core::format::DateStyle::Absolute,
+            true
+        ),
         unknown,
         "the deletion date is known"
     );

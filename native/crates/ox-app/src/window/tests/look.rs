@@ -307,6 +307,9 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
 fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
     let menu = test.window.context_menu();
     wait_for_frames(&test.window, 2);
@@ -343,6 +346,9 @@ fn menus_and_the_sign_in_dialog_paint_each_appearance() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     let cases = [
         ("light", "#f9f9f9", "#f9f9f9", "#ffffff"),
         ("dark", "#2c2c2c", "#282828", "#202020"),
@@ -392,9 +398,9 @@ fn a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance() {
     let test = laid_out(&fixture.uri());
     for (theme, content) in [("light", "#ffffff"), ("dark", "#202020")] {
         show_theme(&test, theme);
-        // Renaming several items asks in a dialog; New folder asks nothing.
+        // Rename items… asks in a dialog; New folder asks nothing.
         super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
-        test.activate("rename", None);
+        test.activate("rename-items", None);
         let dialog = open_dialog(&test);
         wait_for_frames(&dialog, 3);
         assert_eq!(painted(&dialog).width(), 510, "the dialog's width");

@@ -189,7 +189,7 @@ fn protocol_name(uri: &str) -> &'static str {
 fn discovered_servers(body: &gtk::Box, discovery: &DiscoveryState, locations: &LocationContext) {
     let title = section_title(ox_core::i18n::gettext_static("Discovered servers"), Icon::Desktop);
     let count = gtk::Label::builder()
-        .label(discovery.servers.len().to_string())
+        .label(ox_core::format::group_digits(discovery.servers.len() as u64))
         .hexpand(true)
         .xalign(1.0)
         .css_classes(["network-count"])

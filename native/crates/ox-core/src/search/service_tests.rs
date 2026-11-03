@@ -197,3 +197,27 @@ fn too_many_changed_folders_force_a_full_rescan() {
     assert!(state.forced_rescans.contains(&local.root));
     assert_eq!(state.dirty.len(), 1);
 }
+
+/// A watched folder that becomes build output, such as a `venv` that gets
+/// its `pyvenv.cfg` after it was indexed, leaves the cache with what was
+/// stored below it, and is no longer watched.
+///
+/// parity: SRCH-030, SRCH-031
+#[test]
+fn a_folder_that_becomes_a_virtual_environment_leaves_the_cache() {
+    let local = LocalRoot::new();
+    fs::create_dir(local.tree.join("venv")).unwrap();
+    fs::write(local.tree.join("venv/left_pad.py"), "x").unwrap();
+    let service = local.start_service(ServiceLimits::default());
+    local.tick_until(&service, "the first scan is ready", |root| {
+        root.status == RootStatus::Ready
+    });
+    assert_eq!(found_names(&local.index, "left_pad"), ["left_pad.py"]);
+
+    fs::write(local.tree.join("venv/pyvenv.cfg"), "home = /usr/bin").unwrap();
+
+    local.tick_until(&service, "the virtual environment leaves the cache", |root| {
+        found_names(&local.index, "left_pad").is_empty() && root.watch_count == 1
+    });
+    assert!(found_names(&local.index, "venv").is_empty());
+}

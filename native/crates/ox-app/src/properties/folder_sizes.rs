@@ -101,9 +101,9 @@ impl FolderSizeState {
                     "{status} · {files} files · {skipped} skipped · {errors} unreadable. {reason} {finished}",
                     &[
                         ("status", status),
-                        ("files", &size.files.to_string()),
-                        ("skipped", &size.skipped.to_string()),
-                        ("errors", &size.errors.to_string()),
+                        ("files", &ox_core::format::group_digits(size.files)),
+                        ("skipped", &ox_core::format::group_digits(size.skipped)),
+                        ("errors", &ox_core::format::group_digits(size.errors)),
                         ("reason", reason),
                         ("finished", &finished),
                     ],
@@ -188,12 +188,18 @@ pub(super) fn counts_text(files: u64, folders: u64) -> String {
     let files = if files == 1 {
         ox_core::i18n::gettext_static("1 file").to_owned()
     } else {
-        ox_core::i18n::format_message("{files} files", &[("files", &files.to_string())])
+        ox_core::i18n::format_message(
+            "{files} files",
+            &[("files", &ox_core::format::group_digits(files))],
+        )
     };
     let folders = if folders == 1 {
         ox_core::i18n::gettext_static("1 folder").to_owned()
     } else {
-        ox_core::i18n::format_message("{folders} folders", &[("folders", &folders.to_string())])
+        ox_core::i18n::format_message(
+            "{folders} folders",
+            &[("folders", &ox_core::format::group_digits(folders))],
+        )
     };
     ox_core::i18n::format_message("{files}, {folders}", &[("files", &files), ("folders", &folders)])
 }

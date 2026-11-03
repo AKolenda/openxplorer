@@ -13,7 +13,7 @@ use gtk::{gdk, gio};
 use ox_core::location::ArchiveLocation;
 use ox_core::settings::{PreferencesUpdate, ZipOpening};
 
-use super::archives::fixture_with_zip;
+use super::archives::{fixture_with_zip, mark_encrypted, opening_zips_in_the_window};
 use super::file_ops_support::is_enabled;
 use super::item_dialogs::texts;
 use crate::test_support::harness::{capture, descendants, wait_until, Fixture, TestWindow};
@@ -595,17 +595,55 @@ fn a_zip_handed_in_opens_like_a_folder_when_zips_do() {
     });
 }
 
-/// "In a pop-up window", the default, keeps the Compressed folder window.
+/// Now that ZIPs open in the tab by default, a corrupt ZIP says there why
+/// it cannot be listed, and a file in a password ZIP says it needs the
+/// archive manager, as the Compressed folder window says.
+///
+/// parity: ARC-005, ARC-009, ARC-026
+#[gtk::test]
+fn a_corrupt_or_password_zip_says_why_in_the_tab() {
+    let fixture = fixture_with_zip();
+    fs::write(fixture.path("Broken.zip"), b"not a zip").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Broken.zip");
+    test.activate("open", None);
+    let broken = ArchiveLocation::root(&fixture.uri_of("Broken.zip"));
+    wait_until("the broken ZIP in the tab", || {
+        test.window.current_uri() == Some(broken.uri())
+    });
+    test.wait_for_listing("the refusal");
+    let error = test.window.load_error().expect("the tab says why");
+    assert!(error.contains("not a zip file"), "{error}");
+
+    mark_encrypted(&fixture.path("Bundle.zip"));
+    let test = TestWindow::open(&fixture.uri());
+    open_bundle(&test, &fixture);
+    test.select_named("readme.txt");
+    test.activate("open", None);
+    wait_until("the refusal", || !test.window.shown_message().is_empty());
+    assert_eq!(
+        test.window.shown_message(),
+        "Encrypted ZIP members require an archive manager."
+    );
+    assert!(test.context.recorded_launches().is_empty());
+}
+
+/// ZIPs open in the tab like folders by default, as in Windows Explorer;
+/// "In a pop-up window" keeps the Compressed folder window.
 ///
 /// parity: ARC-026
 #[gtk::test]
-fn the_pop_up_window_stays_the_default() {
+fn zips_open_like_folders_by_default() {
     let fixture = fixture_with_zip();
     let test = TestWindow::open(&fixture.uri());
     assert_eq!(
         test.context.settings_data().preferences.zip_opening,
-        ZipOpening::Window
+        ZipOpening::Folder
     );
+    open_bundle(&test, &fixture);
+    assert!(test.shown_dialog().is_none(), "no window over the tab");
+
+    let test = opening_zips_in_the_window(&fixture);
     test.select_named("Bundle.zip");
     test.activate("open", None);
     test.wait_for_dialog("the Compressed folder window");
@@ -619,7 +657,7 @@ fn the_pop_up_window_stays_the_default() {
 #[gtk::test]
 fn a_path_through_a_zip_stays_a_path_with_the_pop_up_window() {
     let fixture = fixture_with_zip();
-    let test = TestWindow::open(&fixture.uri());
+    let test = opening_zips_in_the_window(&fixture);
     test.wait_for_listing("the folder");
     let typed = format!("{}/Bundle.zip/Docs", fixture.root().display());
 

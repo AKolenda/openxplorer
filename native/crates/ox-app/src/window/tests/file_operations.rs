@@ -13,9 +13,10 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
-use ox_core::settings::{PreferencesUpdate, Settings};
+use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 use ox_core::transfer::{Cancellation, Progress, ProgressScope};
 
+use super::context_menus::choose_menu_style;
 use super::file_ops_support::{
     assert_ended_without_a_message, dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog,
     press_shortcut, press_shortcut_where_focused, require_private_trash, select_names, text_field,
@@ -326,7 +327,7 @@ fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
 
-    test.activate("rename", None);
+    test.activate("rename-items", None);
     let dialog = open_dialog(&test);
     let field = text_field(&dialog);
 
@@ -365,7 +366,7 @@ fn a_batch_error_goes_once_a_name_is_accepted() {
     fs::write(fixture.path("README"), "read me").expect("the file is written");
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["README", "Notes 2.txt"]);
-    test.activate("rename", None);
+    test.activate("rename-items", None);
     let dialog = open_dialog(&test);
     let field = text_field(&dialog);
     field.set_text("");
@@ -400,7 +401,7 @@ fn a_batch_name_that_adds_an_extension_asks_first() {
     fs::write(fixture.path("README"), "read me").expect("the file is written");
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["README", "Notes 2.txt"]);
-    test.activate("rename", None);
+    test.activate("rename-items", None);
     let dialog = open_dialog(&test);
     let field = text_field(&dialog);
     field.set_text("Plan.md");
@@ -672,6 +673,9 @@ fn shift_clicking_delete_in_the_bar_deletes_permanently_after_asking() {
 fn shift_choosing_delete_in_the_right_click_menu_asks_to_delete_permanently() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The classic menu, which this test reads; Windows 11's compact
+    // menu is the default.
+    choose_menu_style(&test, ContextMenu::Win10);
     test.window
         .right_click(Some(super::context_menus::position_of(&test, "Notes 2.txt")));
     let menu = test.window.context_menu();

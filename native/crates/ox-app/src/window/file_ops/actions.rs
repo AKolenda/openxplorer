@@ -77,9 +77,11 @@ impl BrowserWindow {
         [journal, clipboard]
     }
 
-    /// New ▸ Folder, the New menu's files and templates, and New ▸ Link.
+    /// New ▸ Folder and Text document, the New menu's other files and
+    /// templates, and New ▸ Link.
     /// The templates are read now and whenever the New menu opens.
     fn install_new_actions(&self) {
+        self.watch_input();
         self.refresh_template_menu();
         if let Some(menu) = self.command_bar().new_menu_popover() {
             menu.connect_show(glib::clone!(
@@ -93,7 +95,9 @@ impl BrowserWindow {
             task_action(WindowAction::NewFolder, |window| async move {
                 window.create_folder().await;
             }),
-            new_file_action(WindowAction::NewTextDocument, starter(BuiltinTemplate::Text)),
+            task_action(WindowAction::NewTextDocument, |window| async move {
+                window.create_text_document().await;
+            }),
             new_file_action(WindowAction::NewFile, NewFileKind::Empty),
             new_file_action(
                 WindowAction::NewMarkdownDocument,
@@ -142,6 +146,9 @@ impl BrowserWindow {
             }),
             task_action(WindowAction::Rename, |window| async move {
                 window.rename_selection().await;
+            }),
+            task_action(WindowAction::RenameItems, |window| async move {
+                window.rename_items_selection().await;
             }),
             // Shift held while Delete is clicked, in the command bar or a
             // menu, deletes permanently, as Shift+Delete does (OPS-016).

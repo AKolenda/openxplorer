@@ -230,11 +230,13 @@
     },
     "clipboardText": {
       "status": "native-tested",
-      "note": "Native: Copy as path (its menu item and Ctrl+Shift+C or Ctrl+Alt+C; the Python app's command bar button is Share now) puts the display path on the display clipboard as text with gdk::Clipboard::set_text, which cannot fail, so the Python fallback dialog has no trigger. The copy buttons of Properties and the mount setup are proven with their own features.",
+      "note": "Native: Copy as path (its menu item and Ctrl+Shift+C or Ctrl+Alt+C; the Python app's command bar button is Share now) puts the display path, in double quotes as Windows writes it, on the display clipboard as text with gdk::Clipboard::set_text, which cannot fail, so the Python fallback dialog has no trigger. The copy buttons of Properties and the mount setup are proven with their own features.",
       "evidence": [
         "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_copies_the_selected_items_address_or_the_folders",
         "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_runs_on_explorers_and_dolphins_keys",
-        "native/crates/ox-app/src/window/copy_path.rs::local_smb_and_device_items_copy_their_display_path"
+        "native/crates/ox-app/src/window/copy_path.rs::a_local_path_with_a_space_is_copied_in_quotes",
+        "native/crates/ox-app/src/window/copy_path.rs::an_smb_item_copies_its_unc_path_in_quotes",
+        "native/crates/ox-app/src/window/copy_path.rs::a_phone_item_copies_its_device_path_in_quotes"
       ]
     },
     "connect": {
@@ -260,7 +262,7 @@
     },
     "createTemplate": {
       "status": "native-tested",
-      "note": "ox_core::ops::create_from_template ports create_from_template in v2.0.0:desktop/file_services.py with the OPS-048 rules: the template must be in a fresh list, it is opened without following links or blocking and checked on the descriptor, read in bounded, cancellable blocks, staged in a private file that is published without overwriting and deleted when it is not published. Native: Create in the New from template dialog runs it; the new file is selected.",
+      "note": "ox_core::ops::create_from_template ports create_from_template in v2.0.0:desktop/file_services.py with the OPS-048 rules: the template must be in a fresh list, it is opened without following links or blocking and checked on the descriptor, read in bounded, cancellable blocks, staged in a private file that is published without overwriting and deleted when it is not published. Native: Create in the New from template dialog runs it; the new file is selected. New > Text document runs it through create_numbered_starter without a dialog, under 'New Text Document.txt' or the next free numbered name, then renames the file in place.",
       "evidence": [
         "native/crates/ox-core/tests/ops_create.rs::a_starter_writes_its_content_to_a_private_new_file",
         "native/crates/ox-core/tests/ops_create.rs::a_user_template_is_copied_without_its_permissions",
@@ -268,7 +270,10 @@
         "native/crates/ox-core/tests/ops_create.rs::a_template_never_overwrites_and_never_goes_to_a_server_listing",
         "native/crates/ox-core/src/ops/new_from_template.rs::a_template_swapped_for_a_link_or_a_fifo_is_refused_without_blocking",
         "native/crates/ox-core/src/ops/new_from_template.rs::a_name_taken_while_publishing_is_kept_and_the_stage_file_is_deleted",
-        "native/crates/ox-app/src/window/tests/file_operations.rs::a_new_menu_file_starts_from_its_template_and_is_created_from_it"
+        "native/crates/ox-app/src/window/tests/file_operations.rs::a_new_menu_file_starts_from_its_template_and_is_created_from_it",
+        "native/crates/ox-core/tests/ops_create.rs::a_numbered_starter_takes_the_next_free_name_before_the_extension",
+        "native/crates/ox-core/src/ops/new_from_template.rs::a_name_taken_at_the_last_moment_moves_to_the_next_number",
+        "native/crates/ox-app/src/window/tests/new_text_document.rs::new_text_document_makes_the_file_at_once_and_renames_its_name_in_place"
       ]
     },
     "desktopDefault": {
@@ -504,14 +509,16 @@
     },
     "rename": {
       "status": "native-tested",
-      "note": "ox_core::ops::rename_item ports rename_item in v2.0.0:desktop/gio_backend.py: name validation, the refusal of roots and whole SMB shares, the same-name no-op, the whole-tree snapshot write check, then a same-folder move that never overwrites. test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected of v2.0.0:desktop/tests/gio_integration.py are ported. Native: F2 runs it on the name edited in place (or in the Rename dialog when the item is not on screen) with the base name selected; the renamed item stays selected and Undo and Redo walk the rename.",
+      "note": "ox_core::ops::rename_item ports rename_item in v2.0.0:desktop/gio_backend.py: name validation, the refusal of roots and whole SMB shares, the same-name no-op, the whole-tree snapshot write check, then a same-folder move that never overwrites. test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected of v2.0.0:desktop/tests/gio_integration.py are ported. Native: F2 runs it on the name edited in place (or in the Rename dialog when the item is not on screen) with the base name selected; the renamed item stays selected and Undo and Redo walk the rename. With several items selected, as in Windows Explorer, the name typed for the focused one goes to all of them as \"Name (1).ext\", \"Name (2).ext\" in the order shown, each keeping its own extension, through ox_core::ops::rename_batch: each item is renamed with rename_item's rules through its own location, a taken number is skipped, and one Undo renames them all back. Rename items… in the classic context menu, for several items, opens the batch rename dialog with its # template (ox_core::ops::rename_batch, OPS-014).",
       "evidence": [
         "native/crates/ox-core/tests/ops_rename.rs::rename_onto_a_taken_name_changes_nothing",
         "native/crates/ox-core/tests/ops_rename.rs::a_folder_holding_a_protected_backup_is_not_renamed",
         "native/crates/ox-core/tests/ops_rename.rs::a_folder_holding_a_configured_snapshot_folder_is_not_renamed",
         "native/crates/ox-core/tests/ops_rename.rs::renaming_to_the_same_name_changes_nothing_and_leaves_nothing_to_undo",
         "native/crates/ox-core/tests/ops_rename.rs::invalid_names_roots_and_whole_shares_are_refused",
-        "native/crates/ox-app/src/window/tests/file_operations.rs::rename_edits_the_name_in_place_and_undo_and_redo_walk_it"
+        "native/crates/ox-app/src/window/tests/file_operations.rs::rename_edits_the_name_in_place_and_undo_and_redo_walk_it",
+        "native/crates/ox-app/src/window/tests/renaming_several.rs::several_selected_items_get_the_typed_name_numbered_in_view_order",
+        "native/crates/ox-core/src/ops/numbered_rename.rs::a_taken_number_is_skipped_and_nothing_is_overwritten"
       ]
     },
     "revealDisable": {

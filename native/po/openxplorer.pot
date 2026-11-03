@@ -182,10 +182,6 @@ msgid "Keep the terminal open when the command ends"
 msgstr ""
 
 #: crates/ox-app/resources/ui/open-with-dialog.ui
-msgid "Open with"
-msgstr ""
-
-#: crates/ox-app/resources/ui/open-with-dialog.ui
 msgid "Or run a command"
 msgstr ""
 
@@ -728,6 +724,26 @@ msgstr ""
 
 #: crates/ox-app/src/folder_view/cells/item_check.rs crates/ox-app/src/window/select_matching.rs
 msgid "Select"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Date created: {date}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Date modified: {date}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Size: {size}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Type: {type}"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/column_keys.rs
@@ -2147,11 +2163,11 @@ msgid "Windows 10 is compact and shows familiar text commands."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 10 · Classic (default)"
+msgid "Windows 10 · Classic"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 11 · Compact actions"
+msgid "Windows 11 · Compact actions (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -2192,11 +2208,11 @@ msgid "Double-clicking a ZIP"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "In a pop-up window (default)"
+msgid "In a pop-up window"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "Like a folder (Windows)"
+msgid "Like a folder (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
@@ -2833,7 +2849,7 @@ msgid "Off: Tab moves keyboard focus through the window as usual."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "Off: a folder opened from another app or the command line opens in a new tab, and the tab you are using stays where it is."
+msgid "Off: a folder opened from another app, Show in folder or the command line opens in a new tab, and the tab you are using stays where it is."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3731,7 +3747,7 @@ msgstr ""
 msgid "More options"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
 msgstr ""
 
@@ -3812,7 +3828,7 @@ msgstr ""
 msgid "From template…"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Group by"
 msgstr ""
 
@@ -3929,6 +3945,10 @@ msgid "Recent locations cleared."
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Choose another app"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Compare files"
 msgstr ""
 
@@ -4005,6 +4025,10 @@ msgstr ""
 msgid "Open in {name}"
 msgstr ""
 
+#: crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/src/window/context_menu/entries.rs
+msgid "Open with"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs
 msgid "Open with {name}"
@@ -4031,10 +4055,14 @@ msgid "Properties"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
-msgid "Select only one item for this command."
+msgid "Rename items…"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Select only one item for this command."
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Show more options"
 msgstr ""
 
@@ -4060,6 +4088,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/desktop_link.rs
 msgid "This link points to an address OpenXplorer cannot open."
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/entry/type_label.rs
+msgid "Compressed folder"
 msgstr ""
 
 #: crates/ox-app/src/window/details_pane/content.rs
@@ -4421,7 +4453,7 @@ msgstr ""
 msgid "Rename the {len} selected items to:"
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/batch_rename.rs
+#: crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/numbered_rename.rs
 msgid "Renaming items…"
 msgstr ""
 
@@ -4647,6 +4679,14 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/names.rs
 msgid "Use a name without slashes or control characters."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a text document…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New Text Document"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -5099,12 +5139,31 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
+msgid "There is not enough space in “{folder}” to save the file."
+msgstr ""
+
+#: crates/ox-app/src/window/picker.rs
+msgid "You don't have permission to save in this location. Contact the administrator to obtain permission."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{folder}” is not available. If it is on a network, make sure the share is still connected."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
 msgid "“{name}” is a folder, not a file."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
 msgid "“{name}” is not a valid file name."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/picker.rs
+msgid "“{name}” is set to read-only. Try again with a different file name."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6099,10 +6158,6 @@ msgid "Only folders and network shares can be pinned to Quick access."
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs
-msgid "Compressed folder"
-msgstr ""
-
-#: crates/ox-core/src/entry/type_label.rs
 msgid "Excel worksheet"
 msgstr ""
 
@@ -6995,7 +7050,7 @@ msgstr ""
 msgid "Add # to the name, so each item gets its own number."
 msgstr ""
 
-#: crates/ox-core/src/ops/batch_rename.rs
+#: crates/ox-core/src/ops/batch_rename.rs crates/ox-core/src/ops/numbered_rename.rs
 msgid "Enter a name for the items."
 msgstr ""
 
@@ -7122,6 +7177,11 @@ msgstr ""
 
 #: crates/ox-core/src/ops/new_from_template.rs
 msgid "This template is unavailable, too large, or not a regular template file."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/new_from_template.rs
+msgid "Too many files are called “{base_name}”. Rename some of them, then try again."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
