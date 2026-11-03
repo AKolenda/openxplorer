@@ -54,7 +54,7 @@ use action::drop_run_action;
 pub(in crate::window) use action::DropRun;
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{query_program, ProgramChecks, ProgramTarget};
-pub(super) use targets::{DragScroll, DropZone};
+pub(super) use targets::{scroll_step, DragScroll, DropZone, SCROLL_TICK};
 
 /// The most items one drop brings.
 const MAX_DROPPED_ITEMS: usize = 200;

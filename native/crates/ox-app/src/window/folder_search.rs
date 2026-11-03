@@ -37,6 +37,19 @@ use super::search_box::ViewKey;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
+/// A search the window showed, kept while another tab stands in front so
+/// it shows again when its tab comes back: tabs share the search box, and
+/// showing a tab empties it.
+#[derive(Debug, Clone)]
+pub(super) struct KeptSearch {
+    /// The search box's text.
+    query: String,
+    /// The scope the strip showed.
+    scope: SearchScope,
+    /// The search options that narrowed what was shown.
+    facets: SearchFacets,
+}
+
 impl BrowserWindow {
     /// The strip above the columns while searching.
     pub(super) fn search_strip(&self) -> &SearchInfoStrip {
@@ -215,6 +228,30 @@ impl BrowserWindow {
         let awaits_status = self.context().search_cache().status().is_none();
         let is_running = self.imp().search.borrow().is_running();
         self.is_searching() && (is_running || awaits_status)
+    }
+
+    /// The search the window shows, to show again later; `None` while
+    /// nothing is searched.
+    pub(super) fn kept_search(&self) -> Option<KeptSearch> {
+        let search = self.imp().search.borrow();
+        search.is_active().then(|| KeptSearch {
+            query: search.query().to_owned(),
+            scope: search.scope(),
+            facets: search.facets(),
+        })
+    }
+
+    /// Shows `kept` again, in the tab in front, as if typed there: it runs
+    /// again once the typing pause is over.
+    pub(super) fn restore_search(&self, kept: Option<KeptSearch>) {
+        let Some(kept) = kept else {
+            return;
+        };
+        let mut search = self.imp().search.borrow_mut();
+        search.set_scope(kept.scope);
+        search.set_facets(kept.facets);
+        drop(search);
+        self.search_box().set_query(&kept.query);
     }
 
     /// Types `text` into the search box, as the snapshot hook asks.

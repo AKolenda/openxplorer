@@ -134,7 +134,7 @@ sudo apt install gnome-terminal
 
 Middle-click a folder, connected share, breadcrumb or sidebar location to open a background tab. Shift+middle-click also switches to it. Middle-click an existing tab to close it. Background directories load when selected, so opening a network tab does not immediately interrupt you with a login dialog.
 
-Drag a tab onto another OpenXplorer tab strip to merge it. To open a separate window, drop on a supported desktop, or drag down into the source window until the new-window hint appears. The Move tab to new window menu remains available. Escape cancels; the original tab is kept until the destination acknowledges it.
+Press a tab to show it, then drag it along its strip: the other tabs slide aside as it moves, and it stays where you release it. Drag it out of the strip and the tab itself follows the pointer while the tab beside it comes to the front: over another OpenXplorer window's tab strip it joins that strip, whose tabs make room for it, and a release there merges it at that spot, while a release outside every tab strip opens it in a new window. With no other OpenXplorer window open, the only tab of a window takes the window along. The Move tab to new window menu remains available. Escape cancels and keeps the tab, with one exception: on Wayland, Escape pressed while the pointer is outside every OpenXplorer window goes to the desktop, not to OpenXplorer, and the desktop reports it as a drag that ended there, so the tab opens in a new window. The original tab is kept until the destination acknowledges it.
 
 ## Drag files between applications
 

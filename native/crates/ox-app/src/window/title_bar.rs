@@ -7,7 +7,9 @@
 //! lays the bar out: the "+" right after the last tab, the drag area taking
 //! the rest of the width, and the whole bar a `GtkWindowHandle`, so
 //! dragging or double-clicking any empty part moves or maximises the
-//! window as the desktop expects. This module gives the bar's buttons
+//! window as the desktop expects. A tab that is dragged is the tab drag's
+//! instead: its drag source on the handle claims the press first
+//! (`tab_moves::drag`). This module gives the bar's buttons
 //! their glyphs, the new-tab action and the open-windows menu.
 
 use gtk::glib;
