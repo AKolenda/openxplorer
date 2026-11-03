@@ -232,12 +232,6 @@ fn the_details_pane_previews_an_image_and_names_its_dimensions() {
         property(&pane.shown_properties(), "Dimensions"),
         Some("4 × 3 pixels")
     );
-    test.activate("properties", None);
-    let frame = test.wait_for_dialog("the Properties dialog");
-    wait_until("the dimensions in Properties", || {
-        super::item_dialogs::texts(&frame).contains(&"4 × 3 pixels".to_owned())
-    });
-    frame.close();
     test.window.folder_model().select_none();
     wait_until("the folder's art again", || {
         descendants::<gtk::Picture>(pane).is_empty()

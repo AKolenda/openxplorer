@@ -30,6 +30,7 @@
 //! show a date the same way. Matching the browser exactly would need CLDR
 //! data from ICU.
 
+mod explorer_text;
 mod locale_pattern;
 mod relative_date;
 
@@ -38,6 +39,7 @@ use std::sync::OnceLock;
 
 use glib::DateTime;
 
+pub use explorer_text::{contents_text, exact_size_text, grouped};
 pub use locale_pattern::ClockFormat;
 use locale_pattern::LocalePatterns;
 pub use relative_date::DateStyle;
@@ -327,6 +329,20 @@ pub fn column_date_text(unix_seconds: Option<u64>, style: DateStyle) -> String {
         DateStyle::Absolute => None,
     };
     text.unwrap_or_else(|| date_short_time_text(unix_seconds))
+}
+
+/// The Properties window's Created, Modified and Accessed text, as
+/// Windows 11 writes it: `Tuesday, October 20, 2026, 14:24:52`, with
+/// `Today` or `Yesterday` for the weekday of those days; `Not provided`
+/// when the time is unknown.
+pub fn long_date_time_text(unix_seconds: Option<u64>) -> String {
+    unix_seconds
+        .and_then(local_time)
+        .and_then(|time| {
+            let now = DateTime::now_local().ok()?;
+            explorer_text::long_date_time_with(&time, &now, locale_pattern::current(), clock_format())
+        })
+        .unwrap_or_else(|| crate::i18n::gettext(UNKNOWN_TIMESTAMP))
 }
 
 /// [`date_text`] for a time GIO already returned as a [`DateTime`], in the

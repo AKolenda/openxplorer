@@ -112,6 +112,8 @@ pub(in crate::window) struct OutgoingTabDrag {
     /// The view and sort order of the pane the tab showed in then, which
     /// it takes along if it moves: the pane in front shows the other tab's.
     stepped_back_style: Option<(FolderView, SortOrder)>,
+    /// The window that took the tab, once one did.
+    destination: Option<glib::WeakRef<BrowserWindow>>,
 }
 
 /// What follows the pointer while GTK's drag and drop carries a tab: the

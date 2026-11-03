@@ -10,9 +10,10 @@
 //!   browser window, for every question and form: the desktop dims and
 //!   attaches it, and nothing behind it takes input until it is answered.
 //! - [`DialogLayer`] shows the frame on a dimmed layer inside the browser
-//!   window, under its title bar, for a dialog that must leave the tab
-//!   strip usable: a tab's Properties (PROP-008) and the dialogs shown in
-//!   its place, which stay in front across tab switches.
+//!   window, under its title bar, for a dialog that leaves the tab strip
+//!   usable and stays in front across tab switches: Restore a copy, the
+//!   archive dialogs and result messages. Properties is a window of its
+//!   own ([`crate::properties::PropertiesWindow`]).
 //!
 //! Both hosts follow the same rules: Escape dismisses the dialog, the
 //! content behind it takes no focus or clicks, the dialog is never taller
@@ -31,7 +32,7 @@ mod frame;
 mod layer;
 mod window;
 
-pub(crate) use fields::{check_row, labelled_entry, note, quiet_text, value_or_not_provided, PropertyGrid};
+pub(crate) use fields::{check_row, labelled_entry, note, quiet_text, PropertyGrid};
 pub(crate) use frame::{DialogFrame, DialogWidth};
 pub(crate) use layer::DialogLayer;
 pub(crate) use window::{show_message, Dialog, DialogButton};

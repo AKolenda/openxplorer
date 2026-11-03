@@ -707,8 +707,9 @@ fn ctrl_h_shows_hidden_files_outside_text_fields() {
 /// The text-size keys work inside modal dialogs too, which the
 /// application's accelerators do not reach: they change the size of the
 /// window the dialog belongs to. The window's dialogs, Rename and Map
-/// network location among them, are checked; Open with, the
-/// update and the Brave dialogs install the same keys.
+/// network location among them, and a Properties window, which has no
+/// parent, are checked; Open with, the update and the Brave dialogs
+/// install the same keys.
 ///
 /// parity: VIEW-043
 #[gtk::test]
@@ -719,7 +720,10 @@ fn text_size_keys_work_inside_dialogs() {
     let before = test.window.skin().text_size();
     let rename = crate::dialog::Dialog::new(&test.window, "Rename", "");
     let map = crate::dialogs::map_network_dialog(&test.window, |_, _| {});
-    let dialogs: [&gtk::Window; 2] = [rename.upcast_ref(), map.upcast_ref()];
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let properties = test.wait_for_properties("Notes 2.txt Properties");
+    let dialogs: [&gtk::Window; 3] = [rename.upcast_ref(), map.upcast_ref(), properties.upcast_ref()];
     let plus = gtk::ShortcutTrigger::parse_string("<Control>plus").expect("a trigger");
     let mut expected = before;
     for dialog in dialogs {
@@ -743,6 +747,7 @@ fn text_size_keys_work_inside_dialogs() {
     }
     rename.destroy();
     map.destroy();
+    properties.close();
     test.window.change_text_size(before);
 }
 

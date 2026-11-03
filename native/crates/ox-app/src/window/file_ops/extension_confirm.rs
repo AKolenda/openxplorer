@@ -47,11 +47,29 @@ impl BrowserWindow {
         new_name: &str,
         is_folder: bool,
     ) -> bool {
+        self.confirm_extension_change_over(
+            gtk::prelude::Cast::upcast_ref(self),
+            old_name,
+            new_name,
+            is_folder,
+        )
+        .await
+    }
+
+    /// [`Self::confirm_extension_change`] asked over `parent`, the window
+    /// the rename was asked from, such as a Properties window.
+    pub(crate) async fn confirm_extension_change_over(
+        &self,
+        parent: &gtk::Window,
+        old_name: &str,
+        new_name: &str,
+        is_folder: bool,
+    ) -> bool {
         if !changes_extension(old_name, new_name, is_folder) {
             return true;
         }
         let dialog = Dialog::new(
-            self,
+            parent,
             ox_core::i18n::gettext_static(TITLE),
             ox_core::i18n::gettext_static(MESSAGE),
         );

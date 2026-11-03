@@ -161,27 +161,41 @@ impl BrowserWindow {
         self.present_open_with(subject);
     }
 
-    /// Change app… in Properties: closes Properties and opens the Open
-    /// with dialog for the file at `uri` (`propertiesDialog` in app.js).
+    /// Change app…: opens the Open with dialog for the file at `uri`
+    /// over this window.
     fn change_app(&self, uri: &str) {
-        if let Some(properties) = self.dialog_layer().shown() {
-            properties.close();
-        }
+        self.change_app_over(self.upcast_ref(), uri);
+    }
+
+    /// Change... in Properties: opens the Open with dialog for the file at
+    /// `uri` as a dialog of `parent`, the Properties window, which stays
+    /// open behind it wherever this window is.
+    pub(crate) fn change_app_over(&self, parent: &gtk::Window, uri: &str) {
         let name = self.imp().locations.borrow().base_name(uri);
         let subject = OpenWithSubject {
             uri: uri.to_owned(),
             name,
             is_folder: false,
         };
-        self.present_open_with(subject);
+        self.present_open_with_over(parent, subject);
     }
 
     /// Shows the Open with dialog for `subject`, once its share is
     /// mounted (NET-004).
     fn present_open_with(&self, subject: OpenWithSubject) {
+        self.present_open_with_over(self.upcast_ref(), subject);
+    }
+
+    /// Shows the Open with dialog for `subject` over `parent`, once its
+    /// share is mounted (NET-004).
+    fn present_open_with_over(&self, parent: &gtk::Window, subject: OpenWithSubject) {
         let uri = subject.uri.clone();
+        let parent = parent.downgrade();
         self.after_mounting(&uri, move |window| {
-            OpenWithDialog::present_for(window, subject, window.application_launcher(), window.reporter());
+            let Some(parent) = parent.upgrade() else {
+                return;
+            };
+            OpenWithDialog::present_for(&parent, subject, window.application_launcher(), window.reporter());
         });
     }
 

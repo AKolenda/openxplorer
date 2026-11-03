@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Properties of several selected items (PROP-002), as Dolphin's
-//! `KPropertiesDialog(KFileItemList)` and Explorer's Properties of a
-//! multiple selection show them: a General tab with how many files and
-//! folders are selected, their common type and folder, and their combined
-//! size, size on disk and content, which the folders' sizes are measured
-//! for; and a
-//! Permissions tab whose change applies to all of them, when the user owns
-//! every one, and keeps every bit the user did not change.
+//! Properties of several selected items (PROP-002), as Windows 11's
+//! Properties of a multiple selection show them: a General tab with how
+//! many files and folders are selected, their common type and folder, and
+//! their combined size, size on disk and content, counting up as the
+//! folders are measured; and a Security tab whose change applies to all of
+//! them, when the user owns every one, and keeps every bit the user did
+//! not change.
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
@@ -14,135 +13,102 @@ use ox_core::entry::Entry;
 use ox_core::format;
 use ox_core::location::parent_location;
 use ox_core::permissions::Account;
-use ox_core::sizes::{scan_folder_size_in_background, ScanStatus};
 use ox_core::transfer::Cancellation;
 
-use super::folder_sizes::counts_text;
+use super::folder_count::{count_folders, FolderCountRows, Totals};
+use super::item_window::{can_edit_permissions, PropertiesContext};
 use super::metadata::{read_properties, ItemProperties};
 use super::permissions_editor::{permissions_editor, EditedItems};
-use super::tabs::PropertiesTabs;
-use super::view::{can_edit_permissions, PropertiesContext};
-use super::{PropertiesTab, CALCULATING, READING};
-use crate::dialog::{note, quiet_text, value_or_not_provided, PropertyGrid};
+use super::window::{divider, page, PropertiesWindow, Rows};
+use super::{PropertiesTab, READING};
+use crate::dialog::{note, quiet_text, PropertyGrid};
 use crate::icons::{Art, ArtImage};
+use crate::window::BrowserWindow;
 
-/// The Permissions tab when some item cannot be changed here.
+/// The Security tab when some item cannot be changed here.
 const NOT_EDITABLE: &str = crate::i18n::message_id(
     "Permissions can be changed together only for items you own, outside previous \
                             versions and shares.",
 );
 
-/// The General and Permissions tabs of a multiple selection.
-#[derive(Debug, Clone)]
-pub(crate) struct SelectionProperties {
-    root: gtk::Box,
-    cancel: Cancellation,
+/// The title of a selection's Properties: `<count> items Properties`.
+pub(crate) fn selection_title(count: usize) -> String {
+    ox_core::i18n::format_message(
+        "{count} items Properties",
+        &[("count", &ox_core::format::group_digits(count as u64))],
+    )
 }
 
-impl SelectionProperties {
-    /// The Properties of `entries`, which are at least two, opened on
-    /// General or Permissions as `initial` says. It starts measuring the
-    /// folders and reading the items' permissions at once.
-    pub(crate) fn new(entries: Vec<Entry>, context: &PropertiesContext, initial: PropertiesTab) -> Self {
-        let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        root.add_css_class("properties-view");
-        let tabs = PropertiesTabs::new();
-        root.append(tabs.tab_row());
-        root.append(tabs.pages());
-        let general = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let permissions = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        tabs.add_page(PropertiesTab::General, &general);
-        tabs.add_page(PropertiesTab::Permissions, &permissions);
-        tabs.select_tab(initial);
-        let cancel = Cancellation::new();
-        let size = fill_general(&general, &entries, context);
-        measure(&entries, &size, &cancel);
-        permissions.append(&quiet_text(ox_core::i18n::gettext_static(READING)));
-        read_permissions(&permissions, entries, context.clone());
-        Self { root, cancel }
-    }
-
-    /// The dialog's title: `<count> items Properties`.
-    pub(crate) fn dialog_title(count: usize) -> String {
-        ox_core::i18n::format_message(
-            "{count} items Properties",
-            &[("count", &ox_core::format::group_digits(count as u64))],
-        )
-    }
-
-    /// The widget, for the dialog's body.
-    pub(crate) fn widget(&self) -> &gtk::Box {
-        &self.root
-    }
-
-    /// Stops measuring the folders.
-    pub(crate) fn cancel_work(&self) {
-        self.cancel.cancel();
-    }
+/// Opens the Properties of `entries`, which are at least two, on General
+/// or Security as `initial` says. It starts measuring the folders and
+/// reading the items' permissions at once.
+pub(crate) fn open_selection_properties(
+    opener: &BrowserWindow,
+    entries: Vec<Entry>,
+    context: &PropertiesContext,
+    initial: PropertiesTab,
+) -> PropertiesWindow {
+    let art = entries.first().map(Art::for_entry);
+    let window = PropertiesWindow::new(&selection_title(entries.len()), art, Some(opener));
+    let general = page();
+    let security = page();
+    window.add_tab(
+        PropertiesTab::General.page_name(),
+        PropertiesTab::General.label(),
+        &general,
+    );
+    window.add_tab(
+        PropertiesTab::Security.page_name(),
+        PropertiesTab::Security.label(),
+        &security,
+    );
+    window.select_tab(initial.page_name());
+    let cancel = Cancellation::new();
+    window.track_work(cancel.clone());
+    let rows = fill_general(&general, &entries, context);
+    measure(&entries, &rows, &cancel);
+    security.append(&quiet_text(ox_core::i18n::gettext_static(READING)));
+    read_permissions(&security, entries, context.clone(), window.downgrade());
+    window
 }
 
-/// The Size, Size on disk and Contains values, which measuring updates.
-#[derive(Debug, Clone)]
-struct SizeRows {
-    size: gtk::Label,
-    size_on_disk: gtk::Label,
-    contains: gtk::Label,
-}
-
-/// Fills the General tab and returns its Size and Contains values.
-fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext) -> SizeRows {
-    let files = entries.iter().filter(|entry| !entry.is_dir).count();
-    let folders = entries.len() - files;
+/// Fills the General tab and returns its Size, Size on disk and Contains
+/// values.
+fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext) -> FolderCountRows {
+    let files = entries.iter().filter(|entry| !entry.is_dir).count() as u64;
+    let folders = entries.len() as u64 - files;
     let header = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
-        .css_classes(["property-file"])
+        .css_classes(["properties-header"])
         .build();
     if let Some(first) = entries.first() {
-        header.append(&ArtImage::new(Art::for_entry(first), 48));
+        header.append(&ArtImage::new(Art::for_entry(first), 32));
     }
     let heading = gtk::Label::builder()
-        .label(counts_text(files as u64, folders as u64))
+        .label(format::contents_text(files, folders))
         .xalign(0.0)
         .hexpand(true)
-        .css_classes(["property-name-heading"])
+        .selectable(true)
         .build();
     header.append(&heading);
     panel.append(&header);
-    let grid = PropertyGrid::new();
-    grid.add_row(&ox_core::i18n::gettext("Type"), &common_type(entries));
-    grid.add_row(
+    panel.append(&divider());
+    let kind = Rows::new();
+    kind.add(&ox_core::i18n::gettext("Type"), &common_type(entries));
+    kind.add(
         &ox_core::i18n::gettext("Location"),
         &common_location(entries, context),
     );
-    let bytes: u64 = entries
-        .iter()
-        .filter_map(|entry| entry.size.filter(|_| !entry.is_dir))
-        .sum();
-    let has_folders = folders > 0;
-    let size = grid.add_row(
-        &ox_core::i18n::gettext("Size"),
-        &if has_folders {
-            ox_core::i18n::gettext_static(CALCULATING).to_owned()
-        } else {
-            format::pretty_bytes(bytes)
-        },
-    );
-    let size_on_disk = grid.add_row(
-        &ox_core::i18n::gettext("Size on disk"),
-        ox_core::i18n::gettext_static(CALCULATING),
-    );
-    let contains = grid.add_row(
-        &ox_core::i18n::gettext("Contains"),
-        &if has_folders {
-            ox_core::i18n::gettext_static(CALCULATING).to_owned()
-        } else {
-            counts_text(files as u64, 0)
-        },
-    );
-    panel.append(grid.widget());
-    SizeRows {
+    panel.append(kind.widget());
+    panel.append(&divider());
+    let sizes = Rows::new();
+    let size = sizes.add(&ox_core::i18n::gettext("Size"), "");
+    let on_disk = sizes.add(&ox_core::i18n::gettext("Size on disk"), "");
+    let contains = sizes.add(&ox_core::i18n::gettext("Contains"), "");
+    panel.append(sizes.widget());
+    FolderCountRows {
         size,
-        size_on_disk,
+        on_disk,
         contains,
     }
 }
@@ -174,73 +140,37 @@ fn common_location(entries: &[Entry], context: &PropertiesContext) -> String {
     }
 }
 
-/// Measures the selected folders one after another, and reads the space
-/// each selected file takes, then shows the combined size, size on disk and
-/// content once every one is measured.
-fn measure(entries: &[Entry], rows: &SizeRows, cancel: &Cancellation) {
+/// Reads the space each selected file takes, then counts the selected
+/// folders one after another, showing the totals as they climb.
+fn measure(entries: &[Entry], rows: &FolderCountRows, cancel: &Cancellation) {
     let folders: Vec<String> = entries
         .iter()
         .filter(|entry| entry.is_dir)
         .map(|entry| entry.uri.clone())
         .collect();
-    let files: Vec<String> = entries
+    let files: Vec<(String, u64)> = entries
         .iter()
         .filter(|entry| !entry.is_dir)
-        .map(|entry| entry.uri.clone())
+        .map(|entry| (entry.uri.clone(), entry.size.unwrap_or_default()))
         .collect();
-    let mut bytes: u64 = entries
-        .iter()
-        .filter_map(|entry| entry.size.filter(|_| !entry.is_dir))
-        .sum();
-    let mut file_count = files.len() as u64;
-    let mut subfolders = folders.len() as u64;
     let rows = rows.clone();
     let cancel = cancel.clone();
     glib::spawn_future_local(async move {
-        let mut allocated = Some(0_u64);
-        for uri in files {
-            allocated = add_allocated(allocated, size_on_disk(&uri, &cancel).await);
+        let mut totals = Totals::zero();
+        for (uri, bytes) in files {
+            totals.bytes = totals.bytes.saturating_add(bytes);
+            totals.files += 1;
+            totals.on_disk = totals
+                .on_disk
+                .zip(size_on_disk(&uri, &cancel).await)
+                .map(|(total, allocated)| total.saturating_add(allocated));
             if cancel.is_cancelled() {
                 return;
             }
         }
-        let mut is_complete = true;
-        let has_folders = !folders.is_empty();
-        for uri in folders {
-            let noop = |_: &ox_core::sizes::FolderSize| {};
-            match scan_folder_size_in_background(uri, cancel.clone(), noop).await {
-                Ok(size) => {
-                    bytes += size.bytes;
-                    allocated = add_allocated(allocated, size.allocated);
-                    file_count += size.files;
-                    subfolders += size.folders;
-                    is_complete &= size.status == ScanStatus::Complete;
-                }
-                Err(_) => is_complete = false,
-            }
-            if cancel.is_cancelled() {
-                return;
-            }
-        }
-        let at_least = if is_complete { "" } else { "≥ " };
-        if has_folders {
-            rows.size
-                .set_text(&format!("{at_least}{}", format::pretty_bytes(bytes)));
-            rows.contains
-                .set_text(&format!("{at_least}{}", counts_text(file_count, subfolders)));
-        }
-        let on_disk = allocated.map_or_else(String::new, |allocated| {
-            format!("{at_least}{}", format::pretty_bytes(allocated))
-        });
-        rows.size_on_disk.set_text(value_or_not_provided(&on_disk));
+        totals.folders = folders.len() as u64;
+        count_folders(folders, totals, &rows, &cancel);
     });
-}
-
-/// `total` plus `allocated`, or `None` once any item's space is unknown.
-fn add_allocated(total: Option<u64>, allocated: Option<u64>) -> Option<u64> {
-    total
-        .zip(allocated)
-        .map(|(total, allocated)| total.saturating_add(allocated))
 }
 
 /// The bytes the file at `uri` takes on disk; for a link, the file it
@@ -263,10 +193,15 @@ async fn size_on_disk(uri: &str, cancel: &Cancellation) -> Option<u64> {
         .then(|| info.attribute_uint64("standard::allocated-size"))
 }
 
-/// Reads every item's permissions, then fills the Permissions tab: the
+/// Reads every item's permissions, then fills the Security tab: the
 /// items' owner and group, and the editor when every item can be
 /// changed here.
-fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesContext) {
+fn read_permissions(
+    panel: &gtk::Box,
+    entries: Vec<Entry>,
+    context: PropertiesContext,
+    window: glib::WeakRef<PropertiesWindow>,
+) {
     let panel = panel.downgrade();
     glib::spawn_future_local(async move {
         let mut items: Vec<ItemProperties> = Vec::new();
@@ -322,10 +257,12 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
             owner: shared(ItemProperties::owner_account),
             group: shared(ItemProperties::group_account),
         };
-        panel.append(&permissions_editor(
-            edited,
-            std::sync::Arc::clone(&context.versions),
-        ));
+        let (editor, change) = permissions_editor(edited, std::sync::Arc::clone(&context.versions));
+        panel.append(&editor);
+        // The window's OK and Apply make the editor's change too.
+        if let Some(window) = window.upgrade() {
+            window.add_pending(change);
+        }
     });
 }
 

@@ -234,7 +234,7 @@
     },
     "clipboardText": {
       "status": "native-tested",
-      "note": "Native: Copy as path (its menu item and Ctrl+Shift+C or Ctrl+Alt+C; the Python app's command bar button is Share now) puts the display path, in double quotes as Windows writes it, on the display clipboard as text with gdk::Clipboard::set_text, which cannot fail, so the Python fallback dialog has no trigger. The copy buttons of Properties and the mount setup are proven with their own features.",
+      "note": "Native: Copy as path (its menu item and Ctrl+Shift+C or Ctrl+Alt+C; the Python app's command bar button is Share now) puts the display path, in double quotes as Windows writes it, on the display clipboard as text with gdk::Clipboard::set_text, which cannot fail, so the Python fallback dialog has no trigger. The copy button of the mount setup is proven with its own feature.",
       "evidence": [
         "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_copies_the_selected_items_address_or_the_folders",
         "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_runs_on_explorers_and_dolphins_keys",
@@ -343,9 +343,9 @@
     },
     "folderSize": {
       "status": "native-tested",
-      "note": "Calculate folder size, Calculate folder sizes and the Properties button scan on a worker with progress in the size-scan bar, Cancel scan and one scan per window; the results show in the Size column, the details pane and Properties. Mounting an unmounted share before the scan is not done yet.",
+      "note": "Calculate folder size and Calculate folder sizes scan on a worker with progress in the size-scan bar, Cancel scan and one scan per window; the results show in the Size column and the details pane, while Properties counts a folder by itself. Mounting an unmounted share before the scan is not done yet.",
       "evidence": [
-        "native/crates/ox-app/src/window/tests/item_dialogs.rs::calculate_folder_size_shows_the_size_everywhere_the_folder_is",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::calculate_folder_size_shows_the_size_in_the_view_and_the_bar",
         "native/crates/ox-app/src/window/tests/item_dialogs.rs::calculate_folder_sizes_measures_every_folder_shown_and_one_scan_runs_at_a_time",
         "native/crates/ox-app/src/window/tests/item_dialogs.rs::cancel_scan_stops_the_run_and_says_so"
       ]
@@ -500,10 +500,10 @@
     },
     "properties": {
       "status": "native-tested",
-      "note": "The Properties dialog reads the item off the main thread and shows the General and Permissions tabs in the native window; Change app… waits for the Open with dialog.",
+      "note": "Properties is a window of its own, as in Windows 11: it reads the item off the main thread and shows the General and Security tabs, with OK, Cancel and Apply; Change... opens the Open with dialog as a dialog of the Properties window, which stays open behind it.",
       "evidence": [
-        "native/crates/ox-app/src/window/tests/item_dialogs.rs::alt_enter_opens_the_properties_of_the_selected_file",
-        "native/crates/ox-app/src/window/tests/item_dialogs.rs::properties_without_a_selection_describe_the_folder",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::alt_enter_opens_a_files_properties_in_a_window_of_its_own",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::a_folders_size_and_contents_count_by_themselves",
         "native/crates/ox-app/src/window/tests/item_dialogs.rs::properties_of_a_location_open_for_menus_outside_the_folder_view"
       ]
     },

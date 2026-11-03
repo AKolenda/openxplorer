@@ -290,12 +290,12 @@ fn the_new_tab_button_opens_the_home_folder_in_front() {
     assert_eq!(test.window.tab_count(), 2);
 }
 
-/// Ctrl+Tab and Ctrl+T stay out of text fields, and while the active
-/// tab's Properties are open only the tab keys work.
+/// Ctrl+Tab and Ctrl+T stay out of text fields, and Properties, a window
+/// of its own, keeps neither from the browser window.
 ///
 /// parity: TAB-005
 #[gtk::test]
-fn tab_keys_stay_out_of_text_fields_but_switch_away_from_properties() {
+fn tab_keys_stay_out_of_text_fields_and_properties_windows_keep_none() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.window.folder_pane().focus_view();
@@ -306,13 +306,13 @@ fn tab_keys_stay_out_of_text_fields_but_switch_away_from_properties() {
     let in_search = (test.window.tab_keys_apply(), test.window.new_tab_key_applies());
     test.window.folder_pane().focus_view();
     test.activate("properties", None);
-    test.wait_for_dialog("the Properties dialog");
+    test.wait_for_properties("Example projects Properties");
+    test.window.folder_pane().focus_view();
 
     assert_eq!(in_search, (false, false), "a text field keeps the keys");
-    assert!(test.window.tab_keys_apply(), "Ctrl+Tab leaves the dialog's tab");
     assert!(
-        !test.window.new_tab_key_applies(),
-        "other keys wait for the dialog"
+        test.window.tab_keys_apply() && test.window.new_tab_key_applies(),
+        "Properties is a window of its own and keeps no key from this one"
     );
 }
 

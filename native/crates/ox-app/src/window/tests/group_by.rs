@@ -353,8 +353,10 @@ fn apply_to_all_and_reset_folders_cover_the_group_by_of_downloads() {
 
     let options = open_folder_options(&test);
     ask_from_folder_options(&options, "Apply to Folders").press("Yes");
+    // The shared style was saved already, with the first Group by: what
+    // Apply to Folders writes is Downloads' Group by, the applied one.
     wait_until("the applied view", || {
-        test.context.settings_data().preferences.view_defaults.is_some()
+        test.context.settings_data().preferences.downloads_group_by == Some(GroupBy::None)
     });
     close_folder_options(&test, &options, "OK");
     test.window.navigate(&downloads).expect("Downloads");

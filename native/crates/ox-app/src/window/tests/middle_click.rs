@@ -125,8 +125,8 @@ fn a_middle_click_opens_only_for_its_own_press_and_release() {
     emit("released");
     let opened = test.window.tab_count();
     let hint_after_open = hint(&test);
-    test.activate("properties", None);
-    test.wait_for_dialog("the Properties dialog");
+    test.window.show_result_dialog("Operation result", "Done.");
+    test.wait_for_dialog("a dialog");
     emit("pressed");
     emit("released");
 

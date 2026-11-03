@@ -147,12 +147,6 @@ impl BrowserWindow {
         self.is_writing_files() || self.shows_dialog() || self.is_picking()
     }
 
-    /// True when tab `id` must stay here: the window is busy, or the tab
-    /// has Properties, open or withdrawn (`tabCanMove`, PROP-008).
-    pub(super) fn keeps_tab(&self, id: TabId) -> bool {
-        self.is_busy_for_tab_moves() || self.has_properties(id)
-    }
-
     /// True while a dialog of this window is open.
     pub(super) fn shows_dialog(&self) -> bool {
         let this = self.upcast_ref::<gtk::Window>();
@@ -251,7 +245,7 @@ impl BrowserWindow {
         if destination == self {
             return Err(TabMoveRefusal::NoDestination);
         }
-        if self.keeps_tab(id) {
+        if self.is_busy_for_tab_moves() {
             return Err(TabMoveRefusal::SourceBusy);
         }
         let tab = self.moved_tab(id).ok_or(TabMoveRefusal::NoDestination)?;
@@ -266,7 +260,7 @@ impl BrowserWindow {
     ///
     /// Why the tab stays: this window is busy, or the tab closed.
     fn detach_tab(&self, id: TabId) -> Result<BrowserWindow, TabMoveRefusal> {
-        if self.keeps_tab(id) {
+        if self.is_busy_for_tab_moves() {
             return Err(TabMoveRefusal::SourceBusy);
         }
         let tab = self.moved_tab(id).ok_or(TabMoveRefusal::NoDestination)?;
@@ -285,7 +279,7 @@ impl BrowserWindow {
         match self.detach_tab(id) {
             Ok(window) => {
                 window.present_as_new_window();
-                self.release_moved_tab(id);
+                self.release_moved_tab(id, Some(&window));
             }
             Err(refusal) => self.show_message(&refusal.to_string()),
         }
@@ -303,7 +297,7 @@ impl BrowserWindow {
             return;
         };
         match self.hand_over_tab(id, &destination, None) {
-            Ok(()) => self.release_moved_tab(id),
+            Ok(()) => self.release_moved_tab(id, Some(&destination)),
             Err(refusal) => self.show_message(&refusal.to_string()),
         }
     }
@@ -317,7 +311,7 @@ impl BrowserWindow {
     /// "Move tab to window…": lists the other windows under tab `id`
     /// (`moveTabMenu`), or says why the tab cannot move.
     pub(super) fn show_move_tab_menu(&self, id: TabId) {
-        if self.keeps_tab(id) {
+        if self.is_busy_for_tab_moves() {
             self.show_message(&TabMoveRefusal::SourceBusy.to_string());
             return;
         }
@@ -557,8 +551,8 @@ mod tests {
             .hand_over_tab(tab, &other.window, None)
             .expect("the other window takes the tab");
         let _opened = OpenedWindows::only(&[&test.window, &other.window]);
-        window.release_moved_tab(tab);
-        test.window.release_moved_tab(moved);
+        window.release_moved_tab(tab, Some(&other.window));
+        test.window.release_moved_tab(moved, Some(&window));
 
         wait_until("the moved tab to be listed", || other.window.is_listed());
         wait_until("the selection", || {

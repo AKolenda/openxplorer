@@ -61,8 +61,8 @@ pub(crate) struct ItemProperties {
     /// The width and height of a local image, read from its header
     /// (PROP-013).
     pub dimensions: Option<(i32, i32)>,
-    /// Whether the item has a custom icon (PROP-016).
-    pub has_custom_icon: bool,
+    /// The item's own icon, a picture's URI (PROP-016).
+    pub custom_icon: Option<String>,
     /// The bytes the item takes on disk (`standard::allocated-size`), as
     /// Windows Explorer's "Size on disk"; `None` when the backend does not
     /// report them.
@@ -178,7 +178,7 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
         default_app,
         mount,
         dimensions,
-        has_custom_icon: optional_string(&info, "metadata::custom-icon").is_some_and(|icon| !icon.is_empty()),
+        custom_icon: optional_string(&info, "metadata::custom-icon").filter(|icon| !icon.is_empty()),
         size_on_disk: info
             .has_attribute("standard::allocated-size")
             .then(|| info.attribute_uint64("standard::allocated-size")),
@@ -289,7 +289,7 @@ mod tests {
             default_app: None,
             mount: None,
             dimensions: None,
-            has_custom_icon: false,
+            custom_icon: None,
             size_on_disk: None,
         };
 

@@ -81,15 +81,19 @@ impl StateCheck {
 /// A choice of accounts, showing the items' one, or "Varying (No
 /// Change)" when they differ or it is unknown.
 #[derive(Debug, Clone)]
-pub(super) struct AccountChoice {
-    pub(super) choice: gtk::DropDown,
+pub(in crate::properties) struct AccountChoice {
+    pub(in crate::properties) choice: gtk::DropDown,
     accounts: Vec<Account>,
     current: Option<u32>,
 }
 
 impl AccountChoice {
     /// `accounts`, with `current` first when it is not among them.
-    pub(super) fn new(label: &str, current: Option<&Account>, mut accounts: Vec<Account>) -> Self {
+    pub(in crate::properties) fn new(
+        label: &str,
+        current: Option<&Account>,
+        mut accounts: Vec<Account>,
+    ) -> Self {
         if let Some(current) = current.filter(|current| !accounts.contains(current)) {
             accounts.insert(0, current.clone());
         }
@@ -115,7 +119,7 @@ impl AccountChoice {
     }
 
     /// The chosen id, when it differs from the current one.
-    pub(super) fn changed(&self) -> Option<u32> {
+    pub(in crate::properties) fn changed(&self) -> Option<u32> {
         let index = usize::try_from(self.choice.selected()).ok()?;
         let chosen = self.accounts.get(index)?.id;
         (Some(chosen) != self.current).then_some(chosen)

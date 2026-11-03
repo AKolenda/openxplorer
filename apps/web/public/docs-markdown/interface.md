@@ -68,17 +68,27 @@ Share in the command bar, between Rename and Delete as in Windows 11, opens a ne
 
 To copy an item’s path instead, right-click it and choose Copy as path, or press Ctrl+Shift+C.
 
+## Properties
+
+Alt+Enter, or Properties in a right-click menu, opens Properties as Windows 11 lays it out, in a window of its own: it blocks neither the main window nor another Properties window, and asking again for the same item brings its window back. A file has General, Security and Previous Versions; a folder on this computer adds Sharing and Customize, and Downloads, Documents and the other standard folders add Location.
+
+General shows the name, Type of file and Opens with (Change… picks another app), Location, Size and Size on disk with every byte, such as 314 KB (322,003 bytes), the dates in the long style, such as Tuesday, October 20, 2026, 14:24:52, and the Read-only and Hidden attributes. A folder counts its Size, Size on disk and Contains by itself and shows Created only. Hidden adds a dot to the start of the name, which is how Linux hides an item.
+
+Changes wait for OK or Apply: Apply stays grey until something changes, OK applies and closes, and Cancel or Escape closes without changing anything. A refused change, such as a name that is taken, shows in a message and Properties stays open.
+
+Security shows the item’s real Linux permissions in Windows’ words: the owner, the group and everyone else, and what the one selected may do, from Full control to Read. Edit… and Advanced change them when you own the item; Linux has no deny entries, so the Deny column stays empty. Customize holds Change Icon… for a folder.
+
 ## Previous versions
 
-Properties → Previous versions can browse existing, exposed snapshot collections. Opening a snapshot in another tab retains the original dialog on its originating tab. Restore a copy writes to a separate destination, not over the live original.
+Properties → Previous Versions lists existing, exposed snapshot collections under Name and Date modified, grouped by date as Windows 11 groups them. Select a version: Open shows it in a new tab, and Restore writes a copy to a separate destination, never over the live original. Snapshot source… sets where versions are looked for, and F5 looks again.
 
 This provider recognizes exposed filesystem directories. It does not implement the Windows SMB shadow-copy enumeration protocol, create snapshots, or make backup history exist on a server.
 
-Each previous-version row now includes a right-aligned date and time, followed by Browse and Restore a copy actions. Dates are parsed from recognized snapshot names, including auto-2026-09-04_16-30, 2026-09-05_180000, and @GMT names. A visible “From snapshot name” label explains the source. Unrecognized names show “Date unavailable”; folder modification times are not passed off as snapshot creation times.
+Each version shows the item’s name and, under Date modified, the date and time read from recognized snapshot names, including auto-2026-09-04_16-30, 2026-09-05_180000, and @GMT names; the row’s tooltip names the snapshot, where it came from and where its date comes from. Unrecognized names show “Date unavailable”; folder modification times are not passed off as snapshot creation times.
 
 @GMT timestamps are marked UTC. Other names are shown as written, without guessing a server timezone. This is display metadata, not a server-side ZFS creation-property query.
 
-Snapshot tabs carry a “Previous version” badge and an amber top edge. A banner identifies the historical view and its read-only treatment in OpenXplorer, including when browsing deeper inside it. Network snapshot tabs keep their green network marker. The original Properties dialog still belongs to the original tab.
+Snapshot tabs carry a “Previous version” badge and an amber top edge. A banner identifies the historical view and its read-only treatment in OpenXplorer, including when browsing deeper inside it. Network snapshot tabs keep their green network marker. Properties is a window of its own, so it stays open beside the snapshot tab.
 
 ![Snapshot list with a separate right-hand date and time column](../assets/screenshots/previous-versions.png)
 
@@ -86,7 +96,7 @@ Snapshot tabs carry a “Previous version” badge and an amber top edge. A bann
 
 ## Measure folder sizes on demand
 
-Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and Properties shows the space they take as Size on disk, as Windows Explorer does. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
+Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and shows them in the Size column. Properties counts a folder by itself as soon as it opens, as Windows Explorer does: Size, Size on disk and Contains climb while the folder is measured, and closing Properties stops the count. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
 
 Size counts logical file bytes; Size on disk counts the blocks the files take, which on a compressing filesystem such as ZFS is the compressed space. Neither is a ZFS dataset used/referenced value or a snapshot-exclusive block count.
 

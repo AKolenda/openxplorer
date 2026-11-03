@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The Previous versions tab of the Properties dialog (PROP-019).
+//! The Previous Versions tab (PROP-019), laid out as Windows 11's.
 //!
-//! Ports `renderVersionsPanel` in `v2.0.0:desktop/ui/app.js`: what the tab can and
-//! cannot find, Refresh and Snapshot source…, "Checking readable snapshot
-//! folders…" while the lookup runs, then the versions under their column
-//! titles, or "No accessible previous versions" with the reason, and the
-//! notes on truncation, warnings and the supported layouts. Refreshing,
-//! opening the Snapshot source form or closing the dialog cancels a
-//! lookup in progress, and a stale lookup's result is ignored.
+//! "Previous versions come from snapshot and backup folders.", then
+//! "File versions:" or "Folder versions:" over a list with Name and Date
+//! modified columns, its rows grouped by date ([`super::version_row`]),
+//! "Working on it..." while the lookup runs, and Open and Restore under
+//! it. Open browses a folder's version in a tab; Restore asks where to put
+//! a copy (Restore a copy never overwrites the live item). Snapshot
+//! source... on the left of the buttons configures where versions are
+//! looked for, and F5 looks again (through [`super::window::PropertiesWindow`]). The lookup starts the first time the
+//! tab is shown; looking again, opening Snapshot source... or closing the
+//! window cancels a lookup in progress, and a stale lookup's result is
+//! ignored.
 
 use std::sync::Arc;
 
@@ -19,47 +23,34 @@ use ox_core::transfer::Cancellation;
 use ox_core::versions::{PreviousVersions, VersionList, VersionsError};
 
 use super::snapshot_source::{fill_source_form, SourceItem};
-use super::version_row::version_row;
-use super::PropertiesTarget;
-use crate::dialog::{note, quiet_text};
+use super::version_row::{group_heading, version_row};
+use super::window::{paragraph, push_button};
+use super::{PropertiesTarget, RestoreRequest, SnapshotTarget};
+use crate::dialog::quiet_text;
 use crate::icons::{self, Icon};
-use crate::window::ButtonStyle;
 
-/// What the tab browses, and what it does not.
-const VERSIONS_INTRO: &str = crate::i18n::message_id(
-    "Browse real snapshot or backup folders exposed by your server. This build \
-                              does not enumerate Windows SMB shadow-copy protocol responses or create \
-                              snapshots.",
-);
-/// Shown while the lookup runs.
-const CHECKING: &str = crate::i18n::message_id("Checking readable snapshot folders…");
-/// Above the list: where dates come from.
-const DATE_NOTE: &str = crate::i18n::message_id(
-    "Dates are read from snapshot names. Times stay as written; UTC is marked when \
-                         supplied.",
-);
-/// The heading of an empty result.
-const NO_VERSIONS: &str = crate::i18n::message_id("No accessible previous versions");
+/// What the tab browses.
+const VERSIONS_INTRO: &str =
+    crate::i18n::message_id("Previous versions come from snapshot and backup folders.");
+/// Shown while the lookup runs, as Windows shows it.
+const CHECKING: &str = crate::i18n::message_id("Working on it...");
+/// The heading of an empty result, as Windows words it.
+const NO_VERSIONS: &str = crate::i18n::message_id("There are no previous versions available.");
 /// Under a truncated list.
 const TRUNCATED_NOTE: &str = crate::i18n::message_id(
     "Showing at most 100 versions. Configure a narrower snapshot folder to see more.",
 );
-/// At the end of the tab: what counts as a previous version.
+/// The tooltip of the list: what counts as a previous version.
 const LAYOUTS_NOTE: &str = crate::i18n::message_id(
     "Snapshots must already exist and be readable through your NAS. Built-in \
                             layouts include .snapshot, #snapshot, .zfs/snapshot, and Snapper \
                             .snapshots/<id>/snapshot. Restore a copy never overwrites the live item. A \
                             cached search result is not a previous version.",
 );
-/// The empty result's clock glyph (`icon('clock', 30)`).
-const EMPTY_GLYPH: i32 = 30;
-/// The width of a row's date cell (`.version-date`), which its title
-/// shares.
-const DATE_COLUMN_WIDTH: i32 = 130;
-/// The width of the Actions title: a row's Browse and Restore buttons.
-const ACTIONS_COLUMN_WIDTH: i32 = 210;
-/// The glyph size of the toolbar's buttons.
-const TOOLBAR_GLYPH: i32 = 14;
+/// The intro's glyph.
+const INTRO_GLYPH: i32 = 32;
+/// The height of the list, as Windows' list fills the tab.
+const LIST_HEIGHT: i32 = 230;
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
@@ -91,6 +82,15 @@ mod imp {
         pub(super) is_loaded: Cell<bool>,
         /// The list of versions, or the message in its place.
         pub(super) list: RefCell<Option<gtk::Box>>,
+        /// The versions listed, in the list's order, for Open and Restore.
+        pub(super) shown: RefCell<Vec<ox_core::versions::PreviousVersion>>,
+        /// The rows' list box.
+        pub(super) rows: RefCell<Option<gtk::ListBox>>,
+        /// Open and Restore.
+        pub(super) open: RefCell<Option<gtk::Button>>,
+        pub(super) restore: RefCell<Option<gtk::Button>>,
+        /// Notes under the list.
+        pub(super) notes: RefCell<Option<gtk::Box>>,
     }
 
     #[glib::object_subclass]
@@ -137,6 +137,15 @@ impl VersionsPanel {
         panel
     }
 
+    /// Lists the versions of the item at `uri`, as after a rename, looking
+    /// again if they were shown.
+    pub(super) fn set_item_uri(&self, uri: &str) {
+        self.imp().uri.replace(uri.to_owned());
+        if self.imp().is_loaded.get() {
+            self.load();
+        }
+    }
+
     fn versions(&self) -> &Arc<PreviousVersions> {
         self.imp().versions.get().expect("new sets the service")
     }
@@ -152,19 +161,61 @@ impl VersionsPanel {
         }
     }
 
-    /// Shows the list and starts a new lookup (Refresh).
+    /// Shows the list and starts a new lookup (F5).
     pub(crate) fn load(&self) {
         self.cancel();
         self.clear();
-        self.append(&quiet_text(ox_core::i18n::gettext_static(VERSIONS_INTRO)));
-        self.append(&self.toolbar());
+        let intro = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        intro.add_css_class("versions-intro");
+        let glyph = icons::image(Icon::History, INTRO_GLYPH);
+        glyph.add_css_class("versions-intro-glyph");
+        intro.append(&glyph);
+        intro.append(&paragraph(ox_core::i18n::gettext_static(VERSIONS_INTRO)));
+        self.append(&intro);
+        let caption = if self.kind() == ItemKind::Folder {
+            ox_core::i18n::gettext("Folder versions:")
+        } else {
+            ox_core::i18n::gettext("File versions:")
+        };
+        let caption = gtk::Label::builder()
+            .label(caption)
+            .xalign(0.0)
+            .css_classes(["properties-caption"])
+            .build();
+        self.append(&caption);
+        let frame = gtk::Frame::builder()
+            .css_classes(["properties-list-frame", "versions-frame"])
+            .tooltip_text(ox_core::i18n::gettext_static(LAYOUTS_NOTE))
+            .build();
+        let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        column.append(&column_titles());
         let list = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .css_classes(["versions-list"])
             .build();
-        list.append(&quiet_text(ox_core::i18n::gettext_static(CHECKING)));
-        self.append(&list);
-        self.imp().list.replace(Some(list));
+        list.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
+        let working = quiet_text(ox_core::i18n::gettext_static(CHECKING));
+        working.set_halign(gtk::Align::Center);
+        working.set_margin_top(24);
+        list.append(&working);
+        let scroller = gtk::ScrolledWindow::builder()
+            .child(&list)
+            .min_content_height(LIST_HEIGHT)
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vexpand(true)
+            .build();
+        column.append(&scroller);
+        frame.set_child(Some(&column));
+        self.append(&frame);
+        let notes = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        self.append(&notes);
+        self.append(&self.buttons());
+        let imp = self.imp();
+        imp.list.replace(Some(list));
+        imp.notes.replace(Some(notes));
+        imp.shown.replace(Vec::new());
+        imp.rows.replace(None);
+        self.update_buttons();
         self.start_lookup();
     }
 
@@ -175,24 +226,79 @@ impl VersionsPanel {
         }
     }
 
-    /// Refresh and Snapshot source….
-    fn toolbar(&self) -> gtk::Box {
-        let toolbar = gtk::Box::builder().css_classes(["versions-toolbar"]).build();
-        let refresh = toolbar_button(ox_core::i18n::gettext_static("Refresh"), Icon::ArrowClockwise);
-        refresh.connect_clicked(glib::clone!(
-            #[weak(rename_to = panel)]
-            self,
-            move |_| panel.load()
-        ));
-        let source = toolbar_button(ox_core::i18n::gettext_static("Snapshot source…"), Icon::Settings);
+    /// Snapshot source... on the left; Open and Restore on the right.
+    fn buttons(&self) -> gtk::Box {
+        let row = gtk::Box::builder()
+            .css_classes(["properties-button-row", "versions-buttons"])
+            .build();
+        let source = push_button(&ox_core::i18n::gettext("Snapshot source..."));
         source.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
             move |_| panel.show_source_form()
         ));
-        toolbar.append(&refresh);
-        toolbar.append(&source);
-        toolbar
+        source.set_hexpand(true);
+        row.append(&source);
+        let open = push_button(&ox_core::i18n::gettext("Open"));
+        open.connect_clicked(glib::clone!(
+            #[weak(rename_to = panel)]
+            self,
+            move |_| panel.run_on_selected(true)
+        ));
+        let restore = push_button(&ox_core::i18n::gettext("Restore"));
+        restore.set_tooltip_text(Some(&ox_core::i18n::gettext(
+            "Restore a copy of this version somewhere else; the live item is never overwritten.",
+        )));
+        restore.connect_clicked(glib::clone!(
+            #[weak(rename_to = panel)]
+            self,
+            move |_| panel.run_on_selected(false)
+        ));
+        row.append(&open);
+        row.append(&restore);
+        self.imp().open.replace(Some(open));
+        self.imp().restore.replace(Some(restore));
+        row
+    }
+
+    /// The version selected in the list.
+    fn selected(&self) -> Option<ox_core::versions::PreviousVersion> {
+        let imp = self.imp();
+        let row = imp.rows.borrow().as_ref()?.selected_row()?;
+        let index: usize = row.widget_name().parse().ok()?;
+        imp.shown.borrow().get(index).cloned()
+    }
+
+    /// Greys Open without a selected folder version and Restore without a
+    /// selected version.
+    fn update_buttons(&self) {
+        let selected = self.selected();
+        if let Some(open) = self.imp().open.borrow().as_ref() {
+            open.set_sensitive(selected.as_ref().is_some_and(|version| version.entry.is_dir));
+        }
+        if let Some(restore) = self.imp().restore.borrow().as_ref() {
+            restore.set_sensitive(selected.is_some());
+        }
+    }
+
+    /// Open browses the selected folder version in a tab; Restore asks
+    /// where to put a copy of the selected version. Both happen in the
+    /// browser window that opened Properties, which comes to the front
+    /// first, so what they show is not hidden behind other windows.
+    fn run_on_selected(&self, open: bool) {
+        let Some(version) = self.selected() else {
+            return;
+        };
+        let Some(opener) = super::window::PropertiesWindow::of(self).and_then(|window| window.opener())
+        else {
+            return;
+        };
+        opener.present();
+        if open {
+            opener.browse_snapshot(SnapshotTarget::of_version(&version));
+        } else {
+            opener.ask_restore_destination(&RestoreRequest::of_version(&version));
+        }
     }
 
     /// Runs the lookup on a worker thread and shows its result, unless a
@@ -233,7 +339,7 @@ impl VersionsPanel {
             Ok(found) => found,
             Err(VersionsError::Cancelled) => return,
             Err(error) => {
-                list.append(&quiet_text(&error.to_string()));
+                show_empty(&list, &error.to_string());
                 return;
             }
         };
@@ -245,27 +351,78 @@ impl VersionsPanel {
         self.append_notes(&found);
     }
 
-    /// The date note above the list, the column titles and one row per
-    /// version.
+    /// The versions under their date headings.
     fn show_versions(&self, list: &gtk::Box, found: &VersionList) {
-        let date_note = quiet_text(ox_core::i18n::gettext_static(DATE_NOTE));
-        date_note.add_css_class("version-date-note");
-        self.insert_child_after(&date_note, list.prev_sibling().as_ref());
-        list.set_accessible_role(gtk::AccessibleRole::List);
-        list.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+        // A click selects a version for Open or Restore; a double click
+        // or Enter opens it.
+        let rows = gtk::ListBox::builder()
+            .selection_mode(gtk::SelectionMode::Single)
+            .activate_on_single_click(false)
+            .css_classes(["versions-rows"])
+            .build();
+        rows.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
             "Previous versions",
         ))]);
-        list.append(&column_titles());
+        let today = glib::DateTime::now_local().ok();
         let locations = self.imp().locations.borrow();
-        for version in &found.versions {
-            list.append(&version_row(version, &locations));
+        // Every version is the item itself, as it was: it carries the
+        // item's name, as Windows lists it.
+        let uri = self.imp().uri.borrow().clone();
+        let item_name = gtk::gio::File::for_uri(&uri)
+            .basename()
+            .map(|name| name.to_string_lossy().into_owned());
+        let mut last_heading = None;
+        for (index, version) in found.versions.iter().enumerate() {
+            let heading = today
+                .as_ref()
+                .map(|today| group_heading(version.date().as_ref(), today));
+            if heading.is_some() && heading != last_heading {
+                let label = gtk::Label::builder()
+                    .label(heading.unwrap_or_default())
+                    .xalign(0.0)
+                    .css_classes(["versions-group"])
+                    .build();
+                let header = gtk::ListBoxRow::builder()
+                    .child(&label)
+                    .selectable(false)
+                    .activatable(false)
+                    .build();
+                rows.append(&header);
+                last_heading = heading;
+            }
+            let row = gtk::ListBoxRow::builder()
+                .child(&version_row(
+                    version,
+                    item_name.as_deref().unwrap_or(&version.entry.name),
+                    &locations,
+                ))
+                .name(index.to_string())
+                .build();
+            rows.append(&row);
         }
+        rows.connect_selected_rows_changed(glib::clone!(
+            #[weak(rename_to = panel)]
+            self,
+            move |_| panel.update_buttons()
+        ));
+        rows.connect_row_activated(glib::clone!(
+            #[weak(rename_to = panel)]
+            self,
+            move |_, _| panel.run_on_selected(true)
+        ));
+        list.append(&rows);
+        self.imp().shown.replace(found.versions.clone());
+        self.imp().rows.replace(Some(rows));
+        self.update_buttons();
     }
 
-    /// The truncation note, the warnings and the layouts note.
+    /// The truncation note and the warnings.
     fn append_notes(&self, found: &VersionList) {
+        let Some(notes) = self.imp().notes.borrow().clone() else {
+            return;
+        };
         if found.is_truncated {
-            self.append(&quiet_text(ox_core::i18n::gettext_static(TRUNCATED_NOTE)));
+            notes.append(&quiet_text(ox_core::i18n::gettext_static(TRUNCATED_NOTE)));
         }
         if !found.warnings.is_empty() {
             let details = gtk::Expander::builder()
@@ -273,9 +430,8 @@ impl VersionsPanel {
                 .css_classes(["snapshot-warnings"])
                 .child(&quiet_text(&found.warnings.join("\n")))
                 .build();
-            self.append(&details);
+            notes.append(&details);
         }
-        self.append(&note(ox_core::i18n::gettext_static(LAYOUTS_NOTE)));
     }
 
     /// Replaces the list with the Snapshot source form.
@@ -293,6 +449,7 @@ impl VersionsPanel {
             move || panel.load()
         );
         let form = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        form.set_vexpand(true);
         fill_source_form(&form, &item, self.versions(), &locations, back);
         self.append(&form);
     }
@@ -300,7 +457,12 @@ impl VersionsPanel {
     /// Removes everything the tab shows.
     fn clear(&self) {
         clear_box(self.upcast_ref());
-        self.imp().list.replace(None);
+        let imp = self.imp();
+        imp.list.replace(None);
+        imp.rows.replace(None);
+        imp.open.replace(None);
+        imp.restore.replace(None);
+        imp.notes.replace(None);
     }
 
     /// The number of the newest lookup, for tests.
@@ -316,27 +478,50 @@ impl VersionsPanel {
         self.lookup_arrived(generation, result);
     }
 
-    /// Shows the list and starts a new lookup, as Refresh does, for tests.
+    /// Shows the list and starts a new lookup, as F5 does, for tests.
     #[cfg(test)]
     pub(crate) fn refresh(&self) {
         self.load();
     }
 
-    /// The labels of the versions listed, for tests.
+    /// The item whose versions are listed, for tests.
+    #[cfg(test)]
+    pub(crate) fn item_uri(&self) -> String {
+        self.imp().uri.borrow().clone()
+    }
+
+    /// The snapshot names of the versions listed, for tests.
     #[cfg(test)]
     pub(crate) fn version_labels(&self) -> Vec<String> {
-        let Some(list) = self.imp().list.borrow().clone() else {
-            return Vec::new();
-        };
-        crate::window::children(&list)
-            .filter(|row| row.has_css_class("version-row"))
-            .filter_map(|row| {
-                crate::test_support::harness::descendants::<gtk::Label>(&row)
-                    .into_iter()
-                    .next()
-            })
-            .map(|label| label.text().to_string())
+        self.imp()
+            .shown
+            .borrow()
+            .iter()
+            .map(|version| version.label.clone())
             .collect()
+    }
+
+    /// Selects the version at `index` in the list, for tests.
+    #[cfg(test)]
+    pub(crate) fn select_version(&self, index: usize) {
+        let rows = self.imp().rows.borrow().clone();
+        let Some(rows) = rows else {
+            return;
+        };
+        let mut row = rows.first_child();
+        while let Some(widget) = row {
+            if widget.widget_name() == index.to_string() {
+                rows.select_row(widget.downcast_ref::<gtk::ListBoxRow>());
+                return;
+            }
+            row = widget.next_sibling();
+        }
+    }
+
+    /// Presses Open (`true`) or Restore, for tests.
+    #[cfg(test)]
+    pub(crate) fn press(&self, open: bool) {
+        self.run_on_selected(open);
     }
 
     /// Every text the tab shows, for tests.
@@ -349,52 +534,41 @@ impl VersionsPanel {
     }
 }
 
-/// "Snapshot", "Date & time" and "Actions" above the rows, hidden from
-/// screen readers as in app.js: each row names its own parts. The date
-/// and actions titles are as wide as those cells of a row.
+/// "Name" and "Date modified" above the rows, hidden from screen readers:
+/// each row names its own parts.
 fn column_titles() -> gtk::Box {
     let titles = gtk::Box::builder().css_classes(["version-columns"]).build();
-    let columns = [
-        ("Snapshot", -1, true),
-        ("Date & time", DATE_COLUMN_WIDTH, false),
-        ("Actions", ACTIONS_COLUMN_WIDTH, false),
-    ];
-    for (title, width, expands) in columns {
-        let label = gtk::Label::builder()
-            .label(title)
-            .xalign(0.0)
-            .width_request(width)
-            .hexpand(expands)
-            .build();
-        titles.append(&label);
-    }
+    let name = gtk::Label::builder()
+        .label(ox_core::i18n::gettext("Name"))
+        .xalign(0.0)
+        .hexpand(true)
+        .build();
+    let date = gtk::Label::builder()
+        .label(ox_core::i18n::gettext("Date modified"))
+        .xalign(0.0)
+        .css_classes(["version-date"])
+        .build();
+    titles.append(&name);
+    titles.append(&date);
     titles.set_accessible_role(gtk::AccessibleRole::Presentation);
     titles
 }
 
-/// The clock, "No accessible previous versions" and `message`.
+/// "There are no previous versions available." and why.
 fn show_empty(list: &gtk::Box, message: &str) {
-    let glyph = icons::image(Icon::Clock, EMPTY_GLYPH);
-    glyph.set_halign(gtk::Align::Start);
-    list.append(&glyph);
     let heading = gtk::Label::builder()
         .label(ox_core::i18n::gettext_static(NO_VERSIONS))
-        .xalign(0.0)
+        .wrap(true)
         .css_classes(["versions-empty-heading"])
         .build();
+    heading.set_margin_top(24);
     list.append(&heading);
-    list.append(&quiet_text(message));
-}
-
-/// A small bordered toolbar button with `glyph` and `label`.
-fn toolbar_button(label: &str, glyph: Icon) -> gtk::Button {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    content.append(&icons::image(glyph, TOOLBAR_GLYPH));
-    content.append(&gtk::Label::new(Some(label)));
-    let button = gtk::Button::builder().child(&content).build();
-    button.add_css_class(ButtonStyle::Bordered.css_class());
-    button.update_property(&[gtk::accessible::Property::Label(label)]);
-    button
+    if !message.is_empty() {
+        let reason = quiet_text(message);
+        reason.set_halign(gtk::Align::Center);
+        reason.set_justify(gtk::Justification::Center);
+        list.append(&reason);
+    }
 }
 
 /// Removes every child of `container`.

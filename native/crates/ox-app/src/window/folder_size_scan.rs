@@ -357,13 +357,14 @@ impl BrowserWindow {
         run.as_ref().map(|run| run.cancel.clone())
     }
 
-    /// What this window measured for the folder at `uri`.
+    /// What this window measured for the folder at `uri`, for tests.
+    #[cfg(test)]
     pub(super) fn measured_folder_size(&self, uri: &str) -> Option<FolderSizeState> {
         self.size_scans().measured.borrow().get(uri).cloned()
     }
 
     /// Records `state` for the folder at `uri` and shows it wherever the
-    /// folder is: the rows of every tab, the details pane and Properties.
+    /// folder is: the rows of every tab and the details pane.
     fn receive_folder_size(&self, uri: &str, state: &FolderSizeState) {
         self.size_scans().measured.borrow_mut().set(uri, state.clone());
         let stores: Vec<gtk::gio::ListStore> = {
@@ -372,9 +373,6 @@ impl BrowserWindow {
         };
         for store in stores {
             update_rows_of(&store, uri, state);
-        }
-        for view in self.properties_views() {
-            view.show_folder_size(uri, state);
         }
         self.update_details_pane();
     }
