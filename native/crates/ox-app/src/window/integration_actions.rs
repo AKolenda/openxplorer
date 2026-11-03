@@ -465,6 +465,13 @@ impl BrowserWindow {
         self.status_bar().check_updates_tooltip()
     }
 
+    /// Whether the status bar shows "Check for updates", for tests of
+    /// other modules.
+    #[cfg(test)]
+    pub(crate) fn shows_status_bar_update(&self) -> bool {
+        self.status_bar().shows_check_updates()
+    }
+
     /// The message line's text, for tests of other modules.
     #[cfg(test)]
     pub(crate) fn shown_message_text(&self) -> String {

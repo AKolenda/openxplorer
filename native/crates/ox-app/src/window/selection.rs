@@ -154,8 +154,14 @@ impl BrowserWindow {
         };
         let model = self.folder_pane().model();
         let selected = model.summary();
+        let counts_items = self.folder_pane().details().counts_items();
         let single = (selected.count == 1)
-            .then(|| model.selected_items().first().map(status_bar::item_text))
+            .then(|| {
+                model
+                    .selected_items()
+                    .first()
+                    .map(|item| status_bar::item_text(item, counts_items))
+            })
             .flatten();
         self.status_bar().set_counts(subject, selected, single);
         self.show_watch_state();

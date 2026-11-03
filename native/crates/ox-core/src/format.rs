@@ -35,6 +35,7 @@ mod locale_pattern;
 mod relative_date;
 
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::OnceLock;
 
 use glib::DateTime;
 
@@ -110,6 +111,131 @@ const SIZE_UNITS: [SizeUnit; 4] = [
 /// (`prettyBytes(undefined)` in app.js).
 pub fn size_text(bytes: Option<u64>) -> String {
     bytes.map_or_else(|| UNKNOWN_DATE.to_owned(), pretty_bytes)
+}
+
+/// A file's size as Windows Explorer's Size column writes it: whole
+/// kilobytes, rounded up, with thousands separated (`1 KB` for 20 bytes,
+/// `0 KB` for an empty file, `2,345 KB`); empty when unknown.
+pub fn column_size_text(bytes: Option<u64>) -> String {
+    let Some(bytes) = bytes else {
+        return String::new();
+    };
+    let kilobytes = bytes.div_ceil(1024);
+    crate::i18n::format_message(
+        "{value} {unit}",
+        &[
+            ("value", &group_digits(kilobytes)),
+            ("unit", crate::i18n::gettext_static("KB")),
+        ],
+    )
+}
+
+/// How a locale groups the digits of a whole number: the separator, and
+/// whether groups after the first three digits have two digits, as Indian
+/// locales write lakhs and crores (`12,34,567`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DigitGrouping {
+    separator: &'static str,
+    lakhs: bool,
+}
+
+/// Languages that group digits with a full stop (CLDR `group` `.`).
+const FULL_STOP_LANGUAGES: [&str; 19] = [
+    "az", "ca", "da", "de", "el", "es", "eu", "gl", "hr", "id", "is", "it", "nl", "pt", "ro", "sl", "sr",
+    "tr", "vi",
+];
+
+/// Languages that group digits with a no-break space (CLDR `group`
+/// U+00A0).
+const SPACE_LANGUAGES: [&str; 17] = [
+    "be", "bg", "cs", "et", "fi", "hu", "kk", "lt", "lv", "nb", "nn", "no", "pl", "ru", "sk", "sv", "uk",
+];
+
+/// Regions where Spanish groups digits with a comma (CLDR), where Spain
+/// and most of South America use a full stop.
+const COMMA_SPANISH_REGIONS: [&str; 11] = ["419", "DO", "GT", "HN", "MX", "NI", "PA", "PE", "PR", "SV", "US"];
+
+/// Languages of India, which group digits in lakhs (CLDR `#,##,##0`).
+const LAKH_LANGUAGES: [&str; 12] = [
+    "as", "bn", "gu", "hi", "kn", "ml", "mr", "ne", "or", "pa", "ta", "te",
+];
+
+impl DigitGrouping {
+    /// Commas between groups of three: English, Chinese, Japanese, `C`.
+    pub const COMMAS: Self = Self {
+        separator: ",",
+        lakhs: false,
+    };
+
+    /// How the locale named `locale`, such as `de_AT.UTF-8`, groups digits,
+    /// after CLDR for the locales listed here; commas in threes for the
+    /// rest (including `C` and `POSIX`).
+    ///
+    /// `GLib` has no number formatting call and `localeconv` would need
+    /// `unsafe`, so the language and region decide, as for the first
+    /// weekday.
+    pub fn for_locale(locale: &str) -> Self {
+        let name = locale.split(['.', '@']).next().unwrap_or_default();
+        let (language, region) = name.split_once('_').unwrap_or((name, ""));
+        let separator = match (language, region) {
+            ("de" | "it" | "rm", "CH" | "LI") => "\u{2019}",
+            // French in Canada writes a no-break space, elsewhere a narrow
+            // one, as Windows does.
+            ("de", "AT") | ("pt", "PT" | "AO" | "MZ") | ("fr", "CA") | ("es", "CR") => "\u{a0}",
+            ("es", region) if COMMA_SPANISH_REGIONS.contains(&region) => ",",
+            ("fr", _) => "\u{202f}",
+            _ if FULL_STOP_LANGUAGES.contains(&language) => ".",
+            _ if SPACE_LANGUAGES.contains(&language) => "\u{a0}",
+            _ => ",",
+        };
+        Self {
+            separator,
+            // India groups in lakhs, and so do its languages named without
+            // a region, Bengali in Bangladesh and Nepali in Nepal.
+            lakhs: region == "IN"
+                || (region.is_empty() && LAKH_LANGUAGES.contains(&language))
+                || matches!(language, "bn" | "ne"),
+        }
+    }
+
+    /// `value` with its digits grouped.
+    pub fn group(self, value: u64) -> String {
+        let digits = value.to_string();
+        let mut grouped = String::with_capacity(digits.len() * 2);
+        for (index, digit) in digits.chars().enumerate() {
+            let remaining = digits.len() - index;
+            let starts_group = if self.lakhs && remaining > 3 {
+                (remaining - 3).is_multiple_of(2)
+            } else {
+                remaining.is_multiple_of(3)
+            };
+            if index > 0 && starts_group {
+                grouped.push_str(self.separator);
+            }
+            grouped.push(digit);
+        }
+        grouped
+    }
+
+    /// How the process's numeric locale groups digits: `LC_ALL`, else
+    /// `LC_NUMERIC`, else `LANG`, as the C library chooses it; read once.
+    pub fn current() -> Self {
+        static CURRENT: OnceLock<DigitGrouping> = OnceLock::new();
+        *CURRENT.get_or_init(|| {
+            let locale = ["LC_ALL", "LC_NUMERIC", "LANG"]
+                .into_iter()
+                .filter_map(|variable| std::env::var(variable).ok())
+                .find(|value| !value.is_empty())
+                .unwrap_or_default();
+            Self::for_locale(&locale)
+        })
+    }
+}
+
+/// `value` with its digits grouped as the process's numeric locale groups
+/// them: `35,000`, `35.000` in German, `1,23,456` in India.
+pub fn group_digits(value: u64) -> String {
+    DigitGrouping::current().group(value)
 }
 
 /// `912 bytes`, `71.0 KB`, `130 KB`, `1.1 MB`: one decimal below 100 and
@@ -282,6 +408,55 @@ fn local_time(unix_seconds: u64) -> Option<DateTime> {
 mod tests {
     use super::locale_pattern::LocaleSamples;
     use super::*;
+
+    /// The Size column writes whole kilobytes, rounded up and grouped, as
+    /// Windows Explorer's does, and nothing for an unknown size.
+    ///
+    /// parity: VIEW-001
+    #[test]
+    fn the_size_column_writes_whole_kilobytes_rounded_up() {
+        assert_eq!(column_size_text(Some(0)), "0 KB");
+        assert_eq!(column_size_text(Some(20)), "1 KB");
+        assert_eq!(column_size_text(Some(1024)), "1 KB");
+        assert_eq!(column_size_text(Some(1025)), "2 KB");
+        assert_eq!(column_size_text(None), "");
+        let commas = DigitGrouping::COMMAS;
+        assert_eq!(commas.group(2_345), "2,345");
+        assert_eq!(commas.group(999), "999");
+        assert_eq!(commas.group(0), "0");
+    }
+
+    /// Digits are grouped as the numeric locale groups them, after CLDR:
+    /// the separator by language and region, and lakhs in India.
+    ///
+    /// parity: VIEW-001
+    #[test]
+    fn digit_groups_follow_the_locale() {
+        let grouped = |locale: &str, value: u64| DigitGrouping::for_locale(locale).group(value);
+        assert_eq!(grouped("en_US.UTF-8", 1_048_576), "1,048,576");
+        assert_eq!(grouped("zh_CN.UTF-8", 1_048_576), "1,048,576");
+        assert_eq!(grouped("C", 1_048_576), "1,048,576");
+        assert_eq!(grouped("de_DE.UTF-8", 1_048_576), "1.048.576");
+        assert_eq!(grouped("de_AT.UTF-8", 1_234), "1\u{a0}234");
+        assert_eq!(grouped("de_CH.UTF-8", 1_234), "1\u{2019}234");
+        assert_eq!(grouped("es_ES.UTF-8", 1_234), "1.234");
+        assert_eq!(grouped("es_PE.UTF-8", 1_234), "1,234");
+        assert_eq!(grouped("es_MX.UTF-8", 1_234), "1,234");
+        assert_eq!(grouped("pt_BR.UTF-8", 1_234), "1.234");
+        assert_eq!(grouped("pt_PT.UTF-8", 1_234), "1\u{a0}234");
+        assert_eq!(grouped("fr_FR.UTF-8", 1_234), "1\u{202f}234");
+        assert_eq!(grouped("fr_CA.UTF-8", 1_234), "1\u{a0}234");
+        assert_eq!(grouped("ru_RU.UTF-8", 1_234), "1\u{a0}234");
+        assert_eq!(grouped("en_IN.UTF-8", 123_456), "1,23,456");
+        assert_eq!(grouped("hi_IN.UTF-8", 12_345_678), "1,23,45,678");
+        assert_eq!(grouped("en_IN.UTF-8", 999), "999");
+        assert_eq!(grouped("en_IN.UTF-8", 1_000), "1,000");
+        assert_eq!(grouped("bn_BD.UTF-8", 123_456), "1,23,456");
+        assert_eq!(grouped("hi.UTF-8", 123_456), "1,23,456");
+        assert_eq!(grouped("ne_NP.UTF-8", 123_456), "1,23,456");
+        assert_eq!(grouped("ta_LK.UTF-8", 123_456), "123,456");
+        assert_eq!(grouped("es_CR.UTF-8", 1_234), "1\u{a0}234");
+    }
 
     /// One locale's samples of the reference time in [`locale_pattern`], as
     /// glibc 2.39 prints them, and the texts for 2026-09-21 14:13:20 UTC.

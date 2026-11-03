@@ -33,7 +33,7 @@ const NOT_EDITABLE: &str = crate::i18n::message_id(
 
 /// The title of a selection's Properties: `<count> items Properties`.
 pub(crate) fn selection_title(count: usize) -> String {
-    ox_core::i18n::format_message("{count} items Properties", &[("count", &count.to_string())])
+    ox_core::i18n::format_message("{count} items Properties", &[("count", &ox_core::format::group_digits(count as u64))])
 }
 
 /// Opens the Properties of `entries`, which are at least two, on General

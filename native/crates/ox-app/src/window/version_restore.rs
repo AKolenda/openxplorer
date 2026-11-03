@@ -62,12 +62,13 @@ impl BrowserWindow {
             policy: ConflictPolicy::KeepBoth,
         };
         let operation = OperationContext::new(self.context().write_protection());
-        let panel = self.transfer_panel();
-        panel.start(
+        if !self.claim_transfer_panel(
             TransferKind::Files,
             starting_label(TransferMode::Copy),
-            operation.cancel.clone(),
-        );
+            &operation.cancel,
+        ) {
+            return;
+        }
         let progress = self.progress_reporter(&operation.cancel);
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

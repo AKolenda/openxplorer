@@ -186,10 +186,6 @@ msgid "Keep the terminal open when the command ends"
 msgstr ""
 
 #: crates/ox-app/resources/ui/open-with-dialog.ui
-msgid "Open with"
-msgstr ""
-
-#: crates/ox-app/resources/ui/open-with-dialog.ui
 msgid "Or run a command"
 msgstr ""
 
@@ -732,6 +728,26 @@ msgstr ""
 
 #: crates/ox-app/src/folder_view/cells/item_check.rs crates/ox-app/src/window/select_matching.rs
 msgid "Select"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Date created: {date}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Date modified: {date}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Size: {size}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Type: {type}"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/column_keys.rs
@@ -2278,11 +2294,11 @@ msgid "Windows 10 is compact and shows familiar text commands."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 10 · Classic (default)"
+msgid "Windows 10 · Classic"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 11 · Compact actions"
+msgid "Windows 11 · Compact actions (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -2323,11 +2339,11 @@ msgid "Double-clicking a ZIP"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "In a pop-up window (default)"
+msgid "In a pop-up window"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "Like a folder (Windows)"
+msgid "Like a folder (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
@@ -3858,7 +3874,7 @@ msgstr ""
 msgid "More options"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-core/src/ops/undo.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-core/src/ops/undo.rs
 msgid "New"
 msgstr ""
 
@@ -3939,7 +3955,7 @@ msgstr ""
 msgid "From template…"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Group by"
 msgstr ""
 
@@ -4060,6 +4076,10 @@ msgid "Calculate folder size"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Choose another app"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Compare files"
 msgstr ""
 
@@ -4132,6 +4152,10 @@ msgstr ""
 msgid "Open in {name}"
 msgstr ""
 
+#: crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/src/window/context_menu/entries.rs
+msgid "Open with"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_drop/targets/highlight.rs
 msgid "Open with {name}"
@@ -4165,7 +4189,7 @@ msgstr ""
 msgid "Select only one item for this command."
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Show more options"
 msgstr ""
 
@@ -4191,6 +4215,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/desktop_link.rs
 msgid "This link points to an address OpenXplorer cannot open."
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/content.rs crates/ox-core/src/entry/type_label.rs
+msgid "Compressed folder"
 msgstr ""
 
 #: crates/ox-app/src/window/details_pane/content.rs
@@ -6236,10 +6264,6 @@ msgstr ""
 
 #: crates/ox-core/src/entry/error.rs
 msgid "Only folders and network shares can be pinned to Quick access."
-msgstr ""
-
-#: crates/ox-core/src/entry/type_label.rs
-msgid "Compressed folder"
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs

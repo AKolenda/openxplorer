@@ -28,7 +28,7 @@ use crate::integration::{self, ApplicationChoice, Tool};
 use crate::locations::Page;
 
 use super::actions::{plain_action, text_action};
-use super::command_bar::{new_menu, sort_menu, view_menu};
+use super::command_bar::{group_by_menu, new_menu, sort_menu, view_menu};
 use super::disk_tools::is_installed;
 use super::menu_popover::{MenuEntry, MenuPopover, MenuStyle};
 use super::widget_tree::children;
@@ -36,8 +36,9 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 use entries::{
-    background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu, zip_background_menu,
-    zip_item_menu, Comparison, ContextMenu, ItemFacts, ItemLocation, ItemShape,
+    background_menu, compact_background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu,
+    zip_background_menu, zip_item_menu, BackgroundSubmenus, Comparison, ContextMenu, ItemFacts, ItemLocation,
+    ItemShape,
 };
 
 /// How far into a row, and from the view's corner without one, a menu
@@ -108,7 +109,7 @@ impl BrowserWindow {
             popover,
             move |_| popover.unparent()
         ));
-        view.add_controller(context_menu_shortcut());
+        view.add_controller(self.context_menu_shortcuts());
         let right_click = gtk::GestureClick::new();
         right_click.set_button(gdk::BUTTON_SECONDARY);
         right_click.connect_pressed(glib::clone!(
@@ -121,7 +122,8 @@ impl BrowserWindow {
                 window.select_for_context_menu(&view, x, y);
                 #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
                 let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
-                window.open_context_menu(&view, &point, window.preferred_menu_style());
+                let style = menu_style_for(window.preferred_menu_style(), gesture.current_event_state());
+                window.open_context_menu(&view, &point, style);
             }
         ));
         view.add_controller(right_click);
@@ -153,14 +155,15 @@ impl BrowserWindow {
             return;
         };
         let mut menu = self.menu_for_selection(style);
+        let mut extras = Vec::new();
         // Service actions run programs on files: the Recycle Bin's items
         // and those inside a ZIP (ARC-026) are not files they can open.
         let folder = self.command_facts().folder;
         if !folder.is_recycle_bin && !folder.is_zip {
-            self.append_service_actions(&mut menu.entries);
+            self.append_service_actions(&mut extras, style == MenuStyle::Classic);
         }
         if self.administrator_target().is_some() {
-            menu.entries.push(
+            extras.push(
                 super::menu_popover::MenuItem::new(
                     ox_core::i18n::gettext_static("Open as administrator…"),
                     crate::icons::Icon::ShieldLock,
@@ -169,6 +172,7 @@ impl BrowserWindow {
                 .into(),
             );
         }
+        add_extras(&mut menu.entries, extras);
         popover.set_entries(menu.entries);
         popover.set_style_and_strip(style, menu.strip);
         popover.set_pointing_to(Some(point));
@@ -193,6 +197,18 @@ impl BrowserWindow {
         let in_recycle_bin = facts.folder.is_recycle_bin;
         let entries = match (items.first(), in_recycle_bin) {
             (None, true) => recycle_bin_background_menu(),
+            (None, false) if style == MenuStyle::Compact => {
+                self.refresh_template_menu();
+                compact_background_menu(
+                    &self.journal_label(JournalDirection::Undo),
+                    BackgroundSubmenus {
+                        view: view_menu(),
+                        sort: sort_menu(),
+                        group: group_by_menu(),
+                        new: new_menu(self.template_menu_entries()),
+                    },
+                )
+            }
             (None, false) => background_menu(
                 &self.journal_label(JournalDirection::Undo),
                 &self.journal_label(JournalDirection::Redo),
@@ -254,9 +270,21 @@ impl BrowserWindow {
         }
     }
 
-    /// Opens the classic menu from the Menu key or Shift+F10, pointing at
-    /// the first selected item, or near the top of the view without one.
+    /// Opens the classic menu from Shift+F10, pointing at the first
+    /// selected item, or near the top of the view without one.
     pub(super) fn open_context_menu_from_keyboard(&self) {
+        self.open_keyboard_menu(MenuStyle::Classic);
+    }
+
+    /// Opens the menu the Menu key opens, the right-click menu's style,
+    /// as Windows 11 Explorer's Menu key opens its compact menu.
+    pub(super) fn open_context_menu_from_menu_key(&self) {
+        self.open_keyboard_menu(self.preferred_menu_style());
+    }
+
+    /// Opens a menu in `style` from the keyboard, pointing at the first
+    /// selected item, or near the top of the view without one.
+    fn open_keyboard_menu(&self, style: MenuStyle) {
         let view = self.folder_pane().input_widget();
         let selected = self.folder_pane().model().first_selected();
         if let Some(position) = selected {
@@ -264,7 +292,7 @@ impl BrowserWindow {
         }
         let row = selected.and_then(|position| self.folder_pane().owners().widget_at(position));
         let bounds = row.and_then(|row| row.compute_bounds(&view));
-        self.open_context_menu(&view, &keyboard_menu_anchor(bounds), MenuStyle::Classic);
+        self.open_context_menu(&view, &keyboard_menu_anchor(bounds), style);
     }
 
     /// "Show more options": the classic menu where the compact one was.
@@ -403,18 +431,37 @@ fn context_menu_of(view: &gtk::Widget) -> Option<MenuPopover> {
     children(view).find_map(|child| child.downcast::<MenuPopover>().ok())
 }
 
-/// The keys of [`context_menu_shortcut`].
-pub(super) const CONTEXT_MENU_KEYS: &str = "Menu|<Shift>F10";
+/// The key that opens the right-click menu's style from the keyboard.
+pub(super) const MENU_KEY: &str = "Menu";
 
-/// The Menu key and Shift+F10 open the context menu. They are view
-/// shortcuts, not application accelerators, so the address and search
-/// entries keep their own text menus on those keys.
-fn context_menu_shortcut() -> gtk::ShortcutController {
-    let trigger = gtk::ShortcutTrigger::parse_string(CONTEXT_MENU_KEYS);
-    let action = gtk::NamedAction::new(&WindowAction::ContextMenu.detailed_name());
-    let shortcuts = gtk::ShortcutController::new();
-    shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
-    shortcuts
+/// The key that opens the classic menu, `win.context-menu`, as "Show more
+/// options" does.
+pub(super) const CLASSIC_MENU_KEY: &str = "<Shift>F10";
+
+impl BrowserWindow {
+    /// The Menu key opens the right-click menu's style and Shift+F10 the
+    /// classic menu, as in Windows 11 Explorer. They are view shortcuts,
+    /// not application accelerators, so the address and search entries
+    /// keep their own text menus on those keys.
+    fn context_menu_shortcuts(&self) -> gtk::ShortcutController {
+        let shortcuts = gtk::ShortcutController::new();
+        let menu_key = gtk::CallbackAction::new(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, _| {
+                window.open_context_menu_from_menu_key();
+                glib::Propagation::Stop
+            }
+        ));
+        let menu_key_trigger = gtk::ShortcutTrigger::parse_string(MENU_KEY);
+        shortcuts.add_shortcut(gtk::Shortcut::new(menu_key_trigger, Some(menu_key)));
+        let classic = gtk::ShortcutTrigger::parse_string(CLASSIC_MENU_KEY);
+        let action = gtk::NamedAction::new(&WindowAction::ContextMenu.detailed_name());
+        shortcuts.add_shortcut(gtk::Shortcut::new(classic, Some(action)));
+        shortcuts
+    }
 }
 
 /// The installed disk tool the menu of `entry` offers: Mount disk image
@@ -433,9 +480,113 @@ fn disk_tool_of(entry: &Entry) -> Option<DiskTool> {
     is_installed(tool).then_some(tool)
 }
 
+/// The style of a right-click menu: `preferred`, or the classic menu when
+/// Shift is held, as Shift+right-click opens it in Windows 11 Explorer.
+fn menu_style_for(preferred: MenuStyle, modifiers: gdk::ModifierType) -> MenuStyle {
+    if modifiers.contains(gdk::ModifierType::SHIFT_MASK) {
+        MenuStyle::Classic
+    } else {
+        preferred
+    }
+}
+
+/// Adds `extras`, the service actions and "Open as administrator…", to the
+/// end of a menu, or in Windows 11's compact menu above its last item,
+/// "Show more options", in a group of their own, as Explorer puts the
+/// commands other programs add there.
+fn add_extras(entries: &mut Vec<MenuEntry>, extras: Vec<MenuEntry>) {
+    if extras.is_empty() {
+        return;
+    }
+    let more = entries.iter().rposition(|entry| {
+        matches!(
+            entry,
+            MenuEntry::Item(item)
+                if item.action == super::menu_popover::MenuAction::Window(WindowAction::ShowMoreOptions)
+        )
+    });
+    match more {
+        Some(at) => {
+            let group = std::iter::once(MenuEntry::Divider).chain(extras);
+            // Before the divider that sets "Show more options" apart.
+            let before = if at > 0 && matches!(entries[at - 1], MenuEntry::Divider) {
+                at - 1
+            } else {
+                at
+            };
+            entries.splice(before..before, group);
+        }
+        None => entries.extend(extras),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn labels(entries: &[MenuEntry]) -> Vec<String> {
+        entries
+            .iter()
+            .map(|entry| match entry {
+                MenuEntry::Item(item) => item.label.clone(),
+                MenuEntry::Divider => "-".to_owned(),
+            })
+            .collect()
+    }
+
+    fn entry(label: &str, action: WindowAction) -> MenuEntry {
+        super::super::menu_popover::MenuItem::new(label, crate::icons::Icon::Info, action).into()
+    }
+
+    /// The service actions and "Open as administrator…" go above "Show
+    /// more options" in a group of their own, and at the end of a menu
+    /// without it.
+    ///
+    /// parity: CMD-010
+    #[test]
+    fn extras_sit_above_show_more_options_or_at_the_end() {
+        let extras = || vec![entry("Open as administrator…", WindowAction::OpenAsAdministrator)];
+        let mut compact = vec![
+            entry("Properties", WindowAction::Properties),
+            MenuEntry::Divider,
+            entry("Show more options", WindowAction::ShowMoreOptions),
+        ];
+        add_extras(&mut compact, extras());
+        assert_eq!(
+            labels(&compact),
+            [
+                "Properties",
+                "-",
+                "Open as administrator…",
+                "-",
+                "Show more options"
+            ]
+        );
+        let mut classic = vec![entry("Properties", WindowAction::Properties)];
+        add_extras(&mut classic, extras());
+        assert_eq!(labels(&classic), ["Properties", "Open as administrator…"]);
+        let mut unchanged = classic.clone();
+        add_extras(&mut unchanged, Vec::new());
+        assert_eq!(unchanged, classic, "no extras, no divider");
+    }
+
+    /// Shift+right-click opens the classic menu whatever the choice, as in
+    /// Windows 11 Explorer.
+    ///
+    /// parity: CMD-010
+    #[test]
+    fn shift_right_click_opens_the_classic_menu() {
+        let shift = gdk::ModifierType::SHIFT_MASK;
+        assert_eq!(menu_style_for(MenuStyle::Compact, shift), MenuStyle::Classic);
+        assert_eq!(
+            menu_style_for(MenuStyle::Compact, gdk::ModifierType::empty()),
+            MenuStyle::Compact
+        );
+        assert_eq!(
+            menu_style_for(MenuStyle::Classic, gdk::ModifierType::empty()),
+            MenuStyle::Classic
+        );
+    }
 
     #[test]
     fn zip_archives_are_known_by_name_or_type() {

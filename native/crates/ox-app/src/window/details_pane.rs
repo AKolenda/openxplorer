@@ -115,6 +115,9 @@ mod imp {
         /// The info glyph before the note.
         #[template_child]
         pub(super) note_glyph: TemplateChild<gtk::Image>,
+        /// The note's row, its glyph included, shown only with a note.
+        #[template_child]
+        pub(super) note_row: TemplateChild<gtk::Box>,
         /// The note at the bottom.
         #[template_child]
         pub(super) note: TemplateChild<gtk::Label>,
@@ -276,6 +279,7 @@ impl DetailsPane {
         self.show_buttons(content.action);
         self.show_properties(&content.properties);
         imp.note.set_text(content.note);
+        imp.note_row.set_visible(!content.note.is_empty());
         self.show_media(content.media.as_ref());
     }
 
