@@ -41,16 +41,16 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
 use ox_core::integration::{
-    checked_name, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest, FileFilter,
-    FilterPattern,
+    checked_name, remembered_location, ChooserAnswer, ChooserCall, ChooserMode, ChooserReply, ChooserRequest,
+    DialogFolders, FileFilter, FilterPattern, StartFolder,
 };
 
 use super::actions::QUIT_ACCELERATORS;
 use super::{BrowserWindow, ButtonStyle, WindowAction};
 use crate::dialog::{DialogFrame, DialogWidth};
 use crate::folder_view::filter::ChooserListing;
-use local_paths::{ask_for_path, Known, LocalPaths};
-use probe::{all_writable, probe, Probe};
+use local_paths::{ask_for_path, path_at_once, Known, LocalPaths};
+use probe::{all_writable, probe, test_folder, test_replace, test_write, Probe, WriteTest};
 
 mod local_paths;
 mod probe;
@@ -115,6 +115,15 @@ impl ChoiceControl {
     }
 }
 
+/// How a dialog's choice is being made ([`BrowserWindow::run_choice`]).
+#[derive(Debug)]
+enum Choosing {
+    /// The accept button, Enter in File name, or Open with several items.
+    Accept,
+    /// A file activated by double-click, Enter or the address bar.
+    Activated(Box<Entry>),
+}
+
 /// A window's file dialog: the call and the bar's controls.
 #[derive(Debug)]
 pub(crate) struct Picker {
@@ -146,6 +155,9 @@ pub(crate) struct Picker {
     /// Set once the dialog is a modal child of the caller's window
     /// ([`super::caller_window`]).
     attached_to_caller: Rc<Cell<bool>>,
+    /// The calling application, whose last folder the dialog remembers;
+    /// `None` when it could not be named, and nothing is remembered.
+    caller: Option<String>,
 }
 
 impl Picker {
@@ -196,6 +208,128 @@ fn not_answering(path: &Path) -> String {
         "“{path}” is not answering. Its network share may have stopped responding.",
         &[("path", &path.display().to_string())],
     )
+}
+
+/// How long the dialog checks each folder it may start in. Shorter than
+/// [`probe::PROBE_TIMEOUT`] where that is long, so a dialog whose last
+/// folder is on a share that stopped answering opens at once elsewhere.
+#[cfg(not(test))]
+const START_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1500);
+/// Shorter than [`probe::PROBE_TIMEOUT`] in tests too, so they tell the
+/// two apart.
+#[cfg(test)]
+const START_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// The location to open for `folder` when it is a folder that answers in
+/// time; `None` otherwise. A network location is used only while `GVfs`
+/// has it mounted: the dialog never mounts a share or asks for a password
+/// on its own.
+async fn start_location(folder: StartFolder) -> Option<String> {
+    // One deadline for the whole check, asking GVfs for a share's path
+    // included, which waits longer on its own.
+    glib::future_with_timeout(START_TIMEOUT, start_location_now(folder))
+        .await
+        .ok()
+        .flatten()
+}
+
+/// [`start_location`] without its deadline.
+async fn start_location_now(folder: StartFolder) -> Option<String> {
+    let (uri, path) = match folder {
+        StartFolder::Path(path) => (openable_uri(&gio::File::for_path(&path).uri(), &path), path),
+        StartFolder::Location(uri) => match path_at_once(&uri) {
+            Known::Path(path) => (uri, path),
+            Known::NoPath => return None,
+            Known::Unknown => match ask_for_path(&uri).await.path() {
+                Some(path) => (uri, path),
+                None => on_a_mount_with_its_user(&uri).await?,
+            },
+        },
+    };
+    (probe(&path).await == Probe::Folder).then_some(uri)
+}
+
+/// A remembered `location` that has no path of its own, found on a share
+/// `GVfs` mounted with a user: the address the dialog opens and its local
+/// path. It is looked up by the mount's address, so nothing is mounted.
+async fn on_a_mount_with_its_user(location: &str) -> Option<(String, PathBuf)> {
+    let roots: Vec<String> = gio::VolumeMonitor::get()
+        .mounts()
+        .iter()
+        .map(|mount| mount.root().uri().to_string())
+        .collect();
+    let mounted = address_on_mount(location, &roots)?;
+    let path = ask_for_path(&mounted).await.path()?;
+    Some(opened_on_mount(path))
+}
+
+/// What the dialog opens for `path`, a folder's local path on a share
+/// mounted with a user: that path, as no tab takes the mount's address,
+/// which holds the user (SAFE-010).
+fn opened_on_mount(path: PathBuf) -> (String, PathBuf) {
+    (openable_uri(&gio::File::for_path(&path).uri(), &path), path)
+}
+
+/// The address a tab opens for the local `path`, whose GIO address is
+/// `uri`: that address, which names a share by its own address for a path
+/// in `GVfs`'s FUSE export, unless it holds a user (`smb://sam@nas/…`,
+/// as for a share mounted with one), which no tab takes (SAFE-010); then
+/// the path's literal `file://` address.
+fn openable_uri(uri: &str, path: &Path) -> String {
+    let has_user = glib::Uri::parse(uri, glib::UriFlags::NONE)
+        .ok()
+        .and_then(|parsed| parsed.userinfo())
+        .is_some();
+    if !has_user {
+        return uri.to_owned();
+    }
+    glib::filename_to_uri(path, None).map_or_else(|_| String::new(), |literal| literal.to_string())
+}
+
+/// The address of the remembered `location` on one of the mounts whose
+/// root addresses are `roots`: the memory keeps a location without its
+/// user ([`remembered_location`]), while `GVfs` names a share mounted with
+/// a user by an address that holds it (`sftp://anna@build.example/`), and
+/// gives the address without it no path. `None` when no mount holds it,
+/// or when mounts with different users do: the memory cannot tell which
+/// account the folder was used through.
+fn address_on_mount(location: &str, roots: &[String]) -> Option<String> {
+    let mut found = roots.iter().filter_map(|root| {
+        // A mount without a user has the location's own path already.
+        glib::Uri::parse(root, glib::UriFlags::NONE).ok()?.userinfo()?;
+        let kept = remembered_location(root)?;
+        let rest = location.strip_prefix(kept.trim_end_matches('/'))?;
+        (rest.is_empty() || rest.starts_with('/')).then(|| format!("{}{rest}", root.trim_end_matches('/')))
+    });
+    let first = found.next()?;
+    found.all(|other| other == first).then_some(first)
+}
+
+/// The dialog's message when the caller could not write `name` in
+/// `folder`, in Windows' words; `Ok` when it can.
+fn write_refusal(test: WriteTest, folder: &Path, name: &str) -> Result<(), String> {
+    let folder_text = folder.display().to_string();
+    match test {
+        // The caller looks again and asks before replacing it.
+        WriteTest::Writable | WriteTest::Appeared => Ok(()),
+        WriteTest::Denied => Err(ox_core::i18n::gettext(
+            "You don't have permission to save in this location. Contact the administrator to obtain \
+             permission.",
+        )),
+        WriteTest::ReadOnlyFile => Err(ox_core::i18n::format_message(
+            "“{name}” is set to read-only. Try again with a different file name.",
+            &[("name", name)],
+        )),
+        WriteTest::NoSpace => Err(ox_core::i18n::format_message(
+            "There is not enough space in “{folder}” to save the file.",
+            &[("folder", &folder_text)],
+        )),
+        WriteTest::Unavailable => Err(ox_core::i18n::format_message(
+            "“{folder}” is not available. If it is on a network, make sure the share is still connected.",
+            &[("folder", &folder_text)],
+        )),
+        WriteTest::NoAnswer => Err(not_answering(folder)),
+    }
 }
 
 /// The path the File name box's `typed` text names, from `folder`: a
@@ -316,10 +450,12 @@ impl BrowserWindow {
             request,
             reply,
             parent_window,
+            caller,
             ..
         } = call;
-        let wanted_folder = request.current_folder.clone();
+        let start_folders = self.start_folders(&request, caller.as_deref());
         let mut picker = self.build_picker_bar(request, reply.clone());
+        picker.caller = caller;
         picker.attached_to_caller = super::caller_window::attach_to_caller(self.upcast_ref(), &parent_window);
         let picker = Rc::new(picker);
         self.imp().picker.replace(Some(Rc::clone(&picker)));
@@ -347,7 +483,7 @@ impl BrowserWindow {
         self.update_share_command();
         self.set_default_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1);
         self.apply_chooser_listing();
-        self.open_start_folder(wanted_folder);
+        self.open_start_folder(start_folders);
         self.listen_for_escape();
         self.cancel_on_quit_key();
         self.keep_one_selected();
@@ -366,32 +502,52 @@ impl BrowserWindow {
         self.update_picker();
     }
 
-    /// Opens the folder the dialog starts in: the caller's `wanted` folder
-    /// if it is one, else the home folder. The caller's folder is checked
-    /// off the main thread: on a share that stopped answering, the check
-    /// would freeze every window. The dialog then opens in the home folder
-    /// and says so.
-    fn open_start_folder(&self, wanted: Option<PathBuf>) {
-        let Some(wanted) = wanted else {
-            self.open_first_tab(&glib::home_dir());
-            return;
-        };
+    /// The folders the dialog for `request` may start in, in order, by
+    /// Windows' rule ([`ox_core::integration::start_folders`]): the
+    /// caller's file or folder, its last folder, then Documents, the
+    /// Desktop and the home folder.
+    fn start_folders(&self, request: &ChooserRequest, caller: Option<&str>) -> Vec<StartFolder> {
+        let memory = caller.and_then(|app| {
+            DialogFolders::open(&self.context().settings_directory())
+                .of(app)
+                .cloned()
+        });
+        let file_folder = request
+            .folder_of_file
+            .then_some(request.current_folder.as_deref())
+            .flatten();
+        let initial = request.suggested_folder.as_deref();
+        let known = ox_core::places::FolderLocations::from_environment().read_paths();
+        let defaults = [
+            known.path(ox_core::places::KnownFolder::Documents).to_path_buf(),
+            known.path(ox_core::places::KnownFolder::Desktop).to_path_buf(),
+            glib::home_dir(),
+        ];
+        ox_core::integration::start_folders(file_folder, initial, memory.as_ref(), &defaults)
+    }
+
+    /// Opens the first of `folders` that is there, else the home folder.
+    /// Each is checked off the main thread and for a short time only
+    /// ([`START_TIMEOUT`]): a folder that is gone, or on a share that is
+    /// not connected or stopped answering, is passed over without an
+    /// error, as Windows' dialog falls back to the next folder.
+    fn open_start_folder(&self, folders: Vec<StartFolder>) {
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
-                let found = probe(&wanted).await;
-                if window.picker().is_none_or(|picker| picker.reply.is_answered()) {
-                    return;
-                }
-                if found == Probe::Folder {
-                    window.open_first_tab(&wanted);
-                    return;
+                for folder in folders {
+                    let found = start_location(folder).await;
+                    if window.picker().is_none_or(|picker| picker.reply.is_answered()) {
+                        return;
+                    }
+                    if let Some(uri) = found {
+                        if window.add_tab(&uri).is_ok() {
+                            return;
+                        }
+                    }
                 }
                 window.open_first_tab(&glib::home_dir());
-                if found == Probe::NoAnswer {
-                    window.show_message(&not_answering(&wanted));
-                }
             }
         ));
     }
@@ -453,36 +609,11 @@ impl BrowserWindow {
     }
 
     /// A file was activated (double-click, Enter or typed in the address
-    /// bar): it is the choice in an Open dialog, and the file to replace,
-    /// after asking, in a Save dialog.
+    /// bar): it is the choice in an Open dialog, and the file to save in
+    /// a Save dialog, checked as the Save button checks it and replaced
+    /// only after asking ([`Self::run_choice`]).
     pub(super) fn pick_activated(&self, entry: &Entry) {
-        let Some(picker) = self.picker() else {
-            return;
-        };
-        match &picker.request.mode {
-            ChooserMode::Open { directory: false, .. } => {
-                // The activated file is the choice, selected or not.
-                match self.local_path(&entry.uri) {
-                    Some(path) if !picker.is_busy() && !picker.reply.is_answered() => {
-                        self.finish_picking(&picker, vec![path]);
-                    }
-                    Some(_) => {}
-                    None => self.show_message(&not_local()),
-                }
-            }
-            ChooserMode::Save { .. } => {
-                let Some(path) = self.local_path(&entry.uri) else {
-                    return self.show_message(&not_local());
-                };
-                if let Some(name) = &picker.name {
-                    name.set_text(&entry.name);
-                }
-                if !picker.is_busy() && !picker.reply.is_answered() {
-                    self.confirm_replace(&picker, vec![path], std::slice::from_ref(&entry.name));
-                }
-            }
-            ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => {}
-        }
+        self.run_choice(Choosing::Activated(Box::new(entry.clone())));
     }
 
     /// Open with several items selected accepts them in an Open dialog.
@@ -500,11 +631,23 @@ impl BrowserWindow {
     /// window that then refused to close (an update installing, files
     /// being written) kept a dead dialog whose Save, Cancel and Escape
     /// did nothing.
+    ///
+    /// This is the one place a dialog sends its answer (the portal's own
+    /// Close aside, which ox-core answers), and so the one place its folder
+    /// is remembered: only for a choice really sent, never for a close
+    /// that was refused or a dialog the portal closed first.
     pub(super) fn end_picking_on_close(&self) {
-        if let Some(picker) = self.imp().picker.borrow().as_ref() {
-            let answer = picker.pending.take().unwrap_or(ChooserAnswer::Cancelled);
-            picker.reply.send(&answer);
+        let Some(picker) = self.picker() else {
+            return;
+        };
+        if picker.reply.is_answered() {
+            return;
         }
+        let answer = picker.pending.take().unwrap_or(ChooserAnswer::Cancelled);
+        if let ChooserAnswer::Chosen { locations, .. } = &answer {
+            self.remember_folder(&picker, locations);
+        }
+        picker.reply.send(&answer);
     }
 
     /// The window refused to close: the dialog stays usable, its choice
@@ -651,13 +794,22 @@ impl BrowserWindow {
             .set_tooltip_text(has_no_path.then(not_local).as_deref());
     }
 
-    /// The accept button: works out the choice and answers, asking first
-    /// before replacing files.
-    ///
-    /// What is on disk is checked off the main thread ([`probe`]), and
-    /// the accept button waits meanwhile, so a share that stopped
-    /// answering cannot freeze the app.
+    /// The accept button, Enter in File name, and Open with several
+    /// items selected: works out the choice and answers, asking first
+    /// before replacing files ([`Self::run_choice`]).
     fn accept_choice(&self) {
+        self.run_choice(Choosing::Accept);
+    }
+
+    /// Every way a dialog's choice is made goes through here: the accept
+    /// button, Enter in File name, Open with several items, and a file
+    /// activated by double-click, Enter or the address bar. The choice is
+    /// worked out off the main thread with the same checks, a Save's
+    /// write test included, while the accept button waits, so a share
+    /// that stopped answering cannot freeze the app; then the dialog
+    /// answers ([`Self::finish_picking`]), asks before replacing, or says
+    /// why it cannot.
+    fn run_choice(&self, choosing: Choosing) {
         let Some(picker) = self.picker() else {
             return;
         };
@@ -670,9 +822,15 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                let outcome = window.work_out_choice(&picker).await;
+                let outcome = match &choosing {
+                    Choosing::Accept => window.work_out_choice(&picker).await,
+                    Choosing::Activated(entry) => window.activated_choice(&picker, entry).await,
+                };
                 picker.checking.set(false);
                 window.update_picker();
+                if picker.reply.is_answered() {
+                    return;
+                }
                 match outcome {
                     Ok(locations) if !locations.is_empty() => window.finish_picking(&picker, locations),
                     Err(message) if !message.is_empty() => window.show_message(&message),
@@ -681,6 +839,36 @@ impl BrowserWindow {
                 }
             }
         ));
+    }
+
+    /// The locations an activated file chooses: the file itself in an
+    /// Open dialog; in a Save dialog the file to replace, checked as
+    /// [`Self::checked_save_target`] checks a typed name.
+    async fn activated_choice(&self, picker: &Rc<Picker>, entry: &Entry) -> Result<Vec<PathBuf>, String> {
+        match &picker.request.mode {
+            ChooserMode::Open { directory: false, .. } => {
+                // The activated file is the choice, selected or not.
+                let path = self.local_path_now(&entry.uri).await.ok_or_else(not_local)?;
+                Ok(vec![path])
+            }
+            ChooserMode::Save { .. } => {
+                let path = self.local_path_now(&entry.uri).await.ok_or_else(not_local)?;
+                if let Some(name) = &picker.name {
+                    name.set_text(&entry.name);
+                }
+                // The file's real name, bytes and all; the name shown
+                // (Entry::name, a display name) is only for what the
+                // dialog says.
+                let folder = path.parent().map(Path::to_path_buf).ok_or_else(not_local)?;
+                let real = path
+                    .file_name()
+                    .map(std::ffi::OsStr::to_os_string)
+                    .ok_or_else(not_local)?;
+                self.checked_save_target(picker, folder, real, entry.name.clone())
+                    .await
+            }
+            ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => Ok(Vec::new()),
+        }
     }
 
     /// The locations the accept button chooses, as [`Self::accept_choice`]
@@ -702,14 +890,40 @@ impl BrowserWindow {
             ChooserMode::Save { .. } => self.chosen_save(picker).await,
             ChooserMode::SaveFiles { names } => {
                 let folder = self.chosen_folder(&selected).await?;
+                // The names as the caller gave them, bytes and all; their
+                // text is only for what the dialog says.
                 let mut existing = Vec::new();
                 for name in names {
                     match probe(&folder.join(name)).await {
                         Probe::NoAnswer => return Err(not_answering(&folder)),
-                        found if found.exists() => existing.push(name.to_string_lossy().into_owned()),
+                        found if found.exists() => existing.push(name),
                         _ => {}
                     }
                 }
+                // The folder takes new files (a file of the dialog's
+                // own), and every file to be replaced may be written.
+                let first = names.first().map(|name| name.to_string_lossy().into_owned());
+                write_refusal(test_folder(&folder).await, &folder, &first.unwrap_or_default())?;
+                // Another program may have created one of the other files
+                // meanwhile: it is replaced only after asking too.
+                for name in names {
+                    if existing.contains(&name) {
+                        continue;
+                    }
+                    match probe(&folder.join(name)).await {
+                        Probe::NoAnswer => return Err(not_answering(&folder)),
+                        found if found.exists() => existing.push(name),
+                        _ => {}
+                    }
+                }
+                for name in &existing {
+                    let test = test_replace(&folder.join(name)).await;
+                    write_refusal(test, &folder, &name.to_string_lossy())?;
+                }
+                let existing: Vec<String> = existing
+                    .iter()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .collect();
                 if existing.is_empty() {
                     return Ok(vec![folder]);
                 }
@@ -824,6 +1038,26 @@ impl BrowserWindow {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         let name = checked_name(&saved_name(&written, picker.chosen_type())).map_err(|_| bad_name())?;
+        self.checked_save_target(picker, folder, name.clone().into(), name)
+            .await
+    }
+
+    /// The file `name` in `folder` a Save dialog answers with, by the same
+    /// checks whether it was typed or activated: a folder of that name
+    /// opens; the caller must be able to write there ([`test_write`],
+    /// which also finds a file another program creates meanwhile); an
+    /// existing file is replaced only after asking. `name` is the real
+    /// file name; `label` is how the dialog names it to the user.
+    async fn checked_save_target(
+        &self,
+        picker: &Rc<Picker>,
+        folder: PathBuf,
+        name: std::ffi::OsString,
+        label: String,
+    ) -> Result<Vec<PathBuf>, String> {
+        let Some(name_box) = &picker.name else {
+            return Ok(Vec::new());
+        };
         let target = folder.join(&name);
         let found = probe(&target).await;
         if found == Probe::NoAnswer {
@@ -834,8 +1068,27 @@ impl BrowserWindow {
             self.navigate_or_report(&gio::File::for_path(&target).uri());
             return Ok(Vec::new());
         }
-        if found.exists() {
-            self.confirm_replace(picker, vec![target], &[name]);
+        let mut exists = found.exists();
+        let mut test = test_write(&folder, name.as_ref(), exists).await;
+        if test == WriteTest::Appeared {
+            // Another program created the file while the folder was tested:
+            // look again, and never answer it as a new file.
+            match probe(&target).await {
+                Probe::NoAnswer => return Err(not_answering(&folder)),
+                Probe::Folder => {
+                    name_box.set_text("");
+                    self.navigate_or_report(&gio::File::for_path(&target).uri());
+                    return Ok(Vec::new());
+                }
+                Probe::File | Probe::Missing => {
+                    exists = true;
+                    test = test_write(&folder, name.as_ref(), true).await;
+                }
+            }
+        }
+        write_refusal(test, &folder, &label)?;
+        if exists {
+            self.confirm_replace(picker, vec![target], &[label]);
             return Ok(Vec::new());
         }
         Ok(vec![target])
@@ -998,6 +1251,10 @@ impl BrowserWindow {
             self,
             async move {
                 let writable = is_open && all_writable(&locations).await;
+                // The portal may have closed the dialog meanwhile.
+                if picker.reply.is_answered() {
+                    return;
+                }
                 // The answer waits for the window to close
                 // ([`BrowserWindow::end_picking_on_close`]).
                 picker.pending.replace(Some(ChooserAnswer::Chosen {
@@ -1009,6 +1266,48 @@ impl BrowserWindow {
                 window.close();
             }
         ));
+    }
+
+    /// Remembers where the user chose `locations` as the caller's last
+    /// folder, shared by its Open and Save dialogs, as Windows does when a
+    /// dialog is answered (never when it is cancelled; called only as the
+    /// choice is sent, [`Self::end_picking_on_close`]): the folder of the
+    /// file chosen, the folder chosen, or for a folder dialog the folder
+    /// shown. A folder is kept by its own location, so a share is
+    /// remembered as `smb://…` rather than its FUSE path, and without any
+    /// user name or password. A memory that cannot be written only loses
+    /// the memory, never the answer.
+    fn remember_folder(&self, picker: &Picker, locations: &[PathBuf]) {
+        let Some(caller) = picker.caller.as_deref() else {
+            return;
+        };
+        let Some(first) = locations.first() else {
+            return;
+        };
+        let shown = self.current_uri().and_then(|uri| {
+            let path = picker.local_paths.known(&uri).path()?;
+            Some((uri, path))
+        });
+        let folder = match &picker.request.mode {
+            ChooserMode::SaveFiles { .. } => first.clone(),
+            ChooserMode::Open { directory: true, .. } => match &shown {
+                Some((_, path)) => path.clone(),
+                None => first.parent().map_or_else(|| first.clone(), Path::to_path_buf),
+            },
+            ChooserMode::Open { .. } | ChooserMode::Save { .. } => match first.parent() {
+                Some(parent) => parent.to_path_buf(),
+                None => return,
+            },
+        };
+        // A share's FUSE path, typed in File name, is kept by the share's
+        // own address too: GVfs gives it as the path's location.
+        let location = match shown {
+            Some((uri, path)) if path == folder => uri,
+            _ => gio::File::for_path(&folder).uri().to_string(),
+        };
+        let initial = picker.request.suggested_folder.as_deref();
+        let _ =
+            DialogFolders::open(&self.context().settings_directory()).remember(caller, initial, &location);
     }
 
     /// Cancel, Escape, and Ctrl+Q in a dialog: closes the window, which
@@ -1142,6 +1441,7 @@ impl BrowserWindow {
             checking: Cell::new(false),
             single: Cell::new(None),
             attached_to_caller: Rc::default(),
+            caller: None,
         }
     }
 
@@ -1460,10 +1760,32 @@ mod tests {
             self.call_from("", method, entries)
         }
 
+        /// Starts `method` with `entries` for the application the portal
+        /// names `app_id`.
+        fn call_for(
+            &self,
+            app_id: &str,
+            method: &str,
+            entries: &[(&str, glib::Variant)],
+        ) -> Rc<RefCell<Option<(u32, glib::VariantDict)>>> {
+            self.call_as(app_id, "", method, entries)
+        }
+
         /// Starts `method` with `entries` for the caller's window
         /// `parent`, as the portal names it (`wayland:<handle>`).
         fn call_from(
             &self,
+            parent: &str,
+            method: &str,
+            entries: &[(&str, glib::Variant)],
+        ) -> Rc<RefCell<Option<(u32, glib::VariantDict)>>> {
+            self.call_as("org.example.Editor", parent, method, entries)
+        }
+
+        /// Starts `method` with `entries` for `app_id`'s window `parent`.
+        fn call_as(
+            &self,
+            app_id: &str,
             parent: &str,
             method: &str,
             entries: &[(&str, glib::Variant)],
@@ -1473,7 +1795,7 @@ mod tests {
                     .expect("a path");
             let parameters = glib::Variant::tuple_from_iter([
                 handle.to_variant(),
-                "org.example.Editor".to_variant(),
+                app_id.to_variant(),
                 parent.to_variant(),
                 "".to_variant(),
                 options_from_entries(entries).end(),
@@ -1583,9 +1905,11 @@ mod tests {
     }
 
     /// A caller's folder on a share that stopped answering does not
-    /// freeze the app: the dialog opens in the home folder and says so.
+    /// freeze the app: the dialog opens in the next folder Windows would
+    /// use (here the home folder, as the test home has no Documents or
+    /// Desktop), without an error.
     ///
-    /// parity: INT-032
+    /// parity: INT-032, INT-035
     #[gtk::test]
     fn a_folder_that_does_not_answer_opens_the_dialog_at_home() {
         let fixture = Fixture::empty();
@@ -1603,8 +1927,8 @@ mod tests {
         let home = gio::File::for_path(glib::home_dir()).uri().to_string();
         assert_eq!(window.current_uri().as_deref(), Some(home.as_str()));
         assert!(
-            window.shown_message().contains("is not answering"),
-            "{}",
+            window.shown_message().is_empty(),
+            "Windows falls back without an error: {}",
             window.shown_message()
         );
         window.cancel_picking();
@@ -1652,6 +1976,682 @@ mod tests {
     /// Saving into a folder whose share stopped answering says so and
     /// answers nothing; the dialog stays usable.
     ///
+    /// Answers the open dialog of `portal` with the file `name` in
+    /// `folder`, typed as a full path in File name, and waits for the
+    /// answer.
+    fn save_as(
+        portal: &Portal,
+        answer: &Rc<RefCell<Option<(u32, glib::VariantDict)>>>,
+        path: &std::path::Path,
+    ) {
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.as_ref().expect("a name box");
+        name.set_text(&path.display().to_string());
+        enter(name);
+        let (response, uris) = Portal::finish(answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [gio::File::for_path(path).uri().to_string()]);
+    }
+
+    /// The folder `window` shows, as a local path.
+    fn shown_folder(window: &crate::window::BrowserWindow) -> Option<std::path::PathBuf> {
+        window
+            .current_uri()
+            .and_then(|uri| gio::File::for_uri(&uri).path())
+    }
+
+    /// Copies the dialog memory of `from` into `to`'s settings folder, as
+    /// the file is still there when the app starts again.
+    fn restart_with_memory_of(from: &Portal, to: &Portal) {
+        let file = from
+            .test
+            .settings_directory()
+            .join(ox_core::integration::DIALOG_FOLDERS_FILE);
+        fs::copy(
+            &file,
+            to.test
+                .settings_directory()
+                .join(ox_core::integration::DIALOG_FOLDERS_FILE),
+        )
+        .expect("the memory was written");
+    }
+
+    /// Each application's dialogs start where the user last chose a file
+    /// in them, Open and Save alike, also after the app starts again; another
+    /// application keeps its own, and a new folder passed by the
+    /// application is honoured, as in Windows.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn each_apps_dialogs_start_in_its_last_folder() {
+        let fixture = Fixture::empty();
+        let downloads = fixture.path("Downloads");
+        let reports = fixture.path("Reports");
+        let pictures = fixture.path("Pictures");
+        for folder in [&downloads, &reports, &pictures] {
+            fs::create_dir(folder).expect("a folder");
+        }
+        let suggested = |folder: &std::path::Path| {
+            vec![
+                ("current_folder", path_variant(&folder.display().to_string())),
+                ("current_name", "Quarterly notes.html".to_variant()),
+            ]
+        };
+
+        let first = Portal::new();
+        let answer = first.call_for("org.example.Browser", "SaveFile", &suggested(&downloads));
+        assert_eq!(
+            shown_folder(&first.test.window).as_deref(),
+            Some(downloads.as_path())
+        );
+        save_as(&first, &answer, &reports.join("Quarterly notes.html"));
+
+        // The app starts again: its Open dialog suggests Downloads again.
+        let open = Portal::new();
+        restart_with_memory_of(&first, &open);
+        let answer = open.call_for(
+            "org.example.Browser",
+            "OpenFile",
+            &[("current_folder", path_variant(&downloads.display().to_string()))],
+        );
+        assert_eq!(
+            shown_folder(&open.test.window).as_deref(),
+            Some(reports.as_path()),
+            "Open starts where Save was last used"
+        );
+        open.test.window.cancel_picking();
+        Portal::finish(&answer);
+
+        let other = Portal::new();
+        restart_with_memory_of(&first, &other);
+        let answer = other.call_for("org.example.Mail", "SaveFile", &suggested(&downloads));
+        assert_eq!(
+            shown_folder(&other.test.window).as_deref(),
+            Some(downloads.as_path()),
+            "another app has its own memory"
+        );
+        other.test.window.cancel_picking();
+        Portal::finish(&answer);
+
+        let moved = Portal::new();
+        restart_with_memory_of(&first, &moved);
+        let answer = moved.call_for("org.example.Browser", "SaveFile", &suggested(&pictures));
+        assert_eq!(
+            shown_folder(&moved.test.window).as_deref(),
+            Some(pictures.as_path()),
+            "a folder other than the first one passed is the app's choice"
+        );
+        moved.test.window.cancel_picking();
+        Portal::finish(&answer);
+    }
+
+    /// A Save that names both a file and a folder opens the file's folder
+    /// and still remembers the last folder under the folder the app
+    /// suggested, so the app's next Save from that folder starts there.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_save_naming_a_file_and_a_folder_remembers_by_the_folder() {
+        let fixture = Fixture::empty();
+        let downloads = fixture.path("Downloads");
+        let letters = fixture.path("Letters");
+        let reports = fixture.path("Reports");
+        for folder in [&downloads, &letters, &reports] {
+            fs::create_dir(folder).expect("a folder");
+        }
+
+        let first = Portal::new();
+        let answer = first.call_for(
+            "org.example.Editor",
+            "SaveFile",
+            &[
+                ("current_folder", path_variant(&downloads.display().to_string())),
+                (
+                    "current_file",
+                    path_variant(&letters.join("draft.odt").display().to_string()),
+                ),
+            ],
+        );
+        assert_eq!(
+            shown_folder(&first.test.window).as_deref(),
+            Some(letters.as_path()),
+            "the file's own folder opens"
+        );
+        save_as(&first, &answer, &reports.join("draft.odt"));
+
+        let next = Portal::new();
+        restart_with_memory_of(&first, &next);
+        let answer = next.call_for(
+            "org.example.Editor",
+            "SaveFile",
+            &[
+                ("current_folder", path_variant(&downloads.display().to_string())),
+                ("current_name", "notes.odt".to_variant()),
+            ],
+        );
+        assert_eq!(
+            shown_folder(&next.test.window).as_deref(),
+            Some(reports.as_path()),
+            "the same suggested folder reopens the last one"
+        );
+        next.test.window.cancel_picking();
+        Portal::finish(&answer);
+    }
+
+    /// A file the application names with its full path opens its own
+    /// folder, before the remembered one; a remembered folder that is gone
+    /// or on a share that stopped answering is passed over quickly and
+    /// without an error.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_full_path_wins_and_a_lost_last_folder_is_passed_over() {
+        let fixture = Fixture::empty();
+        let letters = fixture.path("Letters");
+        let downloads = fixture.path("Downloads");
+        let share = fixture.path("Share");
+        for folder in [&letters, &downloads, &share] {
+            fs::create_dir(folder).expect("a folder");
+        }
+        let remember = |portal: &Portal, last: &std::path::Path| {
+            ox_core::integration::DialogFolders::open(portal.test.settings_directory())
+                .remember(
+                    "org.example.Editor",
+                    Some(&downloads),
+                    &gio::File::for_path(last).uri(),
+                )
+                .expect("the memory is written");
+        };
+
+        // While the caller passes its first folder, the last one opens.
+        let reopening = Portal::new();
+        remember(&reopening, &share);
+        let answer = reopening.call(
+            "OpenFile",
+            &[("current_folder", path_variant(&downloads.display().to_string()))],
+        );
+        assert_eq!(
+            shown_folder(&reopening.test.window).as_deref(),
+            Some(share.as_path())
+        );
+        reopening.test.window.cancel_picking();
+        Portal::finish(&answer);
+
+        let saving = Portal::new();
+        remember(&saving, &share);
+        let answer = saving.call(
+            "SaveFile",
+            &[(
+                "current_file",
+                path_variant(&letters.join("draft.odt").display().to_string()),
+            )],
+        );
+        assert_eq!(
+            shown_folder(&saving.test.window).as_deref(),
+            Some(letters.as_path())
+        );
+        saving.test.window.cancel_picking();
+        Portal::finish(&answer);
+
+        let gone = Portal::new();
+        remember(&gone, &fixture.path("Removed"));
+        let started = std::time::Instant::now();
+        let answer = gone.call(
+            "OpenFile",
+            &[("current_folder", path_variant(&downloads.display().to_string()))],
+        );
+        assert_eq!(
+            shown_folder(&gone.test.window).as_deref(),
+            Some(downloads.as_path())
+        );
+        assert!(
+            gone.test.window.shown_message().is_empty(),
+            "{}",
+            gone.test.window.shown_message()
+        );
+        gone.test.window.cancel_picking();
+        Portal::finish(&answer);
+
+        let offline = Portal::new();
+        remember(&offline, &share);
+        super::probe::stop_answering(&share);
+        let answer = offline.call(
+            "OpenFile",
+            &[("current_folder", path_variant(&downloads.display().to_string()))],
+        );
+        assert_eq!(
+            shown_folder(&offline.test.window).as_deref(),
+            Some(downloads.as_path())
+        );
+        assert!(offline.test.window.shown_message().is_empty());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(10),
+            "no dialog waited long for a folder"
+        );
+        offline.test.window.cancel_picking();
+        Portal::finish(&answer);
+    }
+
+    /// A file chosen in a Save dialog by double-click, Enter or the
+    /// address bar goes through the same check as the Save button: a
+    /// read-only file is reported, not offered for replacing.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn activating_a_read_only_file_in_a_save_dialog_says_so() {
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = Fixture::empty();
+        fixture.write("signed.txt");
+        let signed = fixture.path("signed.txt");
+        fs::set_permissions(&signed, fs::Permissions::from_mode(0o444)).expect("read-only");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "SaveFile", Vec::new());
+        let test = &portal.test;
+        let window = &test.window;
+
+        window.activate_item(test.position_of("signed.txt"));
+        wait_until("the dialog to say so", || {
+            window
+                .shown_message()
+                .contains("“signed.txt” is set to read-only")
+        });
+        assert!(window.dialog_layer().shown().is_none(), "no replace question");
+        window.submit_address(&signed.display().to_string());
+        wait_until("the check of the typed file", || {
+            window.picker().is_some_and(|picker| !picker.checking.get())
+        });
+        settle();
+        assert!(window.dialog_layer().shown().is_none(), "nor for the address bar");
+        assert!(answer.borrow().is_none(), "nothing is answered");
+
+        fs::set_permissions(&signed, fs::Permissions::from_mode(0o644)).expect("writable again");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// Save files checks the file it would replace by its own name, also
+    /// one that is not UTF-8.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn saving_files_checks_a_name_that_is_not_utf8() {
+        use std::os::unix::ffi::OsStrExt;
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = Fixture::empty();
+        let name = std::ffi::OsStr::from_bytes(b"caf\xe9.txt");
+        let existing = fixture.root().join(name);
+        fs::write(&existing, "signed").expect("a file");
+        fs::set_permissions(&existing, fs::Permissions::from_mode(0o444)).expect("read-only");
+        let portal = Portal::new();
+        let names: Vec<Vec<u8>> = vec![b"caf\xe9.txt\0".to_vec()];
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFiles",
+            vec![("files", names.to_variant())],
+        );
+        let window = &portal.test.window;
+
+        window.picker().expect("a picker").accept.emit_clicked();
+        wait_until("the dialog to say so", || {
+            window.shown_message().contains("is set to read-only")
+        });
+        assert!(window.dialog_layer().shown().is_none(), "no replace question");
+        assert!(answer.borrow().is_none(), "nothing is answered");
+
+        fs::set_permissions(&existing, fs::Permissions::from_mode(0o644)).expect("writable again");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// The folder is remembered only when the choice is really sent: a
+    /// dialog the portal closes while it still checks the file chosen
+    /// remembers nothing.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_dialog_closed_before_it_answers_remembers_nothing() {
+        let fixture = Fixture::empty();
+        fixture.write("notes.txt");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "OpenFile", Vec::new());
+        let test = &portal.test;
+        // The check of whether the caller may write the file waits.
+        super::probe::stop_answering(&fixture.path("notes.txt"));
+
+        test.window.activate_item(test.position_of("notes.txt"));
+        let closing = portal.frontend.call_future(
+            Some(&portal.backend_name),
+            "/org/freedesktop/portal/desktop/request/1_1/picker",
+            "org.freedesktop.impl.portal.Request",
+            "Close",
+            None,
+            None,
+            gio::DBusCallFlags::NO_AUTO_START,
+            5000,
+        );
+        wait_for("the portal's Close", closing).expect("the portal may close it");
+        assert_eq!(Portal::finish(&answer).0, ox_core::integration::RESPONSE_OTHER);
+        wait_for(
+            "the write check to end",
+            glib::timeout_future(super::probe::PROBE_TIMEOUT * 3),
+        );
+
+        let memory = test
+            .settings_directory()
+            .join(ox_core::integration::DIALOG_FOLDERS_FILE);
+        assert!(!memory.exists(), "a dialog that did not answer remembers nothing");
+    }
+
+    /// A file activated in a Save dialog is checked and answered by its
+    /// real name, also one that is not UTF-8, whose shown name differs.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn an_activated_file_is_saved_by_its_real_name() {
+        use std::os::unix::ffi::OsStrExt;
+        let fixture = Fixture::empty();
+        let real = fixture.root().join(std::ffi::OsStr::from_bytes(b"caf\xe9.txt"));
+        fs::write(&real, "old").expect("a file");
+        let portal = Portal::new();
+        let answer = dialog_on(&portal, &fixture, "SaveFile", Vec::new());
+        let test = &portal.test;
+        let shown = test
+            .names()
+            .into_iter()
+            .find(|name| name.starts_with("caf"))
+            .expect("the file is listed");
+
+        test.window.activate_item(test.position_of(&shown));
+        let question = replace_question(test);
+        press_in(&question, "Replace");
+
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [gio::File::for_path(&real).uri().to_string()]);
+    }
+
+    /// A file another program creates while Save files checks the folder
+    /// is replaced only after asking, as one that was there already.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_file_that_appears_while_saving_files_is_replaced_only_after_asking() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let names: Vec<Vec<u8>> = vec![b"one.txt\0".to_vec(), b"two.txt\0".to_vec()];
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFiles",
+            vec![("files", names.to_variant())],
+        );
+        super::probe::appear_when_tested(&fixture.path("two.txt"));
+        let window = &portal.test.window;
+
+        window.picker().expect("a picker").accept.emit_clicked();
+
+        let question = replace_question(&portal.test);
+        assert_eq!(
+            question.message().as_str(),
+            "“two.txt” already exists. Do you want to replace it?"
+        );
+        assert!(
+            answer.borrow().is_none(),
+            "nothing is answered before the user says so"
+        );
+        press_in(&question, "Cancel");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// A share that stops answering while Save files checks it is
+    /// reported, never answered as a folder the files can be saved in.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn saving_files_where_the_share_stops_answering_says_so() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let names: Vec<Vec<u8>> = vec![b"one.txt\0".to_vec()];
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFiles",
+            vec![("files", names.to_variant())],
+        );
+        super::probe::stop_answering_after_test(&fixture.path("one.txt"));
+        let window = &portal.test.window;
+
+        window.picker().expect("a picker").accept.emit_clicked();
+        wait_until("the dialog to say so", || {
+            window.shown_message().contains("is not answering") || answer.borrow().is_some()
+        });
+
+        assert!(answer.borrow().is_none(), "nothing is answered");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// A file another program creates while Save checks the folder is
+    /// replaced only after asking, as any file that was there already.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_file_that_appears_while_saving_is_replaced_only_after_asking() {
+        let fixture = Fixture::empty();
+        let target = fixture.path("report.txt");
+        let portal = Portal::new();
+        let answer = portal.call(
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("current_name", "report.txt".to_variant()),
+            ],
+        );
+        super::probe::appear_when_tested(&target);
+        let window = &portal.test.window;
+        window.picker().expect("a picker").accept.emit_clicked();
+
+        let question = replace_question(&portal.test);
+        assert!(
+            answer.borrow().is_none(),
+            "nothing is answered before the user says so"
+        );
+        assert_eq!(
+            fs::read_to_string(&target).expect("the other program's file"),
+            "written by another program"
+        );
+        press_in(&question, "Cancel");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// Save files checks every file it would replace before asking, so a
+    /// read-only one among them is reported, not found out by the caller
+    /// halfway through saving.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn saving_files_checks_every_file_it_would_replace() {
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = Fixture::empty();
+        let second = fixture.path("two.txt");
+        fs::write(&second, "signed").expect("a file");
+        fs::set_permissions(&second, fs::Permissions::from_mode(0o444)).expect("read-only");
+        let portal = Portal::new();
+        let names: Vec<Vec<u8>> = vec![b"one.txt\0".to_vec(), b"two.txt\0".to_vec()];
+        let answer = portal.call(
+            "SaveFiles",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("files", names.to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        window.picker().expect("a picker").accept.emit_clicked();
+        wait_until("the dialog to say so", || {
+            window.shown_message().contains("“two.txt” is set to read-only")
+        });
+        assert!(answer.borrow().is_none(), "nothing is answered");
+        assert!(window.dialog_layer().shown().is_none(), "no replace question");
+        fs::set_permissions(&second, fs::Permissions::from_mode(0o644)).expect("writable again");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// A remembered share whose local path `GVfs` is slow to give is
+    /// passed over within the start timeout, not after `GVfs`'s own wait.
+    ///
+    /// parity: INT-035
+    #[gtk::test]
+    fn a_slow_share_lookup_is_bounded_by_the_start_timeout() {
+        let uri = format!("{}projects/Reports", super::local_paths::NEVER_ANSWERS);
+        let started = std::time::Instant::now();
+
+        let found = glib::MainContext::default().block_on(super::start_location(
+            ox_core::integration::StartFolder::Location(uri),
+        ));
+
+        assert_eq!(found, None);
+        let waited = started.elapsed();
+        assert!(
+            waited < super::START_TIMEOUT + std::time::Duration::from_millis(150),
+            "waited {waited:?}, more than the start timeout {:?}",
+            super::START_TIMEOUT
+        );
+    }
+
+    /// A remembered folder, kept without its user, is found on the share
+    /// `GVfs` mounted with that user, by the mount's own address; on no
+    /// other share, nor on a mount that only starts the same way. No tab
+    /// takes that address, so the dialog opens the folder's local path.
+    ///
+    /// parity: INT-035, SAFE-010
+    #[gtk::test]
+    fn a_remembered_folder_is_found_on_a_share_mounted_with_a_user() {
+        let roots = [
+            "sftp://build.example/".to_owned(),
+            "sftp://anna@build.example.org/".to_owned(),
+            "sftp://anna@build.example/".to_owned(),
+            "smb://sam@studio-nas/projects/".to_owned(),
+        ];
+
+        assert_eq!(
+            super::address_on_mount("sftp://build.example/srv/My%20Out", &roots[1..]).as_deref(),
+            Some("sftp://anna@build.example/srv/My%20Out")
+        );
+        assert_eq!(
+            super::address_on_mount("smb://studio-nas/projects", &roots).as_deref(),
+            Some("smb://sam@studio-nas/projects")
+        );
+        assert_eq!(
+            super::address_on_mount("smb://studio-nas/projects-old/Film", &roots),
+            None,
+            "another share that starts the same way"
+        );
+        assert_eq!(
+            super::address_on_mount("sftp://build.example/srv", &roots[..1]),
+            None,
+            "a mount without a user has the address's own path"
+        );
+        assert_eq!(
+            super::address_on_mount("sftp://elsewhere.example/srv", &roots),
+            None
+        );
+        let two_accounts = [
+            "sftp://anna@build.example/".to_owned(),
+            "sftp://ben@build.example/".to_owned(),
+        ];
+        assert_eq!(
+            super::address_on_mount("sftp://build.example/srv", &two_accounts),
+            None,
+            "two accounts on one server: which one was used is unknown"
+        );
+
+        // GIO names a path on a share mounted with a user by an address
+        // that holds the user: the tab opens the path itself instead.
+        let fuse = std::path::Path::new(
+            "/run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam/Film",
+        );
+        assert_eq!(
+            super::openable_uri("smb://sam@studio-nas/projects/Film", fuse),
+            "file:///run/user/1000/gvfs/smb-share:server=studio-nas,share=projects,user=sam/Film"
+        );
+        assert_eq!(
+            super::openable_uri("smb://studio-nas/projects/Film", fuse),
+            "smb://studio-nas/projects/Film",
+            "a share mounted without a user keeps its own address"
+        );
+
+        let fixture = Fixture::empty();
+        let test = TestWindow::without_tabs();
+        assert!(
+            test.window.add_tab("smb://sam@studio-nas/projects").is_err(),
+            "no tab takes an address with a user"
+        );
+        let (opened, path) = super::opened_on_mount(fixture.root().to_path_buf());
+        assert_eq!(path, fixture.root());
+        test.window.add_tab(&opened).expect("the folder opens");
+        assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    }
+
+    /// Saving where the caller cannot create the file, as on a share the
+    /// server shares read-only, says so in Windows' words instead of
+    /// answering a file the caller will fail to write.
+    ///
+    /// parity: INT-032, INT-035
+    #[gtk::test]
+    fn saving_where_the_file_cannot_be_written_says_so() {
+        use std::os::unix::fs::PermissionsExt;
+        // root may write anything, so the refusal holds for users only.
+        let is_root = fs::metadata("/proc/self").is_ok_and(|metadata| {
+            use std::os::unix::fs::MetadataExt;
+            metadata.uid() == 0
+        });
+        if is_root {
+            return;
+        }
+        let fixture = Fixture::empty();
+        let archive = fixture.path("Archive");
+        fs::create_dir(&archive).expect("a folder");
+        fs::set_permissions(&archive, fs::Permissions::from_mode(0o555)).expect("read-only");
+        let portal = Portal::new();
+        let answer = portal.call(
+            "SaveFile",
+            &[
+                ("current_folder", path_variant(&archive.display().to_string())),
+                ("current_name", "report.txt".to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        picker.accept.emit_clicked();
+        wait_until("the dialog to say so", || {
+            window
+                .shown_message()
+                .contains("You don't have permission to save in this location")
+        });
+        assert!(answer.borrow().is_none(), "nothing is answered");
+        assert!(!archive.join("report.txt").exists(), "nothing is left behind");
+        fs::set_permissions(&archive, fs::Permissions::from_mode(0o755)).expect("writable again");
+        picker.accept.emit_clicked();
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(
+            uris,
+            [gio::File::for_path(archive.join("report.txt")).uri().to_string()]
+        );
+        assert!(!archive.join("report.txt").exists(), "the test file was removed");
+    }
+
     /// parity: INT-032
     #[gtk::test]
     fn saving_where_the_share_stopped_answering_says_so() {
