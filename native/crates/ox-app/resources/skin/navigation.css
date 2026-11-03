@@ -69,7 +69,20 @@
   background-color: @ox_selected;
   border-color: @ox_accent;
 }
-.address .crumb-divider { color: @ox_text_tertiary; padding: 0 1px; border-radius: 4px; }
+/* Windows 11 Explorer's chevron between crumbs, in place of app.js's
+   '/' or '\\' (NAV-017). */
+.address .crumb-divider {
+  min-width: 20px;
+  min-height: 24px;
+  border-radius: 4px;
+  color: @ox_muted;
+  background-image: -gtk-icontheme("ox-chevron-right-16-symbolic");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+}
+/* Right to left, the crumbs run leftwards and so do the chevrons. */
+.address .crumb-divider:dir(rtl) { background-image: -gtk-icontheme("ox-chevron-left-16-symbolic"); }
 /* A divider opens the subfolder menu of the crumb before it (NAV-020). */
 .address .crumb-divider:hover { background-color: @ox_hover; }
 .address button.address-chevron { min-width: 22px; min-height: 24px; }

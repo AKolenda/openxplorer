@@ -82,9 +82,10 @@ window.ox .sidebar button.side-eject { min-width: 24px; min-height: 24px; margin
 window.ox .sidebar button.side-eject:hover { background-color: @ox_pressed; color: @ox_text; }
 /* The accent bar of the selected row: 3 x 16 with 2px corners, centred
    on the row (§4.4; the web's .side-entry.selected:before is 3 x 15) by
-   a top margin that follows the row's height (theme/fonts.rs). */
+   a top margin that follows the row's height (theme/fonts.rs). Windows 11
+   Explorer's navigation pane marks the open place with the row's fill
+   alone, so the bar keeps its room but stays clear. */
 .sidebar .pill { min-width: 3px; min-height: 16px; border-radius: 2px; }
-.sidebar list > row:selected .pill { background-color: @ox_accent; }
 .sidebar .side-separator { min-height: 1px; background-color: @ox_border; margin: 12px 13px 11px 13px; }
 
 /* ---- Map network location ---- */

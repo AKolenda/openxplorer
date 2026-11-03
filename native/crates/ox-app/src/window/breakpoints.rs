@@ -7,8 +7,8 @@
 //! within (`max-1190` and so on), so `resources/skin/breakpoints.css`
 //! narrows paddings and widths, and [`BrowserWindow::fit_to_width`] hides
 //! what CSS cannot:
-//! the details pane below 961 pixels, and the search box, some commands,
-//! two columns and the build text below 681. Hiding the details pane this
+//! the details pane below 961 pixels, and the search box, some commands
+//! and two columns below 681. Hiding the details pane this
 //! way leaves the saved preference alone, so it comes back when the window
 //! is wider again. The 1190-pixel column and sidebar widths of the web
 //! stylesheet are overridden there by later `!important` rules, so they
@@ -180,7 +180,6 @@ impl BrowserWindow {
         self.tab_strip().set_tab_width(band.tab_width());
         self.search_box().set_visible(!compact);
         self.command_bar().fit_to_width(band);
-        self.status_bar().set_build_visible(!compact);
         let details_columns = if compact {
             DetailsColumns::NameAndSize
         } else {

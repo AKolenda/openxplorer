@@ -7,13 +7,16 @@
 
 use gtk::glib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::settings::DetailsPaneOptions;
 
 use super::actions::text_action;
+use super::folder_pane::FolderPane;
 use super::preferences::Preference;
 use super::status_bar;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use crate::folder_view::item::FileItem;
 
 impl BrowserWindow {
     /// Follows the pointer over the items of `view` for the details pane.
@@ -48,14 +51,47 @@ impl BrowserWindow {
         let item = point
             .and_then(|(x, y)| pane_model.owners().position_at(view, x, y))
             .and_then(|position| pane_model.model().item(position));
-        self.status_bar()
-            .show_hovered(item.as_ref().map(status_bar::item_text));
+        self.imp().hovered_item.replace(item.clone());
+        self.describe_hovered();
         let pane = self.details_pane();
         if !pane.options().follow_hover {
             return;
         }
         if pane.set_hovered(item) {
             self.update_details_pane();
+        }
+    }
+
+    /// Describes the item under the pointer in the status bar again, with
+    /// its item count while the folder pane counts items.
+    pub(super) fn describe_hovered(&self) {
+        let item = self.imp().hovered_item.borrow().clone();
+        let counts_items = self.folder_pane().details().counts_items();
+        self.status_bar()
+            .show_hovered(item.map(|item| status_bar::item_text(&item, counts_items)));
+    }
+
+    /// Describes a folder of `pane` again once its items are counted,
+    /// when the status bar describes it: selected alone or under the
+    /// pointer.
+    pub(super) fn follow_item_counts(&self, pane: &FolderPane) {
+        pane.owners().connect_item_counted(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |item| window.item_counted(item)
+        ));
+    }
+
+    /// `item` was counted: describes it again where the status bar does.
+    fn item_counted(&self, item: &FileItem) {
+        if self.imp().hovered_item.borrow().as_ref() == Some(item) {
+            self.describe_hovered();
+        }
+        let model = self.folder_pane().model();
+        if let [position] = model.selected_positions()[..] {
+            if model.item(position).as_ref() == Some(item) {
+                self.update_status();
+            }
         }
     }
 

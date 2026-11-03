@@ -358,6 +358,12 @@ impl FolderPane {
         self.parts().rubber_band.is_visible()
     }
 
+    /// The drawn rubber band's width and height, for tests.
+    #[cfg(test)]
+    pub(super) fn rubber_band_size(&self) -> (i32, i32) {
+        self.parts().rubber_band.size_request()
+    }
+
     /// The note over the pane while a drag shows one, for tests.
     #[cfg(test)]
     pub(super) fn drag_hint(&self) -> Option<String> {
