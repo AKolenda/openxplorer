@@ -344,7 +344,12 @@ impl BrowserWindow {
             return;
         }
         let is_listed = result.is_ok();
-        let waits_to_mount = self.imp().session.borrow().tab(id).is_some_and(|tab| tab.waits_to_mount);
+        let waits_to_mount = self
+            .imp()
+            .session
+            .borrow()
+            .tab(id)
+            .is_some_and(|tab| tab.waits_to_mount);
         let may_mount = run.mount_retry == MountRetry::Allowed && !waits_to_mount;
         match result {
             Ok(()) if run.mode == LoadMode::Reload => self.merge_rows(id, run.held_rows.take()),
