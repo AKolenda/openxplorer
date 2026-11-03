@@ -880,5 +880,6 @@ fn a_link_inside_the_tree_onto_another_mount_is_removed_as_a_link() {
     assert_eq!(reported.left_behind(), Vec::<&PathBuf>::new());
 }
 
+mod others_can_change;
 mod parent_path;
 mod routing;

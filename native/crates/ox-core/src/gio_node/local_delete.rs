@@ -325,7 +325,7 @@ fn first_mount_in<'m>(
 
 /// The refusal to delete an item because the mount table shows a mount
 /// at `path` inside it, before anything was deleted.
-pub(super) fn mount_inside_refusal(path: &Path) -> TransferError {
+fn mount_inside_refusal(path: &Path) -> TransferError {
     TransferError::failed(crate::i18n::format_message(
         "A drive or share is mounted at {path}, inside the item being deleted. Nothing was \
          deleted. Unmount it first.",
@@ -334,7 +334,7 @@ pub(super) fn mount_inside_refusal(path: &Path) -> TransferError {
 }
 
 /// The refusal to delete a mount point.
-pub(super) fn mount_point_refusal(path: &Path) -> TransferError {
+fn mount_point_refusal(path: &Path) -> TransferError {
     TransferError::failed(crate::i18n::format_message(
         "{path} is where a drive or share is mounted, so it was not deleted. Unmount it first.",
         &[("path", &path.display().to_string())],
@@ -342,7 +342,7 @@ pub(super) fn mount_point_refusal(path: &Path) -> TransferError {
 }
 
 /// The refusal to enter the mount point at `path` inside the deleted item.
-pub(super) fn contained_mount_refusal(path: &Path) -> TransferError {
+fn contained_mount_refusal(path: &Path) -> TransferError {
     TransferError::failed(crate::i18n::format_message(
         "A drive or share is mounted at {path}. Deleting never goes into another drive, so it \
          stopped there. Unmount it first.",

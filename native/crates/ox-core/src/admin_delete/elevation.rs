@@ -80,26 +80,53 @@ pub(super) fn elevated_delete(
 /// app lives in `/opt/<package>/bin`, and the FHS one of the RPM and Arch
 /// packages, whose app lives in `/usr/bin`.
 ///
+/// A Flatpak never has one, whatever is installed or configured: a helper
+/// started there would walk the sandbox's own view of the filesystem, not
+/// the host's that `gvfsd-admin` and the user's `admin://` path mean, so
+/// it could delete a different tree from the one the user confirmed.
+///
 /// # Errors
 ///
-/// [`TransferError::NotSupported`] when no helper is installed, for example
-/// in a Flatpak, which has no host `pkexec` to start one with.
+/// [`TransferError::NotSupported`] when no helper is installed, and always
+/// in a Flatpak, which has no host `pkexec` to start one with either.
 pub fn helper_path() -> Result<PathBuf, TransferError> {
-    if let Some(configured) = std::env::var_os(HELPER_VARIABLE) {
+    helper_path_in(
+        crate::integration::Sandbox::detect(),
+        std::env::var_os(HELPER_VARIABLE),
+        std::env::current_exe,
+    )
+}
+
+/// [`helper_path`] in `sandbox`, with `configured` read from
+/// `OX_ADMIN_DELETE_HELPER` and `program` saying where the app runs from.
+fn helper_path_in(
+    sandbox: crate::integration::Sandbox,
+    configured: Option<std::ffi::OsString>,
+    program: impl FnOnce() -> std::io::Result<PathBuf>,
+) -> Result<PathBuf, TransferError> {
+    // Asked first, so that not even the variable a build or a test sets
+    // can start a helper inside the sandbox.
+    if sandbox.is_flatpak() {
+        return Err(no_helper());
+    }
+    if let Some(configured) = configured {
         return Ok(PathBuf::from(configured));
     }
-    let program = std::env::current_exe()
+    let program = program()
         .map_err(|error| TransferError::failed(format!("The running program has no path: {error}")))?;
     helper_candidates(&program)
         .into_iter()
         .find(|candidate| candidate.is_file())
-        .ok_or_else(|| {
-            TransferError::NotSupported(gettext(
-                "This build has no administrator deletion helper, so a whole folder cannot be \
-             deleted under admin://. Delete the items inside it one at a time, or install the \
-             distribution package of OpenXplorer.",
-            ))
-        })
+        .ok_or_else(no_helper)
+}
+
+/// The refusal for a build that has no helper to start.
+fn no_helper() -> TransferError {
+    TransferError::NotSupported(gettext(
+        "This build has no administrator deletion helper, so a whole folder cannot be \
+         deleted under admin://. Delete the items inside it one at a time, or install the \
+         distribution package of OpenXplorer.",
+    ))
 }
 
 /// Where the helper may be, for an app installed at `program`, in the
@@ -234,6 +261,40 @@ fn watch_for_cancellation(child: &mut Child, cancel: &Cancellation) -> Watcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integration::Sandbox;
+
+    /// Kept from the up-front refusal this walk replaced: a Flatpak never
+    /// deletes a whole `admin://` folder, even with a helper configured,
+    /// and the program's own path is not even looked at.
+    ///
+    /// parity: XFER-015, OPS-039
+    #[test]
+    fn a_flatpak_never_starts_a_helper() {
+        let configured = Some(std::ffi::OsString::from(
+            "/opt/openxplorer/libexec/openxplorer-admin-delete",
+        ));
+
+        let result = helper_path_in(Sandbox::Flatpak, configured, || {
+            panic!("the program's path was looked up inside a Flatpak")
+        });
+
+        assert_eq!(result, Err(no_helper()));
+    }
+
+    /// On the host the variable a build or a test sets is honoured, which
+    /// is what the check above has to come before.
+    ///
+    /// parity: XFER-015
+    #[test]
+    fn outside_a_flatpak_the_configured_helper_is_used() {
+        let configured = PathBuf::from("/opt/openxplorer/libexec/openxplorer-admin-delete");
+
+        let result = helper_path_in(Sandbox::Host, Some(configured.clone().into_os_string()), || {
+            panic!("the program's path was looked up although a helper was configured")
+        });
+
+        assert_eq!(result, Ok(configured));
+    }
 
     /// The app finds its helper beside itself rather than on `PATH`,
     /// which a user could point elsewhere. These are the two layouts

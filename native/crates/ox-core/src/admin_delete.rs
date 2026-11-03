@@ -17,6 +17,15 @@
 //! `unlink` of one name resolves nothing a second time, so there is no
 //! walk to redirect, and no administrator prompt for the user to answer.
 //!
+//! 2.0.12 closed the same hole the other way, by refusing up front every
+//! `admin://` folder another account could change, or that was on a drive
+//! whose owners and modes could not be believed, because the walk by path
+//! could not be made safe for those. This walk replaces that refusal: it
+//! deletes those folders, and `tests::others_can_change` holds each shape
+//! 2.0.12 refused, with the advisory's race against it. A Flatpak is still
+//! refused ([`elevation::helper_path`]), because a helper there would walk
+//! the sandbox's view of the filesystem rather than the host's.
+//!
 //! | Module | Responsibility |
 //! |---|---|
 //! | [`walk`] | The privileged walk, the rules root needs on top, and the trusted resolution of the item's own folder |

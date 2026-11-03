@@ -537,6 +537,36 @@ fn a_trusted_link_under_a_folder_others_can_change_is_refused() {
     );
 }
 
+/// The other way round: a trusted link that leads *into* a folder others
+/// can change. 2.0.12 judged where such a link led and refused it
+/// (`a_trusted_link_into_a_folder_others_can_change_is_refused`). The
+/// walk follows it, because the link itself is the only thing whoever
+/// can write to that folder could have used to redirect the walk, and
+/// that link is one they cannot replace; past it, a folder others can
+/// change stops links, not the walk, and nothing beside the selected
+/// folder is touched.
+///
+/// parity: XFER-015, OPS-039
+#[test]
+fn a_trusted_link_into_a_folder_others_can_change_is_followed() {
+    let Some(base) = trusted_base() else { return };
+    let open_to_all = make_dir(&base.path().join("shared"));
+    let (real, selected) = tree_to_delete(&open_to_all);
+    let link = base.path().join("link");
+    symlink("shared/real", &link).expect("the link is created");
+    set_mode(&open_to_all, 0o777);
+
+    let result = delete(&link.join("selected"), &trusting(trusted_here()));
+    set_mode(&open_to_all, 0o755);
+
+    assert_eq!(result, Ok(()));
+    assert!(!selected.exists(), "the selected folder is gone");
+    assert_eq!(
+        fs::read(real.join("keep.txt")).expect("nothing else was touched"),
+        b"keep me"
+    );
+}
+
 /// The hop limit is a limit, not a hint: a chain exactly as long as it
 /// allows resolves, and one link more does not.
 ///
