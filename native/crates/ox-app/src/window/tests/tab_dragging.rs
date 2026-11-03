@@ -586,6 +586,29 @@ fn no_tab_closes_while_another_is_dragged_along_its_row() {
     assert_eq!(open, [first, second, third, fourth], "no tab closed");
 }
 
+/// Ctrl+T while a tab is dragged along its row opens no tab: the strip
+/// keeps the tabs it had when the drag began, so the new tab would not
+/// show in front, nor take the focus, until the drag is over.
+///
+/// parity: TAB-003, TAB-032
+#[gtk::test]
+fn no_tab_opens_while_another_is_dragged_along_its_row() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let [first, second] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    let strip = test.window.tab_strip();
+
+    strip.grab_tab(first, (grab_point(&test.window, first), 10.0));
+    strip.follow_pointer(first, grab_point(&test.window, first) + 20.0);
+    test.activate("new-tab", None);
+
+    assert_eq!(tab_ids(&test.window), [first, second], "no tab opened");
+    assert_eq!(strip.live_tab(), Some(first), "the tab still follows the pointer");
+}
+
 /// With "Tab key switches between split panes" on, Tab while a split tab
 /// is dragged along its row keeps its active pane active: the drag holds
 /// the tab by that pane, so leaving the row after a switch would carry the

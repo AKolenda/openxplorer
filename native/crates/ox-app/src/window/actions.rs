@@ -162,6 +162,12 @@ impl BrowserWindow {
     fn install_tab_actions(&self) {
         self.add_action_entries([
             plain_action(WindowAction::NewTab, |window| {
+                // Not while a tab is dragged: the strip keeps the tabs it
+                // had when the drag began, so a new one would not show in
+                // front until it is over (TAB-032).
+                if window.refuse_while_tabs_move() {
+                    return;
+                }
                 let home = window.imp().locations.borrow().home_uri();
                 if let Err(error) = window.add_tab(&home) {
                     window.show_message(&error.to_string());
