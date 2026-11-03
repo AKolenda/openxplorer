@@ -63,6 +63,9 @@ pub(super) struct GeneralTab {
     /// The Opens with value, read again when the window comes back to
     /// the front after Change....
     pub opens_with: Option<gtk::Label>,
+    /// The name, Read-only and Hidden, which follow the item when another
+    /// tab changes it.
+    pub edits: Rc<GeneralEdits>,
 }
 
 /// Fills the General tab of `properties`, registering its changes with
@@ -151,11 +154,12 @@ pub(super) fn general_tab(
     let attributes = Rows::new();
     attributes.add_control(&ox_core::i18n::gettext("Attributes"), &edits.attribute_boxes());
     page.append(attributes.widget());
-    window.add_pending(edits);
+    window.add_pending(Rc::<GeneralEdits>::clone(&edits));
     GeneralTab {
         page,
         folder_rows,
         opens_with,
+        edits,
     }
 }
 
@@ -382,6 +386,19 @@ impl GeneralEdits {
         self.is_updating.set(true);
         self.read_only.set_inconsistent(state == ReadOnly::Unchanged);
         self.read_only.set_active(state == ReadOnly::Set);
+        self.is_updating.set(false);
+    }
+
+    /// After Security changed the item's permissions, a file's Read-only
+    /// shows its mode `mode` again, unless it holds a change not applied.
+    pub(super) fn follow_mode(&self, mode: Option<u32>) {
+        if self.is_folder || self.read_only_change().is_some() {
+            return;
+        }
+        let read_only = mode.is_some_and(|mode| mode & 0o200 == 0);
+        self.read_only_now.set(Some(read_only));
+        self.is_updating.set(true);
+        self.read_only.set_active(read_only);
         self.is_updating.set(false);
     }
 

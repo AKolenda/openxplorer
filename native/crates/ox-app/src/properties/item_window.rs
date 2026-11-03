@@ -24,7 +24,7 @@ use ox_core::transfer::Cancellation;
 use ox_core::versions::{is_conventional_snapshot, PreviousVersions};
 
 use super::folder_count::{count_folders, Totals};
-use super::general_tab::{general_tab, GeneralRights};
+use super::general_tab::{general_tab, GeneralEdits, GeneralRights};
 use super::location_panel::LocationPanel;
 use super::metadata::{read_properties, ItemProperties};
 use super::security_tab::{fill_security, SecurityContext, SecurityFacts};
@@ -66,6 +66,8 @@ struct ItemPages {
     /// Points the Sharing tab at a renamed folder.
     share_folder: Option<Rc<dyn Fn(std::path::PathBuf)>>,
     general: gtk::Box,
+    /// The General tab's edits, once it is filled.
+    general_edits: RefCell<Option<Rc<GeneralEdits>>>,
     security: gtk::Box,
     customize: Option<gtk::Box>,
     /// Stops the folder count.
@@ -162,6 +164,7 @@ pub(crate) fn open_item_properties(
         target,
         context,
         general,
+        general_edits: RefCell::new(None),
         security,
         customize,
         count,
@@ -272,6 +275,9 @@ impl ItemPages {
         };
         fill_security(&self.security, &facts, &security_context);
         if !first {
+            if let Some(edits) = self.general_edits.borrow().as_ref() {
+                edits.follow_mode(properties.mode);
+            }
             return;
         }
         window.set_art(Art::for_entry(&properties.entry));
@@ -285,6 +291,7 @@ impl ItemPages {
         clear(&self.general);
         let general = general_tab(window, &properties, &self.context.locations, rights, &self.uri);
         self.general.append(&general.page);
+        self.general_edits.replace(Some(Rc::clone(&general.edits)));
         if let Some(rows) = &general.folder_rows {
             if is_smb_server(&properties.entry.uri) {
                 rows.show(Totals::zero());

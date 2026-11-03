@@ -462,6 +462,46 @@ fn edit_after_general_changes_the_item_as_it_is_now() {
     assert_eq!(mode_of(&path), 0o600, "the unrelated file is untouched");
 }
 
+/// Read-only on General follows a change Edit... made: taking the
+/// owner's Write ticks it, and clearing it then gives Write back.
+///
+/// parity: PROP-003, PROP-007
+#[gtk::test]
+fn read_only_follows_a_change_made_in_edit() {
+    let fixture = Fixture::standard();
+    let path = fixture.path("Notes 2.txt");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("a known mode");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let read_only = check(&general(&window), "Read-only");
+    assert!(!read_only.is_active());
+
+    window.select_tab("security");
+    let security = tab(&window, "security");
+    press(&security, "Edit...");
+    let edit = sub_dialog(&window, "Permissions for Notes 2.txt");
+    let names = descendants::<gtk::ListBox>(&edit).remove(0);
+    names.select_row(names.row_at_index(0).as_ref());
+    let write = descendants::<gtk::CheckButton>(&edit)
+        .into_iter()
+        .filter(WidgetExt::is_sensitive)
+        .nth(4)
+        .expect("Allow Write");
+    assert!(write.is_active(), "the owner may write");
+    write.set_active(false);
+    edit.ok_button().emit_clicked();
+    wait_until("the change", || mode_of(&path) == 0o444);
+
+    wait_until("Read-only to follow", || read_only.is_active());
+    assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    read_only.set_active(false);
+    assert!(window.apply_button().is_sensitive(), "clearing it is a change");
+    press(&window, "Apply");
+    wait_until("Write back", || mode_of(&path) & 0o200 != 0);
+}
+
 /// A rename on General reaches every tab: asking again for the renamed
 /// item brings the same window back, and the other tabs work on the new
 /// name.
