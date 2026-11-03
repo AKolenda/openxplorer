@@ -7,6 +7,8 @@
 use std::fs;
 use std::path::Path;
 
+use gio::prelude::*;
+
 use super::error::SearchError;
 use super::mounts::{mount_for_path, read_mounts, Mount};
 use super::scan::ListedItem;
@@ -293,12 +295,12 @@ impl IndexScope {
         let Some((_, marker)) = DEPENDENCY_FOLDERS.iter().find(|(folder, _)| *folder == name) else {
             return false;
         };
-        let exists = |folder: &gio::File, file: &str| {
-            folder.child(file).query_exists(gio::Cancellable::NONE)
-        };
+        let exists = |folder: &gio::File, file: &str| folder.child(file).query_exists(gio::Cancellable::NONE);
         let parent = parents
             .iter()
-            .fold(gio::File::for_uri(&self.root), |folder, child| folder.child(child));
+            .fold(gio::File::for_uri(&self.root), |folder, child| {
+                folder.child(child)
+            });
         match marker {
             Marker::Name => true,
             Marker::Beside(files) => files.iter().any(|file| exists(&parent, file)),
