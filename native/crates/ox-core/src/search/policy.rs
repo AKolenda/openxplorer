@@ -4,6 +4,8 @@
 //! Ports `root_network`, `policy` and `allowed` from
 //! `v2.0.0:desktop/index_service.py` (SRCH-030, SRCH-031).
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -126,6 +128,12 @@ impl RootStorage {
 pub(crate) struct IndexScope {
     root: String,
     excluded: Vec<String>,
+    /// Stops a marker lookup when the scan or update is stopped.
+    cancellable: gio::Cancellable,
+    /// Whether each folder below the root with a dependency folder's name,
+    /// by its path below the root, had its marker: every item below it
+    /// asks again, and on a network share each lookup is a round trip.
+    markers: RefCell<HashMap<String, bool>>,
 }
 
 impl IndexScope {
@@ -186,6 +194,8 @@ impl IndexScope {
         let mut scope = Self {
             root: root.to_owned(),
             excluded: Vec::new(),
+            cancellable: gio::Cancellable::new(),
+            markers: RefCell::default(),
         };
         let Some(root_path) = local_path(root) else {
             return scope;
@@ -202,6 +212,12 @@ impl IndexScope {
             .map(|mount| file_uri(&mount.path));
         scope.excluded.extend(nested_mounts);
         scope
+    }
+
+    /// This scope, with its marker lookups stopped by `cancellable`.
+    pub(crate) fn cancelled_by(mut self, cancellable: &gio::Cancellable) -> Self {
+        self.cancellable = cancellable.clone();
+        self
     }
 
     /// Whether `uri` may be indexed (`allowed` in Python): inside the root,
@@ -295,20 +311,27 @@ impl IndexScope {
         let Some((_, marker)) = DEPENDENCY_FOLDERS.iter().find(|(folder, _)| *folder == name) else {
             return false;
         };
-        let exists = |folder: &gio::File, file: &str| folder.child(file).query_exists(gio::Cancellable::NONE);
+        let key = format!("{}/{name}", parents.join("/"));
+        if let Some(&known) = self.markers.borrow().get(&key) {
+            return known;
+        }
+        let exists =
+            |folder: &gio::File, file: &str| folder.child(file).query_exists(Some(&self.cancellable));
         let parent = parents
             .iter()
             .fold(gio::File::for_uri(&self.root), |folder, child| {
                 folder.child(child)
             });
-        match marker {
+        let is_marked = match marker {
             Marker::Name => true,
             Marker::Beside(files) => files.iter().any(|file| exists(&parent, file)),
             Marker::Inside(files) => {
                 let folder = parent.child(name);
                 files.iter().any(|file| exists(&folder, file))
             }
-        }
+        };
+        self.markers.borrow_mut().insert(key, is_marked);
+        is_marked
     }
 }
 
@@ -465,6 +488,23 @@ mod tests {
         assert!(project.admits("file:///home/test/project/dist/app.js"));
     }
 
+    /// A folder's marker is looked up once per scope: every item below it
+    /// asks again, and on a network share each lookup is a round trip.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn a_folders_marker_is_looked_up_once() {
+        let (base, root) = tree(&["Sales/target/plan.odt"]);
+        let home = scope(&root, &[]);
+        let uri = |path: &str| format!("{root}/{path}");
+        assert!(home.admits(&uri("Sales/target/plan.odt")));
+
+        fs::write(base.path().join("Sales/Cargo.toml"), "").unwrap();
+
+        assert!(home.admits(&uri("Sales/target/budget.odt")));
+        assert!(!scope(&root, &[]).admits(&uri("Sales/target/budget.odt")));
+    }
+
     /// A file is never taken for the folder that holds it: only a folder
     /// named `target` or `vendor` is build output or installed dependencies,
     /// so a file with that name is still indexed.
@@ -504,8 +544,8 @@ mod tests {
     fn root_exclusions() {
         assert!(!scope("file:///", &[]).admits("file:///proc/1"));
         let without_exclusions = IndexScope {
-            root: "file:///".to_owned(),
             excluded: Vec::new(),
+            ..scope("file:///", &[])
         };
         assert!(!without_exclusions.admits("file:///.snapshots/1"));
         assert!(!without_exclusions.admits("file:///.zfs/snapshot"));

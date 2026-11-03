@@ -77,7 +77,7 @@ fn update_folders(shared: &Shared, job: &UpdateJob, storage: RootStorage) -> Res
     if job.root.generation.is_none() {
         return Ok(UpdateEnd::Abandoned);
     }
-    let scope = shared.scope_of(root)?;
+    let scope = shared.scope_of(root)?.cancelled_by(&job.cancellable);
     let mut pending = vec![job.folder.clone()];
     let mut seen = HashSet::new();
     while let Some(folder) = pending.pop() {
@@ -85,7 +85,17 @@ fn update_folders(shared: &Shared, job: &UpdateJob, storage: RootStorage) -> Res
             return Ok(UpdateEnd::Abandoned);
         }
         check_cancelled(&job.cancellable)?;
-        if seen.contains(&folder) || !scope.admits(&folder) {
+        if seen.contains(&folder) {
+            continue;
+        }
+        if !scope.admits(&folder) {
+            // A folder that became build output since it was read, such as
+            // a `venv` that just got its `pyvenv.cfg`, leaves the cache when
+            // its parent is read again.
+            let parent = parent_uri(&folder);
+            if scope.admits(&parent) {
+                pending.push(parent);
+            }
             continue;
         }
         seen.insert(folder.clone());
