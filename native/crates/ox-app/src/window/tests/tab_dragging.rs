@@ -25,7 +25,7 @@ use crate::test_support::harness::{
     wait_for, wait_until, windows_besides, Fixture, OpenedWindows, TestWindow,
 };
 use crate::test_support::pointer::{screen_point, window_origin, Button, Pointer};
-use crate::window::session::TabId;
+use crate::window::session::{Tab, TabId};
 use crate::window::BrowserWindow;
 
 /// Where the pointer goes to find a window on the screen: any point works,
@@ -487,6 +487,56 @@ fn a_tab_whose_landing_neighbour_closes_while_it_settles_lands_before_the_next()
     crate::test_support::harness::wait_until("the tab settled", || moved.get().is_some());
 
     assert_eq!(moved.get(), Some(Some((first, Some(fourth)))));
+}
+
+/// F3 while a tab is dragged along its row splits no tab, not even the
+/// one in front that is not dragged: splitting gives that tab another id,
+/// by which the dragged tab keeps where it lands, so it would land at the
+/// end of the row instead.
+///
+/// parity: TAB-032, VIEW-059
+#[gtk::test]
+fn no_tab_splits_while_another_is_dragged_along_its_row() {
+    let fixture = Fixture::standard();
+    let test = two_tabs(&fixture);
+    test.window.add_tab(&fixture.uri_of("Music")).expect("a folder");
+    test.wait_for_listing("the third tab");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let [_, second, third] = tab_ids(&test.window)[..] else {
+        panic!("three tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let moved = Rc::new(Cell::new(None));
+
+    strip.grab_tab(third, (grab_point(&test.window, third), 10.0));
+    // Before the second tab's middle: the order shown changes.
+    strip.follow_pointer(third, grab_point(&test.window, second) - 20.0);
+    crate::test_support::harness::wait_for_frames(&test.window, 2);
+    test.window.switch_tab(second);
+    test.activate("split-view", None);
+    let split = test
+        .window
+        .imp()
+        .session
+        .borrow()
+        .active()
+        .is_some_and(Tab::is_split);
+    strip.let_go(
+        true,
+        glib::clone!(
+            #[strong]
+            moved,
+            move |went| moved.set(Some(went))
+        ),
+    );
+    wait_until("the tab settled", || moved.get().is_some());
+
+    assert!(!split, "the tab in front stays whole");
+    assert_eq!(
+        moved.get(),
+        Some(Some((third, Some(second)))),
+        "the dragged tab lands before it"
+    );
 }
 
 /// With "Tab key switches between split panes" on, Tab while a split tab

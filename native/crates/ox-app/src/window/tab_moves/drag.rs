@@ -202,4 +202,20 @@ impl BrowserWindow {
         let active = self.imp().session.borrow().active_id();
         active.is_some_and(|id| self.refuse_while_moving(id))
     }
+
+    /// [`Self::refuse_while_active_tab_moves`] for what gives a tab of the
+    /// strip another id, as splitting it, closing one of its panes or
+    /// switching between them does: refused for any tab while one follows
+    /// the pointer along the row or a window drag holds this window, as
+    /// where the dragged tab lands or goes back is kept as the ids of the
+    /// tabs after it. A tab let go a moment ago lands at once first.
+    pub(in crate::window) fn refuse_while_tabs_move(&self) -> bool {
+        let strip = self.tab_strip();
+        strip.land_settling_tab();
+        if strip.is_following() || self.is_in_window_drag() {
+            self.show_message(ox_core::i18n::gettext_static(TAB_IS_MOVING));
+            return true;
+        }
+        self.refuse_while_active_tab_moves()
+    }
 }

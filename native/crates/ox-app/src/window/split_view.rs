@@ -144,7 +144,7 @@ impl BrowserWindow {
     /// F3: splits the tab, or closes its active pane.
     pub(super) fn toggle_split_view(&self) {
         let is_split = self.imp().session.borrow().active().is_some_and(Tab::is_split);
-        if self.refuse_while_active_tab_moves() {
+        if self.refuse_while_tabs_move() {
             self.show_split_state();
         } else if is_split {
             self.close_active_pane();
@@ -168,6 +168,9 @@ impl BrowserWindow {
         let Some(uri) = uri.filter(|uri| Page::from_uri(uri) != Some(Page::Settings)) else {
             return Ok(());
         };
+        if self.refuse_while_tabs_move() {
+            return Ok(());
+        }
         self.leave_pane();
         let split = self.imp().session.borrow_mut().split_active(&uri);
         if let Some(id) = split {
@@ -203,16 +206,15 @@ impl BrowserWindow {
 
     /// Makes the pane on `side` active, when the tab in front is split and
     /// that pane is not active yet. Keyboard focus stays where it goes.
-    /// A tab let go a moment ago lands at once first; one still dragged
-    /// keeps its active pane, by which the drag holds it (TAB-032): false
-    /// then, as the pane on `side` stays inactive.
+    /// A tab let go a moment ago lands at once first; while a tab is still
+    /// dragged the tabs keep their active panes, by which the drag holds
+    /// them (TAB-032): false then, as the pane on `side` stays inactive.
     pub(super) fn activate_pane(&self, side: PaneSide) -> bool {
         let is_split = self.imp().session.borrow().active().is_some_and(Tab::is_split);
         if !is_split || side == self.imp().active_side.get() {
             return true;
         }
-        self.tab_strip().land_settling_tab();
-        if self.refuse_while_active_tab_moves() {
+        if self.refuse_while_tabs_move() {
             return false;
         }
         self.leave_pane();
