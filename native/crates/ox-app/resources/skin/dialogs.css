@@ -84,8 +84,8 @@ window.ox button.danger:active { background-color: alpha(@ox_critical_fill, .8);
    action with Pause and Cancel, as Windows Explorer shows them
    (§4.17 "Progress window"; src/window/progress_window.rs,
    src/window/transfer_panel.rs). The bar and the graph change only when
-   the operation reports; the paused colour fades by a transition, which
-   GTK skips with reduced motion. ---- */
+   the operation reports, and Pause or Resume recolours the whole action
+   at once, with no fade (ACC-010). ---- */
 window.progress-window { background-color: @ox_bg; color: @ox_text; }
 .progress-action { padding: 14px 20px 14px 20px; }
 .progress-action + .progress-action { border-top: 1px solid @ox_border; }
@@ -106,15 +106,17 @@ window.ox button.progress-control { min-width: 28px; min-height: 28px; padding: 
   background-color: @ox_accent;
   border: none;
   border-radius: 1px;
-  transition: background-color 200ms ease-out;
 }
 /* A paused action turns the caution colour (Windows UX guidance:
    "Turn the progress bar yellow to indicate that the user has paused"). */
 .progress-action.paused progressbar > trough > progress { background-color: @ox_caution; }
 /* The speed graph of More details (src/window/transfer_panel/speed_graph.rs):
    drawn into a picture at the device's scale in these colours, which it
-   reads from hidden swatches. `color` on the graph is its speed line. */
+   reads from hidden swatches, redrawn at once when the action pauses or
+   resumes. */
 speedgraph { border: 1px solid @ox_border; background-color: @ox_bg; color: @ox_text; }
+speedgraph .speed-line { color: @ox_text; }
+.progress-action.paused speedgraph .speed-line { color: @ox_caution; }
 speedgraph .speed-area { color: alpha(@ox_accent, .6); }
 speedgraph .speed-reached { color: alpha(@ox_accent, .12); }
 speedgraph .speed-grid { color: alpha(@ox_text, .07); }

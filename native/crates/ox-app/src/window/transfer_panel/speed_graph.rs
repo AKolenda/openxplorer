@@ -227,8 +227,8 @@ mod imp {
         pub(super) picture: RefCell<Option<gtk::Picture>>,
         /// "Speed: 32.8 MB/s".
         pub(super) label: RefCell<Option<gtk::Label>>,
-        /// Hidden widgets whose CSS colour is the area's, the part done's
-        /// and the gridlines'.
+        /// Hidden widgets whose CSS colour is the area's, the part done's,
+        /// the gridlines' and the speed line's.
         pub(super) swatches: RefCell<Vec<gtk::Widget>>,
         /// The speed at each progress reported.
         pub(super) samples: RefCell<Vec<(f64, u64)>>,
@@ -313,7 +313,7 @@ impl SpeedGraph {
         let label = gtk::Label::builder().visible(false).build();
         label.add_css_class("speed-label");
         label.set_parent(self);
-        let swatches = ["speed-area", "speed-reached", "speed-grid"].map(|class| {
+        let swatches = ["speed-area", "speed-reached", "speed-grid", "speed-line"].map(|class| {
             let swatch = gtk::Box::builder().visible(false).build();
             swatch.add_css_class(class);
             swatch.set_parent(self);
@@ -364,6 +364,13 @@ impl SpeedGraph {
             }
             self.update_property(&[gtk::accessible::Property::Description(&text)]);
         }
+        self.changed();
+    }
+
+    /// Draws the graph again in the skin's colours, which a paused or
+    /// resumed action has just changed: the area and the line turn the
+    /// caution colour, or back, on the next frame.
+    pub(crate) fn recolour(&self) {
         self.changed();
     }
 
@@ -443,7 +450,7 @@ impl SpeedGraph {
             area: colour(0),
             reached: colour(1),
             grid: colour(2),
-            line: bytes_of(&self.color()),
+            line: colour(3),
         }
     }
 
@@ -483,7 +490,57 @@ impl SpeedGraph {
         Some((texture.width(), texture.height()))
     }
 
-    /// How far the graph shows the action, and its speed, for tests.
+    /// The colour of the drawn texture at (`x`, `y`), fractions of its
+    /// width and height, as straight RGBA, for tests.
+    #[cfg(test)]
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a pixel inside a small test texture"
+    )]
+    pub(crate) fn texture_pixel(&self, x: f64, y: f64) -> Option<Rgba> {
+        let picture = self.imp().picture.borrow().clone()?;
+        let texture = picture.paintable().and_downcast::<gdk::Texture>()?;
+        let (width, height) = (texture.width() as usize, texture.height() as usize);
+        let mut downloader = gdk::TextureDownloader::new(&texture);
+        downloader.set_format(gdk::MemoryFormat::R8g8b8a8);
+        let (bytes, stride) = downloader.download_bytes();
+        let column = ((x * width as f64) as usize).min(width - 1);
+        let row = ((y * height as f64) as usize).min(height - 1);
+        let at = row * stride + column * 4;
+        bytes.get(at..at + 4)?.try_into().ok()
+    }
+
+    /// The row of the speed line in the drawn texture, as a fraction of
+    /// its height, for tests.
+    #[cfg(test)]
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        reason = "a row inside a small test texture"
+    )]
+    pub(crate) fn line_fraction(&self) -> Option<f64> {
+        let (_, height) = self.texture_size()?;
+        let samples = self.imp().samples.borrow().clone();
+        let plot = Plot {
+            samples: &samples,
+            progress: self.imp().progress.get(),
+            speed: self.imp().speed.get(),
+        };
+        let row = line_row(&plot, height as usize)?;
+        Some((row as f64 + 0.5) / f64::from(height))
+    }
+
+    /// The colour of the caution swatch the skin gives a paused graph's
+    /// area, or the accent one otherwise, as RGB, for tests.
+    #[cfg(test)]
+    pub(crate) fn area_rgb(&self) -> [u8; 3] {
+        let area = self.palette().area;
+        [area[0], area[1], area[2]]
+    }
+
+    /// How far the graph shows the action, and its speed, for tests.    /// How far the graph shows the action, and its speed, for tests.
     #[cfg(test)]
     pub(crate) fn shown(&self) -> (f64, Option<u64>) {
         (self.imp().progress.get(), self.imp().speed.get())

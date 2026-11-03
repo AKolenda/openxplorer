@@ -35,9 +35,9 @@
 //! meanwhile does not replace it. The bars, the graph and the buttons
 //! are named for assistive technologies, and the bar carries the
 //! worker's report as its value text. Nothing moves frame by frame: the
-//! bar and the graph change only when the operation reports, and the
-//! paused colour fades in by a CSS transition, which GTK skips when the
-//! desktop asks for reduced motion (ACC-010).
+//! bar and the graph change only when the operation reports, and Pause
+//! or Resume recolours the bar, the graph's area and its speed line on
+//! the next frame, with no fade to catch halfway (ACC-010).
 //!
 //! While it runs, the action holds an [`OperationSession`] for the
 //! window that started it, so the session does not log out or suspend in
@@ -533,6 +533,10 @@ impl TransferPanel {
         } else {
             self.remove_css_class("paused");
         }
+        // The graph's picture is drawn in the skin's colours: draw it again
+        // in the new ones now, as no report comes while the action is
+        // paused.
+        imp.graph.recolour();
     }
 
     /// Tells the progress window that the action changed.
@@ -805,6 +809,167 @@ mod tests {
         window.destroy();
 
         assert_eq!(seen, [(0.4, 0.4), (0.7, 0.7)]);
+    }
+
+    /// The straight RGBA colour of `widget`, rendered by GTK, at (`x`,
+    /// `y`), fractions of its size.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a pixel inside a small test widget"
+    )]
+    fn rendered_pixel(widget: &impl IsA<gtk::Widget>, x: f64, y: f64) -> [u8; 4] {
+        let widget = widget.upcast_ref::<gtk::Widget>();
+        let (width, height) = (widget.width(), widget.height());
+        let paintable = gtk::WidgetPaintable::new(Some(widget));
+        let snapshot = gtk::Snapshot::new();
+        paintable.snapshot(&snapshot, f64::from(width), f64::from(height));
+        let node = snapshot.to_node().expect("the widget draws something");
+        let renderer = widget
+            .native()
+            .and_then(|native| native.renderer())
+            .expect("a realized window");
+        let texture = renderer.render_texture(&node, None);
+        let mut downloader = gtk::gdk::TextureDownloader::new(&texture);
+        downloader.set_format(gtk::gdk::MemoryFormat::R8g8b8a8);
+        let (bytes, stride) = downloader.download_bytes();
+        let column = ((x * f64::from(texture.width())) as usize).min(texture.width() as usize - 1);
+        let row = ((y * f64::from(texture.height())) as usize).min(texture.height() as usize - 1);
+        let at = row * stride + column * 4;
+        bytes[at..at + 4].try_into().expect("four channels")
+    }
+
+    /// Whether the RGB of `pixel` is `expected`, give or take rounding.
+    fn is_colour(pixel: [u8; 4], expected: [u8; 3]) -> bool {
+        pixel[..3]
+            .iter()
+            .zip(expected)
+            .all(|(channel, expected)| channel.abs_diff(expected) <= 3)
+    }
+
+    /// A shown panel in its own window, with a copy half done and
+    /// `details` open or closed, and the action's caution and accent
+    /// colours, read from the skin's swatches.
+    fn paused_fixture(
+        details: bool,
+    ) -> (
+        crate::test_support::harness::TestWindow,
+        gtk::Window,
+        TransferPanel,
+    ) {
+        // The browsing window loads the skin, whose colours the action uses.
+        let skinned = crate::test_support::harness::TestWindow::without_tabs();
+        let panel: TransferPanel = glib::Object::new();
+        let window = gtk::Window::builder().child(&panel).default_width(400).build();
+        window.set_visible(true);
+        panel.start(TransferKind::Files, "Preparing copy…", Cancellation::new());
+        panel.show_details(details);
+        panel.show_progress(&bytes("a.txt", 250, 1000, 0, 2));
+        crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+        panel.show_progress(&bytes("a.txt", 500, 1000, 0, 2));
+        crate::test_support::harness::wait_until("the panel to be drawn", || {
+            panel.is_mapped() && (!details || panel.imp().graph.texture_size().is_some())
+        });
+        crate::test_support::harness::wait_for_frames(&window, 4);
+        (skinned, window, panel)
+    }
+
+    /// The colour of the graph's area well inside the part done, and of
+    /// its speed line.
+    fn graph_colours(panel: &TransferPanel) -> ([u8; 4], [u8; 4]) {
+        let graph = &panel.imp().graph;
+        let line = graph.line_fraction().expect("a speed is known");
+        let area = graph.texture_pixel(0.2, 0.97).expect("the graph is drawn");
+        let line = graph.texture_pixel(0.8, line).expect("the graph is drawn");
+        (area, line)
+    }
+
+    /// Pause turns the graph's area and its speed line the caution
+    /// colour at once, with More details open.
+    ///
+    /// parity: OPS-021
+    #[gtk::test]
+    fn pause_turns_the_graph_the_caution_colour_at_once() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        let mut seen = Vec::new();
+        for theme in ["light", "dark"] {
+            let (skinned, window, panel) = paused_fixture(true);
+            skinned.activate("theme", Some(theme));
+            crate::test_support::harness::wait_for_frames(&window, 3);
+            let accent = panel.imp().graph.area_rgb();
+
+            panel.press_pause();
+            crate::test_support::harness::wait_for_frames(&window, 2);
+            let caution = panel.imp().graph.area_rgb();
+            let (area, line) = graph_colours(&panel);
+            panel.finish();
+            window.destroy();
+            seen.push((theme, accent, caution, area, line));
+        }
+
+        for (theme, accent, caution, area, line) in seen {
+            assert_ne!(caution, accent, "{theme}: the skin has a caution colour");
+            assert!(
+                is_colour(area, caution),
+                "{theme}: the area is {area:?}, not {caution:?}"
+            );
+            assert!(
+                is_colour(line, caution),
+                "{theme}: the line is {line:?}, not {caution:?}"
+            );
+        }
+    }
+
+    /// Resume turns the graph back to the accent colour and its line back
+    /// to the text colour at once.
+    ///
+    /// parity: OPS-021
+    #[gtk::test]
+    fn resume_turns_the_graph_back_at_once() {
+        let (_skinned, window, panel) = paused_fixture(true);
+        let (area_before, line_before) = graph_colours(&panel);
+        panel.press_pause();
+        crate::test_support::harness::wait_for_frames(&window, 3);
+        let caution = panel.imp().graph.area_rgb();
+        let (paused_area, _) = graph_colours(&panel);
+
+        panel.press_pause();
+        crate::test_support::harness::wait_for_frames(&window, 2);
+        let (area, line) = graph_colours(&panel);
+        panel.finish();
+        window.destroy();
+
+        assert!(is_colour(paused_area, caution), "paused first: {paused_area:?}");
+        assert_eq!(area, area_before, "the area is the accent colour again");
+        assert_eq!(line, line_before, "the line is the text colour again");
+    }
+
+    /// With the details closed, Pause turns the bar's fill the caution
+    /// colour on the next frame, with no fade caught halfway, and Resume
+    /// turns it back the same way.
+    ///
+    /// parity: OPS-021
+    #[gtk::test]
+    fn pause_turns_the_bar_the_caution_colour_at_once() {
+        let (_skinned, window, panel) = paused_fixture(false);
+        let bar = panel.imp().progress_bar.clone();
+        let accent = rendered_pixel(&bar, 0.25, 0.5);
+
+        panel.press_pause();
+        crate::test_support::harness::wait_for_frames(&window, 1);
+        let paused = rendered_pixel(&bar, 0.25, 0.5);
+        let caution = panel.imp().graph.area_rgb();
+        panel.press_pause();
+        crate::test_support::harness::wait_for_frames(&window, 1);
+        let resumed = rendered_pixel(&bar, 0.25, 0.5);
+        panel.finish();
+        window.destroy();
+
+        assert!(
+            is_colour(paused, caution),
+            "the paused bar is {paused:?}, not {caution:?}"
+        );
+        assert_eq!(resumed, accent, "the bar is the accent colour again");
     }
 
     /// The details have no bar of the file being copied, as Windows has
