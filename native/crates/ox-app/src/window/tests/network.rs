@@ -706,7 +706,9 @@ fn the_network_surfaces_are_captured() {
         test.activate("theme", Some(theme));
         test.window.navigate(Page::ThisPc.uri()).expect("This PC");
         let landing = test.window.folder_pane().landing();
-        wait_until("the saved share", || shows(landing, "Studio NAS (Z:)"));
+        wait_until("the saved share", || {
+            shows(landing, "Studio NAS (\\\\studio-nas) (Z:)")
+        });
         capture(&test.window, &format!("native-this-pc-saved-share-{theme}.png"));
         test.window
             .navigate(Page::Network.uri())

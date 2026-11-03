@@ -737,8 +737,10 @@ fn the_view_menu_and_ctrl_shift_f4_open_the_terminal_here() {
     assert!(keys.iter().any(|key| key == "<Shift><Control>F4"), "{keys:?}");
 }
 
-/// More options: "Pin to Quick access" needs a folder, so pages disable
-/// it and say why (CMD-031).
+/// More options: "Pin to Quick access" needs a folder, so a page that
+/// lists it, such as Settings, disables it and says why (CMD-031); This
+/// PC and Network list the network drive commands in its place, as
+/// Windows 11 does.
 ///
 /// parity: CMD-007, CMD-031
 #[gtk::test]
@@ -751,20 +753,24 @@ fn more_options_needs_a_folder_for_pin() {
     assert!(more.row("Pin to Quick access").is_sensitive());
     more.popdown();
 
-    for page in [Page::ThisPc, Page::Settings] {
-        test.window.navigate(page.uri()).expect("a page");
-        more.popup();
-        wait_for_frames(&test.window, 2);
-        let pin = more.row("Pin to Quick access");
-        assert!(!pin.is_sensitive(), "{page:?}");
-        let tooltip = pin.tooltip_text().unwrap_or_default();
-        assert_eq!(
-            tooltip.lines().nth(1),
-            Some("Only a folder can be pinned to Quick access."),
-            "{page:?}"
-        );
-        more.popdown();
-    }
+    test.window.navigate(Page::Settings.uri()).expect("Settings");
+    more.popup();
+    wait_for_frames(&test.window, 2);
+    let pin = more.row("Pin to Quick access");
+    assert!(!pin.is_sensitive());
+    let tooltip = pin.tooltip_text().unwrap_or_default();
+    assert_eq!(
+        tooltip.lines().nth(1),
+        Some("Only a folder can be pinned to Quick access.")
+    );
+    more.popdown();
+
+    test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+    let labels = more.row_labels();
+    assert!(
+        !labels.iter().any(|label| label.contains("Quick access")),
+        "{labels:?}"
+    );
 }
 
 /// The appearances left "…" for Settings > Appearance, as Windows 11
