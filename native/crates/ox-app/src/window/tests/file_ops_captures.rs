@@ -11,7 +11,6 @@
 use std::path::PathBuf;
 
 use gtk::prelude::*;
-use gtk::subclass::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 use ox_core::transfer::{Progress, ProgressScope};
 
@@ -113,13 +112,17 @@ fn the_transfer_panel_and_the_compact_menu_are_captured_light_and_dark() {
     for theme in THEMES {
         test.activate("theme", Some(theme));
         test.window.begin_operation("Copy: Notes 2.txt (1/3)");
-        test.window.imp().transfer_panel.show_progress(&Progress {
+        test.window.transfer_panel().show_progress(&Progress {
             label: "Copy: Notes 2.txt (1/3)".to_owned(),
             fraction: 0.4,
             scope: ProgressScope::Batch,
             bytes: None,
+            items: None,
+            name: None,
         });
-        capture(&test.window, &format!("native-transfer-{theme}.png"));
+        let progress = test.context.progress_window().expect("the operation's window");
+        progress.set_visible(true);
+        crate::test_support::harness::capture_dialog(&progress, &format!("native-transfer-{theme}.png"));
         test.window.end_operation();
         test.window.folder_model().select_only(1);
         test.activate("rename", None);
@@ -134,5 +137,56 @@ fn the_transfer_panel_and_the_compact_menu_are_captured_light_and_dark() {
         );
         menu.popdown();
         wait_until("the menu to close", || !menu.is_mapped());
+    }
+}
+
+/// The progress window with More details open, light and dark: the speed
+/// graph, the name and what remains, for visual review.
+#[gtk::test]
+fn the_progress_windows_details_are_captured_light_and_dark() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    for theme in THEMES {
+        test.activate("theme", Some(theme));
+        let context = test
+            .window
+            .begin_operation("Preparing copy…")
+            .expect("the copy starts");
+        let panel = test.window.transfer_panel().clone();
+        let uris = [format!("{}/Notes 2.txt", fixture.uri())];
+        let documents = format!("{}/Documents", fixture.uri());
+        let verb = crate::window::transfer_panel::Verb::Copying;
+        panel.describe(crate::window::transfer_panel::Action::of(verb, &uris, Some(&documents)).unwrap());
+        let progress = test.context.progress_window().expect("the operation's window");
+        progress.set_visible(true);
+        if !progress.shows_details() {
+            progress.press_details();
+        }
+        let size = 40 * 1024 * 1024;
+        for step in 1..=44_u64 {
+            let wobble = [3, 5, 2, 6, 4][usize::try_from(step % 5).unwrap()];
+            wait_for_frames(&progress, u32::try_from(wobble).unwrap());
+            panel.show_progress(&Progress {
+                label: "Copying Notes 2.txt".to_owned(),
+                fraction: 0.5,
+                scope: ProgressScope::File,
+                bytes: Some(ox_core::transfer::ByteProgress {
+                    file_written: step * size / 100,
+                    file_size: size,
+                    batch_written: step * size / 100,
+                    batch_size: Some(size),
+                    file_started: false,
+                }),
+                items: Some(ox_core::transfer::ItemCount { done: 0, total: 1 }),
+                name: Some("Notes 2.txt".to_owned()),
+            });
+        }
+        crate::test_support::harness::capture_dialog(
+            &progress,
+            &format!("native-progress-details-{theme}.png"),
+        );
+        context.cancel.cancel();
+        test.window.end_operation();
     }
 }

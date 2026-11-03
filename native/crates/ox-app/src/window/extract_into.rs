@@ -263,6 +263,7 @@ impl BrowserWindow {
             self.zip_extractor()
                 .with_progress(self.progress_reporter(&cancel)),
         );
+        self.describe_extraction(&cancel, &request);
         let extracted = extractor.extract_in_background(request, cancel).await;
         self.finish_archive_operation();
         Ok(extracted)

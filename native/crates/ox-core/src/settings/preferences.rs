@@ -332,6 +332,11 @@ pub struct Preferences {
     /// its application (Dolphin's "Always ask"); off, it only ever opens.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub ask_to_run_programs: bool,
+    /// The progress window shows "More details": the speed graph, the
+    /// name, the time and the items remaining. Windows keeps it as it
+    /// was last left, across sessions; stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub progress_details: bool,
     /// Explicitly enabled installed service actions, keyed by definition digest.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub enabled_service_actions: Vec<String>,
@@ -488,6 +493,7 @@ impl Default for Preferences {
             confirm_empty_trash: true,
             confirm_close_tabs: false,
             ask_to_run_programs: false,
+            progress_details: false,
             enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,
@@ -570,6 +576,7 @@ impl Preferences {
         self.apply_confirmations(update);
         self.apply_service_actions(update.enabled_service_actions.as_ref());
         replace_if_some(&mut self.desktop_font, update.desktop_font);
+        replace_if_some(&mut self.progress_details, update.progress_details);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
         let icon_size = update
@@ -765,6 +772,8 @@ pub struct PreferencesUpdate {
     pub confirm_close_tabs: Option<bool>,
     /// Ask whether to run a program or script that is opened.
     pub ask_to_run_programs: Option<bool>,
+    /// Show the progress window's details.
+    pub progress_details: Option<bool>,
     /// Replaces the allowlist of installed service actions.
     pub enabled_service_actions: Option<Vec<String>>,
     /// Use the desktop's font, or the Windows font stack.
@@ -861,6 +870,7 @@ impl PreferencesUpdate {
             confirm_empty_trash: flag("confirmEmptyTrash"),
             confirm_close_tabs: flag("confirmCloseTabs"),
             ask_to_run_programs: flag("askToRunPrograms"),
+            progress_details: flag("progressDetails"),
             enabled_service_actions: values.get("enabledServiceActions").and_then(read_keys),
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
@@ -1216,6 +1226,31 @@ mod tests {
         assert_eq!(stored["confirmTrash"], json!(false));
         assert_eq!(stored["confirmCloseTabs"], json!(true));
         assert!(stored.get("confirmDelete").is_none() && stored.get("fullPathInTitle").is_none());
+    }
+
+    /// The progress window's "More details" stays as it was last left,
+    /// across sessions, as in Windows; stored only when open.
+    ///
+    /// parity: OPS-021
+    #[test]
+    fn the_progress_windows_details_are_remembered_and_stored_only_when_open() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.progress_details);
+
+        preferences.apply(&PreferencesUpdate::from_json(&json!({"progressDetails": "yes"})).unwrap());
+        assert!(!preferences.progress_details, "only a JSON boolean counts");
+        assert!(serde_json::to_value(&preferences)
+            .unwrap()
+            .get("progressDetails")
+            .is_none());
+
+        preferences.apply(&PreferencesUpdate::from_json(&json!({"progressDetails": true})).unwrap());
+        assert!(preferences.progress_details);
+        let stored = serde_json::to_value(&preferences).unwrap();
+        assert_eq!(stored["progressDetails"], json!(true));
+        let mut read = Preferences::default();
+        read.apply(&PreferencesUpdate::from_json(&stored).unwrap());
+        assert!(read.progress_details, "read back from the stored settings");
     }
 
     /// parity: SET-016

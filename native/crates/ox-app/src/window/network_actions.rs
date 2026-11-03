@@ -185,7 +185,7 @@ impl BrowserWindow {
 
     /// Open in new window: another window of the app showing `uri`,
     /// refused as Ctrl+N is while an update installs (TAB-043).
-    fn open_in_new_window(&self, uri: &str) {
+    pub(in crate::window) fn open_in_new_window(&self, uri: &str) {
         if let Some(refusal) = self.context().updates().new_window_refusal() {
             self.show_message(&refusal);
             return;
