@@ -921,8 +921,8 @@ mod tests {
     /// With "Folders from other apps open in a new window" on, each Show
     /// in folder request opens a window of its own: `ShowItems` with the
     /// file selected, `ShowFolders` at the folder and `ShowItemProperties`
-    /// at the file's folder, with the file's Properties window. The window
-    /// in use keeps its tabs.
+    /// at the file's folder, with the file's Properties window, which takes
+    /// the caller's token. The window in use keeps its tabs.
     ///
     /// parity: INT-014, NAV-042
     #[gtk::test]
@@ -958,10 +958,16 @@ mod tests {
         assert_eq!(folders.tab_count(), 1);
         assert_eq!(folders.current_uri(), Some(fixture.uri_of("Documents")));
 
-        show_in_folder(
-            &app,
+        let request = FileManagerRequest::new(
             FileManagerMethod::ShowItemProperties,
             &[fixture.uri_of("Documents/report.txt")],
+        )
+        .expect("a valid location");
+        super::super::requests::show_file_manager_request(
+            &application(),
+            &app.state.context,
+            &request,
+            "caller-token",
         );
 
         let properties = window_besides(&[window, &items, &folders]);
@@ -973,6 +979,11 @@ mod tests {
                 .iter()
                 .any(|window| window.title_text() == "report.txt Properties")
         });
+        assert_eq!(
+            properties.properties_startup_ids(),
+            ["caller-token"],
+            "the Properties window takes the caller's token"
+        );
         wait_until("the selection", || selected_names(&properties) == ["report.txt"]);
         assert_eq!(window.tab_count(), 1);
     }

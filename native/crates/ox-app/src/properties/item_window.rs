@@ -111,7 +111,7 @@ pub(crate) fn open_item_properties(
     );
     if let Some(folder) = target.known_folder {
         let location = LocationPanel::new(folder, Arc::clone(&context.relocation), context.brave.clone());
-        window.add_pending(location.pending());
+        window.add_pending_last(location.pending());
         window.add_tab(
             PropertiesTab::Location.page_name(),
             PropertiesTab::Location.label(),

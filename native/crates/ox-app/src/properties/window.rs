@@ -90,6 +90,8 @@ mod imp {
         pub(super) apply: gtk::Button,
         /// The changes the tabs hold.
         pub(super) pending: RefCell<Vec<Rc<dyn Pending>>>,
+        /// How many changes at the end of `pending` are made last.
+        pub(super) made_last: Cell<usize>,
         /// Work to stop when the window closes.
         pub(super) work: RefCell<Vec<Cancellation>>,
         /// Run when the window closes.
@@ -496,7 +498,18 @@ impl PropertiesWindow {
 
     /// Registers a change a tab holds until OK or Apply.
     pub(crate) fn add_pending(&self, pending: Rc<dyn Pending>) {
-        self.imp().pending.borrow_mut().push(pending);
+        let imp = self.imp();
+        let mut changes = imp.pending.borrow_mut();
+        let at = changes.len() - imp.made_last.get();
+        changes.insert(at, pending);
+    }
+
+    /// Registers a change made after every other, as Location's, which
+    /// moves the folder's files once the other tabs changed them.
+    pub(crate) fn add_pending_last(&self, pending: Rc<dyn Pending>) {
+        let imp = self.imp();
+        imp.pending.borrow_mut().push(pending);
+        imp.made_last.set(imp.made_last.get() + 1);
     }
 
     /// Greys Apply, or not, after a tab's control changed.

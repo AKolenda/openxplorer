@@ -178,16 +178,20 @@ pub(super) fn show_file_manager_request(
         return;
     }
     let window = active_window(app).unwrap_or_else(|| open_window(app, context, None));
-    // A token lets one window take focus. ShowItemProperties asks for a
-    // Properties window, which opens a moment later: it takes the token.
+    raise_for_caller(&window, window_token(&window, request, startup_id));
+    window.show_file_manager_request(request);
+}
+
+/// The caller's token for `window` itself. A token lets one window take
+/// focus: `ShowItemProperties` asks for a Properties window, which opens a
+/// moment later, so that window takes it and `window` none.
+fn window_token<'a>(window: &BrowserWindow, request: &FileManagerRequest, startup_id: &'a str) -> &'a str {
     let is_properties = request.method() == ox_core::integration::FileManagerMethod::ShowItemProperties;
     if is_properties && !startup_id.is_empty() {
         window.hand_startup_id_to_properties(startup_id);
-        raise_for_caller(&window, "");
-    } else {
-        raise_for_caller(&window, startup_id);
+        return "";
     }
-    window.show_file_manager_request(request);
+    startup_id
 }
 
 /// Opens a window whose tabs are the request's, with the items selected
@@ -215,7 +219,7 @@ fn show_in_new_window(
             window.show_message(&error.to_string());
         }
     }
-    raise_for_caller(&NewWindow(&window), startup_id);
+    raise_for_caller(&NewWindow(&window), window_token(&window, request, startup_id));
     window.open_request_properties(request);
 }
 
