@@ -14,6 +14,7 @@ use super::file_ops_support::{
     assert_ended_without_a_message, dialog_over, is_renaming_in_place, name_editor, open_dialog,
     select_names, text_field,
 };
+use crate::dialog::Dialog;
 use crate::test_support::harness::{descendants, settle, wait_until, Fixture, TestWindow};
 
 /// Selects the items called `names` and gives `focused` keyboard focus,
@@ -313,4 +314,47 @@ fn a_dotted_name_typed_for_a_folder_is_numbered_whole() {
     });
     assert!(fixture.path("Archive.v1 (1)").is_dir());
     assert!(fixture.path("Archive.v1 (2)").is_dir());
+}
+
+/// A name starting with a dot hides every renamed item while hidden files
+/// are not shown: the Rename dialog, which asks when the edited item is
+/// not on screen, asks "Rename and hide?" first, as renaming in place
+/// does. Cancel keeps the dialog with the typed name; Rename and Hide
+/// renames them all.
+///
+/// parity: OPS-050, OPS-013
+#[gtk::test]
+fn a_hiding_name_in_the_rename_dialog_asks_first() {
+    let fixture = Fixture::with_files(400);
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["file 0398.txt", "file 0399.txt"]);
+    test.activate("rename", None);
+    let dialog = open_dialog(&test);
+    let field = text_field(&dialog);
+    let question = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .find(|shown| shown.is_visible() && shown.title_text() == "Rename and hide?")
+    };
+
+    field.set_text(".Plan.txt");
+    dialog.press("Save");
+    wait_until("the hide question", || question().is_some());
+    question().expect("it shows").press("Cancel");
+    wait_until("the question to close", || question().is_none());
+    settle();
+
+    assert!(dialog.is_visible(), "the Rename dialog stays");
+    assert_eq!(field.text(), ".Plan.txt", "the typed name is kept");
+    assert!(fixture.path("file 0398.txt").is_file());
+    assert!(!fixture.path(".Plan (1).txt").exists());
+
+    dialog.press("Save");
+    wait_until("the hide question again", || question().is_some());
+    question().expect("it shows").press("Rename and Hide");
+    wait_until("the hidden names", || {
+        fixture.path(".Plan (1).txt").is_file() && fixture.path(".Plan (2).txt").is_file()
+    });
+    assert!(!fixture.path("file 0398.txt").exists());
 }

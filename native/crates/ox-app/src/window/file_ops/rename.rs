@@ -29,7 +29,7 @@ use crate::window::BrowserWindow;
 
 /// The Rename dialog's line when the user keeps a name that would hide
 /// the item.
-const NOT_RENAMED: &str = crate::i18n::message_id("The name was not changed.");
+pub(super) const NOT_RENAMED: &str = crate::i18n::message_id("The name was not changed.");
 
 /// How much of `entry`'s name a rename selects: a file's name before its
 /// extension, a folder's whole name.

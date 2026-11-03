@@ -16,11 +16,13 @@
 //! message, an item that could not be renamed is named in the operation's
 //! result, and Undo renames the whole batch back (OPS-029).
 
+use gtk::glib::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::location::parent_location;
 use ox_core::ops::{rename_numbered_items, summarize_batch_rename, BatchItem, NumberedRename};
 
 use super::name_dialog::{ask_for_name, NameRequest, NameSelection};
+use super::rename::NOT_RENAMED;
 use super::running::FinishedOperation;
 use crate::window::BrowserWindow;
 
@@ -65,14 +67,22 @@ impl BrowserWindow {
         let batch = ask_for_name(self, request, |name, _cancel| {
             // The unchanged name renames nothing, as Enter on it in place.
             let batch = (name != edited.name).then(|| numbered_batch_for(entries, edited, &name));
+            let edited_name = edited.name.clone();
+            let window = self.downgrade();
             async move {
-                match batch {
-                    Some(batch) => batch
-                        .base_name()
-                        .map(|_| Some(batch))
-                        .map_err(|error| error.to_string()),
-                    None => Ok(None),
+                let Some(batch) = batch else {
+                    return Ok(None);
+                };
+                let base = batch.base_name().map_err(|error| error.to_string())?;
+                let not_renamed = || ox_core::i18n::gettext_static(NOT_RENAMED).to_owned();
+                let window = window.upgrade().ok_or_else(not_renamed)?;
+                // A name that hides the items asks first, as in place and
+                // in the Rename dialog of one item (OPS-013); Cancel keeps
+                // the dialog with the typed name.
+                if !window.confirm_hiding_rename(&edited_name, &base).await {
+                    return Err(not_renamed());
                 }
+                Ok(Some(batch))
             }
         })
         .await;
