@@ -12,6 +12,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::time::Duration;
 
 use gtk::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
@@ -25,7 +26,7 @@ use crate::locations::Page;
 use crate::network::Discoverer;
 use crate::test_support::file_entry;
 use crate::test_support::harness::{
-    capture, capture_dialog, descendants, wait_until, Fixture, TestWindow, ThemeGuard,
+    capture, capture_dialog, descendants, wait_for, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::window::session::TabPlacement;
 use crate::window::BrowserWindow;
@@ -297,6 +298,13 @@ fn a_share_another_application_shows_is_mounted_only_when_the_user_asks() {
         Some("smb://example.invalid/other")
     );
     assert!(test.window.load_error().is_some(), "the share is unavailable");
+    let item = ["smb://example.invalid/third/notes.txt"];
+    let properties =
+        FileManagerRequest::new(FileManagerMethod::ShowItemProperties, &item).expect("an SMB file");
+    test.window.show_file_manager_request(&properties);
+    test.wait_for_listing("the Properties item's folder");
+    wait_for(Duration::from_millis(500));
+    assert!(test.window.properties_windows().is_empty(), "no Properties");
     assert_eq!(mounts.get(), 0, "nothing was mounted for the requests");
 
     test.activate("refresh", None);

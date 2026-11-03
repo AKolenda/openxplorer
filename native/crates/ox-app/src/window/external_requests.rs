@@ -19,6 +19,7 @@
 //! connects, signing in with a saved password if there is one, only when
 //! the user chooses Try again (NET-004).
 
+use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 use ox_core::location::{parent_location, same_location};
@@ -80,10 +81,30 @@ impl BrowserWindow {
 
     /// The Properties of a checked `ShowItemProperties` request's item,
     /// over the window once it is shown; nothing for the other methods.
+    /// Properties mount an unmounted share first, which a request never
+    /// does: an item on such a share gets no Properties, and its tab says
+    /// the share is not mounted.
     pub(crate) fn open_request_properties(&self, request: &FileManagerRequest) {
-        if request.method() == FileManagerMethod::ShowItemProperties {
-            self.open_properties_of(&request.uris()[0], PropertiesTab::General);
+        if request.method() != FileManagerMethod::ShowItemProperties {
+            return;
         }
+        let uri = request.uris()[0].clone();
+        gtk::glib::spawn_future_local(gtk::glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let probe = gtk::gio::File::for_uri(&uri)
+                    .query_info_future(
+                        "standard::type",
+                        gtk::gio::FileQueryInfoFlags::NONE,
+                        gtk::glib::Priority::DEFAULT,
+                    )
+                    .await;
+                if !matches!(&probe, Err(error) if error.matches(gtk::gio::IOErrorEnum::NotMounted)) {
+                    window.open_properties_of(&uri, PropertiesTab::General);
+                }
+            }
+        ));
     }
 
     /// Opens `folder` in a new tab in front, saying in the message line
