@@ -3,8 +3,8 @@
 //!
 //! Both views show an item as its icon art beside or above its name
 //! ([`FileCell`]), as the name cell of `renderRows` in `v2.0.0:desktop/ui/app.js`
-//! does. Every cell shows its row's tooltip ([`row_tooltip`]), as
-//! `row.title` does. While the item is renamed in place, a text field
+//! does. The item shows Explorer's infotip ([`row_tooltip`]) where
+//! `row.title` showed its name. While the item is renamed in place, a text field
 //! takes the name's place. [`CellOwners`] follows the cells the views
 //! bind and turns a click position back into a row. The art is an [`ArtImage`] of
 //! bundled icons, which GTK renders again by itself when the theme or the
@@ -26,7 +26,7 @@ use gtk::{glib, pango};
 pub(crate) use cell_owners::CellOwners;
 pub(crate) use custom_icon::CUSTOM_ICON;
 pub(crate) use expander::connect_expanders;
-pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip};
+pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip, TooltipCell};
 
 use crate::folder_view::item::FileItem;
 use crate::icons::Art;
@@ -297,6 +297,11 @@ impl FileCell {
         imp.label.set_visible(true);
     }
 
+    /// Whether the name is cut short with an ellipsis where it is shown.
+    pub(crate) fn name_is_elided(&self) -> bool {
+        self.imp().label.layout().is_ellipsized()
+    }
+
     /// The name label, for tests of what a view shows.
     #[cfg(test)]
     pub(crate) fn name(&self) -> String {
@@ -343,7 +348,7 @@ pub(crate) fn connect_file_cells(
         let list_item = as_list_item(object);
         list_item.set_child(Some(&cell));
         setup_owners.register(&cell, list_item);
-        show_row_tooltip(&cell, &setup_owners, |_| None);
+        show_row_tooltip(&cell, &setup_owners, |_| None, TooltipCell::Item);
         cell.follow_item_check(list_item, &setup_owners);
     });
     let bind_owners = Rc::clone(owners);

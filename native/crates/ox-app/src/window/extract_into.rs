@@ -31,6 +31,7 @@ use ox_core::transfer::{Cancellation, Node, TransferMode};
 
 use crate::archive_view::{extraction_failure_text, ArchiveTarget, ExtractionChoice, EXTRACTION_STOPPED};
 
+use super::archive_actions::OPERATION_RUNNING;
 use super::file_ops::IncomingItems;
 use super::session::TabId;
 use super::transfer_panel::TransferKind;
@@ -167,7 +168,7 @@ impl BrowserWindow {
             destination_uri: parent,
             folder_name: name,
         };
-        let extracted = match self.run_extraction(request, |extractor| extractor).await {
+        let extracted = match self.run_extraction(request, |extractor| extractor).await? {
             Err(error) if error.is_cancelled() => return Ok(None),
             extracted => extracted.map_err(|error| extraction_failure_text(&error))?,
         };
@@ -195,7 +196,7 @@ impl BrowserWindow {
         // Errors name the chosen folder, not the private one.
         let extracted = match self
             .run_extraction(request, ZipExtractor::into_existing_folder)
-            .await
+            .await?
         {
             Err(error) if error.is_cancelled() => return Ok(None),
             extracted => extracted.map_err(|error| extraction_failure_text(&error))?,
@@ -242,17 +243,21 @@ impl BrowserWindow {
     /// Runs `request` with the transfer panel and the window's progress,
     /// with the extractor that `adjust` makes of the window's, for example
     /// one extracting only some members.
+    ///
+    /// # Errors
+    ///
+    /// Why it did not start: an operation that began after the caller's
+    /// check holds the panel.
     pub(super) async fn run_extraction(
         &self,
         request: ExtractionRequest,
         adjust: impl FnOnce(ZipExtractor) -> ZipExtractor,
-    ) -> Result<ExtractedFolder, ArchiveError> {
+    ) -> Result<Result<ExtractedFolder, ArchiveError>, String> {
         let cancel = Cancellation::new();
-        self.transfer_panel().start(
-            TransferKind::Archive,
-            ox_core::i18n::gettext_static(PREPARING),
-            cancel.clone(),
-        );
+        let label = ox_core::i18n::gettext_static(PREPARING);
+        if !self.claim_transfer_panel(TransferKind::Archive, label, &cancel) {
+            return Err(ox_core::i18n::gettext_static(OPERATION_RUNNING).to_owned());
+        }
         self.update_archive_actions();
         let extractor = adjust(
             self.zip_extractor()
@@ -260,7 +265,7 @@ impl BrowserWindow {
         );
         let extracted = extractor.extract_in_background(request, cancel).await;
         self.finish_archive_operation();
-        extracted
+        Ok(extracted)
     }
 
     /// Shows `shown` (the extracted folder), or lists the chosen folder's

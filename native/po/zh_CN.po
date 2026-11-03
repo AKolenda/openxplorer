@@ -723,6 +723,26 @@ msgstr "展开"
 msgid "Select"
 msgstr "选择"
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Date created: {date}"
+msgstr "创建日期：{date}"
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Date modified: {date}"
+msgstr "修改日期：{date}"
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Size: {size}"
+msgstr "大小：{size}"
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs
+msgid "Type: {type}"
+msgstr "类型：{type}"
+
 #: crates/ox-app/src/folder_view/column_keys.rs
 msgid "Enter sorts by this column; Left and Right resize it; Home fits it to the listed items"
 msgstr "Enter 按此列排序；左右方向键调整其宽度；Home 使其适应所列出的项目"
@@ -2100,12 +2120,12 @@ msgid "Windows 10 is compact and shows familiar text commands."
 msgstr "Windows 10 风格更紧凑，并显示熟悉的文本命令。"
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 10 · Classic (default)"
-msgstr "Windows 10 · 经典（默认）"
+msgid "Windows 10 · Classic"
+msgstr "Windows 10 · 经典"
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "Windows 11 · Compact actions"
-msgstr "Windows 11 · 紧凑操作"
+msgid "Windows 11 · Compact actions (default)"
+msgstr "Windows 11 · 紧凑操作（默认）"
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "appearance dark light system colour color mode"
@@ -2144,12 +2164,12 @@ msgid "Double-clicking a ZIP"
 msgstr "双击 ZIP 文件"
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "In a pop-up window (default)"
-msgstr "在弹出窗口中（默认）"
+msgid "In a pop-up window"
+msgstr "在弹出窗口中"
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "Like a folder (Windows)"
-msgstr "像文件夹一样（Windows）"
+msgid "Like a folder (default)"
+msgstr "像文件夹一样（默认）"
 
 #: crates/ox-app/src/settings_page/archives.rs
 msgid "Like a folder opens a ZIP in the tab, as Windows Explorer does: browse it with the address bar, Back and Up, copy or drag files out, and Extract all from the bar. In a pop-up window shows it over the tab."
@@ -2784,7 +2804,9 @@ msgid "Off: Tab moves keyboard focus through the window as usual."
 msgstr "关闭：Tab 键像往常一样在窗口中切换键盘焦点。"
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "Off: a folder opened from another app or the command line opens in a new tab, and the tab you are using stays where it is."
+#, fuzzy
+#| msgid "Off: a folder opened from another app or the command line opens in a new tab, and the tab you are using stays where it is."
+msgid "Off: a folder opened from another app, Show in folder or the command line opens in a new tab, and the tab you are using stays where it is."
 msgstr "关闭：从其他应用或命令行打开的文件夹会在新标签页中打开，你正在使用的标签页保持不动。"
 
 #: crates/ox-app/src/settings_page/general.rs

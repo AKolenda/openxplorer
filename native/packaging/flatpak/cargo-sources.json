@@ -431,14 +431,14 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/crc32fast/crc32fast-1.5.2.crate",
-        "sha256": "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78",
-        "dest": "cargo/vendor/crc32fast-1.5.2"
+        "url": "https://static.crates.io/crates/crc32fast/crc32fast-1.5.4.crate",
+        "sha256": "5f97d3416d5337d15c4b0d78c8c91df922ca143f57ec20e2d1c188333047ef04",
+        "dest": "cargo/vendor/crc32fast-1.5.4"
     },
     {
         "type": "inline",
-        "contents": "{\"package\": \"01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78\", \"files\": {}}",
-        "dest": "cargo/vendor/crc32fast-1.5.2",
+        "contents": "{\"package\": \"5f97d3416d5337d15c4b0d78c8c91df922ca143f57ec20e2d1c188333047ef04\", \"files\": {}}",
+        "dest": "cargo/vendor/crc32fast-1.5.4",
         "dest-filename": ".cargo-checksum.json"
     },
     {

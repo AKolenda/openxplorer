@@ -23,6 +23,7 @@ pub(crate) use replace::{parent_directory, replace_file_atomically, replace_file
 
 use std::fs::{self, DirBuilder, File, Metadata, OpenOptions, Permissions};
 use std::io::{self, Read};
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
@@ -239,19 +240,25 @@ pub(crate) fn read_limited_text(file: File, path: &Path, limit: u64) -> Result<S
 }
 
 /// Checks a SQLite database and any `-wal`, `-shm` or `-journal` sidecar
-/// next to it. The database itself must exist; sidecars may be missing,
-/// or unlinked by another connection while being checked.
+/// next to it, and returns which file the database path names. The
+/// database itself must exist; sidecars may be missing, or unlinked by
+/// another connection while being checked.
+///
+/// Safety rule "checking a database keeps its locks": SQLite's POSIX
+/// advisory locks belong to the process, and closing any ordinary
+/// descriptor of a file releases all of them, among them the shared lock
+/// on `-shm` that tells other processes its WAL index is in use. The next
+/// process to open the cache would then rebuild and truncate `-shm` under
+/// this one's mapping. So the files are checked as [`private_file`] checks
+/// them, but through `O_PATH` descriptors, whose close releases no lock.
 ///
 /// # Errors
 ///
 /// Everything [`private_file`] refuses for the database or a sidecar
 /// that still exists.
-pub(crate) fn validate_sqlite_files(path: &Path) -> Result<(), StorageError> {
-    let database = PrivateFileOptions {
-        writable: true,
-        ..PrivateFileOptions::default()
-    };
-    private_file(path, database)?;
+pub(crate) fn validate_sqlite_files(path: &Path) -> Result<FileIdentity, StorageError> {
+    let database = PrivateFileOptions::default();
+    let identity = check_sqlite_file(path, database)?;
     let sidecar = PrivateFileOptions {
         allow_unlinked: true,
         ..database
@@ -259,9 +266,51 @@ pub(crate) fn validate_sqlite_files(path: &Path) -> Result<(), StorageError> {
     for suffix in SQLITE_SIDECAR_SUFFIXES {
         let mut sidecar_path = path.as_os_str().to_owned();
         sidecar_path.push(suffix);
-        private_file_if_present(Path::new(&sidecar_path), sidecar)?;
+        match check_sqlite_file(Path::new(&sidecar_path), sidecar) {
+            Err(error) if !error.is_not_found() => return Err(error),
+            _ => {}
+        }
     }
-    Ok(())
+    Ok(identity)
+}
+
+/// The device and inode of a file: a path names another file once it is
+/// deleted and created again, or replaced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FileIdentity {
+    device: u64,
+    inode: u64,
+}
+
+/// [`private_file`] for one SQLite file, without opening it for I/O (see
+/// [`validate_sqlite_files`]). A file that is not yet 0600 is made so
+/// through `/proc/self/fd`, as glibc's `fchmodat` does for an `O_PATH`
+/// descriptor, which `fchmod` refuses.
+fn check_sqlite_file(path: &Path, options: PrivateFileOptions) -> Result<FileIdentity, StorageError> {
+    let file = OpenOptions::new()
+        .read(true)
+        .kernel_flags(OFlags::PATH | OFlags::NOFOLLOW)
+        .open(path)
+        .with_path(path)?;
+    let metadata = file.metadata().with_path(path)?;
+    // With `O_PATH`, `O_NOFOLLOW` opens a symlink itself instead of
+    // failing; it fails here as every other private open does.
+    if metadata.file_type().is_symlink() {
+        let error = io::Error::from_raw_os_error(rustix::io::Errno::LOOP.raw_os_error());
+        return Err(StorageError::io(path, error));
+    }
+    match OpenedFile::inspect(&metadata).verdict(options) {
+        Verdict::Refuse => return Err(StorageError::refused(path, StorageRefusal::NotPrivateFile)),
+        Verdict::AcceptAndMakePrivate if metadata.mode() & 0o7777 != FILE_MODE => {
+            let descriptor = format!("/proc/self/fd/{}", file.as_raw_fd());
+            fs::set_permissions(descriptor, Permissions::from_mode(FILE_MODE)).with_path(path)?;
+        }
+        Verdict::AcceptAndMakePrivate | Verdict::AcceptUnlinked => {}
+    }
+    Ok(FileIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+    })
 }
 
 /// What `fstat` reported about an opened file, reduced to what
@@ -534,6 +583,25 @@ mod tests {
         assert_eq!(fs::read(&target).unwrap(), b"unchanged");
         fs::remove_file(root.path().join("search.sqlite3-wal")).unwrap();
         validate_sqlite_files(&database).unwrap();
+    }
+
+    /// The database and its sidecars become 0600 when they are checked,
+    /// although the check never opens them for reading or writing.
+    /// parity: SAFE-009
+    #[test]
+    fn checked_sqlite_files_become_private() {
+        let root = tempfile::tempdir().unwrap();
+        let database = root.path().join("search.sqlite3");
+        let wal = root.path().join("search.sqlite3-wal");
+        for path in [&database, &wal] {
+            fs::write(path, b"").unwrap();
+            fs::set_permissions(path, Permissions::from_mode(0o644)).unwrap();
+        }
+
+        validate_sqlite_files(&database).unwrap();
+
+        assert_eq!(permission_bits(&database), 0o600);
+        assert_eq!(permission_bits(&wal), 0o600);
     }
 
     /// Ported from `v2.0.0:desktop/tests/test_terminal_security.py::PrivateStorageTests::test_sqlite_sidecar_unlinked_during_check_is_allowed`

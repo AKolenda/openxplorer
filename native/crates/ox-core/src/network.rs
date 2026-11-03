@@ -80,7 +80,7 @@ pub use credential_store::{CredentialGeneration, CredentialStore, ForgetScope, S
 pub use discovery::{discover_servers, DiscoveredServer, Discovery, DISCOVERY_NOTE};
 pub use error::NetworkError;
 pub use keyring::{Keyring, KeyringCollection, KeyringError, NewSecret, SecretAttributes};
-pub use local_path::{fuse_export_path, local_path};
+pub use local_path::{fuse_export_location, fuse_export_path, local_path, outside_location};
 pub use mount_helper::mount_share_command;
 pub use mount_plan::{mount_plan, DesktopUser, MountPlan, MountPlanError};
 pub use mount_table::{

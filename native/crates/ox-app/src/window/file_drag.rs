@@ -72,7 +72,10 @@ fn drag_announcement(uris: &[String]) -> String {
                 .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
             ox_core::i18n::format_message("Dragging {name}", &[("name", &name)])
         }
-        _ => ox_core::i18n::format_message("Dragging {len} items", &[("len", &uris.len().to_string())]),
+        _ => ox_core::i18n::format_message(
+            "Dragging {len} items",
+            &[("len", &ox_core::format::group_digits(uris.len() as u64))],
+        ),
     }
 }
 
@@ -120,7 +123,7 @@ fn drag_icon(art: Art, count: usize) -> gtk::Widget {
     icon.append(&ArtImage::new(art, DRAG_ICON_SIZE));
     if count > 1 {
         let badge = gtk::Label::builder()
-            .label(count.to_string())
+            .label(ox_core::format::group_digits(count as u64))
             .valign(gtk::Align::Start)
             .css_classes(["drag-count"])
             .build();
