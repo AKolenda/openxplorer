@@ -61,9 +61,9 @@ fn tab_numbers_and_ctrl_page_keys_show_tabs() {
 }
 
 /// A double-click on a tab behind opens a copy of it in front. The first
-/// click shows the tab, which builds the tabs anew, so the strip counts the
-/// clicks; it claims the second press, which keeps the title bar from
-/// maximizing the window.
+/// press shows the tab and keeps its widget, so the press could go on into
+/// a drag; the strip counts the clicks and claims the second press, which
+/// keeps the title bar from maximizing the window.
 ///
 /// parity: TAB-014
 #[gtk::test]
@@ -78,17 +78,17 @@ fn double_clicking_a_tab_opens_a_copy_in_front() {
     let first = first_tab();
     let point = middle_of(&first, strip);
 
+    // A press reaches the tab, then the strip around it.
+    click_gesture(&first, gtk::gdk::BUTTON_PRIMARY)
+        .emit_by_name::<()>("pressed", &[&1_i32, &point.0, &point.1]);
     let strip_click = click_gesture(strip, gtk::gdk::BUTTON_PRIMARY);
     strip_click.emit_by_name::<()>("pressed", &[&1_i32, &point.0, &point.1]);
-    click_gesture(&first, gtk::gdk::BUTTON_PRIMARY)
-        .emit_by_name::<()>("released", &[&1_i32, &point.0, &point.1]);
-    wait_until("the tabs built anew to be laid out", || {
-        let tab = first_tab();
-        tab != first && tab.width() > 0
-    });
-    // GTK counts the press on the tabs built anew as a first press.
+    let shown_on_press = test.active_tab() == tab_ids(&test).first().copied();
+    let kept = first_tab() == first;
     strip_click.emit_by_name::<()>("pressed", &[&1_i32, &point.0, &point.1]);
 
+    assert!(shown_on_press, "the first press shows the tab");
+    assert!(kept, "showing it keeps the tab's widget");
     assert_eq!(test.window.tab_count(), 3);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     assert_eq!(

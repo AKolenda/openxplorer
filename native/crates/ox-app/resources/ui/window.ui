@@ -30,7 +30,8 @@
       tab, the drag area taking the rest, the open-windows button and the
       caption buttons. The whole bar is a GtkWindowHandle, so dragging or
       double-clicking any empty part moves or maximises the window as the
-      desktop expects.
+      desktop expects; the tabs' drag source on the handle claims a dragged
+      tab first, so a tab drag never moves the window.
     -->
     <property name="titlebar">
       <object class="GtkWindowHandle">

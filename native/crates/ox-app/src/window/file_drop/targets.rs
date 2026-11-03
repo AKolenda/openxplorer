@@ -22,7 +22,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 
-pub(in crate::window) use autoscroll::DragScroll;
+pub(in crate::window) use autoscroll::{scroll_step, DragScroll, TICK as SCROLL_TICK};
 
 use spot::DropSpot;
 

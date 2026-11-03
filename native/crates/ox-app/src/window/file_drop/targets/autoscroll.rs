@@ -26,7 +26,7 @@ const EDGE: f64 = 40.0;
 const MAX_STEP: f64 = 24.0;
 
 /// How often a hovering drag scrolls.
-const TICK: Duration = Duration::from_millis(30);
+pub(in crate::window) const TICK: Duration = Duration::from_millis(30);
 
 /// The running scroll of one zone: its scrolled window, how far each
 /// tick moves it, and the timer.
@@ -39,8 +39,9 @@ pub(in crate::window) struct DragScroll {
 
 /// How far a zone `height` pixels tall scrolls per tick with the pointer
 /// at `y`: up (negative) near the top, down near the bottom, faster
-/// closer to the edge; 0 elsewhere.
-pub(super) fn scroll_step(y: f64, height: f64) -> f64 {
+/// closer to the edge; 0 elsewhere. Along a zone that scrolls sideways,
+/// as the tab strip, `y` and `height` are along its width.
+pub(in crate::window) fn scroll_step(y: f64, height: f64) -> f64 {
     if height <= 2.0 * EDGE {
         return 0.0;
     }

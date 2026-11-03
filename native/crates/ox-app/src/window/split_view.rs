@@ -117,14 +117,26 @@ impl BrowserWindow {
         press.connect_pressed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_, _, _, _| window.activate_pane(side)
+            move |_, _, _, _| {
+                window.activate_pane(side);
+            }
         ));
         column.add_controller(press);
         let focus = gtk::EventControllerFocus::new();
         focus.connect_enter(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_| window.activate_pane(side)
+            move |_| {
+                if !window.activate_pane(side) {
+                    // Focus goes back where the drag holds the tab, once
+                    // GTK has finished moving it here.
+                    glib::idle_add_local_once(glib::clone!(
+                        #[weak]
+                        window,
+                        move || window.folder_pane().focus_view()
+                    ));
+                }
+            }
         ));
         column.add_controller(focus);
     }
@@ -132,7 +144,7 @@ impl BrowserWindow {
     /// F3: splits the tab, or closes its active pane.
     pub(super) fn toggle_split_view(&self) {
         let is_split = self.imp().session.borrow().active().is_some_and(Tab::is_split);
-        if self.refuse_while_active_tab_moves() {
+        if self.refuse_while_tabs_move() {
             self.show_split_state();
         } else if is_split {
             self.close_active_pane();
@@ -156,6 +168,9 @@ impl BrowserWindow {
         let Some(uri) = uri.filter(|uri| Page::from_uri(uri) != Some(Page::Settings)) else {
             return Ok(());
         };
+        if self.refuse_while_tabs_move() {
+            return Ok(());
+        }
         self.leave_pane();
         let split = self.imp().session.borrow_mut().split_active(&uri);
         if let Some(id) = split {
@@ -205,16 +220,23 @@ impl BrowserWindow {
 
     /// Makes the pane on `side` active, when the tab in front is split and
     /// that pane is not active yet. Keyboard focus stays where it goes.
-    pub(super) fn activate_pane(&self, side: PaneSide) {
+    /// A tab let go a moment ago lands at once first; while a tab is still
+    /// dragged the tabs keep their active panes, by which the drag holds
+    /// them (TAB-032): false then, as the pane on `side` stays inactive.
+    pub(super) fn activate_pane(&self, side: PaneSide) -> bool {
         let is_split = self.imp().session.borrow().active().is_some_and(Tab::is_split);
         if !is_split || side == self.imp().active_side.get() {
-            return;
+            return true;
+        }
+        if self.refuse_while_tabs_move() {
+            return false;
         }
         self.leave_pane();
         let active = self.imp().session.borrow_mut().activate_beside();
         if let Some(id) = active {
             self.show_tab_with(id, FocusOnShow::Keep);
         }
+        true
     }
 
     /// Tab in a folder view of a split tab, when the settings ask for it:
