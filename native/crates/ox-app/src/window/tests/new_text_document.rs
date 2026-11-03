@@ -700,8 +700,9 @@ fn a_slow_creates_panel_is_its_own_until_it_ends() {
     );
 }
 
-/// Properties opened over the items while the create ran stays in front:
-/// nothing is renamed underneath it and the selection is left as it was.
+/// Properties opened while the create ran keeps the focus: its window
+/// stays in front, nothing is renamed behind it and the selection is left
+/// as it was.
 ///
 /// parity: OPS-002
 #[gtk::test]
@@ -711,13 +712,21 @@ fn properties_opened_during_the_create_is_left_alone() {
     select_names(&test, &["Résumé.txt"]);
     let release = start_held_text_document(&test);
     test.activate("properties", None);
-    test.wait_for_dialog("Properties");
+    let properties = test.wait_for_properties("Résumé.txt Properties");
+    wait_until("Properties has the focus", || {
+        properties.is_active() && !test.window.is_active()
+    });
 
     finish_held_text_document(&test, &fixture, release);
 
-    assert!(test.window.dialog_layer().shown().is_some(), "Properties stays");
-    assert!(!is_renaming_in_place(&test), "nothing is renamed underneath");
-    assert_eq!(test.selected_names(), ["Résumé.txt"]);
+    let focus_kept = properties.is_active();
+    let renaming = is_renaming_in_place(&test);
+    let selected = test.selected_names();
+    properties.close();
+
+    assert!(focus_kept, "Properties keeps the focus");
+    assert!(!renaming, "nothing is renamed behind it");
+    assert_eq!(selected, ["Résumé.txt"]);
 }
 
 /// Scrolling through a long folder while the create ran is not undone:
