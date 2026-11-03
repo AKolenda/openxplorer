@@ -39,6 +39,42 @@ fn tab_ids(window: &BrowserWindow) -> Vec<TabId> {
     session.tabs().iter().map(|tab| tab.id).collect()
 }
 
+/// A dragged tab leaves its strip once the carried tab is drawn, which
+/// GTK's drag icon shows the moment it gets it, so waiting for a widget to
+/// be drawn ends with its window's next frame also when the widget was
+/// shown before the wait began, and not only after the 250 ms fallback.
+///
+/// parity: TAB-034
+#[gtk::test]
+fn waiting_for_a_widget_to_be_drawn_ends_with_its_next_frame_even_if_already_shown() {
+    let drawn = |widget: &gtk::Widget| {
+        let is_drawn = std::rc::Rc::new(std::cell::Cell::new(false));
+        let mark = std::rc::Rc::clone(&is_drawn);
+        source::when_drawn(widget, std::rc::Rc::new(move || mark.set(true)));
+        is_drawn
+    };
+    let shown = gtk::Window::new();
+    let already = gtk::Label::new(Some("Documents"));
+    shown.set_child(Some(&already));
+    shown.present();
+    wait_until("the window to be shown", || already.is_mapped());
+    let later_window = gtk::Window::new();
+    let later = gtk::Label::new(Some("Pictures"));
+    later_window.set_child(Some(&later));
+
+    let already_drawn = drawn(already.upcast_ref());
+    let later_drawn = drawn(later.upcast_ref());
+    wait_for_frames(&shown, 2);
+    let later_before_shown = later_drawn.get();
+    later_window.present();
+
+    wait_until("the shown label to be drawn", || already_drawn.get());
+    wait_until("the label shown later to be drawn", || later_drawn.get());
+    assert!(!later_before_shown, "not drawn before it is shown");
+    shown.destroy();
+    later_window.destroy();
+}
+
 /// The tab widget at `index` of `window`'s strip.
 fn tab_widget(window: &BrowserWindow, index: usize) -> gtk::Widget {
     crate::window::widget_tree::children(&window.tab_strip().tab_list())
@@ -109,6 +145,38 @@ fn a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer() {
     );
 }
 
+/// A tab dropped on its own strip where the strip no longer followed it,
+/// as after it left the strip, lands there and leaves the strip still, so
+/// the strip shows the session's tabs again.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn a_tab_dropped_on_its_own_strip_after_leaving_it_leaves_the_strip_still() {
+    let fixture = Fixture::standard();
+    let test = three_tabs(&fixture);
+    let [first, second, third] = tab_ids(&test.window)[..] else {
+        panic!("three tabs are open");
+    };
+    let dragged = start_dragging(&test.window, 0);
+    let strip = test.window.tab_strip();
+    let grab = middle_in(&tab_widget(&test.window, 0), strip);
+    strip.grab_tab(dragged, grab);
+    strip.follow_pointer(dragged, grab.0 + 4.0);
+    strip.detach_tab(dragged);
+    let was_live = strip.live_tab();
+
+    let taken = test
+        .window
+        .settle_tab_drag(dragged, &test.window, TabDropSpot::Strip { before: None });
+    test.window.end_tab_drag();
+    settle();
+
+    assert_eq!(was_live, Some(dragged), "the strip was live");
+    assert!(taken);
+    assert_eq!(strip.live_tab(), None, "the strip is still");
+    assert_eq!(tab_ids(&test.window), [second, third, first]);
+}
+
 /// parity: TAB-033, TAB-039
 #[gtk::test]
 fn a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag() {
@@ -147,9 +215,13 @@ fn a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag(
     );
 }
 
-/// parity: TAB-034, TAB-035
+/// Released anywhere in a window of this app outside its tab row, in the
+/// source window just below its strip or in another window's file list, a
+/// tab tears out, as in Chrome; a busy window refuses it.
+///
+/// parity: TAB-034, TAB-035, TAB-037
 #[gtk::test]
-fn only_the_source_window_well_below_its_strip_tears_a_tab_out() {
+fn outside_every_tab_row_a_dropped_tab_tears_out() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.window
@@ -160,18 +232,23 @@ fn only_the_source_window_well_below_its_strip_tears_a_tab_out() {
     let bottom = f64::from(test.window.title_bar_bottom().expect("a laid out title bar"));
     let dragged = start_dragging(&test.window, 1);
 
-    let in_the_gap = test.window.tab_drop_spot(&test.window, 300.0, bottom + 20.0);
+    let just_below = test.window.tab_drop_spot(&test.window, 300.0, bottom + 5.0);
     let well_below = test.window.tab_drop_spot(&test.window, 300.0, bottom + 60.0);
     let in_another_window = other.window.tab_drop_spot(&test.window, 300.0, bottom + 60.0);
+    let operation = other.window.begin_operation("Preparing copy…");
+    let in_a_busy_window = other.window.tab_drop_spot(&test.window, 300.0, bottom + 60.0);
+    other.window.end_operation();
     let taken = test
         .window
         .settle_tab_drag(dragged, &test.window, TabDropSpot::TearOut);
     test.window.end_tab_drag();
     let opened = OpenedWindows::only(&[&test.window, &other.window]);
 
-    assert_eq!(in_the_gap, None);
+    assert_eq!(just_below, Some(TabDropSpot::TearOut));
     assert_eq!(well_below, Some(TabDropSpot::TearOut));
-    assert_eq!(in_another_window, None, "another window's body refuses the tab");
+    assert_eq!(in_another_window, Some(TabDropSpot::TearOut));
+    assert!(operation.is_some());
+    assert_eq!(in_a_busy_window, None, "a busy window refuses the tab");
     assert!(taken);
     assert_eq!(opened.window().current_uri(), Some(fixture.uri_of("Documents")));
     assert_eq!(test.window.tab_count(), 1);
@@ -182,39 +259,52 @@ struct UnclaimedEnd {
     /// The cancel reason GTK reports first, or `None` when the drop
     /// was performed (GNOME Shell's desktop drop).
     cancel: Option<gdk::DragCancelReason>,
-    /// A window of this app refused the tab where it was released.
-    refused_here: bool,
+    /// The window of this app under the pointer at the end, `Some(true)`
+    /// when it takes the tab, or `None` outside every one.
+    over: Option<bool>,
     /// The tab tears out into a new window.
     tears_out: bool,
 }
 
+/// A tab released outside every window of this app tears out, as in
+/// Chrome, whether GNOME Shell takes it as a desktop drop, X11 reports no
+/// target or Wayland cancels the drag. Escape keeps it, and so does a
+/// busy window that refused it, which says so. Wayland reports Escape like
+/// a release outside, so Escape keeps the tab there only while the pointer
+/// is over a window of this app.
+///
 /// parity: TAB-034, TAB-035, TAB-036
 #[gtk::test]
 fn a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays() {
     let cases = [
         UnclaimedEnd {
             cancel: None,
-            refused_here: false,
+            over: None,
             tears_out: true,
         },
         UnclaimedEnd {
             cancel: Some(gdk::DragCancelReason::NoTarget),
-            refused_here: false,
+            over: None,
+            tears_out: true,
+        },
+        UnclaimedEnd {
+            cancel: Some(gdk::DragCancelReason::Error),
+            over: None,
             tears_out: true,
         },
         UnclaimedEnd {
             cancel: Some(gdk::DragCancelReason::NoTarget),
-            refused_here: true,
-            tears_out: false,
-        },
-        UnclaimedEnd {
-            cancel: Some(gdk::DragCancelReason::UserCancelled),
-            refused_here: false,
+            over: Some(false),
             tears_out: false,
         },
         UnclaimedEnd {
             cancel: Some(gdk::DragCancelReason::Error),
-            refused_here: false,
+            over: Some(true),
+            tears_out: false,
+        },
+        UnclaimedEnd {
+            cancel: Some(gdk::DragCancelReason::UserCancelled),
+            over: None,
             tears_out: false,
         },
     ];
@@ -227,7 +317,7 @@ fn a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays() {
         test.wait_for_listing("the second tab");
         let dragged = start_dragging(&test.window, 1);
 
-        test.window.note_tab_refusal(case.refused_here);
+        test.window.note_tab_hover(case.over);
         if let Some(reason) = case.cancel {
             test.window.cancel_tab_drag(reason);
         }
@@ -245,9 +335,39 @@ fn a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays() {
             wait_for(std::time::Duration::from_millis(100));
             assert!(windows_besides(&[&test.window]).is_empty());
             assert_eq!(test.window.tab_count(), 2, "the tab stays");
-            assert_eq!(test.window.shown_message(), TabMoveRefusal::Cancelled.to_string());
+            let refused = case.over == Some(false);
+            let message = test.window.shown_message();
+            if refused {
+                assert_eq!(message, TabMoveRefusal::DestinationBusy.to_string());
+            } else {
+                assert_ne!(message, TabMoveRefusal::DestinationBusy.to_string());
+            }
         }
     }
+}
+
+/// A drag that starts with the pointer already outside every window of
+/// this app, as when a tab leaves a strip at the top of the screen
+/// upwards, is outside until a window reports it over itself: released
+/// where nothing takes it, the tab tears out.
+///
+/// parity: TAB-034
+#[gtk::test]
+fn a_drag_no_window_reported_over_tears_out_when_nothing_takes_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the second tab");
+    start_dragging(&test.window, 1);
+
+    test.window.cancel_tab_drag(gdk::DragCancelReason::NoTarget);
+    test.window.end_tab_drag();
+    let opened = OpenedWindows::only(&[&test.window]);
+
+    assert_eq!(opened.window().current_uri(), Some(fixture.uri_of("Documents")));
+    assert_eq!(test.window.tab_count(), 1);
 }
 
 /// parity: TAB-003
@@ -301,71 +421,141 @@ fn no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy() {
     );
 }
 
-/// parity: TAB-032, TAB-034
+/// Over another window's strip a stand-in for the dragged tab follows the
+/// pointer and the tabs make room for it where it would land, the one tab
+/// shown in front there, as in Chrome; nothing is written over the window,
+/// and away from the strip the stand-in goes, the tabs close up and the
+/// window's own tab is shown in front again.
+///
+/// parity: TAB-033, TAB-034
 #[gtk::test]
-fn a_tab_drag_shows_where_the_tab_would_go() {
+fn a_tab_over_another_windows_strip_takes_its_place_there_and_nothing_is_written() {
     let fixture = Fixture::standard();
     let test = three_tabs(&fixture);
-    let [_, second, third] = tab_ids(&test.window)[..] else {
-        panic!("three tabs are open");
-    };
+    let other = test.open_beside(&fixture.uri());
+    other
+        .window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    other.wait_for_listing("the other window's second tab");
+    wait_for_frames(&other.window, 3);
     let dragged = start_dragging(&test.window, 0);
-    test.window.tab_strip().show_dragged_tab(Some(dragged));
+    let width = other
+        .window
+        .tab_strip()
+        .tab_width(tab_ids(&other.window)[0])
+        .expect("a shown tab");
+    let second = tab_widget(&other.window, 1);
+    let second_left = left_in_row(&other.window, &second);
+    let (x, _) = middle_in(&second, other.window.tab_strip());
 
-    test.window
-        .show_tab_drop_spot(Some(TabDropSpot::Strip { before: Some(second) }));
-    let before_second = classes_of(&test.window, second);
-    let strip_marked = test.window.tab_strip().has_css_class("tab-drop-active");
-    let fades_the_dragged_tab = classes_of(&test.window, dragged);
-    test.window
-        .show_tab_drop_spot(Some(TabDropSpot::Strip { before: None }));
-    let after_last = classes_of(&test.window, third);
-    test.window.show_tab_drop_spot(Some(TabDropSpot::TearOut));
-    let tear_out_hint = test.window.folder_pane().drag_hint();
+    other.window.show_tab_drop_spot(
+        &test.window,
+        dragged,
+        Some(TabDropSpot::Strip { before: None }),
+        x - 20.0,
+    );
+    wait_for(std::time::Duration::from_millis(300));
+    let opened_left = left_in_row(&other.window, &second);
+    let stand_ins = crate::window::widget_tree::children(&other.window.tab_strip().tab_list()).count();
+    let in_front_over = shown_in_front(&other.window);
+    other
+        .window
+        .show_tab_drop_spot(&test.window, dragged, Some(TabDropSpot::TearOut), 300.0);
+    let hint_away = other.window.folder_pane().drag_hint();
+    wait_for(std::time::Duration::from_millis(300));
+    let closed_left = left_in_row(&other.window, &second);
+    let after_leaving = crate::window::widget_tree::children(&other.window.tab_strip().tab_list()).count();
+    let in_front_after = shown_in_front(&other.window);
+    test.window.cancel_tab_drag(gdk::DragCancelReason::UserCancelled);
     test.window.end_tab_drag();
 
-    assert!(before_second.contains(&"tab-insert-before".to_owned()));
-    assert!(strip_marked);
-    assert!(fades_the_dragged_tab.contains(&"tab-drag-source".to_owned()));
-    assert!(after_last.contains(&"tab-insert-after".to_owned()));
-    assert_eq!(tear_out_hint.as_deref(), Some(TEAR_OUT_HINT));
     assert!(
-        !test.window.tab_strip().has_css_class("tab-drop-active"),
-        "the marks go with the drag"
+        (opened_left - (second_left + width + 2.0)).abs() < 1.0,
+        "the tab after the stand-in moved by a tab's width: {second_left} -> {opened_left}"
     );
-    assert_eq!(test.window.folder_pane().drag_hint(), None);
-    assert!(!classes_of(&test.window, dragged).contains(&"tab-drag-source".to_owned()));
+    assert_eq!(stand_ins, 3, "the stand-in is in the strip");
+    assert_eq!(after_leaving, 2, "the stand-in left with the tab");
+    assert_eq!(in_front_over, [2], "only the stand-in is shown in front");
+    assert_eq!(in_front_after, [1], "the window's own tab is in front again");
+    assert_eq!(hint_away, None, "no text over the file list");
+    assert!((closed_left - second_left).abs() < 1.0, "the tabs closed up");
 }
 
-/// The style classes of tab `id` of `window`.
-fn classes_of(window: &BrowserWindow, id: TabId) -> Vec<String> {
-    let classes = window.tab_strip().tab_classes();
-    classes
-        .into_iter()
-        .find_map(|(tab, classes)| (tab == id).then_some(classes))
-        .expect("the tab is shown")
+/// Where the tabs shown in front are among the children of `window`'s
+/// strip, a stand-in last.
+fn shown_in_front(window: &BrowserWindow) -> Vec<usize> {
+    crate::window::widget_tree::children(&window.tab_strip().tab_list())
+        .enumerate()
+        .filter(|(_, tab)| tab.has_css_class("active"))
+        .map(|(at, _)| at)
+        .collect()
 }
 
-/// With `OX_NATIVE_CAPTURE_DIR` set, saves a tab drag's insertion mark
-/// and its tear-out note in both themes.
+/// The left edge of `tab` in `window`'s row of tabs, where it is drawn.
+fn left_in_row(window: &BrowserWindow, tab: &gtk::Widget) -> f64 {
+    let bounds = tab
+        .compute_bounds(&window.tab_strip().tab_list())
+        .expect("a shown tab");
+    f64::from(bounds.x())
+}
+
+/// With `OX_NATIVE_CAPTURE_DIR` set, saves a strip that took in a tab
+/// dragged from another window, in both themes.
 #[gtk::test]
-fn a_tab_drags_marks_are_captured_light_and_dark() {
+fn a_tab_from_another_window_is_captured_light_and_dark() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = three_tabs(&fixture);
-    let second = tab_ids(&test.window)[1];
+    let other = test.open_beside(&fixture.uri());
     let dragged = start_dragging(&test.window, 0);
     for theme in ["light", "dark"] {
         test.activate("theme", Some(theme));
-        // A new theme draws the tabs anew; a drag's next motion would
-        // mark the new ones.
-        wait_for_frames(&test.window, 3);
-        test.window.tab_strip().show_dragged_tab(Some(dragged));
-        test.window
-            .show_tab_drop_spot(Some(TabDropSpot::Strip { before: Some(second) }));
-        capture(&test.window, &format!("native-tab-drag-insert-{theme}.png"));
-        test.window.show_tab_drop_spot(Some(TabDropSpot::TearOut));
-        capture(&test.window, &format!("native-tab-drag-tear-out-{theme}.png"));
+        // A new theme draws the tabs anew.
+        wait_for_frames(&other.window, 3);
+        other.window.show_tab_drop_spot(
+            &test.window,
+            dragged,
+            Some(TabDropSpot::Strip { before: None }),
+            10.0,
+        );
+        wait_for(std::time::Duration::from_millis(300));
+        capture(&other.window, &format!("native-tab-drag-guest-{theme}.png"));
+        other
+            .window
+            .show_tab_drop_spot(&test.window, dragged, Some(TabDropSpot::TearOut), 10.0);
+        wait_for(std::time::Duration::from_millis(300));
     }
+    test.window.cancel_tab_drag(gdk::DragCancelReason::UserCancelled);
     test.window.end_tab_drag();
+}
+
+/// A split tab carried out of its strip, its active pane in icons, while
+/// the tab beside it, in front meanwhile, shows its pane in details: it
+/// takes its own view along when it moves, not the one in front.
+///
+/// parity: TAB-034, TAB-039
+#[gtk::test]
+fn a_carried_tab_out_of_its_strip_takes_its_own_view_along() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the second tab");
+    test.window
+        .split_tab(Some(&fixture.uri_of("Music")))
+        .expect("split");
+    test.wait_for_listing("the other pane");
+    test.window
+        .show_view(FolderView::Icons(crate::folder_view::grid::IconSize::LARGE));
+    let view = test.window.folder_pane().view();
+
+    let tab = start_dragging(&test.window, 1);
+    test.window.take_tab_off_strip(tab);
+    let in_front = test.window.folder_pane().view();
+    let moved = test.window.moved_tab(tab).expect("the tab is open");
+
+    assert_ne!(in_front, view, "the pane in front shows the other tab's view");
+    assert_eq!(moved.view, view, "the tab takes its own view");
 }

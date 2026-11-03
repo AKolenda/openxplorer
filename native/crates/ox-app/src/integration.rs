@@ -77,7 +77,7 @@ pub(crate) use status::{DefaultsReport, IntegrationStatus};
 pub(crate) use terminal::open_terminal;
 pub(crate) use tools::{installed_application, Tool};
 pub(crate) use type_associations::{
-    change_type, is_protected, other_applications, type_applications, TypeApplication, TypeChange,
+    change_type, other_applications, type_applications, TypeApplication, TypeChange,
 };
 
 /// Emitted when something the Settings status shows may have changed: the

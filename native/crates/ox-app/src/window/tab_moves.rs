@@ -7,9 +7,10 @@
 //! `applyPendingTabRestore` of `v2.0.0:desktop/ui/app.js`, and the handoff of
 //! `v2.0.0:desktop/tab_transfers.py`. Every window lives in this process, so a
 //! tab moves as a [`MovedTab`], the state `prepareTabTransfer` sent: its
-//! history, selection, scroll position, view, sort and Settings page. The
-//! destination restores the history, view and sort at once, and the
-//! selection and scroll position once its folder is listed. The drag
+//! history, selection, scroll position, view, sort and Settings page, and
+//! a location it was still going to. The destination restores the
+//! history, view and sort at once, goes on to that location, and restores
+//! the selection and scroll position once its folder is listed. The drag
 //! gesture that moves tabs is in [`drag`].
 //!
 //! Safety rule "the original is kept until the destination has the tab"
@@ -61,14 +62,6 @@ pub(super) enum TabMoveRefusal {
     /// The tab closed, or the destination is the window it is in.
     #[error("{}", ox_core::i18n::gettext("Choose a different, ready OpenXplorer window."))]
     NoDestination,
-    /// The drag ended without a place that takes the tab.
-    #[error(
-        "{}",
-        ox_core::i18n::gettext(
-            "Tab move cancelled. To detach, release below the tab strip or use Move tab to new window."
-        )
-    )]
-    Cancelled,
 }
 
 /// What a tab takes along when it moves to another window
@@ -91,6 +84,9 @@ pub(super) struct MovedTab {
     sort: SortOrder,
     /// The page Settings shows, for the Settings tab.
     settings_view: Option<SettingsView>,
+    /// A location the tab was still going to, looked up or mounted,
+    /// which the destination goes on to (VIEW-068).
+    opening: Option<String>,
 }
 
 /// The menu that moves tab `id` into one of `windows`, which lists each
@@ -151,12 +147,6 @@ impl BrowserWindow {
         self.is_writing_files() || self.shows_dialog() || self.is_picking()
     }
 
-    /// True when tab `id` must stay here: the window is busy, or the tab
-    /// has Properties, open or withdrawn (`tabCanMove`, PROP-008).
-    pub(super) fn keeps_tab(&self, id: TabId) -> bool {
-        self.is_busy_for_tab_moves() || self.has_properties(id)
-    }
-
     /// True while a dialog of this window is open.
     pub(super) fn shows_dialog(&self) -> bool {
         let this = self.upcast_ref::<gtk::Window>();
@@ -168,11 +158,28 @@ impl BrowserWindow {
     }
 
     /// What tab `id` takes along when it moves, with the selection and
-    /// scroll position of the tab in front as they are now.
+    /// scroll position of the tab in front as they are now. A tab whose
+    /// listing has yet to put its view back, as one that just moved here,
+    /// takes the view it waits for: the view here does not show it yet.
     fn moved_tab(&self, id: TabId) -> Option<MovedTab> {
-        if self.imp().session.borrow().is_active(id) {
+        let shows_its_view = {
+            let session = self.imp().session.borrow();
+            session.is_active(id)
+                && session
+                    .tab(id)
+                    .is_some_and(|tab| tab.scroll_after_listing.is_none())
+        };
+        if shows_its_view {
             self.save_tab_view();
         }
+        // A carried tab out of its strip: the pane in front shows the tab
+        // beside it.
+        let (view, sort) = self.carried_tab_style(id).unwrap_or_else(|| {
+            (
+                self.folder_pane().view(),
+                self.folder_pane().details().sort_order(),
+            )
+        });
         let session = self.imp().session.borrow();
         let tab = session.tab(id)?;
         let is_settings = Page::from_uri(tab.uri()) == Some(Page::Settings);
@@ -180,10 +187,11 @@ impl BrowserWindow {
             history: tab.history.clone(),
             left_views: tab.left_views.clone(),
             selected: tab.selected.clone(),
-            scroll: tab.scroll,
-            view: self.folder_pane().view(),
-            sort: self.folder_pane().details().sort_order(),
+            scroll: tab.scroll_after_listing.unwrap_or(tab.scroll),
+            view,
+            sort,
             settings_view: is_settings.then(|| self.settings_page().view()),
+            opening: tab.opening.as_ref().map(|opening| opening.target().to_owned()),
         })
     }
 
@@ -200,7 +208,7 @@ impl BrowserWindow {
             return Err(TabMoveRefusal::DestinationBusy);
         }
         if let Some(view) = tab.settings_view {
-            self.open_settings(Some(view));
+            self.receive_settings_tab(view, before);
             return Ok(());
         }
         self.save_tab_view();
@@ -215,6 +223,9 @@ impl BrowserWindow {
         self.show_view(tab.view);
         self.folder_pane().details().sort_by(tab.sort);
         self.show_tab(id);
+        if let Some(target) = tab.opening {
+            self.resume_opening(id, &target);
+        }
         Ok(())
     }
 
@@ -234,7 +245,7 @@ impl BrowserWindow {
         if destination == self {
             return Err(TabMoveRefusal::NoDestination);
         }
-        if self.keeps_tab(id) {
+        if self.is_busy_for_tab_moves() {
             return Err(TabMoveRefusal::SourceBusy);
         }
         let tab = self.moved_tab(id).ok_or(TabMoveRefusal::NoDestination)?;
@@ -249,7 +260,7 @@ impl BrowserWindow {
     ///
     /// Why the tab stays: this window is busy, or the tab closed.
     fn detach_tab(&self, id: TabId) -> Result<BrowserWindow, TabMoveRefusal> {
-        if self.keeps_tab(id) {
+        if self.is_busy_for_tab_moves() {
             return Err(TabMoveRefusal::SourceBusy);
         }
         let tab = self.moved_tab(id).ok_or(TabMoveRefusal::NoDestination)?;
@@ -268,7 +279,7 @@ impl BrowserWindow {
         match self.detach_tab(id) {
             Ok(window) => {
                 window.present_as_new_window();
-                self.release_moved_tab(id);
+                self.release_moved_tab(id, Some(&window));
             }
             Err(refusal) => self.show_message(&refusal.to_string()),
         }
@@ -286,7 +297,7 @@ impl BrowserWindow {
             return;
         };
         match self.hand_over_tab(id, &destination, None) {
-            Ok(()) => self.release_moved_tab(id),
+            Ok(()) => self.release_moved_tab(id, Some(&destination)),
             Err(refusal) => self.show_message(&refusal.to_string()),
         }
     }
@@ -300,7 +311,7 @@ impl BrowserWindow {
     /// "Move tab to window…": lists the other windows under tab `id`
     /// (`moveTabMenu`), or says why the tab cannot move.
     pub(super) fn show_move_tab_menu(&self, id: TabId) {
-        if self.keeps_tab(id) {
+        if self.is_busy_for_tab_moves() {
             self.show_message(&TabMoveRefusal::SourceBusy.to_string());
             return;
         }
@@ -341,15 +352,24 @@ impl BrowserWindow {
                 let Some((tab, window_id)) = target.and_then(glib::Variant::get::<(u64, u32)>) else {
                     return;
                 };
-                window.move_tab_into_window(TabId::from_raw(tab), window_id);
+                let tab = TabId::from_raw(tab);
+                if !window.refuse_while_moving(tab) {
+                    window.move_tab_into_window(tab, window_id);
+                }
             })
             .build();
+        // A tab that is being dragged stays where it is (TAB-003).
         self.add_action_entries([
-            tab_action(
-                WindowAction::MoveTabToNewWindow,
-                BrowserWindow::move_tab_to_new_window,
-            ),
-            tab_action(WindowAction::MoveTabToWindow, BrowserWindow::show_move_tab_menu),
+            tab_action(WindowAction::MoveTabToNewWindow, |window, tab| {
+                if !window.refuse_while_moving(tab) {
+                    window.move_tab_to_new_window(tab);
+                }
+            }),
+            tab_action(WindowAction::MoveTabToWindow, |window, tab| {
+                if !window.refuse_while_moving(tab) {
+                    window.show_move_tab_menu(tab);
+                }
+            }),
             into_window,
         ]);
     }
@@ -507,6 +527,44 @@ mod tests {
             "the original went once the new window had it"
         );
         assert!(!tab_ids(&test.window).contains(&moved));
+    }
+
+    /// A tab moved on again before its new window listed it, as a tab moved
+    /// to a new window and straight on to another before that window drew
+    /// its folder, keeps its selection and scroll position: its window has
+    /// not shown them yet, so they come from the tab, not from its view.
+    ///
+    /// parity: TAB-039
+    #[gtk::test]
+    fn a_tab_moved_on_before_its_window_listed_it_keeps_its_selection_and_scroll() {
+        let first = Fixture::standard();
+        let many = Fixture::with_files(200);
+        let test = window_with_a_travelled_tab(&first, &many);
+        let moved = active_tab(&test.window);
+        let other = test.open_beside(&first.uri());
+
+        // A new window has the tab, shown, its folder not listed yet.
+        let window = test.window.detach_tab(moved).expect("a new window");
+        window.present_as_new_window();
+        let tab = active_tab(&window);
+        window
+            .hand_over_tab(tab, &other.window, None)
+            .expect("the other window takes the tab");
+        let _opened = OpenedWindows::only(&[&test.window, &other.window]);
+        window.release_moved_tab(tab, Some(&other.window));
+        test.window.release_moved_tab(moved, Some(&window));
+
+        wait_until("the moved tab to be listed", || other.window.is_listed());
+        wait_until("the selection", || {
+            other.window.folder_model().selected_items().len() == 1
+        });
+        assert_eq!(
+            other.window.folder_model().selected_items()[0].entry().name,
+            "file 0042.txt"
+        );
+        wait_until("the scroll position", || {
+            other.window.folder_pane().scroll_position() > 599.0
+        });
     }
 
     /// parity: TAB-029

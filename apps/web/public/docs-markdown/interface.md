@@ -12,9 +12,9 @@ Resize the sidebar and column edges. Double-click an edge to reset or fit it, de
 
 ## Choose a folder view
 
-View offers Details, List and icon sizes. Use Ctrl+mouse wheel or the status-bar slider to change icon size. Details can expand folders in place; drag from empty space to select items, hold Ctrl to toggle them or Shift to add them. View → Compact view, also in Settings → Appearance → Files and folders, draws the Details rows and the navigation pane closer together, as in Windows 11, so more items fit. View → Item check boxes, on by default as in Windows 11, gives each item a check box that shows while you point at it and stays checked while it is selected; click it to select or deselect that item alone, or use the box before Name in Details to select every item, and again to select none.
+View offers Details, List and icon sizes. Use Ctrl+mouse wheel or the status-bar slider to change icon size. Settings → Files & folders → Expandable folders in Details lets Details expand folders in place (off by default, as in Windows Explorer); drag from empty space to select items, hold Ctrl to toggle them or Shift to add them. View → Compact view, also in Settings → Appearance → Files and folders, draws the Details rows and the navigation pane closer together, as in Windows 11, so more items fit. View → Item check boxes, on by default as in Windows 11, gives each item a check box that shows while you point at it and stays checked while it is selected; click it to select or deselect that item alone, or use the box before Name in Details to select every item, and again to select none.
 
-Right-click a Details heading to choose columns, then drag headings to reorder them. The Recycle Bin includes Original location and Date deleted. Sort is laid out like Windows Explorer’s: Name, Date modified and Type, with Size and the other file properties under More. Sort › Group by groups the folder apart from its sort, so a folder grouped by date modified can be sorted by name within each group: choose Name (A – H, I – P, Q – Z), Date modified, Type, Size, Date created, Same as sort (groups that follow the sort), or (None). Downloads is grouped by date modified until you choose otherwise there. Sort also has a Folders first switch. Each folder remembers the view you give it, as in Windows 11. More options → Options opens Folder Options. Its View tab has Folder views: Apply to Folders gives every folder, Downloads included, the view of the folder you opened it from (layout, icon size, columns, sort and grouping), and Reset Folders gives every folder the default view, Details sorted by name, with Downloads grouped by date again. Each asks Yes or No first. OpenXplorer has no folder types, so both cover all folders; Apply to Folders is unavailable from This PC, Network, Recent, search results and the Recycle Bin. The View tab also turns off Remember each folder's view settings (then every folder shares one view), shows hidden files in every folder (as Ctrl+H does), and has Always show icons, never thumbnails. The General tab's Open File Explorer to chooses Home or This PC for new windows. Relative dates include the time; Settings → Appearance → Files and folders can show absolute dates instead.
+Right-click a Details heading to choose columns, then drag headings to reorder them. The Recycle Bin includes Original location and Date deleted. Sort is laid out like Windows Explorer’s: Name, Date modified and Type, with Size and the other file properties under More. Sort › Group by groups the folder apart from its sort, so a folder grouped by date modified can be sorted by name within each group: choose Name (A – H, I – P, Q – Z), Date modified, Type, Size, Date created, Same as sort (groups that follow the sort), or (None). Downloads is grouped by date modified until you choose otherwise there. Sort also has a Folders first switch. Each folder remembers the view you give it, as in Windows 11. More options → Options opens Folder Options. Its View tab has Folder views: Apply to Folders gives every folder, Downloads included, the view of the folder you opened it from (layout, icon size, columns, sort and grouping), and Reset Folders gives every folder the default view, Details sorted by name, with Downloads grouped by date again. Each asks Yes or No first. OpenXplorer has no folder types, so both cover all folders; Apply to Folders is unavailable from This PC, Network, Recent, search results and the Recycle Bin. The View tab also turns off Remember each folder's view settings (then every folder shares one view), shows hidden files in every folder (as Ctrl+H does), and has Always show icons, never thumbnails. The General tab's Open File Explorer to chooses Home or This PC for new windows. Dates are shown in full with the time, as in Windows Explorer, and a folder's Size is empty; Settings → Files & folders → Relative dates (Today, Yesterday) and Show the number of items in folders turn on Dolphin's way. If you turned on the number of items in folders in 2.0.11 or earlier, turn it on again once: those versions saved it the same way as their default.
 
 ## Two folders in one tab
 
@@ -33,6 +33,12 @@ View → Folder tree (F7) shows a tree of folders below the navigation places. E
 Your Templates folder supplies entries directly in New, with its subfolders as submenus. Choose a template and a new name; creating from a template never overwrites an existing file.
 
 More options → Keyboard shortcuts (Ctrl+?) lists the available keys. Windows Explorer’s keys work too: Ctrl+E moves to the search box like Ctrl+F, Ctrl+D moves the selection to the Recycle Bin like Delete (a text field keeps it), Alt+P shows the details pane like Alt+Shift+P, and F11 shows the window full screen until you press it again. F1 opens the built-in manual without a network connection. Report an issue opens the project issue tracker only when selected.
+
+## Rename several items at once
+
+As in Windows Explorer, select several items and press F2, or choose Rename, then type one name for the item whose name opens for editing and press Enter. Every selected item gets that name with a number in brackets, in the order the folder shows them: Holiday (1).jpg, Holiday (2).jpg, Holiday (3).png. Each file keeps its own extension, and folders and files without an extension get none. A numbered name that is already taken is skipped, so nothing is overwritten. Escape renames nothing, an item that cannot be renamed is listed in Operation result while the others are renamed, and one Ctrl+Z renames them all back.
+
+To number items your own way, right-click the selection, choose Show more options if you use the Windows 11 menu, then Rename items…. Its dialog gives every item one name with # replaced by an ascending number, from the number you choose (Holiday ### gives Holiday 001.jpg, Holiday 002.jpg), and each file keeps its extension. One Ctrl+Z undoes that too.
 
 ## Follow file operations
 
@@ -54,7 +60,7 @@ Administrator access does not remove OpenXplorer’s protection of snapshot fold
 
 ## Choose your context menu
 
-Windows 10-style classic menus are the default; Settings can switch to the Windows 11-style compact option. Open with uses registered applications; identical editor names are deduplicated.
+The Windows 11-style compact menu is the default, as on the Menu key, with the classic menu behind Show more options, on Shift+F10 and on Shift+right-click; Settings can make the Windows 10-style classic menu the default instead. If you chose the classic menu in 2.0.11 or earlier, choose it again once: those versions saved it the same way as their default. Open with uses registered applications; identical editor names are deduplicated.
 
 ## Share files by email
 
@@ -62,17 +68,27 @@ Share in the command bar, between Rename and Delete as in Windows 11, opens a ne
 
 To copy an item’s path instead, right-click it and choose Copy as path, or press Ctrl+Shift+C.
 
+## Properties
+
+Alt+Enter, or Properties in a right-click menu, opens Properties as Windows 11 lays it out, in a window of its own: it blocks neither the main window nor another Properties window, and asking again for the same item brings its window back. A file has General, Security and Previous Versions; a folder on this computer adds Sharing and Customize, and Downloads, Documents and the other standard folders add Location.
+
+General shows the name, Type of file and Opens with (Change… picks another app), Location, Size and Size on disk with every byte, such as 314 KB (322,003 bytes), the dates in the long style, such as Tuesday, October 20, 2026, 14:24:52, and the Read-only and Hidden attributes. A folder counts its Size, Size on disk and Contains by itself and shows Created only. Hidden adds a dot to the start of the name, which is how Linux hides an item.
+
+Changes wait for OK or Apply: Apply stays grey until something changes, OK applies and closes, and Cancel or Escape closes without changing anything. A refused change, such as a name that is taken, shows in a message and Properties stays open.
+
+Security shows the item’s real Linux permissions in Windows’ words: the owner, the group and everyone else, and what the one selected may do, from Full control to Read. Edit… and Advanced change them when you own the item; Linux has no deny entries, so the Deny column stays empty. Customize holds Change Icon… for a folder.
+
 ## Previous versions
 
-Properties → Previous versions can browse existing, exposed snapshot collections. Opening a snapshot in another tab retains the original dialog on its originating tab. Restore a copy writes to a separate destination, not over the live original.
+Properties → Previous Versions lists existing, exposed snapshot collections under Name and Date modified, grouped by date as Windows 11 groups them. Select a version: Open shows it in a new tab, and Restore writes a copy to a separate destination, never over the live original. Snapshot source… sets where versions are looked for, and F5 looks again.
 
 This provider recognizes exposed filesystem directories. It does not implement the Windows SMB shadow-copy enumeration protocol, create snapshots, or make backup history exist on a server.
 
-Each previous-version row now includes a right-aligned date and time, followed by Browse and Restore a copy actions. Dates are parsed from recognized snapshot names, including auto-2026-09-04_16-30, 2026-09-05_180000, and @GMT names. A visible “From snapshot name” label explains the source. Unrecognized names show “Date unavailable”; folder modification times are not passed off as snapshot creation times.
+Each version shows the item’s name and, under Date modified, the date and time read from recognized snapshot names, including auto-2026-09-04_16-30, 2026-09-05_180000, and @GMT names; the row’s tooltip names the snapshot, where it came from and where its date comes from. Unrecognized names show “Date unavailable”; folder modification times are not passed off as snapshot creation times.
 
 @GMT timestamps are marked UTC. Other names are shown as written, without guessing a server timezone. This is display metadata, not a server-side ZFS creation-property query.
 
-Snapshot tabs carry a “Previous version” badge and an amber top edge. A banner identifies the historical view and its read-only treatment in OpenXplorer, including when browsing deeper inside it. Network snapshot tabs keep their green network marker. The original Properties dialog still belongs to the original tab.
+Snapshot tabs carry a “Previous version” badge and an amber top edge. A banner identifies the historical view and its read-only treatment in OpenXplorer, including when browsing deeper inside it. Network snapshot tabs keep their green network marker. Properties is a window of its own, so it stays open beside the snapshot tab.
 
 ![Snapshot list with a separate right-hand date and time column](../assets/screenshots/previous-versions.png)
 
@@ -80,7 +96,7 @@ Snapshot tabs carry a “Previous version” badge and an amber top edge. A bann
 
 ## Measure folder sizes on demand
 
-Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and Properties shows the space they take as Size on disk, as Windows Explorer does. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
+Calculate folder size totals accessible logical file sizes on a worker with progress and cancellation, and shows them in the Size column. Properties counts a folder by itself as soon as it opens, as Windows Explorer does: Size, Size on disk and Contains climb while the folder is measured, and closing Properties stops the count. Limits, excluded entries and read errors are shown as incomplete coverage. Results are session-only and can become stale.
 
 Size counts logical file bytes; Size on disk counts the blocks the files take, which on a compressing filesystem such as ZFS is the compressed space. Neither is a ZFS dataset used/referenced value or a snapshot-exclusive block count.
 
@@ -92,7 +108,7 @@ ZIP browsing is read-only. Listing reads archive metadata; opening a selected me
 
 Select a ZIP and click Extract all in the command bar, or right-click it and choose Extract all… in either context-menu style. As in Windows Explorer, one field says where the files go, filled in with the ZIP's folder and name (for example Downloads/tidewater); Browse… picks another folder. A folder that does not exist yet is created. Delete the last part to extract straight into an existing folder such as Downloads: if a file with the same name is already there, you are asked whether to replace or skip it. A ZIP holding one folder of the same name is not nested (no tidewater/tidewater). The ZIP stays unchanged, and Cancel is available in the progress window. The ⓘ button at the bottom left shows how many files the ZIP holds, a few notes, and Open in archive manager, which opens your archive manager (such as Ark) even when OpenXplorer opens ZIPs by default. A password-protected ZIP cannot be extracted here: the dialog says so and offers the archive manager.
 
-To browse ZIPs like Windows Explorer does, set Settings → ZIP & archives → Double-clicking a ZIP to Like a folder. Opening a ZIP then shows it in the tab: the address bar shows the path through it, folders inside open in the tab, Back and Up work, and Extract all appears in the bar. The ZIP stays read-only; Copy (then Paste anywhere) and dragging items out hand over real copies, which OpenXplorer unpacks into ~/.cache/winspace/zip-copies and removes after a day. The default, In a pop-up window, keeps the Compressed folder window.
+ZIPs open like folders, as in Windows Explorer (Settings → ZIP & archives → Double-clicking a ZIP → Like a folder, the default). Opening a ZIP shows it in the tab: the address bar shows the path through it, folders inside open in the tab, Back and Up work, and Extract all appears in the bar. The ZIP stays read-only; Copy (then Paste anywhere) and dragging items out hand over real copies, which OpenXplorer unpacks into ~/.cache/winspace/zip-copies and removes after a day. Choose In a pop-up window to open ZIPs in the Compressed folder window instead.
 
 Local and already connected SMB locations are supported by the implementation; live SMB extraction still needs target-machine validation. Sign into the relevant shares first. Password-protected ZIPs, unsupported methods, and files exceeding the built-in safety limits need an external archive manager. Double-click continues to browse without extracting the entire ZIP.
 
@@ -118,7 +134,7 @@ sudo apt install gnome-terminal
 
 Middle-click a folder, connected share, breadcrumb or sidebar location to open a background tab. Shift+middle-click also switches to it. Middle-click an existing tab to close it. Background directories load when selected, so opening a network tab does not immediately interrupt you with a login dialog.
 
-Drag a tab onto another OpenXplorer tab strip to merge it. To open a separate window, drop on a supported desktop, or drag down into the source window until the new-window hint appears. The Move tab to new window menu remains available. Escape cancels; the original tab is kept until the destination acknowledges it.
+Press a tab to show it, then drag it along its strip: the other tabs slide aside as it moves, and it stays where you release it. Drag it out of the strip and the tab itself follows the pointer while the tab beside it comes to the front: over another OpenXplorer window's tab strip it joins that strip, whose tabs make room for it, and a release there merges it at that spot, while a release outside every tab strip opens it in a new window. With no other OpenXplorer window open, the only tab of a window takes the window along. The Move tab to new window menu remains available. Escape cancels and keeps the tab, with one exception: on Wayland, Escape pressed while the pointer is outside every OpenXplorer window goes to the desktop, not to OpenXplorer, and the desktop reports it as a drag that ended there, so the tab opens in a new window. The original tab is kept until the destination acknowledges it.
 
 ## Drag files between applications
 

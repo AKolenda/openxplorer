@@ -25,18 +25,14 @@ use crate::window::ButtonStyle;
 const CLOSED: &str = "closed";
 
 /// How wide a dialog is, as the width classes of `style.css` set it
-/// (ui-spec.md §4.11: 510 by default, Properties 600, the archive browser
-/// 720, Previous versions 860).
+/// (ui-spec.md §4.11: 510 by default, the archive browser 720).
+/// Properties are windows of their own ([`crate::properties::PropertiesWindow`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DialogWidth {
     /// A question or a short form.
     Standard,
-    /// The Properties dialog.
-    Properties,
     /// The archive browser.
     Archive,
-    /// The Properties dialog on its Previous versions tab.
-    Versions,
 }
 
 impl DialogWidth {
@@ -44,9 +40,7 @@ impl DialogWidth {
     pub(crate) const fn pixels(self) -> i32 {
         match self {
             DialogWidth::Standard => 510,
-            DialogWidth::Properties => 600,
             DialogWidth::Archive => 720,
-            DialogWidth::Versions => 860,
         }
     }
 }
@@ -274,12 +268,6 @@ impl DialogFrame {
             return;
         }
         self.emit_by_name::<()>(CLOSED, &[]);
-    }
-
-    /// True once the dialog was dismissed for good, for tests.
-    #[cfg(test)]
-    pub(crate) fn is_closed(&self) -> bool {
-        self.imp().is_closed.get()
     }
 
     /// Calls `callback` when the dialog is dismissed for good.

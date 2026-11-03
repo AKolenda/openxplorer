@@ -30,7 +30,7 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(200);
 
 /// Folder names of snapshot collections (`EXCLUDED` in Python). They hold
 /// earlier copies of the same files, which would be counted again.
-const SNAPSHOT_COLLECTION_NAMES: [&str; 4] = [".zfs", ".snapshot", "#snapshot", ".snapshots"];
+pub(crate) const SNAPSHOT_COLLECTION_NAMES: [&str; 4] = [".zfs", ".snapshot", "#snapshot", ".snapshots"];
 
 /// When a scan stops early and reports partial totals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

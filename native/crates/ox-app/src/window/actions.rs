@@ -162,6 +162,12 @@ impl BrowserWindow {
     fn install_tab_actions(&self) {
         self.add_action_entries([
             plain_action(WindowAction::NewTab, |window| {
+                // Not while a tab is dragged: the strip keeps the tabs it
+                // had when the drag began, so a new one would not show in
+                // front until it is over (TAB-032).
+                if window.refuse_while_tabs_move() {
+                    return;
+                }
                 let home = window.imp().locations.borrow().home_uri();
                 if let Err(error) = window.add_tab(&home) {
                     window.show_message(&error.to_string());
@@ -438,7 +444,9 @@ const PROPERTIES_ACCELERATORS: &[&str] = &["<Alt>Return", "<Alt>KP_Enter"];
 /// text-size actions of the browser window it belongs to, as the web
 /// app's key handler did in its sign-in and other dialogs (VIEW-043).
 /// The dialog may sit on another dialog, so the first window up the chain
-/// of transient parents that has the actions runs them.
+/// of transient parents that has the actions runs them; a Properties
+/// window, which has no parent, passes them to the browser window that
+/// opened it.
 pub(crate) fn follow_text_size_keys(dialog: &impl IsA<gtk::Window>) {
     let shortcuts = gtk::ShortcutController::new();
     shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -447,14 +455,12 @@ pub(crate) fn follow_text_size_keys(dialog: &impl IsA<gtk::Window>) {
             let trigger = gtk::ShortcutTrigger::parse_string(&accelerator);
             let name = WindowAction::TextSize(step).detailed_name();
             let run = gtk::CallbackAction::new(move |dialog, _| {
-                let mut owner = dialog
-                    .downcast_ref::<gtk::Window>()
-                    .and_then(GtkWindowExt::transient_for);
+                let mut owner = dialog.downcast_ref::<gtk::Window>().and_then(owner_of);
                 while let Some(window) = owner {
                     if window.activate_action(&name, None).is_ok() {
                         break;
                     }
-                    owner = window.transient_for();
+                    owner = owner_of(&window);
                 }
                 glib::Propagation::Stop
             });
@@ -462,6 +468,17 @@ pub(crate) fn follow_text_size_keys(dialog: &impl IsA<gtk::Window>) {
         }
     }
     dialog.as_ref().add_controller(shortcuts);
+}
+
+/// The window `window` belongs to: its transient parent, or for a
+/// Properties window, a top-level window of its own, its opener.
+fn owner_of(window: &gtk::Window) -> Option<gtk::Window> {
+    window.transient_for().or_else(|| {
+        window
+            .downcast_ref::<crate::properties::PropertiesWindow>()
+            .and_then(crate::properties::PropertiesWindow::opener)
+            .map(Cast::upcast)
+    })
 }
 
 /// Installs the keyboard shortcuts of the window actions that work from

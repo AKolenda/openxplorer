@@ -321,6 +321,13 @@ fn run_cancellable(
         connection.progress_handler(STEPS_PER_CANCEL_CHECK, Some(move || cancellable.is_cancelled()))?;
     }
     let hits = read_hits(connection, plan);
+    if cancellable.is_some() {
+        // The cache pools its connections, so the handler must not outlive
+        // the query: it holds this search's `Cancellable`, and the next
+        // operation that borrows the connection would be interrupted once
+        // that search was cancelled.
+        connection.progress_handler(0, None::<fn() -> bool>)?;
+    }
     match (hits, cancellable) {
         // SQLite reports the interruption as its own error; the caller
         // needs to know it was a cancellation.

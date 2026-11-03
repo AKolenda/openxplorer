@@ -222,6 +222,9 @@ pub(crate) enum WindowAction {
     PasteInto,
     /// Rename (F2): asks for a new name for the one selected item.
     Rename,
+    /// Rename items…: renames several selected items with the "Rename
+    /// items" dialog's `#` template (OPS-014).
+    RenameItems,
     /// Delete: Move to Trash, or Delete permanently where the folder has
     /// no Trash, after asking.
     Trash,
@@ -399,8 +402,9 @@ pub(crate) enum WindowAction {
     /// Open with…: the Open with dialog for the one selected item, or the
     /// folder.
     OpenWith,
-    /// Change app… in Properties: the Open with dialog for the file whose
-    /// URI is the string target.
+    /// Change app…: the Open with dialog, over this window, for the file
+    /// whose URI is the string target. Properties' Change... opens it over
+    /// the Properties window instead (`BrowserWindow::change_app_over`).
     ChangeApp,
     /// Open folder with…: the Open with dialog for the folder whose URI is
     /// the string target (a Quick access pin's menu).
@@ -531,6 +535,7 @@ impl WindowAction {
             WindowAction::Paste => "paste",
             WindowAction::PasteInto => "paste-into",
             WindowAction::Rename => "rename",
+            WindowAction::RenameItems => "rename-items",
             WindowAction::Trash => "trash",
             WindowAction::DeletePermanently => "delete-permanently",
             WindowAction::Duplicate => "duplicate",

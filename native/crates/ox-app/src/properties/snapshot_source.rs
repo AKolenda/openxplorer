@@ -14,8 +14,8 @@ use gtk::{gio, glib};
 use ox_core::location::{parent_location, split_location, LocationContext, LocationKind};
 use ox_core::versions::{PreviousVersions, SnapshotLayout};
 
+use super::window::push_button;
 use crate::dialog::{labelled_entry, quiet_text};
-use crate::window::ButtonStyle;
 
 /// What the form is for.
 const SOURCE_INTRO: &str = crate::i18n::message_id(
@@ -104,6 +104,8 @@ pub(super) fn fill_source_form(
     layout.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
         "Snapshot layout",
     ))]);
+    layout.add_css_class("properties-form-field");
+    layout.set_halign(gtk::Align::Start);
     panel.append(&layout);
     let error = gtk::Label::builder()
         .xalign(0.0)
@@ -118,6 +120,9 @@ pub(super) fn fill_source_form(
         error,
         versions: Arc::clone(versions),
     };
+    // The buttons sit at the bottom of the tab, as a Windows page's do.
+    let space = gtk::Box::builder().vexpand(true).build();
+    panel.append(&space);
     panel.append(&form.buttons(finished));
 }
 
@@ -132,29 +137,29 @@ struct SourceForm {
 }
 
 impl SourceForm {
-    /// Back, Save source and Remove mapping.
+    /// Save source, Remove mapping and Back, from the right, as Windows
+    /// places a page's buttons.
     fn buttons(&self, finished: impl Fn() + Clone + 'static) -> gtk::Box {
         let row = gtk::Box::builder()
+            .halign(gtk::Align::End)
             .css_classes(["snapshot-source-actions"])
             .build();
-        let back = gtk::Button::with_label(&ox_core::i18n::gettext("Back"));
-        back.add_css_class(ButtonStyle::Bordered.css_class());
-        back.connect_clicked({
-            let finished = finished.clone();
-            move |_| finished()
-        });
-        row.append(&back);
-        for (label, change, style) in [
-            ("Save source", SourceChange::Save, ButtonStyle::Accent),
-            ("Remove mapping", SourceChange::Remove, ButtonStyle::Bordered),
+        for (label, change) in [
+            (crate::i18n::message_id("Save source"), SourceChange::Save),
+            (crate::i18n::message_id("Remove mapping"), SourceChange::Remove),
         ] {
-            let button = gtk::Button::with_label(label);
-            button.add_css_class(style.css_class());
+            let button = push_button(&ox_core::i18n::gettext(label));
+            if change == SourceChange::Save {
+                button.add_css_class("suggested-action");
+            }
             let form = self.clone();
             let finished = finished.clone();
             button.connect_clicked(move |_| form.apply(change, finished.clone()));
             row.append(&button);
         }
+        let back = push_button(&ox_core::i18n::gettext("Back"));
+        back.connect_clicked(move |_| finished());
+        row.append(&back);
         row
     }
 

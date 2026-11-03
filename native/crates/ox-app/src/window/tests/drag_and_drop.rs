@@ -175,10 +175,8 @@ fn a_drop_while_a_dialog_shows_is_refused() {
     let source = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt"]);
-    test.activate("properties", None);
-    wait_until("the Properties dialog", || {
-        test.window.dialog_layer().shown().is_some()
-    });
+    test.window.show_result_dialog("Operation result", "Done.");
+    wait_until("the dialog", || test.window.dialog_layer().shown().is_some());
 
     let taken = test.window.drop_files(
         &[source.uri_of("Documents")],
@@ -221,7 +219,7 @@ fn no_drag_starts_while_a_menu_or_a_dialog_is_open() {
     let with_menu = test.window.drag_content_for(notes);
     test.window.context_menu().popdown();
     super::file_ops_support::select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
-    test.activate("rename", None);
+    test.activate("rename-items", None);
     let dialog = open_dialog(&test);
     let with_dialog = test.window.drag_content_for(notes);
     dialog.press("Cancel");

@@ -107,7 +107,7 @@ impl BrowserWindow {
         };
         let extracted = match self
             .run_extraction(request, |extractor| extractor.with_selection(&members))
-            .await
+            .await?
         {
             Err(error) if error.is_cancelled() => return Ok(None),
             extracted => extracted.map_err(|error| crate::archive_view::extraction_failure_text(&error))?,
@@ -193,7 +193,7 @@ fn left_out_note(count: usize) -> Option<String> {
             "{count} links or special files inside were left out.",
             count as u64,
         )
-        .replace("{count}", &count.to_string())
+        .replace("{count}", &ox_core::format::group_digits(count as u64))
     })
 }
 

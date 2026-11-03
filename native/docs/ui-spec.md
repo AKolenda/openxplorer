@@ -52,7 +52,7 @@ and does not "improve" them away.
 | Palette character | Blue-grey tab strip (`#eff1f4` / `#191919`) standing in for Mica Alt; the active tab merges into a light chrome band; white (or `#202020`) content; soft blue selection `#e8f1fb` / `#263c50` with a faint blue edge. |
 | Artwork | The project's own colour art (`folderIcon`, `appendFolderArt`, `zipFolderIcon`, `fileIcon`, `networkIcon` in `app.js`) and its own stroke glyphs (the `paths` table). Folder art: `#d99a22` back, `#ffce56` / `#f7bd40` front, `#fff0bd` paper. Network pipe: `#23873f` with `#62cf7c` / `#35a854` highlights. |
 | Sizes | Row icons 21, sidebar icons 19, tiles 56, details preview 83. |
-| Behaviour you can see | Breakpoints at 1190 / 960 / 680 px, text sizes 80–200 %, the classic (Windows 10, default) or Windows 11 context menu, the amber snapshot-tab marker, type-to-select feedback in the status bar, drag-to-pin highlighting, reduced-motion support. |
+| Behaviour you can see | Breakpoints at 1190 / 960 / 680 px, text sizes 80–200 %, the Windows 11 (default) or classic Windows 10 context menu, the amber snapshot-tab marker, type-to-select feedback in the status bar, drag-to-pin highlighting, reduced-motion support. |
 
 ### 1.2 What "true to spec" means
 
@@ -181,7 +181,7 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 | C16 | `on_accent`: text on primary buttons | `#ffffff` / `#142535` (auth dialog `#112438`) | TextOnAccentFillColorPrimary `#FFFFFF` / `#000000` (CT#L216 / CT#L12) | `#ffffff` / `#000000` | safe |
 | C17 | `hover`: rows, sidebar, commands, menu items | `#f0f0f0` / `#343434` | SubtleFillColorSecondary `#09000000` / `#0FFFFFFF` → `#f0f0f0` on `#f9f9f9`, `#f6f6f6` on white / `#353535` on `#282828` (CT#L230 / CT#L26) | `#f0f0f0` / `#343434` on every surface | Keep. Equals WinUI on the chrome, slightly stronger on white. |
 | C18 | `pressed` | web `filter: brightness(.96)`; native `#e9e9e9` / `#3a3a3a` | SubtleFillColorTertiary `#06000000` / `#0AFFFFFF` → `#f3f3f3` / `#303030` on chrome (CT#L231 / CT#L27), with the foreground at TextFillColorSecondary (ABB#L83, BT#L121, TTL#L20) | `#f3f3f3` / `#303030` plus `color: @ox_muted` | safe. Windows makes pressed *lighter* than hover. |
-| C19 | `selected` | `#e8f1fb` / `#263c50` | WinUI ListView: SubtleFillColorSecondary plus an accent selection pill (LV#L172, LV#L227; the pill's size is drawn in code, not in LV: 3 × 16 (unverified)). Explorer's item view uses a blue tint instead (observed, unverified). | `#e8f1fb` / `#263c50` | Keep. |
+| C19 | `selected` | `#e8f1fb` / `#263c50` | WinUI ListView: SubtleFillColorSecondary plus an accent selection pill (LV#L172, LV#L227; the pill's size is drawn in code, not in LV: 3 × 16 (unverified)); the navigation pane no longer paints the pill (Explorer has none, 2026-11-02). Explorer's item view uses a blue tint instead (observed, unverified). | `#e8f1fb` / `#263c50` | Keep. |
 | C20 | `selected_hover` (new) | none | ListViewItemBackgroundSelectedPointerOver = SubtleFillColorTertiary (LV#L173); Explorer deepens the blue (observed, unverified) | `mix(@ox_selected, @ox_accent, .06)` = `#dae9f7` light (GTK 4.14.5 weights the second colour by the factor; measured) / ≈ `#28445a` dark with `#4cc2ff` | visible (subtle) |
 | C21 | `selected_edge` | rows `#80b4e028`, tiles `#80b4e060` | none in WinUI; GridViewItem draws a 2 px selected border (GV#L111) | rows `alpha(#80b4e0, .16)`, tiles `alpha(#80b4e0, .38)` | Keep. |
 | C22 | `border`: pane dividers, band borders | `#e8e8e8` / `#373737` | DividerStrokeColorDefault `#0F000000` / `#15FFFFFF` → `#eaeaea` on `#f9f9f9` / `#3a3a3a` on `#282828` (CT#L257 / CT#L53) | `#e8e8e8` / `#373737` | Keep (within 2 steps). |
@@ -199,7 +199,7 @@ flattened onto the named surface. Native targets are written as GTK 4.14
 | C34 | `success`: "connected" dot | `#16873c` (offline `#929292`) | SystemFillColorSuccess `#0F7B0F` / `#6CCB5F` (CT#L280 / CT#L76) | `#0f7b0f` / `#6ccb5f`; offline `@ox_text_tertiary` | safe |
 | C35 | `caution_*`: snapshot banner, badge and tab marker | banner `#fff7e8` / `#775314` / `#dfcba5`, dark `#302a20` / `#ecc993` / `#51422a`; badge `#fff2d6` / `#714a08`, dark `#443721` / `#f4cc82`; tab top `#c48c2f` | SystemFillColorCautionBackground `#FFF4CE` / `#433519` (CT#L287 / CT#L83) | current values | Keep (identity); within a few steps of WinUI. |
 | C36 | `smoke`: modal scrim | `#0004`, auth `#0006` | SmokeFillColorDefault `#4D000000` (CT#L263 / CT#L59) | `alpha(black, .3)` for both dialogs | safe |
-| C37 | `tab_text_inactive` (new) | same as the active tab (`@text`) | TabViewItemHeaderForeground = TextFillColorSecondary (TV#L12 / TV#L90) | `@ox_muted` | visible, P3 |
+| C37 | `tab_text_inactive` (new) | same as the active tab (`@text`) | TabViewItemHeaderForeground = TextFillColorSecondary (TV#L12 / TV#L90) | `@ox_muted` | Applied 2026-11-02 (owner: Explorer fidelity). |
 | C38 | `tab_separator` (new) | none | TabViewItemSeparator = DividerStrokeColorDefault (TV#L46 / TV#L124) | `alpha(black, .06)` / `alpha(white, .08)` | visible, P3 |
 | C39 | `tab_strip_line` (new) | none | TabViewBorderBrush = CardStrokeColorDefault `#0F000000` / `#19000000` (TV#L68 / TV#L146). The strip draws it left of the tabs and right of the add button (TVX#L36–37); each tab draws its own bottom line (TVX#L546), hidden on the selected tab (TVX#L337). The selected tab also gets a 1 px outline of the same colour on its top and sides (TV#L72–80, TV#L268; TVX#L344–345). | `alpha(black, .06)` / `alpha(black, .10)` | visible, P3. §1.1 fixes the title bar as having no border, so this ships only if sign-off amends §1.1. |
 | C40 | `scrollbar_thumb` | web `#aaa8`; native `alpha(@ox_text, .35)` | ScrollBarThumbFill = ControlStrongFillColorDefault `#72000000` / `#8BFFFFFF` (SB#L138; CT#L226 / CT#L22) | `alpha(black, .45)` / `alpha(white, .55)` | safe |
@@ -271,7 +271,7 @@ unverified). That is why the app's 12 px base is correct.
 | R11 | Tooltip | desktop default; native 4 | 4 (L-GEO; TT#L52) | 4 | Keep. |
 | R12 | Scrollbar thumb | 8 (web, 9 px bar) | 3 (SB#L190) | 3 | Native already (§4.12). |
 | R13 | Selection pill | 4 | 2 (NV#L222; TRI#L130); 1.5 (LV#L212) | 2 | safe |
-| R14 | Bars: capacity, progress, loading line | 4 / 3 / 0 | 4 for bar-shaped elements (L-GEO) | 2 (half of the 4 px height) / 2 / 0 | Keep; a 4 px-tall bar is already a pill. |
+| R14 | Bars: capacity, progress | 4 / 3 / 0 | 4 for bar-shaped elements (L-GEO) | 2 (half of the 4 px height) / 2 / 0 | Keep; a 4 px-tall bar is already a pill. |
 
 ### 3.5 Spacing
 
@@ -323,9 +323,9 @@ stroke. Fluent's CSS shadow ramp (FT `utils/shadows.js`):
 | M03 | Exit | none | Fast-out `cubic-bezier(0,0,0,1)`, 167 ms, always with a fade (L-MOTION) | `167ms cubic-bezier(0,0,0,1)` plus `opacity` | n/a |
 | M04 | Point to point (moving selection pill) | instant | `cubic-bezier(0.55,0.55,0,1)`, 167 / 250 / 333 ms (L-MOTION) | optional, 167 ms | visible, P3 |
 | M05 | Scrollbar expand and contract | web: none | expand 167 ms after 400 ms; contract 167 ms after 500 ms (SB#L173–176, SB#L188–189); spline `0,0,0,1` (SB#L484) | `transition: min-width 167ms cubic-bezier(0,0,0,1), min-height 167ms cubic-bezier(0,0,0,1);` GTK controls the delays. | safe |
-| M06 | Loading line | 25 % bar, `1s ease-in-out infinite` | none; Fluent duration and curve tokens are in FT `global/durations.js` and `global/curves.js` | Keep. Show it only after 150 ms (Fluent `durationFast`) so fast folders never flash it. | safe |
+| M06 | Loading line | 25 % bar, `1s ease-in-out infinite` | none; Fluent duration and curve tokens are in FT `global/durations.js` and `global/curves.js` | Replaced (VIEW-068): as in Windows Explorer, the address bar's fill is the only progress bar, from the first moment, and no line runs over the items. "Working on it..." and the status bar's "Loading…" wait 300 ms (`slow_delay.rs`) so fast folders never flash them. | safe |
 | M07 | Popover open | instant (web) | Direct entrance (M02) | GTK 4.14 popovers do not animate; keep them instant. | n/a |
-| M08 | Reduced motion | `@media (prefers-reduced-motion: reduce)` → 0.01 ms | n/a | GTK disables CSS transitions and animations when `gtk-enable-animations` is false (GNOME "Reduce animation" / `enable-animations`). The loading line must then show a static 25 % bar. | must keep (rule 1) |
+| M08 | Reduced motion | `@media (prefers-reduced-motion: reduce)` → 0.01 ms | n/a | GTK disables CSS transitions and animations when `gtk-enable-animations` is false (GNOME "Reduce animation" / `enable-animations`). The address bar's progress fill must then stay still, at a third of the field. | must keep (rule 1) |
 
 ### 3.8 Target palette files
 
@@ -499,7 +499,7 @@ where it differs; ✓ means the target equals the current app.
 | "New" | padding `0 10 0 8` ✓ | — | Keep. |
 | Separator | 1 × 20, `margin: 0 10`, `@ox_border` | AppBarSeparator 1 px, DividerStrokeColorDefault, margin `2,8,2,8` (ABS#L8, ABS#L14–16) | Keep. |
 | States | hover `@ox_hover`; pressed `@ox_pressed` with `@ox_muted` text; disabled `@ox_text_disabled`; toggled (Details open) `@ox_selected` | ABB#L77–79, ABB#L12 | safe |
-| Right group | Appearance (sun or moon glyph with a "Light" / "Dark" label, `@ox_muted`, text `@ox_text` on hover, label hidden at ≤ 1050), Settings (gear, `@ox_muted`), Details toggle ✓ | — | Keep. |
+| Right group | Details toggle ✓, as Windows 11 Explorer's bar ends. The Appearance button (sun or moon glyph with a "Light" / "Dark" label) and Settings (gear) are built but hidden (2026-11-02); More options offers both. | — | Applied. |
 | Responsive | ≤ 1190: gap 1, padding `0 10`, separator margin `0 6`; ≤ 960: commands padding `0 8`, min width 32; ≤ 680: hide Share, Cut, Rename and the Details toggle (they stay in More) ✓ | CommandBar overflow (CB#L5–8) | Keep. |
 
 ### 4.4 Sidebar
@@ -509,7 +509,7 @@ where it differs; ✓ means the target equals the current app.
 | Pane | width 210 by default (185 at ≤ 1190, 175 at ≤ 960, 150 at ≤ 680), user-resizable; background `@ox_sidebar`; padding **`12 8 0`** (`13 7 0`) | Explorer pane default width about 200–220 (observed, unverified) | safe |
 | Resizer | 6 px wide, background `@ox_sidebar`, 1 px `@ox_border` right edge; hover or focus: `@ox_selected` with a 2 px `@ox_accent` centre line | — | Keep. |
 | Entry | 35 high (min `ceil(20·s + 15)`), margin `1 0` (37 pitch), radius 4, padding `0 11`, gap 12, 12 px text; icon slot 20 × 24 holding a 19 px icon | NavigationViewItem min height 36 with margin `4,2` (NV#L217, NV#L228); TreeViewItem 28 with margin `4,2` (TR#L79, TR#L82) | Keep. |
-| States | hover `@ox_hover`; pressed `@ox_pressed`; current location `@ox_selected` plus the pill | TreeViewItem hover and selected fills (TR#L47, TR#L50) | safe |
+| States | hover `@ox_hover`; pressed `@ox_pressed`; current location `@ox_selected`, the pill kept clear (Explorer's navigation pane has none; 2026-11-02) | TreeViewItem hover and selected fills (TR#L47, TR#L50) | safe |
 | Selection pill | 3 × **16**, radius **2** (3 × 15, radius 4), `@ox_accent`, at the left edge, centred vertically | NavigationView indicator 3 × 16, radius 2 (NV#L220–222); TreeViewItem 3 × 16, radius 2 (TRI#L130) | safe |
 | Indent | child rows `padding-left: 32`; expander chevron 9 in `@ox_muted` | TreeView chevron (TRI#L143–145) | Keep. |
 | Pin glyph | 11 in `@ox_text_tertiary`, right-aligned, on pinned Quick access rows | Explorer shows a pin on pinned items (observed, unverified) | safe |
@@ -554,7 +554,7 @@ where it differs; ✓ means the target equals the current app.
 |---|---|---|---|
 | Bar | 30 including a 1 px top border (min `max(29, ceil(15·s + 9))` + 1); padding `0 13 0 19`; gap 18; background `@ox_bg`; text **12** px (11) in `@ox_muted` | 12 px minimum (L-TYPE) | text visible, P2 |
 | Left | "N items", "N selected, size" as separate spans 18 apart (native joins them with " · "); type-to-select hint in `@ox_accent`, or `@ox_muted` when nothing matches; ellipsis at 48 % width | — | Keep; D-N13. |
-| Right | status mode (**12** px, hidden at ≤ 680), update button 24 × 24, then the Details view and Large icons toggles, 24 × 24 with glyph **16** (15); active toggle `@ox_selected` with a `@ox_accent` glyph | Explorer puts Details and Large icons toggles at the right of its status bar (observed, unverified) | safe |
+| Right | the free space and its bar; the update button 24 × 24 only while an update needs the user (the status mode, **12** px, is hidden: Explorer names no build there; 2026-11-02); then the Details view and Large icons toggles, 24 × 24 with glyph **16** (15); active toggle `@ox_selected` with a `@ox_accent` glyph | Explorer puts Details and Large icons toggles at the right of its status bar (observed, unverified) | safe |
 
 ### 4.8 Details pane
 
@@ -604,7 +604,7 @@ TT#L52, TT#L76–77). Tag: safe.
 | Element | Target | Windows reference | Tag |
 |---|---|---|---|
 | Scrim | `@ox_smoke` over the window (tab-scoped dialogs cover only the tab's content, as now) | SmokeFillColorDefault (CT#L263) | safe |
-| Surface | width 510 (settings 790, properties 600, versions 860, archive 720, auth 535) within `calc(100vw − 30px)`; radius **8** (9); 1 px `@ox_dialog_stroke`; shadow E02 | ContentDialog width 320–548, height 184–756, border 1, SurfaceStrokeColorDefault (CD#L43–49) | safe |
+| Surface | width 510 (settings 790, archive 720, auth 535; Properties is a window of its own, 400 wide, see `resources/skin/properties.css`) within `calc(100vw − 30px)`; radius **8** (9); 1 px `@ox_dialog_stroke`; shadow E02 | ContentDialog width 320–548, height 184–756, border 1, SurfaceStrokeColorDefault (CD#L43–49) | safe |
 | Layout | content padding **24** (28); title 20 / 600 (T10), 12 px below; body 12 px `@ox_muted`, line height 1.75 | ContentDialogPadding 24, title margin 12 (CD#L51–52); title 20 SemiBold (CD#L238) | padding visible (P3) |
 | Footer (P3) | the auth dialog's footer applied to every dialog: 1 px top border `@ox_border`, background `@ox_chrome` (`#f3f3f3` / `#202020` if WinUI-exact), padding `18 24`, buttons right-aligned | ContentDialog command space: Background = SolidBackgroundFillColorBase under a LayerFillColorAlt content area with a 1 px separator (CD#L40–45, CD#L233, CD#L248) | visible, P3 |
 | Buttons | 32 high (33), min width 92, padding `5 17`, 8 apart (9), E06 border, background `@ox_control_fill`; hover `@ox_control_fill_hover`; pressed `@ox_control_fill_pressed` with `@ox_muted` text | ButtonPadding `11,5,11,6`; button fills (BT#L30–31, BT#L152); spacing 8 (CD#L50) | safe |
@@ -655,7 +655,7 @@ All transitions follow M01.
 | Empty folder | The list stays, with its column titles in Details; "This folder is empty." in `@ox_muted`, centred just under the titles (near the top in the icon views), wrapping in a narrow pane, as in Windows Explorer. | safe |
 | No results, unavailable location, empty Recycle Bin | Centred block starting 30 % down the pane, 20 px from each side, gap 12: glyph 44 at `opacity: .6` in `@ox_muted`; title 16 / **600** in `@ox_text`; message 12 px `@ox_muted`, max width 460, wrapping; optional action as a bordered button, padding `8 20`. | visible (subtle), P3 (weight, T13) |
 | Error (unreachable share, denied) | The same block with the error text and a Retry button. | Keep. |
-| Loading | 2 px line across the top of the content pane: track `@ox_selected`, 25 % bar `@ox_accent` moving left to right in `1s ease-in-out infinite`; appears after 150 ms (M06); static when animations are off (M08). | safe |
+| Opening a location | As in Windows Explorer, from the first moment: a `@ox_selected` fill crawls along behind the address (`.address.loading`, quickly at first, then ever slower, still at a third of the field when animations are off, M08), the address bar is busy for screen readers, and Refresh is Stop. After 300 ms (M06), "Working on it..." in `@ox_muted` where "This folder is empty." goes, in place of the previous folder's rows (VIEW-068). | safe |
 | Search in progress or cached | Search-info bar under the header area: min height 40, padding `7 14`, `@ox_chrome`, 1 px bottom border, **12** px text (11), accent glyph; cache freshness on the right in `@ox_muted`. | text visible, P2 |
 | Folder-size scan | Bottom bar: min height 44, padding `8 18`, `@ox_chrome`, 1 px top border, **12** px text (11), "Cancel scan" as a secondary button 27 high. | text visible, P2 (T04) |
 | Transfer | The progress window of §4.17, not a panel over the folder pane. | visible |
@@ -787,7 +787,7 @@ size before judging hairlines.
 | Scrollbar | `scrollbar.vertical`/`.horizontal`, `.overlay-indicator`, `.hovering`, `.dragging`, `> range > trough > slider` | |
 | Tooltip | `tooltip.background` | |
 | Paned | `paned.workspace > separator` | |
-| Progress | `progressbar > trough > progress` | loading line, capacity bar |
+| Progress | `progressbar > trough > progress` | capacity bar |
 
 ### 6.2 What GTK 4.14 cannot do, and the workaround
 

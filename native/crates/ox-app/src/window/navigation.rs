@@ -338,7 +338,6 @@ impl BrowserWindow {
         self.keep_activations_of(id);
         self.reset_typeahead();
         self.hide_message();
-        self.show_dialog_of_tab(id);
         let Some(view) = self.saved_tab_view(id) else {
             return;
         };
@@ -394,9 +393,10 @@ impl BrowserWindow {
 
     /// Closes a tab; closing the last one closes the window, after asking
     /// as its Close button does (`closeTab` calls `askClose`). A tab that
-    /// is being dragged stays (TAB-003).
+    /// is being dragged stays (TAB-003), and so does every other tab while
+    /// one is dragged along the row ([`Self::refuse_while_tabs_move`]).
     pub(super) fn close_tab(&self, id: TabId) {
-        if self.refuse_while_moving(id) {
+        if self.refuse_while_moving(id) || self.refuse_while_tabs_move() {
             return;
         }
         if self.tab_count() <= 1 {
@@ -409,8 +409,13 @@ impl BrowserWindow {
 
     /// Takes tab `id` out after another window took it: it is not
     /// remembered as closed, and the last tab leaving closes the window.
-    pub(super) fn release_moved_tab(&self, id: TabId) {
+    pub(super) fn release_moved_tab(&self, id: TabId, destination: Option<&BrowserWindow>) {
         if self.tab_count() <= 1 {
+            // Properties opened here go on with the tab's new window, with
+            // any change they hold (PROP-001).
+            if let Some(destination) = destination {
+                destination.adopt_properties_windows(self);
+            }
             self.request_close();
             return;
         }
@@ -421,7 +426,7 @@ impl BrowserWindow {
     /// in front.
     fn remove_tab(&self, id: TabId) {
         self.save_tab_view();
-        self.discard_dialog_of_tab(id);
+        self.forget_snapshot_tab(id);
         let was_active = self.imp().session.borrow().is_active(id);
         self.imp().session.borrow_mut().remove(id);
         if !was_active {

@@ -361,8 +361,10 @@ fn column_titles_sort_and_resize_from_the_keyboard() {
 }
 
 /// Every motion in the skin is a CSS transition or animation, which GTK
-/// skips while the desktop turns animations off; the app never turns them
-/// back on.
+/// skips while the desktop turns animations off, and the only motion drawn
+/// frame by frame, tabs sliding aside for a dragged tab, reads the same
+/// setting and puts the tabs in place at once; the app never turns
+/// animations back on.
 ///
 /// parity: ACC-010
 #[gtk::test]
@@ -380,13 +382,14 @@ fn animations_stay_off_when_the_desktop_turns_them_off() {
     assert_eq!(
         frame_driven_motion(),
         Vec::<String>::new(),
-        "only the snapshot hook and the tests draw frame by frame"
+        "only the snapshot hook, the tests and motion that follows the desktop's animation setting draw frame by frame"
     );
 }
 
 /// The app's source files, outside the snapshot hook and the test
-/// support, that move something frame by frame, which GTK's animation
-/// setting would not stop.
+/// support, that move something frame by frame without reading GTK's
+/// animation setting (`gtk-enable-animations`), which would then not stop
+/// them.
 fn frame_driven_motion() -> Vec<String> {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut folders = vec![source];
@@ -406,7 +409,12 @@ fn frame_driven_motion() -> Vec<String> {
             let moves = ["add_tick_callback", "TimedAnimation", "SpringAnimation"]
                 .iter()
                 .any(|call| text.contains(call));
-            if moves && !path.ends_with("snapshot.rs") && !path.ends_with("accessibility.rs") {
+            let follows_the_setting = text.contains("is_gtk_enable_animations");
+            if moves
+                && !follows_the_setting
+                && !path.ends_with("snapshot.rs")
+                && !path.ends_with("accessibility.rs")
+            {
                 found.push(path.display().to_string());
             }
         }

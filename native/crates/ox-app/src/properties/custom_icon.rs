@@ -1,64 +1,152 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Change icon… and Restore default icon on the General tab (PROP-016),
-//! as Files' Properties and Dolphin's icon button offer them. The choice
-//! is stored as `GVfs` metadata (`metadata::custom-icon`, the key Files
-//! uses), so both file managers show it; the default Windows-style art
-//! stays for every other item.
+//! The Customize tab of a folder (PROP-016), laid out as Windows 11's
+//! "Folder icons" group: "Change Icon..." picks a picture, which shows
+//! beside it at once and becomes the folder's icon on OK or Apply. Restore
+//! Default, beside it while the folder has its own icon, goes back to the
+//! standard folder. The choice is stored as `GVfs` metadata
+//! (`metadata::custom-icon`, the key Files uses), so both file managers
+//! show it.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
-use super::general_panel::glyph_button;
-use crate::dialog::DialogFrame;
+use super::window::{group, paragraph, push_button, ApplyFuture, Pending, PropertiesWindow};
 use crate::folder_view::CUSTOM_ICON;
-use crate::icons::Icon;
+use crate::icons::{Art, ArtImage};
 
-/// Change icon…, and Restore default icon when `has_custom_icon`, for the
-/// local item at `uri`.
-pub(super) fn icon_buttons(row: &gtk::Box, uri: &str, has_custom_icon: bool) {
-    let change = glyph_button(ox_core::i18n::gettext_static("Change icon…"), Icon::Image);
-    let target = uri.to_owned();
-    change.connect_clicked(move |button| choose_icon(button, &target));
-    row.append(&change);
-    if has_custom_icon {
-        let restore = glyph_button(
-            ox_core::i18n::gettext_static("Restore default icon"),
-            Icon::ArrowReset,
-        );
-        let target = uri.to_owned();
-        restore.connect_clicked(move |button| {
-            let button = button.clone();
-            let target = target.clone();
-            glib::spawn_future_local(async move {
-                let result = set_custom_icon(&target, None).await;
-                report(&button, &target, result);
-            });
-        });
-        row.append(&restore);
+/// The size of the icon preview.
+const PREVIEW_SIZE: i32 = 32;
+
+/// The icon chosen, until OK or Apply.
+struct IconChoice {
+    window: glib::WeakRef<PropertiesWindow>,
+    /// The folder's location, which a rename on General changes.
+    uri: Rc<RefCell<String>>,
+    /// The folder's own icon now, if it has one.
+    current: RefCell<Option<String>>,
+    /// The icon the user chose: a picture, or `None` for the default.
+    chosen: RefCell<Option<String>>,
+    preview: gtk::Box,
+    restore: gtk::Button,
+}
+
+impl IconChoice {
+    fn show(&self, icon: Option<&str>) {
+        while let Some(child) = self.preview.first_child() {
+            self.preview.remove(&child);
+        }
+        match icon {
+            Some(icon) => {
+                let picture = gtk::Image::from_gicon(&gio::FileIcon::new(&gio::File::for_uri(icon)));
+                picture.set_pixel_size(PREVIEW_SIZE);
+                self.preview.append(&picture);
+            }
+            None => self.preview.append(&ArtImage::new(Art::Folder, PREVIEW_SIZE)),
+        }
+        self.restore.set_visible(icon.is_some());
+        if let Some(window) = self.window.upgrade() {
+            window.changed();
+        }
+    }
+
+    fn choose(&self, icon: Option<String>) {
+        self.show(icon.as_deref());
+        self.chosen.replace(icon);
+        if let Some(window) = self.window.upgrade() {
+            window.changed();
+        }
     }
 }
 
-/// Asks for a picture, then makes it the icon of the item at `uri`.
-fn choose_icon(button: &gtk::Button, uri: &str) {
+impl Pending for IconChoice {
+    fn has_changes(&self) -> bool {
+        *self.chosen.borrow() != *self.current.borrow()
+    }
+
+    fn apply(self: Rc<Self>) -> ApplyFuture {
+        Box::pin(async move {
+            let icon = self.chosen.borrow().clone();
+            let uri = self.uri.borrow().clone();
+            set_custom_icon(&uri, icon.clone())
+                .await
+                .map_err(|error| error.to_string())?;
+            self.current.replace(icon);
+            if let Some(opener) = self.window.upgrade().and_then(|window| window.opener()) {
+                opener.refresh_item_icon(&uri);
+            }
+            Ok(())
+        })
+    }
+}
+
+/// The Customize tab of the local folder at `uri`, whose own icon is
+/// `current`.
+pub(super) fn customize_tab(
+    window: &PropertiesWindow,
+    uri: &Rc<RefCell<String>>,
+    current: Option<&str>,
+) -> gtk::Box {
+    let page = super::window::page();
+    let (frame, content) = group(&ox_core::i18n::gettext("Folder icons"));
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    text.set_hexpand(true);
+    text.append(&paragraph(&ox_core::i18n::gettext(
+        "You can change the folder icon. If you change the icon, it will no longer show a preview of the \
+         folder's contents.",
+    )));
+    let buttons = gtk::Box::builder().css_classes(["properties-button-row"]).build();
+    let change = push_button(&ox_core::i18n::gettext("Change Icon..."));
+    let restore = push_button(&ox_core::i18n::gettext("Restore Default"));
+    buttons.append(&change);
+    buttons.append(&restore);
+    text.append(&buttons);
+    row.append(&text);
+    let preview = gtk::Box::builder()
+        .valign(gtk::Align::End)
+        .css_classes(["properties-icon-preview"])
+        .build();
+    row.append(&preview);
+    content.append(&row);
+    page.append(&frame);
+    let choice = Rc::new(IconChoice {
+        window: window.downgrade(),
+        uri: Rc::clone(uri),
+        current: RefCell::new(current.map(str::to_owned)),
+        chosen: RefCell::new(current.map(str::to_owned)),
+        preview,
+        restore: restore.clone(),
+    });
+    choice.show(current);
+    let chosen = Rc::clone(&choice);
+    change.connect_clicked(move |button| choose_icon(button, &chosen));
+    let chosen = Rc::clone(&choice);
+    restore.connect_clicked(move |_| chosen.choose(None));
+    window.add_pending(choice);
+    page
+}
+
+/// Asks for a picture for the folder.
+fn choose_icon(button: &gtk::Button, choice: &Rc<IconChoice>) {
     let images = gtk::FileFilter::new();
-    images.set_name(Some("Images"));
+    images.set_name(Some(&ox_core::i18n::gettext("Images")));
     images.add_mime_type("image/*");
     let filters = gio::ListStore::new::<gtk::FileFilter>();
     filters.append(&images);
     let dialog = gtk::FileDialog::builder()
-        .title(ox_core::i18n::gettext("Choose an icon"))
+        .title(ox_core::i18n::gettext("Change Icon"))
         .modal(true)
         .filters(&filters)
         .build();
     let window = button.root().and_downcast::<gtk::Window>();
-    let button = button.clone();
-    let uri = uri.to_owned();
+    let choice = Rc::clone(choice);
     glib::spawn_future_local(async move {
-        let Ok(chosen) = dialog.open_future(window.as_ref()).await else {
-            return;
-        };
-        let result = set_custom_icon(&uri, Some(chosen.uri().to_string())).await;
-        report(&button, &uri, result);
+        if let Ok(chosen) = dialog.open_future(window.as_ref()).await {
+            choice.choose(Some(chosen.uri().to_string()));
+        }
     });
 }
 
@@ -90,24 +178,4 @@ pub(crate) async fn set_custom_icon(uri: &str, icon: Option<String>) -> Result<(
     file.set_attributes_future(&info, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
         .await
         .map(|_| ())
-}
-
-/// Has the window redraw the item, or shows why the change failed.
-fn report(button: &gtk::Button, uri: &str, result: Result<(), glib::Error>) {
-    let window = button.root().and_downcast::<crate::window::BrowserWindow>();
-    match result {
-        Ok(()) => {
-            if let Some(window) = window {
-                window.refresh_item_icon(uri);
-            }
-        }
-        Err(error) => {
-            let frame = button
-                .ancestor(DialogFrame::static_type())
-                .and_downcast::<DialogFrame>();
-            if let Some(frame) = frame {
-                frame.show_error(&error.to_string());
-            }
-        }
-    }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The folder pane: the details and icon views, the empty and error state,
-//! the landing pages and the loading line.
+//! and the landing pages.
 //!
 //! Ports the `main` area of `v2.0.0:desktop/ui/index.html` and `renderContent` in
 //! `v2.0.0:desktop/ui/app.js`. Only the visible view is attached to the selection
@@ -8,7 +8,7 @@
 //! change, which made large folders several times slower to list.
 //!
 //! [`FolderPane`] is a widget subclass around a `GtkOverlay` (the pages,
-//! with the loading line laid over them). The views are widgets of their
+//! with their notes laid over them). The views are widgets of their
 //! own: [`DetailsView`] and [`IconView`], which keeps its tiles' scale.
 
 mod parts;
@@ -125,7 +125,6 @@ impl FolderPane {
             .child(&parts.stack)
             .css_classes(["folder-pane-overlay"])
             .build();
-        overlay.add_overlay(&parts.loading_line);
         overlay.add_overlay(&parts.empty_note);
         overlay.connect_get_child_position(glib::clone!(
             #[weak(rename_to = pane)]
@@ -196,7 +195,27 @@ impl FolderPane {
     /// While it shows, the list is described by it for screen readers;
     /// the list's own description stays as it is.
     pub(super) fn show_empty_note(&self, show: bool) {
+        self.show_note(show, parts::EMPTY_NOTE);
+    }
+
+    /// Says "Working on it..." near the top of the list, where Windows
+    /// Explorer says it while it opens a location, with the list's rows
+    /// hidden when `hides_rows`: they are the previous folder's.
+    pub(super) fn show_working_note(&self, hides_rows: bool) {
+        self.hide_rows(hides_rows);
+        self.show_note(true, parts::WORKING_NOTE);
+    }
+
+    /// Hides or shows the list's rows (and the details view's column
+    /// titles), keeping the list's place, model and selection.
+    pub(super) fn hide_rows(&self, hide: bool) {
+        self.parts().views.set_child_visible(!hide);
+    }
+
+    /// Shows or hides the note near the top of the list, saying `text`.
+    fn show_note(&self, show: bool, text: &'static str) {
         let note = &self.parts().empty_note;
+        note.set_label(ox_core::i18n::gettext_static(text));
         // The row with keyboard focus goes with the last item: the list
         // keeps the keyboard, on its rows' area.
         if show && !note.is_visible() && self.view_has_focus() {
@@ -218,7 +237,22 @@ impl FolderPane {
 
     /// Whether "This folder is empty." shows.
     pub(super) fn shows_empty_note(&self) -> bool {
-        self.parts().empty_note.is_visible()
+        let note = &self.parts().empty_note;
+        note.is_visible() && note.label() == ox_core::i18n::gettext_static(parts::EMPTY_NOTE)
+    }
+
+    /// What the note near the top of the list says while it shows, for
+    /// tests.
+    #[cfg(test)]
+    pub(super) fn shown_note_text(&self) -> Option<String> {
+        let note = &self.parts().empty_note;
+        note.is_visible().then(|| note.label().to_string())
+    }
+
+    /// Whether the list's rows are hidden, for tests.
+    #[cfg(test)]
+    pub(super) fn rows_hidden(&self) -> bool {
+        !self.parts().views.is_child_visible()
     }
 
     /// Where the overlay puts "This folder is empty.": centred, a little
@@ -284,25 +318,6 @@ impl FolderPane {
         }
     }
 
-    /// Shows the loading line over the items while `loading` lasts (see
-    /// [`LoadingLine::set_loading`](super::loading_line::LoadingLine::set_loading)).
-    pub(super) fn set_loading(&self, loading: bool) {
-        self.parts().loading_line.set_loading(loading);
-    }
-
-    /// Whether the loading line shows now, which a listing does only once
-    /// it has run for a moment.
-    pub(super) fn shows_loading_line(&self) -> bool {
-        self.parts().loading_line.is_shown()
-    }
-
-    /// Calls `changed` whenever the loading line shows or hides.
-    pub(super) fn connect_loading_line_changed(&self, changed: impl Fn() + 'static) {
-        self.parts()
-            .loading_line
-            .connect_visible_notify(move |_| changed());
-    }
-
     /// Shows `hint` over the pane, saying what a drag would do there, or
     /// hides the note.
     pub(super) fn show_drag_hint(&self, hint: Option<&str>) {
@@ -343,17 +358,17 @@ impl FolderPane {
         self.parts().rubber_band.is_visible()
     }
 
+    /// The drawn rubber band's width and height, for tests.
+    #[cfg(test)]
+    pub(super) fn rubber_band_size(&self) -> (i32, i32) {
+        self.parts().rubber_band.size_request()
+    }
+
     /// The note over the pane while a drag shows one, for tests.
     #[cfg(test)]
     pub(super) fn drag_hint(&self) -> Option<String> {
         let label = &self.parts().drag_hint;
         label.is_visible().then(|| label.label().to_string())
-    }
-
-    /// The loading line, for tests.
-    #[cfg(test)]
-    pub(super) fn loading_line(&self) -> &super::loading_line::LoadingLine {
-        &self.parts().loading_line
     }
 
     /// The empty, loading and error page, for tests.

@@ -13,7 +13,7 @@ use ox_core::location::file_uri;
 use ox_core::places::{FolderLocations, KnownFolder};
 
 use super::file_ops_support::open_dialog;
-use super::item_dialogs::press;
+use super::item_dialogs::{check, general, press};
 use crate::integration::BraveDialog;
 use crate::properties::LocationPanel;
 use crate::test_support::harness::{descendants, wait_until, TestWindow};
@@ -143,6 +143,80 @@ fn the_location_tab_moves_documents_and_offers_to_move_its_files() {
     assert!(!folders.documents.join("plan.txt").exists());
 }
 
+/// A checked and consented location is applied by the window's OK, as
+/// by Apply location.
+///
+/// parity: PROP-017
+#[gtk::test]
+fn ok_applies_a_checked_and_consented_location() {
+    let folders = Folders::new();
+    let state = folders.home.join(".config-state");
+    let test =
+        TestWindow::open_with_standard_folders(&file_uri(&folders.home), folders.locations(), |context| {
+            context.use_folder_relocation(folders.relocation(&state));
+        });
+    test.activate("properties-of", Some(&file_uri(&folders.documents)));
+    let panel = location_panel(&test);
+    let window = test.window.properties_windows().remove(0);
+    let field = panel.location_field();
+    wait_until("the current location", || {
+        field.text() == folders.documents.to_string_lossy().as_ref()
+    });
+    field.set_text(&folders.destination.to_string_lossy());
+    press(&panel, "Check location");
+    wait_until("the check", || panel.status_text().starts_with("Local folder"));
+    assert!(!window.apply_button().is_sensitive(), "Apply waits for consent");
+    panel.set_consent(true);
+    assert!(window.apply_button().is_sensitive());
+
+    window.ok_button().emit_clicked();
+
+    let question = open_dialog(&test);
+    assert_eq!(question.title_text(), "Move files");
+    question.press("Don't move");
+    let user_dirs = fs::read_to_string(folders.config.join("user-dirs.dirs")).expect("the new setting");
+    assert!(user_dirs.contains(&folders.destination.display().to_string()));
+    wait_until("the window to close", || window.is_closed());
+}
+
+/// Read-only on General, applied with a new location by the same OK,
+/// reaches the files before Location moves them: they arrive read-only.
+///
+/// parity: PROP-003, PROP-017
+#[gtk::test]
+fn read_only_reaches_the_files_before_location_moves_them() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let folders = Folders::new();
+    let state = folders.home.join(".config-state");
+    let test =
+        TestWindow::open_with_standard_folders(&file_uri(&folders.home), folders.locations(), |context| {
+            context.use_folder_relocation(folders.relocation(&state));
+        });
+    test.activate("properties-of", Some(&file_uri(&folders.documents)));
+    let panel = location_panel(&test);
+    let window = test.window.properties_windows().remove(0);
+    let field = panel.location_field();
+    wait_until("the current location", || {
+        field.text() == folders.documents.to_string_lossy().as_ref()
+    });
+    field.set_text(&folders.destination.to_string_lossy());
+    press(&panel, "Check location");
+    wait_until("the check", || panel.status_text().starts_with("Local folder"));
+    panel.set_consent(true);
+    check(&general(&window), "Read-only (Only applies to files in folder)").set_active(true);
+
+    window.ok_button().emit_clicked();
+
+    open_dialog(&test).press("Move files");
+    open_dialog(&test).press("Skip duplicates");
+    open_dialog(&test).press("OK");
+    wait_until("the window to close", || window.is_closed());
+    let mode = |path: PathBuf| fs::metadata(path).expect("the file").permissions().mode() & 0o777;
+    assert_eq!(mode(folders.destination.join("plan.txt")), 0o444);
+    assert_eq!(mode(folders.destination.join("Taxes").join("2025.txt")), 0o444);
+}
+
 /// Brave's follow-up shows for Downloads only, starts unticked and, when
 /// ticked, opens Brave's own dialog for the new folder after Apply.
 ///
@@ -175,10 +249,13 @@ fn a_ticked_brave_follow_up_opens_brave_s_dialog_after_moving_downloads() {
     brave_dialog(&test).expect("it is open").close();
 }
 
-/// The Location tab of the Properties dialog `test` shows.
+/// The Location tab of the Properties window `test` opened.
 fn location_panel(test: &TestWindow) -> LocationPanel {
-    let frame = test.wait_for_dialog("the Properties dialog");
-    let panels = descendants::<LocationPanel>(&frame);
+    wait_until("the Properties window", || {
+        !test.window.properties_windows().is_empty()
+    });
+    let window = test.window.properties_windows().remove(0);
+    let panels = descendants::<LocationPanel>(&window);
     panels
         .into_iter()
         .next()

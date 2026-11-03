@@ -2,6 +2,8 @@
 //! Views, sorting, the status-bar buttons, saved preferences, text size
 //! and appearance.
 
+use std::time::Duration;
+
 use gtk::prelude::*;
 use ox_core::settings::{Appearance, Theme, View};
 
@@ -11,7 +13,7 @@ use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::icons::{Art, FileType};
 use crate::test_support::harness::{
-    application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+    application, descendants, skin, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::text_size::Step;
 use crate::theme::Skin;
@@ -237,6 +239,150 @@ fn the_type_column_shows_the_interface_names_for_documents() {
     assert!(texts.iter().any(|text| text == "Text document"), "{texts:?}");
 }
 
+/// The labels the details view of `test` shows, in its rows and titles.
+fn details_texts(test: &TestWindow) -> Vec<String> {
+    let column_view = test.window.folder_pane().details().column_view().clone();
+    let labels = descendants::<gtk::Label>(&column_view);
+    labels.iter().map(|label| label.text().into()).collect()
+}
+
+/// Whether the details view of `test` shows a folder of one item counted.
+fn shows_one_item(test: &TestWindow) -> bool {
+    details_texts(test).contains(&"1 item".to_owned())
+}
+
+/// What the status bar of `test` says about the selected or hovered item.
+fn described(test: &TestWindow) -> String {
+    test.window.status_bar().texts().1
+}
+
+/// Saves "Show the number of items in folders" as `on`, for every window.
+fn save_item_counts(test: &TestWindow, on: bool) {
+    let mut options = test.context.settings_data().preferences.view_options;
+    options.count_folder_items = on;
+    let update = ox_core::settings::PreferencesUpdate {
+        view_options: Some(options),
+        ..ox_core::settings::PreferencesUpdate::default()
+    };
+    test.context
+        .update_preferences(update, |result| result.expect("saved"));
+    wait_until("the setting to be saved", || {
+        test.context
+            .settings_data()
+            .preferences
+            .view_options
+            .count_folder_items
+            == on
+    });
+}
+
+/// Turning "Show the number of items in folders" off empties a counted
+/// folder's Size at once in every open window, and the status bar's
+/// description of it, without reloading the folder; turning it back on
+/// shows the count kept from before.
+///
+/// parity: VIEW-037
+#[gtk::test]
+fn turning_item_counts_off_empties_counted_folder_sizes_at_once() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/Plan.txt");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    save_item_counts(&test, true);
+    let beside = test.open_beside(&fixture.uri());
+    beside.activate("view", Some("details"));
+    for window in [&test, &beside] {
+        wait_until("the folder to be counted", || shows_one_item(window));
+        window.select_named("Documents");
+        wait_until("the bar to give the count", || {
+            described(window) == "Documents · File folder · 1 item"
+        });
+    }
+    let folder = test.window.folder_model().selected_items()[0].clone();
+
+    save_item_counts(&test, false);
+    for window in [&test, &beside] {
+        wait_until("the count to go", || !shows_one_item(window));
+        assert!(!window.window.folder_pane().owners().counts_items());
+        assert_eq!(described(window), "Documents · File folder");
+    }
+    assert_eq!(folder.item_count(), Some(1), "the count is kept for later");
+
+    save_item_counts(&test, true);
+    for window in [&test, &beside] {
+        wait_until("the count to show again", || shows_one_item(window));
+        assert_eq!(described(window), "Documents · File folder · 1 item");
+    }
+}
+
+/// A selected folder's description in the status bar gains its count once
+/// the folder is counted, though the selection stays as it was.
+///
+/// parity: VIEW-037
+#[gtk::test]
+fn a_selected_folder_is_described_with_its_count_once_counted() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/Plan.txt");
+    let test = TestWindow::without_tabs();
+    save_item_counts(&test, false);
+    test.show(&fixture.uri());
+    test.activate("view", Some("details"));
+    test.select_named("Documents");
+    wait_until("the folder to be described", || {
+        described(&test) == "Documents · File folder"
+    });
+    wait_for(Duration::from_millis(300));
+    let folder = test.window.folder_model().selected_items()[0].clone();
+    assert_eq!(folder.item_count(), None, "nothing counts the folder");
+
+    save_item_counts(&test, true);
+    wait_until("the folder to be counted", || shows_one_item(&test));
+    wait_until("the status bar to give the count", || {
+        described(&test) == "Documents · File folder · 1 item"
+    });
+}
+
+/// The status bar's description of the folder under the pointer follows
+/// "Show the number of items in folders" while the pointer stays still.
+///
+/// parity: VIEW-037, VIEW-052
+#[gtk::test]
+fn the_hovered_folders_description_follows_the_item_count_setting() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/Plan.txt");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    save_item_counts(&test, true);
+    wait_until("the folder to be counted", || shows_one_item(&test));
+    let view = test.window.folder_pane().view_widget();
+    let position = test.position_of("Documents");
+    // The rows can still be moving while the list settles, so point at
+    // the row again until the bar describes it.
+    wait_until("the bar to describe the folder under the pointer", || {
+        let point = test
+            .window
+            .folder_pane()
+            .owners()
+            .widget_at(position)
+            .and_then(|row| row.compute_point(&view, &gtk::graphene::Point::new(2.0, 2.0)));
+        let Some(point) = point else {
+            return false;
+        };
+        test.window
+            .pointer_over_items(&view, Some((f64::from(point.x()), f64::from(point.y()))));
+        described(&test) == "Documents · File folder · 1 item"
+    });
+
+    save_item_counts(&test, false);
+    wait_until("the count to leave the description", || {
+        described(&test) == "Documents · File folder"
+    });
+    save_item_counts(&test, true);
+    wait_until("the count to come back", || {
+        described(&test) == "Documents · File folder · 1 item"
+    });
+}
+
 #[gtk::test]
 fn a_dragged_sidebar_stops_where_the_folder_pane_keeps_its_room() {
     let fixture = Fixture::standard();
@@ -371,8 +517,6 @@ fn a_theme_chosen_in_one_window_reaches_every_window() {
     first.activate("theme", Some("dark"));
     assert_eq!(skin().appearance(), Appearance::Dark);
     assert_eq!(second.action_state("theme").as_deref(), Some("dark"));
-    let button = second.window.command_bar().appearance_tooltip();
-    assert_eq!(button.as_deref(), Some("Appearance: dark. Click to change."));
 }
 
 /// Each theme's settings value is also the `win.theme` target: choosing it
@@ -563,8 +707,9 @@ fn ctrl_h_shows_hidden_files_outside_text_fields() {
 /// The text-size keys work inside modal dialogs too, which the
 /// application's accelerators do not reach: they change the size of the
 /// window the dialog belongs to. The window's dialogs, Rename and Map
-/// network location among them, are checked; Open with, the
-/// update and the Brave dialogs install the same keys.
+/// network location among them, and a Properties window, which has no
+/// parent, are checked; Open with, the update and the Brave dialogs
+/// install the same keys.
 ///
 /// parity: VIEW-043
 #[gtk::test]
@@ -575,7 +720,10 @@ fn text_size_keys_work_inside_dialogs() {
     let before = test.window.skin().text_size();
     let rename = crate::dialog::Dialog::new(&test.window, "Rename", "");
     let map = crate::dialogs::map_network_dialog(&test.window, |_, _| {});
-    let dialogs: [&gtk::Window; 2] = [rename.upcast_ref(), map.upcast_ref()];
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let properties = test.wait_for_properties("Notes 2.txt Properties");
+    let dialogs: [&gtk::Window; 3] = [rename.upcast_ref(), map.upcast_ref(), properties.upcast_ref()];
     let plus = gtk::ShortcutTrigger::parse_string("<Control>plus").expect("a trigger");
     let mut expected = before;
     for dialog in dialogs {
@@ -599,6 +747,7 @@ fn text_size_keys_work_inside_dialogs() {
     }
     rename.destroy();
     map.destroy();
+    properties.close();
     test.window.change_text_size(before);
 }
 

@@ -24,7 +24,7 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
   border-radius: 8px 8px 0 0;
   padding: 0 10px 0 13px;
   color: @ox_tab_text_inactive;
-  transition: background-color 83ms linear, color 83ms linear;
+  transition: background-color 83ms linear, color 83ms linear, box-shadow 150ms ease-out;
 }
 .tab.active { background-color: @ox_chrome; color: @ox_text; box-shadow: 0 -1px 2px @ox_tab_shadow; }
 .tab:not(.active):hover { background-color: @ox_tab_hover; }
@@ -44,22 +44,15 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
 window.ox:backdrop .tab:not(.active),
 window.ox:backdrop .ox-titlebar button.caption { color: @ox_text_tertiary; }
 
-/* ---- Dragging tabs and dropping files on them (TAB-018, TAB-032;
-   style.css .tab-drag-source, .tabs.tab-drop-active, .tab-insert-before) ---- */
-.tab.tab-drag-source { opacity: 0.6; }
-.tab-drop-active { box-shadow: inset 0 -3px @ox_accent; }
-.tab.tab-insert-before { box-shadow: inset 3px 0 @ox_accent; }
-.tab.tab-insert-after { box-shadow: inset -3px 0 @ox_accent; }
+/* ---- Dragging tabs and dropping files on them (TAB-018, TAB-032 to
+   TAB-034). Along a strip the tabs make room for a dragged tab, so there is
+   no insertion mark. ---- */
+/* The dragged tab is lifted over the others it slides across, and so is
+   the tab carried out of its strip. */
+.tab.tab-dragging { box-shadow: 0 -1px 2px @ox_tab_shadow, 0 2px 10px @ox_shadow_key; }
+/* Out of its strip, the tab is gone from it, as in Chrome. */
+.tab.tab-drag-source { opacity: 0; }
 .tab.file-drop-active { outline: 2px solid @ox_accent; outline-offset: -2px; }
-/* The likeness of a dragged tab that follows the pointer. */
-.tab-drag-icon {
-  min-height: 35px;
-  padding: 0 13px;
-  border: 1px solid @ox_border;
-  border-radius: 8px;
-  background-color: @ox_chrome;
-  color: @ox_text;
-}
 
 /* ---- New tab, drag area, open windows ---- */
 .ox-titlebar button.newtab { min-width: 38px; min-height: 34px; margin: 0 3px 0 5px; }

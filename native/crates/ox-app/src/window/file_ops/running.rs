@@ -13,6 +13,9 @@
 //! Explorer, nothing more is said when every item succeeded; otherwise
 //! the "Operation result" dialog says what happened.
 
+use std::time::Duration;
+
+use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::ops::{
     run_transfer, starting_label, summarize, OperationContext, OperationSummary, OpsError, TransferOutcome,
@@ -28,6 +31,17 @@ use crate::search::changed_folders;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::{TransferKind, TransferPanel};
 use crate::window::BrowserWindow;
+
+/// How long a quick write runs before its panel shows, as Windows shows
+/// progress only for an operation that takes a while.
+const QUICK_WRITE_PANEL_DELAY: Duration = Duration::from_secs(1);
+
+/// A write [`BrowserWindow::begin_quick_write`] started.
+#[derive(Debug)]
+pub(super) struct QuickWrite {
+    /// The timer that shows its panel whenever the panel is free.
+    panel_timer: glib::SourceId,
+}
 
 /// Why files are not written while a drive is formatted.
 const FORMATTING_A_DRIVE: &str =
@@ -139,17 +153,92 @@ impl BrowserWindow {
         // OPS-047: an item that fails asks whether to retry, skip or
         // cancel.
         context.item_failure = Some(self.failure_asker());
-        {
-            let mut operations = self.imp().file_operations.borrow_mut();
-            if operations.is_running() {
-                return None;
-            }
-            operations.running = Some(context.cancel.clone());
+        if !self.claim_transfer_panel(TransferKind::Files, label, &context.cancel) {
+            return None;
         }
-        self.transfer_panel()
-            .start(TransferKind::Files, label, context.cancel.clone());
+        self.imp().file_operations.borrow_mut().running = Some(context.cancel.clone());
         self.update_file_commands();
         Some(context)
+    }
+
+    /// Counts a short write, New ▸ Text document, as the window's running
+    /// operation, which `cancel` stops: other file commands wait, Cancel
+    /// stops it, and closing or Quit asks or waits as for any running
+    /// operation (OPS-024, TAB-049). As in Windows, its panel, reading
+    /// `label` with its Cancel button, shows only once it has run for
+    /// [`QUICK_WRITE_PANEL_DELAY`], so a quick one looks instant, and
+    /// once no other write holds the panel: it looks again each
+    /// [`QUICK_WRITE_PANEL_DELAY`] while it runs, so it shows again after
+    /// an archive operation took the panel and finished. `None`, as
+    /// [`Self::begin_operation`] refuses, while any write runs, an
+    /// extraction or compression on the panel included. End it with
+    /// [`Self::end_quick_write`].
+    pub(super) fn begin_quick_write(&self, label: &'static str, cancel: &Cancellation) -> Option<QuickWrite> {
+        if self.is_writing_files() {
+            return None;
+        }
+        self.imp().file_operations.borrow_mut().running = Some(cancel.clone());
+        // The file and archive commands wait while it writes.
+        self.update_file_commands();
+        self.update_archive_actions();
+        let panel_timer = glib::timeout_add_local(
+            QUICK_WRITE_PANEL_DELAY,
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[strong]
+                cancel,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    // An archive operation that checked before this write
+                    // began may hold the panel, or take it from this
+                    // write later; it keeps it, and the panel shows this
+                    // write again once it is free.
+                    let panel = window.transfer_panel();
+                    if !panel.is_busy() && !cancel.is_cancelled() {
+                        panel.start(TransferKind::Create, label, cancel.clone());
+                    }
+                    glib::ControlFlow::Continue
+                }
+            ),
+        );
+        Some(QuickWrite { panel_timer })
+    }
+
+    /// Forgets the write of [`Self::begin_quick_write`] and hides its
+    /// panel, if it showed and is still its own. The file and archive
+    /// commands, which wait while it writes, are enabled again for what
+    /// is shown, which may be another tab by now.
+    pub(super) fn end_quick_write(&self, write: QuickWrite, cancel: &Cancellation) {
+        write.panel_timer.remove();
+        if self.transfer_panel().runs(cancel) {
+            self.transfer_panel().finish();
+        }
+        self.imp().file_operations.borrow_mut().running = None;
+        self.update_file_commands();
+        self.update_archive_actions();
+    }
+
+    /// The one way an operation that runs alone (a file operation, an
+    /// extraction, a compression or a restored copy) takes the primary
+    /// panel. Refuses, leaving the panel to its owner, while this window
+    /// writes files; otherwise shows the panel reading `label`, whose
+    /// Cancel stops `cancel`. Callers that check and then await must
+    /// claim after the await, so nothing started meanwhile loses its
+    /// panel. Transfer jobs take their panels in `begin_transfer`, and a
+    /// quick write shows its own late in `begin_quick_write`.
+    pub(in crate::window) fn claim_transfer_panel(
+        &self,
+        kind: TransferKind,
+        label: &str,
+        cancel: &Cancellation,
+    ) -> bool {
+        if self.is_writing_files() {
+            return false;
+        }
+        self.transfer_panel().start(kind, label, cancel.clone());
+        true
     }
 
     /// Forgets the running operation and hides its panel.
@@ -173,7 +262,12 @@ impl BrowserWindow {
     /// button stops only its own job. Finished work remains (OPS-022).
     pub(in crate::window) fn cancel_operation(&self) {
         self.transfer_panel().cancel();
-        for job in &self.imp().file_operations.borrow().jobs {
+        let operations = self.imp().file_operations.borrow();
+        // A write without a panel has only its token.
+        if let Some(running) = &operations.running {
+            running.cancel();
+        }
+        for job in &operations.jobs {
             job.panel.cancel();
         }
     }

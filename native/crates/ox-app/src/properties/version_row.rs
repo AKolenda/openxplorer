@@ -1,26 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! One row of the Previous versions list (PROP-019, PROP-020).
-//!
-//! Ports the loop over `data.versions` in `renderVersionsPanel` of
-//! `v2.0.0:desktop/ui/app.js`: the item's icon, the snapshot's name over the
-//! collection it came from, the date and time read from the snapshot's
-//! name with a tooltip saying where they come from, then Browse (folders)
-//! and Restore a copy…. The buttons run window actions, so the window
-//! opens the tab or the Restore dialog.
+//! One row of the Previous Versions list (PROP-019, PROP-020), as Windows
+//! 11 lists a version: the item's icon and name under Name, and under Date
+//! modified the date and time read from the snapshot's name (never the
+//! snapshot folder's own time), with a tooltip naming the snapshot, where
+//! it came from and where its date comes from. Rows are grouped under
+//! Windows' headings: Today, Yesterday, Earlier this week, Last week,
+//! Earlier this month, Last month, Earlier this year and A long time ago.
 
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::location::LocationContext;
 use ox_core::versions::{PreviousVersion, SnapshotDate, DATE_UNAVAILABLE, NO_DATE_EXPLANATION};
 
-use crate::icons::{self, Art, ArtImage, Icon};
-use crate::window::{ButtonStyle, WindowAction};
+use crate::icons::{Art, ArtImage};
 
-/// The size of a version's icon (`fileIcon(version, 23)`).
-const ROW_ART_SIZE: i32 = 23;
-
-/// The glyph size in a row's buttons (`.version-row button svg`).
-const BUTTON_GLYPH: i32 = 13;
+/// The size of a version's icon.
+const ROW_ART_SIZE: i32 = 16;
 
 /// A snapshot folder to browse in a tab: where it is, the snapshot's own
 /// folder that the tab's badge covers, and the snapshot's name.
@@ -50,6 +45,7 @@ impl SnapshotTarget {
     }
 
     /// The target as a window action's parameter, `(sss)`.
+    #[cfg(test)]
     pub(crate) fn to_variant(&self) -> glib::Variant {
         (self.uri.as_str(), self.root.as_str(), self.label.as_str()).to_variant()
     }
@@ -59,76 +55,6 @@ impl SnapshotTarget {
         let (uri, root, label) = variant.get::<(String, String, String)>()?;
         Some(Self { uri, root, label })
     }
-}
-
-/// The row showing `version`, whose collection is named through
-/// `locations`.
-pub(super) fn version_row(version: &PreviousVersion, locations: &LocationContext) -> gtk::Box {
-    let row = gtk::Box::builder()
-        .orientation(gtk::Orientation::Horizontal)
-        .css_classes(["version-row"])
-        .build();
-    row.set_accessible_role(gtk::AccessibleRole::ListItem);
-    row.append(&identity(version, locations));
-    row.append(&date_cell(version));
-    row.append(&actions(version));
-    row
-}
-
-/// The icon, the snapshot's name and the collection it came from.
-fn identity(version: &PreviousVersion, locations: &LocationContext) -> gtk::Box {
-    let identity = gtk::Box::builder()
-        .orientation(gtk::Orientation::Horizontal)
-        .hexpand(true)
-        .css_classes(["version-identity"])
-        .build();
-    identity.append(&ArtImage::new(Art::for_entry(&version.entry), ROW_ART_SIZE));
-    let source = locations.display_location(&version.collection);
-    let text = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .css_classes(["version-text"])
-        .tooltip_text(format!("{}\n{source}", version.label))
-        .build();
-    text.append(&ellipsized(&version.label, "version-label"));
-    text.append(&ellipsized(&source, "version-source"));
-    identity.append(&text);
-    identity
-}
-
-/// A one-line label with class `class`, ellipsized when it is too long.
-fn ellipsized(text: &str, class: &str) -> gtk::Label {
-    gtk::Label::builder()
-        .label(text)
-        .xalign(0.0)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
-        .css_classes([class])
-        .build()
-}
-
-/// The date and time from the snapshot's name, or "Date unavailable",
-/// with a tooltip saying where they come from.
-fn date_cell(version: &PreviousVersion) -> gtk::Box {
-    let cell = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .css_classes(["version-date"])
-        .build();
-    let Some(date) = version.date() else {
-        cell.set_tooltip_text(Some(ox_core::i18n::gettext_static(NO_DATE_EXPLANATION)));
-        cell.append(&ellipsized(
-            ox_core::i18n::gettext_static(DATE_UNAVAILABLE),
-            "version-calendar-date",
-        ));
-        return cell;
-    };
-    cell.set_tooltip_text(Some(date.explanation()));
-    cell.append(&ellipsized(&medium_date(&date), "version-calendar-date"));
-    let time = date.time_text();
-    if !time.is_empty() {
-        cell.append(&ellipsized(&time, "version-time"));
-    }
-    // A screen reader hears the exact date, as `<time datetime>` gives it.
-    cell.update_property(&[gtk::accessible::Property::Description(&date.iso_8601())]);
-    cell
 }
 
 /// The date as a medium date in the user's language, such as `5 Sep
@@ -148,32 +74,163 @@ pub(super) fn medium_date(date: &SnapshotDate) -> String {
     formatted.map_or_else(|_| date.date_text(), String::from)
 }
 
-/// Browse (folders only) and Restore a copy….
-fn actions(version: &PreviousVersion) -> gtk::Box {
-    let actions = gtk::Box::builder()
+/// The row showing `version` of the item called `name`, whose collection
+/// is named through `locations`.
+pub(super) fn version_row(version: &PreviousVersion, name: &str, locations: &LocationContext) -> gtk::Box {
+    let row = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
-        .css_classes(["version-actions"])
+        .css_classes(["version-row"])
         .build();
-    if version.entry.is_dir {
-        let browse = row_button(ox_core::i18n::gettext_static("Browse"), Icon::Folder);
-        let target = SnapshotTarget::of_version(version).to_variant();
-        WindowAction::BrowseSnapshot.assign_with_target_to(&browse, &target);
-        actions.append(&browse);
-    }
-    let restore = row_button(ox_core::i18n::gettext_static("Restore a copy…"), Icon::Copy);
-    let request = super::RestoreRequest::of_version(version).to_variant();
-    WindowAction::RestoreVersion.assign_with_target_to(&restore, &request);
-    actions.append(&restore);
-    actions
+    let cell = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    cell.set_hexpand(true);
+    cell.append(&ArtImage::new(Art::for_entry(&version.entry), ROW_ART_SIZE));
+    cell.append(&ellipsized(name));
+    row.append(&cell);
+    let date = version.date();
+    let date_text = date.as_ref().map_or_else(
+        || ox_core::i18n::gettext_static(DATE_UNAVAILABLE).to_owned(),
+        date_modified_text,
+    );
+    let when = ellipsized(&date_text);
+    when.add_css_class("version-date");
+    row.append(&when);
+    let source = locations.display_location(&version.collection);
+    let explanation = date.as_ref().map_or(
+        ox_core::i18n::gettext_static(NO_DATE_EXPLANATION),
+        SnapshotDate::explanation,
+    );
+    row.set_tooltip_text(Some(&format!("{}\n{source}\n{explanation}", version.label)));
+    row.update_property(&[
+        gtk::accessible::Property::Label(&format!("{name}, {date_text}")),
+        gtk::accessible::Property::Description(&format!("{} · {source}", version.label)),
+    ]);
+    row
 }
 
-/// A small bordered button with `glyph` and `label`.
-fn row_button(label: &str, glyph: Icon) -> gtk::Button {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-    content.append(&icons::image(glyph, BUTTON_GLYPH));
-    content.append(&gtk::Label::new(Some(label)));
-    let button = gtk::Button::builder().child(&content).build();
-    button.add_css_class(ButtonStyle::Bordered.css_class());
-    button.update_property(&[gtk::accessible::Property::Label(label)]);
-    button
+/// A one-line label, ellipsized when it is too long.
+fn ellipsized(text: &str) -> gtk::Label {
+    gtk::Label::builder()
+        .label(text)
+        .xalign(0.0)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .build()
+}
+
+/// `10/20/2026 03:16`: the locale's date and the time as the snapshot's
+/// name writes it.
+fn date_modified_text(date: &SnapshotDate) -> String {
+    let day = glib::DateTime::from_local(
+        i32::from(date.year),
+        i32::from(date.month),
+        i32::from(date.day),
+        12,
+        0,
+        0.0,
+    );
+    let day_text = day
+        .ok()
+        .and_then(|day| ox_core::format::format_date(&day))
+        .unwrap_or_else(|| date.date_text());
+    let time = date.time_text();
+    if time.is_empty() {
+        day_text
+    } else {
+        format!("{day_text} {time}")
+    }
+}
+
+/// Windows' heading for a version dated `date`, seen on `today`.
+pub(super) fn group_heading(date: Option<&SnapshotDate>, today: &glib::DateTime) -> &'static str {
+    let Some(date) = date else {
+        return ox_core::i18n::gettext_static(DATE_UNAVAILABLE);
+    };
+    // Calendar days, not elapsed time: a day where the clocks change is
+    // 23 or 25 hours long.
+    let (year, month) = (i32::from(date.year), i32::from(date.month));
+    let days_ago = days_from_civil(today.year(), today.month(), today.day_of_month())
+        - days_from_civil(year, month, i32::from(date.day));
+    // Monday starts the week, as ISO numbers it.
+    let into_week = i64::from(today.day_of_week() - 1);
+    let heading = if days_ago < 0 {
+        crate::i18n::message_id("Later")
+    } else if days_ago == 0 {
+        crate::i18n::message_id("Today")
+    } else if days_ago == 1 {
+        crate::i18n::message_id("Yesterday")
+    } else if days_ago <= into_week {
+        crate::i18n::message_id("Earlier this week")
+    } else if days_ago <= into_week + 7 {
+        crate::i18n::message_id("Last week")
+    } else if year == today.year() && month == today.month() {
+        crate::i18n::message_id("Earlier this month")
+    } else if (year * 12 + month) + 1 == today.year() * 12 + today.month() {
+        crate::i18n::message_id("Last month")
+    } else if year == today.year() {
+        crate::i18n::message_id("Earlier this year")
+    } else {
+        crate::i18n::message_id("A long time ago")
+    };
+    ox_core::i18n::gettext_static(heading)
+}
+
+/// The number of days from 1970-01-01 to `year`-`month`-`day` in the
+/// proleptic Gregorian calendar (Howard Hinnant's `days_from_civil`).
+fn days_from_civil(year: i32, month: i32, day: i32) -> i64 {
+    let year = i64::from(if month <= 2 { year - 1 } else { year });
+    let era = year.div_euclid(400);
+    let year_of_era = year - era * 400;
+    let month = i64::from(month);
+    let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn date(year: u16, month: u8, day: u8) -> SnapshotDate {
+        SnapshotDate {
+            year,
+            month,
+            day,
+            time: None,
+            is_utc: false,
+        }
+    }
+
+    /// Versions group under Windows' headings, counted from today.
+    ///
+    /// parity: PROP-019
+    #[test]
+    fn versions_group_under_windows_headings() {
+        // Saturday, October 31, 2026.
+        let today = glib::DateTime::from_local(2026, 10, 31, 16, 0, 0.0).expect("a date");
+        let heading = |year, month, day| group_heading(Some(&date(year, month, day)), &today);
+        assert_eq!(heading(2026, 10, 31), "Today");
+        assert_eq!(heading(2026, 10, 30), "Yesterday");
+        assert_eq!(heading(2026, 10, 26), "Earlier this week");
+        assert_eq!(heading(2026, 10, 20), "Last week");
+        assert_eq!(heading(2026, 10, 3), "Earlier this month");
+        assert_eq!(heading(2026, 9, 5), "Last month");
+        assert_eq!(heading(2026, 2, 1), "Earlier this year");
+        assert_eq!(heading(2025, 12, 31), "A long time ago");
+        assert_eq!(group_heading(None, &today), "Date unavailable");
+    }
+
+    /// Headings count calendar days: the day before the spring clock
+    /// change, a 23-hour day where the clocks change, is still yesterday.
+    ///
+    /// parity: PROP-019
+    #[test]
+    fn a_day_across_the_clock_change_is_still_yesterday() {
+        // Monday, March 30, 2026: Europe moved its clocks on the 29th.
+        let today = glib::DateTime::from_local(2026, 3, 30, 16, 0, 0.0).expect("a date");
+        let heading = |year, month, day| group_heading(Some(&date(year, month, day)), &today);
+        assert_eq!(heading(2026, 3, 29), "Yesterday");
+        assert_eq!(heading(2026, 3, 23), "Last week");
+        // Sunday, October 25, 2026, after the autumn change.
+        let autumn = glib::DateTime::from_local(2026, 10, 26, 1, 0, 0.0).expect("a date");
+        assert_eq!(group_heading(Some(&date(2026, 10, 25)), &autumn), "Yesterday");
+    }
 }

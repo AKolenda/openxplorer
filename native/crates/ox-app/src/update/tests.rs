@@ -215,6 +215,10 @@ fn checking_offers_a_newer_release_and_the_status_bar_says_so() {
     let fixture = Fixture::standard();
     let simulated = SimulatedUpdates::new(Installation::DebianPackage);
     let test = simulated.window(&fixture);
+    assert!(
+        !test.window.shows_status_bar_update(),
+        "no update button until a check finds one, as Explorer's bar has none"
+    );
 
     let dialog = open_dialog(&test, &simulated.updates);
 
@@ -229,6 +233,7 @@ fn checking_offers_a_newer_release_and_the_status_bar_says_so() {
     );
     let tooltip = test.window.status_bar_update_tooltip();
     assert_eq!(tooltip, "Check for updates\nOpenXplorer 1.0.1 is available.");
+    assert!(test.window.shows_status_bar_update(), "a found update shows it");
     capture_dialog(&dialog, "native-update-available.png");
     dialog.close();
 }

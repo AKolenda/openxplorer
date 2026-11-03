@@ -37,7 +37,9 @@ impl BrowserWindow {
         session.active().is_some_and(|tab| tab.listing_state.is_listed())
     }
 
-    /// Whether the active tab is still receiving directory entries.
+    /// Whether the active tab is still receiving directory entries, for
+    /// tests.
+    #[cfg(test)]
     pub(crate) fn is_loading(&self) -> bool {
         let session = self.imp().session.borrow();
         session.active().is_some_and(|tab| tab.listing_state.is_listing())

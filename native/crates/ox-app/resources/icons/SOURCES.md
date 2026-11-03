@@ -50,8 +50,9 @@ it.
 | `actions/ox-checkmark-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/checkmark_20_regular.svg` | 9ad90a13e5d3dd6309544d09a14817b7e609015db6e6c60ecd44ef120d2b3470 |
 | `actions/ox-chevron-down-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_down_16_regular.svg` | 33efa668d236d70a945c00cbbd3fda019994794a5b5a2e17f5e66aac19abd199 |
 | `actions/ox-chevron-down-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_down_20_regular.svg` | 2584741754fe0e27641d7423ff96e675167119889fbc1e5129516973cbfb136a |
-| `actions/ox-chevron-up-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_up_16_regular.svg` | 540041d671dfb1c7815bde83212ad161f64100007296adb1246bafe109048fb9 |
+| `actions/ox-chevron-left-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_left_16_regular.svg` | 51d4eeb4a620aec50aa0aed834830f5d7e035203c0cf15f87cf11a8e76f56bab |
 | `actions/ox-chevron-right-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_right_16_regular.svg` | 44acaeb0e0f9c84a14c7ad635e9d11424e524a4f1b140893281e2329e94767ab |
+| `actions/ox-chevron-up-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_up_16_regular.svg` | 540041d671dfb1c7815bde83212ad161f64100007296adb1246bafe109048fb9 |
 | `actions/ox-clipboard-paste-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/clipboard_paste_20_regular.svg` | ec9306a57faababc7c2ea24526b65109d68337b71ef2b3af8edf5eb54e04f386 |
 | `actions/ox-code-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/code_20_regular.svg` | 856f7cf4747d46ede53514aac276388bbfd2a09c08dea33e64781ca381f2b152 |
 | `actions/ox-copy-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/copy_20_regular.svg` | 069105eaa258ab181db8e66234677d149d26d3e8caed4e034ed6cfdf0c9511f9 |

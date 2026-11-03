@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-/* In-window dialogs, Properties, the archive dialogs, the snapshot banner
-   and tab marker, and the folder-size bar (ui-spec.md §4.11 and §4.15;
-   style.css .modal-layer, .modal, .properties-*, .version-*, .archive-*,
+/* In-window dialogs, the Location tab's parts, the archive dialogs, the
+   snapshot banner and tab marker, and the folder-size bar (ui-spec.md §4.11
+   and §4.15; style.css .modal-layer, .modal, .location-*, .archive-*,
    .extract-*, .snapshot-* and .size-scan). Font sizes follow the text size
    (theme/fonts.rs). The dialogs that are windows of their own are in
-   dialogs.css and network-dialogs.css; the rules for a dialog's parts here
-   start at the layer, so they reach only the dialogs shown on it. */
+   dialogs.css, network-dialogs.css and properties.css; the rules for a
+   dialog's parts here start at the layer, so they reach only the dialogs
+   shown on it. */
 
 /* The scrim over the window's content (C36). */
 ox-dialog-layer { background-color: @ox_smoke; }
@@ -46,36 +47,6 @@ ox-dialog-layer .ox-dialog .modal-note {
 }
 ox-dialog-layer .ox-dialog checkbutton.checkbox-row { margin-top: 14px; }
 
-/* Properties: the tabs, the file header and the name-value grid. */
-.properties-tabs { border-bottom: 1px solid @ox_border; margin-bottom: 18px; }
-window.ox .properties-tabs button {
-  border-radius: 3px 3px 0 0;
-  border: 1px solid transparent;
-  border-bottom-width: 0;
-  padding: 0 15px;
-  min-height: 34px;
-  color: @ox_muted;
-  background: none;
-  box-shadow: none;
-}
-window.ox .properties-tabs button:checked {
-  color: @ox_text;
-  background-color: @ox_chrome;
-  border-color: @ox_border;
-  box-shadow: inset 0 -2px @ox_accent;
-}
-.properties-panel { padding: 0 3px 5px 0; }
-.property-file {
-  border-bottom: 1px solid @ox_border;
-  padding: 6px 0 20px 0;
-  margin-bottom: 14px;
-  border-spacing: 18px;
-}
-.property-name-heading { font-weight: 500; }
-.property-grid { border-spacing: 15px 18px; margin: 18px 0 22px 0; }
-.property-grid .property-name { color: @ox_muted; min-width: 110px; }
-.property-buttons { border-spacing: 7px; margin-bottom: 12px; }
-
 /* The Location tab of a standard folder (.location-*, .mount-*,
    .network-mount-assistant and .setup-command in style.css). */
 .location-controls { border-spacing: 7px; margin-top: 12px; }
@@ -101,31 +72,6 @@ window.ox .properties-tabs button:checked {
   margin: 8px 0;
 }
 .mount-plan > button { margin-top: 8px; }
-
-/* Previous versions. */
-.versions-toolbar { border-spacing: 8px; margin-bottom: 12px; }
-.versions-list {
-  background-color: @ox_chrome;
-  border: 1px solid @ox_border;
-  border-radius: 4px;
-  min-height: 150px;
-  padding: 9px;
-}
-.versions-list > .quiet { margin: 8px; }
-.versions-empty-heading { font-weight: 500; margin: 14px 8px 9px 8px; }
-.versions-list > image { margin: 15px 8px 0 8px; color: @ox_muted; }
-.version-columns { color: @ox_muted; padding: 0 4px 6px 4px; border-bottom: 1px solid @ox_border; }
-.version-row { padding: 10px 4px; border-bottom: 1px solid @ox_border; border-spacing: 10px; }
-.version-row:last-child { border-bottom-width: 0; }
-.version-identity { border-spacing: 10px; }
-.version-text .version-label { font-weight: 500; }
-.version-text .version-source, .version-date .version-time { color: @ox_muted; }
-.version-date { min-width: 130px; }
-.version-actions { border-spacing: 6px; }
-window.ox .version-actions button { min-height: 29px; padding: 0 7px; }
-.version-date-note { margin-bottom: 8px; }
-.snapshot-warnings { margin-top: 13px; color: @ox_muted; }
-.snapshot-source-actions { border-spacing: 8px; margin-top: 20px; }
 
 /* The archive browser and the Extract dialog. */
 .archive-toolbar { border-spacing: 12px; margin-bottom: 12px; }
@@ -171,7 +117,7 @@ window.ox ox-dialog-layer .ox-dialog .dialog-actions menubutton.extract-info > b
 .snapshot-banner .snapshot-safety { opacity: .9; }
 
 /* The tab marker: the amber top edge and the badge. */
-.ox-titlebar .tab.snapshot-tab { box-shadow: inset 0 2px @ox_caution_edge; }
+.ox-titlebar .tab.snapshot-tab, dnd .tab.snapshot-tab { box-shadow: inset 0 2px @ox_caution_edge; }
 .snapshot-tab-badge {
   background-color: @ox_caution_badge_bg;
   color: @ox_caution_badge_text;

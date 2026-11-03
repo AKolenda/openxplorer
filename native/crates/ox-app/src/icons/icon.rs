@@ -71,6 +71,10 @@ pub(crate) enum Icon {
     /// chevron, a column title's sort arrow, the sidebar's expanders and a
     /// settings drop-down).
     ChevronDown16,
+    /// `chevron_left_16_regular`: the address bar's crumb dividers in a
+    /// right-to-left language (named by `resources/skin/navigation.css`).
+    #[cfg_attr(not(test), expect(dead_code, reason = "only the skin's CSS names it"))]
+    ChevronLeft16,
     /// `chevron_right_16_regular`: a settings row that opens a page of its
     /// own.
     ChevronRight16,
@@ -275,6 +279,7 @@ impl Icon {
             Icon::Checkmark => "ox-checkmark-20-symbolic",
             Icon::ChevronDown => "ox-chevron-down-20-symbolic",
             Icon::ChevronDown16 => "ox-chevron-down-16-symbolic",
+            Icon::ChevronLeft16 => "ox-chevron-left-16-symbolic",
             Icon::ChevronRight16 => "ox-chevron-right-16-symbolic",
             Icon::ChevronUp16 => "ox-chevron-up-16-symbolic",
             Icon::ClipboardPaste => "ox-clipboard-paste-20-symbolic",
@@ -377,7 +382,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 99] = [
+pub(crate) const ALL_ICONS: [Icon; 100] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowClockwise,
@@ -397,6 +402,7 @@ pub(crate) const ALL_ICONS: [Icon; 99] = [
     Icon::Checkmark,
     Icon::ChevronDown,
     Icon::ChevronDown16,
+    Icon::ChevronLeft16,
     Icon::ChevronRight16,
     Icon::ChevronUp16,
     Icon::ClipboardPaste,

@@ -33,6 +33,22 @@
   border-bottom-color: @ox_accent;
   box-shadow: inset 0 -1px @ox_accent;
 }
+/* While the tab in front opens a location, the address shows its
+   progress as Windows Explorer's does: a fill crawling along behind the
+   address, quickly at first and then ever slower, until the location
+   answers (VIEW-068). With animations off (M08) GTK leaves the fill
+   still, at a third of the field. */
+.address.loading {
+  background-image: linear-gradient(@ox_selected, @ox_selected);
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: 33% 100%;
+  animation: ox-address-progress 12s cubic-bezier(.1, .7, .3, 1) forwards;
+}
+@keyframes ox-address-progress {
+  from { background-size: 4% 100%; }
+  to { background-size: 92% 100%; }
+}
 /* The 16px location icon (§4.2) takes the web's 17px icon's room, so the
    crumbs still start at x=217. */
 .address .address-icon { margin-left: 1px; }
@@ -53,7 +69,20 @@
   background-color: @ox_selected;
   border-color: @ox_accent;
 }
-.address .crumb-divider { color: @ox_text_tertiary; padding: 0 1px; border-radius: 4px; }
+/* Windows 11 Explorer's chevron between crumbs, in place of app.js's
+   '/' or '\\' (NAV-017). */
+.address .crumb-divider {
+  min-width: 20px;
+  min-height: 24px;
+  border-radius: 4px;
+  color: @ox_muted;
+  background-image: -gtk-icontheme("ox-chevron-right-16-symbolic");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+}
+/* Right to left, the crumbs run leftwards and so do the chevrons. */
+.address .crumb-divider:dir(rtl) { background-image: -gtk-icontheme("ox-chevron-left-16-symbolic"); }
 /* A divider opens the subfolder menu of the crumb before it (NAV-020). */
 .address .crumb-divider:hover { background-color: @ox_hover; }
 .address button.address-chevron { min-width: 22px; min-height: 24px; }

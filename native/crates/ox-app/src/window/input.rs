@@ -81,13 +81,18 @@ impl BrowserWindow {
             self.folder_input(details.upcast_ref());
             self.folder_input(grid.upcast_ref());
             self.empty_folder_input(pane);
+            self.follow_item_counts(pane);
         }
         self.install_selection_keys();
         self.install_slow_click_rename();
         self.address_bar().connect_cancelled(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || window.finish_address()
+            move || {
+                // The address being opened goes with the edit (VIEW-068).
+                window.cancel_typed_opening();
+                window.finish_address();
+            }
         ));
         self.install_focus_regions();
         super::menu_popover::close_menus_on_press(self);

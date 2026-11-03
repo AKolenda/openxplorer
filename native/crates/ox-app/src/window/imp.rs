@@ -194,6 +194,14 @@ pub(crate) struct BrowserWindow {
     /// for the keyboard the isolated session cannot press.
     #[cfg(test)]
     pub(super) test_shift_held: Cell<bool>,
+    /// Counts the key presses, mouse presses and scrolls in the window,
+    /// so a slow New ▸ Text document renames in place only when the user
+    /// did nothing meanwhile.
+    pub(super) input_generation: Cell<u64>,
+    /// In tests, a gate New ▸ Text document waits at before it creates
+    /// the file, standing in for a slow share or phone.
+    #[cfg(test)]
+    pub(super) text_document_gate: RefCell<Option<async_channel::Receiver<()>>>,
     /// Set while the window swaps or reloads the model, so the
     /// selection it restores is not saved over the tab's selection.
     pub(super) changing_model: Cell<bool>,
@@ -222,6 +230,8 @@ pub(crate) struct BrowserWindow {
     pub(super) closing_tabs_confirmed: Cell<bool>,
     /// The file drag this window started, while it lasts.
     pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
+    /// The item under the pointer that the status bar describes.
+    pub(super) hovered_item: RefCell<Option<crate::folder_view::item::FileItem>>,
     /// Until when clicks that open items are ignored, around a drag.
     pub(super) item_clicks_resume_at: Cell<Option<std::time::Instant>>,
     /// Which files under a drag are programs (DND-026).
@@ -325,7 +335,7 @@ impl ObjectImpl for BrowserWindow {
     fn dispose(&self) {
         self.obj().end_progress_actions();
         self.obj().end_size_scans();
-        self.obj().end_properties_work();
+        self.obj().close_properties_windows();
         self.obj().end_band();
         self.obj().disconnect_external_handlers();
         self.obj().close_network();
@@ -379,10 +389,10 @@ impl WindowImpl for BrowserWindow {
         self.session
             .borrow_mut()
             .change_panes(super::session::Tab::stop_reading);
-        // So do its folder-size scans and the work of its Properties
-        // dialogs (PROP-029).
+        // So do its folder-size scans, and its Properties windows close
+        // with the work they started (PROP-029).
         self.obj().end_size_scans();
-        self.obj().end_properties_work();
+        self.obj().close_properties_windows();
         // A file dialog closed without a choice answers Cancelled
         // (INT-032).
         self.obj().end_picking_on_close();

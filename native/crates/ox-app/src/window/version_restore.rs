@@ -28,7 +28,7 @@ const OPERATION_RUNNING: &str = crate::i18n::message_id("Another file operation 
 impl BrowserWindow {
     /// Asks where to restore a copy of a previous version, then copies it
     /// there.
-    pub(super) fn ask_restore_destination(&self, request: &RestoreRequest) {
+    pub(crate) fn ask_restore_destination(&self, request: &RestoreRequest) {
         let home = self.imp().locations.borrow().home_uri();
         let versions = self.context().previous_versions().clone();
         let source = request.version_uri.clone();
@@ -62,12 +62,13 @@ impl BrowserWindow {
             policy: ConflictPolicy::KeepBoth,
         };
         let operation = OperationContext::new(self.context().write_protection());
-        let panel = self.transfer_panel();
-        panel.start(
+        if !self.claim_transfer_panel(
             TransferKind::Files,
             starting_label(TransferMode::Copy),
-            operation.cancel.clone(),
-        );
+            &operation.cancel,
+        ) {
+            return;
+        }
         let progress = self.progress_reporter(&operation.cancel);
         let verb = crate::window::transfer_panel::Verb::Copying;
         let action = crate::window::transfer_panel::Action::of(verb, &request.uris, Some(&destination));

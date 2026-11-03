@@ -49,7 +49,7 @@ fn height_cap(dialog: &gtk::Window) -> Option<i32> {
 /// Limits `scroller` so `dialog`, at the width it will have, is at most
 /// `cap` tall; the body scrolls instead of the dialog outgrowing it. A
 /// body shorter than the limit keeps its natural height.
-fn cap_body(dialog: &gtk::Window, scroller: &gtk::ScrolledWindow, cap: i32) {
+pub(crate) fn cap_body(dialog: &gtk::Window, scroller: &gtk::ScrolledWindow, cap: i32) {
     let width = dialog_width(dialog);
     // With the body held at exactly PROBE_HEIGHT, the rest of the dialog
     // is what is left over: the title, the buttons and the padding.

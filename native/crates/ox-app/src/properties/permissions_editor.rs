@@ -10,8 +10,9 @@
 //! has it (PROP-002).
 
 mod advanced;
-mod choices;
+pub(super) mod choices;
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gtk::glib;
@@ -23,10 +24,12 @@ use ox_core::permissions::{
 use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
 
-use super::general_panel::glyph_button;
-use crate::dialog::{check_row, DialogFrame, PropertyGrid};
+use super::window::glyph_button;
+use super::window::{ApplyFuture, Pending, PropertiesWindow};
+use crate::dialog::{check_row, PropertyGrid};
 use crate::icons::Icon;
 use advanced::AdvancedBits;
+pub(super) use choices::AccountChoice as SharedAccountChoice;
 use choices::{AccessChoice, AccountChoice, StateCheck};
 
 /// An item the editor changes.
@@ -130,7 +133,9 @@ impl Controls {
         let mode_changes = match (request.mode, self.open_advanced()) {
             (ModeChange::Advanced(bits), Some((_, mode))) => bits != mode || request.recursive,
             (ModeChange::Simple(change), _) => !change.is_empty(),
-            (ModeChange::Advanced(_), None) => true,
+            (ModeChange::Advanced(_), None) | (ModeChange::ReadOnlyFiles(_) | ModeChange::Bits { .. }, _) => {
+                true
+            }
         };
         mode_changes || request.owner.is_some() || request.group.is_some()
     }
@@ -180,8 +185,11 @@ fn add_control_row(grid: &PropertyGrid, name: &str, control: &impl IsA<gtk::Widg
     grid.widget().attach(control, column, line, 1, 1);
 }
 
-/// The editor for `items`.
-pub(super) fn permissions_editor(items: EditedItems, versions: Arc<PreviousVersions>) -> gtk::Box {
+/// The editor for `items`, and its change for the window's OK and Apply.
+pub(super) fn permissions_editor(
+    items: EditedItems,
+    versions: Arc<PreviousVersions>,
+) -> (gtk::Box, Rc<EditorChange>) {
     let editor = gtk::Box::new(gtk::Orientation::Vertical, 8);
     let has_files = items.items.iter().any(|item| !item.is_folder);
     let has_folders = items.items.iter().any(|item| item.is_folder);
@@ -265,75 +273,115 @@ pub(super) fn permissions_editor(items: EditedItems, versions: Arc<PreviousVersi
             }
         });
     }
+    let uris = items.items.into_iter().map(|item| item.uri).collect();
+    let (apply, change) = apply_button(&controls, uris, versions);
+    editor.append(&apply);
+    (editor, change)
+}
+
+/// Apply permissions, greyed until the user changes something, and the
+/// change it makes, which the window's OK and Apply make too.
+fn apply_button(
+    controls: &Controls,
+    uris: Vec<String>,
+    versions: Arc<PreviousVersions>,
+) -> (gtk::Button, Rc<EditorChange>) {
     let apply = glyph_button(
         ox_core::i18n::gettext_static("Apply permissions"),
         Icon::ShieldLock,
     );
     apply.set_halign(gtk::Align::Start);
-    // Nothing is applied until the user changes something.
     apply.set_sensitive(false);
-    let watched = controls.clone();
-    let button = apply.downgrade();
-    controls.connect_changed(move || {
-        if let Some(button) = button.upgrade() {
-            button.set_sensitive(watched.has_changes());
-        }
+    let change = Rc::new(EditorChange {
+        controls: controls.clone(),
+        uris,
+        versions,
+        button: apply.downgrade(),
     });
-    let uris: Vec<String> = items.items.into_iter().map(|item| item.uri).collect();
+    let watched = Rc::clone(&change);
+    controls.connect_changed(move || watched.changed());
+    let pressed = Rc::clone(&change);
     apply.connect_clicked(move |button| {
-        start_change(button, &uris, controls.request(), &versions);
+        let change = Rc::clone(&pressed);
+        let window = PropertiesWindow::of(button);
+        glib::spawn_future_local(async move {
+            if let (Err(message), Some(window)) = (change.apply_now().await, window) {
+                window.show_error(&message);
+            }
+        });
     });
-    editor.append(&apply);
-    editor
+    (apply, change)
 }
 
-/// Applies `request` to every item in the background and says how it
-/// went: a toast, or the first error in the dialog.
-fn start_change(
-    button: &gtk::Button,
-    uris: &[String],
-    request: PermissionRequest,
-    versions: &PreviousVersions,
-) {
-    let frame = button
-        .ancestor(DialogFrame::static_type())
-        .and_downcast::<DialogFrame>();
-    let window = button.root().and_downcast::<crate::window::BrowserWindow>();
-    // Safety rule PROP-024: a previous version is never changed in place.
-    if let Some(refusal) = uris.iter().find_map(|uri| versions.check_writable(uri).err()) {
-        if let Some(frame) = frame {
-            frame.show_error(&refusal.to_string());
-        }
-        return;
-    }
-    // No drive is formatted while the items change, nor are they changed
-    // while one is (DEV-012).
-    let writing = match window.as_ref().map(crate::window::BrowserWindow::hold_write) {
-        Some(Err(refusal)) => {
-            if let Some(frame) = frame {
-                frame.show_error(&refusal);
+/// The editor's change, which Apply permissions and the window's OK and
+/// Apply make (PROP-002).
+pub(super) struct EditorChange {
+    controls: Controls,
+    uris: Vec<String>,
+    versions: Arc<PreviousVersions>,
+    /// Apply permissions, greyed while there is nothing to apply.
+    button: glib::WeakRef<gtk::Button>,
+}
+
+impl EditorChange {
+    /// Greys Apply permissions, and the window's Apply, or not.
+    fn changed(&self) {
+        let has_changes = self.controls.has_changes();
+        if let Some(button) = self.button.upgrade() {
+            button.set_sensitive(has_changes);
+            if let Some(window) = PropertiesWindow::of(&button) {
+                window.changed();
             }
-            return;
         }
-        writing => writing.and_then(Result::ok),
-    };
-    button.set_sensitive(false);
-    let uris = uris.to_vec();
-    let button = button.downgrade();
-    glib::spawn_future_local(async move {
-        let _writing = writing;
+    }
+
+    /// Applies the controls' change to every item in the background.
+    ///
+    /// # Errors
+    ///
+    /// The refusal or the first error, to show in a message.
+    async fn apply_now(&self) -> Result<(), String> {
+        // Safety rule PROP-024: a previous version is never changed in place.
+        if let Some(refusal) = self
+            .uris
+            .iter()
+            .find_map(|uri| self.versions.check_writable(uri).err())
+        {
+            return Err(refusal.to_string());
+        }
+        let button = self.button.upgrade();
+        let opener = button
+            .as_ref()
+            .and_then(PropertiesWindow::of)
+            .and_then(|window| window.opener());
+        // No drive is formatted while the items change, nor are they
+        // changed while one is (DEV-012).
+        let _writing = match &opener {
+            Some(opener) => Some(opener.hold_write()?),
+            None => None,
+        };
+        if let Some(button) = &button {
+            button.set_sensitive(false);
+        }
+        let request = self.controls.request();
         let mut result = Ok(());
-        for uri in uris {
-            result = apply_in_background(uri, request, Cancellation::new()).await;
+        for uri in &self.uris {
+            result = apply_in_background(uri.clone(), request, Cancellation::new()).await;
             if result.is_err() {
                 break;
             }
         }
-        if let Some(button) = button.upgrade() {
-            button.set_sensitive(true);
-        }
-        if let (Err(error), Some(frame)) = (result, frame) {
-            frame.show_error(&error.to_string());
-        }
-    });
+        self.changed();
+        result.map_err(|error| error.to_string())
+    }
+}
+
+impl Pending for EditorChange {
+    fn has_changes(&self) -> bool {
+        self.controls.has_changes()
+    }
+
+    fn apply(self: Rc<Self>) -> ApplyFuture {
+        Box::pin(async move { self.apply_now().await })
+    }
 }

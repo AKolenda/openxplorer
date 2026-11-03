@@ -17,6 +17,8 @@ use crate::folder_view::watch::Watch;
 use crate::history::{History, HistoryViews};
 
 use super::listing_state::{ListingEnd, ListingState};
+use super::slow_delay::BusyClock;
+use super::slow_location::Opening;
 
 mod split;
 
@@ -150,6 +152,12 @@ pub(super) struct Tab {
     /// An item of this tab is being opened; a second one waits for it
     /// (`tab.opening` in `openEntry`).
     pub is_activating: bool,
+    /// A location the tab is going to, looked up or mounted before the
+    /// tab moves there (see [`super::slow_location`]).
+    pub opening: Option<Opening>,
+    /// Since when the tab has been opening or listing its location, which
+    /// decides when it says it is working (VIEW-068).
+    pub busy_clock: BusyClock,
     /// The folder pane that shows this tab: the start pane, or the end
     /// pane of a split tab.
     pub side: PaneSide,
@@ -181,6 +189,8 @@ impl Tab {
             revealed_item: None,
             changed_while_hidden: false,
             is_activating: false,
+            opening: None,
+            busy_clock: BusyClock::default(),
             side: PaneSide::Start,
             beside: None,
         }
@@ -191,9 +201,22 @@ impl Tab {
         self.history.current()
     }
 
+    /// Whether the tab is opening or listing a location.
+    pub(super) fn is_busy(&self) -> bool {
+        self.opening.is_some() || self.listing_state.is_listing()
+    }
+
+    /// Whether the tab's location has taken longer than the delay to
+    /// open and list (see [`BusyClock`]).
+    pub(super) fn is_slow(&self) -> bool {
+        self.busy_clock.is_slow(self.is_busy(), std::time::Instant::now())
+    }
+
     /// Starts a load and returns its generation. The folder watch is kept:
     /// the caller replaces it only when the location changed.
     pub(super) fn begin_load(&mut self) -> u64 {
+        let was_busy = self.is_busy();
+        self.busy_clock.start(was_busy, std::time::Instant::now());
         self.listing = None;
         self.generation = self.generation.wrapping_add(1);
         self.listing_state.begin();
@@ -443,14 +466,23 @@ impl Session {
     /// active, or the new last tab (`Math.min(i, tabs.length - 1)` in
     /// app.js, as in Windows Explorer and browsers).
     pub(super) fn remove(&mut self, id: TabId) {
+        let successor = self.successor(id);
         let Some(index) = self.tabs.iter().position(|tab| tab.id == id) else {
             return;
         };
         self.tabs.remove(index);
         if self.active == Some(id) {
-            let next = self.tabs.get(index).or_else(|| self.tabs.last());
-            self.active = next.map(|tab| tab.id);
+            self.active = successor;
         }
+    }
+
+    /// The tab that comes to the front when tab `id` leaves the strip
+    /// while in front: the tab to its right, or to its left at the end.
+    pub(super) fn successor(&self, id: TabId) -> Option<TabId> {
+        let index = self.tabs.iter().position(|tab| tab.id == id)?;
+        let next = self.tabs.get(index + 1);
+        let next = next.or_else(|| index.checked_sub(1).and_then(|before| self.tabs.get(before)));
+        next.map(|tab| tab.id)
     }
 
     /// The tab next to the active one in `direction`, wrapping around at
@@ -513,6 +545,22 @@ mod tests {
         let (mut session, [_, second, third]) = three_tabs();
         session.remove(third);
         assert_eq!(session.active_id(), Some(second));
+    }
+
+    /// The tab that takes a dragged-out tab's place in front is the one
+    /// closing it would show, and nothing changes until it is shown.
+    ///
+    /// parity: TAB-002, TAB-034
+    #[test]
+    fn a_tab_leaving_the_strip_is_succeeded_by_the_tab_closing_it_would_show() {
+        let (session, [first, second, third]) = three_tabs();
+        assert_eq!(session.successor(first), Some(second));
+        assert_eq!(session.successor(second), Some(third));
+        assert_eq!(session.successor(third), Some(second));
+        assert_eq!(session.active_id(), Some(third));
+        let mut alone = Session::default();
+        let only = alone.add("file:///one", TabPlacement::Foreground);
+        assert_eq!(alone.successor(only), None);
     }
 
     #[test]

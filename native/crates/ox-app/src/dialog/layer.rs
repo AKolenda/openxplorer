@@ -4,15 +4,14 @@
 //!
 //! Ports `#modal-layer`, `showModal` and `closeModal` of
 //! `v2.0.0:desktop/ui/app.js`, drawn as `native/docs/ui-spec.md` §4.11 says:
-//! the scrim covers the window's content, as `positionTabDialog` places
-//! the layer of a tab's Properties under the title bar, and the dialog is
-//! at most the window's width less 30 pixels (`calc(100vw - 30px)`).
+//! the scrim covers the window's content under the title bar, and the
+//! dialog is at most the window's width less 30 pixels
+//! (`calc(100vw - 30px)`).
 //!
 //! While a dialog is shown, the content under the layer takes neither
 //! clicks nor keyboard focus, and Escape dismisses the dialog (ACC-004).
-//! The title bar stays usable, so a tab's Properties can be left for
-//! another tab and found again (PROP-008); the window decides which
-//! dialog belongs to which tab, and asks the layer to show or withdraw it.
+//! The title bar stays usable. Properties is not shown here: it is a
+//! window of its own ([`crate::properties::PropertiesWindow`]).
 
 use gtk::glib;
 use gtk::prelude::*;

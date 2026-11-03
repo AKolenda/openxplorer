@@ -251,6 +251,20 @@ pub struct Preferences {
     pub auto_index: bool,
     /// Classic (Windows 10) or compact (Windows 11) context menus.
     pub context_menu: ContextMenu,
+    /// Folder item counts were turned on in this app. Files of older
+    /// releases store `viewOptions.countFolderItems: true`, then the
+    /// default, whenever any view option changed, so without this mark
+    /// that value gives way to Explorer's empty folder Size once
+    /// (`read.rs`). Stored only when set.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub item_counts_chosen: bool,
+    /// The classic menu was chosen in this app. Files the Python app or an
+    /// older release wrote store `"win10"`, its default, whether chosen or
+    /// not, so without this mark that value gives way to the compact menu
+    /// once, as Windows 11 Explorer opens it (`read.rs`). Stored only when
+    /// set.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub classic_menu_chosen: bool,
     /// Seconds between network location refreshes: 30, 60 or 300.
     pub network_interval: u32,
     /// Percent: 80, 90, 100, 110, 125, 150, 175 or 200.
@@ -284,9 +298,9 @@ pub struct Preferences {
     #[serde(skip_serializing_if = "is_true")]
     pub browse_archives: bool,
     /// How a ZIP opens when [`Self::browse_archives`] is on: in the tab
-    /// like a folder, or in its own window as before (ARC-026). Stored
-    /// only when the folder is chosen.
-    #[serde(skip_serializing_if = "ZipOpening::is_window")]
+    /// like a folder, as Windows Explorer opens it, or in its own window
+    /// (ARC-026). Stored only when the window is chosen.
+    #[serde(skip_serializing_if = "ZipOpening::is_folder")]
     pub zip_opening: ZipOpening,
     /// The details pane's own options; saved only once changed, so the
     /// settings of a new installation stay as the Python app writes them.
@@ -379,9 +393,11 @@ pub struct Preferences {
     /// The folder tree's options (SIDE-028); saved only once changed.
     #[serde(skip_serializing_if = "FolderTreeOptions::is_default")]
     pub folder_tree: FolderTreeOptions,
-    /// Date columns show absolute dates instead of "Today at 3:00 PM"
-    /// (Dolphin's `UseShortRelativeDates`, inverted). Stored only when on.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    /// Date columns show absolute dates, as Windows Explorer does, instead
+    /// of "Today at 3:00 PM" (Dolphin's `UseShortRelativeDates`, inverted).
+    /// On by default; stored only when off, so a file that stored the
+    /// choice of absolute dates keeps it.
+    #[serde(skip_serializing_if = "is_true")]
     pub absolute_dates: bool,
     /// Each folder remembers its own display style: Windows' "Remember
     /// each folder's view settings" (Dolphin's `GlobalViewProps`,
@@ -403,8 +419,10 @@ pub struct Preferences {
     #[serde(rename = "itemChecksOnCtrl", skip_serializing_if = "is_true")]
     pub item_checks_on_ctrl: bool,
     /// Folders in the details view expand in place (Dolphin's
-    /// `ExpandableFolders`). Stored only when off.
-    #[serde(skip_serializing_if = "is_true")]
+    /// `ExpandableFolders`). Off by default, as Windows Explorer's details
+    /// view has no such arrows; stored only when on, so a file that stored
+    /// the choice to turn them off keeps it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub expandable_folders: bool,
     /// Windows 11's Compact view: the file list's and the navigation
     /// pane's rows stand closer, so more items fit. Off by default, as in
@@ -455,6 +473,8 @@ impl Default for Preferences {
             show_hidden: false,
             auto_index: true,
             context_menu: ContextMenu::default(),
+            classic_menu_chosen: false,
+            item_counts_chosen: false,
             network_interval: DEFAULT_NETWORK_INTERVAL,
             text_size: DEFAULT_TEXT_SIZE,
             sidebar_width: None,
@@ -464,7 +484,7 @@ impl Default for Preferences {
             editable_location: false,
             external_folders_in_new_window: false,
             browse_archives: true,
-            zip_opening: ZipOpening::Window,
+            zip_opening: ZipOpening::Folder,
             details_pane_options: DetailsPaneOptions::default(),
             view_options: ViewOptions::default(),
             full_path_in_title: false,
@@ -487,11 +507,11 @@ impl Default for Preferences {
             begin_in_split_view: false,
             tab_switches_split_panes: false,
             folder_tree: FolderTreeOptions::default(),
-            absolute_dates: false,
+            absolute_dates: true,
             per_folder_views: true,
             selection_marker: false,
             item_checks_on_ctrl: true,
-            expandable_folders: true,
+            expandable_folders: false,
             compact_density: false,
             view_defaults: None,
             folder_views: Vec::new(),
@@ -541,6 +561,9 @@ impl Preferences {
         replace_if_some(&mut self.show_hidden, update.show_hidden);
         replace_if_some(&mut self.auto_index, update.auto_index);
         replace_if_some(&mut self.context_menu, update.context_menu);
+        if let Some(menu) = update.context_menu {
+            self.classic_menu_chosen = menu == ContextMenu::Win10;
+        }
         replace_if_some(&mut self.network_interval, network_interval);
         replace_if_some(&mut self.text_size, text_size);
         replace_if_some(&mut self.show_full_path, update.show_full_path);
@@ -635,6 +658,7 @@ impl Preferences {
         };
         let columns_changed = options.details_columns != self.view_options.details_columns;
         self.view_options = options.clone();
+        self.item_counts_chosen = options.count_folder_items;
         columns_changed
     }
 
@@ -1022,7 +1046,8 @@ mod tests {
         let preferences = Preferences::default();
         assert_eq!(preferences.theme, Theme::System);
         assert_eq!(preferences.view, View::Details);
-        assert_eq!(preferences.context_menu, ContextMenu::Win10);
+        // Windows 11's compact menu, where the Python app had the classic one.
+        assert_eq!(preferences.context_menu, ContextMenu::Win11);
         assert_eq!(preferences.network_interval, 60);
         assert_eq!(preferences.text_size, 100);
         assert!(preferences.auto_index);
@@ -1030,14 +1055,15 @@ mod tests {
         assert!(!preferences.show_hidden);
     }
 
-    /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`.
+    /// The layout of `Settings.data['preferences']` in `v2.0.0:desktop/core.py`,
+    /// with Windows 11's compact menu where the Python app stored "win10".
     /// parity: SET-016
     #[test]
     fn default_preferences_are_stored_like_the_python_app() {
         let stored = serde_json::to_value(Preferences::default()).unwrap();
         let python = json!({
             "theme": "system", "view": "details", "details": true, "showHidden": false,
-            "autoIndex": true, "contextMenu": "win10", "networkInterval": 60, "textSize": 100
+            "autoIndex": true, "contextMenu": "win11", "networkInterval": 60, "textSize": 100
         });
         assert_eq!(stored, python);
     }

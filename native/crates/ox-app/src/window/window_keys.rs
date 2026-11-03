@@ -35,15 +35,6 @@ enum KeyCommand {
 }
 
 impl KeyCommand {
-    /// Whether the command switches tabs, which works even from the
-    /// active tab's Properties dialog.
-    fn is_tab_switch(self) -> bool {
-        matches!(
-            self,
-            KeyCommand::Window(WindowAction::NextTab | WindowAction::PreviousTab)
-        )
-    }
-
     /// The action the command runs, as widgets name it.
     fn detailed_name(self) -> String {
         match self {
@@ -144,12 +135,8 @@ impl BrowserWindow {
     }
 
     /// Whether `command`'s key acts now: not from a text field and not
-    /// while a dialog is open, except that tab switching works from the
-    /// active tab's Properties dialog.
+    /// while a dialog is open.
     fn window_key_applies(&self, command: KeyCommand) -> bool {
-        if command.is_tab_switch() && self.shows_dialog_of_active_tab() {
-            return true;
-        }
         if self.dialog_layer().shown().is_some() {
             return false;
         }

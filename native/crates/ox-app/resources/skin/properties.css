@@ -1,0 +1,184 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Properties windows (src/properties/window.rs), laid out as Windows 11's
+   Properties: a title bar with the item's picture, a row of tabs over a
+   bordered page, divider lines between groups of rows, group boxes, and OK,
+   Cancel and Apply at the bottom right. The measures are Windows' at 100 %
+   (11-pixel page margins, 23-pixel buttons at least 75 wide); the colours
+   are the @ox_* tokens of light.css and dark.css, and the text the app's
+   own font at the size theme/fonts.rs gives .ox-properties. */
+
+window.ox.ox-properties { background-color: @ox_chrome; color: @ox_text; }
+window.ox.ox-properties.csd {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px @ox_flyout_stroke, 0 8px 24px @ox_shadow_key;
+}
+
+/* The title bar: picture, title and a full-height close button. */
+.properties-titlebar { min-height: 32px; background-color: @ox_chrome; }
+window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary; }
+.properties-title-art { margin: 0 8px 0 10px; }
+.properties-title { margin-right: 8px; }
+.properties-titlebar button.caption { min-width: 46px; min-height: 32px; }
+
+/* The tabs over the page (Windows' classic tab control). */
+.ox-properties notebook.properties-notebook { margin: 6px 11px 0 11px; background: none; }
+.ox-properties notebook.properties-notebook > header {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+.ox-properties notebook.properties-notebook > header > tabs { margin: 0; }
+.ox-properties notebook.properties-notebook > header tab {
+  min-height: 20px;
+  padding: 1px 6px;
+  margin: 2px 0 0 0;
+  border: 1px solid @ox_border;
+  border-bottom-width: 0;
+  border-radius: 0;
+  background-color: @ox_chrome;
+  color: @ox_text;
+  box-shadow: none;
+  outline-offset: -3px;
+}
+.ox-properties notebook.properties-notebook > header tab + tab { border-left-width: 0; }
+.ox-properties notebook.properties-notebook > header tab:hover { background-color: @ox_hover; }
+.ox-properties notebook.properties-notebook > header tab:checked {
+  background-color: @ox_bg;
+  margin-top: 0;
+  padding-top: 3px;
+  box-shadow: none;
+}
+.ox-properties notebook.properties-notebook > stack {
+  background-color: @ox_bg;
+  border: 1px solid @ox_border;
+}
+.ox-properties .properties-page { padding: 11px 11px 8px 11px; }
+.ox-properties .properties-page > * { margin-bottom: 0; }
+
+/* The General tab: picture and name, groups of rows between dividers. */
+.ox-properties .properties-header { border-spacing: 14px; margin: 3px 0 10px 4px; }
+.ox-properties entry.properties-name {
+  min-height: 21px;
+  padding: 0 4px;
+  border-radius: 0;
+  border: 1px solid @ox_border;
+  background-color: @ox_bg;
+  box-shadow: none;
+}
+.ox-properties entry.properties-name:focus-within { border-color: @ox_accent; }
+.ox-properties separator.properties-divider {
+  min-height: 1px;
+  background-color: @ox_border;
+  margin: 6px 0;
+}
+.ox-properties grid.properties-rows { border-spacing: 14px 7px; margin: 5px 0 5px 4px; }
+.ox-properties .properties-rows .property-name { min-width: 76px; }
+.ox-properties .properties-attributes { border-spacing: 14px 6px; }
+.ox-properties checkbutton { padding: 0; min-height: 18px; }
+
+/* Buttons: Windows' push buttons, at least 75 wide and 23 high. */
+.ox-properties button.properties-button {
+  min-width: 61px;
+  min-height: 21px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid @ox_control_stroke;
+  border-bottom-color: @ox_control_stroke_bottom;
+  background-color: @ox_control_fill;
+  color: @ox_text;
+  box-shadow: none;
+}
+.ox-properties button.properties-button:hover { background-color: @ox_control_fill_hover; }
+.ox-properties button.properties-button:active { background-color: @ox_control_fill_pressed; }
+.ox-properties button.properties-button:disabled { color: @ox_text_disabled; }
+/* OK is the default button: Windows draws it with an accent border, not
+   filled. */
+.ox-properties button.properties-button.suggested-action {
+  border-color: @ox_accent;
+  box-shadow: inset 0 0 0 1px @ox_accent;
+}
+.ox-properties .properties-footer { border-spacing: 8px; margin: 10px 11px 11px 11px; }
+.ox-properties .properties-button-row { border-spacing: 10px; margin: 8px 0; }
+
+/* Group boxes (Sharing, Customize, Advanced Sharing). */
+.ox-properties frame.properties-group {
+  border: 1px solid @ox_border;
+  border-radius: 0;
+  margin: 4px 0 10px 0;
+  padding: 0;
+}
+.ox-properties frame.properties-group > label { margin: 0 6px; padding: 0 2px; }
+.ox-properties .properties-group-content { padding: 6px 10px 10px 10px; border-spacing: 6px; }
+.ox-properties .properties-text { margin: 2px 0; }
+
+/* Lists in a sunken frame: names, permissions, versions. */
+.ox-properties frame.properties-list-frame {
+  border: 1px solid @ox_border;
+  border-radius: 0;
+  background-color: @ox_bg;
+  margin: 2px 0 6px 0;
+}
+.ox-properties .properties-caption { margin: 6px 0 2px 0; }
+.ox-properties list.properties-names { background-color: @ox_bg; min-height: 64px; }
+.ox-properties list.properties-names > row { padding: 1px 4px; min-height: 18px; }
+.ox-properties list.properties-names > row:selected {
+  background-color: @ox_accent;
+  color: @ox_on_accent;
+}
+.ox-properties grid.properties-permission-heading { margin-top: 8px; }
+.ox-properties .properties-permission-column { min-width: 52px; }
+.ox-properties grid.properties-permissions { padding: 3px 4px; border-spacing: 0 1px; }
+.ox-properties .properties-permission-cell { min-width: 52px; }
+.ox-properties image.properties-allowed { color: @ox_muted; }
+.ox-properties grid.properties-entries { padding: 3px 6px; border-spacing: 18px 3px; }
+.ox-properties .properties-entries-heading { color: @ox_muted; }
+
+/* The Previous Versions tab. */
+.ox-properties .versions-intro { margin: 2px 0 12px 0; }
+.ox-properties image.versions-intro-glyph { color: @ox_success; }
+.ox-properties .version-columns {
+  padding: 2px 6px;
+  border-bottom: 1px solid @ox_border;
+  color: @ox_text;
+}
+.ox-properties .version-date { min-width: 120px; }
+.ox-properties list.versions-rows { background-color: @ox_bg; }
+.ox-properties list.versions-rows > row { padding: 1px 6px; }
+.ox-properties .versions-group { color: @ox_accent; margin: 4px 0 2px 0; font-weight: 400; }
+.ox-properties .version-row { border-spacing: 6px; }
+.ox-properties .versions-empty-heading { color: @ox_muted; }
+.ox-properties .snapshot-warnings { margin-top: 6px; color: @ox_muted; }
+.ox-properties .snapshot-source-actions { border-spacing: 8px; margin-top: 16px; }
+
+/* Customize. */
+.ox-properties .properties-icon-preview { margin: 0 8px 4px 0; }
+
+/* Forms inside a tab or a Properties dialog (Snapshot source, Location,
+   the mount assistant, Advanced Sharing, several items' Security): the
+   captions, notes, check rows and name-value grids the dialogs share
+   (dialog/fields.rs), spaced as the tab pages are. */
+.ox-properties .field-label { margin: 10px 0 4px 0; }
+.ox-properties .quiet { color: @ox_muted; margin-bottom: 4px; }
+.ox-properties .note {
+  color: @ox_muted;
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  padding: 8px 10px;
+  margin-top: 10px;
+}
+.ox-properties checkbutton.checkbox-row { margin-top: 8px; }
+.ox-properties .dialog-error { color: @ox_error; margin-top: 8px; }
+.ox-properties entry {
+  min-height: 23px;
+  padding: 0 4px;
+  border-radius: 0;
+  border: 1px solid @ox_border;
+  background-color: @ox_bg;
+  box-shadow: none;
+}
+.ox-properties entry:focus-within { border-color: @ox_accent; }
+.ox-properties grid.property-grid { border-spacing: 14px 7px; margin: 5px 0 10px 4px; }
+.ox-properties .property-grid .property-name { min-width: 92px; }
+.ox-properties .properties-form-field { margin-bottom: 2px; }
+.ox-properties dropdown.properties-form-field { margin-top: 10px; }

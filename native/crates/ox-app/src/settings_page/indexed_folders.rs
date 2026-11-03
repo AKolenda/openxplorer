@@ -29,7 +29,6 @@ use ox_core::search::IndexRoot;
 
 pub(crate) use candidates::{index_candidates, CandidateSources, IndexCandidate};
 pub(crate) use commands::IndexCommand;
-pub(crate) use root_row::grouped_number;
 use suggestions::IndexSuggestions;
 
 use super::group::SettingsGroup;
