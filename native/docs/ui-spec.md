@@ -692,6 +692,7 @@ all copy jobs). Templates: `resources/ui/progress-window.ui` and
 | More details | A flat toggle at the bottom with a chevron, "More details" / "Fewer details", for every action; remembered across sessions (`progressDetails`), saved without telling the browsing windows that their settings changed, so they do not redraw. | B8-COPY ("'More details' is sticky … across sessions"). |
 | Details | Speed graph 72 high in the bar's place, 1 px `@ox_border` edge on `@ox_bg`: faint gridlines (10 columns, 4 rows, `alpha(@ox_text, .07)`), the part done shaded `alpha(@ox_accent, .12)`, the speed as a filled area `alpha(@ox_accent, .6)` up to the current percentage, its top edge running straight from one report's speed to the next and anti-aliased, the highest speed at 1/1.3 of the height, and a 1 px `@ox_text` line across at the current speed with "Speed: 32.8 MB/s" (11 px) above its right end. Then "Name: <item>", "Time remaining: About 25 seconds" ("Calculating…" at first), "Items remaining: 1,030 (313 MB)". No bar of the file being copied, as in Windows. | B8-COPY ("a real-time throughput graph … the speed of data transfer, the transfer rate trend, and how much data is left"); wording from Windows screenshots; time formats per UX-PROG. Sizes and colours: not a source. |
 | Motion | None: the bar and graph change only on reports, and the paused colour applies at once, with or without animations (ACC-010). | — |
+| Replace or Skip Files | When a copy or move meets taken names, the items without a conflict go first, then the action asks in place of its bar and details, and the window shows at once, in front, titled "Replace or Skip Files" while it has that one action. The action keeps line 1; the 18 px line becomes 15 px and says what it found, wrapping, beside Cancel: one conflict, 'The destination already has a file named "report.png"' (a folder: 'a folder named'); several, "The destination has 3 files with the same names". Under it three command rows, flat buttons with padding `6 8`, radius 4, a 20 px glyph and 14 px text: Fluent `checkmark_20` in `@ox_success` with "Replace the file in the destination" / "Replace the files in the destination", `arrow_undo_20` in `@ox_accent` with "Skip this file" / "Skip these files", `document_copy_20` in `@ox_accent` with "Compare info for both files" / "Let me decide for each file". The first row takes the focus. A folder meeting a folder of its name merges without asking; only the files inside with taken names count. | Wording, rows and glyph colours: Windows 11 screenshots (private, not in the repository). Conflicts at the end of the job and the three choices: B8-COPY (the Windows team's replies: "conflicts are all queued to the end of the copy job"; "replace, skip or choose"). Silent merge: Folder Options' "Hide folder merge conflicts", on by default. Sizes: not a source. |
 
 The graph's pixels are computed in Rust (`render` in
 `speed_graph.rs`) at the device's scale and shown as a texture in a
@@ -701,6 +702,22 @@ swatches styled in `dialogs.css`. It uses no GTK or Cairo drawing call,
 which `native/tools/check.py` forbids for icons. The item count first counts the selected items, then every file
 once the free-space check has counted them; Windows counts every file from
 the start.
+
+#### File Conflict window
+
+"Compare info for both files" or "Let me decide for each file" opens it.
+Source: `src/window/conflict_window.rs`; skin: `dialogs.css`.
+
+| Part | Target | Source |
+|---|---|---|
+| Window | Title "1 File Conflict" / "3 File Conflicts". Default 560 × 520, resizable. Transient for the progress window and modal within a window group of the two alone: it blocks only the progress window; the browsing windows and other actions stay usable. No position: the desktop places it (Wayland). Background `@ox_bg`. | Windows 11 screenshots; the group is how GTK limits a modal window. |
+| Top | Padding `12 16 8`. "Which files do you want to keep?" 16 px `@ox_accent`, a heading for assistive technologies; under it "If you select both versions, the copied file will have a number added to its name." | Windows 11 screenshots; the hint also in B8-COPY's replies. |
+| Sides | Two equal columns, padding `8 16`, 1 px `@ox_border` under: a check box with "Files from Downloads" and one with "Files already in Desktop", each folder a link in `@ox_accent` that opens it in a new window. Each takes its side for every file not skipped; it shows mixed when only some files have it. | Windows 11 screenshots. |
+| Rows | One per file, padding `8 16`, 1 px `@ox_border` under: the name (12 px, ellipsized in the middle), then for each side a check box holding a 48 px thumbnail from the shared cache (the type's colour icon until one loads or when there is none, the folder icon for a folder), the date modified and the size. Each check box is named "report.png from Downloads, <date>, <size>" or "… already in Desktop, …". | Windows 11 screenshots; thumbnails: B8-COPY ("hover over the thumbnail image"). |
+| Footer | Padding `10 16`, 1 px `@ox_border` above: "Skip 1 file with the same date and size" when there are such files (it skips them and greys their check boxes), then Continue (default, enabled once every file has a side) and Cancel. | Windows 11 screenshots. |
+| Answers | Only the incoming side: Replace. Only the existing side: Skip. Both: Keep both, the copy numbered "report (2).png", then "(3)". Cancel or Escape stops the whole action; what was copied before the question stays. | Windows 11 screenshots and Windows' behaviour. |
+| Replace | The replaced file goes to the Recycle Bin first where the Trash works, so Undo brings it back; elsewhere the file is overwritten, as in Windows. | Not Windows: Windows overwrites. |
+| Motion | None. | — |
 
 ---
 
