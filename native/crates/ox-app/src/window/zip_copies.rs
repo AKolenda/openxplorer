@@ -107,7 +107,7 @@ impl BrowserWindow {
         };
         let extracted = match self
             .run_extraction(request, |extractor| extractor.with_selection(&members))
-            .await
+            .await?
         {
             Err(error) if error.is_cancelled() => return Ok(None),
             extracted => extracted.map_err(|error| crate::archive_view::extraction_failure_text(&error))?,
