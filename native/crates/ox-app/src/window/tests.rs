@@ -46,6 +46,7 @@ mod late_replies;
 mod listing;
 mod look;
 mod middle_click;
+mod name_conflicts;
 mod narrow_windows;
 mod network;
 mod network_shares;

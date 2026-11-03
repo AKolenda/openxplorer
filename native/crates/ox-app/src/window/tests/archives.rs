@@ -321,10 +321,7 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
     descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
     press(&frame, "Extract");
 
-    wait_until("the name-conflict question", || {
-        super::file_ops_support::dialog_over(&test).is_some()
-    });
-    super::file_ops_support::open_dialog(&test).press("Skip duplicates");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
 
     wait_until("the extracted folder", || fixture.path("Docs/a.txt").exists());
     wait_until("the move's report", || {
@@ -380,11 +377,8 @@ fn cancelling_an_extractions_conflict_question_says_nothing() {
     });
     descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
     press(&frame, "Extract");
-    wait_until("the name-conflict question", || {
-        super::file_ops_support::dialog_over(&test).is_some()
-    });
 
-    super::file_ops_support::open_dialog(&test).press("Cancel");
+    super::file_ops_support::cancel_conflicts(&test);
     wait_until("the private folder to be removed", || {
         fs::read_dir(fixture.root())
             .expect("the folder")

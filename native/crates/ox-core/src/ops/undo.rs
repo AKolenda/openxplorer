@@ -17,11 +17,17 @@
 //! | Move (Skip) | Moving each item back to its folder |
 //! | Move to Trash | Restoring the items from the Recycle Bin |
 //! | Restore from the Recycle Bin | Moving the items to the Trash again |
+//! | Copy or move that replaced files | Undoing the copy or move, then restoring the replaced files from the Recycle Bin |
+//!
+//! A Replace answered in the name-conflict questions moves the replaced
+//! file to the Recycle Bin before the incoming file takes its name
+//! (`resolved_transfer`), and the record lists every replaced file, so
+//! Undo can bring it back. Folders merged by a paste are never moved to
+//! the Trash by its Undo: the record lists the items that went into them.
 //!
 //! Not undoable: permanent delete and emptying the Recycle Bin (nothing is
-//! left to bring back), Replace (the replaced items are gone and merged
-//! folders cannot be separated again), and a move with Keep both (the new
-//! names are not known exactly). Every undo step runs with the same safety
+//! left to bring back), and a file a Replace overwrote where nothing could
+//! go to the Recycle Bin (its copy then stays when the rest is undone). Every undo step runs with the same safety
 //! rules as the operation itself; `undo_apply` carries them out.
 //!
 //! Reversing a record has an effect of its own, which [`UndoRecord::inverse`]
@@ -94,6 +100,22 @@ pub enum UndoRecord {
     Restore {
         /// Where the restored items are now.
         restored: Vec<String>,
+    },
+    /// A copy or move that replaced files, which went to the Recycle Bin:
+    /// undone by undoing `steps` in order, then restoring each replaced
+    /// file. The Recycle Bin items are looked up before the steps run,
+    /// since the steps may move other items from the same paths to the
+    /// Trash. Its Redo is a record of the same kind.
+    Replace {
+        /// The operation it belongs to, which names the step.
+        operation: Operation,
+        /// What undoes the rest of the operation.
+        steps: Vec<UndoRecord>,
+        /// The local paths the replaced files had.
+        replaced: Vec<PathBuf>,
+        /// When they went to the Recycle Bin, at the earliest, in seconds
+        /// since the Unix epoch.
+        replaced_since: u64,
     },
 }
 
@@ -201,6 +223,7 @@ impl UndoRecord {
             UndoRecord::Move { .. } => Operation::Move,
             UndoRecord::Trash { .. } => Operation::Delete,
             UndoRecord::Restore { .. } => Operation::Restore,
+            UndoRecord::Replace { operation, .. } => *operation,
         }
     }
 
@@ -230,6 +253,9 @@ impl UndoRecord {
     /// | New item, Link, Copy, Duplicate, Restore | moved items to the Trash | restores them from the Recycle Bin |
     /// | Move | moved items back | moves them forward again |
     /// | Move to Trash | restored items | moves them to the Trash again |
+    ///
+    /// A [`UndoRecord::Replace`] needs the result of each of its parts, so
+    /// its inverse is [`UndoRecord::replace_inverse`]; this gives `None`.
     pub fn inverse(&self, result: &TransferResult, reversed_since: u64) -> Option<UndoRecord> {
         let finished = &result.done;
         if finished.is_empty() {
@@ -257,8 +283,46 @@ impl UndoRecord {
             UndoRecord::Trash { .. } => UndoRecord::Restore {
                 restored: finished.clone(),
             },
+            UndoRecord::Replace { .. } => return None,
         };
         Some(inverse)
+    }
+
+    /// The inverse of reversing a [`UndoRecord::Replace`] of `operation`
+    /// that started at `reversed_since`: `steps` are its steps with each
+    /// one's result, `restored` the replaced files it brought back from
+    /// the Recycle Bin. Taking it back moves those files to the Trash
+    /// again, then reverses each step's reversal, the last first; the
+    /// items the steps moved to the Trash are its own replaced files.
+    pub fn replace_inverse(
+        operation: Operation,
+        steps: &[(UndoRecord, TransferResult)],
+        restored: &TransferResult,
+        reversed_since: u64,
+    ) -> Option<UndoRecord> {
+        let mut inverse_steps = Vec::new();
+        if !restored.done.is_empty() {
+            inverse_steps.push(UndoRecord::Restore {
+                restored: restored.done.clone(),
+            });
+        }
+        let mut replaced = Vec::new();
+        for (step, result) in steps.iter().rev() {
+            match step.inverse(result, reversed_since) {
+                Some(UndoRecord::Trash { original_paths, .. }) => replaced.extend(original_paths),
+                Some(other) => inverse_steps.push(other),
+                None => {}
+            }
+        }
+        if inverse_steps.is_empty() && replaced.is_empty() {
+            return None;
+        }
+        Some(UndoRecord::Replace {
+            operation,
+            steps: inverse_steps,
+            replaced,
+            replaced_since: reversed_since,
+        })
     }
 }
 

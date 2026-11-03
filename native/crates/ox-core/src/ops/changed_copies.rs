@@ -29,8 +29,14 @@ const ATTRIBUTES: &str = "standard::name,standard::display-name,standard::type,t
 /// anything inside which, were modified after `since` (seconds since the
 /// Unix epoch), or could not be checked completely. Empty for every other step.
 pub async fn changed_copies(record: &UndoRecord, since: u64) -> Vec<String> {
-    let (UndoRecord::Copy { copies } | UndoRecord::Duplicate { copies }) = record else {
-        return Vec::new();
+    let copies = match record {
+        UndoRecord::Copy { copies } | UndoRecord::Duplicate { copies } => copies,
+        // A copy that replaced files: its copies are in its Copy step.
+        UndoRecord::Replace { steps, .. } => match steps.as_slice() {
+            [UndoRecord::Copy { copies }, ..] => copies,
+            _ => return Vec::new(),
+        },
+        _ => return Vec::new(),
     };
     let pending = copies.clone();
     on_worker(move || Ok(changed_copies_blocking(&pending, since, MAX_CHECKED)))

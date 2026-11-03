@@ -3,35 +3,38 @@
 //! name-conflict check (CLIP-003, OPS-026, OPS-027, OPS-028, OPS-036).
 //!
 //! Ports `paste` and `transferWithConflicts` of `v2.0.0:desktop/ui/app.js`.
-//! Paste reads the desktop's clipboard again first. Before anything is
-//! copied, the destination is checked for every incoming name; without a
+//! Paste reads the desktop's clipboard again first. The copy or move then
+//! takes its action in the progress window, and before anything is
+//! copied, the destination is checked for every incoming name, inside the
+//! folders it merges into too ([`scan_name_conflicts`]); without a
 //! conflict the copy starts at once with the Skip policy, so a name that
 //! appears after the check is still never overwritten. With conflicts the
-//! dialog asks ([`super::conflict_dialog`]); items without a conflict
-//! keep the Skip policy whatever the answers. A copy of an item into its
-//! own folder is kept as "name - Copy" without asking, as Windows Explorer
+//! action asks "Replace or Skip Files" in place of its progress, as
+//! Windows does, and "Compare info for both files" or "Let me decide for
+//! each file" opens the File Conflict window
+//! ([`crate::window::conflict_window`]); items without a conflict keep
+//! the Skip policy whatever the answers. A copy of an item into its own
+//! folder is kept as "name - Copy" without asking, as Windows Explorer
 //! does: the only name it meets there is its own. An item moved (cut and
 //! pasted) into its own folder stays where it is, without asking, as in
-//! Windows Explorer; the other items move. The check and the dialog
-//! count as the running operation, so a second paste cannot start
-//! meanwhile. After a move, the moved items leave a cut clipboard.
-
-use std::collections::HashMap;
+//! Windows Explorer; the other items move. The question holds the job's
+//! place among the four that may run at once, and never the browsing
+//! window. After a move, the moved items leave a cut clipboard.
 
 use gtk::subclass::prelude::*;
 use ox_core::clipboard::{ClipboardFiles, ClipboardMode};
 use ox_core::location::{parent_location, same_location};
 use ox_core::ops::{
-    find_conflicts, run_chosen_transfer, starting_label, ChosenTransfer, ItemChoice, OpsError,
-    TransferOutcome, TransferRequest,
+    run_resolved_transfer, scan_name_conflicts, starting_label, ConflictScan, OpsError, Resolution,
+    TransferOutcome,
 };
-use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
+use ox_core::transfer::{Cancellation, TransferMode};
 
-use super::conflict_dialog::ConflictAnswer;
 use super::running::FinishedOperation;
 use super::unfinished::mark_unfinished;
 use crate::dialog;
 use crate::search::changed_folders;
+use crate::window::transfer_panel::{Action, Verb};
 use crate::window::BrowserWindow;
 
 /// The title of the dialog shown when the destination cannot be checked.
@@ -60,64 +63,6 @@ impl IncomingItems {
             });
         }
         (!self.uris.is_empty()).then_some(self)
-    }
-}
-
-/// How the items of `incoming` run, given the answers about their
-/// conflicts: one request when every item has the same policy, otherwise
-/// a request with an answer per item (items without a conflict: Skip).
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum TransferPlan {
-    /// Every item with one policy.
-    Uniform(TransferRequest),
-    /// An answer per item.
-    PerItem(ChosenTransfer),
-}
-
-impl TransferPlan {
-    /// The plan for `incoming` with `answers`.
-    fn new(incoming: IncomingItems, answers: &[ConflictAnswer]) -> Self {
-        let by_uri: HashMap<&str, &ConflictAnswer> = answers
-            .iter()
-            .map(|answer| (answer.uri.as_str(), answer))
-            .collect();
-        let policy_of = |uri: &String| {
-            by_uri
-                .get(uri.as_str())
-                .map_or(ConflictPolicy::Skip, |answer| answer.policy)
-        };
-        let rename_of = |uri: &String| {
-            by_uri
-                .get(uri.as_str())
-                .and_then(|answer| answer.rename_to.clone())
-        };
-        let first_policy = incoming.uris.first().map_or(ConflictPolicy::Skip, policy_of);
-        let is_uniform = incoming
-            .uris
-            .iter()
-            .all(|uri| policy_of(uri) == first_policy && rename_of(uri).is_none());
-        if is_uniform {
-            return TransferPlan::Uniform(TransferRequest {
-                mode: incoming.mode,
-                uris: incoming.uris,
-                destination_folder: Some(incoming.destination_folder),
-                policy: first_policy,
-            });
-        }
-        let items = incoming
-            .uris
-            .iter()
-            .map(|uri| ItemChoice {
-                uri: uri.clone(),
-                policy: policy_of(uri),
-                rename_to: rename_of(uri),
-            })
-            .collect();
-        TransferPlan::PerItem(ChosenTransfer {
-            mode: incoming.mode,
-            destination_folder: incoming.destination_folder,
-            items,
-        })
     }
 }
 
@@ -202,13 +147,38 @@ impl BrowserWindow {
 
     /// Checks, asks, runs and reports `incoming`; the journal records it
     /// when `undoable`.
+    ///
+    /// The job claims its action in the progress window first, as Windows
+    /// shows "Copying 1 item from Downloads to Desktop" before it asks, so
+    /// the four-job limit and the overlap check count it while it checks
+    /// and asks, and the browsing windows stay free meanwhile.
     async fn transfer_checked(&self, incoming: IncomingItems, undoable: bool) -> Option<TransferOutcome> {
         let incoming = incoming.without_items_already_there()?;
         let origin = self.current_uri();
-        let answers = self.plan_transfer(&incoming).await?;
         let mode = incoming.mode;
-        let plan = TransferPlan::new(incoming, &answers);
-        let outcome = self.run_plan(&plan).await?;
+        let destination = incoming.destination_folder.clone();
+        let context = self.begin_transfer(starting_label(mode), &incoming.uris, Some(&destination))?;
+        let verb = Verb::of_mode(mode);
+        self.describe_operation(
+            &context.cancel,
+            Action::of(verb, &incoming.uris, Some(&destination)),
+        );
+        let Some((scan, answers)) = self.check_and_ask(&incoming, &context.cancel).await else {
+            self.end_transfer(&context.cancel);
+            return None;
+        };
+        let progress = self.progress_reporter(&context.cancel);
+        let mark = mark_unfinished(Some(&destination));
+        let outcome = run_resolved_transfer(&scan, &answers, &context, progress).await;
+        drop(mark);
+        self.end_transfer(&context.cancel);
+        let written = scan
+            .items
+            .iter()
+            .map(|item| item.destination_folder.as_str())
+            .chain([destination.as_str()]);
+        let changed = changed_folders(written, incoming.uris.iter().map(String::as_str));
+        self.context().search_cache().folders_written(changed);
         let finished = outcome.clone().map(|outcome| {
             let finished = FinishedOperation::of_transfer(mode, outcome);
             if undoable {
@@ -224,31 +194,25 @@ impl BrowserWindow {
         outcome.ok()
     }
 
-    /// The conflict check and the dialog, as the window's planning step:
-    /// the answers about the conflicting items, or `None` when nothing
-    /// may run.
-    async fn plan_transfer(&self, incoming: &IncomingItems) -> Option<Vec<ConflictAnswer>> {
-        {
-            let mut operations = self.imp().file_operations.borrow_mut();
-            if operations.is_busy() || operations.jobs.len() >= super::jobs::MAX_JOBS {
-                return None;
-            }
-            operations.planning = true;
-        }
-        self.update_file_commands();
-        let answers = self.check_and_ask(incoming).await;
-        self.imp().file_operations.borrow_mut().planning = false;
-        self.update_file_commands();
-        answers
-    }
-
-    /// Finds the conflicts of `incoming` and asks about them; a failed
-    /// check opens "Could not check destination".
-    async fn check_and_ask(&self, incoming: &IncomingItems) -> Option<Vec<ConflictAnswer>> {
-        let checked =
-            find_conflicts(&incoming.uris, &incoming.destination_folder, &Cancellation::new()).await;
-        let conflicts = match checked {
-            Ok(conflicts) => conflicts,
+    /// Finds the name conflicts of `incoming`, inside merged folders too,
+    /// and asks about them in the action of the job `cancel` stops: the
+    /// plan and an answer per conflict, or `None` when nothing may run. A
+    /// failed check opens "Could not check destination".
+    async fn check_and_ask(
+        &self,
+        incoming: &IncomingItems,
+        cancel: &Cancellation,
+    ) -> Option<(ConflictScan, Vec<Resolution>)> {
+        let checked = scan_name_conflicts(
+            incoming.mode,
+            &incoming.uris,
+            &incoming.destination_folder,
+            cancel,
+        )
+        .await;
+        let scan = match checked {
+            Ok(scan) => scan,
+            Err(OpsError::Cancelled) => return None,
             Err(error) => {
                 dialog::show_message(
                     self,
@@ -259,92 +223,20 @@ impl BrowserWindow {
                 return None;
             }
         };
-        // An item copied into its own folder meets only its own name:
-        // Keep both, without asking. The others are asked about.
-        let (own, others): (Vec<String>, Vec<String>) = conflicts.into_iter().partition(|uri| {
-            incoming.mode == TransferMode::Copy
-                && parent_location(uri)
-                    .is_some_and(|parent| same_location(&parent, &incoming.destination_folder))
-        });
-        // The names those copies will take are not offered to the others.
-        let mut reserved = Vec::new();
-        for uri in &own {
-            let planned =
-                super::conflict_rename::suggested_name(uri, &incoming.destination_folder, &reserved).await;
-            reserved.push(planned);
+        if !scan.has_conflicts() {
+            return Some((scan, Vec::new()));
         }
-        let mut answers: Vec<ConflictAnswer> = own
-            .into_iter()
-            .map(|uri| ConflictAnswer {
-                uri,
-                policy: ConflictPolicy::KeepBoth,
-                rename_to: None,
-            })
-            .collect();
-        if others.is_empty() {
-            return Some(answers);
-        }
-        let destination = self
-            .imp()
-            .locations
-            .borrow()
-            .display_location(&incoming.destination_folder);
-        let asked = self
-            .ask_about_conflicts(&others, &incoming.destination_folder, &destination, reserved)
+        let answers = self
+            .panel_for_operation(cancel)
+            .ask_about_conflicts(&scan)
             .await?;
-        answers.extend(asked);
-        Some(answers)
-    }
-
-    /// Runs `plan` as a transfer job with independent progress and cancellation.
-    /// Returns `None` when `begin_transfer` cannot admit the job.
-    async fn run_plan(&self, plan: &TransferPlan) -> Option<Result<TransferOutcome, OpsError>> {
-        match plan {
-            TransferPlan::Uniform(request) => self.run_request(request).await,
-            TransferPlan::PerItem(chosen) => {
-                let uris: Vec<String> = chosen.items.iter().map(|item| item.uri.clone()).collect();
-                let context = self.begin_transfer(
-                    starting_label(chosen.mode),
-                    &uris,
-                    Some(&chosen.destination_folder),
-                )?;
-                let progress = self.progress_reporter(&context.cancel);
-                let verb = crate::window::transfer_panel::Verb::of_mode(chosen.mode);
-                let destination = Some(chosen.destination_folder.as_str());
-                let action = crate::window::transfer_panel::Action::of(verb, &uris, destination);
-                self.describe_operation(&context.cancel, action);
-                let mark = mark_unfinished(Some(&chosen.destination_folder));
-                let outcome = run_chosen_transfer(chosen, &context, progress).await;
-                drop(mark);
-                self.end_transfer(&context.cancel);
-                let items = chosen.items.iter().map(|item| item.uri.as_str());
-                let changed = changed_folders([chosen.destination_folder.as_str()], items);
-                self.context().search_cache().folders_written(changed);
-                Some(outcome)
-            }
-        }
+        Some((scan, answers))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn incoming(uris: &[&str]) -> IncomingItems {
-        IncomingItems {
-            mode: TransferMode::Copy,
-            uris: uris.iter().map(ToString::to_string).collect(),
-            destination_folder: "file:///tmp/target".to_owned(),
-        }
-    }
-
-    fn answer(uri: &str, policy: ConflictPolicy) -> ConflictAnswer {
-        ConflictAnswer {
-            uri: uri.to_owned(),
-            policy,
-            rename_to: None,
-        }
-    }
 
     /// A move leaves out the items already in the destination folder; a
     /// copy keeps them, to make "name - Copy".
@@ -374,45 +266,5 @@ mod tests {
             ..items(TransferMode::Move)
         };
         assert_eq!(only_there.without_items_already_there(), None);
-    }
-
-    /// parity: OPS-027
-    #[test]
-    fn without_conflicts_everything_copies_with_skip() {
-        let plan = TransferPlan::new(incoming(&["file:///a", "file:///b"]), &[]);
-
-        let TransferPlan::Uniform(request) = plan else {
-            panic!("one policy for every item");
-        };
-        assert_eq!(request.policy, ConflictPolicy::Skip);
-        assert_eq!(request.uris, ["file:///a", "file:///b"]);
-        assert_eq!(request.destination_folder.as_deref(), Some("file:///tmp/target"));
-    }
-
-    /// parity: OPS-026
-    #[test]
-    fn one_answer_for_every_item_is_one_request_with_that_policy() {
-        let answers = [answer("file:///a", ConflictPolicy::Replace)];
-
-        let plan = TransferPlan::new(incoming(&["file:///a"]), &answers);
-
-        let TransferPlan::Uniform(request) = plan else {
-            panic!("one policy for every item");
-        };
-        assert_eq!(request.policy, ConflictPolicy::Replace);
-    }
-
-    /// parity: OPS-027, OPS-028
-    #[test]
-    fn items_without_a_conflict_keep_skip_beside_answered_ones() {
-        let answers = [answer("file:///a", ConflictPolicy::KeepBoth)];
-
-        let plan = TransferPlan::new(incoming(&["file:///a", "file:///b"]), &answers);
-
-        let TransferPlan::PerItem(chosen) = plan else {
-            panic!("an answer per item");
-        };
-        let policies: Vec<ConflictPolicy> = chosen.items.iter().map(|item| item.policy).collect();
-        assert_eq!(policies, [ConflictPolicy::KeepBoth, ConflictPolicy::Skip]);
     }
 }

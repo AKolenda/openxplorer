@@ -207,3 +207,74 @@ pub(super) fn require_private_trash() {
         "this test needs GVfs with its Trash backend; found {schemes:?}"
     );
 }
+
+/// How a test answers the "Replace or Skip Files" question.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::window) enum ConflictAnswer {
+    /// "Replace the file(s) in the destination".
+    Replace,
+    /// "Skip this file" / "Skip these files".
+    Skip,
+    /// Both versions checked in the File Conflict window for every file.
+    KeepBoth,
+}
+
+/// The progress window of `test`'s application, once an action asks
+/// "Replace or Skip Files".
+fn asking_window(test: &TestWindow) -> crate::window::progress_window::ProgressWindow {
+    wait_until("the Replace or Skip Files question", || {
+        test.context.progress_window().is_some_and(|window| {
+            window.is_visible() && window.actions().iter().any(|action| action.is_asking())
+        })
+    });
+    test.context.progress_window().expect("it asks")
+}
+
+/// Waits for an action to ask "Replace or Skip Files", then presses that
+/// action's Cancel.
+pub(in crate::window) fn cancel_conflicts(test: &TestWindow) {
+    let window = asking_window(test);
+    let action = window
+        .actions()
+        .into_iter()
+        .find(|action| action.is_asking())
+        .expect("the asking action");
+    action.press_cancel();
+}
+
+/// Waits for the progress window of `test`'s application to ask "Replace
+/// or Skip Files", and answers with `answer`.
+pub(in crate::window) fn answer_conflicts(test: &TestWindow, answer: ConflictAnswer) {
+    let window = asking_window(test);
+    let texts: &[&str] = match answer {
+        ConflictAnswer::Replace => &[
+            "Replace the file in the destination",
+            "Replace the files in the destination",
+        ],
+        ConflictAnswer::Skip => &["Skip this file", "Skip these files"],
+        ConflictAnswer::KeepBoth => &["Compare info for both files", "Let me decide for each file"],
+    };
+    let row = descendants::<gtk::Button>(&window)
+        .into_iter()
+        .find(|button| {
+            button.get_visible()
+                && descendants::<gtk::Label>(button)
+                    .iter()
+                    .any(|label| texts.contains(&label.text().as_str()))
+        })
+        .expect("the question's row");
+    row.emit_clicked();
+    if answer != ConflictAnswer::KeepBoth {
+        return;
+    }
+    wait_until("the File Conflict window", || window.conflict_window().is_some());
+    let conflicts = window.conflict_window().expect("it shows");
+    let (incoming, existing) = conflicts.header_checks();
+    incoming.set_active(true);
+    existing.set_active(true);
+    descendants::<gtk::Button>(&conflicts)
+        .into_iter()
+        .find(|button| button.label().as_deref() == Some("Continue"))
+        .expect("Continue")
+        .emit_clicked();
+}

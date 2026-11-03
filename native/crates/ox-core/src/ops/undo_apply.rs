@@ -16,13 +16,22 @@
 //!   skipped.
 //! - Trashed items come back through the Recycle Bin's restore, which
 //!   never overwrites either.
+//! - A copy or move that replaced files is undone step by step, then the
+//!   replaced files come back from the Recycle Bin, once the steps took
+//!   their replacements away.
+//! - A moved item goes back into its folder even when the move removed
+//!   that folder, as a merging move does once it emptied it: the folder
+//!   is made again first.
 
 use std::ffi::OsString;
+use std::sync::{Arc, Mutex};
+
+use gio::prelude::*;
 
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
 use super::folder_groups::{FolderGroup, FolderGroups};
-use super::recycle_bin::restore_trashed_since;
+use super::recycle_bin::{find_trashed_since, restore_found, restore_trashed_since};
 use super::rename::rename_back;
 use super::results::{merge_results, record_failure};
 use super::run_transfer::{gio_transfer_engine, unix_seconds_now};
@@ -58,9 +67,65 @@ pub async fn reverse(
     // Taken before anything moves, so a Redo restores exactly the items
     // this reversal moves to the Trash.
     let reversed_since = unix_seconds_now();
+    if let UndoRecord::Replace { .. } = record {
+        let record = record.clone();
+        let context = context.clone();
+        return on_worker(move || {
+            let (steps, restored) = undo_replace(&record, &context, Box::new(progress))?;
+            let UndoRecord::Replace { operation, .. } = record else {
+                unreachable!("only a Replace record is reversed here");
+            };
+            let mut result = TransferResult::default();
+            for (_, part) in &steps {
+                merge_results(&mut result, part.clone());
+            }
+            merge_results(&mut result, restored.clone());
+            let inverse = UndoRecord::replace_inverse(operation, &steps, &restored, reversed_since);
+            Ok(Reversal { result, inverse })
+        })
+        .await;
+    }
     let result = undo(record, context, progress).await?;
     let inverse = record.inverse(&result, reversed_since);
     Ok(Reversal { result, inverse })
+}
+
+/// Undoes the steps of the Replace `record`, then restores its replaced
+/// files: each step with its result, and the restore's result.
+fn undo_replace(
+    record: &UndoRecord,
+    context: &OperationContext,
+    progress: Box<dyn FnMut(Progress) + Send>,
+) -> Result<(Vec<(UndoRecord, TransferResult)>, TransferResult), OpsError> {
+    let UndoRecord::Replace {
+        steps,
+        replaced,
+        replaced_since,
+        ..
+    } = record
+    else {
+        return Ok((Vec::new(), TransferResult::default()));
+    };
+    // Looked up first: the steps may move other items from these paths
+    // to the Trash.
+    let found = find_trashed_since(replaced, *replaced_since, &context.cancel)?;
+    let progress = Arc::new(Mutex::new(progress));
+    let mut done = Vec::new();
+    for step in steps {
+        let sink = Arc::clone(&progress);
+        let result = undo_blocking(step, context, move |report| {
+            if let Ok(mut progress) = sink.lock() {
+                progress(report);
+            }
+        })?;
+        let cancelled = result.cancelled;
+        done.push((step.clone(), result));
+        if cancelled {
+            return Ok((done, TransferResult::default()));
+        }
+    }
+    let restored = restore_found(replaced, &found, context);
+    Ok((done, restored))
 }
 
 /// Reverses the operation `record` describes, sending throttled progress
@@ -105,6 +170,16 @@ fn undo_blocking(
             original_paths,
             trashed_since,
         } => restore_trashed_since(original_paths, *trashed_since, context)?,
+        UndoRecord::Replace { .. } => {
+            drop(engine);
+            let (steps, restored) = undo_replace(record, context, Box::new(|_| {}))?;
+            let mut total = TransferResult::default();
+            for (_, part) in steps {
+                merge_results(&mut total, part);
+            }
+            merge_results(&mut total, restored);
+            total
+        }
     };
     Ok(result)
 }
@@ -154,6 +229,12 @@ fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &Operati
     let (kept_name, renamed): (Vec<&MovedItem>, Vec<&MovedItem>) =
         items.iter().partition(|item| moved_name(item).is_none());
     for group in group_by_original_folder(&kept_name) {
+        if let Err(error) = recreate_folder(&group.folder_uri, context) {
+            for uri in &group.uris {
+                record_failure(&mut total, &GioNode::new(uri).display_name(), &error);
+            }
+            continue;
+        }
         let operation = Operation::Move {
             destination_folder: &group.folder_uri,
             policy: ConflictPolicy::Skip,
@@ -186,6 +267,21 @@ fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &Operati
         }
     }
     total
+}
+
+/// Makes the folder at `uri` again, with the folders it is in, when a
+/// merging move removed it after emptying it; an existing folder is left
+/// as it is.
+fn recreate_folder(uri: &str, context: &OperationContext) -> Result<(), OpsError> {
+    let folder = gio::File::for_uri(uri);
+    if folder.query_exists(gio::Cancellable::NONE) {
+        return Ok(());
+    }
+    context.protection.check(uri)?;
+    match folder.make_directory_with_parents(Some(context.cancellable())) {
+        Err(error) if !error.matches(gio::IOErrorEnum::Exists) => Err(OpsError::failed(error.to_string())),
+        _ => Ok(()),
+    }
 }
 
 /// The name `item` had before the move, when it landed under another one.
