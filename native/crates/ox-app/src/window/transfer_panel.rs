@@ -288,6 +288,16 @@ impl TransferPanel {
         self.set_visible(true);
     }
 
+    /// [`Self::start`] for an operation that already waited a moment
+    /// before it showed anything, such as a slow New ▸ Text document: its
+    /// progress window shows at once instead of waiting again.
+    pub(crate) fn start_after_waiting(&self, kind: TransferKind, label: &str, cancel: Cancellation) {
+        self.start(kind, label, cancel);
+        if let Some(window) = self.imp().window.upgrade() {
+            window.show_now();
+        }
+    }
+
     /// True while an operation runs.
     pub(crate) fn is_busy(&self) -> bool {
         self.imp().cancel.borrow().is_some()
