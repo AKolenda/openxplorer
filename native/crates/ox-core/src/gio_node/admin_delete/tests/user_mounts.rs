@@ -206,6 +206,34 @@ fn a_removable_or_hot_pluggable_drive_is_refused() {
     }
 }
 
+/// A LUKS or LVM volume is judged by the devices under it: here the
+/// first partition of a disk image on a loop device.
+///
+/// parity: XFER-015, OPS-039
+#[test]
+fn a_mapped_volume_on_a_disk_image_is_refused() {
+    let (_folder, root) = workspace();
+    let (drive, selected, files, mounts) = drive_in(&root, "drive", b"/dev/mapper/vault", (253, 0));
+    let rules = rules(&root, mounts);
+    let system = rules.seams.system.as_ref().expect("a fake system");
+    block_device(system, (259, 0), "virtual/block/loop0/loop0p1", false);
+    fs::create_dir_all(system.join("sys/devices/virtual/block/loop0/loop")).expect("mark the loop device");
+    let mapped = system.join("sys/devices/virtual/block/dm-0");
+    fs::create_dir_all(mapped.join("slaves")).expect("create the volume");
+    symlink("../../loop0/loop0p1", mapped.join("slaves/loop0p1")).expect("link the device below");
+    fs::create_dir_all(system.join("sys/dev/block")).expect("create the folder");
+    symlink(
+        "../../devices/virtual/block/dm-0",
+        system.join("sys/dev/block/253:0"),
+    )
+    .expect("link the volume");
+
+    let result = delete(&selected, &rules);
+
+    assert_eq!(result, Err(users_can_mount(&drive)));
+    assert_kept(&files);
+}
+
 /// A user `fstab` entry that is not mounted still matters where a user
 /// could mount a drive while the deletion runs: inside the folder, or on
 /// its path.

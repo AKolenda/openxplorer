@@ -197,14 +197,17 @@ impl UserMounts {
         if depth > MAX_STACKED_DEVICES || inside.iter().any(is_hot_pluggable_bus) {
             return true;
         }
+        // A loop device's partitions sit inside its folder, which alone
+        // has `loop/`.
         let marked_removable = device
             .ancestors()
             .take_while(|folder| folder.starts_with(&sys) && *folder != sys)
             .any(|folder| {
-                fs::read_to_string(folder.join("removable"))
-                    .is_ok_and(|flag| matches!(flag.trim(), "1" | "removable"))
+                folder.join("loop").exists()
+                    || fs::read_to_string(folder.join("removable"))
+                        .is_ok_and(|flag| matches!(flag.trim(), "1" | "removable"))
             });
-        if marked_removable || device.join("loop").exists() {
+        if marked_removable {
             return true;
         }
         let Ok(below) = fs::read_dir(device.join("slaves")) else {
