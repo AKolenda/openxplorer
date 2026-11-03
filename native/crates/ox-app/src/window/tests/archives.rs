@@ -12,6 +12,7 @@ use std::time::Duration;
 use gtk::prelude::*;
 use ox_core::archive::{CompressionRequest, ZipCompressor};
 use ox_core::location::file_uri;
+use ox_core::settings::{PreferencesUpdate, ZipOpening};
 use ox_core::transfer::Cancellation;
 
 use super::item_dialogs::{press, texts};
@@ -42,6 +43,22 @@ pub(super) fn fixture_with_zip() -> Fixture {
     fixture
 }
 
+/// A window on `fixture` that opens ZIPs in the "Compressed folder"
+/// window, the choice ZIPs no longer open with by default.
+pub(super) fn opening_zips_in_the_window(fixture: &Fixture) -> TestWindow {
+    let test = TestWindow::open(&fixture.uri());
+    let choose = PreferencesUpdate {
+        zip_opening: Some(ZipOpening::Window),
+        ..PreferencesUpdate::default()
+    };
+    test.context
+        .update_preferences(choose, |result| result.expect("saved"));
+    wait_until("the preference", || {
+        test.context.settings_data().preferences.zip_opening == ZipOpening::Window
+    });
+    test
+}
+
 fn uri_in(folder: &Path, name: &str) -> String {
     file_uri(&folder.join(name))
 }
@@ -59,7 +76,7 @@ pub(super) fn archive_browser(test: &TestWindow) -> ArchiveBrowserView {
 #[gtk::test]
 fn opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy() {
     let fixture = fixture_with_zip();
-    let test = TestWindow::open(&fixture.uri());
+    let test = opening_zips_in_the_window(&fixture);
     test.select_named("Bundle.zip");
 
     test.activate("open", None);
@@ -104,7 +121,7 @@ fn opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy() {
 fn a_corrupt_zip_says_why_it_cannot_be_browsed() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Broken.zip"), b"not a zip").expect("fixture file");
-    let test = TestWindow::open(&fixture.uri());
+    let test = opening_zips_in_the_window(&fixture);
     test.select_named("Broken.zip");
 
     test.activate("open", None);
@@ -122,7 +139,7 @@ fn a_corrupt_zip_says_why_it_cannot_be_browsed() {
 #[gtk::test]
 fn a_late_archive_listing_never_replaces_a_newer_one() {
     let fixture = fixture_with_zip();
-    let test = TestWindow::open(&fixture.uri());
+    let test = opening_zips_in_the_window(&fixture);
     test.select_named("Bundle.zip");
     test.activate("open", None);
     let browser = archive_browser(&test);
@@ -220,7 +237,7 @@ fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
 
 /// Marks every member of the ZIP at `path` as encrypted, in its local
 /// header and in the central directory (general purpose flag bit 0).
-fn mark_encrypted(path: &Path) {
+pub(super) fn mark_encrypted(path: &Path) {
     let mut bytes = fs::read(path).expect("the ZIP");
     for at in 0..bytes.len().saturating_sub(10) {
         let flags = match &bytes[at..at + 4] {
@@ -321,17 +338,19 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
         b"mine",
         "skipped, not replaced"
     );
-    let leftovers: Vec<_> = fs::read_dir(fixture.root())
-        .expect("the folder")
-        .filter_map(Result::ok)
-        .filter(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(".openxplorer-extract-")
-        })
-        .collect();
-    assert!(leftovers.is_empty(), "the private folder is removed");
+    // The private folder is removed once the move ends, which can come
+    // just after the report on a busy machine.
+    wait_until("the private folder to be removed", || {
+        fs::read_dir(fixture.root())
+            .expect("the folder")
+            .filter_map(Result::ok)
+            .all(|entry| {
+                !entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".openxplorer-extract-")
+            })
+    });
     let undo = test.window.lookup_action("undo").expect("the Undo action");
     assert!(
         !undo.is_enabled(),
@@ -557,8 +576,9 @@ fn write_tar_gz(fixture: &Fixture) {
     assert!(status.success());
 }
 
-/// A .tar.gz opens in the archive browser and extracts like a ZIP; with
-/// "Open archives as folders" off it opens in its default application,
+/// A .tar.gz opens in the archive browser and extracts like a ZIP, also
+/// now that ZIPs open like folders by default; with "Open archives as
+/// folders" off it opens in its default application,
 /// unless it was handed to the app.
 ///
 /// parity: ARC-022, ARC-024
@@ -672,7 +692,7 @@ fn the_archive_commands_follow_the_selection() {
 #[gtk::test]
 fn open_in_archive_manager_hands_the_zip_to_the_desktop() {
     let fixture = fixture_with_zip();
-    let test = TestWindow::open(&fixture.uri());
+    let test = opening_zips_in_the_window(&fixture);
     test.select_named("Bundle.zip");
     test.activate("open", None);
     let frame = test.wait_for_dialog("the archive browser");

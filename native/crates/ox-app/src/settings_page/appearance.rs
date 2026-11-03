@@ -72,11 +72,11 @@ const PANE_WIDTHS: RowText = RowText {
 const MENU_STYLES: [Choice<ContextMenu>; 2] = [
     Choice {
         value: ContextMenu::Win10,
-        label: crate::i18n::message_id("Windows 10 · Classic (default)"),
+        label: crate::i18n::message_id("Windows 10 · Classic"),
     },
     Choice {
         value: ContextMenu::Win11,
-        label: crate::i18n::message_id("Windows 11 · Compact actions"),
+        label: crate::i18n::message_id("Windows 11 · Compact actions (default)"),
     },
 ];
 
@@ -374,6 +374,6 @@ mod tests {
     fn the_menu_styles_are_the_python_choices_classic_first() {
         let values = MENU_STYLES.map(|choice| choice.value);
         assert_eq!(values, ContextMenu::ALL);
-        assert_eq!(MENU_STYLES[0].label, "Windows 10 · Classic (default)");
+        assert_eq!(MENU_STYLES[0].label, "Windows 10 · Classic");
     }
 }
