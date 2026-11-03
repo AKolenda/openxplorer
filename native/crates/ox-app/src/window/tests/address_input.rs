@@ -12,7 +12,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use super::archives::{archive_browser, fixture_with_zip};
+use super::archives::{archive_browser, fixture_with_zip, opening_zips_in_the_window};
 use super::support::middle_click_at;
 use crate::locations::Page;
 use crate::test_support::harness::{application, descendants, wait_for, wait_until, Fixture, TestWindow};
@@ -91,12 +91,15 @@ fn an_smb_path_has_server_share_and_folder_crumbs_with_the_uri_encoded() {
     assert_eq!(labels[1..], ["Team files", "Q3 #1"]);
     assert!(crumb_target(&crumbs[0]).starts_with("smb://nas:1445/"));
     assert_eq!(crumb_target(&crumbs[2]), "smb://nas:1445/Team%20files/Q3%20%231");
-    let dividers: Vec<String> = descendants::<gtk::Label>(&crumb_box(&test))
-        .iter()
+    let dividers: Vec<gtk::Label> = descendants::<gtk::Label>(&crumb_box(&test))
+        .into_iter()
         .filter(|label| label.has_css_class("crumb-divider"))
-        .map(|label| label.text().to_string())
         .collect();
-    assert_eq!(dividers, ["\\", "\\"]);
+    assert_eq!(dividers.len(), 2, "server › share › folder");
+    assert!(
+        dividers.iter().all(|label| label.text().is_empty()),
+        "dividers are drawn as Explorer's chevrons, not as the path's '\\'"
+    );
 }
 
 /// parity: NAV-018
@@ -572,7 +575,7 @@ fn a_middle_click_on_blank_address_space_opens_the_selected_text() {
 #[gtk::test]
 fn a_typed_zip_opens_the_archive_browser() {
     let fixture = fixture_with_zip();
-    let test = TestWindow::open(&fixture.uri());
+    let test = opening_zips_in_the_window(&fixture);
     test.activate("location", None);
 
     test.window

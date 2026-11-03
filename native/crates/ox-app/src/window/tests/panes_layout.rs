@@ -6,7 +6,9 @@ use gtk::prelude::*;
 use ox_core::settings::{PreferencesUpdate, Settings};
 
 use super::geometry::{bounds, laid_out, Bounds};
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
+use crate::test_support::harness::{
+    descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+};
 use crate::window::widget_tree::children;
 
 /// The column titles of the details view, left to right.
@@ -77,7 +79,7 @@ fn the_size_title_is_right_aligned_and_only_the_sorted_column_has_an_arrow() {
 
 /// Saves Expandable folders as `on`, as Settings would, and lets the
 /// window follow it.
-fn save_expandable_folders(test: &TestWindow, on: bool) {
+pub(super) fn save_expandable_folders(test: &TestWindow, on: bool) {
     let update = PreferencesUpdate {
         expandable_folders: Some(on),
         ..PreferencesUpdate::default()
@@ -113,18 +115,19 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let row_place = bounds(&test, &row);
     assert_eq!(
         (row_place.x, row_place.width, row_place.height),
-        (list.x + 2, list.width - 14, 36),
-        "the fixture has folders, so rows make room for their arrows"
+        (list.x + 12, list.width - 24, 36),
+        "folders show no arrows by default, as in Explorer"
     );
     let (cell_x, title_x) = cell_and_title_x(&test, &row);
     assert_eq!(cell_x, title_x);
 
-    save_expandable_folders(&test, false);
+    save_expandable_folders(&test, true);
     let row = first_row(&test);
     let row_place = bounds(&test, &row);
     assert_eq!(
         (row_place.x, row_place.width, row_place.height),
-        (list.x + 12, list.width - 24, 36)
+        (list.x + 2, list.width - 14, 36),
+        "the fixture has folders, so rows make room for their arrows"
     );
     let (cell_x, title_x) = cell_and_title_x(&test, &row);
     assert_eq!(cell_x, title_x);
@@ -138,6 +141,7 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
 fn a_folders_arrow_sits_inside_its_rows_highlight() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    save_expandable_folders(&test, true);
     let view = test.window.folder_pane().details().column_view();
     let arrows: Vec<gtk::Widget> = descendants::<gtk::Widget>(view)
         .into_iter()
@@ -202,12 +206,36 @@ fn the_details_note_fills_the_pane_width() {
     );
 }
 
+/// With one item selected on this computer the pane drops its "Select an
+/// item…" note, glyph and all, as Windows Explorer's shows none; with
+/// nothing selected it shows the note again.
+///
+/// parity: PROP-009
+#[gtk::test]
+fn the_details_note_hides_while_one_item_is_selected() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let note = descendants::<gtk::Box>(test.window.details_pane())
+        .into_iter()
+        .find(|row| row.has_css_class("detail-note"))
+        .expect("the note");
+    assert!(note.is_visible(), "nothing selected: the hint");
+    test.select_named("Notes 2.txt");
+    wait_until("the note to hide", || !note.is_visible());
+    test.window.folder_model().select_positions(&[]);
+    wait_until("the note to come back", || note.is_visible());
+}
+
 /// parity: VIEW-006
 #[gtk::test]
 fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let status_buttons: Vec<gtk::Button> = descendants::<gtk::Button>(test.window.status_bar());
+    // "Check for updates" shows only while an update needs the user.
+    let status_buttons: Vec<gtk::Button> = descendants::<gtk::Button>(test.window.status_bar())
+        .into_iter()
+        .filter(gtk::Button::is_visible)
+        .collect();
     let placed: Vec<Bounds> = status_buttons
         .iter()
         .map(|button| bounds(&test, button))

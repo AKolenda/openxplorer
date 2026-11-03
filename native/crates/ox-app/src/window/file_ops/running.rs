@@ -136,17 +136,32 @@ impl BrowserWindow {
         // OPS-047: an item that fails asks whether to retry, skip or
         // cancel.
         context.item_failure = Some(self.failure_asker());
-        {
-            let mut operations = self.imp().file_operations.borrow_mut();
-            if operations.is_running() {
-                return None;
-            }
-            operations.running = Some(context.cancel.clone());
+        if !self.claim_transfer_panel(TransferKind::Files, label, &context.cancel) {
+            return None;
         }
-        self.transfer_panel()
-            .start(TransferKind::Files, label, context.cancel.clone());
+        self.imp().file_operations.borrow_mut().running = Some(context.cancel.clone());
         self.update_file_commands();
         Some(context)
+    }
+
+    /// The one way an operation that runs alone (a file operation, an
+    /// extraction, a compression or a restored copy) takes the primary
+    /// panel. Refuses, leaving the panel to its owner, while this window
+    /// writes files; otherwise shows the panel reading `label`, whose
+    /// Cancel stops `cancel`. Callers that check and then await must
+    /// claim after the await, so nothing started meanwhile loses its
+    /// panel. Transfer jobs take their panels in `begin_transfer`.
+    pub(in crate::window) fn claim_transfer_panel(
+        &self,
+        kind: TransferKind,
+        label: &str,
+        cancel: &Cancellation,
+    ) -> bool {
+        if self.is_writing_files() {
+            return false;
+        }
+        self.transfer_panel().start(kind, label, cancel.clone());
+        true
     }
 
     /// Forgets the running operation and hides its panel.
