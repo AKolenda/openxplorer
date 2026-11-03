@@ -24,7 +24,9 @@ use super::root::{CacheStatus, Caching, HiddenItems, IndexRoot, Monitoring, Root
 use super::schema;
 use super::text::{display_path, truncate_chars};
 use crate::location::{is_device_location, is_smb_server, normalise, python_strip};
-use crate::private_storage::{private_directory, private_file, validate_sqlite_files, PrivateFileOptions};
+use crate::private_storage::{
+    private_directory, private_file, validate_sqlite_files, FileIdentity, PrivateFileOptions,
+};
 
 /// The database file inside the cache directory.
 const DATABASE_FILE: &str = "search.sqlite3";
@@ -61,7 +63,7 @@ pub struct SearchIndex {
     /// They also hold the WAL in place: SQLite deletes `-wal` and `-shm`
     /// when the last connection closes, and this cache used to open and
     /// close one per operation.
-    idle: Arc<Mutex<Vec<Connection>>>,
+    idle: Arc<Mutex<Vec<IdleConnection>>>,
 }
 
 impl SearchIndex {
@@ -297,24 +299,31 @@ impl SearchIndex {
     /// directory, and the database and its sidecars owned regular files
     /// with one link, so a symlink planted after start-up is refused
     /// before SQLite follows it. Reusing a connection does not skip that
-    /// check.
+    /// check, and a connection is only reused while the database path
+    /// still names the file it opened.
     ///
     /// # Errors
     ///
     /// A storage refusal of the directory or a database file, or the
     /// database's error.
     pub(super) fn connect(&self) -> Result<PooledConnection, SearchError> {
-        let idle = {
-            let mut idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner);
-            idle.pop()
-        };
         // Every use re-checks private storage, also one that reuses a
         // connection: a symlink or a hard link planted after start-up must
         // be refused before the next read or write, not only at open.
         private_directory(&self.directory)?;
-        validate_sqlite_files(&self.database)?;
-        let connection = if let Some(connection) = idle {
-            connection
+        let database = validate_sqlite_files(&self.database)?;
+        let (reused, stale) = {
+            let mut idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner);
+            // A connection still reads the file it opened after the cache
+            // was deleted and created again, which is not the cache any
+            // more. Closing it is safe: SQLite neither checkpoints nor
+            // deletes sidecars of a database file that has moved.
+            let stale: Vec<_> = idle.extract_if(.., |idle| idle.database != database).collect();
+            (idle.pop(), stale)
+        };
+        drop(stale);
+        let connection = if let Some(idle) = reused {
+            idle.connection
         } else {
             let connection = Connection::open(&self.database)?;
             connection.busy_timeout(BUSY_TIMEOUT)?;
@@ -322,6 +331,7 @@ impl SearchIndex {
         };
         Ok(PooledConnection {
             connection: Some(connection),
+            database,
             idle: Arc::clone(&self.idle),
         })
     }
@@ -338,7 +348,18 @@ impl SearchIndex {
 #[derive(Debug)]
 pub(super) struct PooledConnection {
     connection: Option<Connection>,
-    idle: Arc<Mutex<Vec<Connection>>>,
+    /// The database file that was checked before the connection was handed
+    /// out.
+    database: FileIdentity,
+    idle: Arc<Mutex<Vec<IdleConnection>>>,
+}
+
+/// A connection left open for the next operation, with the database file
+/// it was last checked against.
+#[derive(Debug)]
+struct IdleConnection {
+    connection: Connection,
+    database: FileIdentity,
 }
 
 impl Deref for PooledConnection {
@@ -367,7 +388,10 @@ impl Drop for PooledConnection {
         if idle.len() >= POOL_SIZE {
             return;
         }
-        idle.push(connection);
+        idle.push(IdleConnection {
+            connection,
+            database: self.database,
+        });
     }
 }
 
@@ -553,6 +577,54 @@ mod tests {
         let shm = share.directory.path().join("search.sqlite3-shm");
         assert!(wal.exists(), "the write-ahead log is still there");
         assert!(shm.exists(), "its shared-memory index is still there");
+    }
+
+    /// Checking the database files before an operation keeps the locks of
+    /// the connections this process left open. Closing an ordinary
+    /// descriptor of `-shm` drops its shared lock, after which the next
+    /// process to open the cache truncates `-shm` under their mapping.
+    ///
+    /// parity: SRCH-025
+    #[test]
+    fn checking_the_files_keeps_the_open_connections_locks() {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "a.pdf")]);
+        let shm = share.directory.path().join("search.sqlite3-shm");
+
+        share.index.status().unwrap();
+
+        assert!(is_locked(&shm), "the connection left open still locks -shm");
+    }
+
+    /// The cache deleted and created again while it is open is the one
+    /// read afterwards, not the deleted file an open connection still has.
+    ///
+    /// parity: SRCH-025
+    #[test]
+    fn a_cache_created_again_replaces_the_deleted_one() {
+        let share = ScannedShare::new();
+        share.store(&[listed_file(SHARE, "a.pdf")]);
+        assert_eq!(found_names(&share.index, "a.pdf"), ["a.pdf"]);
+        for name in ["search.sqlite3", "search.sqlite3-wal", "search.sqlite3-shm"] {
+            std::fs::remove_file(share.directory.path().join(name)).unwrap();
+        }
+
+        let _other_process = open_index(&share.directory);
+
+        assert!(share.index.roots().unwrap().is_empty());
+        assert!(found_names(&share.index, "a.pdf").is_empty());
+    }
+
+    /// Whether a POSIX lock is held on `path`, as `/proc/locks` lists it.
+    fn is_locked(path: &std::path::Path) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        // A lock's file is `major:minor:inode`.
+        let file = format!(":{}", std::fs::metadata(path).unwrap().ino());
+        let locks = std::fs::read_to_string("/proc/locks").unwrap();
+        locks.lines().any(|line| {
+            let fields: Vec<_> = line.split_whitespace().collect();
+            fields.contains(&"POSIX") && fields.iter().any(|field| field.ends_with(&file))
+        })
     }
 
     /// Monitoring errors are cut to 500 characters before they are stored.
