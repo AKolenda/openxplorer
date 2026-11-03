@@ -313,7 +313,16 @@ fn a_share_another_application_shows_is_mounted_only_when_the_user_asks() {
     test.wait_for_listing("the watch's refresh");
     assert_eq!(mounts.get(), 0, "nothing was mounted for the watch's refresh");
 
+    let selection = || {
+        let session = test.window.imp().session.borrow();
+        let tab = session.active().expect("a tab in front");
+        (tab.selected.clone(), tab.reveals_selection)
+    };
+    let requested = (vec![item[0].to_owned()], true);
+    assert_eq!(selection(), requested, "the item waits to be selected");
+
     test.activate("refresh", None);
+    assert_eq!(selection(), requested, "Try again keeps the item to select");
     wait_until("the user's connect", || mounts.get() == 1);
     test.wait_for_listing("the listing after the mount");
     assert_eq!(mounts.get(), 1, "mounted once");

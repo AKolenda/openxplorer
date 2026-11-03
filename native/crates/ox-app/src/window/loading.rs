@@ -453,6 +453,11 @@ impl BrowserWindow {
         let (selected, reveals, renames) = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.tab_mut(id) else { return };
+            // A share left unmounted for another application has no rows:
+            // what it asked to select waits for the listing after Try again.
+            if tab.waits_to_mount && tab.error.is_some() {
+                return;
+            }
             (
                 tab.selected.clone(),
                 std::mem::take(&mut tab.reveals_selection),
