@@ -295,8 +295,8 @@ impl AddressBar {
         let last = crumbs.len().saturating_sub(1);
         for (index, crumb) in crumbs.iter().enumerate() {
             let next = crumbs.get(index + 1).map(|next| next.crumb.uri.as_str());
-            if let Some(divider) = crumb.divider_before {
-                let label = divider_label(divider);
+            if crumb.divider_before.is_some() {
+                let label = divider_label();
                 if let Some(previous) = index.checked_sub(1).and_then(|previous| crumbs.get(previous)) {
                     crumb_menus::open_subfolders_on_click(&label, &previous.crumb.uri, &crumb.crumb.uri);
                 }
@@ -448,11 +448,11 @@ fn address_options_menu() -> gio::Menu {
     menu
 }
 
-/// The `/` or `\\` between crumbs, hidden from screen readers as
-/// `aria-hidden` hides it in app.js.
-fn divider_label(text: &str) -> gtk::Label {
+/// The divider between crumbs: Windows 11 Explorer's chevron, drawn by
+/// the skin (`.crumb-divider`), where app.js wrote the path's `/` or `\\`.
+/// Hidden from screen readers as `aria-hidden` hides it in app.js.
+fn divider_label() -> gtk::Label {
     gtk::Label::builder()
-        .label(text)
         .accessible_role(gtk::AccessibleRole::Presentation)
         .css_classes(["crumb-divider"])
         .build()

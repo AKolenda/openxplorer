@@ -38,7 +38,10 @@ impl std::fmt::Debug for HeaderTitle {
 fn header_text(title: &str, count: u32) -> String {
     ox_core::i18n::format_message(
         "{title} ({count})",
-        &[("title", title), ("count", &count.to_string())],
+        &[
+            ("title", title),
+            ("count", &ox_core::format::group_digits(u64::from(count))),
+        ],
     )
 }
 
