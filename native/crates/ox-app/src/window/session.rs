@@ -17,6 +17,8 @@ use crate::folder_view::watch::Watch;
 use crate::history::{History, HistoryViews};
 
 use super::listing_state::{ListingEnd, ListingState};
+use super::slow_delay::BusyClock;
+use super::slow_location::Opening;
 
 mod split;
 
@@ -150,6 +152,12 @@ pub(super) struct Tab {
     /// An item of this tab is being opened; a second one waits for it
     /// (`tab.opening` in `openEntry`).
     pub is_activating: bool,
+    /// A location the tab is going to, looked up or mounted before the
+    /// tab moves there (see [`super::slow_location`]).
+    pub opening: Option<Opening>,
+    /// Since when the tab has been opening or listing its location, which
+    /// decides when it says it is working (VIEW-068).
+    pub busy_clock: BusyClock,
     /// The folder pane that shows this tab: the start pane, or the end
     /// pane of a split tab.
     pub side: PaneSide,
@@ -181,6 +189,8 @@ impl Tab {
             revealed_item: None,
             changed_while_hidden: false,
             is_activating: false,
+            opening: None,
+            busy_clock: BusyClock::default(),
             side: PaneSide::Start,
             beside: None,
         }
@@ -191,9 +201,22 @@ impl Tab {
         self.history.current()
     }
 
+    /// Whether the tab is opening or listing a location.
+    pub(super) fn is_busy(&self) -> bool {
+        self.opening.is_some() || self.listing_state.is_listing()
+    }
+
+    /// Whether the tab's location has taken longer than the delay to
+    /// open and list (see [`BusyClock`]).
+    pub(super) fn is_slow(&self) -> bool {
+        self.busy_clock.is_slow(self.is_busy(), std::time::Instant::now())
+    }
+
     /// Starts a load and returns its generation. The folder watch is kept:
     /// the caller replaces it only when the location changed.
     pub(super) fn begin_load(&mut self) -> u64 {
+        let was_busy = self.is_busy();
+        self.busy_clock.start(was_busy, std::time::Instant::now());
         self.listing = None;
         self.generation = self.generation.wrapping_add(1);
         self.listing_state.begin();

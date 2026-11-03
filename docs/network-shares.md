@@ -8,6 +8,8 @@ Open Network and enter a server or share address. The address bar also accepts L
 
 Windows-style paths use backslashes, not backticks: \\studio-nas\Projects. You can also use smb://studio-nas/Projects. Click each breadcrumb to jump to an ancestor. The website walkthrough uses this exact interface; the website itself makes no SMB connections.
 
+A slow server shows that it is working, as Windows Explorer does: the address bar fills with progress and Refresh turns into Stop at once, and after a moment the file list says Working on it... in place of the previous folder. Press Stop, or Esc while you are still in the address bar, to cancel and stay where you were. Pressing Enter again does not start over; entering another address replaces the slow one. Other tabs stay usable meanwhile.
+
 ```sh
 \\nas\Projects
 smb://nas/Projects

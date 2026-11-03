@@ -29,15 +29,18 @@ use crate::archive_view::{archive_browser, listing_notice};
 /// A running listing. Dropping it cancels the listing.
 #[derive(Debug)]
 pub(crate) struct Listing {
-    /// The listing task, aborted when the listing is dropped.
-    task: glib::JoinHandle<()>,
+    /// The listing task, aborted when the listing is dropped; `None` once
+    /// detached.
+    task: Option<glib::JoinHandle<()>>,
 }
 
 impl Drop for Listing {
     fn drop(&mut self) {
         // Dropping a JoinHandle only detaches the task; aborting it is what
         // stops the listing and cancels its GIO futures.
-        self.task.abort();
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
     }
 }
 
@@ -46,8 +49,15 @@ impl Listing {
     /// share before it is listed again. Dropping it cancels `work`.
     pub(crate) fn spawn(work: impl Future<Output = ()> + 'static) -> Self {
         Self {
-            task: glib::spawn_future_local(work),
+            task: Some(glib::spawn_future_local(work)),
         }
+    }
+
+    /// Lets the work run to its end without this handle, as the work
+    /// itself does once it has its answer: dropping the handle from inside
+    /// the task would abort the task that is running.
+    pub(crate) fn detach(mut self) {
+        drop(self.task.take());
     }
 }
 
@@ -61,6 +71,10 @@ pub(crate) fn list_folder(
 ) -> Listing {
     let uri = uri.to_owned();
     Listing::spawn(async move {
+        #[cfg(test)]
+        crate::test_support::held::wait_while_held(&uri).await;
+        #[cfg(test)]
+        crate::test_support::held::wait_while_held(&crate::test_support::held::listing_key(&uri)).await;
         let result = if uri == RECENT_LOCATIONS_URI {
             list_recent_locations(on_batch).await
         } else {

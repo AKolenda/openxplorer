@@ -80,8 +80,12 @@ impl WindowNetwork {
     pub(crate) fn mount(&self, uri: &str) -> Mounting {
         #[cfg(test)]
         if let Some(answer) = self.mount_answer.borrow().as_ref() {
-            let answered = answer();
-            return Box::pin(async move { answered });
+            let answer = Rc::clone(answer);
+            let uri = uri.to_owned();
+            return Box::pin(async move {
+                crate::test_support::held::wait_while_held(&crate::test_support::held::mount_key(&uri)).await;
+                answer()
+            });
         }
         let prompts = self.prompts.clone();
         let uri = uri.to_owned();
