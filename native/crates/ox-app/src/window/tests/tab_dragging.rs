@@ -873,6 +873,54 @@ fn a_tab_pressed_again_while_it_slides_into_place_is_held_where_it_is_drawn() {
     );
 }
 
+/// A tab let go past another and dragged again while it still slides into
+/// its new place, before the session took the new order: Escape calls off
+/// only the second drag, so the tab goes back where the release put it,
+/// not where it was before the first drag.
+///
+/// parity: TAB-032
+#[gtk::test]
+fn escape_on_a_tab_dragged_again_while_it_slides_into_place_keeps_its_release() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = two_tabs(&fixture);
+    let [first, second] = tab_ids(&test.window)[..] else {
+        panic!("two tabs are open");
+    };
+    let strip = test.window.tab_strip();
+    let first_tab = tab_widget(&test.window, 0);
+    let width = f64::from(first_tab.width());
+    let from = on_screen(&mut pointer, &first_tab, (20.0, 10.0));
+    // Past the other tab's middle, still over its place.
+    #[expect(clippy::cast_possible_truncation, reason = "a tab's width")]
+    let released = (from.0 + (width * 0.7) as i32, from.1);
+
+    press_and_glide(&mut pointer, from, released, Pace::Held);
+    pointer.release(Button::Primary);
+    // Pressed again on the tab as drawn and moved past the drag threshold
+    // at once, well within its 200 ms slide.
+    pointer.press_and_flick(Button::Primary, &[(released.0 + 20, released.1)]);
+    let resumed = strip.is_following() && strip.live_tab() == Some(first);
+    let order_while_dragged_again = tab_ids(&test.window);
+    pointer.tap_key(gtk::gdk::Key::Escape);
+    wait_until("the called-off drag to settle", || strip.live_tab().is_none());
+    pointer.release(Button::Primary);
+    wait_for(HOLD);
+
+    assert!(resumed, "the second press dragged the sliding tab on");
+    assert_eq!(
+        order_while_dragged_again,
+        [first, second],
+        "the session had not taken the release's order yet"
+    );
+    assert_eq!(
+        tab_ids(&test.window),
+        [second, first],
+        "Escape kept the first release"
+    );
+    assert!(!drags_and_drops(&test.window));
+}
+
 /// A tab let go past another and pressed again while it still slides
 /// into its new place, the press held until it is there and the other tab
 /// slid under the point pressed: the press drags the tab it met, not the

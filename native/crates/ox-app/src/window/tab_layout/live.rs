@@ -130,6 +130,10 @@ pub(super) struct LiveTabs {
     tick: Option<gtk::TickCallbackId>,
     /// What to do once a released tab is in place.
     on_settled: Option<Settled>,
+    /// The order a release of the dragged tab kept, when it was grabbed
+    /// again before it was in place and the session took that order: where
+    /// calling off this drag puts the tabs.
+    released: Option<Vec<gtk::Widget>>,
 }
 
 /// The left edge of each of `order`'s tabs when packed from 0 with `gap`
@@ -164,6 +168,7 @@ impl LiveTabs {
             slides: Vec::new(),
             tick: None,
             on_settled: None,
+            released: None,
         }
     }
 
@@ -261,8 +266,11 @@ impl LiveTabs {
         let reordered_at = self.dragged.reordered_at;
         let was_away = self.dragged.detached;
         if self.dragged.settling {
-            // Back in the strip before it slid back: it follows again.
+            // Grabbed again before it slid into place: it follows again,
+            // and the order its release kept, which the session does not
+            // have yet, is the one to go back to.
             self.dragged.settling = false;
+            self.released = Some(self.order.clone());
             if let Some(settled) = self.on_settled.take() {
                 settled.cancel();
             }
@@ -337,6 +345,12 @@ impl LiveTabs {
     /// Whether every slide is over at frame time `now`.
     pub(super) fn is_still(&self, now: i64) -> bool {
         self.slides.iter().all(|(_, slide)| slide.is_done(now))
+    }
+
+    /// The order a release before this drag of the same tab kept, if the
+    /// tab was grabbed again before it was in place.
+    pub(super) fn released(&self) -> Option<&[gtk::Widget]> {
+        self.released.as_deref()
     }
 
     pub(super) fn take_on_settled(&mut self) -> Option<Settled> {

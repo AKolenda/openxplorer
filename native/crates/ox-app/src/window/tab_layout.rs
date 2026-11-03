@@ -356,6 +356,16 @@ impl TabLayout {
             .map(|live| live.order().to_vec())
     }
 
+    /// The order a release of the dragged tab kept, when it was grabbed
+    /// again before it was in place, so the session does not have it yet.
+    pub(crate) fn released_order(&self) -> Option<Vec<gtk::Widget>> {
+        self.imp()
+            .live
+            .borrow()
+            .as_ref()
+            .and_then(|live| live.released().map(<[gtk::Widget]>::to_vec))
+    }
+
     /// The tab following the pointer, if one is.
     pub(crate) fn following(&self) -> Option<gtk::Widget> {
         self.imp().live.borrow().as_ref()?.following().cloned()

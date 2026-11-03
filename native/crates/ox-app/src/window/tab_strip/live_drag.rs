@@ -214,8 +214,11 @@ impl TabStrip {
 
     /// The dragged tab is let go: it slides into the place shown, or with
     /// `keep_order` false back to where it was, and the others with it.
-    /// `done` then gets where it went, if the order changed: before the
-    /// first tab after it still open, as one may close while it slides.
+    /// Where it was is where a release a moment ago put it, when it was
+    /// grabbed again before it was in place: calling off this drag keeps
+    /// that one. `done` then gets where it went, if the order changed:
+    /// before the first tab after it still open, as one may close while it
+    /// slides.
     pub(in crate::window) fn let_go(&self, keep_order: bool, done: impl FnOnce(Option<LiveMove>) + 'static) {
         let layout = self.layout();
         let Some(dragged) = layout.dragged() else {
@@ -223,10 +226,11 @@ impl TabStrip {
             return;
         };
         let original = self.widgets();
+        let before_drag = layout.released_order().unwrap_or_else(|| original.clone());
         let order = if keep_order {
-            layout.live_order().unwrap_or_else(|| original.clone())
+            layout.live_order().unwrap_or(before_drag)
         } else {
-            original.clone()
+            before_drag
         };
         let moved = (order != original)
             .then(|| {
